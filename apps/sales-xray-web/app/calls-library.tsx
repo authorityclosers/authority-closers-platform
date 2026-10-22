@@ -48,6 +48,7 @@ import {
 } from "./acquisition-client";
 import { seededLibraryPage } from "./calls-seed";
 import { displayName } from "./display-name";
+import { leadLink } from "./leads/leads-client";
 import {
   cachedCallsPage,
   readCallsList,
@@ -264,6 +265,18 @@ function shortRep(rep: string) {
   const [first, ...rest] = (match?.[1] ?? rep).trim().split(/\s+/);
   const last = rest.at(-1);
   return `${last ? `${first} ${last[0]}.` : first}${match?.[2] ?? ""}`;
+}
+
+/**
+ * A phone row's length in words, so it never reads like the clock time beside
+ * it (Liquid Glass, 22 Oct 2026): "40 s", "21 min", "1 h 5 min".
+ */
+function lengthWords(ms: number) {
+  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))} s`;
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `${minutes} min`;
+  const rest = minutes % 60;
+  return `${Math.floor(minutes / 60)} h${rest ? ` ${rest} min` : ""}`;
 }
 
 /** A lead's stage in the words Leads uses for it. */
@@ -1109,9 +1122,8 @@ function CallsLibraryContent({
     if (!submission.lead) return null;
     const name = displayName(submission.lead.name);
     const stage = LEAD_STAGE_WORDS[submission.lead.stage];
-    return title.toLowerCase().includes(name.toLowerCase())
-      ? stage
-      : `${name} · ${stage}`;
+    const named = !title.toLowerCase().includes(name.toLowerCase());
+    return { text: named ? `${name} · ${stage}` : stage, named, name, stage };
   };
   const lengthOf = (
     submission: LibrarySubmission,
@@ -1237,16 +1249,23 @@ function CallsLibraryContent({
     insight?.durationMs
       ? {
           text: formatClock(insight.durationMs),
+          words: lengthWords(insight.durationMs),
           label: `Measured call duration: ${formatClock(insight.durationMs)}`,
           title: "Measured from the recording",
         }
       : hasRecordedLength(submission)
         ? {
             text: formatDuration(submission.durationSeconds),
+            words: lengthWords(submission.durationSeconds * 1000),
             label: `Length: ${formatDuration(submission.durationSeconds)}`,
             title: "Measured from the audio at upload",
           }
-        : { text: "", label: "Length unavailable", title: undefined };
+        : {
+            text: "",
+            words: "",
+            label: "Length unavailable",
+            title: undefined,
+          };
 
   const callRow = (submission: LibrarySubmission) => {
     const tone = callTone(submission);
@@ -1334,11 +1353,15 @@ function CallsLibraryContent({
               <span className={styles.leadLine}>
                 <UserRound size={12} aria-hidden="true" />
                 <span className={styles.srOnly}>Lead: </span>
-                {lead}
+                {lead.text}
               </span>
             ) : null}
             {/* Phone: one quiet line carries what the desktop columns show. */}
-            <small className={styles.meta} data-lead={lead ? "" : undefined}>
+            <small
+              className={styles.meta}
+              data-lead={lead ? "" : undefined}
+              data-lead-named={lead?.named ? "" : undefined}
+            >
               <span className={styles.metaStatus} data-tone={tone}>
                 <i aria-hidden="true" />
                 {shortState(submission)}
@@ -1347,14 +1370,20 @@ function CallsLibraryContent({
                 <span className={styles.metaLead}>
                   <UserRound size={11} aria-hidden="true" />
                   <span className={styles.srOnly}>Lead: </span>
-                  {lead}
+                  {lead.text}
                 </span>
               ) : null}
               <span>{when}</span>
               {length.text ? (
-                <span className={styles.metaLength}>{length.text}</span>
+                <span className={styles.metaLength} title={length.label}>
+                  {length.words}
+                </span>
               ) : null}
-              {rep ? <span title={rep}>{shortRep(rep)}</span> : null}
+              {rep ? (
+                <span className={styles.metaRep} title={rep}>
+                  {shortRep(rep)}
+                </span>
+              ) : null}
             </small>
             {/* The summary line shows only with something in it: a row
                 never keeps an empty line under its name. */}
@@ -2071,6 +2100,15 @@ function CallsLibraryContent({
             canRename={Boolean(
               shownPreview.label && ownsCall(shownPreview.owner, viewerId),
             )}
+            lead={
+              shownPreview.lead
+                ? {
+                    href: leadLink(shownPreview.lead.leadId),
+                    name: displayName(shownPreview.lead.name),
+                    stage: LEAD_STAGE_WORDS[shownPreview.lead.stage],
+                  }
+                : null
+            }
             onOpen={() => openSubmission(shownPreview)}
             onRename={() => {
               setPreviewId(null);

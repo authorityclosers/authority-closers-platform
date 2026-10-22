@@ -1733,4 +1733,23 @@ it("names each call's lead and where it stands, once", async () => {
   ).toBe("Anil Example");
   expect(rowText(secondId)).toContain("Lead: Lost");
   expect(rowText(thirdId)).not.toContain("Lead:");
+  // A phone row says its length in words, never like the clock beside it.
+  expect(
+    host.querySelector(`[data-call-row="${thirdId}"] [title^="Length"]`)
+      ?.textContent,
+  ).toBe("1 min");
+  // The preview opens the lead's own page.
+  const preview = host.querySelector<HTMLButtonElement>(
+    `[data-call-row="${firstId}"] button[aria-label^="Preview"]`,
+  )!;
+  await act(async () => preview.click());
+  await flush();
+  const leadRow = document.querySelector<HTMLAnchorElement>(
+    'ul[aria-label="Lead"] a',
+  );
+  expect(leadRow?.getAttribute("href")).toBe(
+    "/leads?lead=66666666-6666-4666-8666-666666666666",
+  );
+  expect(leadRow?.textContent).toContain("Asha Fictional");
+  expect(leadRow?.textContent).toContain("Lead · Interested");
 });

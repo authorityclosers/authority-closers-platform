@@ -1610,10 +1610,11 @@
   white-space: nowrap;
 }
 
+/* The quiet line's own muted colour: teal stays for Ready and the primary
+   action (Liquid Glass, 22 Oct 2026). */
 .leadLine > svg,
 .metaLead > svg {
   flex: none;
-  color: var(--lx-teal);
 }
 
 @container calls-page (max-width: 760px) {
@@ -1624,6 +1625,12 @@
   /* A call with a lead keeps its quiet line to one line: the length gives way
      (it is in the Report and the wide screen's column). */
   .meta[data-lead] .metaLength {
+    display: none;
+  }
+
+  /* When the lead's own name is on the line, the seller gives way too (the
+     reps filter still finds their calls). */
+  .meta[data-lead-named] .metaRep {
     display: none;
   }
 }

@@ -16,6 +16,7 @@ import {
   Pencil,
   Play,
   Target,
+  UserRound,
   Wrench,
 } from "lucide-react";
 import { useRef, useState } from "react";
@@ -27,7 +28,7 @@ import {
   type InsightReadState,
 } from "./calls-insights";
 import { formatClock } from "./lightbox/time";
-import { Button } from "./ui/kit";
+import { ActionList, ActionRow, Button } from "./ui/kit";
 import { Sheet } from "./ui/sheet";
 import styles from "./calls-drawer.module.css";
 
@@ -43,6 +44,7 @@ export function CallsDrawer({
   onRetry,
   hasReport,
   canRename,
+  lead = null,
   onOpen,
   onRename,
   onClose,
@@ -59,6 +61,8 @@ export function CallsDrawer({
   onRetry: () => void;
   hasReport: boolean;
   canRename: boolean;
+  /** The lead this call belongs to (slice 7): its page is one tap away. */
+  lead?: { href: string; name: string; stage: string } | null;
   onOpen: () => void;
   onRename: () => void;
   onClose: () => void;
@@ -129,6 +133,18 @@ export function CallsDrawer({
             </span>
           ) : null}
         </div>
+
+        {lead ? (
+          <ActionList label="Lead">
+            <ActionRow
+              icon={<UserRound size={18} />}
+              tone="neutral"
+              title={lead.name}
+              note={`Lead · ${lead.stage}`}
+              href={lead.href}
+            />
+          </ActionList>
+        ) : null}
 
         {hasReport ? (
           <audio
