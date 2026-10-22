@@ -1175,6 +1175,20 @@ a.rowTitle:focus-visible::after {
   min-width: 0;
 }
 
+/* A row with an action of its own beside it (remove, more): the row's
+   button takes the room, the action keeps its 44 px. */
+.actionItem[data-trailing] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.actionTrailing {
+  display: inline-flex;
+  align-items: center;
+  padding-right: 6px;
+}
+
 .actionRow {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto auto;

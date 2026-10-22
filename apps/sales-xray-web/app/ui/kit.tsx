@@ -616,6 +616,7 @@ export function ActionRow({
   onClick,
   tone = "accent",
   end,
+  trailing,
   disabled = false,
   chevron = true,
 }: {
@@ -627,6 +628,11 @@ export function ActionRow({
   onClick?: () => void;
   tone?: Tone;
   end?: ReactNode;
+  /**
+   * An action of its own beside the row (remove a saved view), outside the
+   * row's button so the two never nest; give it its own label.
+   */
+  trailing?: ReactNode;
   disabled?: boolean;
   chevron?: boolean;
 }) {
@@ -652,7 +658,7 @@ export function ActionRow({
     </>
   );
   return (
-    <li className={styles.actionItem}>
+    <li className={styles.actionItem} data-trailing={trailing ? "" : undefined}>
       {href && !disabled ? (
         <Link href={href} className={styles.actionRow} onClick={onClick}>
           {inside}
@@ -667,6 +673,9 @@ export function ActionRow({
           {inside}
         </button>
       )}
+      {trailing ? (
+        <span className={styles.actionTrailing}>{trailing}</span>
+      ) : null}
     </li>
   );
 }

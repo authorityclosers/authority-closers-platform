@@ -321,3 +321,34 @@ it("makes action rows one tap each: a link to a place, a button for an act", asy
     link.querySelector('[data-tone="accent"]')?.getAttribute("aria-hidden"),
   ).toBe("true");
 });
+
+it("puts a row's own action beside it, never inside its button", async () => {
+  const onOpen = vi.fn();
+  const onRemove = vi.fn();
+  await act(async () =>
+    root.render(
+      <ActionList label="Saved views">
+        <ActionRow
+          title="Hot leads"
+          onClick={onOpen}
+          trailing={
+            <button
+              type="button"
+              aria-label="Remove Hot leads"
+              onClick={onRemove}
+            >
+              ×
+            </button>
+          }
+        />
+      </ActionList>,
+    ),
+  );
+  const item = host.querySelector("li")!;
+  const [row, remove] = [...item.querySelectorAll("button")];
+  expect(row.contains(remove)).toBe(false);
+  expect(item.hasAttribute("data-trailing")).toBe(true);
+  await act(async () => remove.click());
+  expect(onRemove).toHaveBeenCalledTimes(1);
+  expect(onOpen).not.toHaveBeenCalled();
+});
