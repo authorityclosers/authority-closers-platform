@@ -15,7 +15,8 @@
  * `?tab=all&stage=open&tap=bulk` ticks two leads and opens Select → Actions;
  * `tap=bulkwa` goes on to a WhatsApp template and who gets it.
  * `&views=1` keeps three saved views on this browser, one of them the view in use
- * (Open, Everyone); `&tap=views` then opens Views.
+ * (Open, Everyone); `&tap=views` then opens Views. `&q=` searches by name or city;
+ * `?tab=all&stage=open&q=nagpurx` shows an empty list's "Clear filters".
  */
 
 import { Suspense, useEffect, useState } from "react";
@@ -151,8 +152,13 @@ function answers(now: number, path: string): unknown {
     const params = new URLSearchParams(path.split("?")[1]);
     const stage = params.get("stage");
     const pipeline = params.get("pipeline");
+    // A search narrows by name or city, as the desk does (`&q=` on the page).
+    const words = (params.get("search") ?? "").toLowerCase();
     const inPipeline = all.filter(
-      (row) => !pipeline || row.pipeline === pipeline,
+      (row) =>
+        (!pipeline || row.pipeline === pipeline) &&
+        (!words ||
+          `${row.name} ${row.city ?? ""}`.toLowerCase().includes(words)),
     );
     const leads = inPipeline.filter((row) =>
       !stage || stage === "open"

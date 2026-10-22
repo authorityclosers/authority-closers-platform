@@ -341,7 +341,10 @@ export function DashboardBody({
               ) : recentState.status === "error" ? (
                 <NotLoaded />
               ) : recent === null || recent.length === 0 ? (
-                <Quiet text="No calls yet." />
+                <Quiet
+                  text="No calls yet."
+                  action={{ href: "/analysis/new", label: "Analyse a call" }}
+                />
               ) : (
                 <SectionBoundary name="Recent calls">
                   <RecentCallsList
@@ -421,8 +424,24 @@ function Figure({
   );
 }
 
-function Quiet({ text }: { text: string }) {
-  return <p className={styles.quiet}>{text}</p>;
+/** Nothing to show yet; where it is a list's first use, one way to start. */
+function Quiet({
+  text,
+  action,
+}: {
+  text: string;
+  action?: { href: string; label: string };
+}) {
+  return (
+    <p className={styles.quiet}>
+      {text}
+      {action ? (
+        <Link className={styles.textLink} href={action.href}>
+          {action.label}
+        </Link>
+      ) : null}
+    </p>
+  );
 }
 
 /** A failed read says so in place; the corner card offers the retry. */

@@ -445,7 +445,20 @@ export function TeamView({
   }, []);
 
   if (error)
-    return <Empty icon={Users} title="The team didn't load" text={error} />;
+    return (
+      <Empty
+        icon={Users}
+        title="The team didn't load"
+        text={error}
+        action={{
+          label: "Try again",
+          onClick: () => {
+            setError(null);
+            void load();
+          },
+        }}
+      />
+    );
   if (!team)
     return (
       <div

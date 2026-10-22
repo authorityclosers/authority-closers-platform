@@ -7,7 +7,7 @@
  * owners and admins, and hands the stage counts up for the tabs.
  */
 
-import { ListChecks, SearchX, Users } from "lucide-react";
+import { ListChecks, SearchX, UserPlus, Users } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { notify } from "../notice-center";
@@ -49,6 +49,10 @@ export function ListView({
   onCounts,
   pipeline = null,
   tools = null,
+  filtered = false,
+  onClearFilters,
+  onAdd,
+  onShowOpen,
 }: {
   canManage: boolean;
   /** "open", a stage kind, or "test". */
@@ -69,6 +73,12 @@ export function ListView({
   pipeline?: string | null;
   /** Beside Select on the list's head: the saved views. */
   tools?: ReactNode;
+  /** A search or whose-leads pick narrows the list (an empty list can clear it). */
+  filtered?: boolean;
+  onClearFilters?: () => void;
+  /** An empty Open list offers Add lead; another stage, the open leads. */
+  onAdd?: () => void;
+  onShowOpen?: () => void;
 }) {
   const [loaded, setLoaded] = useState<{
     key: string;
@@ -293,22 +303,14 @@ export function ListView({
             ))}
           </div>
         ) : rows.length === 0 ? (
-          <InlineEmpty
-            icon={query ? SearchX : Users}
-            title={
-              query
-                ? "No leads match"
-                : stage === TEST
-                  ? "No test leads"
-                  : `No leads in ${stageLabel}`
-            }
-            text={
-              query
-                ? "Try another name, city or the last digits of a number."
-                : stage === TEST
-                  ? "Test and sample leads show here, ready to clear."
-                  : "A lead moves here from its own page, after a call."
-            }
+          <EmptyList
+            stage={stage}
+            stageLabel={stageLabel}
+            query={query}
+            filtered={filtered || !!query}
+            onClearFilters={onClearFilters}
+            onAdd={onAdd}
+            onShowOpen={onShowOpen}
           />
         ) : (
           <>
@@ -394,5 +396,74 @@ export function ListView({
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * An empty list says what goes here and offers one way on (ease-of-use wave #9,
+ * 22 Oct 2026): a narrowed list clears its filters, an empty Open list adds a lead,
+ * any other stage goes back to the open leads.
+ */
+function EmptyList({
+  stage,
+  stageLabel,
+  query,
+  filtered,
+  onClearFilters,
+  onAdd,
+  onShowOpen,
+}: {
+  stage: string;
+  stageLabel: string;
+  query: string;
+  filtered: boolean;
+  onClearFilters?: () => void;
+  onAdd?: () => void;
+  onShowOpen?: () => void;
+}) {
+  const action = (label: string, run?: () => void) =>
+    run ? (
+      <Button onClick={run} className={styles.inlineEmptyAction}>
+        {label}
+      </Button>
+    ) : null;
+  if (filtered)
+    return (
+      <InlineEmpty
+        icon={SearchX}
+        title="No leads match"
+        text={
+          query
+            ? "Try another name, city or the last digits of a number."
+            : "Nobody here for whose leads you picked."
+        }
+        action={action("Clear filters", onClearFilters)}
+      />
+    );
+  if (stage === TEST)
+    return (
+      <InlineEmpty
+        icon={Users}
+        title="No test leads"
+        text="Test and sample leads show here, ready to clear."
+        action={action("See open leads", onShowOpen)}
+      />
+    );
+  if (stage === "open")
+    return (
+      <InlineEmpty
+        icon={UserPlus}
+        title="No leads yet"
+        text="Add your first lead, or connect your ad form in Lead sources."
+        action={action("Add lead", onAdd)}
+      />
+    );
+  return (
+    <InlineEmpty
+      icon={Users}
+      title={`No leads in ${stageLabel}`}
+      text="A lead moves here from its own page, after a call."
+      action={action("See open leads", onShowOpen)}
+    />
   );
 }

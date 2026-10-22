@@ -391,6 +391,9 @@
 }
 
 .quiet {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
   margin: 0;
   padding: 14px;
   border: 1px dashed var(--sx-line-strong);

@@ -2348,6 +2348,8 @@ export function LeadSheet({
     leadId: string;
     message: string;
   } | null>(null);
+  // "Try again" on a lead that didn't open reads it once more.
+  const [attempt, setAttempt] = useState(0);
   const [formKey, setFormKey] = useState(0);
   const [backFrom, setBackFrom] = useState<string | null>(null);
   const [heard, setHeard] = useState<NativeCall | null>(null);
@@ -2387,7 +2389,7 @@ export function LeadSheet({
         });
       });
     return () => controller.abort();
-  }, [leadId]);
+  }, [leadId, attempt]);
 
   const update = (next: LeadDetail) => {
     setLoaded(next);
@@ -2424,7 +2426,18 @@ export function LeadSheet({
         onClose={onClose}
       >
         {error ? (
-          <Empty icon={PhoneOff} title="This lead didn't open" text={error} />
+          <Empty
+            icon={PhoneOff}
+            title="This lead didn't open"
+            text={error}
+            action={{
+              label: "Try again",
+              onClick: () => {
+                setFailed(null);
+                setAttempt((value) => value + 1);
+              },
+            }}
+          />
         ) : detail ? (
           <>
             <LeadCard

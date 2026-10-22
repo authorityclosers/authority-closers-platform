@@ -572,6 +572,16 @@ export function LeadsRoute() {
     setPicked({ view, at: addressKey, pipeline: next });
     window.history.replaceState(null, "", viewHref(view, next, filters));
   };
+  // An empty list's "Clear filters": everyone's (or your own) leads, no search.
+  const filtersOn =
+    !!query || (can && scopeChoice !== null && scopeChoice !== "team");
+  const clearFilters = () => {
+    setScopeChoice(null);
+    setSearch("");
+    setQuery("");
+    setSearching(false);
+    window.history.replaceState(null, "", viewHref(view, pipeline));
+  };
   const chooseScope = (next: Scope) => {
     setScopeChoice(next);
     window.history.replaceState(
@@ -880,6 +890,10 @@ export function LeadsRoute() {
               onChanged={refresh}
               onCounts={onCounts}
               pipeline={pipeline}
+              filtered={filtersOn}
+              onClearFilters={clearFilters}
+              onAdd={() => begin("adding", setAdding)}
+              onShowOpen={() => go("open")}
               tools={
                 view === TEST ? null : (
                   <ViewsChip

@@ -336,9 +336,12 @@ function TeamHome({ desk }: { desk: Desk | null }) {
               ))}
             </ol>
           ) : (
-            <p className={styles.quiet}>
-              Add sellers in Organisation to see how each one does.
-            </p>
+            <div className={styles.quiet}>
+              <span>Add sellers to see how each one does.</span>
+              <Link className={styles.more} href="/organisation/invites">
+                Invite sellers
+              </Link>
+            </div>
           )
         ) : (
           <div className={styles.listSkeleton} aria-busy="true">
@@ -493,9 +496,12 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
         <div className={styles.head}>
           <h2>Today</h2>
         </div>
-        <p className={styles.quiet} role="status">
-          Your leads didn&apos;t load. Open Leads, or come back in a moment.
-        </p>
+        <div className={styles.quiet} role="status">
+          <span>Your leads didn&apos;t load. Come back in a moment.</span>
+          <Link className={styles.more} href="/leads">
+            Open Leads
+          </Link>
+        </div>
       </section>
     );
   const { desk } = state;
