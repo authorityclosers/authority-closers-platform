@@ -16,6 +16,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
 
 import { ChannelMark, ChatAvatar } from "./channel-mark";
@@ -263,6 +264,7 @@ export function ThreadList({
   now,
   onOpen,
   onClear,
+  canConnect = false,
 }: {
   threads: ChatThread[];
   filter: ChatFilter;
@@ -274,6 +276,8 @@ export function ThreadList({
   now: Date;
   onOpen: (thread: ChatThread) => void;
   onClear: () => void;
+  /** Owners and admins connect WhatsApp, Messenger and Instagram. */
+  canConnect?: boolean;
 }) {
   const shown = filterThreads(threads, filter, me);
   if (!threads.length)
@@ -287,6 +291,15 @@ export function ThreadList({
           When a lead writes on WhatsApp, Messenger or Instagram, the chat shows
           here.
         </p>
+        {canConnect ? (
+          <Link href="/settings/apps" className={styles.linkButton}>
+            Connect WhatsApp
+          </Link>
+        ) : (
+          <Link href="/leads" className={styles.linkButton}>
+            Message a lead
+          </Link>
+        )}
       </div>
     );
   if (!shown.length)

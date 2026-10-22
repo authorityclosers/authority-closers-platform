@@ -45,7 +45,9 @@ import {
   type Performance,
   type Period,
 } from "../leads/leads-client";
+import { readJourney, type Kind } from "../leads/journey/journey-client";
 import { KIND_WORDS } from "../leads/stage-tabs";
+import { several, usePipelines } from "../leads/use-pipelines";
 import { Avatar, Delta, Segmented } from "../ui/kit";
 import styles from "./sales-home.module.css";
 
@@ -352,7 +354,39 @@ function TeamHome({ desk }: { desk: Desk | null }) {
   );
 }
 
+/**
+ * The organisation's own name for each kind of stage, where it has one stage of
+ * that kind (Redmi, 22 Oct 2026: Home read "New / Not contacted" while Leads
+ * read "New enquiry / Couldn't reach"). Across several pipelines, the kinds.
+ */
+function useStageNames(): Partial<Record<Kind, string>> {
+  const pipes = usePipelines();
+  const [names, setNames] = useState<Partial<Record<Kind, string>>>({});
+  useEffect(() => {
+    let live = true;
+    readJourney().then(
+      (view) => {
+        if (!live) return;
+        const found: Partial<Record<Kind, string>> = {};
+        for (const kind of OPEN_KINDS) {
+          const own = view.stages.filter(
+            (stage) => !stage.archived && stage.kind === kind,
+          );
+          if (own.length === 1) found[kind] = own[0].label;
+        }
+        setNames(found);
+      },
+      () => undefined,
+    );
+    return () => {
+      live = false;
+    };
+  }, []);
+  return several(pipes) ? {} : names;
+}
+
 function Funnel({ pipeline }: { pipeline: Record<string, number> }) {
+  const names = useStageNames();
   const most = Math.max(1, ...OPEN_KINDS.map((kind) => pipeline[kind] ?? 0));
   return (
     <ul className={styles.funnel}>
@@ -361,7 +395,9 @@ function Funnel({ pipeline }: { pipeline: Record<string, number> }) {
         return (
           <li key={kind} data-kind={kind}>
             <Link href={`/leads?tab=all&stage=${kind}`}>
-              <span className={styles.funnelLabel}>{KIND_WORDS[kind]}</span>
+              <span className={styles.funnelLabel}>
+                {names[kind] ?? KIND_WORDS[kind]}
+              </span>
               <span className={styles.funnelTrack} aria-hidden="true">
                 <span
                   className={styles.funnelBar}

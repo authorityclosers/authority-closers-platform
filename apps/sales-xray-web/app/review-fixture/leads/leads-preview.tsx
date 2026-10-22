@@ -9,10 +9,13 @@
  * `?tab=stages&tap=change` the kinds of business. `&pipelines=2` gives the
  * organisation two pipelines (enquiries and partner outreach; `&pipeline=`
  * picks one), and `?tab=stages&pipelines=2&tap=new` opens New pipeline.
+ * `?after-call=1` opens the first lead as if a call to it just ended, so the
+ * "How did it go?" sheet shows (Redmi #47: Save says what it still needs).
  */
 
 import { Suspense, useEffect, useState } from "react";
 
+import { rememberCall } from "../../leads/leads-client";
 import { LeadsRoute } from "../../leads/leads-page";
 import { WorkspaceAccessContext } from "../../workspace-access";
 
@@ -156,6 +159,33 @@ function answers(now: number, path: string): unknown {
       stage_counts[row.stage] = (stage_counts[row.stage] ?? 0) + 1;
     return { leads, total: leads.length, next_offset: null, stage_counts };
   }
+  const one = /^\/v1\/lead-desk\/leads\/([0-9a-f-]{36})$/.exec(path);
+  const row = one ? all.find((item) => item.lead_id === one[1]) : undefined;
+  if (row)
+    return {
+      lead: row,
+      phone: "+91 98765 43210",
+      email: null,
+      owner_reason: null,
+      next_action_note: null,
+      fields: [],
+      source_fields: [],
+      events: [],
+      can_edit: true,
+      can_assign: true,
+      reps: [],
+      call_mode: "phone",
+      first_call_minutes: null,
+      stage_suggestion: null,
+      stage_choices: (
+        [
+          ["step_2", "Call back", "follow_up", "You spoke to them"],
+          ["step_3", "Site visit booked", "interested", "A visit is booked"],
+          ["step_4", "Booked", "won", "They bought"],
+          ["step_5", "Not interested", "lost", "They won't buy"],
+        ] as const
+      ).map(([key, label, kind, meaning]) => ({ key, label, kind, meaning })),
+    };
   if (path === "/v1/lead-desk/pipelines" && twoPipelines())
     return {
       pipelines: [
@@ -354,6 +384,16 @@ function answers(now: number, path: string): unknown {
 
 function install() {
   if (typeof window === "undefined") return true;
+  // `?after-call=1`: a call to the first lead ended 95 s ago; the lead opens.
+  if (new URLSearchParams(window.location.search).get("after-call") === "1") {
+    const first = rows(Date.now())[0].lead_id;
+    rememberCall(first, Date.now() - 95_000);
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${window.location.search}#lead=${first}`,
+    );
+  }
   const real = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const url = String(input instanceof Request ? input.url : input);
