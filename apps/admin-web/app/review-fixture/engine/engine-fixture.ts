@@ -394,7 +394,7 @@ const REGISTRY = {
   uptake: 0.1,
 };
 
-const module = (
+const moduleRow = (
   id: string,
   label: string | null,
   stage: string,
@@ -481,19 +481,19 @@ export function engineFixture(
       expected_per_minute: 0.735,
     },
     modules: [
-      module("c1.audio-check", "Audio check", "C1", {
+      moduleRow("c1.audio-check", "Audio check", "C1", {
         calls: 31,
         steps: 31,
         actual: 0,
         expected: 0,
       }),
-      module("c2.flash-lite", "Transcript · Gemini 3.1 Flash-Lite", "C2", {
+      moduleRow("c2.flash-lite", "Transcript · Gemini 3.1 Flash-Lite", "C2", {
         calls: 31,
         steps: 33,
         actual: 42.48,
         expected: 32.99,
       }),
-      module(
+      moduleRow(
         "c4.one-pass-v1",
         "One pass · facts, notes and 27-pointer review",
         "C4",
@@ -505,13 +505,13 @@ export function engineFixture(
           tokens: [118_400, 111_900, 79_800, 74_700],
         },
       ),
-      module("c5.after-one-pass", "Full report · coaching-v5", "C5", {
+      moduleRow("c5.after-one-pass", "Full report · coaching-v5", "C5", {
         calls: 18,
         steps: 18,
         actual: 32.7,
         expected: 33.27,
       }),
-      module(
+      moduleRow(
         "pr.in-one-pass",
         "Pointer review · inside the one-pass read",
         "PR",
@@ -522,13 +522,13 @@ export function engineFixture(
           expected: 0,
         },
       ),
-      module("cdf.fast", "Lead details · fast call data", "CDF", {
+      moduleRow("cdf.fast", "Lead details · fast call data", "CDF", {
         calls: 13,
         steps: 13,
         actual: 0.61,
         expected: 0.66,
       }),
-      module("C4·gpt-6-luna:flex", null, "C4", {
+      moduleRow("C4·gpt-6-luna:flex", null, "C4", {
         calls: 2,
         steps: 2,
         actual: 0,
