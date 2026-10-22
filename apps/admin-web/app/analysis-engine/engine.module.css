@@ -1,0 +1,95 @@
+/* Analysis engine: expected against actual per module, plans and the registry. */
+.note {
+  margin: 0 0 10px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.note[data-tone="warn"] {
+  color: var(--sx-warn);
+}
+
+.muted {
+  color: var(--sx-muted);
+}
+
+.name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name small,
+.registry small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.ratio,
+.tokens {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.ratio {
+  font-weight: 600;
+}
+
+.ratio[data-tone="good"] {
+  color: var(--sx-good);
+}
+
+.ratio[data-tone="warn"] {
+  color: var(--sx-warn);
+}
+
+.ratio[data-tone="bad"] {
+  color: var(--sx-bad);
+}
+
+.tokens small {
+  color: var(--sx-muted);
+}
+
+.registry {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.registry li {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 10px;
+}
+
+.registryHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+}
+
+.examples {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.examples b {
+  color: var(--sx-ink, inherit);
+  font-weight: 600;
+}
