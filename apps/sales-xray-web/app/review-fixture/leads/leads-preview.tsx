@@ -10,7 +10,9 @@
  * organisation two pipelines (enquiries and partner outreach; `&pipeline=`
  * picks one), and `?tab=stages&pipelines=2&tap=new` opens New pipeline.
  * `?after-call=1` opens the first lead as if a call to it just ended, so the
- * "How did it go?" sheet shows (Redmi #47: Save says what it still needs).
+ * "How did it go?" sheet shows (Redmi #47: Save says what it still needs);
+ * `&tap=next` then saves "Didn't get through" and shows who is next.
+ * `?tab=all&stage=open&tap=bulk` ticks two leads and opens Select → Actions.
  */
 
 import { Suspense, useEffect, useState } from "react";
@@ -159,7 +161,26 @@ function answers(now: number, path: string): unknown {
       stage_counts[row.stage] = (stage_counts[row.stage] ?? 0) + 1;
     return { leads, total: leads.length, next_offset: null, stage_counts };
   }
-  const one = /^\/v1\/lead-desk\/leads\/([0-9a-f-]{36})$/.exec(path);
+  if (path.startsWith("/v1/lead-desk/next")) {
+    const after = all[1];
+    return {
+      lead: after,
+      phone: "+91 98765 43211",
+      email: null,
+      owner_reason: null,
+      next_action_note: null,
+      fields: [],
+      source_fields: [],
+      events: [],
+      can_edit: true,
+      can_assign: true,
+      reps: [],
+      call_mode: "phone",
+    };
+  }
+  const one = /^\/v1\/lead-desk\/leads\/([0-9a-f-]{36})(\/dispose)?$/.exec(
+    path,
+  );
   const row = one ? all.find((item) => item.lead_id === one[1]) : undefined;
   if (row)
     return {
@@ -417,6 +438,31 @@ function install() {
 function useTap() {
   useEffect(() => {
     const tap = new URLSearchParams(window.location.search).get("tap");
+    const press = (text: string) =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+        .find((button) => button.textContent?.trim().startsWith(text))
+        ?.click();
+    if (tap === "next" || tap === "bulk") {
+      const steps =
+        tap === "next"
+          ? ["Didn't get through", "No answer", "Save"]
+          : ["Select", "", "", "Actions"];
+      const timers = steps.map((text, index) =>
+        window.setTimeout(
+          () => {
+            if (text) press(text);
+            else
+              document
+                .querySelectorAll<HTMLButtonElement>(
+                  'li button[aria-checked="false"]',
+                )[0]
+                ?.click();
+          },
+          900 + index * 300,
+        ),
+      );
+      return () => timers.forEach((timer) => window.clearTimeout(timer));
+    }
     if (tap !== "menu" && tap !== "change" && tap !== "new") return;
     const timer = window.setTimeout(
       () =>
