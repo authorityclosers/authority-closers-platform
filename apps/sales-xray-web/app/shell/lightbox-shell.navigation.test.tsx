@@ -96,7 +96,8 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
     ),
   ).not.toBeNull();
 
-  // The phone bar carries no account pill: More in the tab bar opens it.
+  // The phone bar carries no account pill: the avatar in the top bar opens
+  // You (the new map, 22 Oct: no More tab).
   expect(
     host.querySelectorAll(
       'button[aria-label="Open AC account menu"][aria-expanded="false"]',
@@ -123,7 +124,7 @@ it("makes the sidebar search open Calls with the typed text", () => {
   expect(form?.querySelector("kbd")?.textContent).toBe("Ctrl K");
 });
 
-// Owner, 17 Oct: five tabs; 20 Oct: "5 tabs, Chats inside Leads".
+// The new map (owner, 22 Oct 2026): Home, Leads, + (Add), Chats, Calls.
 it("keeps the phone tab bar to its five tabs, plus a dev settings control", () => {
   for (const liveData of [false, true]) {
     const shell = (
@@ -142,18 +143,21 @@ it("keeps the phone tab bar to its five tabs, plus a dev settings control", () =
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? ["Home", "Leads", "Add", "Calls", "More", "Settings"]
-        : ["Home", "Leads", "Add", "Calls", "More"],
+        ? ["Home", "Leads", "Add", "Chats", "Calls", "Settings"]
+        : ["Home", "Leads", "Add", "Chats", "Calls"],
     );
-    // Owner, 17 Oct: Prospects and Coaching open from the More sheet.
+    // Prospects and Coaching open from You, not from the tab bar.
     expect(nav.querySelector('a[href="/prospects"]')).toBeNull();
     expect(nav.querySelector('a[href="/coaching"]')).toBeNull();
-    // Chats opens from the Leads | Chats switch, not its own tab.
-    expect(nav.querySelector('a[href="/chats"]')).toBeNull();
-    const more = Array.from(nav.querySelectorAll("button")).find(
-      (button) => button.textContent?.trim() === "More",
-    );
-    expect(more?.getAttribute("aria-haspopup")).toBe("dialog");
+    // Chats is its own tab now.
+    expect(nav.querySelector('a[href="/chats"]')).not.toBeNull();
+    // Add is the only tab that is a button: it asks what to add (the dev
+    // settings control is the other button, and only with live data).
+    expect(
+      Array.from(nav.querySelectorAll("button"), (button) =>
+        button.textContent?.trim(),
+      ),
+    ).toEqual(liveData ? ["Add", "Settings"] : ["Add"]);
     expect(
       nav.querySelector('[aria-current="page"]')?.getAttribute("href"),
     ).toBe("/dashboard");
@@ -177,7 +181,7 @@ it("keeps the five tabs for an unconfirmed session; signed out offers Home, New 
         <p>Dashboard</p>
       </AcquisitionShell>,
     ),
-  ).toEqual(["Home", "Leads", "Add", "Calls", "More"]);
+  ).toEqual(["Home", "Leads", "Add", "Chats", "Calls"]);
   // B22: Leads and Calls only lead to a sign-in prompt for a visitor.
   expect(
     tabs(

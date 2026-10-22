@@ -1,11 +1,13 @@
 import { CALLS_PATH, NEW_ANALYSIS_PATH } from "../analysis-routes";
 
 /**
- * The five phone tabs (owner, 17 Oct): everything else lives under More.
- * Chats lives inside Leads on phones (owner, 20 Oct: "5 tabs, Chats inside
- * Leads"); computers keep a Chats item in the rail.
+ * The five phone tabs of the new map (owner, 22 Oct 2026: "Approved: the new
+ * map"): Home, Leads, + (Add), Chats and Calls. More is gone: your avatar
+ * opens You, with your settings and the organisation's. A page that is not a
+ * tab lights the place it belongs to (Prospects under Leads, Coaching under
+ * Calls, the organisation's pages under Home); Settings lights none.
  */
-export type PhoneTab = "dashboard" | "leads" | "calls" | "new" | "more";
+export type PhoneTab = "dashboard" | "leads" | "chats" | "calls" | "new";
 
 export type ShellActive =
   | "dashboard"
@@ -20,18 +22,18 @@ export type ShellActive =
   | "insights"
   | "review";
 
-const FROM_ACTIVE: Record<ShellActive, PhoneTab> = {
+const FROM_ACTIVE: Record<ShellActive, PhoneTab | null> = {
   dashboard: "dashboard",
   leads: "leads",
-  chats: "leads",
+  chats: "chats",
   analyse: "new",
   calls: "calls",
-  prospects: "more",
-  coaching: "more",
-  account: "more",
-  organisation: "more",
-  insights: "more",
-  review: "more",
+  prospects: "leads",
+  coaching: "calls",
+  account: null,
+  organisation: "dashboard",
+  insights: "dashboard",
+  review: null,
 };
 
 const under = (pathname: string, root: string) =>
@@ -49,25 +51,21 @@ export function phoneTabFor(
   if (pathname) {
     if (under(pathname, "/dashboard")) return "dashboard";
     if (under(pathname, "/leads")) return "leads";
-    if (under(pathname, "/chats")) return "leads";
+    if (under(pathname, "/chats")) return "chats";
     if (under(pathname, CALLS_PATH) || under(pathname, "/calls"))
       return "calls";
+    if (under(pathname, "/prospects")) return "leads";
+    if (under(pathname, "/coaching")) return "calls";
+    if (under(pathname, "/organisation")) return "dashboard";
+    if (
+      ["/account", "/settings", "/plans"].some((root) => under(pathname, root))
+    )
+      return null;
     // A call analysed here keeps /analysis/new in the router while the
     // address bar already shows the call: once the page says it is that
     // call's report, it is under Calls (owner, 19 Oct).
     if (under(pathname, NEW_ANALYSIS_PATH))
       return active === "calls" ? "calls" : "new";
-    if (
-      [
-        "/prospects",
-        "/coaching",
-        "/organisation",
-        "/account",
-        "/settings",
-        "/plans",
-      ].some((root) => under(pathname, root))
-    )
-      return "more";
   }
   return active ? FROM_ACTIVE[active] : null;
 }

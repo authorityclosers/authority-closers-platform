@@ -4,7 +4,6 @@ import {
   BarChart3,
   Building2,
   ChevronDown,
-  Ellipsis,
   FolderOpen,
   GraduationCap,
   LayoutGrid,
@@ -192,7 +191,7 @@ function resolvePageTitle(
   pageName?: string,
 ): string | null {
   if (pageName) return pageName;
-  if (active === "dashboard") return "Dashboard";
+  if (active === "dashboard") return "Home";
   if (heading) return heading.title;
   if (active === "calls") return "Calls";
   if (active === "leads") return "Leads";
@@ -712,7 +711,7 @@ function LightboxShellFrame({
   const [createOpen, setCreateOpen] = useState(false);
   const [workspaceSheetOpen, setWorkspaceSheetOpen] = useState(false);
 
-  // Phones: the avatar in the top bar and More in the tab bar open one sheet.
+  // Phones: the avatar in the top bar opens You (there is no More tab).
   function toggleAccountSheet(event: MouseEvent<HTMLElement>) {
     if (!authenticated) return;
     accountAnchorRef.current = event.currentTarget;
@@ -928,13 +927,13 @@ function LightboxShellFrame({
             <ScreenLink
               className={`${styles.stripBtn}${place === "dashboard" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/dashboard"
-              aria-label="Dashboard"
-              data-rail-tip="Dashboard"
+              aria-label="Home"
+              data-rail-tip="Home"
               aria-current={place === "dashboard" ? "page" : undefined}
             >
               <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
               <span className={styles.railPill} aria-hidden="true" />
-              <span style={RAIL_NAME_STYLE}>Dashboard</span>
+              <span style={RAIL_NAME_STYLE}>Home</span>
             </ScreenLink>
             <ScreenLink
               className={`${styles.stripBtn}${place === "leads" ? ` ${styles.stripBtnActive}` : ""}`}
@@ -1318,7 +1317,7 @@ function LightboxShellFrame({
           ) : (
             <BrandLockup href={homeHref} />
           )}
-          {/* The account lives under More in the tab bar, not here too. */}
+          {/* You opens from the avatar on the left, not from here too. */}
           <div className={styles.barActions}>
             <ReviewBarChip live={leadsBadgeLive} />
             {bell}
@@ -1399,10 +1398,10 @@ function LightboxShellFrame({
           </SectionBoundary>
         </main>
       </div>
-      {/* Owner, 17 and 20 Oct: five clear tabs on phones (Home, Leads, New,
-          Calls, More), nothing else. Chats opens from the Leads | Chats
-          switch; Prospects, Coaching and the organisation pages live in the
-          More sheet. */}
+      {/* The new map (owner, 22 Oct 2026): five tabs on phones, Home, Leads,
+          + (Add), Chats and Calls. Your avatar in the top bar opens You (your
+          settings, the organisation's, the other places, Log out), so there
+          is no More tab. */}
       <nav
         ref={tabBarRef}
         className={styles.bottomNav}
@@ -1424,9 +1423,7 @@ function LightboxShellFrame({
             href="/leads"
             aria-current={phoneTab === "leads" ? "page" : undefined}
           >
-            {/* Chats live inside Leads on phones (owner, 20 Oct: "5 tabs,
-                Chats inside Leads"), so unread chats count here too. */}
-            <LeadsTabIcon size={20} live={leadsBadgeLive} withChats />
+            <LeadsTabIcon size={20} live={leadsBadgeLive} />
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Leads</span>
           </ScreenLink>
@@ -1464,6 +1461,18 @@ function LightboxShellFrame({
             <span>Add</span>
           </button>
         )}
+        {/* Chats has its own tab and its own unread count. */}
+        {guest ? null : (
+          <ScreenLink
+            className={styles.bottomLink}
+            href="/chats"
+            aria-current={phoneTab === "chats" ? "page" : undefined}
+          >
+            <ChatsTabIcon size={20} live={leadsBadgeLive} />
+            <span className={styles.tabPill} aria-hidden="true" />
+            <span>Chats</span>
+          </ScreenLink>
+        )}
         {guest ? null : (
           <ScreenLink
             className={styles.bottomLink}
@@ -1476,7 +1485,7 @@ function LightboxShellFrame({
           </ScreenLink>
         )}
         {/* Signed out shows Sign in (the phone app has its own sign-in
-            screen, so it hides this); an unconfirmed session keeps More. */}
+            screen, so it hides this). */}
         {guest ? (
           <ScreenLink
             className={`${styles.bottomLink} sx-web-only`}
@@ -1487,20 +1496,7 @@ function LightboxShellFrame({
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Sign in</span>
           </ScreenLink>
-        ) : (
-          <button
-            type="button"
-            className={styles.bottomLink}
-            onClick={toggleAccountSheet}
-            aria-haspopup="dialog"
-            aria-expanded={accountCardOpen && authenticated}
-            aria-current={phoneTab === "more" ? "page" : undefined}
-          >
-            <Ellipsis size={20} aria-hidden="true" />
-            <span className={styles.tabPill} aria-hidden="true" />
-            <span>More</span>
-          </button>
-        )}
+        ) : null}
         {/* Local live-data development only; never on a served site. */}
         <LocalSettingsButton className={styles.bottomLink} />
       </nav>

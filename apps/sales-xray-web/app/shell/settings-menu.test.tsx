@@ -95,12 +95,12 @@ it("opens beside the gear on a computer, inside the window", async () => {
   );
 });
 
-it("opens as a sheet on a phone, named Account, which swipes away", async () => {
+it("opens as a sheet on a phone, named You, which swipes away", async () => {
   asPhone(true);
   const sheet = await open();
   expect(sheet.tagName).toBe("DIALOG");
   const title = document.getElementById(sheet.getAttribute("aria-labelledby")!);
-  expect(title?.textContent).toBe("Account");
+  expect(title?.textContent).toBe("You");
   expect(sheet.textContent).toContain("Fictional User");
   expect(sheet.textContent).toContain("Log out");
 });
@@ -429,4 +429,41 @@ it("asks the server for nothing while closed, though it stays mounted", async ()
     },
   );
   expect(fetcher).not.toHaveBeenCalled();
+});
+
+// The new map (owner, 22 Oct 2026): no More tab; You holds every setting,
+// two taps from anywhere, and the organisation's only for its owners and
+// admins.
+it("puts your settings, and an organisation's for its managers, in You", async () => {
+  asPhone(true);
+  const rows = async (props: Props) => {
+    const sheet = await open(props);
+    const list = (label: string) =>
+      [
+        ...sheet.querySelectorAll<HTMLAnchorElement>(
+          `ul[aria-label="${label}"] a`,
+        ),
+      ].map((link) => link.getAttribute("href"));
+    return {
+      yours: list("Your settings"),
+      theirs: list("Organisation settings"),
+    };
+  };
+  const manager = await rows({ organisation: true, insights: true });
+  expect(manager.yours).toEqual([
+    "/settings/profile",
+    "/settings/selling",
+    "/settings/notifications",
+  ]);
+  expect(manager.theirs).toEqual([
+    "/settings/team",
+    "/leads?tab=stages",
+    "/settings/apps",
+    "/settings/call-ai",
+  ]);
+  await act(async () => root.unmount());
+  host.remove();
+  const seller = await rows({ organisation: true, insights: false });
+  expect(seller.yours).toHaveLength(3);
+  expect(seller.theirs).toEqual([]);
 });
