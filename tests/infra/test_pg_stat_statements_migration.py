@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from pathlib import Path
+
+import pytest
 
 from tests.infra.test_postgres_launch_tuning import database as _database
 from tests.infra.test_postgres_launch_tuning import docker, psql
@@ -41,7 +44,8 @@ def test_fixed_operation_rejects_arguments_and_identity_before_connecting(tmp_pa
         assert MARKER not in result.stdout + result.stderr
 
 
-def test_runtime_secret_stays_in_environment_and_sql_has_one_fixed_extension(tmp_path):
+@pytest.mark.parametrize("shell_flags", [[], ["-x"]], ids=["normal", "inherited-trace"])
+def test_runtime_secret_stays_in_environment_and_sql_has_one_fixed_extension(tmp_path, shell_flags):
     psql_fake = tmp_path / "psql"
     psql_fake.write_text(
         "#!/bin/sh\n"
@@ -51,7 +55,7 @@ def test_runtime_secret_stays_in_environment_and_sql_has_one_fixed_extension(tmp
     )
     psql_fake.chmod(0o755)
     result = subprocess.run(  # noqa: S603 - fixed script with mocked psql
-        ["/bin/sh", str(SCRIPT)],
+        ["/bin/sh", *shell_flags, str(SCRIPT)],
         env={
             "PATH": str(tmp_path),
             "FIXTURE": str(tmp_path),
@@ -78,7 +82,31 @@ def test_runtime_secret_stays_in_environment_and_sql_has_one_fixed_extension(tmp
     assert "e.extversion = '1.12'" in sql and "r.rolname = 'ac_owner'" in sql
 
 
-def run_extension(database, *, check=True):
+@pytest.mark.parametrize("password", [None, ""], ids=["missing", "empty"])
+def test_missing_owner_secret_refuses_before_psql(tmp_path, password):
+    psql_fake = tmp_path / "psql"
+    psql_fake.write_text("#!/bin/sh\nprintf unexpected-connection\nexit 99\n")
+    psql_fake.chmod(0o755)
+    env = {
+        "PATH": str(tmp_path),
+        "POSTGRES_USER": "ac_owner",
+        "POSTGRES_DB": "ac_platform",
+    }
+    if password is not None:
+        env["POSTGRES_PASSWORD"] = password
+    result = subprocess.run(  # noqa: S603 - fixed script, fictional environment
+        ["/bin/sh", "-x", str(SCRIPT)],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    assert "unexpected-connection" not in result.stdout + result.stderr
+    assert "Owner password must be injected" in result.stderr
+
+
+def run_extension(database, *, password=MARKER, check=True):
     return docker(
         "exec",
         "--interactive",
@@ -87,7 +115,7 @@ def run_extension(database, *, check=True):
         "--env",
         "POSTGRES_DB=ac_platform",
         "--env",
-        "POSTGRES_PASSWORD=" + MARKER,
+        "POSTGRES_PASSWORD=" + password,
         database,
         "sh",
         "-eu",
@@ -96,11 +124,60 @@ def run_extension(database, *, check=True):
     )
 
 
+def require_owner_password(database):
+    """Require actual runtime-secret authentication only in the disposable PG."""
+    docker(
+        "exec",
+        "--user",
+        "postgres",
+        database,
+        "sh",
+        "-eu",
+        "-c",
+        'fixture_hba=$(mktemp "$PGDATA/.pg_hba.aut2203.XXXXXX"); '
+        "trap 'rm -f -- \"$fixture_hba\"' EXIT; "
+        "printf '%s\\n' 'host ac_platform ac_owner 127.0.0.1/32 scram-sha-256' "
+        '> "$fixture_hba"; '
+        'cat "$PGDATA/pg_hba.conf" >> "$fixture_hba"; '
+        'mv -- "$fixture_hba" "$PGDATA/pg_hba.conf"',
+    )
+    psql(database, "SELECT pg_reload_conf();")
+    # Reload is asynchronous. Refusal must be observed before any success can
+    # count as proof that the injected password authenticated the owner.
+    deadline = time.monotonic() + 5
+    while True:
+        refused = docker(
+            "exec",
+            "--env",
+            "PGPASSWORD=fictional-wrong-password",
+            database,
+            "psql",
+            "-XqAt",
+            "--no-password",
+            "-h",
+            "127.0.0.1",
+            "-U",
+            "ac_owner",
+            "-d",
+            "ac_platform",
+            "-c",
+            "SELECT 1",
+            check=False,
+        )
+        output = refused.stdout + refused.stderr
+        assert MARKER not in output and "fictional-wrong-password" not in output
+        if refused.returncode != 0:
+            assert "password authentication failed" in refused.stderr
+            break
+        assert time.monotonic() < deadline, "fixture never required the owner password"
+        time.sleep(0.1)
+
+
 def test_actual_absent_installed_and_restricted_role_contract(database):
     psql(
         database,
         """
-        CREATE ROLE ac_owner LOGIN SUPERUSER;
+        CREATE ROLE ac_owner LOGIN SUPERUSER PASSWORD 'fictional-password-never-print';
         CREATE ROLE ac_migrator LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
                 NOINHERIT NOREPLICATION NOBYPASSRLS;
         CREATE ROLE ac_runtime LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
@@ -110,6 +187,7 @@ def test_actual_absent_installed_and_restricted_role_contract(database):
         CREATE DATABASE ac_platform OWNER ac_owner;
     """,
     )
+    require_owner_password(database)
     roles_sql = """
         SELECT rolname, rolsuper, rolcreatedb, rolcreaterole,
                rolinherit, rolreplication, rolbypassrls
@@ -211,10 +289,12 @@ def test_actual_wrong_existing_extension_owner_is_refused_atomically(database):
             CREATE ROLE ac_backup LOGIN NOINHERIT;
           END IF;
         END$$;
+        ALTER ROLE ac_owner PASSWORD 'fictional-password-never-print';
         DROP DATABASE IF EXISTS ac_platform;
         CREATE DATABASE ac_platform OWNER ac_owner;
     """,
     )
+    require_owner_password(database)
     docker(
         "exec",
         database,

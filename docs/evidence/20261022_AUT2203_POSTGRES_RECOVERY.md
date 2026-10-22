@@ -48,7 +48,7 @@ Root remains the sole host/release executor on the parent; no parent mutation is
 
 Retained evidence: `/home/acdev/strikes/2203/evidence/`. Temporary test files are run-owned under `PAPERCLIP_RUN_SCRATCH_DIR`.
 
-Source SHA256:
+Initial source SHA256 (commit `aaf81fb5821c376ad3f544e5b653aaca9a4dd54c`):
 - `infra/application/scripts/install-application-release.sh`: `62a33eca57f5f410cde9d02ce38e4ce18b27bd518f74f022c9e540f360b16f62`
 - `infra/application/scripts/migrate-pg-stat-statements.sh`: `27943140d082aa5a9028394996326f6dacc7d31845283391b2f62a46212fee6e`
 - `tests/infra/test_postgres_release_recovery.py`: `2881f007b9c10b329fe3aecb2949c9585262c9e900860ce4d054a6fb25855e18`
@@ -56,3 +56,13 @@ Source SHA256:
 - `tests/infra/test_application_release_archive.py`: `f27ba084426489da56a40e9397aa72eda4afaa3369a0c963d3c93122543ca560`
 
 PostgreSQL primary references: [CREATE EXTENSION privileges, IF NOT EXISTS caveat and explicit version/schema](https://www.postgresql.org/docs/18/sql-createextension.html); [preload and per-database SQL objects](https://www.postgresql.org/docs/18/pgstatstatements.html). Actual final extension tests remain pending; documentation is not execution evidence.
+
+## CTO wake: close an authentication-proof gap
+
+The CTO's comment `0e99e4ab-6299-44fc-ad00-74c77a82e08a` correctly withholds approval. The coordinator and Platform inboxes still contain no migration allocation, receiving/source-selection acknowledgment or authorized extension-image result. The shared head at inspection was the initial source commit above. No final numbered integration or release PR is claimed; workbench rules reserve release PR creation to the authorized release owner.
+
+The extension fixture previously used trust authentication, which could accept an incorrect owner password. The two pending Docker tests now set a fictional owner password, require SCRAM for that owner's IPv4 connection **inside the disposable container only**, observe incorrect-password refusal, and then invoke the fixed migration script with its injected password. During asynchronous configuration reload, the refusal probe executes only `SELECT 1`, preserving the absent-extension case. Existing restricted-role and wrong-extension-owner assertions remain. This fixture correction has not been executed against Docker by Platform and must be included in the authorized executor's final proof.
+
+Executed local checks: `uv run pytest -q tests/infra/test_pg_stat_statements_migration.py tests/infra/test_postgres_release_recovery.py` — **15 passed, 2 skipped, exit 0, 1.80s**. This includes new missing/empty-password refusal before connection and inherited-shell-trace protection. Both isolated-image tests remain skipped, not passed. Ruff format/check, HTTP import and owned whitespace checks pass. Retained receipt: `/home/acdev/strikes/2203/evidence/cto-wake-verification.json`.
+
+Updated extension test SHA256: `ea73dbe587f9a7eb4d288e4fe56b347181fee898ba00ac32b662b11ca4a759c0`. Installer and privileged-script bytes are unchanged from the initial source hashes. The existing coordinator must supply the allocated revision/down_revision and receiving/source selection; the authorized isolated-image executor must return the final test result. Platform then integrates and submits the complete exact source for CTO review and CEO admission. Root remains the sole live restart/release executor on [AUT-2202](/AUT/issues/AUT-2202).
