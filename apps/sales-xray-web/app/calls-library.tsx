@@ -2090,7 +2090,14 @@ function CallsLibraryContent({
             open={previewSubmission !== null}
             id={shownPreview.id}
             title={titleOf(shownPreview)}
-            meta={`${formatCreatedDate(shownPreview.createdAt, dates)} · ${formatCreatedTime(shownPreview.createdAt, dates)} · ${lengthOf(shownPreview, rowInsight(shownPreview))}`}
+            // The length in words, as the rows say it, never a second clock.
+            meta={[
+              formatCreatedDate(shownPreview.createdAt, dates),
+              formatCreatedTime(shownPreview.createdAt, dates),
+              lengthCell(shownPreview, rowInsight(shownPreview)).words,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
             status={submissionState(shownPreview)}
             tone={callTone(shownPreview)}
             insight={rowInsight(shownPreview)}

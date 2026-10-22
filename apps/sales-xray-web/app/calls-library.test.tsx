@@ -1752,4 +1752,7 @@ it("names each call's lead and where it stands, once", async () => {
   );
   expect(leadRow?.textContent).toContain("Asha Fictional");
   expect(leadRow?.textContent).toContain("Lead · Interested");
+  // Its subtitle gives the length in words too.
+  expect(document.body.textContent).toMatch(/· 1 min/);
+  expect(document.body.textContent).not.toMatch(/\d{2}:\d{2} · \d{2}:\d{2}/);
 });
