@@ -244,6 +244,7 @@ def test_cold_cache_captures_dependencies_and_warm_cache_never_contacts_mirrors(
     assert "transitive-lib_1_amd64.deb" in record["archives"]
     (install,) = cold.of("offline-install")
     assert "--no-download" in install and "--no-remove" in install
+    assert f"Dir::Cache::archives={tmp_path}/" in install
     assert str(tmp_path / "transitive-lib_1_amd64.deb") in install
 
     warm = FakeHost(installed={"util-linux", "e2fsprogs"}, failures={"update": ["timeout"] * 3})
@@ -307,57 +308,76 @@ def test_cache_key_tracks_runner_image_components_and_locked_node_packages(monke
 @pytest.mark.skipif(
     not shutil.which("apt-get") or not shutil.which("dpkg-deb"), reason="Debian tools"
 )
-def test_real_apt_resolves_local_transaction_without_indexes_or_network(tmp_path) -> None:
-    # Exercise the real solver with fictional Debian packages and an empty dpkg
-    # status/index. Simulation cannot change this host's package state.
+def test_real_apt_passes_local_archives_to_dpkg_without_indexes_or_network(tmp_path) -> None:
+    # Exercise real acquisition, not --simulate/--download-only (both can hide
+    # a wrong archive directory). Replace dpkg with a recorder so host package
+    # configuration and post-install hooks cannot run.
     archives = []
+    directory = tmp_path / "archives"
+    (directory / "partial").mkdir(parents=True)
     for name, dependency in [("ac-ci-fixture-dep", ""), ("ac-ci-fixture", "ac-ci-fixture-dep")]:
         package = tmp_path / name
         (package / "DEBIAN").mkdir(parents=True)
         (package / "DEBIAN/control").write_text(
             f"Package: {name}\nVersion: 1.0\nArchitecture: all\nMaintainer: CI <ci@example.test>\n"
             + (f"Depends: {dependency}\n" if dependency else "")
-            + "Description: fictional CI offline solver fixture\n"
+            + "Description: fictional CI offline acquisition fixture\n"
         )
-        archive = tmp_path / f"{name}.deb"
+        archive = directory / f"{name}_1.0_all.deb"
         subprocess.run(  # noqa: S603 - fixed executable and fictional fixture paths
             ["/usr/bin/dpkg-deb", "--build", str(package), str(archive)],
             check=True,
             capture_output=True,
         )
         archives.append(str(archive))
+    (tmp_path / "state/lists/partial").mkdir(parents=True)
+    (tmp_path / "empty-config").mkdir()
+    (tmp_path / "log").mkdir()
     (tmp_path / "status").touch()
-    (tmp_path / "lists/partial").mkdir(parents=True)
-    result = subprocess.run(  # noqa: S603 - isolated solver simulation, fixed fixture inputs
-        [
-            "/usr/bin/apt-get",
-            "--simulate",
-            "--no-download",
-            "--no-remove",
-            "--no-install-recommends",
-            "-o",
-            f"Dir::State::status={tmp_path / 'status'}",
-            "-o",
-            f"Dir::State::lists={tmp_path / 'lists'}",
-            "-o",
-            f"Dir::Cache={tmp_path / 'cache'}",
-            "-o",
-            f"Dir::Etc::sourcelist={tmp_path / 'no-sources'}",
-            "-o",
-            f"Dir::Etc::sourceparts={tmp_path / 'no-source-parts'}",
-            "-o",
-            "Debug::NoLocking=1",
-            "install",
-            *archives,
-        ],
-        capture_output=True,
-        text=True,
-        timeout=30,
-        env={**os.environ, "LC_ALL": "C"},
+    (tmp_path / "empty.conf").touch()
+    recorder = tmp_path / "dpkg-recorder"
+    calls = tmp_path / "dpkg-argv"
+    recorder.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\" >> " + shlex.quote(str(calls)) + "\n")
+    recorder.chmod(0o700)
+    config = tmp_path / "apt.conf"
+    config.write_text(
+        f'Dir::Etc::parts "{tmp_path}/empty-config";\nDir::Etc::main "{tmp_path}/empty.conf";\n'
     )
+    command = [
+        "/usr/bin/apt-get",
+        "--yes",
+        "--no-download",
+        "--no-remove",
+        "--no-install-recommends",
+    ]
+    for key, value in [
+        ("Dir::State", tmp_path / "state"),
+        ("Dir::State::status", tmp_path / "status"),
+        ("Dir::Cache", tmp_path / "empty-cache"),
+        ("Dir::Log", tmp_path / "log"),
+        ("Dir::Etc::sourcelist", tmp_path / "empty.conf"),
+        ("Dir::Etc::sourceparts", tmp_path / "empty-config"),
+        ("Dir::Bin::dpkg", recorder),
+        ("Debug::NoLocking", "1"),
+    ]:
+        command += ["-o", f"{key}={value}"]
+
+    def install(options):
+        return subprocess.run(  # noqa: S603 - real apt, isolated state, no-op dpkg, fictional inputs
+            [*command, *options, "install", *archives],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={**os.environ, "APT_CONFIG": str(config), "LC_ALL": "C"},
+        )
+
+    # This is the exact hosted failure, reproduced with no mirror or root access.
+    assert install([]).returncode != 0
+    result = install(["-o", f"Dir::Cache::archives={directory}/"])
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "Inst ac-ci-fixture-dep" in result.stdout
-    assert "Inst ac-ci-fixture " in result.stdout
+    assert "--unpack" in calls.read_text()
+    assert all(path in calls.read_text() for path in archives)
+    assert (tmp_path / "status").read_text() == ""
 
 
 def test_main_reports_a_github_error_and_nonzero(monkeypatch, capsys) -> None:

@@ -12,16 +12,21 @@ Workbench prerequisite and Node installs run in the foreground. Previously `bash
 
 ## Verification
 
-- Focused prerequisite, registration workflow and recovery workflow checks: **73 passed** (22.39 s).
+- Focused prerequisite, registration workflow and recovery workflow checks: **74 passed** (14.05 s).
 - Ruff formatting and lint: pass for all touched Python files.
 - Required `uv run python -c "import ac_platform.http"`: pass.
-- Real apt solver fixture: resolves two fictional local Debian packages, including their dependency, with empty package indexes/status and no configured sources. Both simulation and acquisition (`--download-only --no-download`) succeed; host packages remain unchanged.
+- Real apt acquisition fixture: two fictional Debian packages with a dependency, empty package indexes/status and no configured sources. The real install path rejects the wrong archive directory and passes the cached archives to a recording dpkg stub when the directory matches. The stub prevents host package changes and post-install hooks. Solver simulation/download-only had hidden this distinction; both are insufficient evidence for offline installation.
 - Fake-host tests prove complete cold transaction capture, warm install/probes without update or downloads, image/runtime/component key isolation, preinstalled packages, and rejection of altered/missing/extra archives, mismatched package lists and missing manifest.
 - Shared-action guards cover exact cache restore/save, early save, foreground dependency status, mandatory proofs and retained shard evidence.
 
 ## Hosted validation and release follow-up
 
-Pending source-bound hosted run. This local result is not a release or a week-long stability claim.
+- Implementation: `20377e2e`; workbench historical-source overlay/routing: `533e6019`.
+- [Hosted check 39774635110](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39774635110): cancelled after the compatibility follow-up superseded its source; no success claim.
+- [Hosted check 39775449427](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39775449427): lint passed; Node visual prerequisite cold download succeeded, but offline install failed because it did not name the download archive directory. Corrective change sets the same directory for both download and install and explicitly retains downloaded packages. The strengthened real apt regression reproduces this exact failure and passes with the corrected arguments.
+- Source tool `scripts/ci/wb-ci` now overlays the shared action and helper with the current workflow for pinned historical checks. The authorized operator must refresh the installed `/usr/local/bin/wb-ci` copy from the reviewed source.
+
+Corrected-source hosted validation is pending. This result is not a release or a week-long stability claim.
 
 Acceptance requires the authorized release operator to include the reviewed commit, then seven days of release and workbench runs without prerequisite/apt failures. Record cache hits/misses and distinguish actual dependency failures from missing background status files. Do not close the parent issue before that observation is complete.
 

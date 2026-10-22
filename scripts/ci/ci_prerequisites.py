@@ -55,6 +55,8 @@ APT_OPTIONS = (
     "Acquire::https::Timeout=20",
     "-o",
     "DPkg::Lock::Timeout=60",
+    "-o",
+    "APT::Keep-Downloaded-Packages=true",
 )
 PLAYWRIGHT_ENV = {"PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT": "30000"}
 DRY_RUN_PACKAGES = re.compile(r"apt-get install -y --no-install-recommends ([^\"\n]+)")
@@ -292,6 +294,8 @@ class Prerequisites:
                     limit,
                     "apt-get",
                     *APT_OPTIONS,
+                    "-o",
+                    f"Dir::Cache::archives={directory}/",
                     "install",
                     "--yes",
                     "--no-install-recommends",
