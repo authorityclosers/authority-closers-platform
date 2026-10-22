@@ -532,6 +532,24 @@ export type NewLead = {
   pipeline?: string;
 };
 
+/** Whether a number is already a lead (Add lead asks while it is typed). */
+export type LeadMatch = {
+  found: boolean;
+  /** Only for a manager, or the lead's own owner. */
+  lead_id?: string | null;
+  name?: string | null;
+  stage_label?: string | null;
+  owner_name?: string | null;
+  yours?: boolean;
+};
+
+export function matchLead(phone: string, signal?: AbortSignal) {
+  return request<LeadMatch>(
+    `/leads/match?${new URLSearchParams({ phone: phone.slice(0, 40) })}`,
+    { signal },
+  );
+}
+
 export function addLead(lead: NewLead, command = commandId()) {
   const body = Object.fromEntries(
     Object.entries(lead).filter(([, value]) => value !== "" && value != null),

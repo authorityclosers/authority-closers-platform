@@ -148,6 +148,20 @@ class LeadPage(Model):
     stage_counts: dict[str, int] = Field(default_factory=dict)
 
 
+class LeadMatch(Model):
+    """Whether a number is already a lead, for Add lead while typing (22 Oct 2026). A
+    manager, or the lead's own owner, gets the lead; a seller learns only that a teammate
+    has it (Add lead refuses that number anyway)."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    found: bool
+    lead_id: UUID | None = None
+    name: str | None = None
+    stage_label: str | None = None
+    owner_name: str | None = None
+    yours: bool = False
+
+
 class LeadsDeleted(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     deleted: int

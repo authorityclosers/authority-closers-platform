@@ -52,6 +52,7 @@ from ac_platform.lead_desk.contracts import (
     LeadDetail,
     LeadEdit,
     LeadEventView,
+    LeadMatch,
     LeadPage,
     LeadRow,
     LeadsDeleted,
@@ -1260,6 +1261,37 @@ class LeadDesk:
         )
         await self.db.flush()
         return await self.detail(lead_id)
+
+    async def match(self, phone: str) -> LeadMatch:
+        """Whether this number is already a lead, said before Add lead (a repeat joins
+        that lead; a teammate's is refused). Only a manager or its owner sees the lead."""
+        _, config = await self.settings()
+        try:
+            found = extract(
+                {"phone": phone[:40]}, None, default_country=config["default_country"]
+            ).phone
+        except CaptureError:
+            found = None
+        if not found:
+            return LeadMatch(found=False)
+        lead = await self.db.scalar(
+            select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.phone == found).limit(1)
+        )
+        if lead is None:
+            return LeadMatch(found=False)
+        mine = lead.owner_person_id == self.viewer.person_id
+        if not (self.viewer.can_manage or mine):
+            return LeadMatch(found=True)
+        await self._labels(journeys.pipeline_of(lead))
+        names = await self._names([lead.owner_person_id]) if lead.owner_person_id else {}
+        return LeadMatch(
+            found=True,
+            lead_id=lead.id,
+            name=lead.name,
+            stage_label=self._stage_label(lead),
+            owner_name=names.get(lead.owner_person_id) if lead.owner_person_id else None,
+            yours=mine,
+        )
 
     async def _name(self, person_id: UUID | None) -> str:
         if person_id is None:

@@ -3,9 +3,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 
 const addLead = vi.fn();
+const matchLead = vi.fn();
 vi.mock("./leads-client", async (original) => ({
   ...(await original<typeof import("./leads-client")>()),
   addLead: (...args: unknown[]) => addLead(...args),
+  matchLead: (...args: unknown[]) => matchLead(...args),
 }));
 
 import { resetBackCloseForTests } from "../ui/back-close";
@@ -18,7 +20,7 @@ import { AddLeadDialog } from "./capture-dialogs";
 let root: Root;
 let host: HTMLDivElement;
 
-async function mount(canManage = false) {
+async function mount(canManage = false, onClose = () => {}) {
   const onAdded = vi.fn();
   host = document.createElement("div");
   document.body.append(host);
@@ -28,7 +30,7 @@ async function mount(canManage = false) {
       <AddLeadDialog
         open
         canManage={canManage}
-        onClose={() => {}}
+        onClose={onClose}
         onAdded={onAdded}
       />,
     ),
@@ -55,6 +57,66 @@ afterEach(async () => {
   host.remove();
   resetBackCloseForTests();
   addLead.mockReset();
+  matchLead.mockReset();
+  vi.useRealTimers();
+});
+
+const press = (dialog: HTMLElement, text: string) =>
+  Array.from(dialog.querySelectorAll("button")).find(
+    (button) => button.textContent?.trim() === text,
+  )!;
+
+// The orchestrator's ease-of-use wave, 22 Oct 2026: no duplicate leads.
+it("says while a number is typed that it is already a lead, and opens it", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  matchLead.mockResolvedValue({
+    found: true,
+    lead_id: "lead-9",
+    name: "asha fictional",
+    stage_label: "Call back",
+    owner_name: "rahul example",
+    yours: false,
+  });
+  const { dialog, onAdded } = await mount(true);
+  const phone = dialog.querySelectorAll("input")[1];
+  await act(async () => type(phone, "98765 43210"));
+  await act(async () => vi.advanceTimersByTimeAsync(450));
+  expect(matchLead).toHaveBeenCalledTimes(1);
+  const note = dialog.querySelector('[role="status"]');
+  expect(note?.textContent).toContain(
+    "Already a lead: Asha Fictional · Call back · with Rahul Example",
+  );
+  await act(async () => press(dialog, "Open").click());
+  expect(onAdded).toHaveBeenCalledWith("lead-9");
+});
+
+it("never offers to add a number a teammate already has", async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  matchLead.mockResolvedValue({ found: true });
+  const { dialog } = await mount();
+  await act(async () =>
+    type(dialog.querySelectorAll("input")[1], "98765 43210"),
+  );
+  await act(async () => vi.advanceTimersByTimeAsync(450));
+  expect(dialog.textContent).toContain("Already a lead on a teammate's desk.");
+  expect(press(dialog, "Add lead").disabled).toBe(true);
+});
+
+it("asks before throwing away what was typed", async () => {
+  const onClose = vi.fn();
+  const { dialog } = await mount(false, onClose);
+  // Nothing typed: Cancel closes at once.
+  await act(async () => press(dialog, "Cancel").click());
+  expect(onClose).toHaveBeenCalledTimes(1);
+  await act(async () => type(dialog.querySelectorAll("input")[0], "Asha"));
+  await act(async () => press(dialog, "Cancel").click());
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(dialog.textContent).toContain("Discard this lead?");
+  await act(async () => press(dialog, "Keep editing").click());
+  expect(dialog.textContent).not.toContain("Discard this lead?");
+  await act(async () => press(dialog, "Cancel").click());
+  await act(async () => press(dialog, "Discard").click());
+  expect(onClose).toHaveBeenCalledTimes(2);
 });
 
 // Owner, 22 Oct: adding a lead must be low effort.

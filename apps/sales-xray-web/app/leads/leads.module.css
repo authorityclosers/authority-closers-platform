@@ -2498,6 +2498,47 @@ a.repName {
   overflow-wrap: anywhere;
 }
 
+/* Add lead: a number that is already a lead, and the ask before discarding. */
+.matchNote {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  color: var(--lx-focus-ink);
+  font-weight: 600;
+}
+
+.matchNote strong {
+  color: var(--sx-ink);
+}
+
+.matchOpen {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.discardAsk {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.discardAsk > span {
+  margin-right: auto;
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
 /* The lead's pipeline and a move to another (22 Oct 2026). */
 .pipelineMark {
   display: grid;
