@@ -22,6 +22,7 @@ from collections.abc import Sequence
 from datetime import datetime, timedelta
 from typing import Any
 
+from ac_platform.conversation_intelligence.admin_pricing import FX_USD_TO_INR
 from ac_platform.conversation_intelligence.analysis_engine import registry
 from ac_platform.conversation_intelligence.application import ConversationError, utc
 from ac_platform.conversation_intelligence.cost_metrics import (
@@ -58,7 +59,7 @@ def engine_view(
     export = next((item for item in exports if item.environment == environment), None)
     since = now - timedelta(days=days)
     # The fits are at the planning rate; the store's paise are at the price sheet's rate.
-    scale = float(FX["planning_usd_to_inr"]) / registry.PLANNING_FX
+    scale = float(FX_USD_TO_INR) / registry.PLANNING_FX
     base: dict[str, Any] = {
         "environment": environment,
         "registry": registry.describe(),
@@ -141,22 +142,22 @@ def engine_view(
     for key, group in sorted(
         grouped.items(), key=lambda pair: (order.get(pair[0], len(order)), pair[0])
     ):
-        known = key not in unmodelled
-        ratio = _ratio(group["actual_paise"], group["expected_paise"]) if known else None
+        modelled = key not in unmodelled
+        ratio = _ratio(group["actual_paise"], group["expected_paise"]) if modelled else None
         tokens = group["tokens"]
         modules.append(
             {
                 "id": key,
-                "label": registry.module(key).label if known else None,
-                "stage": registry.module(key).stage if known else unmodelled[key]["stage"],
-                "model": None if known else unmodelled[key]["model"],
-                "modelled": known,
+                "label": registry.module(key).label if modelled else None,
+                "stage": registry.module(key).stage if modelled else unmodelled[key]["stage"],
+                "model": None if modelled else unmodelled[key]["model"],
+                "modelled": modelled,
                 "calls": group["calls"],
                 "steps": group["steps"],
                 "unpriced_steps": group["unpriced_steps"],
                 "audio_minutes": round(group["audio_ms"] / 60_000, 1),
                 "actual_rupees": _rupees(group["actual_paise"]),
-                "expected_rupees": _rupees(group["expected_paise"]) if known else None,
+                "expected_rupees": _rupees(group["expected_paise"]) if modelled else None,
                 "ratio": ratio,
                 "drifting": ratio is not None and abs(ratio - 1) > DRIFT,
                 "tokens": {
