@@ -121,7 +121,7 @@ import {
 } from "./updates-client";
 import { ChatsTabIcon } from "../chats/chats-badge";
 import { AddLeadDialog } from "../leads/capture-dialogs";
-import { readLeads } from "../leads/leads-client";
+import { leadLink, readLeads } from "../leads/leads-client";
 import { CommandBar, type Command } from "../ui/command-bar";
 import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
@@ -990,10 +990,8 @@ function LightboxShellFrame({
               .filter(Boolean)
               .join(" · "),
             icon: <UserRound size={17} />,
-            run: () => {
-              handOverLead(lead.lead_id);
-              go("/leads");
-            },
+            // The lead's own address: Leads with its sheet up.
+            run: () => go(leadLink(lead.lead_id)),
           }));
         } catch {
           // A failed read shows the calls only.
