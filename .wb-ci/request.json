@@ -1,0 +1,19 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "d6c1b9bce2179765c2fde039bb89e6598d54da1d",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "docs/evidence/20261022_AUT2202_POSTGRES_LAUNCH.md",
+    "infra/application/compose.yaml",
+    "scripts/ops/postgres-launch-observe.sql",
+    "tests/infra/test_postgres_launch_tuning.py"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
