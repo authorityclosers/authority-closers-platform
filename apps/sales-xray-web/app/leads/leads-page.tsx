@@ -23,6 +23,7 @@
 import {
   ArrowLeft,
   Building2,
+  ChevronDown,
   Ellipsis,
   Phone,
   PhoneCall,
@@ -102,6 +103,17 @@ import { SourcesView } from "./sources-view";
 import { TakingSwitch } from "./taking-switch";
 import { TeamView } from "./team-view";
 import { several, usePipelines } from "./use-pipelines";
+
+/** To call's pipeline, remembered per seller and workspace on this device. */
+const toCallKey = (contextKey: string) => `sx:to-call-pipeline:${contextKey}`;
+function storedToCall(contextKey: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.localStorage.getItem(toCallKey(contextKey));
+  } catch {
+    return null;
+  }
+}
 import { ViewsChip } from "./views-sheet";
 import {
   ActiveFilters,
@@ -312,6 +324,37 @@ export function LeadsRoute() {
     return () => clearTimeout(timer);
   }, [search]);
 
+  // Several pipelines: To call and Start calling work one at a time, or all
+  // (orchestrator, 23 Oct 2026: cold partner outreach apart from enquiries). The
+  // choice is used before the pipelines are read, so the desk doesn't load twice.
+  const pipes = usePipelines(authenticated);
+  const [pipelineChoice, setPipelineChoice] = useState(() => ({
+    at: contextKey,
+    value: storedToCall(contextKey),
+  }));
+  if (pipelineChoice.at !== contextKey)
+    setPipelineChoice({ at: contextKey, value: storedToCall(contextKey) });
+  const toCallPipeline =
+    !pipelineChoice.value || pipelineChoice.at !== contextKey
+      ? null
+      : pipes === null ||
+          (several(pipes) &&
+            pipes.pipelines.some((item) => item.key === pipelineChoice.value))
+        ? pipelineChoice.value
+        : null;
+  const chooseToCall = useCallback(
+    (next: string | null) => {
+      setPipelineChoice({ at: contextKey, value: next });
+      try {
+        if (next) window.localStorage.setItem(toCallKey(contextKey), next);
+        else window.localStorage.removeItem(toCallKey(contextKey));
+      } catch {
+        // Storage blocked: the choice lasts for this visit.
+      }
+    },
+    [contextKey],
+  );
+
   useEffect(() => {
     if (!authenticated) return;
     const controller = new AbortController();
@@ -319,19 +362,30 @@ export function LeadsRoute() {
       lastRead.current = Date.now();
       waiters.current.splice(0).forEach((resolve) => resolve());
     };
-    readDesk(controller.signal)
+    readDesk(controller.signal, toCallPipeline)
       .then((next) => {
         setDesk(next);
         setDeskKey(contextKey);
         setError(null);
-        publishBadge({
-          overdue: next.counts.overdue ?? 0,
-          to_call: dueNow(next),
-        });
+        // The app's badge counts the whole day, never one pipeline's.
+        if (!toCallPipeline)
+          publishBadge({
+            overdue: next.counts.overdue ?? 0,
+            to_call: dueNow(next),
+          });
         settle();
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
+        // The remembered pipeline is gone: back to all of them.
+        if (
+          toCallPipeline &&
+          reason instanceof LeadsError &&
+          reason.status === 422
+        ) {
+          chooseToCall(null);
+          return;
+        }
         setError(
           reason instanceof LeadsError
             ? reason
@@ -341,9 +395,7 @@ export function LeadsRoute() {
         settle();
       });
     return () => controller.abort();
-  }, [authenticated, contextKey, version]);
-
-  const pipes = usePipelines(authenticated);
+  }, [authenticated, contextKey, version, toCallPipeline, chooseToCall]);
 
   // Back in the app or the tab, an alert while open, or a minute gone: read again.
   useEffect(() => {
@@ -886,6 +938,25 @@ export function LeadsRoute() {
                   onChanged={refresh}
                 />
                 <PhoneLogCard as="chip" />
+                {view === "desk" && several(pipes) ? (
+                  <label className={styles.pipelineChip}>
+                    <select
+                      aria-label="Pipeline to call"
+                      value={toCallPipeline ?? ""}
+                      onChange={(event) =>
+                        chooseToCall(event.target.value || null)
+                      }
+                    >
+                      <option value="">All pipelines</option>
+                      {pipes.pipelines.map((item) => (
+                        <option key={item.key} value={item.key}>
+                          {item.name}
+                        </option>
+                      ))}
+                    </select>
+                    <ChevronDown size={14} aria-hidden="true" />
+                  </label>
+                ) : null}
                 <span className={styles.toolbarEnd}>
                   {filterable ? (
                     <FilterChip
@@ -1035,6 +1106,7 @@ export function LeadsRoute() {
           }}
           onChanged={refresh}
           onNext={(leadId) => open(leadId, "call")}
+          pipeline={toCallPipeline}
         />
         <ActionSheet
           open={!!dialling}
@@ -1073,6 +1145,7 @@ export function LeadsRoute() {
           key={`calling-${rounds.calling}`}
           open={calling}
           me={desk.me}
+          pipeline={toCallPipeline}
           onClose={() => {
             setCalling(false);
             refresh();

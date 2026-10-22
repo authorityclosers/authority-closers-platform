@@ -18,6 +18,7 @@ import {
   takePendingCall,
   whatsappHref,
   readDesk,
+  readNext,
   LeadsError,
   splitList,
   type LeadRow,
@@ -156,6 +157,25 @@ describe("API client", () => {
       connected: false,
       reason: "busy",
     });
+  });
+  // Start calling one pipeline at a time (23 Oct 2026).
+  it("asks for one pipeline's day and next lead only when one is chosen", async () => {
+    const fetcher = vi.fn<(url: string) => Promise<Response>>(async () =>
+      Response.json(null),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    await readDesk(undefined, "partner_outreach").catch(() => undefined);
+    await readDesk(undefined, null).catch(() => undefined);
+    await readNext(undefined, undefined, "partner_outreach");
+    await readNext("lead-1", undefined, "partner_outreach");
+    await readNext("lead-1");
+    expect(fetcher.mock.calls.map((call) => String(call[0]))).toEqual([
+      "/v1/lead-desk?pipeline=partner_outreach",
+      "/v1/lead-desk",
+      "/v1/lead-desk/next?pipeline=partner_outreach",
+      "/v1/lead-desk/next?skip=lead-1&pipeline=partner_outreach",
+      "/v1/lead-desk/next?skip=lead-1",
+    ]);
   });
 });
 

@@ -441,18 +441,32 @@ function isDesk(value: unknown): value is Desk {
   );
 }
 
-export async function readDesk(signal?: AbortSignal): Promise<Desk> {
-  const desk = await request<unknown>("", { signal });
+/** My day; with a pipeline, its leads only (Start calling one pipeline at a time). */
+export async function readDesk(
+  signal?: AbortSignal,
+  pipeline?: string | null,
+): Promise<Desk> {
+  const desk = await request<unknown>(
+    pipeline ? `?pipeline=${encodeURIComponent(pipeline)}` : "",
+    { signal },
+  );
   if (!isDesk(desk))
     throw new LeadsError("Your leads didn't load. Try again.", 0);
   return desk;
 }
 
-export function readNext(skip?: string, signal?: AbortSignal) {
-  return request<LeadDetail | null>(
-    skip ? `/next?skip=${encodeURIComponent(skip)}` : "/next",
-    { signal },
-  );
+export function readNext(
+  skip?: string,
+  signal?: AbortSignal,
+  pipeline?: string | null,
+) {
+  const query = new URLSearchParams();
+  if (skip) query.set("skip", skip);
+  if (pipeline) query.set("pipeline", pipeline);
+  const asked = query.toString();
+  return request<LeadDetail | null>(asked ? `/next?${asked}` : "/next", {
+    signal,
+  });
 }
 
 export function readLeads(
