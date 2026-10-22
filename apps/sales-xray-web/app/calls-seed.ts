@@ -6,7 +6,7 @@ import type { ServerRead } from "./server-reads";
 
 /** The Calls page's first read, exactly as the browser makes it. */
 export const CALLS_LIST_PATH =
-  "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true";
+  "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true";
 
 /**
  * The server's answer to the Calls list read as the page's first page of

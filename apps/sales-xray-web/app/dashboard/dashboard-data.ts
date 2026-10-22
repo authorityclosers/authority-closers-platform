@@ -188,7 +188,7 @@ export async function readRecentCalls(
   const page = parseSubmissionLibraryPage(
     await acquisition(
       owners
-        ? "/submissions?include_owners=true&order=reports_first&include_summary=true"
+        ? "/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true"
         : "/submissions?order=reports_first",
       { signal },
     ),

@@ -143,7 +143,7 @@ const ok = (body: unknown, status = 200) =>
     headers: { "content-type": "application/json" },
   });
 const LIST =
-  "GET /v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true";
+  "GET /v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true";
 const insightPath = (id: string, kind: string) =>
   `GET /v1/conversation/acquisition/submissions/${id}/${kind}`;
 const measuredRecord = {
@@ -694,7 +694,7 @@ it("loads every server listed state without auto claiming or processing", async 
   expect(host.textContent).toContain("Report ready");
   expect(fetchMock).toHaveBeenCalledOnce();
   expect(fetchMock.mock.calls[0][0]).toBe(
-    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true",
+    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true",
   );
   expect(fetchMock.mock.calls[0][1]).toEqual(
     expect.objectContaining({
@@ -730,7 +730,7 @@ it("only remembers and navigates on explicit row activation, then paginates by c
   );
   await flush();
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true&before=${cursor}`,
   );
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(2);
   await act(async () =>
@@ -766,7 +766,7 @@ it("keeps pagination available when concurrent erasure empties a page", async ()
     host.querySelector(`[data-submission-id="${secondId}"]`),
   ).not.toBeNull();
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true&before=${cursor}`,
   );
 });
 
@@ -840,7 +840,7 @@ it("refreshes the visible library after a background upload and shows its ready 
 
   expect(fetchMock).toHaveBeenCalledTimes(2);
   expect(fetchMock.mock.calls[1][0]).toBe(
-    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true",
+    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true",
   );
   expect(
     host.querySelector(`[data-submission-id="${secondId}"]`)?.textContent,
@@ -1262,7 +1262,7 @@ it("keeps the loaded cursor when a status-only refresh leaves page membership un
   await flush();
 
   expect(fetchMock.mock.calls[2][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true&before=${cursor}`,
   );
   expect(host.querySelectorAll(".calls-library-item")).toHaveLength(2);
 });
@@ -1468,7 +1468,7 @@ it("settles a timed-out next-page read and leaves its cursor retryable", async (
     "Saved calls could not be loaded",
   );
   expect(fetchMock.mock.calls[1][0]).toBe(
-    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&before=${cursor}`,
+    `/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true&before=${cursor}`,
   );
 });
 
@@ -1694,4 +1694,43 @@ it("lists calls with Reports first and names never-analysed calls honestly", asy
   )!;
   expect(sort.value).toBe("reports");
   expect(sort.options[0].textContent).toBe("Reports first");
+});
+
+// Approved map, slice 7 (22 Oct 2026): a call names the lead it belongs to.
+it("names each call's lead and where it stands, once", async () => {
+  const lead = (name: string, stage: string) => ({
+    lead_id: "66666666-6666-4666-8666-666666666666",
+    name,
+    stage,
+    step: null,
+    pipeline: "main",
+  });
+  routeFetch({
+    [LIST]: () =>
+      ok(
+        page([
+          {
+            ...row(firstId, true),
+            display_name: "Site visit · Asha Fictional",
+            display_name_revision: 1,
+            lead: lead("asha fictional", "interested"),
+          },
+          { ...row(secondId, true), lead: lead("anil example", "lost") },
+          row(thirdId, true),
+        ]),
+      ),
+  });
+  await act(async () => renderLibrary({ insights: true }));
+  await flush();
+  const rowText = (id: string) =>
+    host.querySelector(`[data-call-row="${id}"]`)?.textContent ?? "";
+  // The call's own name already says whom: only the stage is added.
+  expect(rowText(firstId)).toContain("Lead: Interested");
+  expect(rowText(firstId)).not.toContain("Asha Fictional · Interested");
+  // A call with no name of its own takes its lead's name, capitalised.
+  expect(
+    host.querySelector(`[data-call-row="${secondId}"] strong`)?.textContent,
+  ).toBe("Anil Example");
+  expect(rowText(secondId)).toContain("Lead: Lost");
+  expect(rowText(thirdId)).not.toContain("Lead:");
 });

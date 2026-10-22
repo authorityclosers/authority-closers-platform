@@ -66,7 +66,57 @@ export type LibrarySubmission = {
    * a readable Report; absent from a server that doesn't send them.
    */
   summary?: RowSummary | null;
+  /**
+   * The lead this call belongs to (include_leads=true; approved map, slice 7):
+   * absent when no lead names the call, or from a server that doesn't send it.
+   */
+  lead?: CallLead;
 };
+
+/** A call's lead: its name and where it stands now (the lead's stage). */
+export type CallLead = {
+  leadId: string;
+  name: string;
+  stage: "new" | "not_connected" | "follow_up" | "interested" | "won" | "lost";
+  /** The business's own stage, when the seller picked one. */
+  step: string | null;
+  pipeline: string;
+};
+
+const LEAD_STAGES = [
+  "new",
+  "not_connected",
+  "follow_up",
+  "interested",
+  "won",
+  "lost",
+] as const;
+
+/** A row's lead, checked: exactly its five fields, or the contract fails. */
+export function parseCallLead(value: unknown): CallLead {
+  const lead = record(value);
+  const short = (field: unknown, max: number) =>
+    typeof field === "string" && field.trim().length > 0 && field.length <= max;
+  if (
+    Object.keys(lead).some(
+      (key) => !["lead_id", "name", "stage", "step", "pipeline"].includes(key),
+    ) ||
+    typeof lead.lead_id !== "string" ||
+    !UUID.test(lead.lead_id) ||
+    !short(lead.name, 200) ||
+    !LEAD_STAGES.includes(lead.stage as CallLead["stage"]) ||
+    (lead.step !== null && !short(lead.step, 40)) ||
+    !short(lead.pipeline, 40)
+  )
+    throw new ReportContractError("acquisition_library_lead");
+  return {
+    leadId: lead.lead_id,
+    name: lead.name as string,
+    stage: lead.stage as CallLead["stage"],
+    step: lead.step as string | null,
+    pipeline: lead.pipeline as string,
+  };
+}
 
 /** A row's Report facts, as the list sends them (include_summary=true). */
 export type RowSummary = {
@@ -581,6 +631,7 @@ export function parseSubmissionLibraryPage(
             "owner_person_id",
             "owner_name",
             "summary",
+            "lead",
           ].includes(key),
       ) ||
       typeof submission.submission_id !== "string" ||
@@ -630,6 +681,7 @@ export function parseSubmissionLibraryPage(
       ...("summary" in submission
         ? { summary: parseRowSummary(submission.summary) }
         : {}),
+      ...("lead" in submission ? { lead: parseCallLead(submission.lead) } : {}),
     });
   }
   return {

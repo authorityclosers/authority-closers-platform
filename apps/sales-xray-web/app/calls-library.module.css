@@ -1591,3 +1591,39 @@
     transform: none;
   }
 }
+
+/* The lead a call belongs to (approved map, slice 7, 22 Oct 2026): a line under
+   the name on wider screens, a part of the quiet line on phones. */
+.leadLine,
+.metaLead {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--lx-ink-3);
+}
+
+.leadLine {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.leadLine > svg,
+.metaLead > svg {
+  flex: none;
+  color: var(--lx-teal);
+}
+
+@container calls-page (max-width: 760px) {
+  .leadLine {
+    display: none;
+  }
+
+  /* A call with a lead keeps its quiet line to one line: the length gives way
+     (it is in the Report and the wide screen's column). */
+  .meta[data-lead] .metaLength {
+    display: none;
+  }
+}

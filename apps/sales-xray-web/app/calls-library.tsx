@@ -20,6 +20,7 @@ import {
   LoaderCircle,
   RefreshCw,
   Search,
+  UserRound,
   Users,
   X,
 } from "lucide-react";
@@ -41,10 +42,12 @@ import {
   acquisition,
   parseSubmissionLibraryPage,
   rememberSubmission,
+  type CallLead,
   type LibrarySubmission,
   type SubmissionLibraryPage,
 } from "./acquisition-client";
 import { seededLibraryPage } from "./calls-seed";
+import { displayName } from "./display-name";
 import {
   cachedCallsPage,
   readCallsList,
@@ -250,7 +253,28 @@ const FILTERS: { id: "all" | CallTone; label: string }[] = [
 
 /** The Calls page reads calls with Reports before never-analysed ones. */
 const LIST_PATH =
-  "/submissions?include_owners=true&order=reports_first&include_summary=true";
+  "/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true";
+
+/**
+ * A teammate on a phone row's one quiet line: "Swamini F.", "You", "Rahul E.
+ * (2)". The wide screen's column keeps the whole name.
+ */
+function shortRep(rep: string) {
+  const match = /^(.*?)( \(\d+\))?$/.exec(rep);
+  const [first, ...rest] = (match?.[1] ?? rep).trim().split(/\s+/);
+  const last = rest.at(-1);
+  return `${last ? `${first} ${last[0]}.` : first}${match?.[2] ?? ""}`;
+}
+
+/** A lead's stage in the words Leads uses for it. */
+const LEAD_STAGE_WORDS: Record<CallLead["stage"], string> = {
+  new: "New",
+  not_connected: "Not contacted",
+  follow_up: "Follow up",
+  interested: "Interested",
+  won: "Won",
+  lost: "Lost",
+};
 
 /** A saved call whose analysis never started (the server orders these last). */
 function notAnalysed(submission: LibrarySubmission) {
@@ -1071,8 +1095,24 @@ function CallsLibraryContent({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [workspace]);
+  // A call with no name of its own is named by its lead (slice 7).
   const titleOf = (submission: LibrarySubmission) =>
-    callTitle(submission.label, unnamedCallName(submission.createdAt, dates));
+    callTitle(
+      submission.label,
+      submission.lead
+        ? displayName(submission.lead.name)
+        : unnamedCallName(submission.createdAt, dates),
+    );
+  // The lead a call belongs to (approved map, slice 7, 22 Oct 2026): where it
+  // stands now, and its name unless the call's own name already says it.
+  const leadMark = (submission: LibrarySubmission, title: string) => {
+    if (!submission.lead) return null;
+    const name = displayName(submission.lead.name);
+    const stage = LEAD_STAGE_WORDS[submission.lead.stage];
+    return title.toLowerCase().includes(name.toLowerCase())
+      ? stage
+      : `${name} · ${stage}`;
+  };
   const lengthOf = (
     submission: LibrarySubmission,
     insight: CallInsight | null,
@@ -1217,6 +1257,7 @@ function CallsLibraryContent({
     const read =
       workspace && submission.hasReport ? rowStatus(submission) : null;
     const title = titleOf(submission);
+    const lead = leadMark(submission, title);
     const label = submission.label;
     const length = lengthCell(submission, insight);
     const rep =
@@ -1282,20 +1323,38 @@ function CallsLibraryContent({
         >
           <span className={`${styles.copy} calls-library-copy`}>
             <strong
-              data-unnamed={label?.displayName ? undefined : "true"}
+              data-unnamed={
+                label?.displayName || submission.lead ? undefined : "true"
+              }
               title={title}
             >
               {title}
             </strong>
+            {lead ? (
+              <span className={styles.leadLine}>
+                <UserRound size={12} aria-hidden="true" />
+                <span className={styles.srOnly}>Lead: </span>
+                {lead}
+              </span>
+            ) : null}
             {/* Phone: one quiet line carries what the desktop columns show. */}
-            <small className={styles.meta}>
+            <small className={styles.meta} data-lead={lead ? "" : undefined}>
               <span className={styles.metaStatus} data-tone={tone}>
                 <i aria-hidden="true" />
                 {shortState(submission)}
               </span>
+              {lead ? (
+                <span className={styles.metaLead}>
+                  <UserRound size={11} aria-hidden="true" />
+                  <span className={styles.srOnly}>Lead: </span>
+                  {lead}
+                </span>
+              ) : null}
               <span>{when}</span>
-              {length.text ? <span>{length.text}</span> : null}
-              {rep ? <span>{rep}</span> : null}
+              {length.text ? (
+                <span className={styles.metaLength}>{length.text}</span>
+              ) : null}
+              {rep ? <span title={rep}>{shortRep(rep)}</span> : null}
             </small>
             {/* The summary line shows only with something in it: a row
                 never keeps an empty line under its name. */}
