@@ -131,7 +131,10 @@ it("says plainly when nobody else is due", async () => {
   expect(host.textContent).toBe("Saved. Nobody else is due now.");
   await act(async () =>
     root.render(
-      <CallNext lead={detail(TWO, "Asha Fictional")} onCall={() => undefined} />,
+      <CallNext
+        lead={detail(TWO, "Asha Fictional")}
+        onCall={() => undefined}
+      />,
     ),
   );
   expect(host.textContent).toContain("Next up: Asha Fictional");

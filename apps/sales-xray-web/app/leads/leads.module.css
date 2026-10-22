@@ -2574,6 +2574,82 @@ a.repName {
   white-space: nowrap;
 }
 
+/* Leads → Views: a saved stage, pipeline, owner and search (22 Oct 2026). */
+.listTools {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The view's name gives way first on a narrow phone; the count and Select stay. */
+.statusChip.viewChip {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.viewName {
+  overflow: hidden;
+  min-width: 0;
+  max-width: 10em;
+  text-overflow: ellipsis;
+}
+
+.statusChip[data-view] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+}
+
+.views {
+  display: grid;
+  gap: 14px;
+}
+
+.viewLine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.viewLine .menuRow[aria-current="true"] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+}
+
+.viewLine .menuWords small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewRemove {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--sx-radius-md);
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.viewRemove:hover {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.viewRemove:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.viewSave {
+  width: 100%;
+}
+
 /* Select → Actions → Send a WhatsApp: the template, its parts, who gets it. */
 .bulkSend {
   display: grid;
@@ -4671,10 +4747,12 @@ a.repName {
 }
 
 .listTotal {
+  flex: none;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* An empty list in one line, with at most one action. */

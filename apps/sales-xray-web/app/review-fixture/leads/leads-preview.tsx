@@ -14,6 +14,8 @@
  * `&tap=next` then saves "Didn't get through" and shows who is next.
  * `?tab=all&stage=open&tap=bulk` ticks two leads and opens Select → Actions;
  * `tap=bulkwa` goes on to a WhatsApp template and who gets it.
+ * `&views=1` keeps three saved views on this browser, one of them the view in use
+ * (Open, Everyone); `&tap=views` then opens Views.
  */
 
 import { Suspense, useEffect, useState } from "react";
@@ -428,8 +430,33 @@ function answers(now: number, path: string): unknown {
   return null;
 }
 
+/** `&views=1`: three saved views (Leads → Views), kept as the page keeps them. */
+function keepViews() {
+  if (new URLSearchParams(window.location.search).get("views") !== "1") return;
+  const view = (
+    id: string,
+    name: string,
+    stage: string,
+    who: string,
+    q: string,
+  ) => ({ id, name, stage, pipeline: null, who, q });
+  try {
+    window.localStorage.setItem(
+      `sx.leads.views.v1:${OWNER}:${TENANT}`,
+      JSON.stringify([
+        view("v-open", "All open leads", "open", "team", ""),
+        view("v-pune", "Mine in Pune", "open", "mine", "pune"),
+        view("v-hot", "Interested, no owner", "interested", "unassigned", ""),
+      ]),
+    );
+  } catch {
+    // A browser that keeps nothing shows Views empty.
+  }
+}
+
 function install() {
   if (typeof window === "undefined") return true;
+  keepViews();
   // `?after-call=1`: a call to the first lead ended 95 s ago; the lead opens.
   if (new URLSearchParams(window.location.search).get("after-call") === "1") {
     const first = rows(Date.now())[0].lead_id;
@@ -498,22 +525,29 @@ function useTap() {
       );
       return () => timers.forEach((timer) => window.clearTimeout(timer));
     }
-    if (tap !== "menu" && tap !== "change" && tap !== "new") return;
+    if (tap !== "menu" && tap !== "change" && tap !== "new" && tap !== "views")
+      return;
     const timer = window.setTimeout(
       () =>
         (tap === "menu"
           ? document.querySelector<HTMLButtonElement>(
               'button[aria-label="Leads settings"]',
             )
-          : tap === "new"
-            ? Array.from(
-                document.querySelectorAll<HTMLButtonElement>("button"),
-              ).find((button) => button.textContent?.trim() === "New pipeline")
-            : Array.from(
-                document.querySelectorAll<HTMLButtonElement>(
-                  'section[aria-label="Your kind of business"] button',
-                ),
-              ).find((button) => button.textContent === "Change")
+          : tap === "views"
+            ? document.querySelector<HTMLButtonElement>(
+                'button[aria-label^="Saved view"]',
+              )
+            : tap === "new"
+              ? Array.from(
+                  document.querySelectorAll<HTMLButtonElement>("button"),
+                ).find(
+                  (button) => button.textContent?.trim() === "New pipeline",
+                )
+              : Array.from(
+                  document.querySelectorAll<HTMLButtonElement>(
+                    'section[aria-label="Your kind of business"] button',
+                  ),
+                ).find((button) => button.textContent === "Change")
         )?.click(),
       900,
     );

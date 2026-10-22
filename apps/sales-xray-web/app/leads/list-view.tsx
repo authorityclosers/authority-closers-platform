@@ -8,7 +8,7 @@
  */
 
 import { ListChecks, SearchX, Users } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { notify } from "../notice-center";
 import { Button, Skeleton } from "../ui/kit";
@@ -48,6 +48,7 @@ export function ListView({
   onChanged,
   onCounts,
   pipeline = null,
+  tools = null,
 }: {
   canManage: boolean;
   /** "open", a stage kind, or "test". */
@@ -66,6 +67,8 @@ export function ListView({
   onCounts?: (counts: Record<string, number>) => void;
   /** One pipeline's leads; none: every pipeline's. */
   pipeline?: string | null;
+  /** Beside Select on the list's head: the saved views. */
+  tools?: ReactNode;
 }) {
   const [loaded, setLoaded] = useState<{
     key: string;
@@ -251,26 +254,29 @@ export function ListView({
               ? `${page.total} ${page.total === 1 ? "lead" : "leads"}`
               : null}
           </span>
-          {canManage && rows.length ? (
-            <button
-              type="button"
-              className={styles.statusChip}
-              aria-pressed={selecting}
-              onClick={() => {
-                setPicked(null);
-                setSelecting((value) => !value);
-              }}
-            >
-              {selecting ? (
-                "Done"
-              ) : (
-                <>
-                  <ListChecks size={14} aria-hidden="true" />
-                  Select
-                </>
-              )}
-            </button>
-          ) : null}
+          <span className={styles.listTools}>
+            {selecting ? null : tools}
+            {canManage && rows.length ? (
+              <button
+                type="button"
+                className={styles.statusChip}
+                aria-pressed={selecting}
+                onClick={() => {
+                  setPicked(null);
+                  setSelecting((value) => !value);
+                }}
+              >
+                {selecting ? (
+                  "Done"
+                ) : (
+                  <>
+                    <ListChecks size={14} aria-hidden="true" />
+                    Select
+                  </>
+                )}
+              </button>
+            ) : null}
+          </span>
         </div>
         {error ? (
           <p className={styles.error} role="alert">

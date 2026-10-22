@@ -97,11 +97,13 @@ import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { LeadsSkeleton } from "./leads-skeleton";
 import { JourneyTab } from "./journey/journey-view";
 import { ListView, TEST, type Scope } from "./list-view";
+import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
 import { SourcesView } from "./sources-view";
 import { TakingSwitch } from "./taking-switch";
 import { TeamView } from "./team-view";
 import { several, usePipelines } from "./use-pipelines";
+import { ViewsChip } from "./views-sheet";
 import styles from "./leads.module.css";
 
 type Manage = "team" | "sources" | "stages";
@@ -110,6 +112,12 @@ const MANAGE_TITLE: Record<Manage, string> = {
   team: "Team",
   sources: "Lead sources",
   stages: "Lead stages",
+};
+
+const WHO_WORDS: Record<Scope, string> = {
+  team: "Everyone",
+  mine: "Mine",
+  unassigned: "No owner",
 };
 
 // The desk reads itself again when the app comes back, and every minute.
@@ -130,8 +138,13 @@ const onHashChange = (change: () => void) => {
 };
 
 /** The address of a view on this page: the desk, a stage (in one pipeline, when
- * picked), or a settings page. */
-function viewHref(view: string, pipeline: string | null = null): string {
+ * picked; whose leads and a search, when set), or a settings page. A stage's
+ * address is the whole view, so a refresh or a shared link keeps it. */
+function viewHref(
+  view: string,
+  pipeline: string | null = null,
+  filters: { who?: Scope | null; q?: string } = {},
+): string {
   const path = window.location.pathname || LEADS_PATH;
   if (view === "desk") return path;
   if (view === "team" || view === "sources" || view === "stages")
@@ -139,7 +152,10 @@ function viewHref(view: string, pipeline: string | null = null): string {
   const inPipeline = pipeline
     ? `&pipeline=${encodeURIComponent(pipeline)}`
     : "";
-  return `${path}?tab=all&stage=${encodeURIComponent(view)}${inPipeline}`;
+  const who = filters.who ? `&who=${filters.who}` : "";
+  const words = filters.q?.trim();
+  const q = words ? `&q=${encodeURIComponent(words)}` : "";
+  return `${path}?tab=all&stage=${encodeURIComponent(view)}${inPipeline}${who}${q}`;
 }
 
 export { LeadsSkeleton };
@@ -197,10 +213,13 @@ export function LeadsRoute() {
     at: string;
     pipeline?: string | null;
   } | null>(null);
-  const [scopeChoice, setScopeChoice] = useState<Scope | null>(null);
+  // Whose leads and the search start from the address (a saved view, a link).
+  const [scopeChoice, setScopeChoice] = useState<Scope | null>(() =>
+    asScope(params.get("who")),
+  );
   const [searching, setSearching] = useState(false);
-  const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
+  const [search, setSearch] = useState(() => params.get("q") ?? "");
+  const [query, setQuery] = useState(() => (params.get("q") ?? "").trim());
   // Counts answer a question (who, search, pipeline); a refresh asks it again
   // and the last answer stays on the tabs meanwhile (Redmi, 22 Oct 2026: the
   // counts vanished while the ⋯ sheet was open).
@@ -333,7 +352,9 @@ export function LeadsRoute() {
 
   const current = deskKey === contextKey;
   const can = current && desk ? desk.me.can_manage : false;
-  const scope: Scope = scopeChoice ?? (can ? "team" : "mine");
+  // Only owners and admins pick whose leads; a seller's are always their own.
+  const scope: Scope = can ? (scopeChoice ?? "team") : "mine";
+  const filters = { who: can ? scopeChoice : null, q: query };
 
   // From the address: the desk, a stage, or one of the settings pages.
   const stageKeys = new Set<string>([
@@ -425,6 +446,17 @@ export function LeadsRoute() {
       setCounts({ key: countsKey, question: countsQuestion, value }),
     [countsKey, countsQuestion],
   );
+
+  // The settled search goes into the address in place, like the tabs.
+  const addressQuery = (params.get("q") ?? "").trim();
+  useEffect(() => {
+    if (!stageView || query === addressQuery) return;
+    window.history.replaceState(
+      null,
+      "",
+      viewHref(view, pipeline, { who: can ? scopeChoice : null, q: query }),
+    );
+  }, [stageView, query, addressQuery, view, pipeline, can, scopeChoice]);
 
   if (!authenticated) {
     const loading =
@@ -521,7 +553,7 @@ export function LeadsRoute() {
   // Tabs and filters change the address in place, so Back never steps
   // through them; a settings page is a step of its own, so Back returns.
   const go = (next: string) => {
-    const href = viewHref(next, pipeline);
+    const href = viewHref(next, pipeline, filters);
     setPicked({ view: next, at: addressKey, pipeline });
     if (next === "team" || next === "sources" || next === "stages") {
       pushedSettings.current = true;
@@ -538,7 +570,15 @@ export function LeadsRoute() {
   // One pipeline, or all of them, for the stage views (in place, like the tabs).
   const choosePipeline = (next: string | null) => {
     setPicked({ view, at: addressKey, pipeline: next });
-    window.history.replaceState(null, "", viewHref(view, next));
+    window.history.replaceState(null, "", viewHref(view, next, filters));
+  };
+  const chooseScope = (next: Scope) => {
+    setScopeChoice(next);
+    window.history.replaceState(
+      null,
+      "",
+      viewHref(view, pipeline, { ...filters, who: next }),
+    );
   };
   const tabs = [
     { key: "desk", label: "To call", count: toCall },
@@ -551,6 +591,37 @@ export function LeadsRoute() {
   const stageLabel =
     tabs.find((tab) => tab.key === view)?.label ??
     (view === "open" ? "Open" : "this stage");
+
+  // Saved views: what the list shows now, in words, and back in one tap.
+  const shown: ViewSpec = { stage: view, pipeline, who: scope, q: query };
+  const describeView = (spec: ViewSpec) =>
+    [
+      tabs.find((tab) => tab.key === spec.stage)?.label ??
+        (spec.stage === "open" ? "Open" : "A stage"),
+      spec.pipeline
+        ? (pipes?.pipelines.find((item) => item.key === spec.pipeline)?.name ??
+          null)
+        : null,
+      can ? WHO_WORDS[spec.who] : null,
+      spec.q ? `“${spec.q}”` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  const applyView = (spec: ViewSpec) => {
+    const stage = stageKeys.has(spec.stage) ? spec.stage : "open";
+    const inPipeline = several(pipes) ? spec.pipeline : null;
+    const who = can ? spec.who : null;
+    setScopeChoice(who);
+    setSearch(spec.q);
+    setQuery(spec.q);
+    setSearching(false);
+    setPicked({ view: stage, at: addressKey, pipeline: inPipeline });
+    window.history.replaceState(
+      null,
+      "",
+      viewHref(stage, inPipeline, { who, q: spec.q }),
+    );
+  };
 
   const menuItems: LeadsMenuItem[] = [
     ...(can
@@ -690,7 +761,7 @@ export function LeadsRoute() {
                       aria-label="Whose leads"
                       value={scope}
                       onChange={(event) =>
-                        setScopeChoice(event.target.value as Scope)
+                        chooseScope(event.target.value as Scope)
                       }
                     >
                       <option value="team">Everyone</option>
@@ -809,6 +880,16 @@ export function LeadsRoute() {
               onChanged={refresh}
               onCounts={onCounts}
               pipeline={pipeline}
+              tools={
+                view === TEST ? null : (
+                  <ViewsChip
+                    owner={contextKey}
+                    current={shown}
+                    describe={describeView}
+                    onApply={applyView}
+                  />
+                )
+              }
             />
           ) : (
             <DeskView
