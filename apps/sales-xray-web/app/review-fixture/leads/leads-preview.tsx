@@ -25,7 +25,7 @@
  * `?tab=all&stage=open&q=nagpurx` shows an empty list's "Clear filters".
  */
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 
 import { rememberCall } from "../../leads/leads-client";
 import { LeadsRoute } from "../../leads/leads-page";
@@ -701,9 +701,10 @@ function useTap() {
   }, []);
 }
 
-export function LeadsPreview() {
+/** The fictional organisation, signed in, with its answers installed: for any
+ * screen's fixture that reads the Lead Desk (Leads, and Settings since slice 5). */
+export function FixtureWorkspace({ children }: { children: ReactNode }) {
   useState(install);
-  useTap();
   return (
     <WorkspaceAccessContext.Provider
       value={{
@@ -722,9 +723,18 @@ export function LeadsPreview() {
         retry: () => {},
       }}
     >
+      {children}
+    </WorkspaceAccessContext.Provider>
+  );
+}
+
+export function LeadsPreview() {
+  useTap();
+  return (
+    <FixtureWorkspace>
       <Suspense fallback={null}>
         <LeadsRoute />
       </Suspense>
-    </WorkspaceAccessContext.Provider>
+    </FixtureWorkspace>
   );
 }

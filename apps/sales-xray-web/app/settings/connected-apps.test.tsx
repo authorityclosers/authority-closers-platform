@@ -435,7 +435,7 @@ it("manages an app in a sheet: its connections, disconnect on a second press, an
   // Lead ads are a guided setup; its Pages come from the health read when
   // /meta/status can't be read.
   expect(sheet.textContent).toContain("Brightline Coaching");
-  expect(sheet.querySelector('a[href="/leads?tab=sources"]')).not.toBeNull();
+  expect(sheet.querySelector('a[href="/settings/sources"]')).not.toBeNull();
   await act(async () => button(sheet, "Switch off")!.click());
   expect(calls.some((call) => call.key.includes("/disconnect"))).toBe(false);
   await act(async () =>

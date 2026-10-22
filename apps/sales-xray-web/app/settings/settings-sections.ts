@@ -9,6 +9,8 @@ import {
   Bot,
   Building2,
   CircleUserRound,
+  ClipboardList,
+  Plug,
   CreditCard,
   Code,
   LifeBuoy,
@@ -28,7 +30,10 @@ export type SettingsSectionId =
   | "plan"
   | "organisation"
   | "team"
+  | "lead-rules"
+  | "stages"
   | "call-ai"
+  | "sources"
   | "apps"
   | "ai-replies"
   | "notifications"
@@ -92,11 +97,35 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     group: "Organisation",
   },
   {
+    // Approved map, slice 5 (22 Oct 2026): Leads' own settings live here.
+    id: "lead-rules",
+    label: "Lead rules",
+    hint: "Who gets new leads, limits, reassigning and work hours",
+    icon: ClipboardList,
+    group: "Organisation",
+    managers: true,
+  },
+  {
+    id: "stages",
+    label: "Lead stages",
+    hint: "Your stages and pipelines, and what your ad platforms learn",
+    icon: Route,
+    group: "Organisation",
+  },
+  {
     id: "call-ai",
     label: "AI on calls",
     hint: "How much AI reads each seller's recorded calls",
     icon: Sparkles,
     group: "Organisation",
+    managers: true,
+  },
+  {
+    id: "sources",
+    label: "Lead sources",
+    hint: "Lead forms, sheets, webhooks and imports",
+    icon: Plug,
+    group: "Connections",
     managers: true,
   },
   {
@@ -148,25 +177,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
 
 /**
  * Settings that live with their own work and are listed here so they are easy
- * to find; each opens its own page. Lead stages live in Leads (lead journey
- * session, 20 Oct).
+ * to find; each opens its own page. None just now: Lead stages moved into
+ * Settings (approved map, slice 5, 22 Oct 2026).
  */
 export type SettingsLink = Omit<SettingsSection, "id"> & {
   key: string;
   href: string;
 };
 
-export const SETTINGS_LINKS: readonly SettingsLink[] = [
-  {
-    key: "lead-stages",
-    label: "Lead stages",
-    hint: "Your stages from an industry template, and what each tells your ad platforms",
-    icon: Route,
-    group: "Organisation",
-    managers: true,
-    href: "/leads?tab=stages",
-  },
-];
+export const SETTINGS_LINKS: readonly SettingsLink[] = [];
 
 export const SETTINGS_GROUPS = [
   "Account",

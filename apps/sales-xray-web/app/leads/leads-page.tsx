@@ -29,7 +29,7 @@ import {
   Plus,
   UserRound,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
@@ -43,6 +43,7 @@ import { AcquisitionShell } from "../acquisition-shell";
 import { useCommandSource, type CommandSource } from "../ui/command-registry";
 import { DeskChats } from "../chats/desk-chats";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
+import { settingsPath } from "../settings/settings-sections";
 import { leavingOverlay } from "../ui/back-close";
 import { Badge, Button, Empty, PageHeader } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
@@ -168,6 +169,7 @@ export { LeadsSkeleton };
 export function LeadsRoute() {
   const access = useWorkspaceAccess();
   const params = useSearchParams();
+  const router = useRouter();
   const requested = params.get("tab");
   const requestedStage = params.get("stage");
   const requestedPipeline = params.get("pipeline");
@@ -211,7 +213,10 @@ export function LeadsRoute() {
   const lastRead = useRef(0);
   const [calling, setCalling] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [importing, setImporting] = useState(false);
+  // Settings → Lead sources → Import opens here (/leads?import=file).
+  const [importing, setImporting] = useState(
+    () => params.get("import") === "file",
+  );
   const [menu, setMenu] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // A settings page opened from the menu is a step of its own: Leads goes back.
@@ -752,10 +757,11 @@ export function LeadsRoute() {
             note: desk.counts.unassigned
               ? `${desk.counts.unassigned} need an owner`
               : "Who gets which leads",
+            // Approved map, slice 5: Leads' settings live in Settings.
             onPick: () => {
               setSettingsOpen(false);
               leavingOverlay();
-              go("team");
+              router.push(settingsPath("lead-rules"));
             },
           },
           {
@@ -765,7 +771,7 @@ export function LeadsRoute() {
             onPick: () => {
               setSettingsOpen(false);
               leavingOverlay();
-              go("sources");
+              router.push(settingsPath("sources"));
             },
           },
         ]
@@ -779,7 +785,7 @@ export function LeadsRoute() {
       onPick: () => {
         setSettingsOpen(false);
         leavingOverlay();
-        go("stages");
+        router.push(settingsPath("stages"));
       },
     },
     {
@@ -1154,7 +1160,20 @@ export function LeadsRoute() {
           key={`importing-${rounds.importing}`}
           open={importing}
           canManage={can}
-          onClose={() => setImporting(false)}
+          onClose={() => {
+            setImporting(false);
+            // Arrived from Settings: Import doesn't open again on a refresh.
+            if (new URLSearchParams(window.location.search).has("import")) {
+              const next = new URLSearchParams(window.location.search);
+              next.delete("import");
+              const query = next.toString();
+              window.history.replaceState(
+                window.history.state,
+                "",
+                `${window.location.pathname}${query ? `?${query}` : ""}`,
+              );
+            }
+          }}
           onDone={refresh}
         />
       </MessageSetup.Provider>
