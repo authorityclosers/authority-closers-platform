@@ -755,6 +755,35 @@ export const submissionPath = (id: string) => {
   if (!UUID.test(id)) throw new ReportContractError("submission_id");
   return `/submissions/${id}`;
 };
+
+/** How Calls words a lead's stage (New, Not contacted, …), for the Report too. */
+export const CALL_LEAD_STAGE_WORDS: Record<CallLead["stage"], string> = {
+  new: "New",
+  not_connected: "Not contacted",
+  follow_up: "Follow up",
+  interested: "Interested",
+  won: "Won",
+  lost: "Lost",
+};
+
+/**
+ * The call's lead for the Report header (slice 7): the call's own read with the
+ * opt-in `include_lead=true`, so the Report never depends on the Calls list's
+ * cache. Null when no lead names the call; an older server (422) throws.
+ */
+export async function readCallLead(
+  submissionId: string,
+  signal?: AbortSignal,
+): Promise<CallLead | null> {
+  const body = record(
+    await acquisition(`${submissionPath(submissionId)}?include_lead=true`, {
+      signal,
+    }),
+  );
+  return body.lead === undefined || body.lead === null
+    ? null
+    : parseCallLead(body.lead);
+}
 export function requestedSubmissionId(): string | null {
   const id =
     new URLSearchParams(window.location.search).get("call") ??

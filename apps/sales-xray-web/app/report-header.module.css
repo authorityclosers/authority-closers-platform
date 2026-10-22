@@ -61,3 +61,12 @@ small.fileType.fileType.fileType.fileType.fileType {
   .pinned.pinned.pinned.pinned.pinned:not(:has(details[open])) {
   position: static;
 }
+
+/* The call's lead (slice 7): its name opens the lead's sheet in Leads. */
+.lead {
+  color: inherit;
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}

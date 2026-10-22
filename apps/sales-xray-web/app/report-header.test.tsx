@@ -201,3 +201,40 @@ it("renders clearly visible Transcript button beside More menu and entry inside 
   await act(async () => transcriptMenuButton?.click());
   expect(onOpenTranscript).toHaveBeenCalledTimes(2);
 });
+
+it("names the call's lead and links to its sheet in Leads", async () => {
+  await act(async () =>
+    root.render(
+      <ReportHeader
+        durationMs={67_000}
+        sourceLabel="Fictional test source"
+        claimed
+        busy={false}
+        canDownload
+        canRequestDeletion
+        deletionDisabled={false}
+        onAnalyseAnother={onAnalyseAnother}
+        onDownload={onDownload}
+        onRequestDeletion={() => {}}
+        lead={{
+          leadId: "11111111-1111-4111-8111-111111111111",
+          name: "asha fictional",
+          stage: "interested",
+          step: null,
+          pipeline: "main",
+        }}
+      />,
+    ),
+  );
+  const link = host.querySelector<HTMLAnchorElement>("[data-report-lead] a")!;
+  expect(link.getAttribute("href")).toBe(
+    "/leads?lead=11111111-1111-4111-8111-111111111111",
+  );
+  expect(host.querySelector("[data-report-lead]")!.textContent).toContain(
+    "Interested",
+  );
+});
+
+it("shows no lead line when the call has none", () => {
+  expect(host.querySelector("[data-report-lead]")).toBeNull();
+});
