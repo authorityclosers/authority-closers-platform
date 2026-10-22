@@ -123,7 +123,9 @@ jobs:
         run: pnpm install --frozen-lockfile && uv sync --frozen
       - name: Require codec and locked acquisition browser
         timeout-minutes: 13
-        run: uv run --frozen python scripts/ci/ci_prerequisites.py codec browser
+        uses: ./.github/actions/ci-prerequisites
+        with:
+          components: codec browser
       - name: Build verified AudioAtlas for acquisition browser
         run: |
           set -euo pipefail
@@ -218,7 +220,9 @@ jobs:
         run: pnpm install --frozen-lockfile && uv sync --frozen
       - name: Require codec, filesystem and locked browser prerequisites
         timeout-minutes: 13
-        run: uv run --frozen python scripts/ci/ci_prerequisites.py codec filesystem browser
+        uses: ./.github/actions/ci-prerequisites
+        with:
+          components: codec filesystem browser
       - name: Build verified AudioAtlas for conversation regressions
         run: |
           set -euo pipefail
@@ -328,7 +332,9 @@ jobs:
           --junitxml="${{ runner.temp }}/hosted-activation-root.xml"
       - name: Require codec, filesystem and locked browser prerequisites
         timeout-minutes: 13
-        run: uv run --frozen python scripts/ci/ci_prerequisites.py codec filesystem browser
+        uses: ./.github/actions/ci-prerequisites
+        with:
+          components: codec filesystem browser
       - name: Build verified AudioAtlas for conversation regressions
         run: |
           set -euo pipefail

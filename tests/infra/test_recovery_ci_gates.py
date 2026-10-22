@@ -172,16 +172,8 @@ def test_historical_and_codec_proofs_cannot_silently_lose_prerequisites() -> Non
         application, "Require codec, filesystem and locked browser prerequisites"
     )
     assert codec["timeout-minutes"] == 13
-    assert shlex.split(codec["run"]) == [
-        "uv",
-        "run",
-        "--frozen",
-        "python",
-        "scripts/ci/ci_prerequisites.py",
-        "codec",
-        "filesystem",
-        "browser",
-    ]
+    assert codec["uses"] == "./.github/actions/ci-prerequisites"
+    assert codec["with"]["components"] == "codec filesystem browser"
     browser = _required_step(
         application, "Prove registration consent and server-rendered readiness"
     )
@@ -275,15 +267,8 @@ def test_sales_xray_acquisition_browser_gate_is_required_and_aggregated() -> Non
     assert "proof.json" in receipt["with"]["path"]
     assert names.index(install["name"]) < names.index(browser["name"])
     assert browser["timeout-minutes"] == 13
-    assert shlex.split(browser["run"]) == [
-        "uv",
-        "run",
-        "--frozen",
-        "python",
-        "scripts/ci/ci_prerequisites.py",
-        "codec",
-        "browser",
-    ]
+    assert browser["uses"] == "./.github/actions/ci-prerequisites"
+    assert browser["with"]["components"] == "codec browser"
     assert names.index(browser["name"]) < names.index(native["name"])
     assert names.index(native["name"]) < names.index(build["name"])
     assert [shlex.split(line) for line in native["run"].splitlines()] == [

@@ -146,25 +146,17 @@ jobs:
       - name: This family's exclusion list (base exclusions plus the other family)
         if: matrix.fam != 'targeted'
         run: python3 scripts/ci/wb_checks.py py-family --fam ${{ matrix.fam }} --out "$RUNNER_TEMP/exclusions.txt"
-      - name: Restore Playwright browsers
-        if: matrix.fam != 'b'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      - name: Require cached codec, filesystem and locked browser prerequisites
+        timeout-minutes: 13
+        uses: ./.github/actions/ci-prerequisites
         with:
-          path: ~/.cache/ms-playwright
-          key: wb-playwright-${{ runner.os }}-${{ hashFiles('uv.lock', 'pnpm-lock.yaml') }}
-      - name: Start the prerequisites in the background (family b needs the codec too, not the browser)
-        run: |
-          # Database tests upload audio and the server measures it with ffprobe, so every family needs the codec.
-          what="codec filesystem browser"; [ "${{ matrix.fam }}" = b ] && what="codec filesystem"
-          ( uv run --frozen python scripts/ci/ci_prerequisites.py $what; echo $? > "$RUNNER_TEMP/prereq.rc" ) \
-            > "$RUNNER_TEMP/prereq.log" 2>&1 &
+          components: ${{ matrix.fam == 'b' && 'codec filesystem' || 'codec filesystem browser' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
           node-version: 24.19.0
-      - name: Install locked Node dependencies in the background
-        run: |
-          corepack enable && corepack prepare pnpm@11.19.0 --activate
-          ( pnpm install --frozen-lockfile; echo $? > "$RUNNER_TEMP/pnpm.rc" ) > "$RUNNER_TEMP/pnpm.log" 2>&1 &
+      - name: Install locked Node dependencies
+        timeout-minutes: 6
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate && pnpm install --frozen-lockfile
       - name: Build verified AudioAtlas for conversation regressions
         run: uv run python -c 'from ac_platform.conversation_intelligence.signals import build_native, _native_executable; built = build_native(); assert _native_executable(None) == built.resolve()'
       - name: Provision roles and apply the PostgreSQL migration chain
@@ -179,16 +171,6 @@ jobs:
           done
           psql --set ON_ERROR_STOP=1 --host localhost --username ac_owner --dbname ac_platform --file infra/local/postgres/init/001-roles.sql
           uv run alembic upgrade head && uv run alembic check
-      - name: Wait for the Node dependencies
-        run: |
-          for _ in $(seq 1 300); do [ -f "$RUNNER_TEMP/pnpm.rc" ] && break; sleep 1; done
-          tail -5 "$RUNNER_TEMP/pnpm.log"
-          test "$(cat "$RUNNER_TEMP/pnpm.rc" 2>/dev/null)" = 0
-      - name: Wait for the prerequisites
-        run: |
-          for _ in $(seq 1 600); do [ -f "$RUNNER_TEMP/prereq.rc" ] && break; sleep 1; done
-          cat "$RUNNER_TEMP/prereq.log"
-          test "$(cat "$RUNNER_TEMP/prereq.rc" 2>/dev/null)" = 0
       - name: Run Python tests (family ${{ matrix.fam }}, shard ${{ matrix.shard }} of ${{ matrix.count }})
         run: |
           set -euo pipefail
@@ -231,14 +213,13 @@ jobs:
           node-version: 24.19.0
       - name: Install locked Node dependencies
         run: corepack enable && corepack prepare pnpm@11.19.0 --activate && pnpm install --frozen-lockfile
-      - name: Restore Playwright browsers
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      - name: Require cached locked Node browser
+        timeout-minutes: 13
+        uses: ./.github/actions/ci-prerequisites
         with:
-          path: ~/.cache/ms-playwright
-          key: wb-playwright-node-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
-      - name: Install Playwright Chromium
-        timeout-minutes: 4
-        run: pnpm exec playwright install --with-deps chromium --only-shell
+          components: browser
+          python: python3
+          node-browser: "true"
       - name: Screenshots at 390 and 1440, light and dark, fictional data only (${{ needs.plan.outputs.scope }})
         timeout-minutes: 10
         run: node scripts/ci/wb_screens.mjs "$RUNNER_TEMP/wb-screens" .wb-ci/request.json
@@ -298,14 +279,11 @@ jobs:
           python-version: "3.12"
       - name: Install locked dependencies
         run: python -m pip install --disable-pip-version-check uv==0.12.7 && pnpm install --frozen-lockfile && uv sync --frozen
-      - name: Restore Playwright browsers
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-        with:
-          path: ~/.cache/ms-playwright
-          key: wb-playwright-py-${{ runner.os }}-${{ hashFiles('uv.lock') }}
       - name: Require codec and locked browser
         timeout-minutes: 13
-        run: uv run --frozen python scripts/ci/ci_prerequisites.py codec browser
+        uses: ./.github/actions/ci-prerequisites
+        with:
+          components: codec browser
       - name: Build verified AudioAtlas
         run: uv run --frozen python -c 'from ac_platform.conversation_intelligence.signals import build_native, _native_executable; built = build_native(); assert _native_executable(None) == built.resolve()'
       - name: Provision roles, the migration chain and the acquisition database
@@ -401,4 +379,3 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERIFY_OUTCOME: ${{ steps.verify.outcome }}
         run: python3 scripts/ci/wb_checks.py summary
-
