@@ -215,11 +215,9 @@ export function PhoneAppBanner({ onOpen }: { onOpen: () => void }) {
         <strong>Get the Sales Xray app.</strong> Tap Call, and it fills in how
         the call went and finds the recording for you.
       </span>
-      <Button
-        variant="primary"
-        className={styles.bannerAction}
-        onClick={onOpen}
-      >
+      {/* Tonal: Leads keeps one filled action, Start calling (Liquid Glass
+          polish rubric, 22 Oct 2026). */}
+      <Button className={styles.bannerAction} onClick={onOpen}>
         Get the app
       </Button>
       <button
