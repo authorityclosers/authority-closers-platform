@@ -376,14 +376,18 @@ export function AddLeadDialog({
                 <span className={styles.matchNote} role="status">
                   {existing.lead_id ? (
                     <>
-                      Already a lead:{" "}
-                      <strong>{displayName(existing.name ?? "")}</strong>
-                      {existing.stage_label ? ` · ${existing.stage_label}` : ""}
-                      {existing.yours
-                        ? " · yours"
-                        : existing.owner_name
-                          ? ` · with ${displayName(existing.owner_name)}`
+                      <span>
+                        Already a lead:{" "}
+                        <strong>{displayName(existing.name ?? "")}</strong>
+                        {existing.stage_label
+                          ? ` · ${existing.stage_label}`
                           : ""}
+                        {existing.yours
+                          ? " · yours"
+                          : existing.owner_name
+                            ? ` · with ${displayName(existing.owner_name)}`
+                            : ""}
+                      </span>
                       <button
                         type="button"
                         className={styles.matchOpen}
