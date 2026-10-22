@@ -37,7 +37,7 @@ import {
 } from "./leads-client";
 import { BulkSheet } from "./bulk-sheet";
 import { LeadsTable, useWideScreen } from "./leads-table";
-import { QuickAddBar } from "./quick-add";
+import { QuickAddBar, type PasteRows } from "./quick-add";
 import styles from "./leads.module.css";
 
 export type Scope = "mine" | "team" | "unassigned";
@@ -80,6 +80,7 @@ export function ListView({
   layoutOwner,
   pipelineNames = null,
   me = null,
+  onPasteRows,
 }: {
   canManage: boolean;
   /** "open", a stage kind, or "test". */
@@ -112,6 +113,8 @@ export function ListView({
   pipelineNames?: ReadonlyMap<string, string> | null;
   /** The viewer: the table lets a seller change their own leads in place. */
   me?: string | null;
+  /** Rows pasted into quick add go to the import. */
+  onPasteRows?: PasteRows;
 }) {
   // Table on a computer (owner P0, 23 Oct 2026); phones keep the list.
   const wide = useWideScreen();
@@ -135,7 +138,7 @@ export function ListView({
   // Quick add where a new lead lands: All leads and New (owner P0, 23 Oct 2026).
   const quickAdd =
     stage === "open" || stage === "new"
-      ? { pipeline, onAdded: () => onChanged?.() }
+      ? { pipeline, onAdded: () => onChanged?.(), onPasteRows }
       : null;
   const [loaded, setLoaded] = useState<{
     key: string;
@@ -401,6 +404,7 @@ export function ListView({
           <QuickAddBar
             pipeline={quickAdd.pipeline}
             onAdded={quickAdd.onAdded}
+            onPasteRows={quickAdd.onPasteRows}
           />
         ) : null}
         {error ? (

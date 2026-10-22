@@ -42,6 +42,7 @@ import {
   type PickedContact,
   type SharedLead,
 } from "./leads-client";
+import { PASTED_FILE, pastedFile, readPasted } from "./paste-import";
 import styles from "./leads.module.css";
 
 export type AddWay = "type" | "contacts" | "file" | "sources";
@@ -714,11 +715,14 @@ export function ImportDialog({
   canManage,
   onClose,
   onDone,
+  pasted = null,
 }: {
   open: boolean;
   canManage: boolean;
   onClose: () => void;
   onDone: () => void;
+  /** Rows pasted into the list's quick add: read as soon as it opens. */
+  pasted?: string | null;
 }) {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
@@ -730,6 +734,9 @@ export function ImportDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const command = useRef(commandId());
+  // Rows pasted from a sheet, a CSV or a chat (owner P0, 23 Oct 2026).
+  const [text, setText] = useState("");
+  const [dropped, setDropped] = useState(0);
 
   const pick = async (file: File | undefined) => {
     if (!file) return;
@@ -749,6 +756,29 @@ export function ImportDialog({
       setBusy(false);
     }
   };
+
+  const readText = (value: string) => {
+    const rows = readPasted(value);
+    if (!rows) {
+      setError(
+        "There are no rows in that. Copy the rows from your sheet, with their headings if it has them.",
+      );
+      return;
+    }
+    setDropped(rows.dropped);
+    void pick(pastedFile(rows));
+  };
+  const reading = useRef(readText);
+  useEffect(() => {
+    reading.current = readText;
+  });
+  const handed = useRef(false);
+  useEffect(() => {
+    if (!open || !pasted || handed.current) return;
+    handed.current = true;
+    setText(pasted);
+    reading.current(pasted);
+  }, [open, pasted]);
 
   const run = async () => {
     if (!preview) return;
@@ -784,7 +814,7 @@ export function ImportDialog({
     <Dialog
       open={open}
       title="Import leads"
-      description="Excel (.xlsx) or CSV with a header row, up to 2,000 leads. We match the columns for you, and every column is kept on the lead."
+      description="An Excel (.xlsx) or CSV file, or rows pasted from a sheet or a chat, up to 2,000 leads. We match the columns for you, and every column is kept on the lead."
       onClose={onClose}
       actions={
         result ? (
@@ -854,6 +884,32 @@ export function ImportDialog({
                 onChange={(event) => void pick(event.target.files?.[0])}
               />
             </label>
+            <div className={`${styles.pasteBox} ${styles.pasteRows}`}>
+              <textarea
+                aria-label="Paste rows"
+                rows={3}
+                value={text}
+                disabled={busy}
+                placeholder="Or paste rows from a sheet, a CSV or ChatGPT"
+                onChange={(event) => {
+                  setText(event.target.value);
+                  setError(null);
+                }}
+                onPaste={(event) => {
+                  const value = event.clipboardData.getData("text");
+                  if (!value.trim()) return;
+                  event.preventDefault();
+                  setText(value);
+                  readText(value);
+                }}
+              />
+              <Button
+                onClick={() => readText(text)}
+                disabled={busy || !text.trim()}
+              >
+                Read rows
+              </Button>
+            </div>
             <a
               className={styles.linkButton}
               href={`data:text/csv;charset=utf-8,${encodeURIComponent(SAMPLE_CSV)}`}
@@ -865,9 +921,11 @@ export function ImportDialog({
         ) : (
           <>
             <p className={styles.hint}>
-              {preview.file_name}: {preview.total_rows} rows
-              {preview.truncated ? " (only the first 2,000)" : ""},{" "}
-              {preview.with_phone} with a phone
+              {preview.file_name === PASTED_FILE ? "Pasted" : preview.file_name}
+              : {preview.total_rows} rows
+              {preview.truncated || dropped
+                ? " (only the first 2,000)"
+                : ""}, {preview.with_phone} with a phone
               {preview.repeats_in_file
                 ? `, ${preview.repeats_in_file} repeated in the file`
                 : ""}

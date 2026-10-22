@@ -20,7 +20,7 @@ import {
 
 import { displayName } from "../display-name";
 import { when, type LeadRow } from "./leads-client";
-import { QuickAddRow } from "./quick-add";
+import { QuickAddRow, type PasteRows } from "./quick-add";
 import {
   EDIT_COLUMNS,
   PickEditor,
@@ -141,7 +141,11 @@ export function LeadsTable({
   /** The list's row keys (J/K, Enter) read the table's rows here. */
   keysRef?: RefObject<HTMLDivElement | null>;
   /** Quick add as the last line: the pipeline it adds to, and after adding. */
-  quickAdd?: { pipeline: string | null; onAdded: () => void } | null;
+  quickAdd?: {
+    pipeline: string | null;
+    onAdded: () => void;
+    onPasteRows?: PasteRows;
+  } | null;
   /** Who may change what in place; none while selecting. */
   edit?: EditRights | null;
 }) {
@@ -455,6 +459,7 @@ export function LeadsTable({
             <QuickAddRow
               pipeline={quickAdd.pipeline}
               onAdded={quickAdd.onAdded}
+              onPasteRows={quickAdd.onPasteRows}
               before={selecting ? 1 : 0}
               after={columns.length - 3}
             />

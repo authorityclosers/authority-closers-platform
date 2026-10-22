@@ -5,7 +5,8 @@
  * Enter, and the lead is in; the line empties for the next one. In the table it
  * is the last line, its boxes under Name and Phone; on phones (and an empty
  * list) it sits above the list. A number that is already a lead says so while
- * it is typed, as Add lead does, and the lead rules pick the owner.
+ * it is typed, as Add lead does, and the lead rules pick the owner. Rows pasted
+ * into it (several cells or lines from a sheet) go to the import instead.
  */
 
 import { Plus } from "lucide-react";
@@ -13,6 +14,7 @@ import {
   useEffect,
   useRef,
   useState,
+  type ClipboardEvent,
   type KeyboardEvent,
   type RefObject,
 } from "react";
@@ -33,11 +35,18 @@ type QuickAdd = {
   canAdd: boolean;
   submit: () => void;
   onKeyDown: (event: KeyboardEvent<HTMLInputElement>) => void;
+  onPaste: (event: ClipboardEvent<HTMLInputElement>) => void;
+  /** Pasting rows opens the import. */
+  takesRows: boolean;
 };
+
+/** Rows pasted into quick add: the import reads them (owner P0, 23 Oct 2026). */
+export type PasteRows = (text: string) => void;
 
 function useQuickAdd(
   pipeline: string | null,
   onAdded: () => void,
+  onPasteRows?: PasteRows,
 ): [QuickAdd, RefObject<HTMLInputElement | null>] {
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -113,8 +122,29 @@ function useQuickAdd(
     }
   };
 
+  const onPaste = (event: ClipboardEvent<HTMLInputElement>) => {
+    if (!onPasteRows) return;
+    const text = event.clipboardData.getData("text");
+    // Several cells or lines: a sheet's rows, not one name or number.
+    if (!/[\t\n]/.test(text.trim())) return;
+    event.preventDefault();
+    onPasteRows(text);
+  };
+
   return [
-    { name, phone, setName, setPhone, busy, hint, canAdd, submit, onKeyDown },
+    {
+      name,
+      phone,
+      setName,
+      setPhone,
+      busy,
+      hint,
+      canAdd,
+      submit,
+      onKeyDown,
+      onPaste,
+      takesRows: !!onPasteRows,
+    },
     nameRef,
   ];
 }
@@ -133,7 +163,10 @@ function NameBox({
       value={add.name}
       onChange={(event) => add.setName(event.target.value)}
       onKeyDown={add.onKeyDown}
-      placeholder="New lead's name"
+      onPaste={add.onPaste}
+      placeholder={
+        add.takesRows ? "New lead's name, or paste rows" : "New lead's name"
+      }
       aria-label="New lead's name"
       autoComplete="off"
       maxLength={200}
@@ -148,6 +181,7 @@ function PhoneBox({ add }: { add: QuickAdd }) {
       value={add.phone}
       onChange={(event) => add.setPhone(event.target.value)}
       onKeyDown={add.onKeyDown}
+      onPaste={add.onPaste}
       placeholder="Phone"
       aria-label="New lead's phone"
       type="tel"
@@ -176,18 +210,20 @@ function AddButton({ add }: { add: QuickAdd }) {
 export function QuickAddRow({
   pipeline,
   onAdded,
+  onPasteRows,
   before,
   after,
 }: {
   pipeline: string | null;
   onAdded: () => void;
+  onPasteRows?: PasteRows;
   /** Columns ahead of Name (the tick column while selecting). */
   before: number;
   /** Columns after Phone and Stage (the phone box spans both: a whole
       number needs more room than the Phone column's last four digits). */
   after: number;
 }) {
-  const [add, nameRef] = useQuickAdd(pipeline, onAdded);
+  const [add, nameRef] = useQuickAdd(pipeline, onAdded, onPasteRows);
   return (
     <tr className={styles.quickRow}>
       {before ? <td colSpan={before} /> : null}
@@ -215,11 +251,13 @@ export function QuickAddRow({
 export function QuickAddBar({
   pipeline,
   onAdded,
+  onPasteRows,
 }: {
   pipeline: string | null;
   onAdded: () => void;
+  onPasteRows?: PasteRows;
 }) {
-  const [add, nameRef] = useQuickAdd(pipeline, onAdded);
+  const [add, nameRef] = useQuickAdd(pipeline, onAdded, onPasteRows);
   return (
     <div className={styles.quickAdd} role="group" aria-label="Add a lead">
       <NameBox add={add} inputRef={nameRef} />

@@ -129,3 +129,36 @@ it("says a number is already a lead, and doesn't add it again", async () => {
   await settle();
   expect(posted).toHaveLength(0);
 });
+
+it("hands rows pasted from a sheet to the import, and keeps one name or number", async () => {
+  const onPasteRows = vi.fn();
+  await act(async () =>
+    root.render(
+      <QuickAddBar
+        pipeline={null}
+        onAdded={() => undefined}
+        onPasteRows={onPasteRows}
+      />,
+    ),
+  );
+  const paste = async (input: HTMLInputElement, text: string) => {
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: { getData: () => text },
+    });
+    await act(async () => input.dispatchEvent(event));
+    return event;
+  };
+  expect(box("New lead's name").placeholder).toBe(
+    "New lead's name, or paste rows",
+  );
+  const rows = "Asha\t98765 43210\nRavi\t91234 56789";
+  expect((await paste(box("New lead's name"), rows)).defaultPrevented).toBe(
+    true,
+  );
+  expect(onPasteRows).toHaveBeenCalledWith(rows);
+  expect(
+    (await paste(box("New lead's phone"), "98765 43210")).defaultPrevented,
+  ).toBe(false);
+  expect(onPasteRows).toHaveBeenCalledTimes(1);
+});

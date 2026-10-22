@@ -229,6 +229,8 @@ export function LeadsRoute() {
   const [importing, setImporting] = useState(
     () => params.get("import") === "file",
   );
+  // Rows pasted into quick add, for the import to read (owner P0, 23 Oct 2026).
+  const [pastedRows, setPastedRows] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // A settings page opened from the menu is a step of its own: Leads goes back.
@@ -1037,6 +1039,10 @@ export function LeadsRoute() {
               layoutOwner={contextKey}
               pipelineNames={pipelineNames}
               me={current && desk ? desk.me.person_id : null}
+              onPasteRows={(text) => {
+                setPastedRows(text);
+                begin("importing", setImporting);
+              }}
               tools={
                 view === TEST ? null : (
                   <ViewsChip
@@ -1244,8 +1250,10 @@ export function LeadsRoute() {
           key={`importing-${rounds.importing}`}
           open={importing}
           canManage={can}
+          pasted={pastedRows}
           onClose={() => {
             setImporting(false);
+            setPastedRows(null);
             // Arrived from Settings: Import doesn't open again on a refresh.
             if (new URLSearchParams(window.location.search).has("import")) {
               const next = new URLSearchParams(window.location.search);

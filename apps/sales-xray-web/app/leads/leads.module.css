@@ -3056,6 +3056,16 @@ a.repName {
   grid-column: 1 / -1;
 }
 
+/* Import: pasted rows get the box's whole width, Read rows under them. */
+.pasteRows {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: end;
+}
+
+.pasteRows textarea {
+  justify-self: stretch;
+}
+
 .pickList {
   display: grid;
   max-height: 320px;
