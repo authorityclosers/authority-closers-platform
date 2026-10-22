@@ -547,8 +547,8 @@ def test_hosted_activation_rejects_other_environment_openai_identity(
     paths["env"].write_text("".join(f"{key}={value}\n" for key, value in sorted(values.items())))
     _refresh_activation_inputs(paths)
     result = _validator_result(release, environment)
-    assert result.returncode != 0
-    assert "dedicated host path for the environment" in result.stderr
+    assert result.returncode == 2
+    assert result.stderr == "FAIL  Hosted Sales Xray activation validation failed.\n"
     assert values["AC_XRAY_OPENAI_IDENTITY_DIR"] not in result.stdout + result.stderr
 
 
