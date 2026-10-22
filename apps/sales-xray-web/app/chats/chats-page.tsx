@@ -323,6 +323,7 @@ export function ChatsRoute() {
                   )
                 }
                 onClear={() => setFilter(NO_FILTER)}
+                canConnect={canManage}
               />
             </>
           ) : (

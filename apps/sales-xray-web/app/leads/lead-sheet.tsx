@@ -21,10 +21,12 @@ import {
   Radio,
   Shuffle,
   Trash2,
+  Workflow,
   X,
 } from "lucide-react";
 import Link from "next/link";
 import {
+  useCallback,
   useContext,
   useEffect,
   useId,
@@ -46,6 +48,7 @@ import {
   LeadsError,
   localInputValue,
   logPhoneCall,
+  movePipeline,
   setCallPrivacy,
   minutesLabel,
   nextCallTime,
@@ -69,6 +72,7 @@ import { WhatsAppThread } from "./whatsapp-thread";
 import { sourceText, whyLine } from "./desk-view";
 import { firstCallWords, ownerNote } from "./owner-words";
 import { phoneCallText } from "./phone-call-text";
+import { several, usePipelines } from "./use-pipelines";
 import {
   MessageSetup,
   MessageSheet,
@@ -78,16 +82,22 @@ import {
 import {
   askCallAccess,
   buzz,
+  checkWarning,
   forgetCall,
   inPhoneApp,
   missedReason,
   onPhoneCall,
+  onPhoneSignal,
+  pendingRecordings,
   phoneStatus,
   readLastCall,
   readPhoneRecording,
+  recordingHandled,
+  setupOpen,
   startPhoneCall,
   type NativeCall,
   type NativeRecording,
+  type PendingRecording,
 } from "./native-phone";
 import {
   pickSimulation,
@@ -726,6 +736,37 @@ function usePhoneAppCall(
   }, [leadId]);
 }
 
+/**
+ * Inside the phone app: this lead's newest call the phone logged by itself and
+ * the recording it found for it (owner, 22 Oct 2026), and whether the phone
+ * hides its recordings. Nothing in a browser or an older app.
+ */
+function usePendingRecording(leadId: string) {
+  const [item, setItem] = useState<PendingRecording | null>(null);
+  const [hidden, setHidden] = useState(false);
+  const read = useCallback(() => {
+    void pendingRecordings().then((pending) => {
+      if (!pending) return;
+      const mine = pending.items.filter((row) => row.leadId === leadId);
+      setItem(mine.find((row) => row.recording) ?? null);
+      setHidden(pending.needsAllFiles && pending.allFilesSupported);
+    });
+  }, [leadId]);
+  useEffect(() => {
+    if (!inPhoneApp()) return;
+    read();
+    return onPhoneSignal((event) => {
+      if (event === "recordings" || event === "calls" || event === "resume")
+        read();
+    });
+  }, [read]);
+  const done = useCallback(() => {
+    if (!item) return;
+    void recordingHandled(item.eventId).then(() => setItem(null));
+  }, [item]);
+  return { item, hidden, done };
+}
+
 function talkTime(seconds: number): string {
   const whole = Math.max(0, Math.round(seconds));
   return whole < 60
@@ -791,8 +832,14 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
           };
     }
     case "call":
+      if (event.via === "phone") {
+        // Its recording joined this call (owner, 22 Oct 2026): one row, with the Report link.
+        const text = phoneCallText(event, who);
+        return event.recording
+          ? { title: text.title, detail: "From the phone dialer · recorded" }
+          : text;
+      }
       if (event.recording) return { title: `${who} added the call recording` };
-      if (event.via === "phone") return phoneCallText(event, who);
       return {
         title: `${who} ${event.simulated ? "made a sample call" : "called"}${
           event.duration_seconds
@@ -1129,10 +1176,19 @@ function RecordingUpload({
   waiting = false,
   next = false,
   onNext,
+  callEventId = null,
+  hidden = false,
+  onAttached,
 }: {
   detail: LeadDetail;
   me: Me;
   onDone: (next: LeadDetail) => void;
+  /** The call on this lead the recording belongs to (one the phone logged from its dialer). */
+  callEventId?: string | null;
+  /** The phone hides its call recordings until All files access is allowed (Redmi audit #49). */
+  hidden?: boolean;
+  /** The recording is on the lead: the phone stops offering it. */
+  onAttached?: () => void;
   /** The step after "How did the call go?": in view, with its own heading. */
   next?: boolean;
   /** Start calling: move on to the next lead, with or without analysing. */
@@ -1153,8 +1209,12 @@ function RecordingUpload({
   const [step, setStep] = useState<SimulationStep>("saving");
   const [error, setError] = useState<string | null>(null);
   const [submission, setSubmission] = useState<string | null>(null);
+  // The phone's own recording of this call, once read: only it joins the call.
+  const [picked, setPicked] = useState<File | null>(null);
   const task = useRef<AbortController | null>(null);
   const panel = useRef<HTMLElement>(null);
+  const warning = checkWarning(found);
+  const silent = found?.check?.verdict === "silent";
 
   useEffect(() => () => task.current?.abort(), []);
   useEffect(() => {
@@ -1182,7 +1242,9 @@ function RecordingUpload({
     setError(null);
     setState("reading");
     try {
-      await choose(await readPhoneRecording(found));
+      const file = await readPhoneRecording(found);
+      setPicked(file);
+      await choose(file);
     } catch {
       setError(
         "Your phone didn't share the recording. Pick it from your files instead.",
@@ -1207,12 +1269,14 @@ function RecordingUpload({
         attempt,
         onStep: setStep,
         signal: controller.signal,
+        callEventId: file === picked ? callEventId : null,
       });
       const call = next.events.find(
         (event) => event.kind === "call" && event.recording,
       );
       setSubmission(call?.submission_id ?? null);
       setState("done");
+      if (file === picked) onAttached?.();
       onDone(next);
     } catch (reason) {
       if (controller.signal.aborted) return;
@@ -1257,7 +1321,25 @@ function RecordingUpload({
         <h3>{next ? "Saved. Analyse the call?" : "Call recording"}</h3>
         {state === "done" ? <Badge tone="good">Added</Badge> : null}
       </div>
-      {state === "idle" && found ? (
+      {state === "idle" && hidden && !found ? (
+        <>
+          <p className={styles.recordWarn}>
+            Your phone hides its call recordings. Allow All files access so
+            Sales Xray can find this call&apos;s recording.
+          </p>
+          <div className={styles.row}>
+            <Button onClick={() => void setupOpen("allFiles")}>
+              Allow All files access
+            </Button>
+          </div>
+        </>
+      ) : null}
+      {state === "idle" && found && warning ? (
+        <p className={styles.recordWarn} role="status">
+          {warning}
+        </p>
+      ) : null}
+      {state === "idle" && found && !silent ? (
         <button
           type="button"
           className={styles.recordPick}
@@ -1560,6 +1642,7 @@ export function LeadCard({
 }) {
   const { lead } = detail;
   const setup = useContext(MessageSetup);
+  const waitingRecording = usePendingRecording(lead.lead_id);
   const [permits, setPermits] = useState(false);
   const [calling, setCalling] = useState(false);
   const [messaging, setMessaging] = useState<{
@@ -1868,10 +1951,17 @@ export function LeadCard({
           detail={detail}
           me={me}
           onDone={onChanged}
-          found={phoneCall?.recording ?? null}
+          found={
+            phoneCall?.recording ?? waitingRecording.item?.recording ?? null
+          }
           waiting={phoneCall ? !phoneCall.final : false}
           next={afterCall?.step === "recording"}
           onNext={afterCall?.onNext}
+          callEventId={
+            phoneCall ? null : (waitingRecording.item?.eventId ?? null)
+          }
+          hidden={waitingRecording.hidden}
+          onAttached={phoneCall ? undefined : waitingRecording.done}
         />
       ) : null}
 
@@ -2033,6 +2123,10 @@ export function LeadCard({
         ) : null}
       </section>
 
+      {detail.can_assign ? (
+        <PipelinePanel detail={detail} onChanged={onChanged} />
+      ) : null}
+
       <LastCallBrief detail={detail} onChanged={onChanged} />
 
       <WhatsAppThread leadId={lead.lead_id} canSend={detail.can_edit} />
@@ -2052,6 +2146,79 @@ export function LeadCard({
 /* ---------- Lead sheet ---------- */
 
 export type LeadIntent = "call" | "message";
+
+/**
+ * Which pipeline the lead is in, and a move to another (owners and admins, when the
+ * organisation runs several; owner, 22 Oct 2026). It keeps its owner and follow-ups
+ * and lands in the new pipeline's stage for where it is.
+ */
+function PipelinePanel({
+  detail,
+  onChanged,
+}: {
+  detail: LeadDetail;
+  onChanged: (next: LeadDetail) => void;
+}) {
+  const pipes = usePipelines();
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  if (!several(pipes)) return null;
+  const lead = detail.lead;
+  const here = lead.pipeline ?? "main";
+  const name =
+    pipes.pipelines.find((item) => item.key === here)?.name ?? "Leads";
+  return (
+    <section className={styles.panel} aria-label="Pipeline">
+      <div className={styles.ownerRow}>
+        <span className={styles.pipelineMark} aria-hidden="true">
+          <Workflow size={16} />
+        </span>
+        <span>
+          <small>Pipeline</small>
+          <strong>{name}</strong>
+        </span>
+        <label className={styles.pipelineMove}>
+          <span className={styles.srOnly}>Move to pipeline</span>
+          <select
+            value=""
+            disabled={busy}
+            onChange={async (event) => {
+              const key = event.target.value;
+              if (!key) return;
+              setBusy(true);
+              setProblem(null);
+              try {
+                onChanged(await movePipeline(lead, key));
+              } catch (reason) {
+                setProblem(
+                  reason instanceof LeadsError
+                    ? reason.message
+                    : "Not moved. Try again.",
+                );
+              } finally {
+                setBusy(false);
+              }
+            }}
+          >
+            <option value="">{busy ? "Moving…" : "Move to…"}</option>
+            {pipes.pipelines
+              .filter((item) => item.key !== here)
+              .map((item) => (
+                <option key={item.key} value={item.key}>
+                  {item.name}
+                </option>
+              ))}
+          </select>
+        </label>
+      </div>
+      {problem ? (
+        <p className={styles.error} role="alert">
+          {problem}
+        </p>
+      ) : null}
+    </section>
+  );
+}
 
 export function LeadSheet({
   leadId,

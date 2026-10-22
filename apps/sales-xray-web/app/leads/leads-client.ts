@@ -48,6 +48,8 @@ export type LeadRow = {
   overdue?: boolean;
   /** The business own stage (its key), when it has a stage list (Lead stages). */
   step?: string | null;
+  /** The organisation's pipeline the lead is in ("main" until there are more). */
+  pipeline?: string;
   /** They called, nobody picked up, and nobody has called back yet. */
   missed_at?: string | null;
   missed_calls?: number;
@@ -461,6 +463,7 @@ export function readLeads(
     offset = 0,
     test = false,
     owner,
+    pipeline,
   }: {
     scope: "mine" | "team" | "unassigned";
     stage?: string | null;
@@ -470,11 +473,14 @@ export function readLeads(
     test?: boolean;
     /** One seller's leads (team scope, owners and admins): their profile. */
     owner?: string;
+    /** One pipeline's leads; none: every pipeline's. */
+    pipeline?: string | null;
   },
   signal?: AbortSignal,
 ) {
   const params = new URLSearchParams({ scope });
   if (owner) params.set("owner", owner);
+  if (pipeline) params.set("pipeline", pipeline);
   if (stage) params.set("stage", stage);
   if (search?.trim()) params.set("search", search.trim().slice(0, 80));
   if (offset) params.set("offset", String(offset));
@@ -522,6 +528,8 @@ export type NewLead = {
   note?: string;
   assign: "rules" | "me" | "person";
   person_id?: string;
+  /** A pipeline picked by hand; none: the one that takes added leads. */
+  pipeline?: string;
 };
 
 export function addLead(lead: NewLead, command = commandId()) {
@@ -687,6 +695,22 @@ export function forgetDevice(token: string) {
   );
 }
 
+/** Move a lead to another of the organisation's pipelines (owners and admins). */
+export function movePipeline(
+  lead: Pick<LeadRow, "lead_id" | "revision">,
+  pipeline: string,
+  command = commandId(),
+) {
+  return request<LeadDetail>(
+    `/leads/${encodeURIComponent(lead.lead_id)}/pipeline`,
+    json("POST", {
+      command_id: command,
+      expected_revision: lead.revision,
+      pipeline,
+    }),
+  );
+}
+
 export function reassign(
   lead: Pick<LeadRow, "lead_id" | "revision">,
   personId: string | null,
@@ -758,6 +782,8 @@ export type Performance = {
   previous: Outcomes;
   sellers: SellerOutcome[];
   pipeline: Record<string, number>;
+  /** The same open leads by stage, per pipeline (by the pipeline's key). */
+  pipelines?: Record<string, Record<string, number>>;
 };
 
 export type Period = 1 | 7 | 30;
@@ -866,6 +892,7 @@ export function commitImport(
   mapping: Record<string, string>,
   assign: "rules" | "me",
   command = commandId(),
+  pipeline: string | null = null,
 ) {
   return request<ImportResult>(
     "/imports",
@@ -875,6 +902,7 @@ export function commitImport(
       mapping,
       rows: preview.rows,
       assign,
+      ...(pipeline ? { pipeline } : {}),
     }),
   );
 }

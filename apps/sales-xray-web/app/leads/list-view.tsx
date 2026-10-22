@@ -46,6 +46,7 @@ export function ListView({
   actions,
   onChanged,
   onCounts,
+  pipeline = null,
 }: {
   canManage: boolean;
   /** "open", a stage kind, or "test". */
@@ -62,6 +63,8 @@ export function ListView({
   onChanged?: () => void;
   /** Every stage's count for this scope and search, for the tabs. */
   onCounts?: (counts: Record<string, number>) => void;
+  /** One pipeline's leads; none: every pipeline's. */
+  pipeline?: string | null;
 }) {
   const [loaded, setLoaded] = useState<{
     key: string;
@@ -89,8 +92,8 @@ export function ListView({
   // Results remember the question they answer; until the current one is
   // answered the list shows its skeleton. A refresh of the same question
   // (pull down, back in the app) keeps the rows on screen meanwhile.
-  const question = JSON.stringify([scope, stage, query]);
-  const key = JSON.stringify([scope, stage, query, version]);
+  const question = JSON.stringify([scope, stage, query, pipeline]);
+  const key = JSON.stringify([scope, stage, query, pipeline, version]);
   const page = loaded?.question === question ? loaded.page : null;
   const rows = loaded?.question === question ? loaded.rows : [];
   const error = failed?.key === key ? failed.message : null;
@@ -105,6 +108,7 @@ export function ListView({
     stage: stage === TEST ? null : stage,
     search: query,
     test: stage === TEST,
+    pipeline,
   };
 
   useEffect(() => {
@@ -115,6 +119,7 @@ export function ListView({
         stage: stage === TEST ? null : stage,
         search: query,
         test: stage === TEST,
+        pipeline,
       },
       controller.signal,
     )
@@ -134,7 +139,7 @@ export function ListView({
         });
       });
     return () => controller.abort();
-  }, [key, question, scope, stage, query]);
+  }, [key, question, scope, stage, query, pipeline]);
 
   const more = async () => {
     if (!page?.next_offset || loadingMore) return;

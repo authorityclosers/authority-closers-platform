@@ -34,11 +34,16 @@ import {
   callRecorderStatus,
   inPhoneApp,
   recorderOpen,
+  setupOpen,
   setupStatus,
   type CallRecorderStatus,
   type SetupStatus,
 } from "./native-phone";
-import { EXPLAINERS, recorderSteps } from "./phone-setup-words";
+import {
+  ALL_FILES_EXPLAINER,
+  EXPLAINERS,
+  recorderSteps,
+} from "./phone-setup-words";
 import styles from "./phone-onboarding.module.css";
 
 export const ONBOARDED_KEY = "sx-phone-onboarded";
@@ -138,7 +143,11 @@ function screenFor(
       optional: true,
     };
   }
-  const words = EXPLAINERS[step];
+  // Xiaomi hides its recordings folder: All files access instead (Redmi audit #49).
+  const words =
+    step === "recordings" && hidesRecordings(status)
+      ? ALL_FILES_EXPLAINER
+      : EXPLAINERS[step];
   const icon =
     step === "calls" ? Phone : step === "notifications" ? Bell : FileAudio;
   return {
@@ -151,12 +160,20 @@ function screenFor(
   };
 }
 
+/** MIUI and HyperOS show their recordings only with All files access (app 0.3.80+). */
+function hidesRecordings(status: SetupStatus): boolean {
+  return status.needsAllFiles && status.allFilesSupported;
+}
+
 async function allow(
   step: OnboardingStep,
+  status: SetupStatus,
   recorder: CallRecorderStatus | null,
 ) {
   if (step === "calls") await askCallAccess();
   else if (step === "notifications") await askNotifications();
+  else if (step === "recordings" && hidesRecordings(status))
+    await setupOpen("allFiles");
   else if (step === "recordings") await askRecordingAccess();
   else if (recorder?.available) {
     await callRecorderStart();
@@ -315,7 +332,7 @@ export function PhoneOnboarding() {
           onClick={async () => {
             setBusy(true);
             try {
-              await allow(step, plan.recorder);
+              await allow(step, plan.status, plan.recorder);
             } finally {
               setBusy(false);
               void next();

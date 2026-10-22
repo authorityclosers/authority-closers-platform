@@ -67,6 +67,7 @@ from ac_platform.lead_desk.contracts import (
     PhoneHealth,
     PhoneLog,
     PhoneLogCall,
+    PhoneLogged,
     PhoneLogResult,
     PhoneReport,
     Reassign,
@@ -85,7 +86,7 @@ from ac_platform.lead_desk.contracts import (
     WorkHoursView,
 )
 from ac_platform.lead_desk.journey import model as journeys
-from ac_platform.lead_desk.journey import signals
+from ac_platform.lead_desk.journey import pipelines, signals
 from ac_platform.lead_desk.journey.templates import MILESTONE_WORDS
 from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadEvent, LeadRep
 from ac_platform.lead_desk.vocabulary import (
@@ -349,8 +350,9 @@ class LeadDesk:
         self.sandbox = sandbox
         self.now = now or utcnow()
         self._sequence = 0
-        # The business's own stages, read once per request (lists build many rows).
-        self._journey: journeys.Journey | None = None
+        # Each pipeline's own stages, read once per request (lists build many rows).
+        self._journeys: dict[str, journeys.Journey] = {}
+        self._pipelines: tuple[pipelines.Pipeline, ...] | None = None
 
     # ----- shared reads --------------------------------------------------------
 
@@ -495,23 +497,36 @@ class LeadDesk:
         )
         return seen
 
-    async def _labels(self) -> journeys.Journey:
-        if self._journey is None:
-            self._journey = await journeys.read(self.db, self.tenant_id)
-        return self._journey
+    async def _labels(self, pipeline: str = journeys.MAIN_PIPELINE) -> journeys.Journey:
+        if pipeline not in self._journeys:
+            self._journeys[pipeline] = await journeys.read(self.db, self.tenant_id, pipeline)
+        return self._journeys[pipeline]
+
+    async def _pipeline_list(self) -> tuple[pipelines.Pipeline, ...]:
+        if self._pipelines is None:
+            self._pipelines = await pipelines.listed(self.db, self.tenant_id)
+        return self._pipelines
+
+    async def _pipeline(self, key: str) -> pipelines.Pipeline:
+        try:
+            return pipelines.find(await self._pipeline_list(), key)
+        except journeys.JourneyError as error:
+            raise DeskError(422, str(error)) from None
 
     def _stage_label(self, lead: Lead) -> str:
-        """The business's own name for the lead's stage, else the desk's."""
-        if self._journey is not None:
-            label = self._journey.label(lead.stage, lead.step)
+        """The business's own name for the lead's stage (in its pipeline), else the desk's."""
+        journey = self._journeys.get(journeys.pipeline_of(lead))
+        if journey is not None:
+            label = journey.label(lead.stage, lead.step)
             if label:
                 return label
         return STAGE_LABELS[lead.stage]
 
     def _step(self, lead: Lead) -> str | None:
-        if self._journey is None:
+        journey = self._journeys.get(journeys.pipeline_of(lead))
+        if journey is None:
             return lead.step
-        stage = self._journey.resolve(lead.stage, lead.step)
+        stage = journey.resolve(lead.stage, lead.step)
         return stage.key if stage else lead.step
 
     # ----- rows ------------------------------------------------------------------
@@ -562,6 +577,7 @@ class LeadDesk:
             stage=lead.stage,
             stage_label=self._stage_label(lead),
             step=self._step(lead),
+            pipeline=journeys.pipeline_of(lead),
             source=lead.source,
             source_label=lead.source_label or SOURCE_LABELS.get(lead.source, lead.source),
             owner_person_id=lead.owner_person_id,
@@ -580,7 +596,8 @@ class LeadDesk:
         )
 
     async def _rows(self, leads: Sequence[Lead]) -> tuple[LeadRow, ...]:
-        await self._labels()
+        for key in {journeys.pipeline_of(lead) for lead in leads}:
+            await self._labels(key)
         names = await self._names(lead.owner_person_id for lead in leads)
         day_end = self._day_start() + timedelta(days=1)
         return tuple(self._row(lead, names, day_end) for lead in leads)
@@ -831,11 +848,15 @@ class LeadDesk:
         limit: int = PAGE_SIZE,
         test_only: bool = False,
         owner: UUID | None = None,
+        pipeline: str | None = None,
     ) -> LeadPage:
         limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins see the whole team's leads.")
         where: list[Any] = [self._visible()]
+        if pipeline is not None:
+            # One pipeline's leads: its stage tabs, counts and calling queue.
+            where.append(journeys.lead_in((await self._pipeline(pipeline)).key))
         if owner is not None:
             # One seller's leads, for their profile (owner, 21 Oct 2026): the team list only.
             if scope != "team":
@@ -891,7 +912,7 @@ class LeadDesk:
 
     async def detail(self, lead_id: UUID) -> LeadDetail:
         lead = await self._lead(lead_id)
-        journey = await self._labels()
+        journey = await self._labels(journeys.pipeline_of(lead))
         suggestion = await signals.lead_suggestion(
             self.db, self.tenant_id, lead.id, lead.stage, lead.step, journey
         )
@@ -914,6 +935,9 @@ class LeadDesk:
         names = await self._names(people)
         day_end = self._day_start() + timedelta(days=1)
         hidden = await self._private_calls(lead_id=lead.id)
+        # A recording that names its call joins that call's row (owner, 22 Oct 2026).
+        joined = self._joined_recordings(events)
+        absorbed = {str(recording.id) for recording in joined.values()}
         can_edit = self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id
         reps: tuple[RepOption, ...] = ()
         if self.viewer.can_manage:
@@ -947,10 +971,11 @@ class LeadDesk:
             fields=fields,
             source_fields=self._source_fields(lead.payload),
             events=tuple(
-                self._event_view(event, names, hidden=hidden)
+                self._event_view(event, names, hidden=hidden, recording=joined.get(str(event.id)))
                 for event in events
                 if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
                 and (str(event.id) not in hidden or event.actor_person_id == self.viewer.person_id)
+                and str(event.id) not in absorbed
             ),
             can_edit=can_edit,
             can_assign=self.viewer.can_manage,
@@ -995,12 +1020,33 @@ class LeadDesk:
         except ValueError:
             return None
 
+    @staticmethod
+    def _joined_recordings(events: Sequence[LeadEvent]) -> dict[str, LeadEvent]:
+        """Call event id -> the newest recording event naming that call.
+
+        Only calls in ``events`` count: a recording whose call is older than the
+        shown history stays a row of its own.
+        """
+        present = {str(event.id) for event in events}
+        joined: dict[str, LeadEvent] = {}
+        for event in events:  # newest first
+            target = event.data.get("for_call") if event.kind == "call" else None
+            if (
+                isinstance(target, str)
+                and event.data.get("recording") is True
+                and target in present
+                and target not in joined
+            ):
+                joined[target] = event
+        return joined
+
     def _event_view(
         self,
         event: LeadEvent,
         names: Mapping[UUID, str],
         *,
         hidden: frozenset[str] = frozenset(),
+        recording: LeadEvent | None = None,
     ) -> LeadEventView:
         phone_call = event.kind == "call" and event.data.get("via") == "phone"
         data = event.data
@@ -1025,12 +1071,12 @@ class LeadDesk:
             previous_owner_name=names.get(previous) if previous else None,
             allocation_reason=data.get("reason_text"),
             source_label=data.get("source_label"),
-            submission_id=self._uuid(data.get("submission_id")),
+            submission_id=self._uuid((recording.data if recording else data).get("submission_id")),
             changed=tuple(str(name) for name in data["changed"])
             if isinstance(data.get("changed"), list)
             else None,
             simulated=data.get("simulated") if isinstance(data.get("simulated"), bool) else None,
-            recording=True if data.get("recording") is True else None,
+            recording=True if recording is not None or data.get("recording") is True else None,
             duration_seconds=int(data["duration_seconds"])
             if isinstance(data.get("duration_seconds"), (int, float))
             else None,
@@ -1063,9 +1109,11 @@ class LeadDesk:
         test_data: bool = False,
         reps: list[_Rep] | None = None,
         command_id: UUID | None = None,
+        pipeline: str | None = None,
     ) -> tuple[Lead | None, Literal["created", "repeat", "known", "skipped"]]:
         """Store one record as a lead. The same record again (same source id) is "known"
-        and changes nothing; another record with the same phone is a "repeat"."""
+        and changes nothing; another record with the same phone is a "repeat". A new lead
+        goes to the pipeline picked, else the one that takes its source (pipelines.route)."""
         _, config = await self.settings()
         found = extract(record, mapping, default_country=config["default_country"])
         if not (found.name or found.phone or found.email):
@@ -1094,10 +1142,16 @@ class LeadDesk:
             )
             return existing, "repeat"
 
+        route = (
+            (await self._pipeline(pipeline)).key
+            if pipeline is not None
+            else pipelines.route(await self._pipeline_list(), source)
+        )
         lead = Lead(
             id=uuid4(),
             tenant_id=self.tenant_id,
             revision=1,
+            pipeline_key=route,
             source=source,
             source_ref=source_ref,
             source_label=source_label,
@@ -1162,6 +1216,50 @@ class LeadDesk:
         else:
             await self._allocate(lead, reps=reps)
         return lead, "created"
+
+    async def move_pipeline(
+        self, lead_id: UUID, *, pipeline: str, expected_revision: int, command_id: UUID
+    ) -> LeadDetail:
+        """A manager moves a lead to another pipeline. It keeps its desk stage (To call,
+        follow-ups and its owner stay as they were) and lands in the new pipeline's stage
+        for it."""
+        self._require_manager()
+        seen = await self._command_seen(command_id)
+        if seen is not None:
+            if seen.lead_id != lead_id:
+                raise DeskError(409, "That request was already used for another lead.")
+            return await self.detail(lead_id)
+        lead = await self._lead(lead_id, lock=True)
+        if lead.revision != expected_revision:
+            raise DeskError(409, "This lead changed. Check it and try again.")
+        target = await self._pipeline(pipeline)
+        previous = journeys.pipeline_of(lead)
+        if previous == target.key:
+            raise DeskError(409, f"This lead is already in {target.name}.")
+        before = (await self._labels(previous)).resolve(lead.stage, lead.step)
+        after = (await self._labels(target.key)).resolve(lead.stage, None)
+        landed = after.label if after else STAGE_LABELS[lead.stage]
+        lead.pipeline_key = target.key
+        lead.step = None
+        lead.revision += 1
+        lead.updated_at = self.now
+        self._event(
+            lead,
+            "stage",
+            {
+                "stage": lead.stage,
+                "from_stage": lead.stage,
+                "step": after.key if after else None,
+                "from_step": before.key if before else None,
+                "step_label": f"{target.name} · {landed}",
+                "pipeline": target.key,
+                "from_pipeline": previous,
+            },
+            actor=self.viewer.person_id,
+            command_id=command_id,
+        )
+        await self.db.flush()
+        return await self.detail(lead_id)
 
     async def _name(self, person_id: UUID | None) -> str:
         if person_id is None:
@@ -1349,6 +1447,7 @@ class LeadDesk:
                 actor=self.viewer.person_id,
                 test_data=self.sandbox,
                 command_id=command.command_id,
+                pipeline=command.pipeline,
             )
         except CaptureError as error:
             raise DeskError(422, str(error)) from None
@@ -1386,7 +1485,7 @@ class LeadDesk:
         if command.connected:
             if command.step is not None:
                 # One of the business's own stages: its kind is the desk's stage.
-                chosen = (await self._labels()).by_key.get(command.step)
+                chosen = (await self._labels(journeys.pipeline_of(lead))).by_key.get(command.step)
                 if chosen is None or chosen.archived or chosen.kind not in journeys.CONNECTED_KINDS:
                     raise DeskError(422, "Pick one of your current stages.")
                 if command.stage is not None and command.stage != chosen.kind:
@@ -1810,25 +1909,46 @@ class LeadDesk:
         return await self.detail(lead.id)
 
     async def attach_recording(
-        self, lead_id: UUID, *, command_id: UUID, submission_id: UUID
+        self,
+        lead_id: UUID,
+        *,
+        command_id: UUID,
+        submission_id: UUID,
+        call_event_id: UUID | None = None,
     ) -> LeadDetail:
-        """Puts an uploaded call recording on the lead; the call itself was already counted."""
+        """Puts an uploaded call recording on the lead; the call itself was already counted.
+
+        With ``call_event_id`` (a call already on this lead, such as one the phone
+        logged by itself) the recording joins that call in the history. The call's
+        own event is never changed: this event names it, and the newest one wins.
+        """
         seen = await self._command_seen(command_id)
         if seen is not None:
             return await self.detail(seen.lead_id)
         lead = await self._lead(lead_id, lock=True)
         if not (self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id):
             raise DeskError(403, "Only the lead's owner or a manager can add its call recording.")
+        data: dict[str, Any] = {
+            "submission_id": str(submission_id),
+            "simulated": False,
+            "recording": True,
+        }
+        if call_event_id is not None:
+            call = await self.db.scalar(
+                select(LeadEvent.id).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.lead_id == lead.id,
+                    LeadEvent.id == call_event_id,
+                    LeadEvent.kind == "call",
+                )
+            )
+            if call is None:
+                raise DeskError(404, "That call isn't on this lead.")
+            data["for_call"] = str(call_event_id)
         lead.last_submission_id = submission_id
         lead.revision += 1
         lead.updated_at = self.now
-        self._event(
-            lead,
-            "call",
-            {"submission_id": str(submission_id), "simulated": False, "recording": True},
-            actor=self.viewer.person_id,
-            command_id=command_id,
-        )
+        self._event(lead, "call", data, actor=self.viewer.person_id, command_id=command_id)
         await self.db.flush()
         return await self.detail(lead.id)
 
@@ -1889,16 +2009,27 @@ class LeadDesk:
         if not wanted:
             await self._phone_seen(command.device_id)
             return PhoneLogResult(logged=0, already=already, skipped=skipped)
-        seen = set(
-            (
-                await self.db.scalars(
-                    select(LeadEvent.command_id).where(
-                        LeadEvent.tenant_id == self.tenant_id,
-                        LeadEvent.command_id.in_(list(wanted)),
+        refs: list[PhoneLogged] = []
+        seen: set[UUID] = set()
+        for key, event_id, lead_id, data in (
+            await self.db.execute(
+                select(LeadEvent.command_id, LeadEvent.id, LeadEvent.lead_id, LeadEvent.data).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.command_id.in_(list(wanted)),
+                )
+            )
+        ).all():
+            seen.add(key)
+            # Sent again (after a dropped answer): the phone still learns which call it is.
+            if isinstance(data, dict) and data.get("via") == "phone":
+                refs.append(
+                    PhoneLogged(
+                        log_id=wanted[key][0].log_id,
+                        lead_id=lead_id,
+                        event_id=event_id,
+                        connected=data.get("connected") is True,
                     )
                 )
-            ).all()
-        )
         already += len(seen)
         fresh = sorted(
             ((key, call, phone) for key, (call, phone) in wanted.items() if key not in seen),
@@ -1958,7 +2089,7 @@ class LeadDesk:
                 lead.last_contact_at = max(lead.last_contact_at or contact, contact)
                 lead.first_contact_at = min(lead.first_contact_at or contact, contact)
                 lead.updated_at = self.now
-            self._event(
+            event = self._event(
                 lead,
                 "call",
                 {
@@ -1972,13 +2103,18 @@ class LeadDesk:
                 command_id=key,
                 at=min(start, self.now),
             )
+            refs.append(
+                PhoneLogged(
+                    log_id=call.log_id, lead_id=lead.id, event_id=event.id, connected=talked
+                )
+            )
             logged += 1
         try:
             await self.db.flush()
         except IntegrityError:
             raise DeskError(409, "These calls are being logged already. Try again.") from None
         await self._phone_seen(command.device_id)
-        return PhoneLogResult(logged=logged, already=already, skipped=skipped)
+        return PhoneLogResult(logged=logged, already=already, skipped=skipped, calls=tuple(refs))
 
     async def _private_calls(
         self, since: datetime | None = None, *, lead_id: UUID | None = None
@@ -2432,16 +2568,18 @@ class LeadDesk:
                 seller.name.lower(),
             )
         )
-        pipeline = {
-            str(stage): int(count)
-            for stage, count in (
-                await self.db.execute(
-                    select(Lead.stage, func.count())
-                    .where(Lead.tenant_id == self.tenant_id, Lead.stage.in_(OPEN_STAGES))
-                    .group_by(Lead.stage)
-                )
-            ).all()
-        }
+        key = func.coalesce(Lead.pipeline_key, journeys.MAIN_PIPELINE)
+        pipeline: dict[str, int] = {}
+        pipelines: dict[str, dict[str, int]] = {}
+        for owner_pipeline, stage, count in (
+            await self.db.execute(
+                select(key, Lead.stage, func.count())
+                .where(Lead.tenant_id == self.tenant_id, Lead.stage.in_(OPEN_STAGES))
+                .group_by(key, Lead.stage)
+            )
+        ).all():
+            pipeline[str(stage)] = pipeline.get(str(stage), 0) + int(count)
+            pipelines.setdefault(str(owner_pipeline), {})[str(stage)] = int(count)
         return Performance(
             days=days,
             start=start,
@@ -2450,6 +2588,7 @@ class LeadDesk:
             previous=outcomes(previous, await arrived(before, begin)),
             sellers=tuple(sellers),
             pipeline=pipeline,
+            pipelines=pipelines,
         )
 
     async def save_rep(self, person_id: UUID, command: RepRules) -> Team:

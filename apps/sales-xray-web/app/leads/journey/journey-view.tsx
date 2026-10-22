@@ -13,6 +13,8 @@
  *   plain words, confirmed with one tap. Sales Xray does the matching.
  *
  * Sellers and members see the stages; owners and admins change them.
+ * - An organisation can run several pipelines, each with its own stages and the lead
+ *   sources it takes (owner, 22 Oct 2026); a strip on top picks whose stages show.
  */
 
 import {
@@ -54,6 +56,7 @@ import { LeadsError } from "../leads-client";
 import { AdPlatforms } from "./ad-platforms";
 import {
   ADDABLE,
+  MAIN_PIPELINE,
   applyTemplate,
   changed,
   drafts,
@@ -62,6 +65,7 @@ import {
   newId,
   problem,
   readJourney,
+  readPipelines,
   readSuggestions,
   readTemplates,
   reorder,
@@ -72,9 +76,13 @@ import {
   type Suggestion,
   type JourneyView,
   type Kind,
+  type PipelinesView,
   type TemplateView,
 } from "./journey-client";
 import styles from "./journey.module.css";
+import { forgetPipelines } from "../use-pipelines";
+import { PipelineBar, PipelineCard, PipelineSheet } from "./pipelines";
+import pipelineStyles from "./pipelines.module.css";
 import { StagesExplainer } from "./stages-explainer";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -124,21 +132,35 @@ const failed = (reason: unknown, title: string) =>
 
 type Pane = "stages" | "ads";
 
+/** The pipeline in the address (`&pipeline=`), else the first one. */
+function addressPipeline(): string {
+  if (typeof window === "undefined") return MAIN_PIPELINE;
+  return (
+    new URLSearchParams(window.location.search).get("pipeline") || MAIN_PIPELINE
+  );
+}
+
 export function JourneyTab({ canManage }: { canManage: boolean }) {
   const [view, setView] = useState<JourneyView | null>(null);
   const [templates, setTemplates] = useState<TemplateView[] | null>(null);
   const [choosing, setChoosing] = useState(false);
   const [pane, setPane] = useState<Pane>("stages");
+  const [pipes, setPipes] = useState<PipelinesView | null>(null);
+  const [pipeline, setPipeline] = useState(addressPipeline);
+  // "new", or the key of the pipeline being changed; a fresh sheet each time.
+  const [editing, setEditing] = useState<{ key: string | null; n: number }>({
+    key: null,
+    n: 0,
+  });
+  const [sheetOpen, setSheetOpen] = useState(false);
 
   useEffect(() => {
     let live = true;
-    readJourney()
+    readPipelines()
       .then((next) => {
-        if (live) setView(next);
+        if (live) setPipes(next);
       })
-      .catch((reason: unknown) =>
-        failed(reason, "Your lead stages didn't load"),
-      );
+      .catch(() => undefined);
     if (canManage)
       readTemplates()
         .then((next) => {
@@ -152,11 +174,97 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
     };
   }, [canManage]);
 
-  if (!view) return <JourneySkeleton manager={canManage} />;
+  useEffect(() => {
+    let live = true;
+    readJourney(pipeline)
+      .then((next) => {
+        if (live) setView(next);
+      })
+      .catch((reason: unknown) =>
+        failed(reason, "Your lead stages didn't load"),
+      );
+    return () => {
+      live = false;
+    };
+  }, [pipeline]);
+
+  const pick = (key: string) => {
+    if (key === pipeline) return;
+    setView(null);
+    setChoosing(false);
+    setPipeline(key);
+    try {
+      const url = new URL(window.location.href);
+      if (key === MAIN_PIPELINE) url.searchParams.delete("pipeline");
+      else url.searchParams.set("pipeline", key);
+      window.history.replaceState(window.history.state, "", url);
+    } catch {
+      // The pipeline still shows; only the address keeps the old one.
+    }
+  };
+  const active = pipes?.pipelines.find((item) => item.key === pipeline);
+  const several = (pipes?.pipelines.length ?? 0) > 1;
+  const pipelineParts = pipes ? (
+    <>
+      {canManage || several ? (
+        <PipelineBar
+          view={pipes}
+          current={pipeline}
+          canEdit={canManage}
+          onPick={pick}
+          onNew={() => {
+            setEditing((value) => ({ key: null, n: value.n + 1 }));
+            setSheetOpen(true);
+          }}
+        />
+      ) : null}
+      {several && active ? (
+        <PipelineCard
+          pipeline={active}
+          view={pipes}
+          canEdit={canManage}
+          onEdit={() => {
+            setEditing((value) => ({ key: active.key, n: value.n + 1 }));
+            setSheetOpen(true);
+          }}
+        />
+      ) : null}
+      {canManage ? (
+        <PipelineSheet
+          key={editing.n}
+          open={sheetOpen}
+          view={pipes}
+          pipeline={
+            editing.key === null
+              ? null
+              : (pipes.pipelines.find((item) => item.key === editing.key) ??
+                null)
+          }
+          templates={templates}
+          onClose={() => setSheetOpen(false)}
+          onSaved={(next, key) => {
+            forgetPipelines();
+            setPipes(next);
+            setSheetOpen(false);
+            pick(key);
+          }}
+        />
+      ) : null}
+    </>
+  ) : null;
+
+  if (!view)
+    return (
+      <div className={styles.root}>
+        {pipelineParts}
+        <JourneySkeleton manager={canManage} />
+      </div>
+    );
 
   if (!canManage)
     return (
       <div className={styles.root}>
+        {pipelineParts}
         <StagesExplainer />
         <p className={styles.readOnly}>
           Owners and admins set lead stages. These are the ones your team uses.
@@ -169,6 +277,7 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
   if (view.version === 0 || choosing)
     return (
       <div className={styles.root}>
+        {pipelineParts}
         <TemplatePicker
           templates={templates}
           current={view.industry}
@@ -177,7 +286,11 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
           leads={view.stages.reduce((sum, stage) => sum + stage.leads, 0)}
           onUse={async (template) => {
             try {
-              const next = await applyTemplate(view.version, template);
+              const next = await applyTemplate(
+                view.version,
+                template,
+                view.pipeline,
+              );
               setView(next);
               setChoosing(false);
               notify({
@@ -196,11 +309,15 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
     );
 
   const profile = templates?.find((item) => item.id === view.industry);
+  const mainName =
+    pipes?.pipelines.find((item) => item.main)?.name ?? "your first pipeline";
   return (
     <div className={styles.root}>
+      {pipelineParts}
       <BusinessCard
         profile={profile ?? null}
         loading={templates === null}
+        custom={view.version > 0 && !view.industry}
         onChange={() => setChoosing(true)}
       />
       <StagesExplainer />
@@ -220,7 +337,14 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
           <StageBuilder key={view.version} view={view} onSaved={setView} />
         </section>
         <section className={styles.adsPane} aria-label="Ad platforms">
-          <AdPlatforms version={view.version} />
+          {(view.pipeline ?? MAIN_PIPELINE) === MAIN_PIPELINE ? (
+            <AdPlatforms version={view.version} />
+          ) : (
+            <p className={pipelineStyles.otherAds}>
+              Ad platforms learn from {mainName}’s stages. Leads in this
+              pipeline aren’t sent to them.
+            </p>
+          )}
         </section>
       </div>
     </div>
@@ -237,10 +361,13 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
 function BusinessCard({
   profile,
   loading,
+  custom = false,
   onChange,
 }: {
   profile: TemplateView | null;
   loading: boolean;
+  /** Stages set by hand, from no kind of business. */
+  custom?: boolean;
   onChange: () => void;
 }) {
   const Icon = (profile && ICONS[profile.icon]) || Sparkles;
@@ -254,12 +381,20 @@ function BusinessCard({
         {loading ? (
           <Skeleton width="50%" height={16} />
         ) : (
-          <strong>{profile ? profile.name : "Not chosen yet"}</strong>
+          <strong>
+            {profile
+              ? profile.name
+              : custom
+                ? "Your own stages"
+                : "Not chosen yet"}
+          </strong>
         )}
         <span>
           {profile
             ? `Gives ${profile.stages.length} stages that fit it. Change it any time; your leads stay where they are.`
-            : "Pick the closest one to get stages that fit how you sell."}
+            : custom
+              ? "Set to fit how you sell. Change starts again from a kind of business; your leads stay where they are."
+              : "Pick the closest one to get stages that fit how you sell."}
         </span>
       </span>
       <Button onClick={onChange}>Change</Button>
@@ -563,7 +698,7 @@ function StageBuilder({
     }
     setBusy(true);
     try {
-      const next = await saveJourney(view.version, list);
+      const next = await saveJourney(view.version, list, view.pipeline);
       setSaved(true);
       onSaved(next);
     } catch (reason) {
@@ -641,7 +776,7 @@ function StageBuilder({
         ))}
       </ol>
       <AddStage onAdd={add} />
-      <FromApps list={list} onAdd={add} />
+      <FromApps list={list} pipeline={view.pipeline} onAdd={add} />
 
       <h3 className={styles.besideTitle}>Other outcomes</h3>
       <ul className={styles.path} data-beside="" aria-label="Other outcomes">
@@ -728,15 +863,17 @@ function StageBuilder({
 
 function FromApps({
   list,
+  pipeline,
   onAdd,
 }: {
   list: Draft[];
+  pipeline?: string;
   onAdd: (draft: Draft) => void;
 }) {
   const [found, setFound] = useState<Suggestion[]>([]);
   useEffect(() => {
     let live = true;
-    readSuggestions()
+    readSuggestions(pipeline)
       .then((next) => {
         if (live && Array.isArray(next)) setFound(next);
       })
@@ -744,7 +881,7 @@ function FromApps({
     return () => {
       live = false;
     };
-  }, []);
+  }, [pipeline]);
   const taken = new Set(
     list.flatMap((item) => [
       item.ref ?? "",
