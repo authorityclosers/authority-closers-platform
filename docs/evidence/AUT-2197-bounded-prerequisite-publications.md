@@ -36,3 +36,36 @@ Local final result and implementation pin will be recorded below. Initial verifi
 - Identity `f2f6966933d5e6ec94e1a7feeb383042af56a49258bc6f1c23887ccb04b8e38c`.
 - ZIP SHA-256 `8f1e02fa0191f5e0e718e0ba88eda11959baf1a88fdb2d70ffbe38e0d43f463c`.
 - This repair does not reinterpret that full cold proof or claim a new upload/reuse for the changed identity.
+
+## Final implementation and focused checks
+
+Implementation: **`62cc4b141ac7aa0994885fdc990197aa6bfd655b`**. Eight owned repository paths committed with the Paperclip trailer. Foreign workbench changes were preserved.
+
+- **92 focused tests passed in 7.42 s**, including all existing prerequisite/bundle/retention tests and the new publication lifecycle cases.
+- Ruff lint/format, Prettier, required `import ac_platform.http`, Bash syntax and owned diff whitespace passed. Both hosted lint jobs passed.
+- Real read-only GitHub verification accepted the historical bootstrap pin's exact successful run, reviewed parent, request-only source difference and artifact digest metadata. Its existing cold ZIP/closure/Chromium proof remains the parent evidence; this repair did not download another 452 MB ZIP.
+
+## Hosted simultaneous safe-refusal proof
+
+New identity: **`f60a53a0e435ac6e06f73f0351c1b5c5a22a95de0893544f4a3d18c7166fc568`**.
+
+| Request                                                                                                           | Attempt | Producer job | Producer interval (UTC, 22 Oct 2026) | Artifacts uploaded |
+| ----------------------------------------------------------------------------------------------------------------- | ------- | ------------ | ------------------------------------ | ------------------ |
+| [39841723696](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39841723696/attempts/1) | 1       | 120044325700 | 19:37:46–19:38:12                    | **0**              |
+| [39841746682](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39841746682/attempts/1) | 1       | 120044511173 | 19:38:14–19:38:48                    | **0**              |
+
+Exact request SHAs: `971474db195a3f5037486cd9707778f904d0312d` and `906223e37daa042d3d2fb190f4c4ecd5976e825b`. Each has implementation `62cc4b14` as its sole parent and differs only at `.wb-ci/request.json`; the bare-repository tree comparison and GitHub head metadata both confirm this. Producer intervals do not overlap. Both requests were started simultaneously through the committed source launcher, with separate retained slots.
+
+Both producers logged the exact new identity under shared ownership and then:
+
+```text
+storage admission declined: retained_artifact_bytes=4950391106,
+retained_bundle_bytes=4520764628, reserve_bytes=536870912;
+wait for expiry or use the approved storage path; no upload or deletion
+```
+
+Neither producer reached signed Ubuntu acquisition. GitHub artifact API results for each run show `total_count=0`. Thus the repeat/concurrent proof safely declines without another 452 MB upload. No new publication ID or digest exists for this identity. Overall workflows and dependent summary jobs are intentionally red because publication was safely refused; they are not green cold/warm-consumer proofs. Lint is green in both runs. No full cold suite or old warming mutation was repeated.
+
+During dispatch the second request's independent slot push succeeded while its shared `wb-ci-base` update reported a ref race: that ref already held the exact requested source. Both requested slot heads and hosted runs were verified; no retry, unrelated launcher repair or state change was needed. Direct job-log endpoint reads were unavailable; `gh run view --attempt 1 --log-failed` successfully retrieved the completed logs. All final claims use those logs and source/attempt-specific metadata.
+
+The required child output is delivered for CTO re-review. Existing excess storage is unchanged and can still prevent CI/release publication. Authorized expiry/storage handling, integration/release approval, production version and seven-day reliability stay with the parent. Installed launcher refresh stays with [AUT-2190](/AUT/issues/AUT-2190); this child authorizes no install or deployment.
