@@ -5,7 +5,8 @@
  * on GitHub (wb-ci --visual). Lead Desk reads are answered here; nothing
  * leaves the browser. `?role=owner` (default): how sales are going, sellers,
  * open leads by stage, then call analysis. `?role=seller`: today's calls.
- * `&quiet=1`: a seller with nobody to call now.
+ * `&quiet=1`: a seller with nobody to call now. `&pipelines=2`: two pipelines,
+ * each with its own stages, and a switch above the open leads by stage.
  */
 
 import { Suspense, useState } from "react";
@@ -148,6 +149,75 @@ function answers(now: number, path: string, quiet: boolean): unknown {
         }),
       ),
       pipeline: { new: 12, not_connected: 9, follow_up: 21, interested: 8 },
+      pipelines: {
+        main: { new: 5, not_connected: 3, follow_up: 9, interested: 6 },
+        partner_outreach: {
+          new: 7,
+          not_connected: 6,
+          follow_up: 12,
+          interested: 2,
+        },
+      },
+    };
+  }
+  const two =
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("pipelines") === "2";
+  if (path === "/v1/lead-desk/pipelines" && two)
+    return {
+      pipelines: [
+        ["main", "Enquiries", true],
+        ["partner_outreach", "Partner outreach", false],
+      ].map(([key, name, main], position) => ({
+        key,
+        name,
+        position,
+        main,
+        sources: main ? [] : ["csv"],
+        industry: null,
+        leads: 20,
+      })),
+      sources: { csv: "File imports", manual: "Added by hand" },
+      canEdit: true,
+    };
+  if (path.startsWith("/v1/lead-desk/journey")) {
+    const partner = path.endsWith("pipeline=partner_outreach");
+    const stages: [string, string][] = partner
+      ? [
+          ["New", "new"],
+          ["Couldn't reach", "not_connected"],
+          ["Spoke to owner", "follow_up"],
+          ["Interested", "interested"],
+          ["Partner signed", "won"],
+          ["Not a fit", "lost"],
+        ]
+      : [
+          ["New enquiry", "new"],
+          ["Couldn't reach", "not_connected"],
+          ["Counselled", "follow_up"],
+          ["Session booked", "interested"],
+          ["Enrolled", "won"],
+          ["Lost", "lost"],
+        ];
+    return {
+      version: 1,
+      industry: null,
+      savedAt: null,
+      savedBy: null,
+      canEdit: true,
+      kinds: {},
+      meanings: {},
+      stages: stages.map(([label, kind], index) => ({
+        key: `stage_${index}`,
+        label,
+        kind,
+        kindWords: "",
+        milestone: "",
+        meaning: "",
+        archived: false,
+        origin: "",
+        leads: 0,
+      })),
     };
   }
   return null;

@@ -21,6 +21,7 @@ import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { Button, Dialog, Field, kitStyles, Segmented } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
+import { several, usePipelines } from "./use-pipelines";
 import {
   addLead,
   commandId,
@@ -128,6 +129,39 @@ const EMPTY = {
   note: "",
 };
 
+/**
+ * Which pipeline new leads go to, when the organisation runs several (owner, 22 Oct
+ * 2026). Left alone, the pipeline that takes their source gets them.
+ */
+function PipelinePick({
+  open,
+  value,
+  onChange,
+  plural = false,
+}: {
+  open: boolean;
+  value: string;
+  onChange: (next: string) => void;
+  plural?: boolean;
+}) {
+  const pipes = usePipelines(open);
+  if (!several(pipes)) return null;
+  return (
+    <Field label="Pipeline">
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        <option value="">
+          {plural ? "Where file imports go" : "Where added leads go"}
+        </option>
+        {pipes.pipelines.map((item) => (
+          <option key={item.key} value={item.key}>
+            {item.name}
+          </option>
+        ))}
+      </select>
+    </Field>
+  );
+}
+
 export function AddLeadDialog({
   open,
   canManage,
@@ -152,6 +186,7 @@ export function AddLeadDialog({
   const [assign, setAssign] = useState<"rules" | "me">(
     canManage ? "rules" : "me",
   );
+  const [pipeline, setPipeline] = useState("");
   const [more, setMore] = useState(Boolean(initial?.email || initial?.note));
   const [pasting, setPasting] = useState(false);
   const [paste, setPaste] = useState("");
@@ -222,6 +257,7 @@ export function AddLeadDialog({
         source,
         assign,
         referred_by: source === "referral" ? form.referred_by : undefined,
+        pipeline: pipeline || undefined,
       };
       const detail = await addLead(lead, command.current);
       onAdded(detail.lead.lead_id);
@@ -415,6 +451,9 @@ export function AddLeadDialog({
           </div>
         ) : null}
         {canManage ? (
+          <PipelinePick open={open} value={pipeline} onChange={setPipeline} />
+        ) : null}
+        {canManage ? (
           <div className={styles.whoGets}>
             <span className={kitStyles.fieldLabel} aria-hidden="true">
               Who gets it
@@ -599,6 +638,7 @@ export function ImportDialog({
   const [assign, setAssign] = useState<"rules" | "me">(
     canManage ? "rules" : "me",
   );
+  const [pipeline, setPipeline] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -632,7 +672,15 @@ export function ImportDialog({
     setBusy(true);
     setError(null);
     try {
-      setResult(await commitImport(preview, mapping, assign, command.current));
+      setResult(
+        await commitImport(
+          preview,
+          mapping,
+          assign,
+          command.current,
+          pipeline || null,
+        ),
+      );
       onDone();
     } catch (reason) {
       setError(
@@ -783,6 +831,14 @@ export function ImportDialog({
                 </tbody>
               </table>
             </div>
+            {canManage ? (
+              <PipelinePick
+                open={open}
+                value={pipeline}
+                onChange={setPipeline}
+                plural
+              />
+            ) : null}
             {canManage ? (
               <Segmented
                 label="Who gets them"

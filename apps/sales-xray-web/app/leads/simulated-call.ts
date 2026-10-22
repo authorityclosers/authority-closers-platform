@@ -181,7 +181,11 @@ export async function runSimulatedCall({
   });
 }
 
-/** Saves a real call's recording as the seller's call and puts it on the lead. */
+/**
+ * Saves a real call's recording as the seller's call and puts it on the lead.
+ * With `callEventId` (a call already on the lead, such as one the phone logged
+ * from its dialer) the recording joins that call's row.
+ */
 export async function runRecordingUpload({
   lead,
   file,
@@ -190,6 +194,7 @@ export async function runRecordingUpload({
   onStep,
   signal,
   attempt = crypto.randomUUID(),
+  callEventId = null,
 }: {
   lead: LeadDetail;
   file: File;
@@ -198,6 +203,7 @@ export async function runRecordingUpload({
   onStep: (step: SimulationStep) => void;
   signal: AbortSignal;
   attempt?: string;
+  callEventId?: string | null;
 }): Promise<LeadDetail> {
   onStep("saving");
   const selection = await inventoryImportFiles([file], { signal });
@@ -224,7 +230,12 @@ export async function runRecordingUpload({
     batch: confirmed.data,
     selection: selection.data,
     link: async (submissionId, linkSignal) => {
-      const next = await attachRecording(lead, submissionId, linkSignal);
+      const next = await attachRecording(
+        lead,
+        submissionId,
+        linkSignal,
+        callEventId,
+      );
       await nameCall(submissionId, `${lead.lead.name} · call`, linkSignal);
       return next;
     },
@@ -322,6 +333,7 @@ function attachRecording(
   lead: LeadDetail,
   submissionId: string,
   signal: AbortSignal,
+  callEventId: string | null,
 ) {
   return json<LeadDetail>(
     `${API}/leads/${encodeURIComponent(lead.lead.lead_id)}/recordings`,
@@ -331,6 +343,7 @@ function attachRecording(
       body: JSON.stringify({
         command_id: commandId(),
         submission_id: submissionId,
+        ...(callEventId ? { call_event_id: callEventId } : {}),
       }),
       signal,
     },

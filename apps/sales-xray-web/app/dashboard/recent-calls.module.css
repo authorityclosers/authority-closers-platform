@@ -268,11 +268,8 @@
   }
 
   .name {
-    display: -webkit-box;
+    min-width: 0;
     line-height: 1.35;
-    white-space: normal;
-    -webkit-box-orient: vertical;
-    -webkit-line-clamp: 2;
   }
 }
 

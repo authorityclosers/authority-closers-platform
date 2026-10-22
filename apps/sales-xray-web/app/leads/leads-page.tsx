@@ -29,6 +29,7 @@ import {
   Plus,
   Search,
   UsersRound,
+  Workflow,
   X,
 } from "lucide-react";
 import { useSearchParams } from "next/navigation";
@@ -59,12 +60,17 @@ import { AlertsCard } from "./alerts-card";
 import { PhoneLogCard } from "./phone-log-card";
 import { PhoneSetupBar } from "./phone-setup";
 import { UnknownCallsCard } from "./unknown-calls-card";
+import { RecordedCallsCard } from "./recorded-calls";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
 import { DeskView, dueNow, whyLine, type RowActions } from "./desk-view";
 import { usePullToRefresh } from "./gestures";
-import { readJourney, type JourneyView } from "./journey/journey-client";
+import {
+  MAIN_PIPELINE,
+  readJourney,
+  type JourneyView,
+} from "./journey/journey-client";
 import { LeadActions } from "./lead-actions";
 import {
   LEAD_ADDED_EVENT,
@@ -95,6 +101,7 @@ import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
 import { SourcesView } from "./sources-view";
 import { TakingSwitch } from "./taking-switch";
 import { TeamView } from "./team-view";
+import { several, usePipelines } from "./use-pipelines";
 import styles from "./leads.module.css";
 
 type Manage = "team" | "sources" | "stages";
@@ -122,13 +129,17 @@ const onHashChange = (change: () => void) => {
   return () => window.removeEventListener("hashchange", listener);
 };
 
-/** The address of a view on this page: the desk, a stage, or a settings page. */
-function viewHref(view: string): string {
+/** The address of a view on this page: the desk, a stage (in one pipeline, when
+ * picked), or a settings page. */
+function viewHref(view: string, pipeline: string | null = null): string {
   const path = window.location.pathname || LEADS_PATH;
   if (view === "desk") return path;
   if (view === "team" || view === "sources" || view === "stages")
     return `${path}?tab=${view}`;
-  return `${path}?tab=all&stage=${encodeURIComponent(view)}`;
+  const inPipeline = pipeline
+    ? `&pipeline=${encodeURIComponent(pipeline)}`
+    : "";
+  return `${path}?tab=all&stage=${encodeURIComponent(view)}${inPipeline}`;
 }
 
 export { LeadsSkeleton };
@@ -138,6 +149,7 @@ export function LeadsRoute() {
   const params = useSearchParams();
   const requested = params.get("tab");
   const requestedStage = params.get("stage");
+  const requestedPipeline = params.get("pipeline");
   const addressKey = params.toString();
   // A lead handed over by the Chrome extension opens Add lead, filled in. It
   // travels after "#", so the lead's details never reach a server or its logs.
@@ -180,15 +192,21 @@ export function LeadsRoute() {
   const pushedSettings = useRef(false);
   // The view picked here, until the address catches up (the router follows
   // history.replaceState; without one, as in a static preview, this holds it).
-  const [picked, setPicked] = useState<{ view: string; at: string } | null>(
-    null,
-  );
+  const [picked, setPicked] = useState<{
+    view: string;
+    at: string;
+    pipeline?: string | null;
+  } | null>(null);
   const [scopeChoice, setScopeChoice] = useState<Scope | null>(null);
   const [searching, setSearching] = useState(false);
   const [search, setSearch] = useState("");
   const [query, setQuery] = useState("");
+  // Counts answer a question (who, search, pipeline); a refresh asks it again
+  // and the last answer stays on the tabs meanwhile (Redmi, 22 Oct 2026: the
+  // counts vanished while the ⋯ sheet was open).
   const [counts, setCounts] = useState<{
     key: string;
+    question: string;
     value: Record<string, number>;
   } | null>(null);
   const [journey, setJourney] = useState<{
@@ -287,19 +305,7 @@ export function LeadsRoute() {
     return () => controller.abort();
   }, [authenticated, contextKey, version]);
 
-  // The business's own stages name the tabs; without them the six kinds do.
-  useEffect(() => {
-    if (!authenticated) return;
-    let live = true;
-    readJourney()
-      .then((view) => {
-        if (live) setJourney({ key: contextKey, view });
-      })
-      .catch(() => undefined);
-    return () => {
-      live = false;
-    };
-  }, [authenticated, contextKey]);
+  const pipes = usePipelines(authenticated);
 
   // Back in the app or the tab, an alert while open, or a minute gone: read again.
   useEffect(() => {
@@ -328,7 +334,6 @@ export function LeadsRoute() {
   const current = deskKey === contextKey;
   const can = current && desk ? desk.me.can_manage : false;
   const scope: Scope = scopeChoice ?? (can ? "team" : "mine");
-  const countsKey = JSON.stringify([contextKey, scope, query, version]);
 
   // From the address: the desk, a stage, or one of the settings pages.
   const stageKeys = new Set<string>([
@@ -349,16 +354,58 @@ export function LeadsRoute() {
   const manage: Manage | null =
     view === "team" || view === "sources" || view === "stages" ? view : null;
   const stageView = !manage && view !== "desk";
+  // Several pipelines: a stage view shows one pipeline's leads, or all of them.
+  const fromAddressPipeline =
+    several(pipes) &&
+    pipes.pipelines.some((item) => item.key === requestedPipeline)
+      ? requestedPipeline
+      : null;
+  const pipeline: string | null =
+    stageView && several(pipes) && view !== TEST
+      ? picked && picked.at === addressKey && picked.pipeline !== undefined
+        ? picked.pipeline
+        : fromAddressPipeline
+      : null;
+  const countsQuestion = JSON.stringify([contextKey, scope, query, pipeline]);
+  const countsKey = JSON.stringify([
+    contextKey,
+    scope,
+    query,
+    pipeline,
+    version,
+  ]);
+
+  // The tabs carry the stages of the pipeline shown; across several, the six kinds.
+  const journeyFor = several(pipes) ? pipeline : MAIN_PIPELINE;
+  const journeyKey = `${contextKey}:${journeyFor}`;
+  useEffect(() => {
+    if (!authenticated || !journeyFor) return;
+    let live = true;
+    readJourney(journeyFor)
+      .then((next) => {
+        if (live) setJourney({ key: journeyKey, view: next });
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [authenticated, journeyFor, journeyKey]);
 
   // The desk needs the stage counts too: one list read gives every stage's.
-  const haveCounts = counts?.key === countsKey;
+  const freshCounts = counts?.key === countsKey;
+  const haveCounts = counts?.question === countsQuestion;
   useEffect(() => {
-    if (!authenticated || !current || stageView || haveCounts || manage) return;
+    if (!authenticated || !current || stageView || freshCounts || manage)
+      return;
     const controller = new AbortController();
     readLeads({ scope, stage: "open", search: query }, controller.signal)
       .then((page) => {
         if (page.stage_counts)
-          setCounts({ key: countsKey, value: page.stage_counts });
+          setCounts({
+            key: countsKey,
+            question: countsQuestion,
+            value: page.stage_counts,
+          });
       })
       .catch(() => undefined);
     return () => controller.abort();
@@ -366,15 +413,17 @@ export function LeadsRoute() {
     authenticated,
     current,
     stageView,
-    haveCounts,
+    freshCounts,
     manage,
     scope,
     query,
     countsKey,
+    countsQuestion,
   ]);
   const onCounts = useCallback(
-    (value: Record<string, number>) => setCounts({ key: countsKey, value }),
-    [countsKey],
+    (value: Record<string, number>) =>
+      setCounts({ key: countsKey, question: countsQuestion, value }),
+    [countsKey, countsQuestion],
   );
 
   if (!authenticated) {
@@ -472,8 +521,8 @@ export function LeadsRoute() {
   // Tabs and filters change the address in place, so Back never steps
   // through them; a settings page is a step of its own, so Back returns.
   const go = (next: string) => {
-    const href = viewHref(next);
-    setPicked({ view: next, at: addressKey });
+    const href = viewHref(next, pipeline);
+    setPicked({ view: next, at: addressKey, pipeline });
     if (next === "team" || next === "sources" || next === "stages") {
       pushedSettings.current = true;
       window.history.pushState(null, "", href);
@@ -486,10 +535,15 @@ export function LeadsRoute() {
       window.history.back();
     } else window.history.replaceState(null, "", viewHref("desk"));
   };
+  // One pipeline, or all of them, for the stage views (in place, like the tabs).
+  const choosePipeline = (next: string | null) => {
+    setPicked({ view, at: addressKey, pipeline: next });
+    window.history.replaceState(null, "", viewHref(view, next));
+  };
   const tabs = [
     { key: "desk", label: "To call", count: toCall },
     ...stageTabs(
-      journey?.key === contextKey ? journey.view : null,
+      journey?.key === journeyKey ? journey.view : null,
       haveCounts ? counts.value : null,
     ),
     ...(view === TEST ? [{ key: TEST, label: "Test leads" }] : []),
@@ -572,7 +626,7 @@ export function LeadsRoute() {
           ref={area}
           className={styles.root}
           data-tab={manage ?? (stageView ? "all" : "desk")}
-          data-call-bar={view === "desk" && desk.counts.open ? "" : undefined}
+          data-call-bar={view === "desk" && toCall > 0 ? "" : undefined}
         >
           <div
             ref={spinner}
@@ -642,6 +696,26 @@ export function LeadsRoute() {
                       <option value="team">Everyone</option>
                       <option value="mine">Mine</option>
                       <option value="unassigned">No owner</option>
+                    </select>
+                    <ChevronDown size={14} aria-hidden="true" />
+                  </label>
+                ) : null}
+                {stageView && view !== TEST && several(pipes) ? (
+                  <label className={styles.ownerPicker}>
+                    <Workflow size={14} aria-hidden="true" />
+                    <select
+                      aria-label="Pipeline"
+                      value={pipeline ?? ""}
+                      onChange={(event) =>
+                        choosePipeline(event.target.value || null)
+                      }
+                    >
+                      <option value="">All pipelines</option>
+                      {pipes.pipelines.map((item) => (
+                        <option key={item.key} value={item.key}>
+                          {item.name}
+                        </option>
+                      ))}
                     </select>
                     <ChevronDown size={14} aria-hidden="true" />
                   </label>
@@ -734,6 +808,7 @@ export function LeadsRoute() {
               actions={rowActions}
               onChanged={refresh}
               onCounts={onCounts}
+              pipeline={pipeline}
             />
           ) : (
             <DeskView
@@ -746,6 +821,7 @@ export function LeadsRoute() {
                   <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
                   <AlertsCard />
                   <PhoneLogCard as="offer" />
+                  <RecordedCallsCard me={desk.me} />
                   <UnknownCallsCard onSave={setUnknownLead} />
                   {/* Owner, 20 Oct: chats live in Chats; the desk links there. */}
                   <DeskChats />
@@ -754,8 +830,9 @@ export function LeadsRoute() {
             />
           )}
           {/* Phones: the one primary action, in the thumb's reach above the
-              tab bar (owner, 22 Oct: no big green card). */}
-          {view === "desk" && desk.counts.open ? (
+              tab bar (owner, 22 Oct: no big green card). Nobody due: no bar,
+              the desk says "All caught up" (Redmi, 22 Oct). */}
+          {view === "desk" && toCall > 0 ? (
             <div className={styles.callBar}>
               <button
                 type="button"

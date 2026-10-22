@@ -121,6 +121,9 @@ class Lead(Base):
         DateTime(timezone=True), nullable=True
     )
     alerted_due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Which of the organisation's pipelines the lead is in (migration 0121): its
+    # step is one of that pipeline's stages. Null (every lead from before) is "main".
+    pipeline_key: Mapped[str | None] = mapped_column(String(40), nullable=True, default="main")
 
 
 class LeadEvent(Base):
@@ -799,6 +802,34 @@ class LeadJourneyVersion(Base):
     note: Mapped[str] = mapped_column(String(200))
     created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # The pipeline this list belongs to (migration 0121); null (every list from
+    # before) is "main". Version numbers stay unique per organisation across its
+    # pipelines; each pipeline's newest is its list.
+    pipeline_key: Mapped[str | None] = mapped_column(String(40), nullable=True, default="main")
+
+
+class LeadPipeline(Base):
+    """One of an organisation's pipelines (migration 0121, owner 22 Oct 2026: partner
+    outreach and enquiries side by side). Each has its own lead stages and takes the new
+    leads from the sources picked for it. An organisation without rows has one pipeline,
+    "main", which takes every lead no other pipeline takes."""
+
+    __tablename__ = "lead_desk_pipelines"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_pipeline_tenant"),
+        CheckConstraint("length(trim(name)) > 0", name="lead_desk_pipeline_name"),
+        CheckConstraint("position >= 0", name="lead_desk_pipeline_position"),
+    )
+
+    tenant_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)
+    name: Mapped[str] = mapped_column(String(60))
+    position: Mapped[int] = mapped_column(Integer)
+    # The lead source kinds whose new leads come here (lead_desk/journey/pipelines.py).
+    sources: Mapped[list[str]] = mapped_column(JSON)
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
 class LeadConversion(Base):
