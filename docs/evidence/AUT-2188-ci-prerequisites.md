@@ -2,6 +2,8 @@
 
 Source baseline: `5869a25ff2d0dc49b3788799308b52a356b43845`. Workbench implementation; no deployment or host/package changes performed.
 
+Latest validation: **full current-source CI is green** on workbench `4643dd63`, [run 39781371721 attempt 2](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39781371721/attempts/2). Exact Node cache reuse is proved by [attempt 3](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39781371721/attempts/3). Release inclusion and the seven-day observation remain open.
+
 ## Change
 
 Release validation and workbench Python, e2e and visual jobs use one pinned composite action. Its exact cache key includes the requested package list from the frozen Playwright runtime, runner image version, OS/architecture, dependency lockfiles and installer source. The cache contains the complete apt download transaction (including transitive dependencies/upgrades), an archive SHA-256 manifest, and locked browser files. A cache hit verifies that manifest, installs local Debian files with `--no-download --no-remove`, skips browser downloads, and still proves ffmpeg/ffprobe, filesystem commands and a real locked Chromium launch. Missing or damaged cache content fails closed without mirror fallback.
@@ -48,3 +50,37 @@ Acceptance requires the authorized release operator to include the reviewed comm
 The current workbench pin `4643dd63139ffb229872e91d75131cf5a10b97db` includes the correction. Its prerequisite helper/action, workflows, tool and owned tests are unchanged from `2a90f2cc`. The isolated real-apt regression was reproduced on 22 Oct at 12:43 UTC: **1 passed in 0.30 s**, without host package changes or network access.
 
 [Full cache-warming validation 39780623950](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39780623950) runs this current workbench pin with all Python shards, web, visual and release browser proofs (`--full --e2e`). It was launched through the committed source tool to include the corrected action/helper overlay. Request `9aedaffd`, kept branch `wb-ci/slot-1`; hosted helper bytes match the workbench source exactly. Initial state at 12:44 UTC: queued. The run result and actual cache hits must be recorded before claiming validation or successful warming.
+
+The first request's plan selected **only e2e**, because the existing planner treats explicit families as a replacement even under `--full`. It was cancelled without claiming full validation. This separate planner defect is recorded in [AUT-2189](/AUT/issues/AUT-2189); no planner source change is included here.
+
+The replacement [full cache-warming run 39781371721](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39781371721) explicitly requests `--full --web --py --visual --e2e` for the same source `4643dd63`. Request `a4267b1a`, kept `wb-ci/slot-3`. This is the full validation request; the earlier run is superseded.
+
+Current-head cold fallback is proved by completed jobs in the replacement run:
+
+- Node visual job `119833304779`: **SUCCESS**, runner image `20261021.345.10`, exact cache miss `ci-prerequisites-v1-e2642c3984162c140e9d56a2d81bfb2a7b96eb4daa52b171a94f839cea71d426`. Bounded update/download/local install took 5/3/6 s; browser install took 7 s; Chromium `145.0.7632.6` launched. Cache saved at 12:49:22 UTC before screenshots.
+- Python b2 job `119833305163`: **SUCCESS**, runner image `20261012.334.1`, exact cache miss `ci-prerequisites-v1-0bc927277c4ad2e5159b5c0cb1dc59d49ac2f04822e03e3f3582c654ca0f388b`. Bounded update/download/local install took 8/5/7 s; cache saved at 12:49:08 UTC; **779 passed, 1 skipped** in 118.25 s.
+- The replacement request tree differs from `4643dd63` only at `.wb-ci/request.json`, confirming source matching without overlays or uncommitted product changes. Other jobs were still running when these cold proofs were recorded.
+
+[Root handoff AUT-2190](/AUT/issues/AUT-2190) owns the installed launcher refresh, with exact source `scripts/ci/wb-ci` at `533e6019`, single-file serialized install, byte/mode/overlay verification and guarded rollback. Platform has made no host changes.
+
+Replacement attempt 1 finished **FAILURE** after 14m39s: lint, web, visual, e2e and **12 Python shards passed**; five Python shards exhausted the bounded cold apt download attempts. Example job `119833305152` (b3) missed the same image/key that successful b0/b2 had already populated; update took 22 s, download attempts timed out after 300/300/77 s. Their valid cache was published after the stalled shards' initial restore. This records the remaining first-fill mirror exposure rather than hiding it.
+
+[Same-source warm replay, attempt 2](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39781371721/attempts/2) was started after attempt 1 completed, under the same slot-3 lock. The branch still matched request `a4267b1a` before rerunning. All families, source and branch are retained. Result and exact Node warm proof are pending.
+
+## Full current-source verdict
+
+[Run 39781371721, attempt 2](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39781371721/attempts/2): **SUCCESS** for workbench `4643dd63139ffb229872e91d75131cf5a10b97db`, request `a4267b1a6a387e0cff6942ae34ec18012258cbac`. All 17 Python shards, full lint/type checks, web tests, visual, e2e and the summary passed. Summary job `119843928071` verified **91 family-a files and 887 family-b files**, selecting attempt-2 evidence for every shard. This is a full workbench-source verdict, without claiming a release/PR or production verdict.
+
+Attempt-2 b12 job `119840456875`, previously a cold timeout, restored exact cache `0bc92727` on image `20261012.334.1`, verified **87 Debian archives**, installed offline in 12 s and passed **808 tests** in 138.91 s. No apt update/download occurred. Node visual also passed; its move to image `20261012.334.1` correctly filled separate key `ccd1307e` (6/1/5 s update/download/local install and 6 s browser install).
+
+A Node-only replay was triggered after the green full run, retaining the same locked branch and source, to obtain the outstanding exact Node hit.
+
+## Exact Node warm proof and launcher handoff
+
+[Attempt 3](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39781371721/attempts/3), Node visual job `119844385359`: **SUCCESS**. Runner image `20261012.334.1` restored exact key `ci-prerequisites-v1-ccd1307ec2c02083412c6e291c76bbf4272d1b69ac1eb5de0c1cd0899f53a8d8`; `PREREQ_CACHE_HIT: true`. It verified **9 Debian archives**, installed offline in 8 s and launched Chromium `145.0.7632.6`. Its completed log contains **no apt update, apt download or Playwright install**. This closes the prior Node warm-reuse evidence gap. The temporary log reader used the wrong CLI JSON field after the watch; a read-only collection with the supported `attempt` field confirmed the actual green result and all four proof conditions. No extra workflow rerun was needed.
+
+Root's full installed/source comparison found that the committed launcher omitted the installed core-API headroom guard and used a 3-second watch. The source now preserves **below 400 core requests → exit 75** and **30-second watches**, while retaining both prerequisite action/helper overlays. This launcher-only follow-up occurs after the source-matched full run above; it does not change its tested application, workflow or prerequisite helper bytes.
+
+The reconciled launcher SHA-256 is `b591a73118ba3c7bdc5964b7e63db51bd6447f30d59fc74109ae3fc00a29aff2`, blob `e5052f75f94947a174581159791d39c778e9a48d`. **12 bounded local checks passed**: Bash syntax, absolute-path help without dispatch, parsed overlay paths, fictional remaining counts 0/399 → 75 and 400/5000/unavailable → 0, guard ordering before slots/push, watch interval, candidate hash and an installed comparison showing only the two overlay additions plus trailing whitespace. These checks made no network, host, branch or slot changes.
+
+[Root handoff AUT-2190](/AUT/issues/AUT-2190) remains the single installer. Its prior source-pin blocker is addressed by the reconciled commit; install approval still belongs to the existing review path. No installation, release or production change is claimed. The parent remains open for authorized release inclusion and seven days of release/workbench observation.

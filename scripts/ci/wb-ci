@@ -137,6 +137,15 @@ request=$(GIT_AUTHOR_NAME="wb-ci" GIT_AUTHOR_EMAIL="workbench@authorityclosers.c
   $G commit-tree "$tree" -p "$sha" -m "wb-ci: ${checks[*]:-auto} ($scope) for $short")
 unset GIT_INDEX_FILE
 
+# GitHub's API limit (5,000 requests/hour) is shared by every session, wb-ci and ac-ship (21 Oct: a run of
+# 3-second watches used it up and stopped the v0.76 ship). Reading the limit is free; leave headroom for releases.
+left=$(gh api rate_limit --jq '.resources.core.remaining' 2>/dev/null || true)
+if [ -n "$left" ] && [ "$left" -lt 400 ]; then
+  reset=$(gh api rate_limit --jq '.resources.core.reset | todate' 2>/dev/null || true)
+  echo "wb-ci: GitHub API limit nearly used ($left requests left until ${reset:-the hourly reset}); not starting, retry after it." >&2
+  exit 75
+fi
+
 # A slot per concurrent run. --no-wait does not hold one: it gets a unique branch instead (no warm cache).
 if [ "$wait" = 1 ]; then
   slot=""
@@ -174,7 +183,7 @@ url="https://github.com/$REPO/actions/runs/$run"
 echo "wb-ci: run $url"
 [ "$wait" = 1 ] || { echo "wb-ci: not waiting (--no-wait); delete the branch later: git push origin :$branch"; exit 0; }
 
-gh run watch "$run" -R "$REPO" --interval 3 --exit-status >"$tmp/watch.log" 2>&1 || true
+gh run watch "$run" -R "$REPO" --interval 30 --exit-status >"$tmp/watch.log" 2>&1 || true
 elapsed=$(( $(date +%s) - started ))
 gh run view "$run" -R "$REPO" --json conclusion,jobs --jq '
   def secs(a; b): if a and b and (b|startswith("0001")|not) then ((b|fromdate) - (a|fromdate)) else null end;
