@@ -4859,6 +4859,22 @@ a.repName {
   background: color-mix(in oklab, var(--sx-paper) 22%, transparent);
 }
 
+/* Computers: every stage in view, the row wrapping when there are many
+   (Liquid Glass sweep, 23 Oct 2026: cut at 1440 with no hint). Phones keep
+   the strip that scrolls, faded at its edge. */
+@media (min-width: 900px) {
+  .stageTabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .stageTab:last-child {
+    margin-right: 0;
+  }
+}
+
 .searchRow {
   display: flex;
   align-items: center;

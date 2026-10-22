@@ -32,7 +32,9 @@ import {
 } from "./table-edit";
 import styles from "./leads-table.module.css";
 
-const WIDE = "(min-width: 900px)";
+// Wide enough beside the sidebar for every column to read (1000 px left
+// names at "Asha F…"); narrower screens keep the list.
+const WIDE = "(min-width: 1100px)";
 const onWidth = (change: () => void) => {
   if (typeof window.matchMedia !== "function") return () => undefined;
   const query = window.matchMedia(WIDE);
