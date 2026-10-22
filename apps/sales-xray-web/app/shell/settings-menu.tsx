@@ -66,7 +66,7 @@ import {
 } from "../leads/phone-app-flag";
 import { notify } from "../notice-center";
 import { AccountAvatarImage } from "../speaker-avatar";
-import { SETTINGS_LINKS, sectionById } from "../settings/settings-sections";
+import { sectionById } from "../settings/settings-sections";
 import { ActionList, ActionRow } from "../ui/kit";
 import { Sheet, SHEET_PHONE_QUERY } from "../ui/sheet";
 import { useShellUpdates } from "./updates-store";
@@ -359,14 +359,23 @@ export function SettingsMenu({
     href: `/settings/${id}`,
     icon,
   }));
-  const stages = SETTINGS_LINKS.find((link) => link.key === "lead-stages");
+  // Leads' settings have one home in Settings since slice 5 (22 Oct 2026).
   const theirs = [
     {
       ...sectionById("team"),
       href: "/settings/team",
       icon: <Users size={18} />,
     },
-    ...(stages ? [{ ...stages, icon: <Layers size={18} /> }] : []),
+    {
+      ...sectionById("lead-rules"),
+      href: "/settings/lead-rules",
+      icon: <ListChecks size={18} />,
+    },
+    {
+      ...sectionById("stages"),
+      href: "/settings/stages",
+      icon: <Layers size={18} />,
+    },
     {
       ...sectionById("apps"),
       href: "/settings/apps",

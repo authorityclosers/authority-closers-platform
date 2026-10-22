@@ -457,7 +457,8 @@ it("puts your settings, and an organisation's for its managers, in You", async (
   ]);
   expect(manager.theirs).toEqual([
     "/settings/team",
-    "/leads?tab=stages",
+    "/settings/lead-rules",
+    "/settings/stages",
     "/settings/apps",
     "/settings/call-ai",
   ]);
