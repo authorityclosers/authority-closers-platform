@@ -133,6 +133,14 @@
   color: var(--sx-muted);
 }
 
+/* While the page's search runs: a quiet line where its results will be. */
+.searching {
+  margin: 0;
+  padding: 12px 10px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
 .none {
   margin: 0;
   padding: 24px 10px;

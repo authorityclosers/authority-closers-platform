@@ -70,6 +70,8 @@ export function matchCommands(
 
 export const COMMAND_SEARCH_DELAY_MS = 200;
 
+const NOTHING_FOUND = { words: "", results: [] as Command[] };
+
 export function CommandBar({
   open,
   onClose,
@@ -89,7 +91,11 @@ export function CommandBar({
   placeholder?: string;
 }) {
   const [text, setText] = useState("");
-  const [found, setFound] = useState<Command[]>([]);
+  // What the page's search found, and for which words: older answers never
+  // show under newer words.
+  const [found, setFound] = useState<{ words: string; results: Command[] }>(
+    NOTHING_FOUND,
+  );
   const [active, setActive] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const listId = useId();
@@ -100,7 +106,7 @@ export function CommandBar({
     setWasOpen(open);
     if (open) {
       setText("");
-      setFound([]);
+      setFound(NOTHING_FOUND);
       setActive(0);
     }
   }
@@ -119,10 +125,10 @@ export function CommandBar({
     const timer = window.setTimeout(() => {
       search(words, controller.signal).then(
         (results) => {
-          if (!controller.signal.aborted) setFound(results);
+          if (!controller.signal.aborted) setFound({ words, results });
         },
         () => {
-          if (!controller.signal.aborted) setFound([]);
+          if (!controller.signal.aborted) setFound({ words, results: [] });
         },
       );
     }, COMMAND_SEARCH_DELAY_MS);
@@ -132,10 +138,12 @@ export function CommandBar({
     };
   }, [open, search, words]);
 
+  const searching =
+    Boolean(search) && words.length >= 2 && found.words !== words;
   const results = useMemo(
     () => [
       ...matchCommands(commands, words),
-      ...(words.length >= 2 ? found : []),
+      ...(words.length >= 2 && found.words === words ? found.results : []),
     ],
     [commands, found, words],
   );
@@ -246,7 +254,11 @@ export function CommandBar({
             ))}
           </div>
         ))}
-        {words && !results.length ? (
+        {searching ? (
+          <p className={styles.searching} role="status">
+            Looking for leads and calls…
+          </p>
+        ) : words && !results.length ? (
           <p className={styles.none}>Nothing matches “{words}”.</p>
         ) : null}
       </div>

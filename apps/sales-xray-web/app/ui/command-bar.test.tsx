@@ -145,11 +145,16 @@ it("asks for leads after a short pause, from two letters, and adds them", async 
   await act(async () => vi.advanceTimersByTime(COMMAND_SEARCH_DELAY_MS));
   expect(search).not.toHaveBeenCalled();
   await bar.type("as");
+  // Until the page's search answers, the bar says it is looking.
+  expect(document.querySelector('[role="status"]')?.textContent).toContain(
+    "Looking for leads",
+  );
   await act(async () => vi.advanceTimersByTime(COMMAND_SEARCH_DELAY_MS - 1));
   expect(search).not.toHaveBeenCalled();
   await act(async () => vi.advanceTimersByTime(1));
   expect(search).toHaveBeenCalledWith("as", expect.any(AbortSignal));
   expect(bar.options()).toEqual(["Asha FictionalNew · Pune"]);
+  expect(document.querySelector('[role="status"]')).toBeNull();
   await bar.type("zz");
   await act(async () => vi.advanceTimersByTime(COMMAND_SEARCH_DELAY_MS));
   expect(document.body.textContent).toContain("Nothing matches “zz”");
