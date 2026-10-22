@@ -1107,19 +1107,18 @@
 }
 
 /* The loading outline uses the loaded strip and toolbar themselves, so every
-   tile, control and row keeps its box; only the words wait. */
-.skeleton i.phValue {
-  width: 48px;
-  height: 28px;
+   tile, control and row keeps its box; only the words wait. A placeholder
+   inside a line of text (the number's <b>, the line under it) sits on that
+   line, so the line keeps its own height (Liquid Glass, 22 Oct 2026). */
+.skeleton .phValue > span,
+.skeleton .kpiContext > span {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: -0.05em;
 }
 
-/* A word-shaped bar inside a line of text: the line keeps its height. */
-.skeleton i.phText {
-  display: inline-block;
-  width: var(--w, 8em);
-  max-width: 100%;
-  height: 0.8em;
-  vertical-align: -0.05em;
+.skeleton .phWord {
+  visibility: hidden;
 }
 
 .skeleton .phControl {
@@ -1128,11 +1127,10 @@
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-.skeleton .phChip {
+.skeleton .filters > span {
   display: inline-block;
-  width: 72px;
+  flex: none;
   min-height: var(--lx-control-compact-h, 32px);
-  border-radius: var(--lx-radius-pill);
 }
 
 .skeletonRow {
@@ -1145,16 +1143,6 @@
 
 .skeletonRow + .skeletonRow {
   border-top: 1px solid var(--lx-line-soft);
-}
-
-.skeletonRow i[data-w="title"] {
-  width: min(360px, 60%);
-  height: 12px;
-}
-
-.skeletonRow i[data-w="meta"] {
-  width: min(220px, 40%);
-  height: 10px;
 }
 
 @keyframes pulse {
@@ -1305,8 +1293,8 @@
 
   /* The first two are counts: their loading bar is the width of a short
      number, so a narrow phone keeps name and number on one line. */
-  .skeleton .kpi:nth-child(-n + 2) i.phValue {
-    width: 24px;
+  .skeleton .kpi:nth-child(-n + 2) .phValue > span {
+    width: 24px !important;
   }
 
   .spark {
@@ -1523,7 +1511,7 @@
 }
 
 @media (pointer: coarse) {
-  .skeleton .phChip {
+  .skeleton .filters > span {
     min-height: var(--lx-row-min-h, 44px);
   }
 

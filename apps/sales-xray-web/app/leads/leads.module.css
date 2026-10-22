@@ -1022,6 +1022,18 @@ a.repName {
   padding: 12px 14px;
 }
 
+/* From and To share one width: side by side where both fit, else each on
+   its own line at full width (Liquid Glass review, 22 Oct 2026). */
+.reportForm .row > * {
+  flex: 1 1 150px;
+  min-width: 0;
+}
+
+.reportForm .row input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
 .bars {
   display: grid;
   gap: 6px;
@@ -5423,4 +5435,20 @@ a.repName {
   .actions[data-contact] .contactIcon small {
     display: none;
   }
+}
+
+/* The Leads outline's rows at a lead row's own height (87 px at 390 with the
+   phone type scale), so the list doesn't grow when the leads arrive. */
+.leadRowsSkeleton > * {
+  min-height: 87px;
+}
+
+.leadRowsSkeleton > * + * {
+  border-top: 1px solid var(--sx-line);
+}
+
+/* The outline's stage tabs keep their widths and run off the edge, as the
+   loaded tabs do. */
+.stageTabsSkeleton > * {
+  flex: none;
 }
