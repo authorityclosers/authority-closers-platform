@@ -131,7 +131,7 @@ describe("logging work calls on the phone", () => {
     ).toEqual({ method: "callLogSetup", args: { on: true, sim: "8991-1" } });
   });
 
-  it("switches off from the slim row", async () => {
+  it("asks before switching off from the slim row", async () => {
     const sent = fakePhone((message) =>
       message.method === "callLogSetup"
         ? status({ on: false })
@@ -142,6 +142,15 @@ describe("logging work calls on the phone", () => {
     await act(async () =>
       host.querySelector<HTMLButtonElement>('button[role="switch"]')!.click(),
     );
+    // Owner, 23 Oct 2026: stopping asks first.
+    expect(sent.some((item) => item.method === "callLogSetup")).toBe(false);
+    expect(document.querySelector("dialog")?.textContent).toContain(
+      "Calls already logged stay on their leads.",
+    );
+    const stop = [
+      ...document.querySelectorAll<HTMLButtonElement>("dialog button"),
+    ].find((item) => item.textContent === "Stop logging")!;
+    await act(async () => stop.click());
     expect(sent.at(-1)).toEqual({
       method: "callLogSetup",
       args: { on: false, sim: "8991-1" },
