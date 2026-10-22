@@ -17,8 +17,9 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { useRowKeys } from "../ui/row-keys";
 import { ChannelMark, ChatAvatar } from "./channel-mark";
 import {
   CHANNEL_LABEL,
@@ -196,6 +197,7 @@ function ThreadRow({
         data-active={active || undefined}
         data-unread={unread || undefined}
         aria-current={active ? "true" : undefined}
+        data-row-key={gone ? undefined : thread.key}
         disabled={gone}
         onClick={() => onOpen(thread)}
       >
@@ -282,6 +284,14 @@ export function ThreadList({
   canConnect?: boolean;
 }) {
   const shown = filterThreads(threads, filter, me);
+  // Keys on a computer (J/K, Enter): the next chat without the mouse.
+  const list = useRef<HTMLUListElement>(null);
+  useRowKeys(list, {
+    open: (key) => {
+      const thread = shown.find((item) => item.key === key);
+      if (thread) onOpen(thread);
+    },
+  });
   if (!threads.length)
     return (
       <div className={styles.listEmpty}>
@@ -314,7 +324,7 @@ export function ThreadList({
       </div>
     );
   return (
-    <ul className={styles.listBody} aria-label="Chats">
+    <ul className={styles.listBody} aria-label="Chats" ref={list}>
       {shown.map((thread) => (
         <ThreadRow
           key={thread.key}

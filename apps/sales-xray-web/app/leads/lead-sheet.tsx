@@ -311,9 +311,12 @@ export function CallOutcome({
   heard = null,
   onStop,
   upNext = null,
+  ask = false,
 }: {
   detail: LeadDetail;
   submitLabel: string;
+  /** L on a computer: this is the step to fill (it comes into view, focused). */
+  ask?: boolean;
   /** Call mode: save and end the round here ("Save and stop here"). */
   onStop?: (next: LeadDetail) => void;
   /** Call mode: who comes after this lead, shown above Save. */
@@ -372,9 +375,19 @@ export function CallOutcome({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (attention)
-      ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [attention]);
+    const box = ref.current;
+    if (!box || (!attention && !ask)) return;
+    // The lead's name and Call stay in view (Redmi at 360 px, 22 Oct 2026): the
+    // sheet opens at its top and moves only when the question is out of sight.
+    if (box.getBoundingClientRect().top > window.innerHeight * 0.7)
+      box.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (ask)
+      box
+        .querySelector<HTMLButtonElement>("button")
+        ?.focus({ preventScroll: true });
+  }, [attention, ask]);
+  // Whose call this is, in the question itself (the name may be above the fold).
+  const first = detail.lead.name.split(" ")[0];
 
   const closes = stage === "won" || stage === "lost";
   const needsTime = talk === "talked" && stage !== null && !closes;
@@ -463,8 +476,8 @@ export function CallOutcome({
     >
       <h3 id={`${id}-q`} className={styles.outcomeTitle}>
         {attention
-          ? "Back from the call. How did it go?"
-          : "How did the call go?"}
+          ? `Back from the call with ${first}. How did it go?`
+          : `How did the call with ${first} go?`}
       </h3>
       {heard && heardLine(heard) ? (
         <p className={styles.heard}>
@@ -514,6 +527,7 @@ export function CallOutcome({
           className={styles.choiceTile}
           data-kind="missed"
           aria-pressed={talk === "missed" && !quick}
+          data-span="row"
           onClick={() => {
             setTalk("missed");
             if (quick) setReason(null);
@@ -1861,7 +1875,9 @@ export function LeadCard({
     act.current = () => (intent === "call" ? placeCall() : openMessage(null));
   });
   useEffect(() => {
-    if (!intent || acted.current || !detail.phone || !detail.can_edit) return;
+    // "log" only opens the call's outcome; nothing to place or write.
+    if (!intent || intent === "log" || acted.current) return;
+    if (!detail.phone || !detail.can_edit) return;
     acted.current = true;
     act.current();
   }, [intent, detail.phone, detail.can_edit]);
@@ -2297,7 +2313,8 @@ export function LeadCard({
 
 /* ---------- Lead sheet ---------- */
 
-export type LeadIntent = "call" | "message";
+/** What a lead opens for: a call, a message, or saying how a call went (L). */
+export type LeadIntent = "call" | "message" | "log";
 
 /**
  * Which pipeline the lead is in, and a move to another (owners and admins, when the
@@ -2500,7 +2517,9 @@ export function LeadSheet({
               phoneCall={phoneCall}
               intent={intent}
               afterCall={
-                backFrom === leadId || asked ? { step: "outcome" } : null
+                backFrom === leadId || asked || intent === "log"
+                  ? { step: "outcome" }
+                  : null
               }
               outcome={
                 <CallOutcome
@@ -2509,6 +2528,7 @@ export function LeadSheet({
                   submitLabel="Save"
                   heard={asked}
                   attention={backFrom === leadId}
+                  ask={intent === "log"}
                   beforeSave={() => logWaitingCall(detail)}
                   onSaved={(next) => {
                     setBackFrom(null);

@@ -11,6 +11,7 @@ import { ListChecks, SearchX, UserPlus, Users } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { notify } from "../notice-center";
+import { useRowKeys } from "../ui/row-keys";
 import { Button, Skeleton } from "../ui/kit";
 import {
   DeleteLeadsSheet,
@@ -121,6 +122,24 @@ export function ListView({
   useEffect(() => {
     counts.current = onCounts;
   });
+  // Keys on a computer: J/K, Enter, C (asks before calling), L. Not while ticking.
+  const list = useRef<HTMLUListElement>(null);
+  const byId = (id: string) => rows.find((row) => row.lead_id === id);
+  useRowKeys(
+    list,
+    {
+      open: onOpen,
+      call: (id) => {
+        const row = byId(id);
+        if (row?.phone_last4) actions?.onCall?.(row);
+      },
+      log: (id) => {
+        const row = byId(id);
+        if (row) actions?.onLog?.(row);
+      },
+    },
+    !selecting,
+  );
   const ask = {
     scope,
     stage: stage === TEST ? null : stage,
@@ -314,7 +333,7 @@ export function ListView({
           />
         ) : (
           <>
-            <ul className={styles.leadList} aria-label="Leads">
+            <ul className={styles.leadList} aria-label="Leads" ref={list}>
               {rows.map((row) =>
                 selecting ? (
                   <SelectLine

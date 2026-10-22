@@ -542,6 +542,7 @@ export function LeadsRoute() {
     onCall: (row) => setDialling(row),
     onMessage: (row) => open(row.lead_id, "message"),
     onHold: (row) => setHolding(row),
+    onLog: (row) => open(row.lead_id, "log"),
   };
   const org =
     access?.workspaces?.find(
