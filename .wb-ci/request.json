@@ -1,0 +1,16 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "7650b3504818333342e3b40b69e4dd8b44416405",
+  "full": false,
+  "checks": [
+    "e2e"
+  ],
+  "changed_files": [
+    "apps/admin-web/app/review-fixture/engine/engine-fixture.ts"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
