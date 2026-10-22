@@ -34,6 +34,18 @@ export type EngineModuleRow = {
   tokensOut: TokenPair;
 };
 
+/** Gold agreement for one artifact of one setup (beta and research, never a score). */
+export type QualityRow = {
+  artifact: string;
+  setup: string;
+  module: string | null;
+  nearest: string | null;
+  agreement: number | null;
+  low: number | null;
+  high: number | null;
+  evidence: string;
+};
+
 export type RegistryModule = {
   id: string;
   label: string;
@@ -77,6 +89,7 @@ export type AnalysisEngine = {
     shortCallMinutes: number;
     uptake: number;
     modules: RegistryModule[];
+    quality: QualityRow[];
   };
   window: {
     calls: number;
@@ -147,6 +160,19 @@ export function normalizeEngine(raw: unknown): AnalysisEngine {
       planningFx: read.number(registry.planning_fx, 100),
       shortCallMinutes: read.number(registry.short_call_minutes, 1),
       uptake: read.number(registry.uptake, 0.1),
+      quality: read.array(registry.quality).map((item) => {
+        const row = read.object(item);
+        return {
+          artifact: read.string(row.artifact),
+          setup: read.string(row.setup),
+          module: read.optionalString(row.module),
+          nearest: read.optionalString(row.nearest),
+          agreement: read.optionalNumber(row.agreement),
+          low: read.optionalNumber(row.low),
+          high: read.optionalNumber(row.high),
+          evidence: read.string(row.evidence),
+        };
+      }),
       modules: read.array(registry.modules).map((item) => {
         const row = read.object(item);
         return {
@@ -250,6 +276,15 @@ export function tokenWords(value: number | null): string {
   if (value < 1000) return String(Math.round(value));
   if (value < 1_000_000) return `${(value / 1000).toFixed(1)}k`;
   return `${(value / 1_000_000).toFixed(2)}M`;
+}
+
+/** "64% (49–77)", or "Not scored". */
+export function agreementWords(row: QualityRow): string {
+  if (row.agreement === null) return "Not scored";
+  const share = (value: number) => Math.round(value * 100);
+  return row.low === null || row.high === null
+    ? `${share(row.agreement)}%`
+    : `${share(row.agreement)}% (${share(row.low)}–${share(row.high)})`;
 }
 
 export const STATUS_WORDS: Record<EngineStatus, { label: string; tone: Tone }> =

@@ -4,6 +4,7 @@ import { expect, it } from "vitest";
 
 import { engineFixture } from "../review-fixture/engine/engine-fixture";
 import {
+  agreementWords,
   engineQuery,
   normalizeEngine,
   ratioTone,
@@ -24,7 +25,16 @@ const render = (raw: unknown) => {
 
 it("reads the engine: registry, modules, and plans with this window's and the measured mix's rates", () => {
   const engine = normalizeEngine(engineFixture(NOW));
-  expect(engine.registry.version).toBe("analysis-engine-registry/0");
+  expect(engine.registry.version).toBe("analysis-engine-registry/1");
+  const classic = engine.registry.quality.find(
+    (row) => row.module === "pr.classic",
+  );
+  expect(classic).toMatchObject({ agreement: 0.64, low: 0.49, high: 0.77 });
+  expect(classic && agreementWords(classic)).toBe("64% (49–77)");
+  const onePass = engine.registry.quality.find(
+    (row) => row.module === "c4.one-pass-v1",
+  );
+  expect(onePass && agreementWords(onePass)).toBe("Not scored");
   expect(engine.registry.digest).toMatch(/^[0-9a-f]{10}$/);
   expect(engine.window).toMatchObject({ calls: 31, analysed: 18, short: 13 });
   const transcript = engine.modules.find((row) => row.id === "c2.flash-lite");
@@ -89,8 +99,11 @@ it("shows expected against actual, the drifting module, the module with no fit, 
     "Today: one pass v1 and the full report, Gemini standard",
   );
   expect(text).toContain("if 10% ask for the full report");
-  expect(text).toContain("Registry · v0");
+  expect(text).toContain("Registry · v1");
   expect(text).toContain("16 real calls' receipts");
+  expect(text).toContain("Agreement (95%)");
+  expect(text).toContain("55% (38–70)");
+  expect(text).toContain("research, informs");
 });
 
 it("still shows the plans and the registry when an environment has no export", () => {
@@ -99,7 +112,7 @@ it("still shows the plans and the registry when an environment has no export", (
   expect(text).toContain("isn’t in the metrics store yet");
   expect(text).not.toContain("Modules off their fit");
   expect(text).toContain("Plans");
-  expect(text).toContain("Registry · v0");
+  expect(text).toContain("Registry · v1");
 });
 
 it("warns when the export is old", () => {

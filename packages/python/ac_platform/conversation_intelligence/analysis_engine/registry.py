@@ -31,15 +31,15 @@ from typing import Any, Final, Literal
 
 from ac_platform.one_pass import markers
 
-VERSION: Final = "analysis-engine-registry/0"
+VERSION: Final = "analysis-engine-registry/1"
 # The rate every fit below is in: the price sheet's planning rate (admin_pricing.FX_USD_TO_INR).
 PLANNING_FX: Final = 100.0
 # The short-call rule: under a minute (or no conversation) gets the transcript and lead details.
 SHORT_CALL_MINUTES: Final = 1.0
-# Brain 4.0's answer, the midpoint of 1.5-2.5k output tokens on 21 gold reads.
-BRAIN4_ANSWER_TOKENS: Final = 2_000
-# Brain 4.0's instructions: brain4_shadow.system_prompt() is 20,508 characters.
-BRAIN4_INSTRUCTION_TOKENS: Final = 5_100
+# The Brain 4.0 part inside the one-pass read (v2), measured on 8 AC dev calls (22 Oct): about
+# 4.5k more input tokens and 1.5-2.0k more output tokens than v1 (the midpoint is used).
+BRAIN4_PART_INPUT: Final = 4_500
+BRAIN4_PART_OUTPUT: Final = 1_750
 # A call's fact prompt revision as the metrics store records it (None: before revisions).
 CLASSIC_FACTS: Final = frozenset({None, "facts-v1", "facts-v2"})
 # One-pass calls carry the one-pass prompt revision (one_pass.markers is its only source).
@@ -140,8 +140,8 @@ class Plan:
 _GEMINI_FLASH = (0.75, 3.75)  # gemini-3.8-flash list, US dollars per million tokens in, out
 _ONE_PASS_V1 = Fit(tokens_in=(3_579, 649), tokens_out=(3_379, 101), usd=_GEMINI_FLASH)
 _ONE_PASS_V2 = Fit(
-    tokens_in=(3_579 + BRAIN4_INSTRUCTION_TOKENS, 649),
-    tokens_out=(3_379 + BRAIN4_ANSWER_TOKENS, 101),
+    tokens_in=(3_579 + BRAIN4_PART_INPUT, 649),
+    tokens_out=(3_379 + BRAIN4_PART_OUTPUT, 101),
     usd=_GEMINI_FLASH,
 )
 # Production receipts by call length, less the one-pass C4 fit at each length's mean minutes.
@@ -154,7 +154,7 @@ _LUNA_V1_FLEX = Fit(rupees=(0.19, 0.0042))
 _LUNA_V2_FLEX = Fit(
     rupees=(
         0.19
-        + (BRAIN4_INSTRUCTION_TOKENS * _LUNA_FLEX_USD[0] + BRAIN4_ANSWER_TOKENS * _LUNA_FLEX_USD[1])
+        + (BRAIN4_PART_INPUT * _LUNA_FLEX_USD[0] + BRAIN4_PART_OUTPUT * _LUNA_FLEX_USD[1])
         / 1e6
         * PLANNING_FX,
         0.0042,
@@ -254,8 +254,8 @@ MODULES: Final[tuple[Module, ...]] = (
         facts=frozenset({REVISION_V2}),
         fit=_ONE_PASS_V2,
         status="planned",
-        evidence="the v1 fit plus Brain 4.0's instructions (about 5.1k tokens) and answer"
-        " (1.5-2.5k tokens, midpoint used)",
+        evidence="the v1 fit plus the Brain 4.0 part as measured on 8 AC dev calls (22 Oct):"
+        " +4.5k input, +1.5-2.0k output tokens (midpoint used); every contract passed",
     ),
     Module(
         id="c4.one-pass-v2.flex",
@@ -275,7 +275,8 @@ MODULES: Final[tuple[Module, ...]] = (
         facts=frozenset({REVISION_V2}),
         fit=_LUNA_V2_FLEX,
         status="planned",
-        evidence="Luna's measured C4 plus the Brain 4.0 part at Luna Flex list rates",
+        evidence="Luna's measured C4 plus the Brain 4.0 part (Gemini's measured tokens) at Luna"
+        " Flex list rates",
     ),
     Module(
         id="c4.classic",
@@ -362,19 +363,123 @@ MODULES: Final[tuple[Module, ...]] = (
         label="Brain 4.0 · separate read",
         stage="B4",
         models=(),
-        fit=Fit(
-            tokens_in=(BRAIN4_INSTRUCTION_TOKENS, 649),
-            tokens_out=(BRAIN4_ANSWER_TOKENS, 0),
-            usd=_GEMINI_FLASH,
-        ),
+        fit=Fit(tokens_in=(4_472, 383), tokens_out=(1_376, 24), usd=_GEMINI_FLASH),
         status="beta",
-        evidence="instructions 20,508 characters; answers 1.5-2.5k output tokens on 21 gold reads",
+        evidence="61 saved production reads on Gemini 3.8 Flash (one-pass session, 22 Oct)",
         note="Brain 4.0 beta organisations only; the metrics store does not record this read.",
         recorded=False,
     ),
 )
 
 _BY_ID: Final = {module.id: module for module in MODULES}
+
+
+# ---------- quality ----------
+
+
+@dataclass(frozen=True)
+class Quality:
+    """Agreement with the coaching lead's gold labels, for one artifact of one setup.
+
+    ``module`` is set when the setup is that registry module exactly as built; a research arm
+    or a near relative leaves it empty and names the module it informs in ``nearest``.
+    ``agreement`` and its 95% interval are shares of the labels; all three are None while the
+    setup is not scored. Beta and research only: nothing here is an official score (AC-SVAL).
+    """
+
+    artifact: Literal["review", "brain4"]
+    setup: str
+    agreement: float | None
+    low: float | None
+    high: float | None
+    evidence: str
+    module: str | None = None
+    nearest: str | None = None
+
+
+_GOLD_V1 = "gold v1: the coaching lead's 43 labels on 6 real calls, Flash-Lite transcripts"
+_NOT_SCORED = "not scored yet: production's exact requests on the 7 gold calls"
+
+QUALITY: Final[tuple[Quality, ...]] = (
+    Quality(
+        artifact="review",
+        setup="Classic pointer review",
+        module="pr.classic",
+        agreement=0.64,
+        low=0.49,
+        high=0.77,
+        evidence=_GOLD_V1,
+    ),
+    Quality(
+        artifact="review",
+        setup="One pass v1 review, production's request",
+        module="c4.one-pass-v1",
+        agreement=None,
+        low=None,
+        high=None,
+        evidence=_NOT_SCORED,
+    ),
+    Quality(
+        artifact="review",
+        setup="Research one pass (onepass2: facts and 27 pointers, Gemini)",
+        nearest="c4.one-pass-v1",
+        agreement=0.72,
+        low=0.57,
+        high=0.83,
+        evidence=_GOLD_V1 + "; a research prompt, not production's request",
+    ),
+    Quality(
+        artifact="review",
+        setup="Luna C review, production's request",
+        module="c4.one-pass-v1.luna-flex",
+        agreement=None,
+        low=None,
+        high=None,
+        evidence=_NOT_SCORED,
+    ),
+    Quality(
+        artifact="brain4",
+        setup="Brain 4.0, product prompt, Gemini 3.8 Flash (separate read)",
+        module="b4.shadow",
+        agreement=0.55,
+        low=0.38,
+        high=0.70,
+        evidence=_GOLD_V1,
+    ),
+    Quality(
+        artifact="brain4",
+        setup="Brain 4.0 inside the one-pass read (v2)",
+        module="c4.one-pass-v2",
+        agreement=None,
+        low=None,
+        high=None,
+        evidence=_NOT_SCORED + "; the same Brain 4.0 instructions as the separate read",
+    ),
+    Quality(
+        artifact="brain4",
+        setup="Brain 4.0, product prompt, GPT-6 Luna (separate read)",
+        nearest="c4.one-pass-v2.luna-flex",
+        agreement=0.39,
+        low=0.28,
+        high=0.50,
+        evidence=_GOLD_V1,
+    ),
+    Quality(
+        artifact="brain4",
+        setup="Research Brain 4.0 prompt, Gemini",
+        nearest="b4.shadow",
+        agreement=0.60,
+        low=0.44,
+        high=0.73,
+        evidence=_GOLD_V1 + "; a research prompt",
+    ),
+)
+
+
+def quality_of(module_id: str) -> tuple[Quality, ...]:
+    """The gold rows for a module as built (not its research relatives)."""
+    return tuple(row for row in QUALITY if row.module == module_id)
+
 
 PLANS: Final[tuple[Plan, ...]] = (
     Plan(
@@ -524,6 +629,7 @@ def digest() -> str:
             "short_minutes": SHORT_CALL_MINUTES,
             "modules": [_plain(asdict(item)) for item in MODULES],
             "plans": [_plain(asdict(item)) for item in PLANS],
+            "quality": [_plain(asdict(item)) for item in QUALITY],
             "mix": _plain(REFERENCE_MIX),
         },
         sort_keys=True,
@@ -574,5 +680,6 @@ def describe(*, uptake: float = 0.1) -> dict[str, Any]:
             }
             for item in PLANS
         ],
+        "quality": [asdict(item) for item in QUALITY],
         "uptake": uptake,
     }
