@@ -226,7 +226,7 @@ async def account_library(
     ``include_summary`` adds each row's ``summary`` (``_row_summaries``): what
     a list row shows from its Report, so a list never reads whole Reports.
 
-    ``include_leads`` adds ``lead`` to each call a lead names (``_call_leads``,
+    ``include_leads`` adds ``lead`` to each call a lead names (``call_leads``,
     one more statement for the page); a call no lead names has no ``lead``.
     """
     now = await ownership.sessions._admit()
@@ -277,7 +277,7 @@ async def account_library(
         await _row_summaries(ownership.database, list(current.values())) if include_summary else {}
     )
     leads = (
-        await _call_leads(ownership.database, actor.tenant_id, [row.submission_id for row in page])
+        await call_leads(ownership.database, actor.tenant_id, [row.submission_id for row in page])
         if include_leads
         else {}
     )
@@ -321,10 +321,11 @@ async def account_library(
     }
 
 
-async def _call_leads(
+async def call_leads(
     database: AsyncSession, tenant_id: UUID | None, submission_ids: list[UUID]
 ) -> dict[UUID, dict[str, Any]]:
-    """The lead each listed call belongs to, in one statement (slice 7, 22 Oct 2026).
+    """The lead each call belongs to, in one statement (slice 7, 22 Oct 2026): for a page
+    of the Calls list, or for one call's own read (the Report).
 
     A call belongs to the lead whose history recorded it (a ``call`` event naming its
     submission, newest first), else to the lead whose latest call it is

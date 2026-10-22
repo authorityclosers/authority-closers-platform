@@ -3,7 +3,8 @@
 ``include_leads=true`` adds ``lead`` to each listed call a lead names: through the
 lead's call history (slice 7 B, index 0122), else as the lead's latest call
 (``last_submission_id``). One more statement for the page, the actor's tenant only,
-and without the flag the rows are unchanged. Synthetic one-second WAV uploads, no
+and without the flag the rows are unchanged. One call's own read takes
+``include_lead=true`` for the same ``lead`` (the Report). Synthetic one-second WAV uploads, no
 provider.
 """
 
@@ -144,6 +145,23 @@ def test_calls_name_their_lead_only_when_asked_and_only_in_the_tenant(
                 assert rows[earlier]["lead"]["name"] == "ravi sample"
                 assert rows[earlier]["lead"]["stage"] == "follow_up"
                 assert rows[later]["lead"] == rows[earlier]["lead"]
+
+                # One call's own read names the same lead, only when asked.
+                one = await client.get(PREFIX + f"/submissions/{earlier}?include_lead=true")
+                assert one.status_code == 200, one.text
+                assert one.json()["lead"] == rows[earlier]["lead"]
+                assert "lead" not in (await client.get(PREFIX + f"/submissions/{earlier}")).json()
+                unlinked = await client.get(PREFIX + f"/submissions/{plain}?include_lead=true")
+                assert unlinked.status_code == 200, unlinked.text
+                assert "lead" not in unlinked.json()
+                # Any other key is still refused there.
+                refused = await client.get(PREFIX + f"/submissions/{earlier}?include_leads=true")
+                assert refused.status_code == 422
+                # Other reads of the call still refuse it.
+                other_read = await client.get(
+                    PREFIX + f"/submissions/{earlier}/plan?include_lead=true"
+                )
+                assert other_read.status_code == 422
         finally:
             await setup.engine.dispose()
 
