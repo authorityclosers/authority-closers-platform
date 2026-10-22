@@ -1,6 +1,8 @@
 """Admin-owned execution control and a public non-sensitive availability read."""
 
+import asyncio
 from datetime import UTC, datetime
+from time import monotonic
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -31,6 +33,8 @@ from ac_platform.http.auth import (
     require_admin_surface,
     require_safe_origin,
 )
+
+AVAILABILITY_MEMO_SECONDS = 10.0
 
 
 class ExecutionControlIntent(BaseModel):
@@ -113,6 +117,14 @@ def install_execution_control_http(
             raise HTTPException(422, "Use the current AC operations workspace.")
         response.headers.update({"Cache-Control": "private, no-store", "Vary": "Cookie"})
 
+    # Every open analysis page (a new analysis, an opened call) asks this every
+    # 15 s without signing in, and one answer decodes the whole budget ledger
+    # (every reservation ever made): 100-300 ms of API time on staging. Keep the
+    # answer per process for a short window: one database read per window, not
+    # one per open page. A pause or an exhausted budget shows within it.
+    memo: dict[str, Any] = {"at": None, "paused": False}
+    memo_lock = asyncio.Lock()
+
     @router.get("/v1/conversation/acquisition/availability")
     async def availability(request: Request, response: Response) -> dict[str, bool]:
         allowed = {settings.public_app_url.host}
@@ -121,6 +133,18 @@ def install_execution_control_http(
         if request.url.hostname not in allowed or request.query_params:
             raise HTTPException(404, "Availability not found.")
         response.headers["Cache-Control"] = "no-store"
+
+        def fresh() -> bool:
+            return memo["at"] is not None and monotonic() - memo["at"] < AVAILABILITY_MEMO_SECONDS
+
+        if not fresh():
+            async with memo_lock:
+                if not fresh():
+                    memo["paused"] = await read_paused()
+                    memo["at"] = monotonic()
+        return {"paused": memo["paused"]}
+
+    async def read_paused() -> bool:
         async with sessions() as database, database.begin():
             state = await execution_state(
                 database, environment=settings.environment, operations_tenant_id=scope()
@@ -143,7 +167,7 @@ def install_execution_control_http(
                         now=datetime.now(UTC),
                     )
                     exhausted = budget_view(budget, limits)["warning"] == "exhausted"
-            return {"paused": state["paused"] or exhausted}
+            return bool(state["paused"] or exhausted)
 
     @router.get("/v1/admin/conversation/execution")
     async def current(
