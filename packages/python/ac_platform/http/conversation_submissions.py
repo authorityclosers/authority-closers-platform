@@ -252,7 +252,7 @@ def install_submission_http(
             library
             and len({key for key, _ in queries}) == len(queries)
             and all(
-                key in {"before", "include_owners", "order", "include_summary"}
+                key in {"before", "include_owners", "order", "include_summary", "include_leads"}
                 for key, _ in queries
             )
         ):
@@ -539,6 +539,7 @@ def install_submission_http(
         include_owners: bool = False,
         order: Literal["newest", "reports_first"] = "newest",
         include_summary: bool = False,
+        include_leads: bool = False,
     ) -> dict[str, Any]:
         host = guard(request, response, library=True)
         try:
@@ -558,6 +559,7 @@ def install_submission_http(
                     include_owners=include_owners,
                     order=order,
                     include_summary=include_summary,
+                    include_leads=include_leads,
                 )
         except ConversationError as error:
             raise fail(error.status, str(error)) from None

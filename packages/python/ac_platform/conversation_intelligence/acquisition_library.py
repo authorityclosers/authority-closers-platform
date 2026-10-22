@@ -6,7 +6,20 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from sqlalchemy import Select, and_, case, func, or_, select, tuple_
+from sqlalchemy import (
+    DateTime,
+    Select,
+    String,
+    Uuid,
+    and_,
+    case,
+    column,
+    func,
+    or_,
+    select,
+    table,
+    tuple_,
+)
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.acquisition_models import (
@@ -38,6 +51,19 @@ from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 
 PAGE_SIZE = 20
+# The Lead Desk's leads, read as a plain table: the call library names a call's
+# lead without depending on the Lead Desk's models (slice 7, 22 Oct 2026).
+_LEADS = table(
+    "lead_desk_leads",
+    column("tenant_id", Uuid),
+    column("id", Uuid),
+    column("name", String),
+    column("stage", String),
+    column("step", String),
+    column("pipeline_key", String),
+    column("last_submission_id", Uuid),
+    column("updated_at", DateTime(timezone=True)),
+)
 # How the Report's Overview says the call ended (report_overview.ObservedOutcome).
 _OUTCOMES = frozenset({"closed", "follow_up", "no_sale", "future_date", "disqualified", "unclear"})
 
@@ -188,6 +214,7 @@ async def account_library(
     include_owners: bool = False,
     order: Literal["newest", "reports_first"] = "newest",
     include_summary: bool = False,
+    include_leads: bool = False,
 ) -> dict[str, Any]:
     """Read retained direct/claimed uploads without renewing or assigning ownership.
 
@@ -205,6 +232,9 @@ async def account_library(
 
     ``include_summary`` adds each row's ``summary`` (``_row_summaries``): what
     a list row shows from its Report, so a list never reads whole Reports.
+
+    ``include_leads`` adds ``lead`` to each call a lead names (``_call_leads``,
+    one more statement for the page); a call no lead names has no ``lead``.
     """
     now = await ownership.sessions._admit()
     await ownership.sessions._owner(
@@ -253,6 +283,11 @@ async def account_library(
     summaries = (
         await _row_summaries(ownership.database, list(current.values())) if include_summary else {}
     )
+    leads = (
+        await _call_leads(ownership.database, actor.tenant_id, [row.submission_id for row in page])
+        if include_leads
+        else {}
+    )
     entries = []
     for row in page:
         found = current.get(row.id)
@@ -283,10 +318,53 @@ async def account_library(
         }
         if include_summary:
             entry["summary"] = summaries.get(found.recording_id) if found.has_report else None
+        lead = leads.get(row.submission_id)
+        if lead is not None:
+            entry["lead"] = lead
         entries.append(entry)
     return {
         "submissions": entries,
         "next_cursor": str(rows[PAGE_SIZE - 1].submission_id) if len(rows) > PAGE_SIZE else None,
+    }
+
+
+async def _call_leads(
+    database: AsyncSession, tenant_id: UUID | None, submission_ids: list[UUID]
+) -> dict[UUID, dict[str, Any]]:
+    """The lead each listed call belongs to, in one statement (slice 7, 22 Oct 2026).
+
+    A lead names its latest call (``last_submission_id``, set when a call or its
+    recording is put on the lead), so that call shows the lead's name and where the
+    lead stands now: its stage, the business's own step and its pipeline. A call no
+    lead names has none; if two leads name one call, the one changed last wins.
+    Only the actor's tenant is read, so another organisation's lead never shows.
+    """
+    if tenant_id is None or not submission_ids:
+        return {}
+    leads = _LEADS.c
+    found: dict[UUID, Any] = {}
+    for row in await database.execute(
+        select(
+            leads.last_submission_id,
+            leads.id,
+            leads.name,
+            leads.stage,
+            leads.step,
+            leads.pipeline_key,
+        )
+        .where(leads.tenant_id == tenant_id, leads.last_submission_id.in_(submission_ids))
+        .order_by(leads.updated_at.desc(), leads.id)
+    ):
+        found.setdefault(row.last_submission_id, row)
+    return {
+        submission_id: {
+            "lead_id": str(row.id),
+            "name": row.name,
+            "stage": row.stage,
+            "step": row.step,
+            "pipeline": row.pipeline_key or "main",
+        }
+        for submission_id, row in found.items()
     }
 
 
