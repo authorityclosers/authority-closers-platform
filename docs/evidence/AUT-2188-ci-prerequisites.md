@@ -1,5 +1,7 @@
 # AUT-2188 — CI prerequisite mirror resilience
 
+Latest status (22 Oct, 18:09 UTC wake): later v0.84/workbench failures supersede the earlier warm-run checkpoint as reliability evidence. The verified prerequisite-bundle correction and seven-day acceptance remain open. The storage follow-up below implements one-day workbench retention and summary-only green shard uploads.
+
 Source baseline: `5869a25ff2d0dc49b3788799308b52a356b43845`. Workbench implementation; no deployment or host/package changes performed.
 
 Latest validation: **full current-source CI is green** on workbench `4643dd63`, [run 39781371721 attempt 2](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39781371721/attempts/2). Exact Node cache reuse is proved by [attempt 3](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39781371721/attempts/3). Release inclusion and the seven-day observation remain open.
@@ -84,3 +86,14 @@ Root's full installed/source comparison found that the committed launcher omitte
 The reconciled launcher SHA-256 is `b591a73118ba3c7bdc5964b7e63db51bd6447f30d59fc74109ae3fc00a29aff2`, blob `e5052f75f94947a174581159791d39c778e9a48d`. **12 bounded local checks passed**: Bash syntax, absolute-path help without dispatch, parsed overlay paths, fictional remaining counts 0/399 → 75 and 400/5000/unavailable → 0, guard ordering before slots/push, watch interval, candidate hash and an installed comparison showing only the two overlay additions plus trailing whitespace. These checks made no network, host, branch or slot changes.
 
 [Root handoff AUT-2190](/AUT/issues/AUT-2190) remains the single installer. Its prior source-pin blocker is addressed by the reconciled commit; install approval still belongs to the existing review path. No installation, release or production change is claimed. The parent remains open for authorized release inclusion and seven days of release/workbench observation.
+
+## Workbench artifact storage follow-up (22 Oct 2026)
+
+Source baseline: `62be474e43b9a54dd76e42e105ea0def3e475ca2`. Implements the orchestrator's 18:09 UTC request after the reported v0.85 schema-publication storage failure. This is an artifact-growth change; it does not satisfy the outstanding prerequisite reliability acceptance.
+
+- All four workbench upload steps explicitly use `retention-days: 1`: green coverage summaries, failed/cancelled shard diagnostics, `wb-screens`, and `wb-e2e-*` reports. Future uploads receive this lifetime.
+- Green non-targeted Python shards upload only `manifest.json`, with missing summaries treated as an error. Successful targeted runs need no shard artifact. JUnit and the full shard directory upload only on failure/cancellation.
+- Artifact names, SHA/attempt identity, collection patterns and the final complete-coverage check are preserved. The manifest is required by that check, so retaining only this coverage summary avoids weakening test coverage.
+- Release and schema artifact policies are outside this diff. No artifact deletion, settings change, deployment or installed-tool change was performed.
+
+Verification: **5 focused tests passed in 0.30 s**. The policy checks cover every workbench upload, one-day expiry, green/failure payloads, preserved collector identity and missing-manifest failure. A fictional two-shard fixture uploads only manifests, excludes adjacent JUnit diagnostics, and passes the real complete-coverage verifier. The existing release-retention policy regression also passes. Ruff formatting/lint, YAML parsing, diff whitespace and the required `import ac_platform.http` pass. No new hosted full-run verdict is claimed for this workflow-only follow-up; the prerequisite-bundle correction requires its own cold/offline full/e2e proof.

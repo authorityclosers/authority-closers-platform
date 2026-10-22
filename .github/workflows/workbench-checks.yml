@@ -190,14 +190,24 @@ jobs:
               --junitxml "$out/junit.xml" \
               --basetemp "${RUNNER_TEMP}/wb-python-basetemp-${{ matrix.shard }}"
           fi
-      - name: Keep the shard's manifest and JUnit report
-        if: always()
+      # The summary needs the manifest to prove complete coverage. Green shards
+      # retain only this small summary; full reports are useful on failure.
+      - name: Keep only the green shard's coverage summary
+        if: success() && matrix.fam != 'targeted'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-py-${{ matrix.fam }}-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/python-test-shard-${{ matrix.shard }}/manifest.json
+          if-no-files-found: error
+          retention-days: 1
+      - name: Keep the failed shard's manifest and JUnit report
+        if: failure() || cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: wb-py-${{ matrix.fam }}-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/python-test-shard-${{ matrix.shard }}
           if-no-files-found: warn
-          retention-days: 3
+          retention-days: 1
 
   visual:
     needs: plan
@@ -232,7 +242,7 @@ jobs:
             ${{ runner.temp }}/wb-screens/*.png
             ${{ runner.temp }}/wb-screens/receipt.json
           if-no-files-found: warn
-          retention-days: 3
+          retention-days: 1
 
   e2e:
     # Opt-in (`wb-ci --e2e`), never part of --full: the release's Sales Xray browser proofs from application.yml
@@ -327,6 +337,7 @@ jobs:
         with:
           name: wb-e2e-${{ github.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
+          retention-days: 1
           path: |
             ${{ runner.temp }}/sales-xray-static-browser.xml
             ${{ runner.temp }}/sales-xray-acquisition-browser/sales-xray-acquisition-browser-receipt.json
