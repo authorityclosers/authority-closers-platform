@@ -12,7 +12,8 @@
  * `?after-call=1` opens the first lead as if a call to it just ended, so the
  * "How did it go?" sheet shows (Redmi #47: Save says what it still needs);
  * `&tap=next` then saves "Didn't get through" and shows who is next.
- * `?tab=all&stage=open&tap=bulk` ticks two leads and opens Select → Actions.
+ * `?tab=all&stage=open&tap=bulk` ticks two leads and opens Select → Actions;
+ * `tap=bulkwa` goes on to a WhatsApp template and who gets it.
  */
 
 import { Suspense, useEffect, useState } from "react";
@@ -161,6 +162,30 @@ function answers(now: number, path: string): unknown {
       stage_counts[row.stage] = (stage_counts[row.stage] ?? 0) + 1;
     return { leads, total: leads.length, next_offset: null, stage_counts };
   }
+  if (path === "/v1/lead-desk/whatsapp/status")
+    return {
+      numbers: [{ id: "00000000-0000-4000-8000-000000000700" }],
+      templates: [
+        {
+          name: "welcome_lead",
+          language: "en",
+          status: "APPROVED",
+          text: "Hi {{1}}, thanks for your enquiry. When can we call?",
+          parts: 1,
+        },
+      ],
+    };
+  if (path === "/v1/lead-desk/leads/bulk-whatsapp/preview")
+    return {
+      ready: 1,
+      skipped: [
+        { reason: "no_yes", words: "haven't said yes to WhatsApp", count: 1 },
+      ],
+      sent: 0,
+      failed: 0,
+      text: "Hi {name}, thanks for your enquiry. When can we call?",
+      limit: 100,
+    };
   if (path.startsWith("/v1/lead-desk/next")) {
     const after = all[1];
     return {
@@ -442,11 +467,21 @@ function useTap() {
       Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
         .find((button) => button.textContent?.trim().startsWith(text))
         ?.click();
-    if (tap === "next" || tap === "bulk") {
+    if (tap === "next" || tap === "bulk" || tap === "bulkwa") {
       const steps =
         tap === "next"
           ? ["Didn't get through", "No answer", "Save"]
-          : ["Select", "", "", "Actions"];
+          : tap === "bulk"
+            ? ["Select", "", "", "Actions"]
+            : [
+                "Select",
+                "",
+                "",
+                "Actions",
+                "Send a WhatsApp template",
+                "welcome lead",
+                "Check who gets it",
+              ];
       const timers = steps.map((text, index) =>
         window.setTimeout(
           () => {
