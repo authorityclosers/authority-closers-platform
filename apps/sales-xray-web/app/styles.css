@@ -18,18 +18,19 @@
    its System/Light/Dark theme comes from lightbox/tokens.css alone. Values mirror
    the light tokens in lightbox/tokens.css (asserted by lightbox/tokens.test.ts). */
 :where(html:not([data-lx-root])) .xray-app {
-  --lx-ink: #0b1424;
-  --lx-ink-2: #1c2940;
-  --lx-ink-3: #33415a;
-  --lx-muted: #56637a;
-  --lx-muted-2: #646d7f;
-  --lx-line: #e2e7f0;
-  --lx-line-soft: #eaeef5;
-  --lx-line-strong: #cbd3e1;
-  --lx-paper: #f4f6fb;
-  --lx-paper-2: #f9fafd;
+  --lx-ink: #0a0c10;
+  --lx-ink-2: #1d212a;
+  --lx-ink-3: #3a404c;
+  --lx-muted: #5b626e;
+  --lx-muted-2: #646b77;
+  --lx-line: #e4e6eb;
+  --lx-line-soft: #eceef2;
+  --lx-line-strong: #cdd1d8;
+  --lx-paper: #f2f3f7;
+  --lx-paper-2: #f7f8fa;
   --lx-surface: #ffffff;
-  --lx-sunken: #edf1f7;
+  --lx-elevated: #ffffff;
+  --lx-sunken: #ebedf1;
   --lx-film: #0a1220;
   --lx-film-2: #16233a;
   --lx-film-line: rgba(255, 255, 255, 0.06);
@@ -40,15 +41,17 @@
   --lx-film-wave: #3a4c66;
   --lx-film-lens-outline: #e8edf5;
   --lx-film-lens-fill: #ffffff;
-  --lx-teal: #097870;
-  --lx-teal-hover: #06615b;
+  --lx-teal: #07746b;
+  --lx-teal-hover: #05625a;
   --lx-teal-2: #14b8a6;
-  --lx-teal-soft: #dcf6ef;
-  --lx-teal-tint: #eefaf7;
-  --lx-teal-edge: #b6e9de;
+  --lx-teal-soft: #ddf4ef;
+  --lx-teal-tint: #eef9f6;
+  --lx-teal-edge: #b4e6da;
   --lx-glow: #2dd4bf;
   --lx-glow-ink: #0f8b7e;
   --lx-on-teal: #ffffff;
+  --lx-avatar-top: #a3a9b4;
+  --lx-avatar-bottom: #7d838e;
   --lx-strength: #097870;
   --lx-strength-soft: #dcf6ef;
   --lx-strength-edge: #b6e9de;
@@ -118,10 +121,10 @@
   --lx-space-14: 56px;
   --lx-space-18: 72px;
   --lx-radius-xs: 6px;
-  --lx-radius-sm: 10px;
-  --lx-radius-md: 14px;
-  --lx-radius-lg: 20px;
-  --lx-radius-xl: 26px;
+  --lx-radius-sm: 12px;
+  --lx-radius-md: 16px;
+  --lx-radius-lg: 22px;
+  --lx-radius-xl: 30px;
   --lx-radius-pill: 999px;
   --lx-shadow-1: 0 1px 2px rgba(11, 20, 36, 0.05);
   --lx-shadow-2: 0 10px 26px -18px rgba(11, 20, 36, 0.45);
@@ -142,7 +145,7 @@
   --lx-topbar-h: 64px;
   --lx-content-max: 880px;
   --lx-chapter-rail-w: 196px;
-  --lx-bottom-nav-h: 68px;
+  --lx-bottom-nav-h: 78px;
   --lx-mini-player-h: 62px;
   --lx-gradient-brand: linear-gradient(
     135deg,

@@ -34,6 +34,12 @@ refused. When the classic configuration already carries a GPT-6 Luna entry, that
 and none may be given. Switching onto OpenAI asks Admin's OpenAI word
 (``openai_dpa_signed``: the owner confirmed the DPA).
 
+``--brain4`` (with ``--one-pass``; P1, orchestrator 22 Oct 2026) makes that request recipe
+v2, the same read plus the Brain 4.0 part (``one_pass.brain4_part``), on its own profiles
+(``gemini-one-pass-v2``, ``luna-c4-one-pass-v2``, each with ``-flex``) and variants
+(``one_pass_v2[_flex]``, ``luna_c4_v2[_flex]``). No owner words are recorded for it yet, so
+prepare and switch need ``--reason`` with the owner's words, verbatim.
+
 It calls the same service functions as the Admin actions, nothing reimplemented:
 
 - ``prepare``: ``c2_route.derive_configuration(classic, flex=<tier is flex>)`` from today's
@@ -156,6 +162,7 @@ class Command:
     one_pass: bool = False
     luna: bool = False
     report_on: str = "gemini"
+    brain4: bool = False  # recipe v2: the one-pass request plus the Brain 4.0 part
     openai: tuple[tuple[str, str], ...] = ()  # the Luna entry's references, given
     approver: str = APPROVER
     issue: str = ISSUE
@@ -163,11 +170,12 @@ class Command:
 
     @property
     def variant(self) -> str:
-        """standard, flex, one_pass[_flex], luna_c4[_flex] (C5 on Gemini) or luna[_flex]."""
+        """standard, flex, one_pass[_flex], luna_c4[_flex] (C5 on Gemini) or luna[_flex];
+        with --brain4, ``_v2`` after the base (one_pass_v2_flex)."""
         if not self.one_pass:
             return self.tier
         base = ("luna_c4" if self.report_on == "gemini" else "luna") if self.luna else "one_pass"
-        return base + ("_flex" if self.tier == "flex" else "")
+        return base + ("_v2" if self.brain4 else "") + ("_flex" if self.tier == "flex" else "")
 
     @property
     def words(self) -> str:
@@ -188,6 +196,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--one-pass", action="store_true")
     parser.add_argument("--luna", action="store_true")
     parser.add_argument("--report-on", choices=("gemini", "luna"), default="gemini")
+    parser.add_argument("--brain4", action="store_true")
     for field in (*OPENAI_REQUIRED, *OPENAI_RECORDS):
         parser.add_argument("--openai-" + field.removesuffix("_ref").replace("_", "-") + "-ref")
     parser.add_argument("action", choices=COMMANDS)
@@ -262,7 +271,7 @@ def _approval(command: Command) -> dict[str, str]:
 
 
 def _derive(command: Command, classic: Any, variant: str) -> Any:
-    from ac_platform.one_pass import c2_route
+    from ac_platform.one_pass import c2_route, markers
 
     flex = variant.endswith("flex")
     if variant in TIERS:
@@ -275,6 +284,7 @@ def _derive(command: Command, classic: Any, variant: str) -> Any:
         luna=luna,
         openai=_openai_entry(command, classic) if luna else None,
         luna_report=not variant.startswith("luna_c4"),
+        recipe=markers.RECIPE_V2 if "_v2" in variant else markers.RECIPE,
     )
 
 
@@ -516,6 +526,10 @@ async def execute(
         raise Refused("luna_is_the_one_pass_route_add_one_pass")
     if command.openai and not command.luna:
         raise Refused("openai_refs_are_for_luna_only")
+    if command.brain4 and not command.one_pass:
+        raise Refused("brain4_is_the_one_pass_request_add_one_pass")
+    if command.brain4 and command.action in {"prepare", "switch"} and not command.reason:
+        raise Refused("brain4_needs_the_owners_words_reason")
     actor = await _actor(database, command, operations_tenant_id)
     application = (
         ConversationApplication(database)
@@ -697,6 +711,7 @@ def main(
             one_pass=bool(args.one_pass),
             luna=bool(args.luna),
             report_on=args.report_on,
+            brain4=bool(args.brain4),
             reason=args.reason,
             openai=tuple(
                 (field, value)

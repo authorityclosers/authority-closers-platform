@@ -24,7 +24,7 @@ from ac_platform.conversation_intelligence.completion_limits import completion_c
 from ac_platform.conversation_intelligence.gemini_tiers import FLEX_SUFFIX, base_model
 from ac_platform.conversation_intelligence.report_overview import OVERVIEW_MARKER
 from ac_platform.one_pass.markers import RECIPE as ONE_PASS_RECIPE
-from ac_platform.one_pass.markers import is_one_pass
+from ac_platform.one_pass.markers import is_one_pass, recipe_of
 
 # Gemini 3.8 Flash on Flex is its own approved route (gemini_tiers): same prompt.
 GEMINI_TASK_MODELS = frozenset(
@@ -65,13 +65,14 @@ def _config(
     structured_coaching: bool = False,
     structured_schema_version: int = 3,
     one_pass: bool = False,
+    recipe: str = ONE_PASS_RECIPE,
 ) -> dict[str, Any]:
     # Chunked fact prompts keep their 4,000 bound; only the one-pass request is larger.
     ceiling = completion_ceiling(
         "gemini",
         model,
         "C5" if task == "coaching" else "C4",
-        recipe=ONE_PASS_RECIPE if one_pass else None,
+        recipe=recipe if one_pass else None,
     )
     if type(maximum) is not int or not 256 <= maximum <= ceiling:
         raise GeminiTaskError("invalid_max_completion_tokens")
@@ -107,7 +108,8 @@ def _config(
             raise GeminiTaskError("task_prompt_invalid")
         from ac_platform.one_pass import stage
 
-        config["responseJsonSchema"] = stage.schema()
+        # Its recipe's own schema (v2: with the Brain 4.0 part).
+        config["responseJsonSchema"] = stage.schema(recipe)
     return config
 
 
@@ -179,12 +181,14 @@ def prepare_gemini_body(prompt: Mapping[str, Any], *, task: str = "facts") -> di
         and task == "coaching"
         and OVERVIEW_MARKER in messages[0]["content"]
     )
-    one_pass = task == "facts" and is_one_pass(messages[0]["content"])
+    one_pass_recipe = recipe_of(messages[0]["content"]) if task == "facts" else None
+    one_pass = one_pass_recipe is not None
     config = _config(
         prompt["max_completion_tokens"],
         model=model,
         task=task,
         one_pass=one_pass,
+        recipe=one_pass_recipe or ONE_PASS_RECIPE,
         structured_coaching=structured_coaching,
         structured_schema_version=(
             8
@@ -262,10 +266,13 @@ def gemini_prompt_view(
                 raise ValueError
             texts.append(value)
         one_pass = texts[0].startswith(_ONE_PASS_MARKER)
+        one_pass_recipe = (
+            recipe_of(texts[0][len(_ONE_PASS_MARKER + base_model(model) + "\n") :])
+            if one_pass
+            else None
+        )
         if one_pass and (
-            task != "facts"
-            or base_model(model) != "gemini-3.8-flash"
-            or not is_one_pass(texts[0][len(_ONE_PASS_MARKER + base_model(model) + "\n") :])
+            task != "facts" or base_model(model) != "gemini-3.8-flash" or one_pass_recipe is None
         ):
             raise ValueError
         legacy_structured = texts[0].startswith(_STRUCTURED_MARKER_V2)
@@ -352,6 +359,7 @@ def gemini_prompt_view(
             model=model,
             task=task,
             one_pass=one_pass,
+            recipe=one_pass_recipe or ONE_PASS_RECIPE,
             structured_coaching=structured_coaching,
             structured_schema_version=(
                 8

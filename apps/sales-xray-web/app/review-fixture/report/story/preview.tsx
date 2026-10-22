@@ -37,6 +37,12 @@ import { AMIT_SPEAKERS, amitReport, amitTranscript } from "./amit-call";
 import { AMIT_PILLARS } from "./amit-pillars";
 import { exampleView } from "../../../xray-report/example";
 import { AMIT_STRUCTURE } from "./amit-structure";
+import { AMIT_BRAIN4 } from "./amit-brain4";
+import {
+  ReportLookContext,
+  VERSION_1_LOOK,
+  type ReportLook,
+} from "../../../report-settings";
 import type { OutcomeKind } from "../../../xray-report/model";
 import acquisitionStyles from "../../../acquisition-studio.module.css";
 import styles from "../../shell/full-shell-preview.module.css";
@@ -123,21 +129,32 @@ function speakerProfiles(speakers: StoryFixture["speakers"]) {
  * step when a section is added there. No recording, account, analysis or
  * provider call exists; actions only report what they would do.
  */
+// Report settings scoring "brain4_beta": the AI coaching score is the Analysis.
+const COACH_LOOK: ReportLook = { ...VERSION_1_LOOK, scoring: "brain4_beta" };
+
 export function StoryShellPreview({
   fixture = AMIT_FIXTURE,
   example = null,
   apiStructure = false,
+  coach = false,
 }: {
   fixture?: StoryFixture;
   /** The call as the API sends it once an AI pointer review is saved. */
   apiStructure?: boolean;
+  /** The same call with a fictional Brain 4.0 read, scored by Brain 4.0 (AI coaching score). */
+  coach?: boolean;
   /** The 15 Oct doc's illustrative example and its outcome scenario. */
   example?: OutcomeKind | null;
 }) {
   const title = example ? "Siddhant Pawar · discovery call" : fixture.title;
-  const amitReport = apiStructure
-    ? { ...fixture.report, structure: AMIT_STRUCTURE }
-    : fixture.report;
+  const amitReport = coach
+    ? {
+        ...fixture.report,
+        structure: { ...AMIT_STRUCTURE, brain4: AMIT_BRAIN4 },
+      }
+    : apiStructure
+      ? { ...fixture.report, structure: AMIT_STRUCTURE }
+      : fixture.report;
   const FIXTURE_DURATION_MS = fixture.transcript.duration_ms;
   const audio = useRef<HTMLAudioElement>(null);
   // Like the live studio: a light report sheet unless the app is dark.
@@ -161,259 +178,267 @@ export function StoryShellPreview({
     setStatus("Would open the sign-in page. Nothing was sent.");
 
   return (
-    <UploadSessionProvider>
-      <SpeakerProfilesContext.Provider
-        value={speakerProfiles(fixture.speakers)}
-      >
-        <WorkspaceAccessProvider value={FIXTURE_ACCESS}>
-          <AcquisitionShell
-            authenticated
-            pageName="Report"
-            homeHref="/review-fixture/report/story"
-            active="analyse"
-            mobileFit
-            allowance={FIXTURE_ALLOWANCE}
-          >
-            {/* Production's report ancestry: shell main > .xray-app > .studio-main,
-              the report's own scroll container under the mobile-fit shell. */}
-            <div
-              className={`xray-app simple-app ${acquisitionStyles.app} ${styles.page}`}
-              data-theme={resolvedTheme}
-              data-variant="standalone"
-              data-stage="report"
-              data-full-shell-fixture="true"
+    <ReportLookContext.Provider value={coach ? COACH_LOOK : VERSION_1_LOOK}>
+      <UploadSessionProvider>
+        <SpeakerProfilesContext.Provider
+          value={speakerProfiles(fixture.speakers)}
+        >
+          <WorkspaceAccessProvider value={FIXTURE_ACCESS}>
+            <AcquisitionShell
+              authenticated
+              pageName="Report"
+              homeHref="/review-fixture/report/story"
+              active="analyse"
+              mobileFit
+              allowance={FIXTURE_ALLOWANCE}
             >
-              <div className="studio-main">
-                <p className={styles.banner} role="note">
-                  Development fixture · fictional data · no account, recording
-                  or provider call
-                </p>
-                <SourceWaveformProvider audioRef={audio}>
-                  <section
-                    className={`studio-report panel ${acquisitionStyles.report} ${styles.report}`}
-                    aria-label="Sales call report"
-                    data-lx-surface={
-                      resolvedTheme === "dark" ? undefined : "light"
-                    }
-                  >
-                    <ReportHeader
-                      durationMs={FIXTURE_DURATION_MS}
-                      languageLabel={fixture.language}
-                      sourceLabel="Fictional fixture transcript"
-                      label={{
-                        displayName: title,
-                        revision: 1,
-                      }}
-                      claimed
-                      busy={false}
-                      canDownload={false}
-                      canRequestDeletion
-                      deletionDisabled
-                      onOpenTranscript={() => setTranscriptReaderOpen(true)}
-                      onAnalyseAnother={() =>
-                        setStatus("Would open New analysis. Nothing was sent.")
+              {/* Production's report ancestry: shell main > .xray-app > .studio-main,
+              the report's own scroll container under the mobile-fit shell. */}
+              <div
+                className={`xray-app simple-app ${acquisitionStyles.app} ${styles.page}`}
+                data-theme={resolvedTheme}
+                data-variant="standalone"
+                data-stage="report"
+                data-full-shell-fixture="true"
+              >
+                <div className="studio-main">
+                  <p className={styles.banner} role="note">
+                    Development fixture · fictional data · no account, recording
+                    or provider call
+                  </p>
+                  <SourceWaveformProvider audioRef={audio}>
+                    <section
+                      className={`studio-report panel ${acquisitionStyles.report} ${styles.report}`}
+                      aria-label="Sales call report"
+                      data-lx-surface={
+                        resolvedTheme === "dark" ? undefined : "light"
                       }
-                      visual={
-                        <CallMap
-                          callId={FIXTURE_CALL_ID}
-                          transcript={transcript}
-                          report={amitReport}
-                          durationMs={FIXTURE_DURATION_MS}
-                          onSelectEvidence={seek}
-                          onSeek={playFrom}
-                        />
-                      }
-                      context={
-                        <CallContext
-                          callId={FIXTURE_CALL_ID}
-                          report={amitReport}
-                          transcript={transcript}
-                        />
-                      }
-                      compactVisual={
-                        <CallMapMini
-                          report={amitReport}
-                          durationMs={FIXTURE_DURATION_MS}
-                          onSeek={playFrom}
-                        />
-                      }
-                      onDownload={() => {}}
-                      onRequestDeletion={() => {}}
-                    />
-                    <ReportModes
-                      fixture
-                      illustration={example ? exampleView(example) : null}
-                      documentData={{
-                        report: amitReport,
-                        transcript,
-                        title,
-                      }}
-                      label="Explore your sales report"
-                      lightSurface={resolvedTheme !== "dark"}
-                      boundCallId={FIXTURE_CALL_ID}
-                      onSelectEvidence={selectSource}
-                      panels={[
-                        {
-                          id: "overview",
-                          label: "Overview",
-                          content: (
-                            <OverviewHook
-                              report={amitReport}
-                              transcript={transcript}
-                              callId={FIXTURE_CALL_ID}
-                              onSeek={playFrom}
-                              onUnlock={unlock}
-                            />
-                          ),
-                        },
-                        {
-                          id: "moments",
-                          label: "Moments",
-                          content: (
-                            <ReportMoments
-                              report={amitReport}
-                              callId={FIXTURE_CALL_ID}
-                              transcript={transcript}
-                              onSelectEvidence={seek}
-                              onSelectContextualPlayback={(_selection, title) =>
-                                setStatus(
-                                  `Would play with context · ${title}. No audio exists in this fixture.`,
-                                )
-                              }
-                              onUnlock={unlock}
-                            />
-                          ),
-                        },
-                        {
-                          id: "prospect",
-                          label: "Prospect",
-                          content: (
-                            <>
-                              <KeyFacts
-                                callId={null}
-                                transcript={transcript}
+                    >
+                      <ReportHeader
+                        durationMs={FIXTURE_DURATION_MS}
+                        languageLabel={fixture.language}
+                        sourceLabel="Fictional fixture transcript"
+                        label={{
+                          displayName: title,
+                          revision: 1,
+                        }}
+                        claimed
+                        busy={false}
+                        canDownload={false}
+                        canRequestDeletion
+                        deletionDisabled
+                        onOpenTranscript={() => setTranscriptReaderOpen(true)}
+                        onAnalyseAnother={() =>
+                          setStatus(
+                            "Would open New analysis. Nothing was sent.",
+                          )
+                        }
+                        visual={
+                          <CallMap
+                            callId={FIXTURE_CALL_ID}
+                            transcript={transcript}
+                            report={amitReport}
+                            durationMs={FIXTURE_DURATION_MS}
+                            onSelectEvidence={seek}
+                            onSeek={playFrom}
+                          />
+                        }
+                        context={
+                          <CallContext
+                            callId={FIXTURE_CALL_ID}
+                            report={amitReport}
+                            transcript={transcript}
+                          />
+                        }
+                        compactVisual={
+                          <CallMapMini
+                            report={amitReport}
+                            durationMs={FIXTURE_DURATION_MS}
+                            onSeek={playFrom}
+                          />
+                        }
+                        onDownload={() => {}}
+                        onRequestDeletion={() => {}}
+                      />
+                      <ReportModes
+                        fixture
+                        fixtureLook={coach ? COACH_LOOK : undefined}
+                        illustration={example ? exampleView(example) : null}
+                        documentData={{
+                          report: amitReport,
+                          transcript,
+                          title,
+                        }}
+                        label="Explore your sales report"
+                        lightSurface={resolvedTheme !== "dark"}
+                        boundCallId={FIXTURE_CALL_ID}
+                        onSelectEvidence={selectSource}
+                        panels={[
+                          {
+                            id: "overview",
+                            label: "Overview",
+                            content: (
+                              <OverviewHook
                                 report={amitReport}
-                                durationMs={FIXTURE_DURATION_MS}
+                                transcript={transcript}
+                                callId={FIXTURE_CALL_ID}
                                 onSeek={playFrom}
+                                onUnlock={unlock}
                               />
-                              <ProspectSnapshot
+                            ),
+                          },
+                          {
+                            id: "moments",
+                            label: "Moments",
+                            content: (
+                              <ReportMoments
+                                report={amitReport}
+                                callId={FIXTURE_CALL_ID}
+                                transcript={transcript}
+                                onSelectEvidence={seek}
+                                onSelectContextualPlayback={(
+                                  _selection,
+                                  title,
+                                ) =>
+                                  setStatus(
+                                    `Would play with context · ${title}. No audio exists in this fixture.`,
+                                  )
+                                }
+                                onUnlock={unlock}
+                              />
+                            ),
+                          },
+                          {
+                            id: "prospect",
+                            label: "Prospect",
+                            content: (
+                              <>
+                                <KeyFacts
+                                  callId={null}
+                                  transcript={transcript}
+                                  report={amitReport}
+                                  durationMs={FIXTURE_DURATION_MS}
+                                  onSeek={playFrom}
+                                />
+                                <ProspectSnapshot
+                                  report={amitReport}
+                                  callId={FIXTURE_CALL_ID}
+                                  transcript={transcript}
+                                  onSelectEvidence={seek}
+                                  onUnlock={unlock}
+                                />
+                              </>
+                            ),
+                          },
+                          {
+                            id: "next-call-plan",
+                            label: "Next-call plan",
+                            compactLabel: "Next-call",
+                            content: (
+                              <NextCallPlan
                                 report={amitReport}
                                 callId={FIXTURE_CALL_ID}
                                 transcript={transcript}
                                 onSelectEvidence={seek}
                                 onUnlock={unlock}
                               />
-                            </>
-                          ),
-                        },
-                        {
-                          id: "next-call-plan",
-                          label: "Next-call plan",
-                          compactLabel: "Next-call",
-                          content: (
-                            <NextCallPlan
-                              report={amitReport}
-                              callId={FIXTURE_CALL_ID}
-                              transcript={transcript}
-                              onSelectEvidence={seek}
-                              onUnlock={unlock}
-                            />
-                          ),
-                        },
-                        {
-                          id: "skills",
-                          label: "Sales skills",
-                          compactLabel: "Skills",
-                          content: (
-                            <SalesSkills
-                              dimensions={amitReport.dimensions}
-                              callId={FIXTURE_CALL_ID}
-                              transcript={transcript}
-                              onSelectEvidence={seek}
-                            />
-                          ),
-                        },
-                        {
-                          id: "signals",
-                          label: "Call signals",
-                          content: (
-                            <CallSignals
-                              callId={FIXTURE_CALL_ID}
-                              transcript={transcript}
-                              onSeek={playFrom}
-                            />
-                          ),
-                        },
-                        {
-                          id: "transcript",
-                          label: "Transcript",
-                          content: (
-                            <ReportTranscript
-                              transcript={transcript}
-                              callId={FIXTURE_CALL_ID}
-                              language="en"
-                              onSelect={(segment) =>
-                                selectSource(
-                                  {
-                                    segment_id: segment.id,
-                                    quote: segment.text,
-                                    start_ms: segment.start_ms,
-                                    end_ms: segment.end_ms,
-                                  },
-                                  "Transcript excerpt",
-                                )
-                              }
-                            />
-                          ),
-                        },
-                        {
-                          id: "raw-data",
-                          label: "Raw data",
-                          content: (
-                            <ReportRawData
-                              callId={FIXTURE_CALL_ID}
-                              transcript={transcript}
-                              report={amitReport}
-                              durationMs={FIXTURE_DURATION_MS}
-                              runId={null}
-                              onSeek={playFrom}
-                            />
-                          ),
-                        },
-                      ]}
+                            ),
+                          },
+                          {
+                            id: "skills",
+                            label: "Sales skills",
+                            compactLabel: "Skills",
+                            content: (
+                              <SalesSkills
+                                dimensions={amitReport.dimensions}
+                                callId={FIXTURE_CALL_ID}
+                                transcript={transcript}
+                                onSelectEvidence={seek}
+                              />
+                            ),
+                          },
+                          {
+                            id: "signals",
+                            label: "Call signals",
+                            content: (
+                              <CallSignals
+                                callId={FIXTURE_CALL_ID}
+                                transcript={transcript}
+                                onSeek={playFrom}
+                              />
+                            ),
+                          },
+                          {
+                            id: "transcript",
+                            label: "Transcript",
+                            content: (
+                              <ReportTranscript
+                                transcript={transcript}
+                                callId={FIXTURE_CALL_ID}
+                                language="en"
+                                onSelect={(segment) =>
+                                  selectSource(
+                                    {
+                                      segment_id: segment.id,
+                                      quote: segment.text,
+                                      start_ms: segment.start_ms,
+                                      end_ms: segment.end_ms,
+                                    },
+                                    "Transcript excerpt",
+                                  )
+                                }
+                              />
+                            ),
+                          },
+                          {
+                            id: "raw-data",
+                            label: "Raw data",
+                            content: (
+                              <ReportRawData
+                                callId={FIXTURE_CALL_ID}
+                                transcript={transcript}
+                                report={amitReport}
+                                durationMs={FIXTURE_DURATION_MS}
+                                runId={null}
+                                onSeek={playFrom}
+                              />
+                            ),
+                          },
+                        ]}
+                      />
+                      <ReportScrollRail />
+                      <TranscriptReader
+                        isOpen={transcriptReaderOpen}
+                        onClose={() => setTranscriptReaderOpen(false)}
+                        transcript={transcript}
+                        report={amitReport}
+                        callId={FIXTURE_CALL_ID}
+                        callTitle={title}
+                        onSeek={playFrom}
+                        audioAvailable
+                      />
+                      <p
+                        className={styles.status}
+                        role="status"
+                        aria-label="Fixture action status"
+                        aria-live="polite"
+                      >
+                        {status}
+                      </p>
+                    </section>
+                    <CallAudioDock
+                      audioRef={audio}
+                      src=""
+                      durationMs={FIXTURE_DURATION_MS}
+                      title="Fictional fixture · no audio"
                     />
-                    <ReportScrollRail />
-                    <TranscriptReader
-                      isOpen={transcriptReaderOpen}
-                      onClose={() => setTranscriptReaderOpen(false)}
-                      transcript={transcript}
-                      report={amitReport}
-                      callId={FIXTURE_CALL_ID}
-                      callTitle={title}
-                      onSeek={playFrom}
-                      audioAvailable
-                    />
-                    <p
-                      className={styles.status}
-                      role="status"
-                      aria-label="Fixture action status"
-                      aria-live="polite"
-                    >
-                      {status}
-                    </p>
-                  </section>
-                  <CallAudioDock
-                    audioRef={audio}
-                    src=""
-                    durationMs={FIXTURE_DURATION_MS}
-                    title="Fictional fixture · no audio"
-                  />
-                </SourceWaveformProvider>
+                  </SourceWaveformProvider>
+                </div>
               </div>
-            </div>
-          </AcquisitionShell>
-        </WorkspaceAccessProvider>
-      </SpeakerProfilesContext.Provider>
-    </UploadSessionProvider>
+            </AcquisitionShell>
+          </WorkspaceAccessProvider>
+        </SpeakerProfilesContext.Provider>
+      </UploadSessionProvider>
+    </ReportLookContext.Provider>
   );
 }

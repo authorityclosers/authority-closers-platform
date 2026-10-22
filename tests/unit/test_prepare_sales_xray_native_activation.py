@@ -35,6 +35,20 @@ _APPROVER_ID = UUID("30000000-0000-4000-8000-000000000004")
 _BUDGET_SCOPE_ID = UUID("40000000-0000-4000-8000-000000000005")
 
 
+@pytest.fixture(autouse=True)
+def fictional_openai_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Do not inspect any real managed identity tree during offline tests."""
+
+    original = Path.lstat
+
+    def inspect(path: Path, *args, **kwargs):
+        if path == Path("/etc/authority-closers"):
+            raise FileNotFoundError
+        return original(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", inspect)
+
+
 def test_prepare_rejects_native_artifact_from_different_release(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -166,27 +180,30 @@ def _env_values() -> dict[str, str]:
 def test_prepare_keeps_openai_identity_optional_for_existing_four_provider_env() -> None:
     values = _env_values()
     parsed = _MODULE._parse_env(
-        "".join(f"{key}={values[key]}\n" for key in sorted(values)).encode()
+        "".join(f"{key}={values[key]}\n" for key in sorted(values)).encode(), "staging"
     )
     assert "AC_XRAY_OPENAI_IDENTITY_DIR" not in parsed
 
 
-def test_prepare_accepts_openai_identity_only_as_an_absolute_optional_path() -> None:
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_prepare_accepts_only_the_environment_openai_identity_path(environment: str) -> None:
     values = _env_values()
-    values["AC_XRAY_OPENAI_IDENTITY_DIR"] = str(_MODULE.OPENAI_HOST_IDENTITY_DIR)
+    values["AC_XRAY_OPENAI_IDENTITY_DIR"] = _MODULE.OPENAI_HOST_IDENTITY_DIRS[environment]
     parsed = _MODULE._parse_env(
-        "".join(f"{key}={values[key]}\n" for key in sorted(values)).encode()
+        "".join(f"{key}={values[key]}\n" for key in sorted(values)).encode(), environment
     )
     assert parsed["AC_XRAY_OPENAI_IDENTITY_DIR"] == values["AC_XRAY_OPENAI_IDENTITY_DIR"]
 
     values["AC_XRAY_OPENAI_IDENTITY_DIR"] = "/etc/authority-closers/secrets/sales-xray/identities"
     with pytest.raises(_MODULE.PrepareError, match="dedicated host path"):
-        _MODULE._parse_env("".join(f"{key}={values[key]}\n" for key in sorted(values)).encode())
+        _MODULE._parse_env(
+            "".join(f"{key}={values[key]}\n" for key in sorted(values)).encode(), environment
+        )
 
 
 def test_prepare_binds_openai_directory_to_dedicated_overlay_and_token_path() -> None:
-    descriptor = {"compose_overlay": _MODULE.OPENAI_OVERLAY}
-    openai_identity_dir = str(_MODULE.OPENAI_HOST_IDENTITY_DIR)
+    descriptor = {"environment": "staging", "compose_overlay": _MODULE.OPENAI_OVERLAY}
+    openai_identity_dir = _MODULE.OPENAI_HOST_IDENTITY_DIRS["staging"]
     env = {"AC_XRAY_OPENAI_IDENTITY_DIR": openai_identity_dir}
     service = {
         "providers": [
@@ -207,7 +224,7 @@ def test_prepare_binds_openai_directory_to_dedicated_overlay_and_token_path() ->
 
 
 def test_prepare_rejects_openai_mount_without_provider_and_missing_path() -> None:
-    env = {"AC_XRAY_OPENAI_IDENTITY_DIR": str(_MODULE.OPENAI_HOST_IDENTITY_DIR)}
+    env = {"AC_XRAY_OPENAI_IDENTITY_DIR": _MODULE.OPENAI_HOST_IDENTITY_DIRS["staging"]}
     with pytest.raises(_MODULE.PrepareError, match="unexpected without an OpenAI provider"):
         _MODULE._validate_openai_identity_selection(
             {"compose_overlay": _MODULE.OVERLAY},
@@ -220,6 +237,84 @@ def test_prepare_rejects_openai_mount_without_provider_and_missing_path() -> Non
             {},
             {"providers": [{"provider_id": "openai", "token_file_ref": _MODULE.OPENAI_TOKEN_FILE}]},
         )
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_prepare_openai_directory_refuses_other_environments_and_path_aliases(
+    environment: str,
+) -> None:
+    prefix = "/etc/authority-closers/secrets/sales-xray/identities"
+    expected = f"{prefix}/{environment}/openai"
+    assert str(_MODULE._openai_identity_dir(expected, environment)) == expected
+    other = "production" if environment == "staging" else "staging"
+    for invalid in (
+        f"{prefix}/{other}/openai",
+        f"{prefix}/openai",
+        prefix,
+        f"{prefix}/{environment}",
+        f"{prefix}/{environment}/../{environment}/openai",
+        f"{expected}/.",
+        f"{expected}/",
+        f"{expected}/token",
+        "/arbitrary/openai",
+        "relative/openai",
+        None,
+    ):
+        with pytest.raises(_MODULE.PrepareError, match="dedicated host path"):
+            _MODULE._openai_identity_dir(invalid, environment)
+    with pytest.raises(_MODULE.PrepareError, match="dedicated host path"):
+        _MODULE._openai_identity_dir(expected, "development")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX host metadata contract")
+@pytest.mark.parametrize("component", ["ancestor", "leaf"])
+def test_prepare_rejects_existing_openai_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, component: str
+) -> None:
+    real = tmp_path / "real"
+    (real / "openai").mkdir(parents=True)
+    link = tmp_path / "link"
+    link.symlink_to(real if component == "ancestor" else real / "openai", target_is_directory=True)
+    identity = link / "openai" if component == "ancestor" else link
+    monkeypatch.setitem(_MODULE.OPENAI_HOST_IDENTITY_DIRS, "staging", str(identity))
+    with pytest.raises(_MODULE.PrepareError, match="symbolic links"):
+        _MODULE._openai_identity_dir(str(identity), "staging")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX host metadata contract")
+def test_prepare_fails_closed_on_openai_metadata_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def denied(_path):
+        raise PermissionError
+
+    monkeypatch.setattr(Path, "lstat", denied)
+    with pytest.raises(_MODULE.PrepareError, match="metadata is unavailable"):
+        _MODULE._openai_identity_dir(_MODULE.OPENAI_HOST_IDENTITY_DIRS["staging"], "staging")
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+@pytest.mark.parametrize("openai", [False, True])
+def test_prepare_load_source_binds_openai_to_descriptor_environment(
+    tmp_path: Path, environment: str, openai: bool
+) -> None:
+    source, _ = _write_source_activation(tmp_path, environment=environment, openai=openai)
+    descriptor, _, env, *_ = _MODULE._load_source(source)
+    assert descriptor["environment"] == environment
+    if openai:
+        assert env["AC_XRAY_OPENAI_IDENTITY_DIR"].endswith(f"/{environment}/openai")
+        # Rebind the env digest so rejection proves environment isolation,
+        # rather than a stale-digest check. No source credentials are involved.
+        other = "production" if environment == "staging" else "staging"
+        env["AC_XRAY_OPENAI_IDENTITY_DIR"] = _MODULE.OPENAI_HOST_IDENTITY_DIRS[other]
+        env_raw = _MODULE._env_bytes(env)
+        Path(descriptor["compose_env_file"]).write_bytes(env_raw)
+        descriptor["compose_env_sha256"] = hashlib.sha256(env_raw).hexdigest()
+        source.write_bytes(_MODULE._json_bytes(descriptor))
+        with pytest.raises(_MODULE.PrepareError, match="dedicated host path"):
+            _MODULE._load_source(source)
+    else:
+        assert "AC_XRAY_OPENAI_IDENTITY_DIR" not in env
 
 
 def _hosted_approval(
@@ -283,7 +378,9 @@ def _hosted_approval(
     ).to_json()
 
 
-def _write_source_activation(tmp_path: Path) -> tuple[Path, dict[str, bytes]]:
+def _write_source_activation(
+    tmp_path: Path, *, environment: str = "staging", openai: bool = False
+) -> tuple[Path, dict[str, bytes]]:
     source_dir = tmp_path / "source"
     source_dir.mkdir()
     release_id = "1" * 40
@@ -292,14 +389,14 @@ def _write_source_activation(tmp_path: Path) -> tuple[Path, dict[str, bytes]]:
     approval_path = source_dir / "source-approval.json"
     approval_raw = (
         b'{"schema":"ac.sales-xray.hosted-approval/1",'
-        b'"environment":"staging",'
-        b'"provider_control_tenant_id":"10000000-0000-4000-8000-000000000001"}\n'
+        + f'"environment":"{environment}",'.encode()
+        + b'"provider_control_tenant_id":"10000000-0000-4000-8000-000000000001"}\n'
     )
     approval_path.write_bytes(approval_raw)
     service_path = source_dir / "service.json"
     service = {
         "schema_version": "ac.sales_xray.worker_service/1",
-        "environment": "staging",
+        "environment": environment,
         "release_id": release_id,
         "operations_tenant_id": str(_TENANT_ID),
         "sales_xray_enabled": True,
@@ -323,6 +420,10 @@ def _write_source_activation(tmp_path: Path) -> tuple[Path, dict[str, bytes]]:
             }
         ],
     }
+    if openai:
+        service["providers"].append(
+            {"provider_id": "openai", "token_file_ref": _MODULE.OPENAI_TOKEN_FILE}
+        )
     service_raw = _MODULE._json_bytes(service)
     service_path.write_bytes(service_raw)
 
@@ -337,15 +438,17 @@ def _write_source_activation(tmp_path: Path) -> tuple[Path, dict[str, bytes]]:
             "AC_XRAY_NATIVE_IMAGE_REF": image_ref,
         }
     )
+    if openai:
+        env["AC_XRAY_OPENAI_IDENTITY_DIR"] = _MODULE.OPENAI_HOST_IDENTITY_DIRS[environment]
     env_raw = _MODULE._env_bytes(env)
     env_path.write_bytes(env_raw)
 
     descriptor_path = source_dir / "activation.json"
     descriptor = {
         "schema_version": "ac.sales_xray.hosted_activation/1",
-        "environment": "staging",
+        "environment": environment,
         "release_id": release_id,
-        "compose_overlay": _MODULE.OVERLAY,
+        "compose_overlay": _MODULE.OPENAI_OVERLAY if openai else _MODULE.OVERLAY,
         "compose_profile": _MODULE.PROFILE,
         "compose_env_file": str(env_path),
         "compose_env_sha256": hashlib.sha256(env_raw).hexdigest(),
@@ -355,7 +458,7 @@ def _write_source_activation(tmp_path: Path) -> tuple[Path, dict[str, bytes]]:
         "approval_sha256": hashlib.sha256(approval_raw).hexdigest(),
         "native_image_ref": image_ref,
         "native_image_config_id": config_id,
-        "helper_unit": "sales-xray-native@staging.service",
+        "helper_unit": f"sales-xray-native@{environment}.service",
         "previous_release_policy": "exact_target_release",
     }
     descriptor_raw = _MODULE._json_bytes(descriptor)

@@ -20,7 +20,11 @@ instead of reading the transcript again:
   engine's deep read (development and staging) leaves them to this.
 
 A review part that does not parse is left to today's pointer review (one more Gemini
-read), so nothing is lost. Nothing logged contains transcript text or answers.
+read), so nothing is lost. A v2 read (``markers.RECIPE_V2``, ``brain4_part``) also answers
+Brain 4.0's 18-skill review: its block is saved inside the published pointer review, where
+the Report reads it and the shadow read leaves the call alone; a block that does not parse
+is left out (the shadow read fills in) and never costs the review. Nothing logged contains
+transcript text or answers.
 """
 
 from __future__ import annotations
@@ -53,6 +57,8 @@ class Read:
     response_sha256: str
     provider: str
     model: str
+    # v1, or v2 with the Brain 4.0 part (one_pass.brain4_part).
+    recipe: str = markers.RECIPE
 
 
 def c4_read(connection: Any, report: Mapping[str, Any]) -> Read | None:
@@ -134,7 +140,8 @@ def c4_read(connection: Any, report: Mapping[str, Any]) -> Read | None:
     ).first()
     if row is None or not isinstance(row.manifest, Mapping):
         return None
-    if row.manifest.get("revision") != markers.RECIPE:
+    recipe = row.manifest.get("revision")
+    if recipe not in markers.RECIPES:
         return None
     receipt = connection.execute(select(Job.provider_receipt).where(Job.id == row.job_id)).scalar()
     if not isinstance(receipt, Mapping):
@@ -161,6 +168,7 @@ def c4_read(connection: Any, report: Mapping[str, Any]) -> Read | None:
         response_sha256=response,
         provider=provider,
         model=model,
+        recipe=str(recipe),
     )
 
 
@@ -268,7 +276,7 @@ def publish(
     from ac_platform.call_data import engine
     from ac_platform.call_data.deep_runner import _frames, measured
     from ac_platform.conversation_intelligence import pointer_review
-    from ac_platform.one_pass import analysis
+    from ac_platform.one_pass import analysis, brain4_part
     from ac_platform.one_pass.publish import _save_deep
 
     now = now or datetime.now(UTC)
@@ -281,6 +289,13 @@ def publish(
         # Luna): calibrated by the model that answered, and shown as a beta
         # (one_pass.calibration; owner, 21 Oct 2026).
         review = calibration.calibrate(review, model=read.model)
+        if read.recipe == markers.RECIPE_V2:
+            # Brain 4.0 (beta), saved beside the pointers; read-time calibration and the
+            # category roll-up apply when the Report reads it (pointer_review).
+            block, code = brain4_part.parse(answer, segments, withheld=frozenset(withheld))
+            line["brain4"] = code if block is not None else "unusable:" + code
+            if block is not None:
+                review = {**review, brain4_part.PART: block}
     if _reviewed(connection, report):
         line["review"] = "already_saved"
     elif review is None:
@@ -340,4 +355,4 @@ def one_pass_plans(connection: Any, recording_ids: Iterable[UUID]) -> set[UUID]:
         ),
         {"ids": ids, "since": datetime.now(UTC) - timedelta(days=30)},
     ).mappings()
-    return {row["recording_id"] for row in rows if row["c4_recipe"] == markers.RECIPE}
+    return {row["recording_id"] for row in rows if row["c4_recipe"] in markers.RECIPES}

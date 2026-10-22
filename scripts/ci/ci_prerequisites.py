@@ -7,13 +7,18 @@ overall deadline, retries a bounded number of times and fails closed with a
 short diagnostic. Packages that are already installed are not fetched again.
 The browser comes from the Playwright package in the frozen uv environment that
 runs this helper; its system libraries come from that same Playwright's own
-dependency list, installed in one apt transaction with the codec tools.
+dependency list (or the frozen pnpm package for Node browser jobs). CI caches the
+complete Debian transaction and the locked browser, then installs with downloads
+disabled on a cache hit. The first fill retains bounded network retries.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
+import platform
 import re
 import shutil
 import signal
@@ -22,6 +27,7 @@ import sys
 import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 
 COMPONENTS = ("codec", "filesystem", "browser")
 CODEC_PACKAGES = ("ffmpeg",)
@@ -49,6 +55,8 @@ APT_OPTIONS = (
     "Acquire::https::Timeout=20",
     "-o",
     "DPkg::Lock::Timeout=60",
+    "-o",
+    "APT::Keep-Downloaded-Packages=true",
 )
 PLAYWRIGHT_ENV = {"PLAYWRIGHT_DOWNLOAD_CONNECTION_TIMEOUT": "30000"}
 DRY_RUN_PACKAGES = re.compile(r"apt-get install -y --no-install-recommends ([^\"\n]+)")
@@ -118,6 +126,9 @@ class Prerequisites:
     python: str = sys.executable
     deadline_seconds: float = DEADLINE_SECONDS
     log: Callable[[str], None] = field(default=lambda line: print(line, flush=True))
+    package_cache: Path | None = None
+    offline: bool = False
+    node_browser: bool = False
 
     def __post_init__(self) -> None:
         self._deadline = self.clock() + self.deadline_seconds
@@ -178,7 +189,7 @@ class Prerequisites:
 
     def browser_packages(self) -> list[str]:
         result = self.runner(
-            [self.python, "-m", "playwright", "install-deps", "--dry-run", BROWSER],
+            [*self.playwright, "install-deps", "--dry-run", BROWSER],
             PROBE_SECONDS,
             None,
         )
@@ -188,7 +199,145 @@ class Prerequisites:
             raise PrerequisiteError("locked Playwright did not report its Chromium system packages")
         return packages
 
+    @property
+    def playwright(self) -> list[str]:
+        return (
+            ["pnpm", "exec", "playwright"]
+            if self.node_browser
+            else [self.python, "-m", "playwright"]
+        )
+
+    def packages(self, components: Sequence[str]) -> list[str]:
+        wanted = set(components)
+        return list(
+            dict.fromkeys(
+                (list(CODEC_PACKAGES) if "codec" in wanted else [])
+                + (list(FILESYSTEM_PACKAGES) if "filesystem" in wanted else [])
+                + (self.browser_packages() if "browser" in wanted else [])
+            )
+        )
+
+    def cache_key(self, components: Sequence[str]) -> str:
+        # A transaction depends on both the requested packages and the runner's
+        # installed baseline. Never reuse a partial match across image revisions.
+        root = Path(__file__).resolve().parents[2]
+        identity = {
+            "packages": self.packages(components),
+            # GitHub runner image variables intentionally use mixed case.
+            "image": [os.environ.get("ImageOS"), os.environ.get("ImageVersion")],  # noqa: SIM112
+            "os": Path("/etc/os-release").read_text(),
+            "arch": platform.machine(),
+            "runtime": "node" if self.node_browser else "python",
+            "sources": [
+                hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in (Path(__file__), root / "uv.lock", root / "pnpm-lock.yaml")
+            ],
+        }
+        digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()
+        return f"ci-prerequisites-v1-{digest}"
+
+    def install_cached_packages(self, packages: Sequence[str]) -> None:
+        assert self.package_cache is not None
+        directory = self.package_cache.resolve()
+        directory.mkdir(parents=True, exist_ok=True)
+        manifest = directory / "manifest.json"
+        missing = [name for name in packages if not self.installed(name)]
+        if manifest.exists():
+            try:
+                record = json.loads(manifest.read_text())
+                archives = sorted(directory.glob("*.deb"))
+                hashes = {p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in archives}
+                if record != {"packages": list(packages), "archives": hashes}:
+                    raise ValueError("package list or archive hashes differ")
+                if missing and not archives:
+                    raise ValueError("missing packages with no cached archives")
+            except (OSError, ValueError) as error:
+                raise PrerequisiteError(f"invalid package cache: {error}") from error
+            self.log(f"apt cache: verified {len(archives)} Debian archives; no mirror access")
+        else:
+            if self.offline:
+                raise PrerequisiteError(
+                    "package cache hit has no manifest; refusing mirror fallback"
+                )
+            if missing:
+                self._attempt(
+                    "apt-get update",
+                    lambda limit: self._sudo(limit, "apt-get", *APT_OPTIONS, "update"),
+                    UPDATE_SECONDS,
+                )
+                # Capture the complete solver transaction, including transitive
+                # dependencies and upgrades, before any package is installed.
+                self._attempt(
+                    "apt-get download",
+                    lambda limit: self._sudo(
+                        limit,
+                        "apt-get",
+                        *APT_OPTIONS,
+                        "-o",
+                        f"Dir::Cache::archives={directory}/",
+                        "install",
+                        "--yes",
+                        "--no-install-recommends",
+                        "--download-only",
+                        *missing,
+                    ),
+                    INSTALL_SECONDS,
+                )
+            archives = sorted(directory.glob("*.deb"))
+            if missing and not archives:
+                raise PrerequisiteError("apt download produced no Debian archives")
+
+        if missing:
+            self._attempt(
+                "apt-get offline install",
+                lambda limit: self._sudo(
+                    limit,
+                    "apt-get",
+                    *APT_OPTIONS,
+                    "-o",
+                    f"Dir::Cache::archives={directory}/",
+                    "install",
+                    "--yes",
+                    "--no-install-recommends",
+                    "--no-download",
+                    "--no-remove",
+                    *(str(path) for path in archives),
+                ),
+                INSTALL_SECONDS,
+                before_retry=self.repair_dpkg,
+            )
+        still_missing = [name for name in packages if not self.installed(name)]
+        if still_missing:
+            raise PrerequisiteError(f"apt cache: still missing {' '.join(still_missing)}")
+        # Only publish a complete, successfully installed transaction. Save the
+        # cache before downstream tests so an unrelated failure cannot lose it.
+        manifest.write_text(
+            json.dumps(
+                {
+                    "packages": list(packages),
+                    "archives": {
+                        p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in archives
+                    },
+                },
+                sort_keys=True,
+            )
+            + "\n"
+        )
+
+    def repair_dpkg(self) -> None:
+        limit = min(REPAIR_SECONDS, self._remaining("dpkg repair"))
+        self.runner(
+            self._sudo(limit, "dpkg", "--configure", "-a"),
+            limit + KILL_GRACE_SECONDS * 2,
+            None,
+        )
+
     def install_packages(self, packages: Sequence[str]) -> None:
+        if self.package_cache is not None:
+            self.install_cached_packages(packages)
+            return
+        if self.offline:
+            raise PrerequisiteError("offline prerequisites require a package cache directory")
         missing = [name for name in dict.fromkeys(packages) if not self.installed(name)]
         if not missing:
             self.log(f"apt: all {len(packages)} required packages already installed")
@@ -199,15 +348,6 @@ class Prerequisites:
             lambda limit: self._sudo(limit, "apt-get", *APT_OPTIONS, "update"),
             UPDATE_SECONDS,
         )
-
-        def repair() -> None:
-            # A killed install can leave dpkg half-configured; finish it first.
-            limit = min(REPAIR_SECONDS, self._remaining("dpkg repair"))
-            self.runner(
-                self._sudo(limit, "dpkg", "--configure", "-a"),
-                limit + KILL_GRACE_SECONDS * 2,
-                None,
-            )
 
         self._attempt(
             "apt-get install",
@@ -221,7 +361,7 @@ class Prerequisites:
                 *missing,
             ),
             INSTALL_SECONDS,
-            before_retry=repair,
+            before_retry=self.repair_dpkg,
         )
         still_missing = [name for name in missing if not self.installed(name)]
         if still_missing:
@@ -241,13 +381,30 @@ class Prerequisites:
     def install_browser(self) -> None:
         self._attempt(
             "playwright install",
-            lambda _limit: [self.python, "-m", "playwright", "install", BROWSER],
+            lambda _limit: [*self.playwright, "install", BROWSER],
             DOWNLOAD_SECONDS,
             env=PLAYWRIGHT_ENV,
         )
 
     def prove_browser(self) -> None:
-        result = self.runner([self.python, "-c", BROWSER_PROBE], PROBE_SECONDS, None)
+        argv = [self.python, "-c", BROWSER_PROBE]
+        if self.node_browser:
+            argv = [
+                "node",
+                "-e",
+                """
+const { chromium } = require('playwright');
+(async () => {
+  const browser = await chromium.launch();
+  const page = await browser.newPage();
+  await page.setContent('<p id=ok>ok</p>');
+  if (await page.innerText('#ok') !== 'ok') throw new Error('browser probe failed');
+  console.log('chromium', browser.version());
+  await browser.close();
+})().catch(error => { console.error(error); process.exit(1); });
+""",
+            ]
+        result = self.runner(argv, PROBE_SECONDS, None)
         if result.returncode != 0 or result.timed_out:
             tail = "\n".join(result.stdout.strip().splitlines()[-15:])
             if tail:
@@ -257,14 +414,7 @@ class Prerequisites:
 
     def require(self, components: Sequence[str]) -> None:
         wanted = set(components)
-        packages: list[str] = []
-        if "codec" in wanted:
-            packages += CODEC_PACKAGES
-        if "filesystem" in wanted:
-            packages += FILESYSTEM_PACKAGES
-        if "browser" in wanted:
-            packages += self.browser_packages()
-        self.install_packages(packages)
+        self.install_packages(self.packages(components))
         if "codec" in wanted:
             self.require_commands(CODEC_COMMANDS)
             for command in CODEC_COMMANDS:
@@ -272,16 +422,27 @@ class Prerequisites:
         if "filesystem" in wanted:
             self.require_commands(FILESYSTEM_COMMANDS)
         if "browser" in wanted:
-            self.install_browser()
+            if not self.offline:
+                self.install_browser()
             self.prove_browser()
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("components", nargs="+", choices=COMPONENTS)
+    parser.add_argument("--package-cache", type=Path)
+    parser.add_argument("--offline", action="store_true")
+    parser.add_argument("--node-browser", action="store_true")
+    parser.add_argument("--cache-key", action="store_true")
     args = parser.parse_args(argv)
     try:
-        Prerequisites().require(args.components)
+        tool = Prerequisites(
+            package_cache=args.package_cache, offline=args.offline, node_browser=args.node_browser
+        )
+        if args.cache_key:
+            print(f"key={tool.cache_key(args.components)}")
+        else:
+            tool.require(args.components)
     except PrerequisiteError as error:
         print(f"::error::CI prerequisites: {error}", flush=True)
         return 1

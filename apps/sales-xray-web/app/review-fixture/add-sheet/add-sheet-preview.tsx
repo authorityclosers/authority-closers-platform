@@ -8,6 +8,8 @@
  * `?view=sheet` (default): the Add sheet, Add lead and Add a call.
  * `?view=lead`: then Add lead: the quick form.
  * `?view=personal`: the Add sheet in a personal workspace (no lead desk).
+ * `?view=duplicate`: Add lead with a number that is already a lead.
+ * `?view=discard`: Add lead with a name typed, then Cancel: "Discard this lead?".
  */
 
 import { Suspense, useEffect, useState } from "react";
@@ -28,6 +30,18 @@ function install() {
   window.fetch = async (input, init) => {
     const url = String(input instanceof Request ? input.url : input);
     const path = url.replace(/^https?:\/\/[^/]+/, "");
+    if (path.startsWith("/v1/lead-desk/leads/match"))
+      return new Response(
+        JSON.stringify({
+          found: true,
+          lead_id: "00000000-0000-4000-8000-000000000300",
+          name: "Asha Fictional",
+          stage_label: "Call back",
+          owner_name: "Rahul Example",
+          yours: false,
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
     if (path.startsWith("/v1/"))
       return new Response(JSON.stringify({ detail: "Sample data only." }), {
         status: 404,
@@ -39,6 +53,16 @@ function install() {
 
 const pause = (ms: number) =>
   new Promise((resolve) => window.setTimeout(resolve, ms));
+
+/** Types into a field the way a keyboard would, so React hears it. */
+function typeInto(input: HTMLInputElement | undefined, value: string) {
+  if (!input) return;
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
 
 function Preview() {
   useState(install);
@@ -54,12 +78,28 @@ function Preview() {
           'button[aria-label="Add a lead or a call"]',
         )
         ?.click();
-      if (view !== "lead") return;
+      if (view !== "lead" && view !== "duplicate" && view !== "discard") return;
       // The sheet ignores taps while it settles, as a finger's echo.
       await pause(700);
       if (stopped) return;
       Array.from(document.querySelectorAll<HTMLButtonElement>("dialog button"))
         .find((button) => button.textContent?.includes("Add lead"))
+        ?.click();
+      if (view === "lead") return;
+      await pause(500);
+      if (stopped) return;
+      const inputs = Array.from(
+        document.querySelectorAll<HTMLInputElement>("dialog input"),
+      );
+      if (view === "duplicate") {
+        typeInto(inputs[0], "Asha");
+        typeInto(inputs[1], "98765 43210");
+        return;
+      }
+      typeInto(inputs[0], "Meera Sample");
+      await pause(200);
+      Array.from(document.querySelectorAll<HTMLButtonElement>("dialog button"))
+        .find((button) => button.textContent?.trim() === "Cancel")
         ?.click();
     })();
     return () => {

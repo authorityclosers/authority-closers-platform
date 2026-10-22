@@ -294,7 +294,10 @@ def test_sigterm_records_timeout_alerts_once_and_stops_docker(tmp_path: Path) ->
         env=env,
     )
     deadline = time.monotonic() + 5
-    while not child_pid_file.exists() and time.monotonic() < deadline:
+    # The fake docker creates its pid file before it writes the pid: wait for the content.
+    while time.monotonic() < deadline and not (
+        child_pid_file.exists() and child_pid_file.read_text(encoding="utf-8").strip()
+    ):
         time.sleep(0.01)
     assert child_pid_file.exists(), "fake docker did not start"
     child_pid = int(child_pid_file.read_text(encoding="utf-8"))

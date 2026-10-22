@@ -19,11 +19,13 @@ import {
 } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
+import { displayName } from "../display-name";
 import { Button, Dialog, Field, kitStyles, Segmented } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
 import { several, usePipelines } from "./use-pipelines";
 import {
   addLead,
+  matchLead,
   commandId,
   commitImport,
   contactsSupported,
@@ -35,6 +37,7 @@ import {
   SAMPLE_CSV,
   type ImportPreview,
   type ImportResult,
+  type LeadMatch,
   type NewLead,
   type PickedContact,
   type SharedLead,
@@ -197,6 +200,45 @@ export function AddLeadDialog({
   const nameRef = useRef<HTMLInputElement>(null);
   const formId = useId();
   const contacts = contactsSupported();
+  // What the form held when it opened: anything typed since asks before it
+  // is thrown away (Back, the scrim, Cancel).
+  const [start] = useState(form);
+  const [discarding, setDiscarding] = useState(false);
+  const dirty = JSON.stringify(form) !== JSON.stringify(start);
+  const close = () => {
+    if (dirty && !discarding && !saving) {
+      setDiscarding(true);
+      return;
+    }
+    onClose();
+  };
+  // A number that is already a lead says so while it is typed (22 Oct 2026).
+  const [match, setMatch] = useState<{
+    phone: string;
+    value: LeadMatch;
+  } | null>(null);
+  const digits = form.phone.replace(/\D/g, "").length;
+  useEffect(() => {
+    if (!open || digits < 10) return;
+    const phone = form.phone;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      matchLead(phone, controller.signal).then(
+        (value) => setMatch({ phone, value }),
+        () => undefined,
+      );
+    }, 400);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [open, form.phone, digits]);
+  const existing =
+    match && match.phone === form.phone && match.value.found
+      ? match.value
+      : null;
+  // A teammate's lead: Add lead would refuse it, so it isn't offered.
+  const teammates = existing !== null && !existing.lead_id;
 
   // Owner, 22 Oct: adding a lead must be low effort. An empty form starts in
   // the name box with the keyboard up; a filled-in one waits to be checked.
@@ -207,8 +249,10 @@ export function AddLeadDialog({
   }, [open, initial]);
 
   const set =
-    (key: keyof typeof EMPTY) => (event: { target: { value: string } }) =>
+    (key: keyof typeof EMPTY) => (event: { target: { value: string } }) => {
+      setDiscarding(false);
       setForm((current) => ({ ...current, [key]: event.target.value }));
+    };
 
   const fillFrom = (text: string) => {
     const found = parseContactText(text);
@@ -274,20 +318,30 @@ export function AddLeadDialog({
     <Sheet
       open={open}
       title="Add a lead"
-      onClose={onClose}
+      onClose={close}
       wide="center"
       footer={
-        <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button
-            variant="primary"
-            type="submit"
-            form={formId}
-            disabled={saving}
-          >
-            {saving ? "Adding…" : "Add lead"}
-          </Button>
-        </>
+        discarding ? (
+          <div className={styles.discardAsk} role="alert">
+            <span>Discard this lead?</span>
+            <Button onClick={() => setDiscarding(false)}>Keep editing</Button>
+            <Button variant="primary" onClick={onClose}>
+              Discard
+            </Button>
+          </div>
+        ) : (
+          <>
+            <Button onClick={close}>Cancel</Button>
+            <Button
+              variant="primary"
+              type="submit"
+              form={formId}
+              disabled={saving || teammates}
+            >
+              {saving ? "Adding…" : "Add lead"}
+            </Button>
+          </>
+        )
       }
     >
       <form
@@ -315,7 +369,40 @@ export function AddLeadDialog({
               enterKeyHint="next"
             />
           </Field>
-          <Field label="Phone">
+          <Field
+            label="Phone"
+            hint={
+              existing ? (
+                <span className={styles.matchNote} role="status">
+                  {existing.lead_id ? (
+                    <>
+                      <span>
+                        Already a lead:{" "}
+                        <strong>{displayName(existing.name ?? "")}</strong>
+                        {existing.stage_label
+                          ? ` · ${existing.stage_label}`
+                          : ""}
+                        {existing.yours
+                          ? " · yours"
+                          : existing.owner_name
+                            ? ` · with ${displayName(existing.owner_name)}`
+                            : ""}
+                      </span>
+                      <button
+                        type="button"
+                        className={styles.matchOpen}
+                        onClick={() => onAdded(existing.lead_id!)}
+                      >
+                        Open
+                      </button>
+                    </>
+                  ) : (
+                    "Already a lead on a teammate's desk."
+                  )}
+                </span>
+              ) : undefined
+            }
+          >
             <input
               value={form.phone}
               maxLength={40}

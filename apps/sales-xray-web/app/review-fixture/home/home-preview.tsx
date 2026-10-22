@@ -5,7 +5,8 @@
  * on GitHub (wb-ci --visual). Lead Desk reads are answered here; nothing
  * leaves the browser. `?role=owner` (default): how sales are going, sellers,
  * open leads by stage, then call analysis. `?role=seller`: today's calls.
- * `&quiet=1`: a seller with nobody to call now. `&pipelines=2`: two pipelines,
+ * `&quiet=1`: a seller with nobody to call now. Owners see Needs you (two leads
+ * past the first-response target, two with no owner) and Team | My day (`?view=mine`). `&pipelines=2`: two pipelines,
  * each with its own stages, and a switch above the open leads by stage.
  */
 
@@ -90,7 +91,8 @@ function answers(now: number, path: string, quiet: boolean): unknown {
         follow_up_due: 2,
         not_connected: 1,
         later_today: 2,
-        unassigned: null,
+        // Owners: two new leads nobody has yet (Needs you).
+        unassigned: 2,
         overdue: 1,
       },
       queue: quiet ? [] : queue(now),
@@ -163,6 +165,28 @@ function answers(now: number, path: string, quiet: boolean): unknown {
   const two =
     typeof window !== "undefined" &&
     new URLSearchParams(window.location.search).get("pipelines") === "2";
+  // Needs you (slice 8): two leads waiting past a 10-minute first response.
+  if (path === "/v1/lead-desk/reports/sla")
+    return {
+      settings: { on: true, minutes: 10, alertManagers: true, targets: [] },
+      start: "2026-10-16",
+      end: "2026-10-22",
+      sellers: [],
+      late: [
+        {
+          leadId: "00000000-0000-4000-8000-000000000301",
+          leadName: "meera fictional",
+          seller: "rahul example",
+          minutesLate: 42,
+        },
+        {
+          leadId: "00000000-0000-4000-8000-000000000302",
+          leadName: "karan example",
+          seller: "swamini fictional",
+          minutesLate: 14,
+        },
+      ],
+    };
   if (path === "/v1/lead-desk/pipelines" && two)
     return {
       pipelines: [

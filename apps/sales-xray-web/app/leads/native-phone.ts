@@ -11,12 +11,11 @@
 import { fromPhone, rememberCapture } from "../capture-source";
 
 /**
- * Is a recording worth analysing? The phone decodes it to tell (app 0.3.80+,
- * Redmi audit #53 and #60): "silent" when nobody is heard, "one_sided" when
- * it may hold only one voice (a warning), "unknown" when it can't tell.
+ * Is anyone heard in a recording? The phone decodes it to tell (app 0.3.80+,
+ * Redmi audit #53): "silent" when nobody is, "unknown" when it can't tell.
  */
 export type RecordingCheck = {
-  verdict: "ok" | "silent" | "one_sided" | "unknown";
+  verdict: "ok" | "silent" | "unknown";
   speechSeconds: number;
   measuredSeconds: number;
 };
@@ -162,7 +161,6 @@ const count = (value: unknown) =>
 const VERDICTS = new Set<RecordingCheck["verdict"]>([
   "ok",
   "silent",
-  "one_sided",
   "unknown",
 ]);
 
@@ -197,13 +195,11 @@ export function parseRecording(raw: unknown): NativeRecording | null {
   };
 }
 
-/** The words for a recording the phone found silent or one-sided; null when it sounds fine. */
+/** The words for a recording the phone found silent; null otherwise. */
 export function checkWarning(recording: NativeRecording | null): string | null {
   switch (recording?.check?.verdict) {
     case "silent":
       return "This recording is silent. Check your phone's call recording: Phone setup, Test call.";
-    case "one_sided":
-      return "Only one voice may be in this recording. Your phone may not record the other side.";
     default:
       return null;
   }
@@ -575,32 +571,9 @@ export type SetupStatus = {
   needsAllFiles: boolean;
   /** This app build can ask for All files access (download builds, not Play). */
   allFilesSupported: boolean;
-  /** The last setup test call: were both people heard? */
-  testResult: TestCallResult;
   /** Truecaller is on this phone: its after-call screen covers "How did it go?" (#48). */
   truecaller: boolean;
-  /** This app has Phone setup's test call (app 0.3.80+). */
-  canTest: boolean;
 };
-
-export type TestCallResult =
-  | "both"
-  | "only_you"
-  | "only_them"
-  | "silent"
-  | "not_found"
-  | "unknown"
-  | "none";
-
-const TEST_RESULTS = new Set<TestCallResult>([
-  "both",
-  "only_you",
-  "only_them",
-  "silent",
-  "not_found",
-  "unknown",
-  "none",
-]);
 
 /** This phone's call recorder as the app sees it (owner, 19 Oct: check, don't ask). */
 export type RecorderProfile = {
@@ -668,11 +641,7 @@ export function parseSetup(raw: unknown): SetupStatus | null {
     recorder: parseRecorder(value.recorderProfile),
     needsAllFiles: value.needsAllFiles === true,
     allFilesSupported: value.allFilesSupported === true,
-    testResult: TEST_RESULTS.has(value.testResult as TestCallResult)
-      ? (value.testResult as TestCallResult)
-      : "none",
     truecaller: value.truecaller === true,
-    canTest: typeof value.testResult === "string",
   };
 }
 
@@ -860,14 +829,6 @@ export async function recordingHandled(
   } catch {
     return null;
   }
-}
-
-/** The setup test call's stand-in lead: its recording never leaves the phone. */
-export const TEST_LEAD = "sx-setup-test";
-
-/** Phone setup's test call to a colleague: the app dials and checks both sides were heard. */
-export async function startTestCall(number: string): Promise<void> {
-  await ask("testCall", { number });
 }
 
 /** Asks Android to let Sales Xray read the phone's call recordings. */

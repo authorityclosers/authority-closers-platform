@@ -224,3 +224,62 @@
     padding: 14px 24px;
   }
 }
+
+/* ---------- Liquid Glass (owner's pick, 22 Oct 2026) ----------
+   On phones the sheet floats in from the bottom, rounded on every corner and
+   inset from the edges, as iOS 26's sheets do; on computers a floating glass
+   panel. */
+
+.panel {
+  border: 0.5px solid var(--sx-glass-edge);
+}
+
+@media (max-width: 899.98px) {
+  .panel {
+    left: 8px;
+    right: 8px;
+    bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    max-height: calc(
+      100dvh - max(env(safe-area-inset-top, 0px), 12px) - 36px -
+        env(safe-area-inset-bottom, 0px)
+    );
+    padding-bottom: 0;
+    border-radius: 34px;
+  }
+}
+
+.grabber {
+  width: 40px;
+  margin-top: 7px;
+}
+
+.head {
+  padding: 12px 12px 10px 22px;
+}
+
+.title {
+  font: var(--sx-text-headline);
+}
+
+.close {
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+}
+
+.footer {
+  border-top: 0;
+  padding: 10px 16px 16px;
+}
+
+@media (min-width: 900px) {
+  .panel {
+    border-radius: 28px;
+  }
+
+  .sheet[data-wide="right"] .panel {
+    top: 12px;
+    right: 12px;
+    bottom: 12px;
+    left: auto;
+  }
+}

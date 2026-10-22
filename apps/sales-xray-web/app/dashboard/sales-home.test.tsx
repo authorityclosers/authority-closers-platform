@@ -149,6 +149,7 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
   const titles = Array.from(host.querySelectorAll("h2"), (h) => h.textContent);
   expect(titles).toEqual([
     "How sales are going",
+    "Needs you",
     "Sellers",
     "Open leads by stage",
   ]);
@@ -159,7 +160,7 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
   expect(host.textContent).toContain("13% of 16 leads called");
   expect(host.textContent).toContain("Swamini Fictional");
   expect(host.textContent).toContain("2 won · 3 interested · 12 calls");
-  expect(host.textContent).toContain("1 late follow-up");
+  expect(host.textContent).toContain("1 follow-up is late");
   expect(host.textContent).toContain("6 open now");
   const seller = host.querySelector<HTMLAnchorElement>(
     'a[href="/organisation/people/s1"]',
@@ -193,4 +194,74 @@ it("says all caught up when nobody is due", async () => {
       link.textContent?.startsWith("Call "),
     ),
   ).toBe(false);
+});
+
+// Approved map, slice 8 (22 Oct 2026): "Needs you", from facts the server counts.
+it("tells an owner what needs them, each row opening the work", async () => {
+  answer({
+    "/v1/lead-desk": {
+      ...desk([]),
+      counts: { ...desk([]).counts, unassigned: 2 },
+    },
+    "/v1/lead-desk/reports/performance*": {
+      days: 7,
+      start: "2026-10-16",
+      end: "2026-10-22",
+      current: outcomes(2),
+      previous: outcomes(1),
+      sellers: [],
+      pipeline: {},
+    },
+    "/v1/lead-desk/reports/sla": {
+      settings: { on: true, minutes: 10, alertManagers: false, targets: [] },
+      start: "2026-10-16",
+      end: "2026-10-22",
+      sellers: [],
+      late: [
+        {
+          leadId: "11111111-1111-4111-8111-111111111111",
+          leadName: "meera fictional",
+          seller: "rahul example",
+          minutesLate: 25,
+        },
+      ],
+    },
+  });
+  await mount(true);
+  const needs = host.querySelector('[aria-label="Needs you"]');
+  expect(needs?.textContent).toContain(
+    "1 lead is waiting for a first response",
+  );
+  expect(needs?.textContent).toContain("Meera Fictional");
+  expect(needs?.textContent).toContain("Waiting 25 min · Rahul Example");
+  expect(needs?.textContent).toContain("2 new leads have no owner");
+  const links = Array.from(needs?.querySelectorAll("a") ?? [], (a) =>
+    a.getAttribute("href"),
+  );
+  expect(links).toContain("/leads?lead=11111111-1111-4111-8111-111111111111");
+  expect(links).toContain("/leads?tab=all&stage=open&who=unassigned");
+});
+
+it("says so when nothing needs the owner, and switches to My day", async () => {
+  answer({
+    "/v1/lead-desk": desk([row("ravi sample", { overdue: true })]),
+    "/v1/lead-desk/reports/performance*": {
+      days: 7,
+      start: "2026-10-16",
+      end: "2026-10-22",
+      current: outcomes(2),
+      previous: outcomes(1),
+      sellers: [],
+      pipeline: {},
+    },
+  });
+  await mount(true);
+  expect(host.textContent).toContain("Nothing needs you right now.");
+  const mine = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "My day",
+  )!;
+  await act(async () => mine.click());
+  await act(async () => Promise.resolve());
+  expect(host.querySelector("h2")?.textContent).toBe("Today");
+  expect(window.location.search).toBe("?view=mine");
 });

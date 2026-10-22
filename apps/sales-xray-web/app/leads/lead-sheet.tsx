@@ -15,6 +15,7 @@ import {
   MessageSquareText,
   Mic,
   Pencil,
+  Link2,
   Phone,
   PhoneMissed,
   PhoneOff,
@@ -26,6 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
+  Fragment,
   useCallback,
   useContext,
   useEffect,
@@ -36,9 +38,11 @@ import {
 } from "react";
 
 import { callHref, type UploadPolicy } from "../acquisition-client";
+import { notify } from "../notice-center";
 import { CallFacts } from "../call-engine/call-facts";
 import { Avatar, Badge, Button, Empty, Field } from "../ui/kit";
 import {
+  leadLink,
   addNote,
   ago,
   dispose,
@@ -66,6 +70,13 @@ import {
   type Stage,
 } from "./leads-client";
 import { LastCallBrief } from "./call-brief-card";
+import {
+  chatDays,
+  chatDayTitle,
+  useLeadConversations,
+  type ChatDay,
+} from "./lead-chats";
+import { CallNext } from "./call-next";
 import { chatFacts, chatOrigin } from "./chat-origin";
 import { SocialThread } from "./social-thread";
 import { WhatsAppThread } from "./whatsapp-thread";
@@ -307,9 +318,18 @@ export function CallOutcome({
   beforeSave,
   onSaved,
   heard = null,
+  onStop,
+  upNext = null,
+  ask = false,
 }: {
   detail: LeadDetail;
   submitLabel: string;
+  /** L on a computer: this is the step to fill (it comes into view, focused). */
+  ask?: boolean;
+  /** Call mode: save and end the round here ("Save and stop here"). */
+  onStop?: (next: LeadDetail) => void;
+  /** Call mode: who comes after this lead, shown above Save. */
+  upNext?: ReactNode;
   /** The seller just came back from the dialer: this card asks first. */
   attention: boolean;
   /** What the phone app saw of the call: it pre-fills the answer. */
@@ -329,6 +349,13 @@ export function CallOutcome({
   );
   const [reason, setReason] = useState<string | null>(
     heard?.connected === false ? missedReason(heard.result) : null,
+  );
+  // "No answer" from its own tile: the other reasons stay folded away, so
+  // Save is right below (Call mode, 22 Oct 2026).
+  const [quick, setQuick] = useState(
+    () =>
+      heard?.connected === false &&
+      missedReason(heard.result) === "did_not_pick",
   );
   const lastStage = stageAfterTalk(detail.lead.stage);
   const choices = stageChoices(detail);
@@ -357,9 +384,19 @@ export function CallOutcome({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (attention)
-      ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-  }, [attention]);
+    const box = ref.current;
+    if (!box || (!attention && !ask)) return;
+    // The lead's name and Call stay in view (Redmi at 360 px, 22 Oct 2026): the
+    // sheet opens at its top and moves only when the question is out of sight.
+    if (box.getBoundingClientRect().top > window.innerHeight * 0.7)
+      box.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (ask)
+      box
+        .querySelector<HTMLButtonElement>("button")
+        ?.focus({ preventScroll: true });
+  }, [attention, ask]);
+  // Whose call this is, in the question itself (the name may be above the fold).
+  const first = detail.lead.name.split(" ")[0];
 
   const closes = stage === "won" || stage === "lost";
   const needsTime = talk === "talked" && stage !== null && !closes;
@@ -384,7 +421,11 @@ export function CallOutcome({
       : stage === null
         ? "Pick what happens next to save"
         : "Pick when to call next to save";
-  const [nudged, setNudged] = useState(false);
+  // Each Save tap with a step missing lights that step once (Redmi, 22 Oct
+  // 2026: the hint was on screen already; the step itself should say "here").
+  const [nudges, setNudges] = useState(0);
+  const nudged = nudges > 0;
+  const nudge = nudges ? (nudges % 2 ? "odd" : "even") : undefined;
   const stepRef = useRef<HTMLDivElement>(null);
   const autoRetry =
     reason === null
@@ -394,7 +435,7 @@ export function CallOutcome({
         : `It comes back on the desk ${detail.lead.attempts ? "tomorrow" : "in 1 hour"}.`;
 
   const openMessage = useContext(OpenMessage);
-  const submit = async () => {
+  const submit = async (after: (next: LeadDetail) => void = onSaved) => {
     if (!valid || saving) return;
     setSaving(true);
     setError(null);
@@ -410,7 +451,7 @@ export function CallOutcome({
         deal_value: deal.trim() || undefined,
       });
       buzz("done");
-      onSaved(saved);
+      after(saved);
     } catch (failure) {
       setError(
         failure instanceof LeadsError
@@ -422,6 +463,19 @@ export function CallOutcome({
     }
   };
 
+  // Save, or say what is still missing and light that step.
+  const trySave = (after?: (next: LeadDetail) => void) => {
+    if (valid) {
+      void submit(after);
+      return;
+    }
+    setNudges((count) => count + 1);
+    stepRef.current?.scrollIntoView?.({
+      block: "center",
+      behavior: "smooth",
+    });
+  };
+
   return (
     <section
       ref={ref}
@@ -431,8 +485,8 @@ export function CallOutcome({
     >
       <h3 id={`${id}-q`} className={styles.outcomeTitle}>
         {attention
-          ? "Back from the call. How did it go?"
-          : "How did the call go?"}
+          ? `Back from the call with ${first}. How did it go?`
+          : `How did the call with ${first} go?`}
       </h3>
       {heard && heardLine(heard) ? (
         <p className={styles.heard}>
@@ -460,42 +514,70 @@ export function CallOutcome({
           <CheckCircle2 size={22} aria-hidden="true" />
           We talked
         </button>
+        {/* The most common miss in one tap (Call mode, 22 Oct 2026). */}
         <button
           type="button"
           className={styles.choiceTile}
           data-kind="missed"
-          aria-pressed={talk === "missed"}
+          aria-pressed={talk === "missed" && quick}
           onClick={() => {
             setTalk("missed");
+            setQuick(true);
+            setReason("did_not_pick");
             setStage(null);
             setStep(null);
           }}
         >
           <PhoneMissed size={22} aria-hidden="true" />
+          No answer
+        </button>
+        <button
+          type="button"
+          className={styles.choiceTile}
+          data-kind="missed"
+          aria-pressed={talk === "missed" && !quick}
+          data-span="row"
+          onClick={() => {
+            setTalk("missed");
+            if (quick) setReason(null);
+            setQuick(false);
+            setStage(null);
+            setStep(null);
+          }}
+        >
+          <PhoneOff size={22} aria-hidden="true" />
           Didn&apos;t get through
         </button>
       </div>
 
       {talk === "missed" ? (
-        <div ref={stepRef} className={styles.outcomeStep}>
-          <span className={styles.stepLabel}>What happened?</span>
-          <div
-            className={styles.reasonGrid}
-            role="group"
-            aria-label="What happened"
-          >
-            {MISSED.map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                className={styles.reasonTile}
-                aria-pressed={reason === item.key}
-                onClick={() => setReason(item.key)}
+        <div
+          ref={stepRef}
+          className={styles.outcomeStep}
+          data-nudge={missing ? nudge : undefined}
+        >
+          {quick ? null : (
+            <>
+              <span className={styles.stepLabel}>What happened?</span>
+              <div
+                className={styles.reasonGrid}
+                role="group"
+                aria-label="What happened"
               >
-                {item.label}
-              </button>
-            ))}
-          </div>
+                {MISSED.map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    className={styles.reasonTile}
+                    aria-pressed={reason === item.key}
+                    onClick={() => setReason(item.key)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
           {reason && retry === null ? (
             <p className={styles.retryLine}>
               {autoRetry}
@@ -523,7 +605,11 @@ export function CallOutcome({
       ) : null}
 
       {talk === "talked" ? (
-        <div ref={stepRef} className={styles.outcomeStep}>
+        <div
+          ref={stepRef}
+          className={styles.outcomeStep}
+          data-nudge={missing ? nudge : undefined}
+        >
           <span className={styles.stepLabel}>What happens next?</span>
           {suggested ? (
             <SuggestionHint
@@ -622,40 +708,44 @@ export function CallOutcome({
           {missing}
         </p>
       ) : null}
+      {talk !== null ? upNext : null}
       {talk !== null ? (
         <div className={styles.saveRow}>
           {openMessage && detail.phone ? (
             <button
               type="button"
               className={styles.saveMessage}
+              aria-label={talk === "missed" ? "Message them" : "Send details"}
               onClick={() =>
                 openMessage(talk === "missed" ? "missed_call" : "as_promised")
               }
             >
               <MessageCircle size={18} aria-hidden="true" />
-              {talk === "missed" ? "Message them" : "Send details"}
+              <span className={styles.saveMessageWords}>
+                {talk === "missed" ? "Message them" : "Send details"}
+              </span>
             </button>
           ) : null}
           <button
             type="button"
             className={styles.saveButton}
             data-incomplete={!valid || undefined}
-            onClick={() => {
-              if (valid) {
-                void submit();
-                return;
-              }
-              setNudged(true);
-              stepRef.current?.scrollIntoView?.({
-                block: "center",
-                behavior: "smooth",
-              });
-            }}
+            onClick={() => trySave()}
             disabled={saving}
           >
             {saving ? "Saving…" : submitLabel}
           </button>
         </div>
+      ) : null}
+      {talk !== null && onStop ? (
+        <button
+          type="button"
+          className={`${styles.linkButton} ${styles.stopLink}`}
+          disabled={saving}
+          onClick={() => trySave(onStop)}
+        >
+          Save and stop here
+        </button>
       ) : null}
     </section>
   );
@@ -921,55 +1011,192 @@ function PrivacyButton({
   );
 }
 
+/**
+ * The lead's story in a few lines, before its history (the ease-of-use wave, 22 Oct
+ * 2026: "a lead timeline that reads like a story"): where it came from, how often it
+ * was tried and talked to, how the last call went, and where it stands now.
+ */
+export function storyLines(
+  detail: LeadDetail,
+  now: Date = new Date(),
+): string[] {
+  const lead = detail.lead;
+  const when_ = ago(lead.created_at, now);
+  const lines = [
+    lead.source === "manual"
+      ? `Added by hand ${when_}.`
+      : lead.source === "referral"
+        ? `Came in ${when_} as a referral.`
+        : `Came in ${when_} from ${
+            lead.source_label.startsWith("File:")
+              ? "a file import"
+              : lead.source_label
+          }.`,
+  ];
+  const results = detail.events.filter((event) => event.kind === "result");
+  const talks = results.filter((event) => event.connected).length;
+  if (!lead.attempts) lines.push("Not called yet.");
+  else
+    lines.push(
+      `Tried ${lead.attempts} time${lead.attempts === 1 ? "" : "s"}${
+        talks
+          ? `, talked ${talks === 1 ? "once" : `${talks} times`}`
+          : ", not reached yet"
+      }.`,
+    );
+  const last = results[0];
+  if (last)
+    lines.push(
+      last.connected
+        ? `Last talk ${ago(last.at, now)}: ${last.stage_label ?? "talked"}.`
+        : `Last try ${ago(last.at, now)}: ${(last.reason_label ?? "not reached").toLowerCase()}.`,
+    );
+  lines.push(
+    `Now: ${lead.stage_label}${
+      lead.next_action_at ? `, next call ${when(lead.next_action_at, now)}` : ""
+    }.`,
+  );
+  return lines;
+}
+
+function StorySoFar({ detail }: { detail: LeadDetail }) {
+  return (
+    <div className={styles.story}>
+      <span className={styles.storyTitle}>The story so far</span>
+      <ul>
+        {storyLines(detail).map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** "Today", "Yesterday" or "Mon 20 Oct": the history's day headers. */
+export function dayLabel(iso: string, now: Date = new Date()): string {
+  const at = new Date(iso);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (at.toDateString() === now.toDateString()) return "Today";
+  if (at.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return at.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 export function History({
   events,
   onChanged,
+  chats = [],
+  brief = null,
 }: {
   events: LeadEvent[];
   onChanged?: (next: LeadDetail) => void;
+  /** The lead's chats, one line per app per day (lead hub, 22 Oct 2026). */
+  chats?: ChatDay[];
+  /** Under the newest call with a Report: what that call said. */
+  brief?: ReactNode;
 }) {
+  const briefAt = events.findIndex(
+    (event) => event.kind === "call" && event.submission_id,
+  );
+  // Newest first, calls and chats in one line of time.
+  const items: { at: string; index: number; chat?: ChatDay }[] = [
+    ...events.map((event, index) => ({ at: event.at, index })),
+    ...chats.map((chat, index) => ({
+      at: chat.at,
+      index: events.length + index,
+      chat,
+    })),
+  ];
+  if (chats.length)
+    items.sort(
+      (a, b) => Date.parse(b.at) - Date.parse(a.at) || a.index - b.index,
+    );
   return (
     <ol className={styles.history} aria-label="History">
-      {events.map((event, index) => {
+      {items.map((item, position) => {
+        const day = dayLabel(item.at);
+        const newDay =
+          position === 0 || dayLabel(items[position - 1].at) !== day;
+        const header = newDay ? (
+          <li className={styles.historyDay} aria-hidden="true">
+            {day}
+          </li>
+        ) : null;
+        if (item.chat)
+          return (
+            <Fragment key={item.chat.key}>
+              {header}
+              <li data-kind="chat">
+                <span className={styles.historyTitle}>
+                  {chatDayTitle(item.chat)}
+                </span>
+                {item.chat.last ? (
+                  <span className={styles.historyDetail}>
+                    {item.chat.last.mine ? "You: " : ""}
+                    {item.chat.last.text}
+                  </span>
+                ) : null}
+                <Link
+                  className={styles.historyLink}
+                  href={item.chat.href}
+                  prefetch={false}
+                >
+                  Open the chat
+                </Link>
+              </li>
+            </Fragment>
+          );
+        const event = events[item.index];
+        const index = item.index;
         const text = eventText(event);
         return (
-          <li
-            key={`${event.at}-${index}`}
-            data-kind={event.kind}
-            data-missed={
-              event.direction === "missed" || event.direction === "rejected"
-                ? true
-                : undefined
-            }
-          >
-            <span className={styles.historyTitle}>
-              {text.title}
-              {event.private ? (
-                <span className={styles.privateTag}>Private</span>
-              ) : null}
-            </span>
-            {text.detail ? (
-              <span className={styles.historyDetail}>
-                {event.private
-                  ? "Only you see this call. It isn't counted."
-                  : text.detail}
+          <Fragment key={`${event.at}-${index}`}>
+            {header}
+            <li
+              key={`${event.at}-${index}`}
+              data-kind={event.kind}
+              data-missed={
+                event.direction === "missed" || event.direction === "rejected"
+                  ? true
+                  : undefined
+              }
+            >
+              <span className={styles.historyTitle}>
+                {text.title}
+                {event.private ? (
+                  <span className={styles.privateTag}>Private</span>
+                ) : null}
               </span>
+              {text.detail ? (
+                <span className={styles.historyDetail}>
+                  {event.private
+                    ? "Only you see this call. It isn't counted."
+                    : text.detail}
+                </span>
+              ) : null}
+              {onChanged ? (
+                <PrivacyButton event={event} onChanged={onChanged} />
+              ) : null}
+              {event.kind === "call" && event.submission_id ? (
+                <Link
+                  className={styles.historyLink}
+                  href={callHref(event.submission_id)}
+                >
+                  Open the call&apos;s Report
+                </Link>
+              ) : null}
+              <time className={styles.historyTime} dateTime={event.at}>
+                {when(event.at)}
+              </time>
+            </li>
+            {index === briefAt && brief ? (
+              <li className={styles.historyBrief}>{brief}</li>
             ) : null}
-            {onChanged ? (
-              <PrivacyButton event={event} onChanged={onChanged} />
-            ) : null}
-            {event.kind === "call" && event.submission_id ? (
-              <Link
-                className={styles.historyLink}
-                href={callHref(event.submission_id)}
-              >
-                Open the call&apos;s Report
-              </Link>
-            ) : null}
-            <time className={styles.historyTime} dateTime={event.at}>
-              {when(event.at)}
-            </time>
-          </li>
+          </Fragment>
         );
       })}
     </ol>
@@ -1710,7 +1937,9 @@ export function LeadCard({
     act.current = () => (intent === "call" ? placeCall() : openMessage(null));
   });
   useEffect(() => {
-    if (!intent || acted.current || !detail.phone || !detail.can_edit) return;
+    // "log" only opens the call's outcome; nothing to place or write.
+    if (!intent || intent === "log" || acted.current) return;
+    if (!detail.phone || !detail.can_edit) return;
     acted.current = true;
     act.current();
   }, [intent, detail.phone, detail.can_edit]);
@@ -1727,6 +1956,9 @@ export function LeadCard({
     ? others.filter((rep) => rep.name.toLocaleLowerCase().includes(needle))
     : others;
   const [moveError, setMoveError] = useState<string | null>(null);
+  // The lead's chats, read once for the timeline and the chat sections.
+  const conversations = useLeadConversations(lead.lead_id);
+  const chats = chatDays(lead.lead_id, conversations.wa, conversations.social);
   const sub = [lead.company, lead.city, lead.language]
     .filter(Boolean)
     .join(" · ");
@@ -1799,6 +2031,7 @@ export function LeadCard({
               {lead.stage_label}
             </Badge>
             <Badge>{sourceText(lead)}</Badge>
+            <CopyLeadLink leadId={lead.lead_id} />
           </div>
         </div>
       </header>
@@ -1969,6 +2202,35 @@ export function LeadCard({
           the few things the engine is unsure of, asked one at a time. */}
       <CallFacts detail={detail} onChanged={onChanged} />
 
+      {/* The lead hub (approved map, slice 6, 22 Oct 2026): under the call, one
+          line of time: calls (the newest with what it said and its Report),
+          chats one line a day, notes and stage changes. Then the chats
+          themselves, then about the lead. */}
+      <section className={styles.historyBlock} aria-label="History">
+        <StorySoFar detail={detail} />
+        <h3 className={styles.stepLabel}>History</h3>
+        {detail.can_edit ? (
+          <NoteBox leadId={lead.lead_id} onSaved={onChanged} />
+        ) : null}
+        <History
+          events={detail.events}
+          onChanged={onChanged}
+          chats={chats}
+          brief={<LastCallBrief detail={detail} onChanged={onChanged} />}
+        />
+      </section>
+
+      <WhatsAppThread
+        leadId={lead.lead_id}
+        canSend={detail.can_edit}
+        shared={{ chat: conversations.wa }}
+      />
+      <SocialThread
+        leadId={lead.lead_id}
+        canSend={detail.can_edit}
+        shared={{ chat: conversations.social }}
+      />
+
       <section className={styles.panel} aria-label="Details">
         <div className={styles.panelHead}>
           <h3>Details</h3>
@@ -2126,26 +2388,48 @@ export function LeadCard({
       {detail.can_assign ? (
         <PipelinePanel detail={detail} onChanged={onChanged} />
       ) : null}
-
-      <LastCallBrief detail={detail} onChanged={onChanged} />
-
-      <WhatsAppThread leadId={lead.lead_id} canSend={detail.can_edit} />
-      <SocialThread leadId={lead.lead_id} canSend={detail.can_edit} />
-
-      <section className={styles.historyBlock} aria-label="History">
-        <h3 className={styles.stepLabel}>History</h3>
-        {detail.can_edit ? (
-          <NoteBox leadId={lead.lead_id} onSaved={onChanged} />
-        ) : null}
-        <History events={detail.events} onChanged={onChanged} />
-      </section>
     </div>
+  );
+}
+
+/** This lead's own link, to send a teammate or keep (Liquid Glass, 22 Oct 2026). */
+function CopyLeadLink({ leadId }: { leadId: string }) {
+  const copy = async () => {
+    const link = leadLink(leadId, window.location.origin);
+    try {
+      await navigator.clipboard.writeText(link);
+      notify({
+        id: "lead-link",
+        tone: "success",
+        title: "Link copied",
+        message: "It opens this lead for anyone in your organisation.",
+        timeout: 4000,
+      });
+    } catch {
+      notify({
+        id: "lead-link",
+        tone: "error",
+        title: "This browser didn't copy it",
+        message: link,
+      });
+    }
+  };
+  return (
+    <button
+      type="button"
+      className={styles.copyLink}
+      onClick={() => void copy()}
+    >
+      <Link2 size={13} aria-hidden="true" />
+      Copy link
+    </button>
   );
 }
 
 /* ---------- Lead sheet ---------- */
 
-export type LeadIntent = "call" | "message";
+/** What a lead opens for: a call, a message, or saying how a call went (L). */
+export type LeadIntent = "call" | "message" | "log";
 
 /**
  * Which pipeline the lead is in, and a move to another (owners and admins, when the
@@ -2226,6 +2510,7 @@ export function LeadSheet({
   onClose,
   onChanged,
   intent = null,
+  onNext,
 }: {
   leadId: string | null;
   me: Me | null;
@@ -2233,12 +2518,23 @@ export function LeadSheet({
   onChanged: () => void;
   /** Do this as soon as the lead is open (swipe, hold, an alert's Call). */
   intent?: LeadIntent | null;
+  /** After an outcome is saved: call the next lead on the desk. */
+  onNext?: (leadId: string) => void;
 }) {
+  // Saved here: who is next on the desk, so one tap calls them (the
+  // ease-of-use wave, 22 Oct 2026: "Call next" everywhere, not only in
+  // Start calling).
+  const [nextUp, setNextUp] = useState<{
+    after: string;
+    lead: LeadDetail | null;
+  } | null>(null);
   const [loaded, setLoaded] = useState<LeadDetail | null>(null);
   const [failed, setFailed] = useState<{
     leadId: string;
     message: string;
   } | null>(null);
+  // "Try again" on a lead that didn't open reads it once more.
+  const [attempt, setAttempt] = useState(0);
   const [formKey, setFormKey] = useState(0);
   const [backFrom, setBackFrom] = useState<string | null>(null);
   const [heard, setHeard] = useState<NativeCall | null>(null);
@@ -2278,7 +2574,7 @@ export function LeadSheet({
         });
       });
     return () => controller.abort();
-  }, [leadId]);
+  }, [leadId, attempt]);
 
   const update = (next: LeadDetail) => {
     setLoaded(next);
@@ -2315,7 +2611,18 @@ export function LeadSheet({
         onClose={onClose}
       >
         {error ? (
-          <Empty icon={PhoneOff} title="This lead didn't open" text={error} />
+          <Empty
+            icon={PhoneOff}
+            title="This lead didn't open"
+            text={error}
+            action={{
+              label: "Try again",
+              onClick: () => {
+                setFailed(null);
+                setAttempt((value) => value + 1);
+              },
+            }}
+          />
         ) : detail ? (
           <>
             <LeadCard
@@ -2325,7 +2632,9 @@ export function LeadSheet({
               phoneCall={phoneCall}
               intent={intent}
               afterCall={
-                backFrom === leadId || asked ? { step: "outcome" } : null
+                backFrom === leadId || asked || intent === "log"
+                  ? { step: "outcome" }
+                  : null
               }
               outcome={
                 <CallOutcome
@@ -2334,11 +2643,19 @@ export function LeadSheet({
                   submitLabel="Save"
                   heard={asked}
                   attention={backFrom === leadId}
+                  ask={intent === "log"}
                   beforeSave={() => logWaitingCall(detail)}
                   onSaved={(next) => {
                     setBackFrom(null);
                     if (asked) setAnswered(asked.startedMs);
                     update(next);
+                    if (onNext && leadId) {
+                      const after = leadId;
+                      readNext(after).then(
+                        (lead) => setNextUp({ after, lead }),
+                        () => undefined,
+                      );
+                    }
                   }}
                 />
               }
@@ -2363,6 +2680,9 @@ export function LeadSheet({
                   Delete lead
                 </button>
               </div>
+            ) : null}
+            {onNext && nextUp && nextUp.after === leadId ? (
+              <CallNext lead={nextUp.lead} saved onCall={onNext} />
             ) : null}
           </>
         ) : (
@@ -2414,6 +2734,14 @@ export function CallingLoop({
   const logged = useRef("");
   // Saved "How did it go?": the recording step, then the next lead.
   const [recordingStep, setRecordingStep] = useState<string | null>(null);
+  // Call mode (approved map, slice 3, 22 Oct 2026): who comes after the lead on
+  // screen is read while it is open, so one tap saves and calls them.
+  const [upNext, setUpNext] = useState<{
+    after: string;
+    lead: LeadDetail | null;
+  } | null>(null);
+  // The lead "Save and call <name>" opened: its card places the call once.
+  const [dialing, setDialing] = useState<string | null>(null);
 
   // The page gives each opening a new key, so a round starts at zero, loading.
   const load = (signal?: AbortSignal) => {
@@ -2448,6 +2776,17 @@ export function CallingLoop({
 
   const current =
     open && state === "ready" ? (detail?.lead.lead_id ?? null) : null;
+  useEffect(() => {
+    if (!current) return;
+    const controller = new AbortController();
+    readNext(current, controller.signal)
+      .then((lead) => setUpNext({ after: current, lead }))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, [current]);
+  // Unknown yet (still reading), nobody, or the next lead.
+  const following =
+    upNext && upNext.after === current ? upNext.lead : undefined;
   useCallReturn(current, (seconds) => {
     if (!current) return;
     setBackFrom(current);
@@ -2475,6 +2814,8 @@ export function CallingLoop({
     if (call.final) void forgetCall(call.leadId);
   });
   const phoneCall = heard && heard.leadId === current ? heard : null;
+  // A phone call with a recording: Save leads to the recording step first.
+  const recordingFirst = detail?.call_mode === "phone" && !!phoneCall;
 
   return (
     <Sheet open={open} label="Start calling" onClose={onClose}>
@@ -2511,6 +2852,7 @@ export function CallingLoop({
           detail={detail}
           me={me}
           phoneCall={phoneCall}
+          intent={dialing === detail.lead.lead_id ? "call" : null}
           onChanged={(next) => {
             setDetail(next);
             onChanged();
@@ -2526,10 +2868,30 @@ export function CallingLoop({
             <CallOutcome
               key={`${detail.lead.lead_id}-${detail.lead.revision}-${phoneCall?.startedMs ?? 0}`}
               detail={detail}
-              submitLabel="Save and next lead"
+              submitLabel={
+                recordingFirst
+                  ? "Save and next lead"
+                  : following
+                    ? `Save and call ${following.lead.name.split(" ")[0]}`
+                    : following === null
+                      ? "Save and finish"
+                      : "Save and next lead"
+              }
               heard={phoneCall}
               attention={backFrom === detail.lead.lead_id}
               beforeSave={() => logWaitingCall(detail)}
+              upNext={
+                following ? (
+                  <p className={styles.upNextLine}>
+                    Next: <strong>{following.lead.name}</strong> ·{" "}
+                    {whyLine(following.lead)}
+                  </p>
+                ) : following === null ? (
+                  <p className={styles.upNextLine}>
+                    Nobody else is due after this one.
+                  </p>
+                ) : null
+              }
               onSaved={(saved) => {
                 setBackFrom(null);
                 setDone((value) => value + 1);
@@ -2538,8 +2900,24 @@ export function CallingLoop({
                 if (saved.call_mode === "phone" && phoneCall) {
                   setDetail(saved);
                   setRecordingStep(saved.lead.lead_id);
-                } else loadNext();
+                } else if (following) {
+                  // The tap that saved is the tap that calls the next lead.
+                  setRecordingStep(null);
+                  setDetail(following);
+                  setDialing(following.lead.lead_id);
+                } else if (following === null) setState("done");
+                else loadNext();
               }}
+              onStop={
+                recordingFirst
+                  ? undefined
+                  : () => {
+                      setBackFrom(null);
+                      setDone((value) => value + 1);
+                      onChanged();
+                      onClose();
+                    }
+              }
             />
           }
         />

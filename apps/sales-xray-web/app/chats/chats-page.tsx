@@ -39,7 +39,6 @@ import {
   type ChatThread,
   type Sla,
 } from "./chats-client";
-import styles from "./chats.module.css";
 import { refreshChats, useChats } from "./chats-store";
 import {
   ChatsFrame,
@@ -52,7 +51,6 @@ import {
 import { ThreadFilters, ThreadList } from "./thread-list";
 import { LeadPanel, LeadSheetDialog } from "./lead-panel";
 import { readPanelChoice, savePanelChoice, useMedia } from "./media";
-import { LeadsChatsSwitch } from "./leads-chats-switch";
 import { ThreadView } from "./thread-view";
 
 const CLOCK_EVERY_MS = 30 * 1000;
@@ -292,9 +290,6 @@ export function ChatsRoute() {
         list={
           ready ? (
             <>
-              <div className={styles.switchSlot}>
-                <LeadsChatsSwitch current="chats" />
-              </div>
               <ThreadFilters
                 filter={filter}
                 onChange={setFilter}
@@ -328,9 +323,6 @@ export function ChatsRoute() {
             </>
           ) : (
             <>
-              <div className={styles.switchSlot}>
-                <LeadsChatsSwitch current="chats" />
-              </div>
               <FiltersSkeleton scopes={canManage} />
               <ThreadListSkeleton />
             </>

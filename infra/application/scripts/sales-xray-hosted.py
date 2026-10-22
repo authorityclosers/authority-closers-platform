@@ -66,7 +66,10 @@ ABSOLUTE_ENV_KEYS = {
     "AC_XRAY_INFISICAL_BINARY",
 }
 OPTIONAL_IDENTITY_ENV_KEYS = {"AC_XRAY_OPENAI_IDENTITY_DIR"}
-OPENAI_HOST_IDENTITY_DIR = "/etc/authority-closers/secrets/sales-xray/identities/openai"
+OPENAI_HOST_IDENTITY_DIRS = {
+    "staging": "/etc/authority-closers/secrets/sales-xray/identities/staging/openai",
+    "production": "/etc/authority-closers/secrets/sales-xray/identities/production/openai",
+}
 OPENAI_IDENTITY_TOKEN_NAME = "token"  # noqa: S105 - basename only
 OPENAI_IDENTITY_TOKEN_MODE = 0o400
 OPENAI_TOKEN_FILE = "/run/ac-sales-xray/identities/openai/token"  # noqa: S105 - path only
@@ -163,9 +166,12 @@ def _checked_absolute(value: object, field: str) -> Path:
     return path
 
 
-def _checked_openai_identity_dir(value: object) -> PurePosixPath:
-    if not isinstance(value, str) or value != OPENAI_HOST_IDENTITY_DIR:
-        raise _fail("OpenAI identity directory must use its dedicated host path")
+def _checked_openai_identity_dir(value: object, environment: str) -> PurePosixPath:
+    expected = OPENAI_HOST_IDENTITY_DIRS.get(environment)
+    if expected is None or not isinstance(value, str) or value != expected:
+        raise _fail(
+            "OpenAI identity directory must use its dedicated host path for the environment"
+        )
     path = PurePosixPath(value)
     host_absolute = path.is_absolute() if os.name == "posix" else Path(value).is_absolute()
     if not host_absolute or ".." in path.parts:
@@ -427,7 +433,7 @@ def _checked_uuid(value: object, field: str) -> str:
     return value
 
 
-def _parse_env(raw: bytes) -> dict[str, str]:
+def _parse_env(raw: bytes, environment: str) -> dict[str, str]:
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -457,7 +463,7 @@ def _parse_env(raw: bytes) -> dict[str, str]:
         if key not in result:
             continue
         if key == "AC_XRAY_OPENAI_IDENTITY_DIR":
-            _checked_openai_identity_dir(result[key])
+            _checked_openai_identity_dir(result[key], environment)
             continue
         path = _checked_absolute(result[key], key)
         if ".." in path.parts:
@@ -572,7 +578,7 @@ def _load_activation(
     env_raw = _regular_bytes(env_path, MAX_ENV_BYTES, trusted=True)
     if _sha256(env_raw) != _checked_sha(value["compose_env_sha256"], "compose_env_sha256"):
         raise _fail("compose environment digest differs from the descriptor")
-    env = _parse_env(env_raw)
+    env = _parse_env(env_raw, environment)
     if env["AC_XRAY_NATIVE_IMAGE_REF"] != value["native_image_ref"]:
         raise _fail("API preflight image differs from the worker native image")
     for path_field, env_key in (
@@ -602,7 +608,7 @@ def _load_activation(
     if has_openai:
         if openai_identity_dir is None:
             raise _fail("OpenAI provider requires its separately scoped identity directory")
-        openai_path = _checked_openai_identity_dir(openai_identity_dir)
+        openai_path = _checked_openai_identity_dir(openai_identity_dir, environment)
         if os.name == "posix":
             _validate_openai_identity_metadata(Path(str(openai_path)))
         if any(

@@ -25,11 +25,30 @@ it("aliases only Lightbox tokens that exist", () => {
 
 it("allows three text sizes plus title and figure styles", () => {
   const sizes = [...tokens.matchAll(/--sx-text-[\w-]+:\s*([^;]+);/g)].map(
-    ([, value]) => value.match(/(\d+)px/)?.[1],
+    ([, value]) => value.match(/(\d+(?:\.\d+)?)px/)?.[1],
   );
-  // v2 (owner, 20 Oct): a 17 px headline for sheets and phone titles, and
-  // one large title.
-  expect(sizes).toEqual(["12", "13", "14", "15", "17", "20", "24", "28"]);
+  // Liquid Glass (owner, 22 Oct): 12.5/14/15 on computers, then panel,
+  // headline, title, figure and large title; Apple's 13/15/16.5 on phones.
+  expect(sizes).toEqual([
+    "12.5",
+    "14",
+    "15",
+    "16",
+    "17",
+    "22",
+    "30",
+    "32",
+    "13",
+    "15",
+    "16.5",
+  ]);
+});
+
+it("gives low-memory phones a lighter glass", () => {
+  const code = tokens.replace(/\/\*[\s\S]*?\*\//g, "");
+  expect(code).toMatch(
+    /:root\[data-sx-glass="lite"\][^{]*\{[^}]*--sx-glass-blur: blur\(8px\)/,
+  );
 });
 
 it("keeps glass on one material with solid fallbacks (design system v2)", () => {

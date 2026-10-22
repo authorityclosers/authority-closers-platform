@@ -1740,6 +1740,11 @@
   border-style: solid;
   color: var(--xr-purple);
 }
+.coachNote {
+  font-size: 12.5px;
+  line-height: 1.5;
+  margin: 0;
+}
 .beta {
   border-color: var(--xr-amber-line);
   border-style: solid;

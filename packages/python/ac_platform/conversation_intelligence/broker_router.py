@@ -41,7 +41,7 @@ from ac_platform.conversation_intelligence.openai_tasks import (
     require_openai_one_pass_cost_approval,
 )
 from ac_platform.conversation_intelligence.providers import ProviderResult
-from ac_platform.one_pass.markers import RECIPE as ONE_PASS_RECIPE
+from ac_platform.one_pass.markers import RECIPES as ONE_PASS_RECIPES
 
 _SUPPORTED_PROVIDERS = frozenset({"deepgram", "elevenlabs", "groq", "gemini", "openai"})
 _REFERENCE = re.compile(r"^ref:[A-Za-z0-9][A-Za-z0-9_.:/-]{0,255}$")
@@ -320,7 +320,7 @@ class FixedProviderRouter:
             raise ProviderRouterError("broker_router_payload_mismatch")
         if approval.provider_id == "openai" and (
             approval.stage == "C5"
-            or (approval.stage == "C4" and approval.recipe_revision == ONE_PASS_RECIPE)
+            or (approval.stage == "C4" and approval.recipe_revision in ONE_PASS_RECIPES)
         ):
             try:
                 body = json.loads(payload)
@@ -421,7 +421,7 @@ class FixedProviderRouter:
         # OpenAI's C4 is only ever the one-pass request (checked against its view above).
         if approval.stage == "C4" and not (
             approval.provider_id in {"groq", "gemini"}
-            or (approval.provider_id == "openai" and approval.recipe_revision == ONE_PASS_RECIPE)
+            or (approval.provider_id == "openai" and approval.recipe_revision in ONE_PASS_RECIPES)
         ):
             raise ProviderRouterError("broker_router_route_mismatch")
         if approval.stage == "C5" and approval.provider_id not in {"groq", "gemini", "openai"}:

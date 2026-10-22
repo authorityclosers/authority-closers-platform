@@ -477,6 +477,23 @@ a.tile:active {
   animation: kit-sheen 1.8s var(--sx-ease-sheet) infinite;
 }
 
+/* A row's outline (SkeletonRow): the row's own height and gutter. */
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--sx-row-h);
+  box-sizing: border-box;
+  padding: 10px 16px;
+}
+
+.skeletonLines {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 7px;
+  min-width: 0;
+}
+
 @keyframes kit-sheen {
   from {
     background-position: 100vw 0;
@@ -1158,4 +1175,357 @@ a.rowTitle:focus-visible::after {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 8px;
+}
+
+/* ---------- Action rows (menus, settings lists, action sheets) ----------
+   The Liquid Glass block below groups them into one inset card. */
+
+.actionList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.actionItem {
+  min-width: 0;
+}
+
+/* A row with an action of its own beside it (remove, more): the row's
+   button takes the room, the action keeps its 44 px. */
+.actionItem[data-trailing] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.actionTrailing {
+  display: inline-flex;
+  align-items: center;
+  padding-right: 6px;
+}
+
+.actionRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 60px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.actionRow:not(:has(.actionIcon)) {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.actionRow:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--lx-ink) 3%, var(--sx-surface));
+}
+
+.actionRow:active:not(:disabled) {
+  transform: scale(0.985);
+  transition-duration: var(--sx-dur-instant);
+}
+
+.actionRow:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.actionRow:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.actionIcon {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.actionIcon[data-tone="neutral"] {
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+}
+
+.actionIcon[data-tone="good"] {
+  background: color-mix(in oklab, var(--sx-good) 12%, transparent);
+  color: var(--sx-good);
+}
+
+.actionIcon[data-tone="warn"] {
+  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
+  color: var(--lx-focus-ink);
+}
+
+.actionIcon[data-tone="bad"] {
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+}
+
+.actionWords {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.actionWords strong {
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+}
+
+.actionWords small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.actionEnd {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.actionChevron {
+  color: var(--sx-muted);
+}
+
+/* ---------- Liquid Glass (owner's pick, 22 Oct 2026) ----------
+   Capsule buttons, filled secondary buttons and fields, soft tinted badges,
+   borderless cards on the grouped ground, Apple's grey monogram avatars,
+   separators that start where the text does. */
+
+.button {
+  padding: 0 16px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: var(--sx-fill);
+  font-weight: 650;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--sx-fill-strong);
+}
+
+.button[data-variant="primary"] {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--lx-teal-2) 30%, var(--lx-teal)),
+    var(--lx-teal)
+  );
+  box-shadow:
+    inset 0 1px 0.5px color-mix(in oklab, white 35%, transparent),
+    0 8px 18px -10px color-mix(in oklab, var(--lx-teal) 90%, transparent);
+}
+
+.button[data-variant="primary"]:hover:not(:disabled) {
+  background: var(--lx-teal-hover);
+}
+
+.button[data-variant="ghost"],
+.button[data-variant="icon"] {
+  background: transparent;
+}
+
+.badge {
+  padding: 0 9px;
+  font-weight: 650;
+}
+
+.badge:not([data-tone]),
+.badge[data-tone="neutral"] {
+  background: var(--sx-fill);
+}
+
+.panel,
+.tiles {
+  border-color: transparent;
+  border-radius: var(--lx-radius-lg);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.panelHead {
+  border-bottom-color: var(--lx-line-soft);
+}
+
+.segmented {
+  padding: 3px;
+  border-radius: 999px;
+}
+
+.segment {
+  border-radius: 999px;
+  padding: 0 14px;
+}
+
+.segment[aria-pressed="true"] {
+  box-shadow:
+    0 2px 6px color-mix(in oklab, var(--lx-ink) 10%, transparent),
+    0 0 0 0.5px var(--sx-hairline);
+}
+
+.field :is(input, select, textarea),
+.inlineInput {
+  min-height: max(var(--sx-control-h), 40px);
+  padding: 0 14px;
+  border-color: transparent;
+  border-radius: 12px;
+  background: var(--sx-fill);
+}
+
+.field :is(input, select, textarea):hover:not(:focus) {
+  border-color: transparent;
+  background: var(--sx-fill-strong);
+}
+
+.field :is(input, select, textarea):focus,
+.inlineInput:focus {
+  border-color: var(--sx-accent);
+  background: var(--sx-surface);
+}
+
+.avatar {
+  background: linear-gradient(
+    180deg,
+    var(--lx-avatar-top),
+    var(--lx-avatar-bottom)
+  );
+  color: white;
+  font-weight: 650;
+}
+
+/* Separators start where the text does, as in iOS lists. */
+.row {
+  padding: 10px 16px;
+}
+
+.row + .row {
+  border-top: 0;
+}
+
+.row + .row::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 16px;
+  height: 1px;
+  background: var(--lx-line-soft);
+  content: "";
+}
+
+.row:has(> .avatar) + .row::before {
+  left: 60px;
+}
+
+.dialog {
+  padding: 22px;
+  border-radius: 30px;
+}
+
+.emptyIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+/* B: precision. */
+
+/* A badge is a word with a coloured dot on a hairline. */
+
+/* Action rows: one inset card with separators that start at the text, as in
+   iOS Settings. */
+
+.actionList {
+  gap: 0;
+  overflow: hidden;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.actionList {
+  box-shadow: var(--sx-shadow-1);
+}
+
+.actionItem {
+  position: relative;
+}
+
+.actionItem + .actionItem::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  left: 64px;
+  height: 1px;
+  background: var(--lx-line-soft);
+  content: "";
+}
+
+.actionRow {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.actionRow:hover:not(:disabled) {
+  background: var(--sx-fill-soft);
+}
+
+.actionRow:active:not(:disabled) {
+  background: var(--sx-fill);
+  transform: none;
+}
+
+.actionIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.actionIcon[data-tone="neutral"] {
+  background: var(--lx-avatar-bottom);
+  color: white;
+}
+
+.actionIcon[data-tone="good"] {
+  background: var(--sx-good);
+  color: var(--sx-accent-ink);
+}
+
+.actionIcon[data-tone="warn"] {
+  background: var(--lx-warning);
+  color: white;
+}
+
+.actionIcon[data-tone="bad"] {
+  background: var(--lx-danger);
+  color: white;
 }

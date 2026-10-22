@@ -160,6 +160,74 @@ def test_brain4_beta_is_chosen_for_our_own_workspace_only(
     run(exercise())
 
 
+def test_every_workspace_gets_brain4_unless_it_chose_otherwise(
+    postgres_harness: Any, tmp_path: Any
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            from ac_platform.identity.models import Person
+
+            async with setup.sessions() as db, db.begin():
+                email = (await db.get(Person, setup.actor.person_id)).email
+                ours = await company_workspace(db, email.rsplit("@", 1)[1].lower())
+                customer = await company_workspace(db, "customer.example.test")
+            ops = setup.prepared.state.tenant_id
+
+            async def do(scoring: str, *, apply: bool, **changes: Any) -> Any:
+                command = script.Command(
+                    **{
+                        "environment": "test",
+                        "control_email": email,
+                        "scoring": scoring,
+                        "approver": "Suyash Kulkarni (owner, relayed)",
+                        "issue": "brain4-live",
+                        "reason": "Owner, 22 Oct 2026: the new brain live on production",
+                        "apply": apply,
+                        **changes,
+                    }
+                )
+                async with setup.sessions() as db:
+                    transaction = await db.begin()
+                    try:
+                        result = await script.execute(db, command, operations_tenant_id=ops)
+                    except BaseException:
+                        await transaction.rollback()
+                        raise
+                    if apply and result["status"] == "applied":
+                        await transaction.commit()
+                    else:
+                        await transaction.rollback()
+                    return result
+
+            async def scoring(tenant: UUID) -> str:
+                async with setup.sessions() as db:
+                    effective = await ReportSettingsStore(db).effective(tenant)
+                return str(effective["settings"]["report"]["scoring"])
+
+            # Our own workspace first chose classic for itself; that choice is kept.
+            assert (await do("brain4_beta", apply=True))["status"] == "applied"
+            assert (await do("classic", apply=True))["status"] == "applied"
+            dry = await do("brain4_beta", apply=False, every_workspace=True)
+            assert dry["status"] == "dry_run" and dry["scope"] == "general"
+            assert dry["before"]["scoring"] == "classic"
+            assert await scoring(customer) == "classic"
+            applied = await do("brain4_beta", apply=True, every_workspace=True)
+            assert applied["status"] == "applied"
+            assert await scoring(customer) == "brain4_beta"
+            assert await scoring(ours) == "classic"
+            assert [r["tenant_id"] for r in applied["not_on_target"]] == [str(ours)]
+            assert {str(customer), str(ours)} <= {r["tenant_id"] for r in applied["workspaces"]}
+            again = await do("brain4_beta", apply=True, every_workspace=True)
+            assert again["status"] == "no_op"
+            with pytest.raises(script.Refused, match="every_workspace_takes_no_tenant_id"):
+                await do("brain4_beta", apply=True, every_workspace=True, tenant_id=ours)
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
 def test_the_cli_takes_only_its_own_arguments() -> None:
     with pytest.raises(SystemExit):
         script.main(["--environment", "test", "--bogus"])

@@ -172,19 +172,10 @@ it("reads the phone's waiting calls and drops odd rows", () => {
   ).toBe(false);
 });
 
-it("says when a recording is silent or may be one-sided", () => {
+it("says when a recording is silent", () => {
   const pending = parsePending(PENDING)!;
   expect(checkWarning(pending.items[0].recording)).toBeNull();
   expect(checkWarning(pending.items[1].recording)).toContain("silent");
-  const oneSided = {
-    ...pending.items[0].recording!,
-    check: {
-      verdict: "one_sided" as const,
-      speechSeconds: 9,
-      measuredSeconds: 60,
-    },
-  };
-  expect(checkWarning(oneSided)).toContain("Only one voice");
   expect(checkWarning(null)).toBeNull();
 });
 

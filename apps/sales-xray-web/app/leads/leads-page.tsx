@@ -23,28 +23,27 @@
 import {
   ArrowLeft,
   Building2,
-  ChevronDown,
   Ellipsis,
+  Phone,
   PhoneCall,
   Plus,
-  Search,
-  UsersRound,
-  Workflow,
-  X,
+  UserRound,
 } from "lucide-react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
+import { useCommandSource, type CommandSource } from "../ui/command-registry";
 import { DeskChats } from "../chats/desk-chats";
-import { LeadsChatsSwitch } from "../chats/leads-chats-switch";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
+import { settingsPath } from "../settings/settings-sections";
 import { leavingOverlay } from "../ui/back-close";
 import { Badge, Button, Empty, PageHeader } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
@@ -97,11 +96,20 @@ import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { LeadsSkeleton } from "./leads-skeleton";
 import { JourneyTab } from "./journey/journey-view";
 import { ListView, TEST, type Scope } from "./list-view";
+import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
 import { SourcesView } from "./sources-view";
 import { TakingSwitch } from "./taking-switch";
 import { TeamView } from "./team-view";
 import { several, usePipelines } from "./use-pipelines";
+import { ViewsChip } from "./views-sheet";
+import {
+  ActiveFilters,
+  FilterChip,
+  FilterSheet,
+  filtersOn as countFilters,
+  type LeadFilters,
+} from "./lead-filters";
 import styles from "./leads.module.css";
 
 type Manage = "team" | "sources" | "stages";
@@ -110,6 +118,12 @@ const MANAGE_TITLE: Record<Manage, string> = {
   team: "Team",
   sources: "Lead sources",
   stages: "Lead stages",
+};
+
+const WHO_WORDS: Record<Scope, string> = {
+  team: "Everyone",
+  mine: "Mine",
+  unassigned: "No owner",
 };
 
 // The desk reads itself again when the app comes back, and every minute.
@@ -130,8 +144,13 @@ const onHashChange = (change: () => void) => {
 };
 
 /** The address of a view on this page: the desk, a stage (in one pipeline, when
- * picked), or a settings page. */
-function viewHref(view: string, pipeline: string | null = null): string {
+ * picked; whose leads and a search, when set), or a settings page. A stage's
+ * address is the whole view, so a refresh or a shared link keeps it. */
+function viewHref(
+  view: string,
+  pipeline: string | null = null,
+  filters: { who?: Scope | null; q?: string } = {},
+): string {
   const path = window.location.pathname || LEADS_PATH;
   if (view === "desk") return path;
   if (view === "team" || view === "sources" || view === "stages")
@@ -139,7 +158,10 @@ function viewHref(view: string, pipeline: string | null = null): string {
   const inPipeline = pipeline
     ? `&pipeline=${encodeURIComponent(pipeline)}`
     : "";
-  return `${path}?tab=all&stage=${encodeURIComponent(view)}${inPipeline}`;
+  const who = filters.who ? `&who=${filters.who}` : "";
+  const words = filters.q?.trim();
+  const q = words ? `&q=${encodeURIComponent(words)}` : "";
+  return `${path}?tab=all&stage=${encodeURIComponent(view)}${inPipeline}${who}${q}`;
 }
 
 export { LeadsSkeleton };
@@ -147,6 +169,7 @@ export { LeadsSkeleton };
 export function LeadsRoute() {
   const access = useWorkspaceAccess();
   const params = useSearchParams();
+  const router = useRouter();
   const requested = params.get("tab");
   const requestedStage = params.get("stage");
   const requestedPipeline = params.get("pipeline");
@@ -157,6 +180,11 @@ export function LeadsRoute() {
   const shared = sharedLead(new URLSearchParams(hash.replace(/^#/, "")));
   const linked = linkedLead(hash);
   const [linkDone, setLinkDone] = useState<string | null>(null);
+  // A lead's own link, /leads?lead=<id> (Liquid Glass, 22 Oct 2026): its sheet
+  // opens on arrival and a refresh keeps it; closing it takes the id away.
+  // #lead= stays the same for phone alerts and older links.
+  const addressLead = linkedLead(`lead=${params.get("lead") ?? ""}`);
+  const [addressLeadDone, setAddressLeadDone] = useState<string | null>(null);
   useEffect(() => {
     if (/(^|[#&])(add=lead|lead=)/.test(window.location.hash))
       window.history.replaceState(
@@ -185,7 +213,10 @@ export function LeadsRoute() {
   const lastRead = useRef(0);
   const [calling, setCalling] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [importing, setImporting] = useState(false);
+  // Settings → Lead sources → Import opens here (/leads?import=file).
+  const [importing, setImporting] = useState(
+    () => params.get("import") === "file",
+  );
   const [menu, setMenu] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // A settings page opened from the menu is a step of its own: Leads goes back.
@@ -197,10 +228,17 @@ export function LeadsRoute() {
     at: string;
     pipeline?: string | null;
   } | null>(null);
-  const [scopeChoice, setScopeChoice] = useState<Scope | null>(null);
-  const [searching, setSearching] = useState(false);
-  const [search, setSearch] = useState("");
-  const [query, setQuery] = useState("");
+  // Whose leads and the search start from the address (a saved view, a link).
+  const [scopeChoice, setScopeChoice] = useState<Scope | null>(() =>
+    asScope(params.get("who")),
+  );
+  // Leads → Filter: a fresh sheet each opening.
+  const [filtering, setFiltering] = useState<{
+    round: number;
+    open: boolean;
+  } | null>(null);
+  const [search, setSearch] = useState(() => params.get("q") ?? "");
+  const [query, setQuery] = useState(() => (params.get("q") ?? "").trim());
   // Counts answer a question (who, search, pipeline); a refresh asks it again
   // and the last answer stays on the tabs meanwhile (Redmi, 22 Oct 2026: the
   // counts vanished while the ⋯ sheet was open).
@@ -333,7 +371,9 @@ export function LeadsRoute() {
 
   const current = deskKey === contextKey;
   const can = current && desk ? desk.me.can_manage : false;
-  const scope: Scope = scopeChoice ?? (can ? "team" : "mine");
+  // Only owners and admins pick whose leads; a seller's are always their own.
+  const scope: Scope = can ? (scopeChoice ?? "team") : "mine";
+  const filters = { who: can ? scopeChoice : null, q: query };
 
   // From the address: the desk, a stage, or one of the settings pages.
   const stageKeys = new Set<string>([
@@ -426,6 +466,90 @@ export function LeadsRoute() {
     [countsKey, countsQuestion],
   );
 
+  // The settled search goes into the address in place, like the tabs.
+  const addressQuery = (params.get("q") ?? "").trim();
+  useEffect(() => {
+    if (!stageView || query === addressQuery) return;
+    window.history.replaceState(
+      null,
+      "",
+      viewHref(view, pipeline, { who: can ? scopeChoice : null, q: query }),
+    );
+  }, [stageView, query, addressQuery, view, pipeline, can, scopeChoice]);
+
+  // The command bar (Ctrl K, the header's search) while Leads is open: Start
+  // calling, Add lead, and each lead found to open or to call. A call asks
+  // first, as a swipe does; nothing dials from the bar.
+  const canStart = current && !!desk && desk.counts.open > 0;
+  const commands = useMemo<CommandSource | null>(() => {
+    if (!authenticated) return null;
+    const openLead = (leadId: string, next: LeadIntent | null = null) => {
+      setHolding(null);
+      setIntent(next);
+      setOpenLead(leadId);
+    };
+    const round = (which: "calling" | "adding") =>
+      setRounds((value) => ({ ...value, [which]: value[which] + 1 }));
+    return {
+      commands: [
+        ...(canStart
+          ? [
+              {
+                id: "leads:start-calling",
+                group: "Actions",
+                label: "Start calling",
+                hint: "One due lead at a time",
+                icon: <PhoneCall size={16} aria-hidden="true" />,
+                run: () => {
+                  round("calling");
+                  setCalling(true);
+                },
+              },
+            ]
+          : []),
+        {
+          id: "leads:add-lead",
+          group: "Actions",
+          label: "Add lead",
+          icon: <Plus size={16} aria-hidden="true" />,
+          run: () => {
+            round("adding");
+            setAdding(true);
+          },
+        },
+      ],
+      search: async (text, signal) => {
+        const page = await readLeads(
+          { scope: can ? "team" : "mine", search: text },
+          signal,
+        );
+        return page.leads.slice(0, 6).flatMap((row) => [
+          {
+            id: `leads:open:${row.lead_id}`,
+            group: "Leads",
+            label: row.name,
+            hint: [row.stage_label, row.city].filter(Boolean).join(" · "),
+            icon: <UserRound size={16} aria-hidden="true" />,
+            run: () => openLead(row.lead_id),
+          },
+          ...(row.phone_last4
+            ? [
+                {
+                  id: `leads:call:${row.lead_id}`,
+                  group: "Leads",
+                  label: `Call ${row.name}`,
+                  hint: `Ends in ${row.phone_last4}`,
+                  icon: <Phone size={16} aria-hidden="true" />,
+                  run: () => setDialling(row),
+                },
+              ]
+            : []),
+        ]);
+      },
+    };
+  }, [authenticated, can, canStart]);
+  useCommandSource("leads", commands);
+
   if (!authenticated) {
     const loading =
       !access || access.authenticated === null || access.status === "loading";
@@ -495,7 +619,31 @@ export function LeadsRoute() {
 
   // A phone alert's lead opens once; closing it leaves the desk.
   const fromLink = linked && linkDone !== hash ? linked : null;
-  const shownLead = openLead ?? fromLink?.leadId ?? null;
+  const addressOpen =
+    addressLead && addressLeadDone !== addressLead.leadId ? addressLead : null;
+  const shownLead = openLead ?? fromLink?.leadId ?? addressOpen?.leadId ?? null;
+  // Done with the address's lead: it neither comes back nor stays in the bar.
+  // The sheet may close by stepping Back, which lands after this; the id goes
+  // again once it has.
+  const leaveAddressLead = () => {
+    if (!addressLead) return;
+    setAddressLeadDone(addressLead.leadId);
+    const strip = () => {
+      const next = new URLSearchParams(window.location.search);
+      if (!next.has("lead")) return;
+      next.delete("lead");
+      const query = next.toString();
+      window.history.replaceState(
+        window.history.state,
+        "",
+        `${window.location.pathname}${query ? `?${query}` : ""}${window.location.hash}`,
+      );
+    };
+    strip();
+    window.addEventListener("popstate", () => window.setTimeout(strip, 0), {
+      once: true,
+    });
+  };
   const shownIntent: LeadIntent | null = openLead
     ? intent
     : fromLink?.call
@@ -503,6 +651,7 @@ export function LeadsRoute() {
       : null;
   const open = (leadId: string, next: LeadIntent | null = null) => {
     setLinkDone(hash);
+    leaveAddressLead();
     setHolding(null);
     setIntent(next);
     setOpenLead(leadId);
@@ -511,6 +660,7 @@ export function LeadsRoute() {
     onCall: (row) => setDialling(row),
     onMessage: (row) => open(row.lead_id, "message"),
     onHold: (row) => setHolding(row),
+    onLog: (row) => open(row.lead_id, "log"),
   };
   const org =
     access?.workspaces?.find(
@@ -521,7 +671,7 @@ export function LeadsRoute() {
   // Tabs and filters change the address in place, so Back never steps
   // through them; a settings page is a step of its own, so Back returns.
   const go = (next: string) => {
-    const href = viewHref(next, pipeline);
+    const href = viewHref(next, pipeline, filters);
     setPicked({ view: next, at: addressKey, pipeline });
     if (next === "team" || next === "sources" || next === "stages") {
       pushedSettings.current = true;
@@ -535,10 +685,14 @@ export function LeadsRoute() {
       window.history.back();
     } else window.history.replaceState(null, "", viewHref("desk"));
   };
-  // One pipeline, or all of them, for the stage views (in place, like the tabs).
-  const choosePipeline = (next: string | null) => {
-    setPicked({ view, at: addressKey, pipeline: next });
-    window.history.replaceState(null, "", viewHref(view, next));
+  // An empty list's "Clear filters": everyone's (or your own) leads, no search.
+  const filtersOn =
+    !!query || (can && scopeChoice !== null && scopeChoice !== "team");
+  const clearFilters = () => {
+    setScopeChoice(null);
+    setSearch("");
+    setQuery("");
+    window.history.replaceState(null, "", viewHref(view, pipeline));
   };
   const tabs = [
     { key: "desk", label: "To call", count: toCall },
@@ -552,6 +706,48 @@ export function LeadsRoute() {
     tabs.find((tab) => tab.key === view)?.label ??
     (view === "open" ? "Open" : "this stage");
 
+  // Leads → Filter (stage lists only): whose leads, the pipeline, a name or number.
+  const filterable = stageView && view !== TEST;
+  const defaultWho: Scope = can ? "team" : "mine";
+  const shownFilters: LeadFilters = { who: scope, pipeline, q: query };
+
+  // Saved views: what the list shows now, in words, and back in one tap.
+  const shown: ViewSpec = { stage: view, pipeline, who: scope, q: query };
+  const describeView = (spec: ViewSpec) =>
+    [
+      tabs.find((tab) => tab.key === spec.stage)?.label ??
+        (spec.stage === "open" ? "Open" : "A stage"),
+      spec.pipeline
+        ? (pipes?.pipelines.find((item) => item.key === spec.pipeline)?.name ??
+          null)
+        : null,
+      can ? WHO_WORDS[spec.who] : null,
+      spec.q ? `“${spec.q}”` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+  const applyFilters = (next: LeadFilters) =>
+    applyView({
+      stage: view,
+      pipeline: next.pipeline,
+      who: next.who,
+      q: next.q,
+    });
+  const applyView = (spec: ViewSpec) => {
+    const stage = stageKeys.has(spec.stage) ? spec.stage : "open";
+    const inPipeline = several(pipes) ? spec.pipeline : null;
+    const who = can ? spec.who : null;
+    setScopeChoice(who);
+    setSearch(spec.q);
+    setQuery(spec.q);
+    setPicked({ view: stage, at: addressKey, pipeline: inPipeline });
+    window.history.replaceState(
+      null,
+      "",
+      viewHref(stage, inPipeline, { who, q: spec.q }),
+    );
+  };
+
   const menuItems: LeadsMenuItem[] = [
     ...(can
       ? [
@@ -561,10 +757,11 @@ export function LeadsRoute() {
             note: desk.counts.unassigned
               ? `${desk.counts.unassigned} need an owner`
               : "Who gets which leads",
+            // Approved map, slice 5: Leads' settings live in Settings.
             onPick: () => {
               setSettingsOpen(false);
               leavingOverlay();
-              go("team");
+              router.push(settingsPath("lead-rules"));
             },
           },
           {
@@ -574,7 +771,7 @@ export function LeadsRoute() {
             onPick: () => {
               setSettingsOpen(false);
               leavingOverlay();
-              go("sources");
+              router.push(settingsPath("sources"));
             },
           },
         ]
@@ -588,7 +785,7 @@ export function LeadsRoute() {
       onPick: () => {
         setSettingsOpen(false);
         leavingOverlay();
-        go("stages");
+        router.push(settingsPath("stages"));
       },
     },
     {
@@ -633,8 +830,6 @@ export function LeadsRoute() {
             className={styles.pullSpinner}
             aria-hidden="true"
           />
-          {/* Phones: Leads | Chats (owner, 20 Oct: Chats inside Leads). */}
-          <LeadsChatsSwitch current="leads" />
           <PhoneSetupBar />
           <div className={styles.wideOnly}>
             <PageHeader
@@ -683,43 +878,6 @@ export function LeadsRoute() {
           ) : (
             <>
               <div className={styles.toolbar}>
-                {can && stageView && view !== TEST ? (
-                  <label className={styles.ownerPicker}>
-                    <UsersRound size={14} aria-hidden="true" />
-                    <select
-                      aria-label="Whose leads"
-                      value={scope}
-                      onChange={(event) =>
-                        setScopeChoice(event.target.value as Scope)
-                      }
-                    >
-                      <option value="team">Everyone</option>
-                      <option value="mine">Mine</option>
-                      <option value="unassigned">No owner</option>
-                    </select>
-                    <ChevronDown size={14} aria-hidden="true" />
-                  </label>
-                ) : null}
-                {stageView && view !== TEST && several(pipes) ? (
-                  <label className={styles.ownerPicker}>
-                    <Workflow size={14} aria-hidden="true" />
-                    <select
-                      aria-label="Pipeline"
-                      value={pipeline ?? ""}
-                      onChange={(event) =>
-                        choosePipeline(event.target.value || null)
-                      }
-                    >
-                      <option value="">All pipelines</option>
-                      {pipes.pipelines.map((item) => (
-                        <option key={item.key} value={item.key}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} aria-hidden="true" />
-                  </label>
-                ) : null}
                 <TakingSwitch
                   key={`taking-${desk.me.taking_leads !== false}`}
                   initial={desk.me.taking_leads !== false}
@@ -728,54 +886,38 @@ export function LeadsRoute() {
                   onChanged={refresh}
                 />
                 <PhoneLogCard as="chip" />
-                <span className={styles.toolbarSpacer} />
-                {stageView ? (
+                <span className={styles.toolbarEnd}>
+                  {filterable ? (
+                    <FilterChip
+                      count={countFilters(shownFilters, defaultWho)}
+                      onOpen={() =>
+                        setFiltering((current) => ({
+                          round: (current?.round ?? 0) + 1,
+                          open: true,
+                        }))
+                      }
+                    />
+                  ) : null}
                   <button
                     type="button"
                     className={styles.toolButton}
-                    aria-label="Search leads"
-                    aria-pressed={searching || !!search}
-                    onClick={() => setSearching((value) => !value)}
+                    aria-label="Leads settings"
+                    aria-haspopup="dialog"
+                    onClick={() => setSettingsOpen(true)}
                   >
-                    <Search size={18} aria-hidden="true" />
+                    <Ellipsis size={18} aria-hidden="true" />
                   </button>
-                ) : null}
-                <button
-                  type="button"
-                  className={styles.toolButton}
-                  aria-label="Leads settings"
-                  aria-haspopup="dialog"
-                  onClick={() => setSettingsOpen(true)}
-                >
-                  <Ellipsis size={18} aria-hidden="true" />
-                </button>
+                </span>
               </div>
-              <StageTabs tabs={tabs} current={view} onChange={go} />
-              {stageView && (searching || search) ? (
-                <label className={styles.searchRow}>
-                  <Search size={16} aria-hidden="true" />
-                  <input
-                    type="search"
-                    value={search}
-                    placeholder="Name, company, city or phone"
-                    aria-label="Search leads"
-                    maxLength={80}
-                    autoFocus={!search}
-                    onChange={(event) => setSearch(event.target.value)}
-                  />
-                  <button
-                    type="button"
-                    className={styles.searchClear}
-                    aria-label="Close search"
-                    onClick={() => {
-                      setSearch("");
-                      setSearching(false);
-                    }}
-                  >
-                    <X size={16} aria-hidden="true" />
-                  </button>
-                </label>
+              {filterable ? (
+                <ActiveFilters
+                  filters={shownFilters}
+                  defaultWho={defaultWho}
+                  pipes={pipes?.pipelines ?? []}
+                  onChange={applyFilters}
+                />
               ) : null}
+              <StageTabs tabs={tabs} current={view} onChange={go} />
             </>
           )}
           {error ? (
@@ -809,6 +951,20 @@ export function LeadsRoute() {
               onChanged={refresh}
               onCounts={onCounts}
               pipeline={pipeline}
+              filtered={filtersOn}
+              onClearFilters={clearFilters}
+              onAdd={() => begin("adding", setAdding)}
+              onShowOpen={() => go("open")}
+              tools={
+                view === TEST ? null : (
+                  <ViewsChip
+                    owner={contextKey}
+                    current={shown}
+                    describe={describeView}
+                    onApply={applyView}
+                  />
+                )
+              }
             />
           ) : (
             <DeskView
@@ -848,6 +1004,20 @@ export function LeadsRoute() {
             </div>
           ) : null}
         </div>
+        {filtering ? (
+          <FilterSheet
+            key={filtering.round}
+            open={filtering.open}
+            onClose={() =>
+              setFiltering((current) => current && { ...current, open: false })
+            }
+            filters={shownFilters}
+            defaultWho={defaultWho}
+            canPickWho={can}
+            pipes={several(pipes) ? pipes.pipelines : []}
+            onApply={applyFilters}
+          />
+        ) : null}
         <LeadsMenu
           open={settingsOpen}
           onClose={() => setSettingsOpen(false)}
@@ -859,10 +1029,12 @@ export function LeadsRoute() {
           intent={shownIntent}
           onClose={() => {
             setLinkDone(hash);
+            leaveAddressLead();
             setOpenLead(null);
             setIntent(null);
           }}
           onChanged={refresh}
+          onNext={(leadId) => open(leadId, "call")}
         />
         <ActionSheet
           open={!!dialling}
@@ -988,7 +1160,20 @@ export function LeadsRoute() {
           key={`importing-${rounds.importing}`}
           open={importing}
           canManage={can}
-          onClose={() => setImporting(false)}
+          onClose={() => {
+            setImporting(false);
+            // Arrived from Settings: Import doesn't open again on a refresh.
+            if (new URLSearchParams(window.location.search).has("import")) {
+              const next = new URLSearchParams(window.location.search);
+              next.delete("import");
+              const query = next.toString();
+              window.history.replaceState(
+                window.history.state,
+                "",
+                `${window.location.pathname}${query ? `?${query}` : ""}`,
+              );
+            }
+          }}
           onDone={refresh}
         />
       </MessageSetup.Provider>

@@ -172,3 +172,37 @@ needs his own blind ratings of the dimensions (section 6).
 
 Shown in Admin → Gold set → Brain 4.0 evaluation as checkpoint "gold-v1/2026-10-21". From here on, new judgements
 come from fresh `/review` assignments and pair with Brain 4.0 automatically.
+
+## 9. Owner decision, 22 Oct 2026: Brain 4.0 live as the AI coaching score
+
+The owner's words, relayed verbatim by the orchestrator (22 Oct, about 17:05–17:10 IST):
+
+> "yes get that out a beta and the new brain live on production right now"
+>
+> "yes still we need the report structure given by dipak to be live only"
+
+This is the owner's explicit override of the AC-SVAL gate for how Brain 4.0 is **displayed**:
+
+- The coaching lead's 18-skill structure replaces the 27-pointer analysis on every call that has a Brain 4.0 read.
+- The "Beta" label goes.
+- The scores are named "AI coaching score": rated by AI, never "certified" or "official".
+- Calls without a read fall back to the earlier analysis.
+
+The gates themselves keep running in the background:
+- the blind 18-skill reviews (checkpoint fresh-1, Gate 0 and Gate 3);
+- the Admin evaluation with its drop alerts;
+- this report.
+
+None of them is a claim made to users.
+
+**Numbers at the time of the decision** (section 8; gold v1, 6 calls, 43 labels, Wilson 95%):
+
+| Pipeline | Agreed with the coaching lead's notes |
+|---|---|
+| Today's classic pointer review (Gemini) | 64% (49–77%) |
+| Brain 4.0 product prompt on Gemini 3.8 Flash Flex | 55% (38–70%) |
+| Brain 4.0 product prompt on GPT-6 Luna Flex | 39% (28–50%) |
+
+All the intervals overlap. Brain 4.0 on Gemini caught 1 of 8 of his criticisms. Brain 4.0 on Luna kept only 7 of 46 praise labels, and gave the same rating on a second read only 69% of the time.
+
+**Which engine to use:** Brain 4.0's production read stays on Gemini 3.8 Flash (`brain4_shadow`), the better of the two measured engines. It is a separate read from the one-pass C4 request, so switching C4 to Luna does not change which engine rates the 18 skills.

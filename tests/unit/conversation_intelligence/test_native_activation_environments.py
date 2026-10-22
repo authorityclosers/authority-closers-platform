@@ -19,7 +19,7 @@ def _source_for_environment(tmp_path: Path, environment: str) -> Path:
     source, _ = _write_source_activation(tmp_path)
     descriptor = json.loads(source.read_bytes())
     env_path = Path(descriptor["compose_env_file"])
-    env = _MODULE._parse_env(env_path.read_bytes())
+    env = _MODULE._parse_env(env_path.read_bytes(), descriptor["environment"])
     for name in ("approval", "service_config"):
         path = Path(descriptor[f"{name}_file"])
         payload = json.loads(path.read_bytes())

@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import type { Allowance } from "./acquisition-client";
 import { AcquisitionShell, showsPolicyFooter } from "./acquisition-shell";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { updateShellState } from "./shell/shell-store";
@@ -182,79 +183,28 @@ it("uses compact, truthful page headings with no greeting or estimated duration"
   ).toBeNull();
 });
 
-it("shows analysis time only from a verified allowance", () => {
-  const without = render(
-    renderToStaticMarkup(
-      <AcquisitionShell authenticated>
-        <p>Content</p>
-      </AcquisitionShell>,
-    ),
-  );
-  expect(without.querySelector("[data-minutes-meter]")).toBeNull();
-
-  const shell = render(
-    renderToStaticMarkup(
-      <AcquisitionShell authenticated allowance={allowance}>
-        <p>Content</p>
-      </AcquisitionShell>,
-    ),
-  );
-  const meter = shell.querySelector('[role="meter"]')!;
-  expect(meter.getAttribute("aria-valuenow")).toBe("2520");
-  expect(meter.getAttribute("aria-valuemax")).toBe("3600");
-  expect(meter.getAttribute("aria-valuetext")).toBe(
-    "42 of 60 analysis minutes left",
-  );
-  expect(shell.textContent).toContain("42 of 60 left");
-  expect(shell.textContent).toContain("42 min left");
-  // Owner decision (29 Sep 2026): the header ring shows the exact share of
-  // the verified allowance, computed from the session read, never estimated.
-  expect(shell.textContent).toContain("70%");
-
-  const unlimited = render(
-    renderToStaticMarkup(
-      <AcquisitionShell
-        authenticated
-        allowance={{ ...allowance, available_seconds: 0, unlimited: true }}
-      >
-        <p>Content</p>
-      </AcquisitionShell>,
-    ),
-  );
-  expect(unlimited.querySelector('[role="meter"]')).toBeNull();
-  expect(unlimited.querySelector("[data-minutes-meter]")).toBeNull();
-  expect(unlimited.textContent).not.toMatch(
-    /unlimited|unavailable|∞|0 min|100%/i,
-  );
-});
-
-it("shows hours in both shell pills and retains exact minutes for readers", () => {
-  const shell = render(
-    renderToStaticMarkup(
-      <AcquisitionShell
-        authenticated
-        allowance={{
-          allowance_seconds: 600000,
-          available_seconds: 600000,
-          committed_seconds: 0,
-        }}
-      >
-        <p>Content</p>
-      </AcquisitionShell>,
-    ),
-  );
-  const meters = shell.querySelectorAll("[data-minutes-meter]");
-  expect(meters).toHaveLength(2);
-  for (const meter of meters) {
-    expect(meter.textContent).toContain("166 h");
-    expect(meter.getAttribute("title")).toBe(
-      "10000 of 10000 analysis minutes left",
+it("never shows analysis minutes in the shell (owner, 19 Oct 2026: metering lives in Admin)", () => {
+  const shown: Allowance[] = [
+    allowance,
+    {
+      allowance_seconds: 600000,
+      available_seconds: 600000,
+      committed_seconds: 0,
+    },
+    { ...allowance, available_seconds: 0, unlimited: true as const },
+  ];
+  for (const each of shown) {
+    const shell = render(
+      renderToStaticMarkup(
+        <AcquisitionShell authenticated allowance={each}>
+          <p>Content</p>
+        </AcquisitionShell>,
+      ),
     );
+    expect(shell.querySelector("[data-minutes-meter]")).toBeNull();
+    expect(shell.querySelector('[role="meter"]')).toBeNull();
+    expect(shell.textContent).not.toMatch(/min left|minutes left|\d+ h|\d+%/i);
   }
-  expect(
-    shell.querySelector('[role="meter"]')?.getAttribute("aria-valuenow"),
-  ).toBe("600000");
-  expect(shell.textContent).toContain("100%");
 });
 
 it("keeps the public policy footer to the public landing", async () => {

@@ -169,15 +169,38 @@ const smallTextPairs: [string, string][] = [
 describe("Lightbox token derivative", () => {
   it("keeps every source token except the documented corrections", () => {
     const changedLight = new Map([
-      ["muted-2", "#646d7f"],
-      // Design system v2: a 60 px floating glass tab bar, 8 px above the
-      // edge (r17 had a 56 px bar on the edge; the source 76 px).
-      ["bottom-nav-h", "68px"],
+      // Liquid Glass (owner, 22 Oct 2026): a cool grouped ground under white
+      // cards, a near-black ink ladder and a slightly deeper teal.
+      ["ink", "#0a0c10"],
+      ["ink-2", "#1d212a"],
+      ["ink-3", "#3a404c"],
+      ["muted", "#5b626e"],
+      ["muted-2", "#646b77"],
+      ["line", "#e4e6eb"],
+      ["line-soft", "#eceef2"],
+      ["line-strong", "#cdd1d8"],
+      ["paper", "#f2f3f7"],
+      ["paper-2", "#f7f8fa"],
+      ["sunken", "#ebedf1"],
+      ["teal", "#07746b"],
+      ["teal-hover", "#05625a"],
+      ["teal-soft", "#ddf4ef"],
+      ["teal-tint", "#eef9f6"],
+      ["teal-edge", "#b4e6da"],
+      // Rounder shapes (12/16/22/30) and a 62 px floating tab bar 16 px up.
+      ["radius-sm", "12px"],
+      ["radius-md", "16px"],
+      ["radius-lg", "22px"],
+      ["radius-xl", "30px"],
+      ["bottom-nav-h", "78px"],
       // One teal accent (owner, 11 Oct 2026): info is slate, not blue.
       ["info", "#56637a"],
       ["info-soft", "#eceff4"],
     ]);
     const addedLight = new Set([
+      "elevated",
+      "avatar-top",
+      "avatar-bottom",
       "strength-ink",
       "objection-ink",
       "on-teal",
@@ -197,22 +220,25 @@ describe("Lightbox token derivative", () => {
       "density-panel-head",
       "density-tile-min",
     ]);
-    // Design system v2 (owner, 20 Oct 2026): a graphite dark ladder, no navy.
+    // Liquid Glass (owner, 22 Oct 2026): true black, Apple's grey ladder.
     const changedDark = new Map([
-      ["ink", "#f4f5f7"],
-      ["ink-2", "#e3e5e9"],
-      ["ink-3", "#c3c7ce"],
-      ["muted", "#9ea3ac"],
-      ["muted-2", "#8e939c"],
-      ["line", "#26272c"],
-      ["line-soft", "#1d1e22"],
-      ["line-strong", "#36383e"],
-      ["paper", "#0b0c0e"],
-      ["paper-2", "#111215"],
-      ["surface", "#17181b"],
-      ["sunken", "#0f1012"],
+      ["ink", "#f5f5f7"],
+      ["ink-2", "#e5e5ea"],
+      ["ink-3", "#c7c7cc"],
+      ["muted", "#a1a1a8"],
+      ["muted-2", "#98989f"],
+      ["line", "#2a2a2d"],
+      ["line-soft", "#222225"],
+      ["line-strong", "#3a3a3e"],
+      ["paper", "#000000"],
+      ["paper-2", "#0b0b0c"],
+      ["surface", "#1c1c1e"],
+      ["sunken", "#151517"],
     ]);
     const addedDark = new Set([
+      "elevated",
+      "avatar-top",
+      "avatar-bottom",
       "film",
       "film-2",
       "film-text-2",

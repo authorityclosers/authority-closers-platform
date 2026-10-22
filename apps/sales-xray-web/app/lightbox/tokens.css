@@ -22,6 +22,12 @@
  * - --lx-info is slate in both themes (11 Oct 2026, owner: one teal accent), not blue.
  * - Added the [data-script="deva"] rule: Devanagari source quotes carry an unknown-language
  *   script tag, so :lang(hi|mr) alone cannot keep them upright.
+ * - Liquid Glass (owner, 22 Oct 2026: "premium, Apple-grade"; look A of the
+ *   design-direction proposal): a cool grouped ground (#f2f3f7) under white cards,
+ *   a near-black ink ladder, a slightly deeper teal (#07746b, 5.6:1 under white
+ *   text), rounder shapes (12/16/22/30), a 62 px floating tab bar 16 px up, and
+ *   true black in dark (#000 ground, #1c1c1e cards, #2c2c2e floating layers).
+ *   Added --lx-elevated (floating layers) and --lx-avatar-top/bottom (monograms).
  * - Added operational density tokens (AUT-1451 / study section 2.4 card 2):
  *   --lx-control-compact-h (32px), --lx-control-h (36px), --lx-table-head-h (36px),
  *   --lx-row-min-h (44px), --lx-panel-head-min-h (48px), --lx-tile-min-h (96px),
@@ -32,18 +38,19 @@
   color-scheme: light;
 
   /* ---------- Neutrals ---------- */
-  --lx-ink: #0b1424; /* primary text, strong UI */
-  --lx-ink-2: #1c2940; /* quote text on light surfaces */
-  --lx-ink-3: #33415a; /* secondary text */
-  --lx-muted: #56637a; /* tertiary text; 5.6:1 on paper */
-  --lx-muted-2: #646d7f; /* captions/meta; 4.8:1 on paper - never below 12px, never on sunken */
-  --lx-line: #e2e7f0; /* hairlines on paper/surface */
-  --lx-line-soft: #eaeef5;
-  --lx-line-strong: #cbd3e1;
-  --lx-paper: #f4f6fb; /* app ground */
-  --lx-paper-2: #f9fafd; /* nested/secondary surface */
+  --lx-ink: #0a0c10; /* primary text, strong UI */
+  --lx-ink-2: #1d212a; /* quote text on light surfaces */
+  --lx-ink-3: #3a404c; /* secondary text */
+  --lx-muted: #5b626e; /* tertiary text; 5.5:1 on paper */
+  --lx-muted-2: #646b77; /* captions/meta; 4.8:1 on paper - never below 12px, never on sunken */
+  --lx-line: #e4e6eb; /* hairlines on paper/surface */
+  --lx-line-soft: #eceef2;
+  --lx-line-strong: #cdd1d8;
+  --lx-paper: #f2f3f7; /* app ground */
+  --lx-paper-2: #f7f8fa; /* nested/secondary surface */
   --lx-surface: #ffffff; /* cards */
-  --lx-sunken: #edf1f7; /* segmented controls, "still unknown" wells */
+  --lx-elevated: #ffffff; /* sheets, menus, the tab bar under its glass */
+  --lx-sunken: #ebedf1; /* segmented controls, "still unknown" wells */
 
   /* ---------- Film (dark bands: drop zone, analysing panel, call player, focus card) ---------- */
   --lx-film: #0a1220;
@@ -58,15 +65,17 @@
   --lx-film-lens-fill: #ffffff;
 
   /* ---------- Brand ---------- */
-  --lx-teal: #097870; /* primary action, links, strength */
-  --lx-teal-hover: #06615b;
+  --lx-teal: #07746b; /* primary action, links, strength */
+  --lx-teal-hover: #05625a;
   --lx-teal-2: #14b8a6; /* wordmark gradient end */
-  --lx-teal-soft: #dcf6ef;
-  --lx-teal-tint: #eefaf7;
-  --lx-teal-edge: #b6e9de;
+  --lx-teal-soft: #ddf4ef;
+  --lx-teal-tint: #eef9f6;
+  --lx-teal-edge: #b4e6da;
   --lx-glow: #2dd4bf; /* ONLY on film backgrounds (contrast), never text on light */
   --lx-glow-ink: #0f8b7e; /* Lens sound waves */
   --lx-on-teal: #ffffff; /* text on teal actions */
+  --lx-avatar-top: #a3a9b4;
+  --lx-avatar-bottom: #7d838e;
 
   /* ---------- Moment kinds (semantic; colour never encodes performance) ---------- */
   --lx-strength: #097870;
@@ -149,10 +158,10 @@
 
   /* ---------- Radius ---------- */
   --lx-radius-xs: 6px; /* tiny tags */
-  --lx-radius-sm: 10px; /* buttons, inputs */
-  --lx-radius-md: 14px; /* chips-in-cards, inner wells */
-  --lx-radius-lg: 20px; /* cards */
-  --lx-radius-xl: 26px; /* film panels */
+  --lx-radius-sm: 12px; /* buttons, inputs */
+  --lx-radius-md: 16px; /* chips-in-cards, inner wells */
+  --lx-radius-lg: 22px; /* cards */
+  --lx-radius-xl: 30px; /* film panels */
   --lx-radius-pill: 999px;
 
   /* ---------- Elevation ---------- */
@@ -179,7 +188,7 @@
   --lx-topbar-h: 64px;
   --lx-content-max: 880px; /* report reading column */
   --lx-chapter-rail-w: 196px;
-  --lx-bottom-nav-h: 68px; /* v2: 60 px floating glass bar + 8 px above the edge */
+  --lx-bottom-nav-h: 78px; /* Liquid Glass: a 62 px capsule floating 16 px up */
   --lx-mini-player-h: 62px;
   --lx-gradient-brand: linear-gradient(
     135deg,
@@ -229,18 +238,19 @@
  * one accent. Text pairs keep at least 5.7:1, mostly far more (tokens.test). */
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --lx-ink: #f4f5f7;
-  --lx-ink-2: #e3e5e9;
-  --lx-ink-3: #c3c7ce;
-  --lx-muted: #9ea3ac;
-  --lx-muted-2: #8e939c;
-  --lx-line: #26272c;
-  --lx-line-soft: #1d1e22;
-  --lx-line-strong: #36383e;
-  --lx-paper: #0b0c0e;
-  --lx-paper-2: #111215;
-  --lx-surface: #17181b;
-  --lx-sunken: #0f1012;
+  --lx-ink: #f5f5f7;
+  --lx-ink-2: #e5e5ea;
+  --lx-ink-3: #c7c7cc;
+  --lx-muted: #a1a1a8;
+  --lx-muted-2: #98989f;
+  --lx-line: #2a2a2d;
+  --lx-line-soft: #222225;
+  --lx-line-strong: #3a3a3e;
+  --lx-paper: #000000;
+  --lx-paper-2: #0b0b0c;
+  --lx-surface: #1c1c1e;
+  --lx-elevated: #2c2c2e;
+  --lx-sunken: #151517;
   --lx-film: #0c0d10;
   --lx-film-2: #1a1c21;
   --lx-film-text-2: #c9cdd4;
@@ -252,6 +262,8 @@
   --lx-teal-tint: rgba(45, 212, 191, 0.08);
   --lx-teal-edge: rgba(45, 212, 191, 0.28);
   --lx-on-teal: #0b0c0e;
+  --lx-avatar-top: #6e727b;
+  --lx-avatar-bottom: #4f535b;
   --lx-strength: #2dd4bf;
   --lx-strength-soft: rgba(45, 212, 191, 0.12);
   --lx-strength-ink: #2dd4bf;
@@ -292,29 +304,32 @@
  */
 [data-lx-surface="light"] {
   color-scheme: light;
-  --lx-ink: #0b1424;
-  --lx-ink-2: #1c2940;
-  --lx-ink-3: #33415a;
-  --lx-muted: #56637a;
-  --lx-muted-2: #646d7f;
-  --lx-line: #e2e7f0;
-  --lx-line-soft: #eaeef5;
-  --lx-line-strong: #cbd3e1;
-  --lx-paper: #f4f6fb;
-  --lx-paper-2: #f9fafd;
+  --lx-ink: #0a0c10;
+  --lx-ink-2: #1d212a;
+  --lx-ink-3: #3a404c;
+  --lx-muted: #5b626e;
+  --lx-muted-2: #646b77;
+  --lx-line: #e4e6eb;
+  --lx-line-soft: #eceef2;
+  --lx-line-strong: #cdd1d8;
+  --lx-paper: #f2f3f7;
+  --lx-paper-2: #f7f8fa;
   --lx-surface: #ffffff;
-  --lx-sunken: #edf1f7;
+  --lx-elevated: #ffffff; /* sheets, menus, the tab bar under its glass */
+  --lx-sunken: #ebedf1;
   --lx-film: #0a1220;
   --lx-film-2: #16233a;
   --lx-film-text-2: #c9d4e3;
   --lx-film-text-3: #9fb0c8;
   --lx-film-wave: #3a4c66;
-  --lx-teal: #097870;
-  --lx-teal-hover: #06615b;
-  --lx-teal-soft: #dcf6ef;
-  --lx-teal-tint: #eefaf7;
-  --lx-teal-edge: #b6e9de;
+  --lx-teal: #07746b;
+  --lx-teal-hover: #05625a;
+  --lx-teal-soft: #ddf4ef;
+  --lx-teal-tint: #eef9f6;
+  --lx-teal-edge: #b4e6da;
   --lx-on-teal: #ffffff;
+  --lx-avatar-top: #a3a9b4;
+  --lx-avatar-bottom: #7d838e;
   --lx-strength: #097870;
   --lx-strength-soft: #dcf6ef;
   --lx-strength-ink: #06736f;

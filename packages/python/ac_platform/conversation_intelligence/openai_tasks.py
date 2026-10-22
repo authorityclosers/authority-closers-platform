@@ -27,7 +27,9 @@ from ac_platform.conversation_intelligence.reports import (
     COACHING_PROMPT_V8_MARKER,
 )
 from ac_platform.one_pass.markers import MAX_COMPLETION_TOKENS as ONE_PASS_MAX_COMPLETION_TOKENS
-from ac_platform.one_pass.markers import is_one_pass
+from ac_platform.one_pass.markers import RECIPE as ONE_PASS_RECIPE
+from ac_platform.one_pass.markers import RECIPE_V2 as ONE_PASS_RECIPE_V2
+from ac_platform.one_pass.markers import recipe_of
 
 # GPT-6 Luna on Flex is its own approved route: the same model and request.
 OPENAI_FLEX_SUFFIX = ":flex"
@@ -62,6 +64,7 @@ def is_flex(model: str) -> bool:
 
 
 _ONE_PASS_FORMAT = "sales_xray_one_pass_facts_v1"  # noqa: S105 - a schema name
+_ONE_PASS_FORMAT_V2 = "sales_xray_one_pass_facts_v2"  # noqa: S105 - a schema name
 _ONE_PASS_KEYS = frozenset(
     {
         "model",
@@ -80,23 +83,25 @@ _ONE_PASS_KEYS = frozenset(
 )
 
 
-def _one_pass_format() -> dict[str, Any]:
+def _one_pass_format(recipe: str = ONE_PASS_RECIPE) -> dict[str, Any]:
     from ac_platform.one_pass import stage
 
+    # Its recipe's own schema (v2: with the Brain 4.0 part).
     return {
         "type": "json_schema",
-        "name": _ONE_PASS_FORMAT,
+        "name": _ONE_PASS_FORMAT_V2 if recipe == ONE_PASS_RECIPE_V2 else _ONE_PASS_FORMAT,
         "strict": False,
-        "schema": stage.schema(),
+        "schema": stage.schema(recipe),
     }
 
 
 def _one_pass_body(model: str, maximum: Any, instructions: str, user_input: str) -> dict[str, Any]:
-    if model not in OPENAI_ONE_PASS_MODELS or not is_one_pass(instructions):
+    recipe = recipe_of(instructions)
+    if model not in OPENAI_ONE_PASS_MODELS or recipe is None:
         _fail("openai_task_model_not_supported")
     if type(maximum) is not int or not 256 <= maximum <= ONE_PASS_MAX_COMPLETION_TOKENS:
         _fail("openai_output_budget_invalid")
-    text_format = _one_pass_format()
+    text_format = _one_pass_format(recipe)
     if _input_bytes(instructions, user_input, text_format["schema"]) > OPENAI_MAX_INPUT_BYTES:
         _fail("openai_input_budget_exceeded")
     # No reasoning setting: the provider's default, as measured ("high" did not help).

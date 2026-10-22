@@ -38,7 +38,7 @@ from ac_platform.conversation_intelligence.provider_registry import (
 )
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
-from ac_platform.one_pass.markers import RECIPE as ONE_PASS_RECIPE
+from ac_platform.one_pass.markers import RECIPES as ONE_PASS_RECIPES
 from ac_platform.tenancy.models import Membership
 
 # Switching C2 transcription to Gemini audio, or any route to Gemini Flex, is the owner's
@@ -426,7 +426,7 @@ class ConversationProviderAdmin:
         except (ProviderRegistryError, TypeError, ValueError):
             return False
         return any(
-            route.task == "facts" and route.recipe_revision == ONE_PASS_RECIPE
+            route.task == "facts" and route.recipe_revision in ONE_PASS_RECIPES
             for route in config.routes
         )
 

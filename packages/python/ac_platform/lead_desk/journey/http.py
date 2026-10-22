@@ -760,27 +760,8 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                 before = journey.resolve(lead.stage, lead.step)
                 if before is not None and before.key == stage.key:
                     raise DeskError(409, f"This lead is already in “{stage.label}”.")
-                previous_kind, previous_step = lead.stage, lead.step
-                lead.stage = stage.kind
-                lead.step = stage.key
-                if stage.kind in ("won", "lost"):
-                    lead.next_action_at = None
-                    lead.next_action_note = None
-                lead.revision += 1
-                lead.updated_at = desk.now
-                desk._event(
-                    lead,
-                    "stage",
-                    {
-                        "stage": stage.kind,
-                        "from_stage": previous_kind,
-                        "step": stage.key,
-                        "from_step": before.key if before else previous_step,
-                        "step_label": stage.label,
-                        "remark": command.note,
-                    },
-                    actor=desk.viewer.person_id,
-                    command_id=command.command_id,
+                desk.to_stage(
+                    lead, journey, stage, note=command.note, command_id=command.command_id
                 )
                 await desk.db.flush()
             shown = journey.resolve(lead.stage, lead.step)

@@ -35,6 +35,8 @@ from ac_platform.lead_desk import push, simulation
 from ac_platform.lead_desk.contracts import (
     AlertText,
     Badge,
+    BulkDone,
+    BulkLeads,
     CallPrivacy,
     CallRecord,
     CallReport,
@@ -50,6 +52,7 @@ from ac_platform.lead_desk.contracts import (
     ImportResult,
     LeadDetail,
     LeadEdit,
+    LeadMatch,
     LeadPage,
     LeadsDeleted,
     Me,
@@ -232,6 +235,22 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 owner=owner,
                 pipeline=pipeline,
             )
+
+    @router.get("/leads/match", response_model=LeadMatch, response_model_by_alias=True)
+    async def match_lead(request: Request, response: Response, phone: str = "") -> LeadMatch:
+        """Is this number already a lead? Add lead asks while a number is typed."""
+        no_query(request, frozenset({"phone"}))
+        if not 0 < len(phone) <= 40:
+            raise HTTPException(422, "Enter a phone number.", headers=PRIVATE)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.match(phone)
+
+    @router.post("/leads/bulk", response_model=BulkDone, response_model_by_alias=True)
+    async def bulk_leads(command: BulkLeads, request: Request, response: Response) -> BulkDone:
+        """Owners and admins give, move or re-stage many leads at once."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.bulk(command)
 
     @router.post("/leads/delete", response_model=LeadsDeleted, response_model_by_alias=True)
     async def delete_leads(

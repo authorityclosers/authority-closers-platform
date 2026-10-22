@@ -12,13 +12,14 @@ import {
   ChevronDown,
   Hourglass,
   Inbox,
-  Search,
+  ListFilter,
   UserRound,
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
+import { useRowKeys } from "../ui/row-keys";
 import { ChannelMark, ChatAvatar } from "./channel-mark";
 import {
   CHANNEL_LABEL,
@@ -70,12 +71,12 @@ export function ThreadFilters({
     return (
       <div className={styles.filters}>
         <label className={styles.search}>
-          <Search size={14} aria-hidden="true" />
+          <ListFilter size={14} aria-hidden="true" />
           <input
             type="search"
             value={filter.search}
-            placeholder="Search names"
-            aria-label="Search chats by name"
+            placeholder="Filter by name"
+            aria-label="Filter chats by name"
             autoFocus={!filter.search}
             onChange={(event) =>
               onChange({ ...filter, search: event.target.value })
@@ -84,7 +85,7 @@ export function ThreadFilters({
           <button
             type="button"
             className={styles.searchClose}
-            aria-label="Close search"
+            aria-label="Clear the name filter"
             onClick={() => {
               onChange({ ...filter, search: "" });
               setSearching(false);
@@ -98,13 +99,16 @@ export function ThreadFilters({
   return (
     <div className={styles.filters}>
       <div className={styles.filterRow} role="group" aria-label="Show">
+        {/* A filter in words, not a second magnifier: the header's search is
+            the app's search (Liquid Glass, 22 Oct 2026). */}
         <button
           type="button"
-          className={styles.iconChip}
-          aria-label="Search chats by name"
+          className={styles.chip}
+          aria-label="Filter chats by name"
           onClick={() => setSearching(true)}
         >
-          <Search size={16} aria-hidden="true" />
+          <ListFilter size={12} aria-hidden="true" />
+          Name
         </button>
         {showScopes ? (
           <label className={styles.pickChip}>
@@ -196,6 +200,7 @@ function ThreadRow({
         data-active={active || undefined}
         data-unread={unread || undefined}
         aria-current={active ? "true" : undefined}
+        data-row-key={gone ? undefined : thread.key}
         disabled={gone}
         onClick={() => onOpen(thread)}
       >
@@ -233,7 +238,9 @@ function ThreadRow({
                 data-none={!thread.ownerId || undefined}
               >
                 <UserRound size={11} aria-hidden="true" />
-                {thread.ownerName ?? "Unassigned"}
+                <span className={styles.ownerName}>
+                  {thread.ownerName ?? "Unassigned"}
+                </span>
               </span>
             ) : null}
             {since ? (
@@ -280,6 +287,14 @@ export function ThreadList({
   canConnect?: boolean;
 }) {
   const shown = filterThreads(threads, filter, me);
+  // Keys on a computer (J/K, Enter): the next chat without the mouse.
+  const list = useRef<HTMLUListElement>(null);
+  useRowKeys(list, {
+    open: (key) => {
+      const thread = shown.find((item) => item.key === key);
+      if (thread) onOpen(thread);
+    },
+  });
   if (!threads.length)
     return (
       <div className={styles.listEmpty}>
@@ -312,7 +327,7 @@ export function ThreadList({
       </div>
     );
   return (
-    <ul className={styles.listBody} aria-label="Chats">
+    <ul className={styles.listBody} aria-label="Chats" ref={list}>
       {shown.map((thread) => (
         <ThreadRow
           key={thread.key}

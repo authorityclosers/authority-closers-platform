@@ -7,10 +7,11 @@
  * owners and admins, and hands the stage counts up for the tabs.
  */
 
-import { ListChecks, SearchX, Users } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { ListChecks, SearchX, UserPlus, Users } from "lucide-react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { notify } from "../notice-center";
+import { useRowKeys } from "../ui/row-keys";
 import { Button, Skeleton } from "../ui/kit";
 import {
   DeleteLeadsSheet,
@@ -27,6 +28,7 @@ import {
   type LeadRow,
   type LeadsDeleted,
 } from "./leads-client";
+import { BulkSheet } from "./bulk-sheet";
 import styles from "./leads.module.css";
 
 export type Scope = "mine" | "team" | "unassigned";
@@ -47,6 +49,11 @@ export function ListView({
   onChanged,
   onCounts,
   pipeline = null,
+  tools = null,
+  filtered = false,
+  onClearFilters,
+  onAdd,
+  onShowOpen,
 }: {
   canManage: boolean;
   /** "open", a stage kind, or "test". */
@@ -65,6 +72,14 @@ export function ListView({
   onCounts?: (counts: Record<string, number>) => void;
   /** One pipeline's leads; none: every pipeline's. */
   pipeline?: string | null;
+  /** Beside Select on the list's head: the saved views. */
+  tools?: ReactNode;
+  /** A search or whose-leads pick narrows the list (an empty list can clear it). */
+  filtered?: boolean;
+  onClearFilters?: () => void;
+  /** An empty Open list offers Add lead; another stage, the open leads. */
+  onAdd?: () => void;
+  onShowOpen?: () => void;
 }) {
   const [loaded, setLoaded] = useState<{
     key: string;
@@ -84,6 +99,10 @@ export function ListView({
     leads: ReadonlyMap<string, string>;
   } | null>(null);
   const [loadingAll, setLoadingAll] = useState(false);
+  // Actions on the ticked leads: a fresh sheet each time.
+  const [bulk, setBulk] = useState<{ round: number; open: boolean } | null>(
+    null,
+  );
   const [confirm, setConfirm] = useState<{
     round: number;
     open: boolean;
@@ -103,6 +122,24 @@ export function ListView({
   useEffect(() => {
     counts.current = onCounts;
   });
+  // Keys on a computer: J/K, Enter, C (asks before calling), L. Not while ticking.
+  const list = useRef<HTMLUListElement>(null);
+  const byId = (id: string) => rows.find((row) => row.lead_id === id);
+  useRowKeys(
+    list,
+    {
+      open: onOpen,
+      call: (id) => {
+        const row = byId(id);
+        if (row?.phone_last4) actions?.onCall?.(row);
+      },
+      log: (id) => {
+        const row = byId(id);
+        if (row) actions?.onLog?.(row);
+      },
+    },
+    !selecting,
+  );
   const ask = {
     scope,
     stage: stage === TEST ? null : stage,
@@ -246,26 +283,29 @@ export function ListView({
               ? `${page.total} ${page.total === 1 ? "lead" : "leads"}`
               : null}
           </span>
-          {canManage && rows.length ? (
-            <button
-              type="button"
-              className={styles.statusChip}
-              aria-pressed={selecting}
-              onClick={() => {
-                setPicked(null);
-                setSelecting((value) => !value);
-              }}
-            >
-              {selecting ? (
-                "Done"
-              ) : (
-                <>
-                  <ListChecks size={14} aria-hidden="true" />
-                  Select
-                </>
-              )}
-            </button>
-          ) : null}
+          <span className={styles.listTools}>
+            {selecting ? null : tools}
+            {canManage && rows.length ? (
+              <button
+                type="button"
+                className={styles.statusChip}
+                aria-pressed={selecting}
+                onClick={() => {
+                  setPicked(null);
+                  setSelecting((value) => !value);
+                }}
+              >
+                {selecting ? (
+                  "Done"
+                ) : (
+                  <>
+                    <ListChecks size={14} aria-hidden="true" />
+                    Select
+                  </>
+                )}
+              </button>
+            ) : null}
+          </span>
         </div>
         {error ? (
           <p className={styles.error} role="alert">
@@ -282,26 +322,18 @@ export function ListView({
             ))}
           </div>
         ) : rows.length === 0 ? (
-          <InlineEmpty
-            icon={query ? SearchX : Users}
-            title={
-              query
-                ? "No leads match"
-                : stage === TEST
-                  ? "No test leads"
-                  : `No leads in ${stageLabel}`
-            }
-            text={
-              query
-                ? "Try another name, city or the last digits of a number."
-                : stage === TEST
-                  ? "Test and sample leads show here, ready to clear."
-                  : "A lead moves here from its own page, after a call."
-            }
+          <EmptyList
+            stage={stage}
+            stageLabel={stageLabel}
+            query={query}
+            filtered={filtered || !!query}
+            onClearFilters={onClearFilters}
+            onAdd={onAdd}
+            onShowOpen={onShowOpen}
           />
         ) : (
           <>
-            <ul className={styles.leadList} aria-label="Leads">
+            <ul className={styles.leadList} aria-label="Leads" ref={list}>
               {rows.map((row) =>
                 selecting ? (
                   <SelectLine
@@ -346,6 +378,29 @@ export function ListView({
               leads: [...chosen].map(([lead_id, name]) => ({ lead_id, name })),
             }))
           }
+          onActions={() =>
+            setBulk((current) => ({
+              round: (current?.round ?? 0) + 1,
+              open: true,
+            }))
+          }
+        />
+      ) : null}
+      {bulk ? (
+        <BulkSheet
+          key={bulk.round}
+          open={bulk.open}
+          leadIds={[...chosen.keys()]}
+          pipeline={pipeline}
+          onClose={() =>
+            setBulk((current) => current && { ...current, open: false })
+          }
+          onDone={() => {
+            setBulk((current) => current && { ...current, open: false });
+            setPicked(null);
+            setSelecting(false);
+            onChanged?.();
+          }}
         />
       ) : null}
       {confirm ? (
@@ -360,5 +415,74 @@ export function ListView({
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * An empty list says what goes here and offers one way on (ease-of-use wave #9,
+ * 22 Oct 2026): a narrowed list clears its filters, an empty Open list adds a lead,
+ * any other stage goes back to the open leads.
+ */
+function EmptyList({
+  stage,
+  stageLabel,
+  query,
+  filtered,
+  onClearFilters,
+  onAdd,
+  onShowOpen,
+}: {
+  stage: string;
+  stageLabel: string;
+  query: string;
+  filtered: boolean;
+  onClearFilters?: () => void;
+  onAdd?: () => void;
+  onShowOpen?: () => void;
+}) {
+  const action = (label: string, run?: () => void) =>
+    run ? (
+      <Button onClick={run} className={styles.inlineEmptyAction}>
+        {label}
+      </Button>
+    ) : null;
+  if (filtered)
+    return (
+      <InlineEmpty
+        icon={SearchX}
+        title="No leads match"
+        text={
+          query
+            ? "Try another name, city or the last digits of a number."
+            : "Nobody here for whose leads you picked."
+        }
+        action={action("Clear filters", onClearFilters)}
+      />
+    );
+  if (stage === TEST)
+    return (
+      <InlineEmpty
+        icon={Users}
+        title="No test leads"
+        text="Test and sample leads show here, ready to clear."
+        action={action("See open leads", onShowOpen)}
+      />
+    );
+  if (stage === "open")
+    return (
+      <InlineEmpty
+        icon={UserPlus}
+        title="No leads yet"
+        text="Add your first lead, or connect your ad form in Lead sources."
+        action={action("Add lead", onAdd)}
+      />
+    );
+  return (
+    <InlineEmpty
+      icon={Users}
+      title={`No leads in ${stageLabel}`}
+      text="A lead moves here from its own page, after a call."
+      action={action("See open leads", onShowOpen)}
+    />
   );
 }

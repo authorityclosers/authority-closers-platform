@@ -66,8 +66,10 @@ from ac_platform.conversation_intelligence.reports import (
     merge_fact_packets,
 )
 from ac_platform.conversation_intelligence.speaker_roles import validate_speaker_roles
-from ac_platform.one_pass.markers import PROMPT_REVISION as ONE_PASS_PROMPT_REVISION
+from ac_platform.one_pass.markers import PROMPT_REVISIONS as ONE_PASS_PROMPT_REVISIONS
 from ac_platform.one_pass.markers import RECIPE as ONE_PASS_RECIPE
+from ac_platform.one_pass.markers import RECIPE_BY_PROMPT_REVISION as ONE_PASS_RECIPE_BY_PROMPT
+from ac_platform.one_pass.markers import RECIPES as ONE_PASS_RECIPES
 from ac_platform.one_pass.markers import call_date as one_pass_call_date
 from ac_platform.outbox.models import Job
 
@@ -77,8 +79,9 @@ if TYPE_CHECKING:
 ALIGNMENT_RECIPE = "source-clock-support-v1"
 FACT_RECIPE = "source-fact-chunk-v1"
 # C4 as one request over the whole call (one_pass.stage), chosen by its route's recipe.
+# v2 (one_pass.brain4_part) is the same request plus the Brain 4.0 part.
 ONE_PASS_FACT_RECIPE = ONE_PASS_RECIPE
-FACT_RECIPES = frozenset({FACT_RECIPE, ONE_PASS_FACT_RECIPE})
+FACT_RECIPES = frozenset({FACT_RECIPE, *ONE_PASS_RECIPES})
 COACHING_RECIPE = "qualitative-coaching-v1"
 _LOGGER = logging.getLogger(__name__)
 
@@ -130,7 +133,7 @@ class StageRequest(BaseModel):
     model: str = Field(default=GROQ_MODEL, min_length=1, max_length=128)
     max_input_chars: int = Field(default=16_000, strict=True, ge=512, le=32_000)
     max_completion_tokens: int = Field(default=1_400, strict=True, ge=256, le=20_000)
-    fact_prompt_revision: Literal["facts-v1", "facts-v2", "one-pass-v1"] = Field(
+    fact_prompt_revision: Literal["facts-v1", "facts-v2", "one-pass-v1", "one-pass-v2"] = Field(
         default=FACT_PROMPT_LEGACY,
         exclude_if=lambda value: value == FACT_PROMPT_LEGACY,
     )
@@ -177,7 +180,7 @@ class StageRequest(BaseModel):
         if (
             self.provider == "openai"
             and self.stage != "C5"
-            and self.fact_prompt_revision != ONE_PASS_PROMPT_REVISION
+            and self.fact_prompt_revision not in ONE_PASS_PROMPT_REVISIONS
         ):
             # Coaching, and the one-pass C4 request (GPT-6 Luna).
             raise ValueError("OpenAI is approved for coaching only.")
@@ -191,9 +194,7 @@ class StageRequest(BaseModel):
             self.provider,
             self.model,
             self.stage,
-            recipe=ONE_PASS_RECIPE
-            if self.fact_prompt_revision == ONE_PASS_PROMPT_REVISION
-            else None,
+            recipe=ONE_PASS_RECIPE_BY_PROMPT.get(self.fact_prompt_revision),
         ):
             raise ValueError("Stage output exceeds the provider route limit.")
         if self.stage == "C4" and (self.fact_checkpoint_ids or self.profile is not None):
@@ -570,7 +571,7 @@ class ReportingPipeline:
         await self.save(recording, alignment, aligned)
         parents: tuple[Checkpoint, ...] = (transcript_checkpoint, alignment)
         if request.stage == "C4":
-            one_pass = request.fact_prompt_revision == ONE_PASS_PROMPT_REVISION
+            one_pass = request.fact_prompt_revision in ONE_PASS_PROMPT_REVISIONS
             inputs = prepare_fact_inputs(
                 transcript,
                 provider=request.provider,
@@ -587,7 +588,11 @@ class ReportingPipeline:
             template = build_checkpoint(
                 binding,
                 "C4",
-                ONE_PASS_FACT_RECIPE if one_pass else FACT_RECIPE,
+                (
+                    ONE_PASS_RECIPE_BY_PROMPT[request.fact_prompt_revision]
+                    if one_pass
+                    else FACT_RECIPE
+                ),
                 {
                     "input_sha256": prepared.input_sha256,
                     "chunk_index": prepared.chunk_index,

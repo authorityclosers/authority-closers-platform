@@ -10,10 +10,22 @@
  * organisation two pipelines (enquiries and partner outreach; `&pipeline=`
  * picks one), and `?tab=stages&pipelines=2&tap=new` opens New pipeline.
  * `?after-call=1` opens the first lead as if a call to it just ended, so the
- * "How did it go?" sheet shows (Redmi #47: Save says what it still needs).
+ * "How did it go?" sheet shows (Redmi #47: Save says what it still needs);
+ * `&tap=next` then saves "Didn't get through" and shows who is next.
+ * `?tab=all&stage=open&tap=bulk` ticks two leads and opens Select → Actions;
+ * `tap=bulkwa` goes on to a WhatsApp template and who gets it.
+ * `?loop=1&tap=loop` opens Start calling just back from a call and taps No answer:
+ * Call mode's "Save and call <name>", "Save and stop here" and who is next.
+ * `?tab=all&stage=open&tap=filter` opens Filter (name or number, whose leads,
+ * pipeline); add `&who=mine&q=pune` to see the filters that are on as chips.
+ * `?hub=1&after-call=1` opens the first lead as the lead hub: a call with its
+ * Report, a stage change, a note and a WhatsApp chat in one timeline.
+ * `&views=1` keeps three saved views on this browser, one of them the view in use
+ * (Open, Everyone); `&tap=views` then opens Views. `&q=` searches by name or city;
+ * `?tab=all&stage=open&q=nagpurx` shows an empty list's "Clear filters".
  */
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useEffect, useState, type ReactNode } from "react";
 
 import { rememberCall } from "../../leads/leads-client";
 import { LeadsRoute } from "../../leads/leads-page";
@@ -60,6 +72,100 @@ const LEADS: [string, string | null, string | null, Stage, string, string][] = [
 ];
 
 /** `&pipelines=2`: two pipelines, half the leads in each. */
+/** `&hub=1`: the first lead has a day of history and a WhatsApp chat (lead hub). */
+const hub = () =>
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("hub") === "1";
+
+function hubEvents(now: number) {
+  const at = (minutes: number) =>
+    new Date(now - minutes * MINUTE).toISOString();
+  const base = {
+    actor_name: "rahul example",
+    stage: null,
+    stage_label: null,
+    reason: null,
+    reason_label: null,
+    connected: null,
+    note: null,
+    next_action_at: null,
+    owner_name: null,
+    previous_owner_name: null,
+    allocation_reason: null,
+    source_label: null,
+    submission_id: null,
+    simulated: null,
+    duration_seconds: null,
+  };
+  return [
+    {
+      ...base,
+      kind: "note",
+      at: at(20),
+      note: "Wants a Saturday visit with the family",
+    },
+    {
+      ...base,
+      kind: "stage",
+      at: at(118),
+      stage: "interested",
+      stage_label: "Site visit booked",
+    },
+    {
+      ...base,
+      kind: "call",
+      at: at(120),
+      connected: true,
+      direction: "outgoing",
+      duration_seconds: 254,
+      submission_id: "00000000-0000-4000-8000-000000000900",
+    },
+    {
+      ...base,
+      kind: "call",
+      at: at(60 * 26),
+      connected: false,
+      direction: "outgoing",
+      reason: "did_not_pick",
+      reason_label: "No answer",
+    },
+    { ...base, kind: "captured", at: at(60 * 27), source_label: "Facebook ad" },
+  ];
+}
+
+function hubChat(now: number) {
+  const at = (minutes: number) =>
+    new Date(now - minutes * MINUTE).toISOString();
+  const message = (
+    id: string,
+    minutes: number,
+    direction: string,
+    text: string,
+  ) => ({
+    id,
+    direction,
+    kind: "text",
+    text,
+    status: "read",
+    at: at(minutes),
+  });
+  return {
+    configured: true,
+    connected: true,
+    numbers: [],
+    messages: [
+      message("m1", 70, "in", "Is the 2 BHK still free this weekend?"),
+      message("m2", 66, "out", "Yes, Saturday 11 am works."),
+      message("m3", 64, "in", "Great, see you then"),
+    ],
+    windowOpen: true,
+    windowClosesAt: at(-60 * 22),
+    optedIn: true,
+    optInHow: "Lead form",
+    templates: [],
+  };
+}
+
 const twoPipelines = () =>
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).get("pipelines") === "2";
@@ -146,8 +252,13 @@ function answers(now: number, path: string): unknown {
     const params = new URLSearchParams(path.split("?")[1]);
     const stage = params.get("stage");
     const pipeline = params.get("pipeline");
+    // A search narrows by name or city, as the desk does (`&q=` on the page).
+    const words = (params.get("search") ?? "").toLowerCase();
     const inPipeline = all.filter(
-      (row) => !pipeline || row.pipeline === pipeline,
+      (row) =>
+        (!pipeline || row.pipeline === pipeline) &&
+        (!words ||
+          `${row.name} ${row.city ?? ""}`.toLowerCase().includes(words)),
     );
     const leads = inPipeline.filter((row) =>
       !stage || stage === "open"
@@ -159,18 +270,84 @@ function answers(now: number, path: string): unknown {
       stage_counts[row.stage] = (stage_counts[row.stage] ?? 0) + 1;
     return { leads, total: leads.length, next_offset: null, stage_counts };
   }
-  const one = /^\/v1\/lead-desk\/leads\/([0-9a-f-]{36})$/.exec(path);
-  const row = one ? all.find((item) => item.lead_id === one[1]) : undefined;
-  if (row)
+  if (path === "/v1/lead-desk/whatsapp/status")
     return {
-      lead: row,
-      phone: "+91 98765 43210",
+      numbers: [{ id: "00000000-0000-4000-8000-000000000700" }],
+      templates: [
+        {
+          name: "welcome_lead",
+          language: "en",
+          status: "APPROVED",
+          text: "Hi {{1}}, thanks for your enquiry. When can we call?",
+          parts: 1,
+        },
+      ],
+    };
+  if (path === "/v1/lead-desk/leads/bulk-whatsapp/preview")
+    return {
+      ready: 1,
+      skipped: [
+        { reason: "no_yes", words: "haven't said yes to WhatsApp", count: 1 },
+      ],
+      sent: 0,
+      failed: 0,
+      text: "Hi {name}, thanks for your enquiry. When can we call?",
+      limit: 100,
+    };
+  if (path.startsWith("/v1/lead-desk/next")) {
+    // The lead after the one skipped (Call mode reads it ahead).
+    const skip = new URLSearchParams(path.split("?")[1] ?? "").get("skip");
+    const after = skip === all[1].lead_id ? all[2] : all[1];
+    return {
+      lead: after,
+      phone: "+91 98765 43211",
       email: null,
       owner_reason: null,
       next_action_note: null,
       fields: [],
       source_fields: [],
       events: [],
+      can_edit: true,
+      can_assign: true,
+      reps: [],
+      call_mode: "phone",
+    };
+  }
+  // A lead's chats (the lead hub reads them once): a WhatsApp chat with `&hub=1`.
+  const chat =
+    /^\/v1\/lead-desk\/leads\/([0-9a-f-]{36})\/(whatsapp|social)$/.exec(path);
+  if (chat)
+    return chat[2] === "whatsapp" && hub()
+      ? hubChat(Date.now())
+      : { configured: false, connected: false, threads: [], messages: [] };
+  const one = /^\/v1\/lead-desk\/leads\/([0-9a-f-]{36})(\/dispose)?$/.exec(
+    path,
+  );
+  const row = one ? all.find((item) => item.lead_id === one[1]) : undefined;
+  if (row)
+    return {
+      // `&hub=1`: the first lead's record agrees with its day of history.
+      lead:
+        hub() && row.lead_id === all[0].lead_id
+          ? {
+              ...row,
+              source: "meta",
+              source_label: "Facebook ad",
+              stage: "interested",
+              stage_label: "Site visit booked",
+              calls: 2,
+              attempts: 2,
+              created_at: new Date(Date.now() - 27 * 60 * MINUTE).toISOString(),
+            }
+          : row,
+      phone: "+91 98765 43210",
+      email: null,
+      owner_reason: null,
+      next_action_note: null,
+      fields: [],
+      source_fields: [],
+      events:
+        hub() && row.lead_id === all[0].lead_id ? hubEvents(Date.now()) : [],
       can_edit: true,
       can_assign: true,
       reps: [],
@@ -382,8 +559,33 @@ function answers(now: number, path: string): unknown {
   return null;
 }
 
+/** `&views=1`: three saved views (Leads → Views), kept as the page keeps them. */
+function keepViews() {
+  if (new URLSearchParams(window.location.search).get("views") !== "1") return;
+  const view = (
+    id: string,
+    name: string,
+    stage: string,
+    who: string,
+    q: string,
+  ) => ({ id, name, stage, pipeline: null, who, q });
+  try {
+    window.localStorage.setItem(
+      `sx.leads.views.v1:${OWNER}:${TENANT}`,
+      JSON.stringify([
+        view("v-open", "All open leads", "open", "team", ""),
+        view("v-pune", "Mine in Pune", "open", "mine", "pune"),
+        view("v-hot", "Interested, no owner", "interested", "unassigned", ""),
+      ]),
+    );
+  } catch {
+    // A browser that keeps nothing shows Views empty.
+  }
+}
+
 function install() {
   if (typeof window === "undefined") return true;
+  keepViews();
   // `?after-call=1`: a call to the first lead ended 95 s ago; the lead opens.
   if (new URLSearchParams(window.location.search).get("after-call") === "1") {
     const first = rows(Date.now())[0].lead_id;
@@ -394,6 +596,10 @@ function install() {
       `${window.location.pathname}${window.location.search}#lead=${first}`,
     );
   }
+  // `?loop=1`: Start calling opens on the second lead, just back from its call
+  // (Call mode: "Save and call <name>" then names the lead after it).
+  if (new URLSearchParams(window.location.search).get("loop") === "1")
+    rememberCall(rows(Date.now())[1].lead_id, Date.now() - 95_000);
   const real = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const url = String(input instanceof Request ? input.url : input);
@@ -417,22 +623,77 @@ function install() {
 function useTap() {
   useEffect(() => {
     const tap = new URLSearchParams(window.location.search).get("tap");
-    if (tap !== "menu" && tap !== "change" && tap !== "new") return;
+    const press = (text: string) =>
+      Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+        .find((button) => button.textContent?.trim().startsWith(text))
+        ?.click();
+    // `?tab=all&stage=open&tap=filter`: the Filter sheet (Leads header).
+    if (tap === "filter") {
+      const timer = window.setTimeout(() => press("Filter"), 900);
+      return () => window.clearTimeout(timer);
+    }
+    // `&tap=loop` (with `?loop=1`): Start calling, then No answer.
+    if (tap === "loop") {
+      const timers = [
+        window.setTimeout(() => press("Start calling"), 900),
+        window.setTimeout(() => press("No answer"), 2200),
+      ];
+      return () => timers.forEach((timer) => window.clearTimeout(timer));
+    }
+    if (tap === "next" || tap === "bulk" || tap === "bulkwa") {
+      const steps =
+        tap === "next"
+          ? ["Didn't get through", "No answer", "Save"]
+          : tap === "bulk"
+            ? ["Select", "", "", "Actions"]
+            : [
+                "Select",
+                "",
+                "",
+                "Actions",
+                "Send a WhatsApp template",
+                "welcome lead",
+                "Check who gets it",
+              ];
+      const timers = steps.map((text, index) =>
+        window.setTimeout(
+          () => {
+            if (text) press(text);
+            else
+              document
+                .querySelectorAll<HTMLButtonElement>(
+                  'li button[aria-checked="false"]',
+                )[0]
+                ?.click();
+          },
+          900 + index * 300,
+        ),
+      );
+      return () => timers.forEach((timer) => window.clearTimeout(timer));
+    }
+    if (tap !== "menu" && tap !== "change" && tap !== "new" && tap !== "views")
+      return;
     const timer = window.setTimeout(
       () =>
         (tap === "menu"
           ? document.querySelector<HTMLButtonElement>(
               'button[aria-label="Leads settings"]',
             )
-          : tap === "new"
-            ? Array.from(
-                document.querySelectorAll<HTMLButtonElement>("button"),
-              ).find((button) => button.textContent?.trim() === "New pipeline")
-            : Array.from(
-                document.querySelectorAll<HTMLButtonElement>(
-                  'section[aria-label="Your kind of business"] button',
-                ),
-              ).find((button) => button.textContent === "Change")
+          : tap === "views"
+            ? document.querySelector<HTMLButtonElement>(
+                'button[aria-label^="Saved view"]',
+              )
+            : tap === "new"
+              ? Array.from(
+                  document.querySelectorAll<HTMLButtonElement>("button"),
+                ).find(
+                  (button) => button.textContent?.trim() === "New pipeline",
+                )
+              : Array.from(
+                  document.querySelectorAll<HTMLButtonElement>(
+                    'section[aria-label="Your kind of business"] button',
+                  ),
+                ).find((button) => button.textContent === "Change")
         )?.click(),
       900,
     );
@@ -440,9 +701,10 @@ function useTap() {
   }, []);
 }
 
-export function LeadsPreview() {
+/** The fictional organisation, signed in, with its answers installed: for any
+ * screen's fixture that reads the Lead Desk (Leads, and Settings since slice 5). */
+export function FixtureWorkspace({ children }: { children: ReactNode }) {
   useState(install);
-  useTap();
   return (
     <WorkspaceAccessContext.Provider
       value={{
@@ -461,9 +723,18 @@ export function LeadsPreview() {
         retry: () => {},
       }}
     >
+      {children}
+    </WorkspaceAccessContext.Provider>
+  );
+}
+
+export function LeadsPreview() {
+  useTap();
+  return (
+    <FixtureWorkspace>
       <Suspense fallback={null}>
         <LeadsRoute />
       </Suspense>
-    </WorkspaceAccessContext.Provider>
+    </FixtureWorkspace>
   );
 }

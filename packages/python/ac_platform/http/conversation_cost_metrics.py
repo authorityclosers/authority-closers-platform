@@ -5,6 +5,10 @@ host collector fills with each environment's usage numbers. It opens no other
 environment's database; in its own it reads organisation and person names live
 for the signed-in control account (the store holds none) and changes nothing
 except making this environment's pseudonym key once; see ``cost_metrics``.
+
+``GET /v1/admin/conversation/meter[?env=production&fx=daily]`` is the cost per audio
+minute now (owner, 22 Oct 2026): one environment's today, 24 hours and 7 days, full
+reports against short calls, and by pipeline version; see ``cost_meter``.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationError,
 )
+from ac_platform.conversation_intelligence.cost_meter import read_meter
 from ac_platform.conversation_intelligence.cost_metrics import AdminCostMetrics
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_admin_surface
 
@@ -75,5 +80,33 @@ def install_cost_metrics_routes(
                 person=person,
                 fx=fx,
             )
+        except ConversationError as error:
+            raise HTTPException(error.status, str(error)) from None
+
+    @router.get("/meter")
+    async def meter(
+        request: Request,
+        response: Response,
+        env: Literal["production", "staging", "development"] = "production",
+        fx: Literal["daily", "planning"] = "daily",
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        """Cost per audio minute now: today, 24 hours and 7 days; numbers only."""
+
+        require_admin_surface(request, settings)
+        response.headers["Cache-Control"] = "private, no-store"
+        names = set(request.query_params)
+        if names - {"env", "fx"} or any(len(request.query_params.getlist(n)) != 1 for n in names):
+            raise HTTPException(422, "The cost meter takes env and fx once each.")
+        if settings.operations_tenant_id is None:
+            raise HTTPException(503, "Cost and usage is not configured.")
+        service = AdminCostMetrics(
+            ConversationApplication(auth.database),
+            settings.operations_tenant_id,
+            store_root=settings.metrics_store_root,
+            here=settings.environment,
+        )
+        try:
+            return await read_meter(service, auth.resolved.actor, environment=env, fx=fx)
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
