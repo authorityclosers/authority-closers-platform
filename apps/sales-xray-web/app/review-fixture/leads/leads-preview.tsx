@@ -14,6 +14,8 @@
  * `&tap=next` then saves "Didn't get through" and shows who is next.
  * `?tab=all&stage=open&tap=bulk` ticks two leads and opens Select → Actions;
  * `tap=bulkwa` goes on to a WhatsApp template and who gets it.
+ * `?loop=1&tap=loop` opens Start calling just back from a call and taps No answer:
+ * Call mode's "Save and call <name>", "Save and stop here" and who is next.
  * `&views=1` keeps three saved views on this browser, one of them the view in use
  * (Open, Everyone); `&tap=views` then opens Views. `&q=` searches by name or city;
  * `?tab=all&stage=open&q=nagpurx` shows an empty list's "Clear filters".
@@ -195,7 +197,9 @@ function answers(now: number, path: string): unknown {
       limit: 100,
     };
   if (path.startsWith("/v1/lead-desk/next")) {
-    const after = all[1];
+    // The lead after the one skipped (Call mode reads it ahead).
+    const skip = new URLSearchParams(path.split("?")[1] ?? "").get("skip");
+    const after = skip === all[1].lead_id ? all[2] : all[1];
     return {
       lead: after,
       phone: "+91 98765 43211",
@@ -473,6 +477,10 @@ function install() {
       `${window.location.pathname}${window.location.search}#lead=${first}`,
     );
   }
+  // `?loop=1`: Start calling opens on the second lead, just back from its call
+  // (Call mode: "Save and call <name>" then names the lead after it).
+  if (new URLSearchParams(window.location.search).get("loop") === "1")
+    rememberCall(rows(Date.now())[1].lead_id, Date.now() - 95_000);
   const real = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const url = String(input instanceof Request ? input.url : input);
@@ -500,6 +508,14 @@ function useTap() {
       Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
         .find((button) => button.textContent?.trim().startsWith(text))
         ?.click();
+    // `&tap=loop` (with `?loop=1`): Start calling, then No answer.
+    if (tap === "loop") {
+      const timers = [
+        window.setTimeout(() => press("Start calling"), 900),
+        window.setTimeout(() => press("No answer"), 2200),
+      ];
+      return () => timers.forEach((timer) => window.clearTimeout(timer));
+    }
     if (tap === "next" || tap === "bulk" || tap === "bulkwa") {
       const steps =
         tap === "next"

@@ -202,7 +202,8 @@ it("shows a dialer call with its recording as one row with its Report", async ()
       />,
     ),
   );
-  const row = host.querySelector("li")!;
+  // The first event's row (a day header sits above it since 22 Oct 2026).
+  const row = host.querySelector("li:not([aria-hidden])")!;
   expect(row.textContent).toContain("Asha called · 2:14");
   expect(row.textContent).toContain("From the phone dialer · recorded");
   expect(row.textContent).toContain("Open the call's Report");

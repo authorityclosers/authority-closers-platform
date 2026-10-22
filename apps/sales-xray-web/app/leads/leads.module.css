@@ -2263,8 +2263,8 @@ a.repName {
 
 .choiceRow {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
 }
 
 .choiceTile {
@@ -2273,15 +2273,17 @@ a.repName {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 84px;
-  padding: 12px;
+  min-height: 76px;
+  padding: 10px 6px;
+  text-align: center;
   border: 1px solid var(--sx-line-strong);
   border-radius: var(--lx-radius-lg);
   background: var(--sx-paper);
   color: var(--sx-ink);
   font: inherit;
-  font-size: var(--sx-text-md);
+  font-size: var(--sx-text-sm);
   font-weight: 650;
+  line-height: 1.25;
   cursor: pointer;
   transition: background var(--lx-dur-quick) var(--lx-ease-quick);
 }
@@ -3792,6 +3794,23 @@ a.repName {
   box-shadow: var(--sx-focus-ring);
 }
 
+/* Call mode: who comes after this lead, and a way to stop (22 Oct 2026). */
+.upNextLine {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.upNextLine strong {
+  color: var(--sx-ink);
+}
+
+.stopLink {
+  justify-self: center;
+  min-height: 44px;
+}
+
 .saveRow {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -3800,6 +3819,20 @@ a.repName {
 
 .saveRow > :only-child {
   grid-column: 1 / -1;
+}
+
+/* A narrow phone with the phone type scale: the message button keeps its icon
+   and gives Save its room, so "Save and call <name>" reads on one line. */
+@media (max-width: 419.98px) {
+  .saveMessage {
+    justify-content: center;
+    width: 52px;
+    padding: 0;
+  }
+
+  .saveMessageWords {
+    display: none;
+  }
 }
 
 .saveMessage {
