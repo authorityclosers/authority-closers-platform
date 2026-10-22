@@ -1111,7 +1111,8 @@
    inside a line of text (the number's <b>, the line under it) sits on that
    line, so the line keeps its own height (Liquid Glass, 22 Oct 2026). */
 .skeleton .phValue > span,
-.skeleton .kpiContext > span {
+.skeleton .kpiContext > span,
+.skeleton .group > span {
   display: inline-block;
   max-width: 100%;
   vertical-align: -0.05em;

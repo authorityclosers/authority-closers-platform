@@ -64,6 +64,10 @@ export function CallsBodySkeleton({
         </div>
         <div className={styles.table}>
           <div className={styles.head} aria-hidden="true" />
+          {/* The first day's heading (Today), as the loaded list opens. */}
+          <div className={styles.group} aria-hidden="true">
+            <Skeleton width={44} height={10} />
+          </div>
           {Array.from({ length: 8 }, (_, row) => (
             <div className={styles.skeletonRow} key={row}>
               <Skeleton width="min(360px, 60%)" height={12} />
