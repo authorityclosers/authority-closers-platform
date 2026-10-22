@@ -113,6 +113,37 @@ async def main(path: str, apply: bool) -> int:
             landing = target_after or target_before.stages
             lands = journeys.Journey(1, None, tuple(landing), pipeline=target["key"])
             by_kind = Counter(lead.stage for lead in leads)
+            # Where every lead lands, by the stage it shows now (owner's review, 22 Oct 2026):
+            # the leads that move, by their main stage and their new pipeline's stage; the
+            # leads that stay, by their main stage before and after the new list.
+            moving = {lead.id for lead in leads}
+            main_after_list = journeys.Journey(
+                1, None, tuple(main_after or main_before.stages), pipeline=pipelines.MAIN
+            )
+            moves: Counter[tuple[str, str]] = Counter()
+            for lead in leads:
+                moves[
+                    (
+                        main_before.label(lead.stage, lead.step) or lead.stage,
+                        (lands.resolve(lead.stage, None) or lands.stages[0]).label,
+                    )
+                ] += 1
+            stays: Counter[tuple[str, str]] = Counter()
+            for lead_id, kind, step in (
+                await db.execute(
+                    select(Lead.id, Lead.stage, Lead.step).where(
+                        Lead.tenant_id == tenant_id, journeys.lead_in(pipelines.MAIN)
+                    )
+                )
+            ).tuples():
+                if lead_id in moving:
+                    continue
+                stays[
+                    (
+                        main_before.label(kind, step) or kind,
+                        main_after_list.label(kind, step) or kind,
+                    )
+                ] += 1
             rename = bool(main_spec.get("name")) and main.name != main_spec["name"]
             report["before"] = {
                 "pipelines": [
@@ -144,6 +175,10 @@ async def main(path: str, apply: bool) -> int:
                     }
                     for kind, count in sorted(by_kind.items())
                 },
+                # [stage now, stage after, leads]: every lead, moving or staying.
+                "move_map": [[now, after, n] for (now, after), n in sorted(moves.items())],
+                "main_map": [[now, after, n] for (now, after), n in sorted(stays.items())],
+                "main_leads_after": sum(stays.values()),
             }
             if not (rename or main_after or existing is None or target_after or leads):
                 report["status"] = "already_applied"
