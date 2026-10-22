@@ -2498,6 +2498,50 @@ a.repName {
   overflow-wrap: anywhere;
 }
 
+/* After a save in a lead: who is next, and Call them (22 Oct 2026). */
+.nextUp {
+  position: sticky;
+  z-index: 3;
+  bottom: 0;
+  display: flex;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-float);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.nextUp > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.nextUp strong {
+  color: var(--sx-ink);
+}
+
+.nextUp small {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nextUp .callBarButton {
+  width: auto;
+  min-height: 44px;
+  padding: 0 18px;
+}
+
 /* Select → Actions: give, re-stage or move many leads (22 Oct 2026). */
 .bulk {
   display: grid;

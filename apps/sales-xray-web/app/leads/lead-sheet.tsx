@@ -2238,6 +2238,7 @@ export function LeadSheet({
   onClose,
   onChanged,
   intent = null,
+  onNext,
 }: {
   leadId: string | null;
   me: Me | null;
@@ -2245,7 +2246,16 @@ export function LeadSheet({
   onChanged: () => void;
   /** Do this as soon as the lead is open (swipe, hold, an alert's Call). */
   intent?: LeadIntent | null;
+  /** After an outcome is saved: call the next lead on the desk. */
+  onNext?: (leadId: string) => void;
 }) {
+  // Saved here: who is next on the desk, so one tap calls them (the
+  // ease-of-use wave, 22 Oct 2026: "Call next" everywhere, not only in
+  // Start calling).
+  const [nextUp, setNextUp] = useState<{
+    after: string;
+    lead: LeadDetail | null;
+  } | null>(null);
   const [loaded, setLoaded] = useState<LeadDetail | null>(null);
   const [failed, setFailed] = useState<{
     leadId: string;
@@ -2351,6 +2361,13 @@ export function LeadSheet({
                     setBackFrom(null);
                     if (asked) setAnswered(asked.startedMs);
                     update(next);
+                    if (onNext && leadId) {
+                      const after = leadId;
+                      readNext(after).then(
+                        (lead) => setNextUp({ after, lead }),
+                        () => undefined,
+                      );
+                    }
                   }}
                 />
               }
@@ -2374,6 +2391,28 @@ export function LeadSheet({
                   <Trash2 size={15} aria-hidden="true" />
                   Delete lead
                 </button>
+              </div>
+            ) : null}
+            {onNext && nextUp && nextUp.after === leadId ? (
+              <div className={styles.nextUp} role="status">
+                {nextUp.lead ? (
+                  <>
+                    <span>
+                      Saved. Next up: <strong>{nextUp.lead.lead.name}</strong>
+                      <small>{whyLine(nextUp.lead.lead)}</small>
+                    </span>
+                    <button
+                      type="button"
+                      className={styles.callBarButton}
+                      onClick={() => onNext(nextUp.lead!.lead.lead_id)}
+                    >
+                      <Phone size={17} aria-hidden="true" />
+                      Call {nextUp.lead.lead.name.split(" ")[0]}
+                    </button>
+                  </>
+                ) : (
+                  <span>Saved. Nobody else is due now.</span>
+                )}
               </div>
             ) : null}
           </>

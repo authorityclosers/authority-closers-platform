@@ -863,6 +863,7 @@ export function LeadsRoute() {
             setIntent(null);
           }}
           onChanged={refresh}
+          onNext={(leadId) => open(leadId, "call")}
         />
         <ActionSheet
           open={!!dialling}
