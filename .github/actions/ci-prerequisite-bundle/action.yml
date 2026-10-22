@@ -1,0 +1,53 @@
+name: Publish verified CI prerequisite bundle
+description: Prove a complete non-Azure Ubuntu closure and locked browsers before consumers start.
+outputs:
+  bundle:
+    description: Immutable artifact digest and trusted producer reference.
+    value: ${{ steps.prepare.outputs.reference || steps.reference.outputs.reference }}
+runs:
+  using: composite
+  steps:
+    - name: Make the Azure apt mirror unavailable on this disposable runner
+      shell: bash
+      run: |
+        test "$GITHUB_ACTIONS" = true
+        printf '\n127.0.0.1 azure.archive.ubuntu.com\n::1 azure.archive.ubuntu.com\n' | sudo --non-interactive tee -a /etc/hosts >/dev/null
+    - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+      with:
+        node-version: 24.19.0
+    - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+      with:
+        python-version: "3.12"
+    - name: Install frozen producer tooling
+      shell: bash
+      run: |
+        python -m pip install --disable-pip-version-check uv==0.12.7
+        corepack enable && corepack prepare pnpm@11.19.0 --activate
+        pnpm install --frozen-lockfile --ignore-scripts
+        uv sync --frozen --no-install-project
+    - name: Reuse a trusted bundle or prove a new complete closure
+      id: prepare
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: .venv/bin/python scripts/ci/ci_prerequisite_bundle.py prepare --directory "$RUNNER_TEMP/ci-prerequisite-producer"
+    - name: Publish the proved bundle before consumers start
+      id: upload
+      if: steps.prepare.outputs.built == 'true'
+      uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+      with:
+        name: ${{ steps.prepare.outputs.name }}
+        path: |
+          ${{ runner.temp }}/ci-prerequisite-producer/publish/bundle.json
+          ${{ runner.temp }}/ci-prerequisite-producer/publish/bundle.tar.gz
+        if-no-files-found: error
+        compression-level: 0
+        retention-days: 2
+    - name: Bind the exact published artifact
+      id: reference
+      if: steps.prepare.outputs.built == 'true'
+      shell: bash
+      env:
+        PREREQ_ARTIFACT_ID: ${{ steps.upload.outputs.artifact-id }}
+        PREREQ_ARTIFACT_DIGEST: ${{ steps.upload.outputs.artifact-digest }}
+      run: python3 scripts/ci/ci_prerequisite_bundle.py reference --directory "$RUNNER_TEMP/ci-prerequisite-producer"

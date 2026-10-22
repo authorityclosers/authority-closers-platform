@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: application-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -17,6 +18,18 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  ci-prerequisites:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    outputs:
+      bundle: ${{ steps.bundle.outputs.bundle }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - id: bundle
+        uses: ./.github/actions/ci-prerequisite-bundle
+
   academy-capacity-simulation:
     runs-on: windows-2022
     timeout-minutes: 15
@@ -82,6 +95,7 @@ jobs:
         run: pnpm -r --if-present build
 
   validate-sales-xray-acquisition-browser:
+    needs: ci-prerequisites
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     services:
@@ -125,6 +139,7 @@ jobs:
         timeout-minutes: 13
         uses: ./.github/actions/ci-prerequisites
         with:
+          bundle: ${{ needs.ci-prerequisites.outputs.bundle }}
           components: codec browser
       - name: Build verified AudioAtlas for acquisition browser
         run: |
@@ -156,6 +171,7 @@ jobs:
           retention-days: 14
 
   validate-python-tests:
+    needs: ci-prerequisites
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -222,6 +238,7 @@ jobs:
         timeout-minutes: 13
         uses: ./.github/actions/ci-prerequisites
         with:
+          bundle: ${{ needs.ci-prerequisites.outputs.bundle }}
           components: codec filesystem browser
       - name: Build verified AudioAtlas for conversation regressions
         run: |
@@ -262,6 +279,7 @@ jobs:
           retention-days: 14
 
   validate-python-gates:
+    needs: ci-prerequisites
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
@@ -334,6 +352,7 @@ jobs:
         timeout-minutes: 13
         uses: ./.github/actions/ci-prerequisites
         with:
+          bundle: ${{ needs.ci-prerequisites.outputs.bundle }}
           components: codec filesystem browser
       - name: Build verified AudioAtlas for conversation regressions
         run: |
@@ -525,6 +544,7 @@ jobs:
   validate:
     if: always()
     needs:
+      - ci-prerequisites
       - academy-capacity-simulation
       - validate-python-static
       - validate-frontend
@@ -557,6 +577,7 @@ jobs:
       - name: Require every validation component to pass
         if: always()
         env:
+          PREREQUISITES_RESULT: ${{ needs.ci-prerequisites.result }}
           ACADEMY_RESULT: ${{ needs.academy-capacity-simulation.result }}
           PYTHON_STATIC_RESULT: ${{ needs.validate-python-static.result }}
           FRONTEND_RESULT: ${{ needs.validate-frontend.result }}
@@ -566,6 +587,7 @@ jobs:
         run: |
           set -euo pipefail
           for result in \
+            "$PREREQUISITES_RESULT" \
             "$ACADEMY_RESULT" \
             "$PYTHON_STATIC_RESULT" \
             "$FRONTEND_RESULT" \

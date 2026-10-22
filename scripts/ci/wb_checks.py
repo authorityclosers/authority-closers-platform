@@ -39,7 +39,7 @@ DURATIONS = Path("scripts/ci/wb-python-durations.json")
 WEB_EXT = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 FORMAT_EXT = WEB_EXT + (".css", ".json", ".md", ".yml", ".yaml")
 # Changes here re-run everything: the CI itself, lockfiles and toolchain configuration.
-EVERYTHING = re.compile(r"^(\.github/(workflows/workbench-checks\.yml|actions/ci-prerequisites/)|scripts/ci/(wb[-_]|python_test_shard|ci_prerequisites"
+EVERYTHING = re.compile(r"^(\.github/(workflows/workbench-checks\.yml|actions/(ci-prerequisites|ci-prerequisite-bundle)/)|scripts/ci/(wb[-_]|python_test_shard|ci_prerequisite"
                         r"|python-test-exclusions)|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|pyproject\.toml"
                         r"|uv\.lock|tsconfig[^/]*\.json)")
 WEB = re.compile(r"^(apps/|packages/typescript/)")
