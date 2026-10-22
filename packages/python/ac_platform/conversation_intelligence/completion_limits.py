@@ -1,15 +1,15 @@
 """Finite output bounds; larger C5 requests still require fresh exact approval."""
 
 from ac_platform.one_pass.markers import MAX_COMPLETION_TOKENS as ONE_PASS_MAX_COMPLETION_TOKENS
-from ac_platform.one_pass.markers import RECIPE as ONE_PASS_RECIPE
+from ac_platform.one_pass.markers import RECIPES as ONE_PASS_RECIPES
 from ac_platform.one_pass.markers import ROUTES as ONE_PASS_ROUTES
 
 
 def completion_ceiling(provider: str, model: str, stage: str, *, recipe: str | None = None) -> int:
     # The one-pass C4 request (one_pass.stage) answers call data, notes and the review
-    # in one read; only its own recipe on its own routes is that large. Every other C4
-    # request (the fact chunks) keeps 4,000.
-    if stage == "C4" and recipe == ONE_PASS_RECIPE and (provider, model) in ONE_PASS_ROUTES:
+    # (v2: and Brain 4.0) in one read; only its own recipes on its own routes are that
+    # large. Every other C4 request (the fact chunks) keeps 4,000.
+    if stage == "C4" and recipe in ONE_PASS_RECIPES and (provider, model) in ONE_PASS_ROUTES:
         return ONE_PASS_MAX_COMPLETION_TOKENS
     # A Flex route (gemini_tiers, openai_tasks) has its model's own bounds.
     if model.endswith(":flex"):

@@ -28,6 +28,11 @@ references when sealing. With ``luna_report=False`` (the hybrid, orchestrator 21
 Luna's own coaching read worse on the real-call trial), only the one-pass C4 request goes to
 Luna and C5 stays on Gemini 3.8 Flash (on Flex with ``flex``), its own profile.
 
+With ``recipe=markers.RECIPE_V2`` (P1, orchestrator 22 Oct 2026), the one-pass C4 request
+is v2: the same read plus the Brain 4.0 part (``one_pass.brain4_part``), on its own profiles
+(``gemini-one-pass-v2``, ``-flex``; ``luna-c4-one-pass-v2``, ``-flex``) beside v1's, so a
+v1 seal is unchanged.
+
 Admin activates either configuration; activating the classic one is the one-click
 fallback. Pure: no I/O. ``scripts/ops/one_pass_c2_seal.py`` runs it on the host's files.
 """
@@ -98,6 +103,16 @@ class SealError(ValueError):
     """A stable code: what in the inputs does not fit."""
 
 
+def versioned(profile_id: str, recipe: str) -> str:
+    """v2's profile beside v1's: ``gemini-one-pass`` -> ``gemini-one-pass-v2``, a Flex
+    profile ``...-flex`` -> ``...-v2-flex``."""
+    if recipe != markers.RECIPE_V2:
+        return profile_id
+    if profile_id.endswith("-flex"):
+        return profile_id[: -len("-flex")] + "-v2-flex"
+    return profile_id + "-v2"
+
+
 def _gemini_entry(config: RegistryConfig) -> ProviderConfig:
     entries = [item for item in config.providers if item.provider_id == PROVIDER]
     for route in config.routes:
@@ -137,13 +152,17 @@ def derive_configuration(
     luna: bool = False,
     openai: ProviderConfig | None = None,
     luna_report: bool = True,
+    recipe: str = markers.RECIPE,
 ) -> RegistryConfig:
     """Today's (Scribe) configuration with the asr route on Gemini 3.1 Flash-Lite; with
     ``flex``, Flash-Lite and the Gemini 3.8 Flash C4/C5 routes on their Flex routes
     (gemini_tiers), each keeping its standard per-request ceiling (a fallback is billed at
     standard); with ``one_pass``, the facts route is the one-pass C4 request; with
     ``luna`` too, it and (``luna_report``) the coaching route are on GPT-6 Luna (``flex``:
-    Luna on Flex), using the configuration's OpenAI GPT-6 Luna entry or ``openai``."""
+    Luna on Flex), using the configuration's OpenAI GPT-6 Luna entry or ``openai``;
+    ``recipe`` is the one-pass request's recipe (v2: with the Brain 4.0 part)."""
+    if recipe not in markers.RECIPES or (recipe != markers.RECIPE and not one_pass):
+        raise SealError("one_pass_recipe_invalid")
     if luna and not one_pass:
         raise SealError("luna_is_the_one_pass_route")
     if not luna and (openai is not None or not luna_report):
@@ -188,11 +207,15 @@ def derive_configuration(
         for item in config.routes
     )
     if luna:
-        providers, routes = _luna(providers, routes, flex=flex, openai=openai, report=luna_report)
+        providers, routes = _luna(
+            providers, routes, flex=flex, openai=openai, report=luna_report, recipe=recipe
+        )
     elif one_pass:
-        providers, routes = _one_pass(providers, routes, flex=flex)
-    suffix = ("-luna-c4" if hybrid else "-luna" if luna else "-one-pass" if one_pass else "") + (
-        "-flex" if flex else ""
+        providers, routes = _one_pass(providers, routes, flex=flex, recipe=recipe)
+    suffix = (
+        ("-luna-c4" if hybrid else "-luna" if luna else "-one-pass" if one_pass else "")
+        + ("-v2" if recipe == markers.RECIPE_V2 else "")
+        + ("-flex" if flex else "")
     )
     revision = f"{config.revision}-gemini-c2{suffix}"[:128]
     return RegistryConfig(
@@ -201,7 +224,11 @@ def derive_configuration(
 
 
 def _one_pass(
-    providers: tuple[ProviderConfig, ...], routes: tuple[RouteConfig, ...], *, flex: bool
+    providers: tuple[ProviderConfig, ...],
+    routes: tuple[RouteConfig, ...],
+    *,
+    flex: bool,
+    recipe: str = markers.RECIPE,
 ) -> tuple[tuple[ProviderConfig, ...], tuple[RouteConfig, ...]]:
     """The facts route as the one-pass request, and its Gemini entry's ceiling raised to
     cover the whole call (C5 on the same model shares the entry, so its ceiling too)."""
@@ -217,8 +244,9 @@ def _one_pass(
         else item
         for item in providers
     )
+    prompt = markers.PROMPT_REVISION_BY_RECIPE[recipe]
     routes = tuple(
-        replace(route, recipe_revision=markers.RECIPE, prompt_revision=markers.PROMPT_REVISION)
+        replace(route, recipe_revision=recipe, prompt_revision=prompt)
         if route.task == "facts"
         else route
         for route in routes
@@ -233,6 +261,7 @@ def _luna(
     flex: bool,
     openai: ProviderConfig | None = None,
     report: bool = True,
+    recipe: str = markers.RECIPE,
 ) -> tuple[tuple[ProviderConfig, ...], tuple[RouteConfig, ...]]:
     """The facts route as the one-pass request and (``report``) the coaching route, on
     GPT-6 Luna, with the configuration's own OpenAI entry's references, or the given entry's
@@ -282,8 +311,8 @@ def _luna(
             route,
             provider_id="openai",
             model_id=model,
-            recipe_revision=markers.RECIPE,
-            prompt_revision=markers.PROMPT_REVISION,
+            recipe_revision=recipe,
+            prompt_revision=markers.PROMPT_REVISION_BY_RECIPE[recipe],
         )
         if route.task == "facts"
         else replace(route, provider_id="openai", model_id=model)
@@ -295,7 +324,13 @@ def _luna(
 
 
 def _luna_stages(
-    c4: Any, c5: Any, new: RegistryConfig, *, flex: bool, governance: Any
+    c4: Any,
+    c5: Any,
+    new: RegistryConfig,
+    *,
+    flex: bool,
+    governance: Any,
+    recipe: str = markers.RECIPE,
 ) -> tuple[Any, Any]:
     """The C4 (one-pass) and C5 templates on GPT-6 Luna: the classic templates' bounds,
     the configuration's OpenAI references and Root's OpenAI governance."""
@@ -323,7 +358,7 @@ def _luna_stages(
     }
     one_pass = {
         **common,
-        "recipe_revision": markers.RECIPE,
+        "recipe_revision": recipe,
         "max_requests": 1,
         "max_completion_tokens": LUNA_COMPLETION_TOKENS,
         "max_input_bytes": max(c4.max_input_bytes, markers.MAX_INPUT_BYTES),
@@ -345,6 +380,7 @@ def _profile(
     one_pass: bool = False,
     luna: Any = None,
     luna_report: bool = True,
+    recipe: str = markers.RECIPE,
 ) -> AcquisitionProviderProfile:
     stage_set = next(
         (
@@ -408,7 +444,7 @@ def _profile(
             )
             if stage.stage == "C4":
                 update.update(
-                    recipe_revision=markers.RECIPE,
+                    recipe_revision=recipe,
                     max_requests=1,
                     max_completion_tokens=ONE_PASS_COMPLETION_TOKENS,
                     max_input_bytes=max(stage.max_input_bytes, markers.MAX_INPUT_BYTES),
@@ -419,25 +455,25 @@ def _profile(
         return type(stage).model_validate(stage.model_copy(update=update).model_dump())
 
     if luna is not None:
-        luna_c4, luna_c5 = _luna_stages(c4, c5, new, flex=flex, governance=luna)
+        luna_c4, luna_c5 = _luna_stages(c4, c5, new, flex=flex, governance=luna, recipe=recipe)
         heard = type(c2).model_validate(transcription.model_dump())
         if luna_report:
             return AcquisitionProviderProfile(
-                profile_id=LUNA_FLEX_PROFILE_ID if flex else LUNA_PROFILE_ID,
+                profile_id=versioned(LUNA_FLEX_PROFILE_ID if flex else LUNA_PROFILE_ID, recipe),
                 stages=(heard, luna_c4, luna_c5),
             )
         # The hybrid: C5 stays on the classic Gemini 3.8 Flash template (on Flex with flex).
         if (c5.provider_id, c5.model_id) != (PROVIDER, TEXT_MODEL):
             raise SealError("policy_c5_is_not_gemini_flash")
         return AcquisitionProviderProfile(
-            profile_id=LUNA_C4_FLEX_PROFILE_ID if flex else LUNA_C4_PROFILE_ID,
+            profile_id=versioned(LUNA_C4_FLEX_PROFILE_ID if flex else LUNA_C4_PROFILE_ID, recipe),
             stages=(heard, luna_c4, text(c5)),
         )
     if one_pass and (c4.provider_id, c4.model_id) != (PROVIDER, TEXT_MODEL):
         raise SealError("policy_c4_is_not_gemini_flash")
     stages = (type(c2).model_validate(transcription.model_dump()), text(c4), text(c5))
     profile_id = (
-        (ONE_PASS_FLEX_PROFILE_ID if flex else ONE_PASS_PROFILE_ID)
+        versioned(ONE_PASS_FLEX_PROFILE_ID if flex else ONE_PASS_PROFILE_ID, recipe)
         if one_pass
         else FLEX_PROFILE_ID
         if flex
@@ -455,6 +491,7 @@ def _with_profile(
     one_pass: bool = False,
     luna: Any = None,
     luna_report: bool = True,
+    recipe: str = markers.RECIPE,
 ) -> AcquisitionProviderPolicy:
     profile = _profile(
         policy,
@@ -464,6 +501,7 @@ def _with_profile(
         one_pass=one_pass,
         luna=luna,
         luna_report=luna_report,
+        recipe=recipe,
     )
     kept = tuple(item for item in policy.profiles if item.profile_id != profile.profile_id)
     updated = policy.model_copy(update={"profiles": (*kept, profile)})
@@ -480,16 +518,20 @@ def seal(
     one_pass: bool = False,
     luna: Any = None,
     luna_report: bool = True,
+    recipe: str = markers.RECIPE,
 ) -> HostedApprovalBundle:
     """The bundle with every classic route kept and the Flash-Lite (or one-pass) profile
     added to each acquisition policy. Revalidated as a whole, exactly as the host loads it."""
     if bundle.acquisition_policy is None and not bundle.organisation_acquisition_policies:
         raise SealError("bundle_has_no_acquisition_policy")
+    if recipe not in markers.RECIPES or (recipe != markers.RECIPE and not one_pass):
+        raise SealError("one_pass_recipe_invalid")
     options: dict[str, Any] = {
         "flex": flex,
         "one_pass": one_pass,
         "luna": luna,
         "luna_report": luna_report,
+        "recipe": recipe,
     }
     update: dict[str, Any] = {
         "organisation_acquisition_policies": tuple(

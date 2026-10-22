@@ -12,7 +12,9 @@ covering every segment, with the call's date for relative days), so every existi
 envelope, coverage and receipt check applies unchanged. Only the system prompt (it
 starts with ``MARKER``), its strict schema and the normaliser differ. A provider
 configuration selects it by its facts route's recipe (``RECIPE``), sealed by Root like
-any route; the plan then asks one request with this prompt revision.
+any route; the plan then asks one request with this prompt revision. Recipe v2
+(``RECIPE_V2``, ``MARKER_V2``) is the same request plus the Brain 4.0 part
+(``one_pass.brain4_part``).
 
 Pure: no I/O, no provider.
 """
@@ -25,12 +27,14 @@ from typing import Any
 
 from ac_platform.call_data import extraction
 from ac_platform.conversation_intelligence import reports
-from ac_platform.one_pass import analysis
+from ac_platform.one_pass import analysis, brain4_part
 from ac_platform.one_pass.markers import (
     MARKER,
+    MARKER_V2,
     MAX_COMPLETION_TOKENS,
     PROMPT_REVISION,
     RECIPE,
+    RECIPE_V2,
     ROUTES,
     call_date,
     is_one_pass,
@@ -38,9 +42,11 @@ from ac_platform.one_pass.markers import (
 
 __all__ = [
     "MARKER",
+    "MARKER_V2",
     "MAX_COMPLETION_TOKENS",
     "PROMPT_REVISION",
     "RECIPE",
+    "RECIPE_V2",
     "ROUTES",
     "call_date",
     "is_one_pass",
@@ -51,11 +57,20 @@ class StageError(ValueError):
     """A stable code only."""
 
 
-def system_prompt() -> str:
+def system_prompt(recipe: str = RECIPE) -> str:
+    # v2 (one_pass.brain4_part): the same request plus the Brain 4.0 part.
+    if recipe == RECIPE_V2:
+        return MARKER_V2 + "\n" + brain4_part.stage_system_prompt()
+    if recipe != RECIPE:
+        raise StageError("one_pass_recipe_unknown")
     return MARKER + "\n" + analysis.stage_system_prompt()
 
 
-def schema() -> dict[str, Any]:
+def schema(recipe: str = RECIPE) -> dict[str, Any]:
+    if recipe == RECIPE_V2:
+        return brain4_part.stage_schema()
+    if recipe != RECIPE:
+        raise StageError("one_pass_recipe_unknown")
     return analysis.stage_schema()
 
 
@@ -65,8 +80,10 @@ def prompt(
     model: str,
     max_completion_tokens: int,
     date: str,
+    recipe: str = RECIPE,
 ) -> dict[str, Any]:
     """The request in today's C4 prompt shape (one chunk covering every segment)."""
+    system = system_prompt(recipe)
     if type(max_completion_tokens) is not int or not 256 <= max_completion_tokens <= (
         MAX_COMPLETION_TOKENS
     ):
@@ -86,7 +103,7 @@ def prompt(
         "max_completion_tokens": max_completion_tokens,
         "response_format": {"type": "json_object"},
         "messages": [
-            {"role": "system", "content": system_prompt()},
+            {"role": "system", "content": system},
             {
                 "role": "user",
                 "content": json.dumps(

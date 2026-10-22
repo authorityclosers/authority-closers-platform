@@ -16,5 +16,22 @@ def test_v2_is_its_own_recipe_and_marker() -> None:
     assert markers.MARKER_V2 == "FACT_OUTPUT: one-pass-facts-v2."
     assert not markers.MARKER_V2.startswith(markers.MARKER)
     assert frozenset({markers.RECIPE, markers.RECIPE_V2}) == markers.RECIPES
-    # Until the v2 wiring lands, a v2 prompt is not taken for the v1 request.
-    assert not markers.is_one_pass(markers.MARKER_V2 + "\n...")
+    assert frozenset({markers.PROMPT_REVISION, "one-pass-v2"}) == markers.PROMPT_REVISIONS
+    assert dict(markers.PROMPT_REVISION_BY_RECIPE) == {
+        markers.RECIPE: markers.PROMPT_REVISION,
+        markers.RECIPE_V2: markers.PROMPT_REVISION_V2,
+    }
+    assert {value: key for key, value in markers.PROMPT_REVISION_BY_RECIPE.items()} == dict(
+        markers.RECIPE_BY_PROMPT_REVISION
+    )
+
+
+def test_a_prompt_names_its_recipe_by_its_first_line() -> None:
+    assert markers.recipe_of(markers.MARKER + "\n...") == markers.RECIPE
+    assert markers.recipe_of(markers.MARKER_V2 + "\n...") == markers.RECIPE_V2
+    for other in (markers.MARKER, "x\n" + markers.MARKER + "\n", "FACT_OUTPUT: other.\n", None, 7):
+        assert markers.recipe_of(other) is None
+        assert not markers.is_one_pass(other)
+    assert markers.is_one_pass(markers.MARKER + "\n") and markers.is_one_pass(
+        markers.MARKER_V2 + "\n"
+    )

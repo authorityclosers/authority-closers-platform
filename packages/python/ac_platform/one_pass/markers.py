@@ -4,7 +4,9 @@ analysis."""
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from datetime import datetime
+from types import MappingProxyType
 from typing import Final
 from zoneinfo import ZoneInfo
 
@@ -22,6 +24,14 @@ RECIPE_V2: Final = "one-pass-facts-v2"
 PROMPT_REVISION_V2: Final = "one-pass-v2"
 MARKER_V2: Final = "FACT_OUTPUT: one-pass-facts-v2."
 RECIPES: Final = frozenset({RECIPE, RECIPE_V2})
+PROMPT_REVISIONS: Final = frozenset({PROMPT_REVISION, PROMPT_REVISION_V2})
+PROMPT_REVISION_BY_RECIPE: Final[Mapping[str, str]] = MappingProxyType(
+    {RECIPE: PROMPT_REVISION, RECIPE_V2: PROMPT_REVISION_V2}
+)
+RECIPE_BY_PROMPT_REVISION: Final[Mapping[str, str]] = MappingProxyType(
+    {PROMPT_REVISION: RECIPE, PROMPT_REVISION_V2: RECIPE_V2}
+)
+_MARKERS: Final = ((RECIPE, MARKER), (RECIPE_V2, MARKER_V2))
 # Input bound: the whole call's transcript envelope, its instructions and schema.
 MAX_INPUT_BYTES: Final = 512 * 1024
 # The routes the request is implemented for: Gemini 3.8 Flash and GPT-6 Luna (the
@@ -39,8 +49,15 @@ ROUTES: Final = frozenset(
 IST: Final = ZoneInfo("Asia/Kolkata")
 
 
+def recipe_of(system: object) -> str | None:
+    """The one-pass recipe whose marker starts this system prompt, or None."""
+    if not isinstance(system, str):
+        return None
+    return next((recipe for recipe, marker in _MARKERS if system.startswith(marker + "\n")), None)
+
+
 def is_one_pass(system: object) -> bool:
-    return isinstance(system, str) and system.startswith(MARKER + "\n")
+    return recipe_of(system) is not None
 
 
 def call_date(created_at: datetime) -> str:
