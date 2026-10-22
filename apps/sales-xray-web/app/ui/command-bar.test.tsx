@@ -39,7 +39,7 @@ const command = (
   ...extra,
 });
 
-it("finds commands by any word, a label's own start first", () => {
+it("finds commands by the start of any word, a label's own start first", () => {
   const home = command("Home", "Go to", { keywords: "dashboard sales" });
   const leads = command("Leads");
   const add = command("Add a lead", "Actions");
@@ -57,6 +57,8 @@ it("finds commands by any word, a label's own start first", () => {
     "Add a lead",
   ]);
   expect(matchCommands([home, leads], "nothing here")).toEqual([]);
+  // A word must start a word: "as" is not found inside "sales".
+  expect(matchCommands([home], "as")).toEqual([]);
 });
 
 async function render(

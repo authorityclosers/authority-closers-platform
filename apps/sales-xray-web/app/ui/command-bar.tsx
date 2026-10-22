@@ -39,7 +39,10 @@ export type Command = {
   run: () => void;
 };
 
-/** Words found as they are typed, in any case, at the start of a word first. */
+/**
+ * Each typed word must start a word of the label, hint or keywords, in any
+ * case ("as" finds "Asha", never "sales"); the label's own first word first.
+ */
 export function matchCommands(
   commands: readonly Command[],
   text: string,
@@ -47,9 +50,13 @@ export function matchCommands(
   const words = text.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   if (!words.length) return [...commands];
   const scored = commands.flatMap((command) => {
-    const haystack =
-      `${command.label} ${command.hint ?? ""} ${command.keywords ?? ""}`.toLocaleLowerCase();
-    if (!words.every((word) => haystack.includes(word))) return [];
+    const known =
+      `${command.label} ${command.hint ?? ""} ${command.keywords ?? ""}`
+        .toLocaleLowerCase()
+        .split(/[^\p{L}\p{N}]+/u)
+        .filter(Boolean);
+    if (!words.every((word) => known.some((each) => each.startsWith(word))))
+      return [];
     const label = command.label.toLocaleLowerCase();
     const score = label.startsWith(words[0])
       ? 0
