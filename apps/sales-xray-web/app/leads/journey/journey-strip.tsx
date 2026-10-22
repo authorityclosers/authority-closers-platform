@@ -10,7 +10,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { Skeleton } from "../../ui/kit";
-import { LEADS_PATH } from "../leads-client";
 import { call } from "./journey-client";
 import styles from "./journey-strip.module.css";
 
@@ -80,11 +79,7 @@ export function JourneyStrip() {
     };
   }, []);
   return (
-    <Link
-      href={`${LEADS_PATH}?tab=stages`}
-      scroll={false}
-      className={styles.strip}
-    >
+    <Link href="/settings/stages" scroll={false} className={styles.strip}>
       <span className={styles.icon} aria-hidden="true">
         <Route size={16} />
       </span>

@@ -19,6 +19,11 @@ import { AccountSettings } from "../account-settings";
 import { ANDROID_APK_URL } from "../apps/release";
 import { CallAiSettingsSection } from "../call-ai/call-ai-settings";
 import { AlertsCard } from "../leads/alerts-card";
+import {
+  LeadRulesPane,
+  LeadSourcesPane,
+  LeadStagesPane,
+} from "../leads/settings-panes";
 import { OrganisationView } from "../organisation/organisation-view";
 import { Panel } from "../ui/kit";
 import { ConnectedApps } from "./connected-apps";
@@ -128,6 +133,12 @@ export function SettingsSectionView({ id }: { id: SettingsSectionId }) {
       return <OrganisationView embedded sections={["company"]} />;
     case "team":
       return <OrganisationView embedded sections={["members"]} />;
+    case "lead-rules":
+      return <LeadRulesPane />;
+    case "stages":
+      return <LeadStagesPane />;
+    case "sources":
+      return <LeadSourcesPane />;
     case "call-ai":
       return <CallAiSettingsSection />;
     case "apps":

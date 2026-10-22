@@ -68,8 +68,8 @@ from ac_platform.conversation_intelligence.reports import (
     parse_groq_response,
     validate_coaching_context,
 )
-from ac_platform.one_pass.markers import PROMPT_REVISION as ONE_PASS_PROMPT_REVISION
 from ac_platform.one_pass.markers import RECIPE as ONE_PASS_RECIPE
+from ac_platform.one_pass.markers import RECIPE_BY_PROMPT_REVISION as ONE_PASS_RECIPE_BY_PROMPT
 from ac_platform.one_pass.markers import is_one_pass
 
 TaskName = Literal["asr", "facts", "coaching"]
@@ -982,7 +982,9 @@ def prepare_fact_inputs(
     model: str = GROQ_MODEL,
     max_input_chars: int = 16_000,
     max_completion_tokens: int = 1_400,
-    prompt_revision: Literal["facts-v1", "facts-v2", "one-pass-v1"] = FACT_PROMPT_LEGACY,
+    prompt_revision: Literal[
+        "facts-v1", "facts-v2", "one-pass-v1", "one-pass-v2"
+    ] = FACT_PROMPT_LEGACY,
     call_date: str | None = None,
 ) -> tuple[PreparedTaskInput, ...]:
     """Prepare immutable C4 style-independent fact requests for every chunk; the one-pass
@@ -990,7 +992,7 @@ def prepare_fact_inputs(
 
     validated = extract_style_independent_facts(transcript)
     try:
-        if prompt_revision == ONE_PASS_PROMPT_REVISION:
+        if prompt_revision in ONE_PASS_RECIPE_BY_PROMPT:
             from ac_platform.one_pass import stage
 
             if (provider, model) not in stage.ROUTES:
@@ -1004,6 +1006,7 @@ def prepare_fact_inputs(
                         model=model,
                         max_completion_tokens=max_completion_tokens,
                         date=call_date,
+                        recipe=ONE_PASS_RECIPE_BY_PROMPT[prompt_revision],
                     ),
                 )
             except stage.StageError as exc:
@@ -1014,7 +1017,8 @@ def prepare_fact_inputs(
                 max_input_chars=max_input_chars,
                 max_completion_tokens=max_completion_tokens,
                 model=model,
-                prompt_revision=prompt_revision,
+                # Every one-pass revision took the branch above.
+                prompt_revision=cast(Literal["facts-v1", "facts-v2"], prompt_revision),
             )
     except ReportError as exc:
         raise InferenceTaskError(str(exc)) from None

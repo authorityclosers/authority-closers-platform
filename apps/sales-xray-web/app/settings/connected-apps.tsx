@@ -81,9 +81,9 @@ const STATUS: Record<AppState, { label: string; tone: Tone }> = {
 
 // Where an app's full settings live, for what the sheet doesn't hold itself.
 const MORE: Partial<Record<AppKey, { href: string; label: string }>> = {
-  meta_leads: { href: "/leads?tab=sources", label: "Older leads and ad spend" },
-  google_ads: { href: "/leads?tab=sources", label: "Forms and lead sources" },
-  webhook_sources: { href: "/leads?tab=sources", label: "Webhooks and sheets" },
+  meta_leads: { href: "/settings/sources", label: "Older leads and ad spend" },
+  google_ads: { href: "/settings/sources", label: "Forms and lead sources" },
+  webhook_sources: { href: "/settings/sources", label: "Webhooks and sheets" },
   phone_calls: {
     href: "/settings/devices",
     label: "Phone app and call recording",

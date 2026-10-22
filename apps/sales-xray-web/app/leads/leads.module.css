@@ -426,7 +426,35 @@
 .cardBadges {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
+}
+
+/* The lead's own link, beside its stage and source. */
+.copyLink {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.copyLink:hover {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.copyLink:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
 }
 
 .contact {
@@ -655,6 +683,44 @@
 
 .history li[data-kind="call"]::before {
   background: var(--lx-closing);
+}
+
+/* The history's day headers, and the story so far above it (22 Oct 2026). */
+.history li.historyDay {
+  padding: 4px 0 8px;
+  border-left: 0;
+  margin-left: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.history li.historyDay::before {
+  content: none;
+}
+
+.story {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+}
+
+.storyTitle {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.story ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
 }
 
 /* Mark private: the seller's own phone-logged call, hidden from the team. */
@@ -2152,8 +2218,12 @@ a.repName {
   font-weight: 700;
 }
 
+/* The number is the second line: small, whole, on one line (Liquid Glass,
+   22 Oct 2026: it wrapped at 375 px with the phone type scale). */
 .callButton small {
+  font-size: var(--sx-text-xs);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   opacity: 0.92;
 }
 
@@ -2223,10 +2293,18 @@ a.repName {
   font: var(--sx-text-panel);
 }
 
+/* We talked | No answer, then Didn't get through as a row of its own (Redmi at
+   360 px, 22 Oct 2026: three across wrapped to three lines). */
 .choiceRow {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: 8px;
+}
+
+.choiceTile[data-span="row"] {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  min-height: 52px;
 }
 
 .choiceTile {
@@ -2235,8 +2313,9 @@ a.repName {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 84px;
-  padding: 12px;
+  min-height: 76px;
+  padding: 10px 8px;
+  text-align: center;
   border: 1px solid var(--sx-line-strong);
   border-radius: var(--lx-radius-lg);
   background: var(--sx-paper);
@@ -2244,6 +2323,7 @@ a.repName {
   font: inherit;
   font-size: var(--sx-text-md);
   font-weight: 650;
+  line-height: 1.25;
   cursor: pointer;
   transition: background var(--lx-dur-quick) var(--lx-ease-quick);
 }
@@ -2496,6 +2576,221 @@ a.repName {
 
 .ownerRow strong {
   overflow-wrap: anywhere;
+}
+
+/* After a save in a lead: who is next, and Call them (22 Oct 2026). */
+.nextUp {
+  position: sticky;
+  z-index: 3;
+  bottom: 0;
+  display: flex;
+  margin-top: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-float);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.nextUp > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.nextUp strong {
+  color: var(--sx-ink);
+}
+
+.nextUp small {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Leads → Views: a saved stage, pipeline, owner and search (22 Oct 2026). */
+.listTools {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+/* The view's name gives way first on a narrow phone; the count and Select stay. */
+.statusChip.viewChip {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.viewName {
+  overflow: hidden;
+  min-width: 0;
+  max-width: 10em;
+  text-overflow: ellipsis;
+}
+
+.statusChip[data-view] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+}
+
+.views {
+  display: grid;
+  gap: 14px;
+}
+
+.viewLine {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+}
+
+.viewLine .menuRow[aria-current="true"] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+}
+
+.viewLine .menuWords small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.viewRemove {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--sx-radius-md);
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.viewRemove:hover {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.viewRemove:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.viewSave {
+  width: 100%;
+}
+
+/* Select → Actions → Send a WhatsApp: the template, its parts, who gets it. */
+.bulkSend {
+  display: grid;
+  gap: 12px;
+}
+
+.bulkText {
+  margin: 0;
+  padding: 12px 14px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  white-space: pre-wrap;
+}
+
+.bulkPlan {
+  display: grid;
+  gap: 4px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.bulkPlan strong {
+  color: var(--sx-ink);
+}
+
+.bulkActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* Select → Actions: give, re-stage or move many leads (22 Oct 2026). */
+.bulk {
+  display: grid;
+  gap: 10px;
+}
+
+.bulkBack {
+  display: inline-flex;
+  justify-self: start;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.menuRow:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+
+/* Add lead: a number that is already a lead, and the ask before discarding. */
+.matchNote {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  color: var(--lx-focus-ink);
+  font-weight: 600;
+}
+
+.matchNote strong {
+  color: var(--sx-ink);
+}
+
+.matchOpen {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.discardAsk {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.discardAsk > span {
+  margin-right: auto;
+  color: var(--sx-ink);
+  font-weight: 600;
 }
 
 /* The lead's pipeline and a move to another (22 Oct 2026). */
@@ -3539,6 +3834,23 @@ a.repName {
   box-shadow: var(--sx-focus-ring);
 }
 
+/* Call mode: who comes after this lead, and a way to stop (22 Oct 2026). */
+.upNextLine {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.upNextLine strong {
+  color: var(--sx-ink);
+}
+
+.stopLink {
+  justify-self: center;
+  min-height: 44px;
+}
+
 .saveRow {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -3547,6 +3859,20 @@ a.repName {
 
 .saveRow > :only-child {
   grid-column: 1 / -1;
+}
+
+/* A narrow phone with the phone type scale: the message button keeps its icon
+   and gives Save its room, so "Save and call <name>" reads on one line. */
+@media (max-width: 419.98px) {
+  .saveMessage {
+    justify-content: center;
+    width: 52px;
+    padding: 0;
+  }
+
+  .saveMessageWords {
+    display: none;
+  }
 }
 
 .saveMessage {
@@ -4202,8 +4528,81 @@ a.repName {
   min-width: 0;
 }
 
-.toolbarSpacer {
-  flex: 1 1 0;
+/* The header row's end: Filter and the ⋯ menu (Leads header, 22 Oct 2026). */
+.toolbarEnd {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* Leads → Filter: the count on the chip, the filters that are on, the sheet. */
+.filterCount {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  place-items: center;
+  padding: 0 5px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.activeFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.activeFilter {
+  display: inline-flex;
+  max-width: 100%;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 12px;
+  border: 1px solid var(--lx-teal-edge);
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.activeFilter > span {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activeFilter:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.filterForm {
+  display: grid;
+  gap: 16px;
+}
+
+.filterGroup {
+  display: grid;
+  gap: 8px;
+}
+
+.filterActions {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 8px;
 }
 
 .toolbarTitle {
@@ -4494,10 +4893,12 @@ a.repName {
 }
 
 .listTotal {
+  flex: none;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 /* An empty list in one line, with at most one action. */
@@ -4785,6 +5186,54 @@ a.repName {
   opacity: 0.6;
 }
 
+/* Save with a step missing: that step glows once, each tap (two names, so a
+   second tap plays it again). */
+.outcomeStep[data-nudge] {
+  border-radius: var(--sx-radius-md);
+}
+
+.outcomeStep[data-nudge="odd"] {
+  animation: sx-step-glow-odd 1100ms ease-out 1;
+}
+
+.outcomeStep[data-nudge="even"] {
+  animation: sx-step-glow-even 1100ms ease-out 1;
+}
+
+@keyframes sx-step-glow-odd {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  25% {
+    background: color-mix(in oklab, var(--lx-focus-soft) 70%, transparent);
+    box-shadow: 0 0 0 6px
+      color-mix(in oklab, var(--lx-focus-ink) 30%, transparent);
+  }
+}
+
+@keyframes sx-step-glow-even {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+
+  25% {
+    background: color-mix(in oklab, var(--lx-focus-soft) 70%, transparent);
+    box-shadow: 0 0 0 6px
+      color-mix(in oklab, var(--lx-focus-ink) 30%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .outcomeStep[data-nudge] {
+    animation: none;
+    box-shadow: 0 0 0 2px
+      color-mix(in oklab, var(--lx-focus-ink) 45%, transparent);
+  }
+}
+
 @keyframes sx-save-nudge {
   30% {
     transform: translateX(-4px);
@@ -4864,4 +5313,114 @@ a.repName {
 
 .recordedList li[data-state="error"] small:last-child {
   color: var(--sx-bad);
+}
+
+/* Row keys on a computer (J/K): the row in focus shows it. */
+.leadLine:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px var(--sx-accent);
+}
+
+/* Below 380 px the WhatsApp and SMS tiles give the number its room. */
+@media (max-width: 379.98px) {
+  .contactIcon {
+    width: 64px;
+  }
+}
+
+/* The lead hub's timeline: a chat day reads in one line; the newest call's
+   summary sits under it (22 Oct 2026). */
+.history li[data-kind="chat"] .historyDetail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history li[data-kind="chat"]::before {
+  background: var(--lx-teal);
+}
+
+/* The summary continues its call's line; nothing to say, no row. */
+.history li.historyBrief::before {
+  content: none;
+}
+
+.history li.historyBrief:empty {
+  display: none;
+}
+
+/* A big screen gives the lead more room beside the list (Liquid Glass). */
+@media (min-width: 1280px) {
+  .sheet {
+    --sx-sheet-width: 640px;
+  }
+}
+
+/* Lead rules → Sellers on a phone: a card per seller, not a sideways table. */
+.repCards {
+  display: none;
+}
+
+.repCardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+
+.repCardHead .repRules {
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .tableWrap[data-has-cards] {
+    display: none;
+  }
+
+  .repCards {
+    display: grid;
+  }
+}
+
+/* Leads' settings inside Settings: their own container, so the narrow-screen
+   rules (@container below 900 px) fold them as they do on Leads. */
+.pane {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sx-gap);
+  min-width: 0;
+}
+
+/* The lead's Call row on narrow phones (Liquid Glass, 22 Oct 2026). With the
+   phone type scale the number needs about 110 px, and two 72 px tiles leave
+   Call too little at 360-375 px, so the number spilled out of its button. The
+   row measures its own width: below 340 px the WhatsApp and SMS tiles narrow
+   to 60 px; below 300 px they show their icons only (their names stay as
+   aria-labels). Every tile stays 52 px or more wide and 56 px tall. */
+.actions[data-contact] {
+  container-type: inline-size;
+}
+
+@container (max-width: 339.98px) {
+  .actions[data-contact] .contactIcon {
+    width: 60px;
+  }
+
+  .actions[data-contact] .callButton {
+    gap: 10px;
+    padding-inline: 14px;
+  }
+}
+
+@container (max-width: 299.98px) {
+  .actions[data-contact] .contactIcon {
+    width: 52px;
+  }
+
+  .actions[data-contact] .contactIcon small {
+    display: none;
+  }
 }

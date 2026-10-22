@@ -306,6 +306,19 @@
   white-space: nowrap;
 }
 
+/* A narrow phone with the phone type scale (Liquid Glass, 22 Oct 2026): the
+   owner's name gives way first; the app and the waiting time stay whole. */
+.rowMeta > .owner {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+.ownerName {
+  overflow: hidden;
+  min-width: 0;
+  text-overflow: ellipsis;
+}
+
 .owner[data-none] {
   background: color-mix(in oklab, var(--sx-warn) 12%, transparent);
   color: var(--lx-focus-ink);
@@ -1640,17 +1653,6 @@
 }
 
 /* The Leads | Chats switch on phones, above the filters. */
-.switchSlot {
-  display: contents;
-}
-
-@media (max-width: 899.98px) {
-  .switchSlot {
-    display: block;
-    padding: 10px 16px 0;
-  }
-}
-
 /* ---------- Photos, voice notes, videos and files in a bubble ----------
    Fixed sizes while they load, so the chat never jumps (owner: no layout
    shift). Tokens only. */

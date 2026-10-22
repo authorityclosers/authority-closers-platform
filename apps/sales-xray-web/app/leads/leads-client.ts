@@ -532,6 +532,24 @@ export type NewLead = {
   pipeline?: string;
 };
 
+/** Whether a number is already a lead (Add lead asks while it is typed). */
+export type LeadMatch = {
+  found: boolean;
+  /** Only for a manager, or the lead's own owner. */
+  lead_id?: string | null;
+  name?: string | null;
+  stage_label?: string | null;
+  owner_name?: string | null;
+  yours?: boolean;
+};
+
+export function matchLead(phone: string, signal?: AbortSignal) {
+  return request<LeadMatch>(
+    `/leads/match?${new URLSearchParams({ phone: phone.slice(0, 40) })}`,
+    { signal },
+  );
+}
+
 export function addLead(lead: NewLead, command = commandId()) {
   const body = Object.fromEntries(
     Object.entries(lead).filter(([, value]) => value !== "" && value != null),
@@ -692,6 +710,85 @@ export function forgetDevice(token: string) {
   return request<{ registered: boolean }>(
     "/devices/forget",
     json("POST", { token, platform: "android" }),
+  );
+}
+
+export type BulkAction = "assign" | "stage" | "pipeline";
+export type BulkDone = { done: number; skipped: number; words: string };
+
+/** Many leads at once (owners and admins): give, re-stage or move them. */
+export function bulkLeads(
+  body: {
+    action: BulkAction;
+    lead_ids: string[];
+    person_id?: string | null;
+    step?: string;
+    pipeline?: string;
+  },
+  command = commandId(),
+) {
+  return request<BulkDone>(
+    "/leads/bulk",
+    json("POST", { command_id: command, ...body }),
+  );
+}
+
+/** An approved WhatsApp template, as Meta last said (Settings → Connected apps). */
+export type WaTemplate = {
+  name: string;
+  language: string;
+  status: string;
+  text: string;
+  /** How many {{n}} parts it asks for. */
+  parts: number;
+};
+
+/** The organisation's approved WhatsApp templates; none when WhatsApp isn't set up. */
+export async function readApprovedTemplates(
+  signal?: AbortSignal,
+): Promise<WaTemplate[]> {
+  // Read as sent: a template's name is Meta's id ("welcome_lead"), not a person's.
+  const response = await fetch(`${API}/whatsapp/status`, {
+    credentials: "same-origin",
+    cache: "no-store",
+    signal,
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) return [];
+  const status = (await response.json()) as {
+    numbers?: unknown[];
+    templates?: WaTemplate[];
+  };
+  if (!status.numbers?.length) return [];
+  return (status.templates ?? []).filter((item) => item.status === "APPROVED");
+}
+
+export type BulkWhatsApp = {
+  ready: number;
+  skipped: { reason: string; words: string; count: number }[];
+  sent: number;
+  failed: number;
+  /** The template as a lead reads it ({name} stays as written). */
+  text: string;
+  limit: number;
+};
+
+/**
+ * One approved template to many leads (owners and admins). Without `confirm` it only
+ * says who would get it; a send must quote the count that check showed.
+ */
+export function bulkWhatsApp(
+  body: {
+    leadIds: string[];
+    template: string;
+    language: string;
+    values: string[];
+  },
+  send: { commandId: string; confirm: number } | null = null,
+) {
+  return request<BulkWhatsApp>(
+    send ? "/leads/bulk-whatsapp" : "/leads/bulk-whatsapp/preview",
+    json("POST", send ? { ...body, ...send } : body),
   );
 }
 
@@ -1202,6 +1299,11 @@ export function linkedLead(
   )
     return null;
   return { leadId, call: params.get("call") === "1" };
+}
+
+/** A lead's own link: Leads opens with its sheet up, on a phone or a computer. */
+export function leadLink(leadId: string, origin = ""): string {
+  return `${origin}${LEADS_PATH}?lead=${encodeURIComponent(leadId)}`;
 }
 
 /** Logs a call the seller placed from their own phone, with the time they were away. */

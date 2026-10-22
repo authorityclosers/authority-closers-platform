@@ -84,7 +84,10 @@ it("maps every section, and the old account sections, to an address of its own",
     "plan",
     "organisation",
     "team",
+    "lead-rules",
+    "stages",
     "call-ai",
+    "sources",
     "apps",
     "ai-replies",
     "developers",
@@ -93,6 +96,10 @@ it("maps every section, and the old account sections, to an address of its own",
     "help",
   ]);
   expect(settingsPath("team")).toBe("/settings/team");
+  // Leads' own settings (approved map, slice 5, 22 Oct 2026).
+  expect(settingsPath("stages")).toBe("/settings/stages");
+  expect(settingsPath("lead-rules")).toBe("/settings/lead-rules");
+  expect(settingsPath("sources")).toBe("/settings/sources");
   expect(settingsPath("billing")).toBe("/settings/plan");
   expect(settingsPath("usage")).toBe("/settings/plan");
   expect(settingsPath("general")).toBe("/settings/profile");
@@ -216,13 +223,13 @@ it("keeps the Settings frame while the session is checked", async () => {
   );
 });
 
-it("lists settings that live elsewhere in their group, opening their own page", async () => {
+it("keeps Lead stages in Settings, in the Organisation group", async () => {
   nav.pathname = "/settings";
   await act(async () =>
     root.render(<SettingsShell>{<SettingsPage />}</SettingsShell>),
   );
   const stages = [
-    ...host.querySelectorAll<HTMLAnchorElement>('a[href="/leads?tab=stages"]'),
+    ...host.querySelectorAll<HTMLAnchorElement>('a[href="/settings/stages"]'),
   ];
   // Once in the side list, once as a card on the overview.
   expect(stages).toHaveLength(2);

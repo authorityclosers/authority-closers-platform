@@ -23,7 +23,9 @@ import argparse
 import contextlib
 import hashlib
 import json
+import os
 import re
+import stat
 import sys
 import time
 from collections.abc import Mapping
@@ -43,9 +45,10 @@ ENVIRONMENT_NAMES = frozenset({"development", "staging", "production"})
 OVERLAY = "compose.sales-xray-hosted.yaml"
 OPENAI_OVERLAY = "compose.sales-xray-hosted-openai.yaml"
 PROFILE = "sales-xray-hosted"
-OPENAI_HOST_IDENTITY_DIR = PurePosixPath(
-    "/etc/authority-closers/secrets/sales-xray/identities/openai"
-)
+OPENAI_HOST_IDENTITY_DIRS = {
+    "staging": "/etc/authority-closers/secrets/sales-xray/identities/staging/openai",
+    "production": "/etc/authority-closers/secrets/sales-xray/identities/production/openai",
+}
 OPENAI_TOKEN_FILE = "/run/ac-sales-xray/identities/openai/token"  # noqa: S105 - path only
 
 ABSOLUTE_ENV_KEYS = frozenset(
@@ -181,12 +184,31 @@ def _absolute(value: object, field: str) -> Path:
     return path
 
 
-def _openai_identity_dir(value: object) -> PurePosixPath:
-    if not isinstance(value, str):
-        raise _fail("OpenAI identity directory must use its dedicated host path")
+def _openai_identity_dir(value: object, environment: str) -> PurePosixPath:
+    expected = OPENAI_HOST_IDENTITY_DIRS.get(environment)
+    if expected is None or not isinstance(value, str) or value != expected:
+        raise _fail(
+            "OpenAI identity directory must use its dedicated host path for the environment"
+        )
     path = PurePosixPath(value)
-    if not path.is_absolute() or ".." in path.parts or path != OPENAI_HOST_IDENTITY_DIR:
+    if not path.is_absolute() or ".." in path.parts:
         raise _fail("OpenAI identity directory must use its dedicated host path")
+    # Preparation can precede provisioning. Check existing host components for
+    # symlinks without reading a token; the installer requires the complete tree
+    # and owns its root/worker ownership, mode and singly-linked-token checks.
+    if os.name == "posix":
+        host_path = Path(value)
+        for ancestor in (*reversed(host_path.parents), host_path):
+            try:
+                info = ancestor.lstat()
+            except FileNotFoundError:
+                break
+            except OSError as exc:
+                raise _fail("OpenAI identity metadata is unavailable") from exc
+            if stat.S_ISLNK(info.st_mode):
+                raise _fail("OpenAI identity paths must not contain symbolic links")
+            if not stat.S_ISDIR(info.st_mode):
+                raise _fail("OpenAI identity path ancestor is not a directory")
     return path
 
 
@@ -217,7 +239,7 @@ def _validate_openai_identity_selection(
     if has_openai:
         if "AC_XRAY_OPENAI_IDENTITY_DIR" not in env:
             raise _fail("OpenAI provider requires its separately scoped identity directory")
-        _openai_identity_dir(env["AC_XRAY_OPENAI_IDENTITY_DIR"])
+        _openai_identity_dir(env["AC_XRAY_OPENAI_IDENTITY_DIR"], descriptor["environment"])
         if any(
             item.get("provider_id") == "openai" and item.get("token_file_ref") != OPENAI_TOKEN_FILE
             for item in providers
@@ -227,7 +249,7 @@ def _validate_openai_identity_selection(
         raise _fail("OpenAI identity directory is unexpected without an OpenAI provider")
 
 
-def _parse_env(raw: bytes) -> dict[str, str]:
+def _parse_env(raw: bytes, environment: str) -> dict[str, str]:
     try:
         text = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
@@ -253,7 +275,7 @@ def _parse_env(raw: bytes) -> dict[str, str]:
         if key not in values:
             continue
         if key == "AC_XRAY_OPENAI_IDENTITY_DIR":
-            _openai_identity_dir(values[key])
+            _openai_identity_dir(values[key], environment)
             continue
         _absolute(values[key], key)
     _digest(values["AC_XRAY_SERVICE_SHA256"], "AC_XRAY_SERVICE_SHA256")
@@ -303,7 +325,7 @@ def _load_source(
     env_raw = _read_bytes(env_path, MAX_REFERENCE_BYTES)
     if _sha(env_raw) != _digest(descriptor.get("compose_env_sha256"), "compose_env_sha256"):
         raise _fail("source compose environment digest differs from activation")
-    env = _parse_env(env_raw)
+    env = _parse_env(env_raw, environment)
     if env["AC_XRAY_NATIVE_IMAGE_REF"] != source_image:
         raise _fail("source API image differs from activation image")
     service_path = _absolute(descriptor.get("service_config_file"), "service_config_file")

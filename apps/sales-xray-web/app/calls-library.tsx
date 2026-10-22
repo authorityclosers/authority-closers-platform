@@ -52,6 +52,7 @@ import {
 } from "./calls-cache";
 import { useServerSeedAllowed } from "./initial-session";
 import type { ServerRead } from "./server-reads";
+import { useRowKeys } from "./ui/row-keys";
 import { SectionBoundary } from "./ui/section-boundary";
 import { useWorkspaceAccess } from "./workspace-access";
 import { formatClock } from "./lightbox/time";
@@ -456,6 +457,12 @@ function CallsLibraryContent({
   if (previewId && previewId !== shownPreviewId) setShownPreviewId(previewId);
   // Phones show row checkboxes only in Select mode; desktops always do.
   const [selecting, setSelecting] = useState(false);
+  // Keys on a computer (Liquid Glass slice 9, 22 Oct 2026): J/K move through
+  // the calls. Enter is the row's own button: it opens the call's Report, as a
+  // click does (the release's browser proof presses it; wb-ci 39763038763).
+  // Calls carry no lead here, so C and L have nothing to act on.
+  const rowsRef = useRef<HTMLDivElement>(null);
+  useRowKeys(rowsRef, {}, !preview);
   // Dates in the browser's language and zone; a page drawn on the server
   // starts from the server's (display-clock.tsx), so it keeps its words.
   const dates = useDisplayDates();
@@ -1266,6 +1273,7 @@ function CallsLibraryContent({
         <button
           className={`${styles.item} calls-library-item`}
           data-submission-id={submission.id}
+          data-row-key={submission.id}
           data-tone={tone}
           type="button"
           disabled={opening}
@@ -1879,7 +1887,10 @@ function CallsLibraryContent({
                 </span>
                 <span className={styles.actions} />
               </div>
-              <div className={`${styles.rows} calls-library-items`}>
+              <div
+                className={`${styles.rows} calls-library-items`}
+                ref={rowsRef}
+              >
                 {renderRows()}
               </div>
               {visibleSubmissions.length === 0 && submissions.length > 0 ? (

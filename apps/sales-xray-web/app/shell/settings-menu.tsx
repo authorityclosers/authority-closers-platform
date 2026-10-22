@@ -1,38 +1,42 @@
 "use client";
 
 /**
- * The account menu (design system v2; owner, 20 Oct: "the IA and entire UX
- * UI needs to be considered here nicely … this does not go away when swiped
- * down").
- *
- * Phones (More, or your face in the top bar): a sheet that follows the
- * finger and closes on a swipe down. Computers (the gear in the rail): a
- * glass card beside the rail.
+ * You: the account menu (design system v2; the new map, owner, 22 Oct 2026:
+ * "Approved: the new map"). There is no More tab: on phones your face in the
+ * top bar opens this sheet, which follows the finger and closes on a swipe
+ * down. Computers (the gear in the rail): a glass card beside the rail.
  *
  * It lists only what a person needs, in this order:
  * 1. who is signed in, with Log out one tap away (owner, 17 Oct);
- * 2. phones: where you work (current first, others one tap away, Create an
- *    organisation apart) and the pages that are not tabs;
- * 3. Settings, Plan & usage, What's new, Help & support;
- * 4. the phone app download (website only) and the first-call guide.
- * Profile, language and billing live in Settings; "Taking new leads" lives
- * on the Leads desk, where sellers work.
+ * 2. phones: your settings (Profile, Selling, Notifications), then, for the
+ *    organisation's owners and admins, its settings (Team & roles, Lead
+ *    stages, Connected apps, AI on calls): each two taps from anywhere;
+ * 3. phones: the pages that are not tabs, then where you work (current
+ *    first, others one tap away, Create an organisation apart);
+ * 4. Settings, Plan & usage, What's new, Help & support;
+ * 5. the phone app download (website only) and the first-call guide.
  */
 import {
+  AudioLines,
   BarChart3,
+  Bell,
   Building2,
   ChevronLeft,
   ChevronRight,
   Clock3,
   Compass,
   GraduationCap,
+  Layers,
   LifeBuoy,
   ListChecks,
   LogOut,
   MailOpen,
+  PhoneCall,
+  Plug,
   Settings2,
   Smartphone,
   Sparkles,
+  UserRound,
   Users,
 } from "lucide-react";
 import Link from "next/link";
@@ -52,7 +56,6 @@ import { createPortal } from "react-dom";
 
 import type { Allowance } from "../acquisition-client";
 import { useSalesXraySignOut } from "../account-navigation";
-import { formatAnalysisTime } from "../analysis-time";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { phoneCallsOpener, useInApp } from "../in-app-client";
 import { inPhoneApp } from "../leads/native-phone";
@@ -63,6 +66,8 @@ import {
 } from "../leads/phone-app-flag";
 import { notify } from "../notice-center";
 import { AccountAvatarImage } from "../speaker-avatar";
+import { sectionById } from "../settings/settings-sections";
+import { ActionList, ActionRow } from "../ui/kit";
 import { Sheet, SHEET_PHONE_QUERY } from "../ui/sheet";
 import { useShellUpdates } from "./updates-store";
 import { WorkspacePicker, type PickerWorkspace } from "./workspace-picker";
@@ -89,17 +94,6 @@ export function accountInitials(name: string | null, email: string | null) {
   const letters =
     parts.length > 1 ? parts[0][0] + parts[1][0] : source.slice(0, 2);
   return letters.toUpperCase() || "·";
-}
-
-function minutesLeft(allowance: Allowance | null) {
-  if (!allowance || allowance.unlimited) return null;
-  const left = formatAnalysisTime(allowance.available_seconds);
-  const total = formatAnalysisTime(allowance.allowance_seconds);
-  const share =
-    allowance.allowance_seconds > 0
-      ? Math.min(1, allowance.available_seconds / allowance.allowance_seconds)
-      : 0;
-  return { text: `${left} of ${total} left`, short: `${left} left`, share };
 }
 
 const noSubscription = () => () => {};
@@ -171,7 +165,6 @@ export function SettingsMenu({
   name,
   email,
   photoUrl,
-  allowance,
   organisation = false,
   insights = false,
   workspaces = [],
@@ -200,7 +193,8 @@ export function SettingsMenu({
   name: string | null;
   email: string | null;
   photoUrl?: string | null;
-  allowance: Allowance | null;
+  /** Not shown: end users never see minutes (owner, 19 Oct 2026). */
+  allowance?: Allowance | null;
 }) {
   const [view, setView] = useState<View>(initialView);
   // Each opening starts at the view the opener asked for.
@@ -225,7 +219,6 @@ export function SettingsMenu({
     () => updates.notes.filter((note) => !note.seen).map((note) => note.key),
     [updates.notes],
   );
-  const minutes = minutesLeft(allowance);
   const guide = useFirstCallGuideSwitch();
   const pathname = usePathname();
   const inApp = useInApp();
@@ -353,12 +346,98 @@ export function SettingsMenu({
     pathname === href ||
     (href !== "/organisation" && Boolean(pathname?.startsWith(`${href}/`)));
 
+  // Your settings and, for owners and admins, the organisation's: the
+  // sections' own names and hints (settings/settings-sections.ts).
+  const yours = (
+    [
+      ["profile", <UserRound key="i" size={18} />],
+      ["selling", <PhoneCall key="i" size={18} />],
+      ["notifications", <Bell key="i" size={18} />],
+    ] as const
+  ).map(([id, icon]) => ({
+    ...sectionById(id),
+    href: `/settings/${id}`,
+    icon,
+  }));
+  // Leads' settings have one home in Settings since slice 5 (22 Oct 2026).
+  const theirs = [
+    {
+      ...sectionById("team"),
+      href: "/settings/team",
+      icon: <Users size={18} />,
+    },
+    {
+      ...sectionById("lead-rules"),
+      href: "/settings/lead-rules",
+      icon: <ListChecks size={18} />,
+    },
+    {
+      ...sectionById("stages"),
+      href: "/settings/stages",
+      icon: <Layers size={18} />,
+    },
+    {
+      ...sectionById("apps"),
+      href: "/settings/apps",
+      icon: <Plug size={18} />,
+    },
+    {
+      ...sectionById("call-ai"),
+      href: "/settings/call-ai",
+      icon: <AudioLines size={18} />,
+    },
+  ];
+
   const choose = (tenantId: string) => {
     if (tenantId === currentWorkspaceId) return;
     onClose();
     onSelectWorkspace?.(tenantId);
   };
   const canSwitch = Boolean(onSelectWorkspace) && workspaces.length > 1;
+
+  const goToNav = (
+    <nav className={styles.goTo} aria-label="More pages">
+      {goTo.map((item) => (
+        <Link
+          key={item.href}
+          href={item.href}
+          className={styles.tile}
+          aria-current={here(item.href) ? "page" : undefined}
+          onClick={onClose}
+        >
+          <span aria-hidden="true">{item.icon}</span>
+          {item.label}
+        </Link>
+      ))}
+      {openPhoneCalls ? (
+        <button
+          type="button"
+          className={styles.tile}
+          onClick={() => {
+            onClose();
+            openPhoneCalls();
+          }}
+        >
+          <span aria-hidden="true">
+            <Smartphone size={20} />
+          </span>
+          Calls on this phone
+        </button>
+      ) : null}
+      {phoneApp ? (
+        <Link
+          href={`/leads${PHONE_SETUP_HASH}`}
+          className={styles.tile}
+          onClick={onClose}
+        >
+          <span aria-hidden="true">
+            <ListChecks size={20} />
+          </span>
+          Phone setup
+        </Link>
+      ) : null}
+    </nav>
+  );
 
   const main = (
     <>
@@ -385,6 +464,44 @@ export function SettingsMenu({
           {signingOut ? "Logging out…" : "Log out"}
         </button>
       </div>
+
+      {phone ? (
+        <section className={styles.group} aria-label="Your settings">
+          <h3 className={styles.heading}>You</h3>
+          <ActionList label="Your settings">
+            {yours.map((item) => (
+              <ActionRow
+                key={item.href}
+                icon={item.icon}
+                title={item.label}
+                note={item.hint}
+                href={item.href}
+                onClick={onClose}
+              />
+            ))}
+          </ActionList>
+        </section>
+      ) : null}
+
+      {phone && organisation && insights ? (
+        <section className={styles.group} aria-label="Organisation settings">
+          <h3 className={styles.heading}>Organisation</h3>
+          <ActionList label="Organisation settings">
+            {theirs.map((item) => (
+              <ActionRow
+                key={item.href}
+                icon={item.icon}
+                title={item.label}
+                note={item.hint}
+                href={item.href}
+                onClick={onClose}
+              />
+            ))}
+          </ActionList>
+        </section>
+      ) : null}
+
+      {phone ? goToNav : null}
 
       {phone && (canSwitch || invitesWaiting > 0 || onCreateOrganisation) ? (
         <section className={styles.section} aria-label="Workspace">
@@ -415,50 +532,6 @@ export function SettingsMenu({
         </section>
       ) : null}
 
-      {phone ? (
-        <nav className={styles.goTo} aria-label="More pages">
-          {goTo.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={styles.tile}
-              aria-current={here(item.href) ? "page" : undefined}
-              onClick={onClose}
-            >
-              <span aria-hidden="true">{item.icon}</span>
-              {item.label}
-            </Link>
-          ))}
-          {openPhoneCalls ? (
-            <button
-              type="button"
-              className={styles.tile}
-              onClick={() => {
-                onClose();
-                openPhoneCalls();
-              }}
-            >
-              <span aria-hidden="true">
-                <Smartphone size={20} />
-              </span>
-              Calls on this phone
-            </button>
-          ) : null}
-          {phoneApp ? (
-            <Link
-              href={`/leads${PHONE_SETUP_HASH}`}
-              className={styles.tile}
-              onClick={onClose}
-            >
-              <span aria-hidden="true">
-                <ListChecks size={20} />
-              </span>
-              Phone setup
-            </Link>
-          ) : null}
-        </nav>
-      ) : null}
-
       <div className={styles.list}>
         <Row
           icon={<Settings2 size={17} />}
@@ -469,7 +542,6 @@ export function SettingsMenu({
         <Row
           icon={<Clock3 size={17} />}
           label="Plan & usage"
-          value={minutes?.short}
           href="/settings/plan"
           onClick={onClose}
         />
@@ -570,7 +642,7 @@ export function SettingsMenu({
       <Sheet
         open={open}
         onClose={onClose}
-        title="Account"
+        title="You"
         hideTitle
         closeButton={false}
         className={styles.sheet}

@@ -1,0 +1,57 @@
+name: Cached locked CI prerequisites
+description: Cache the complete Debian transaction and prove the locked tools and browser.
+inputs:
+  components:
+    description: Space-separated prerequisite components.
+    required: true
+  python:
+    description: Python executable with the frozen Playwright environment, or python3 for Node.
+    default: .venv/bin/python
+  node-browser:
+    description: Use the frozen pnpm Playwright package instead of Python Playwright.
+    default: "false"
+runs:
+  using: composite
+  steps:
+    - name: Key the locked packages and runner image
+      id: key
+      shell: bash
+      env:
+        PREREQ_COMPONENTS: ${{ inputs.components }}
+        PREREQ_PYTHON: ${{ inputs.python }}
+        PREREQ_NODE: ${{ inputs.node-browser }}
+      run: |
+        read -r -a components <<< "$PREREQ_COMPONENTS"
+        options=(); [ "$PREREQ_NODE" != true ] || options+=(--node-browser)
+        "$PREREQ_PYTHON" scripts/ci/ci_prerequisites.py --cache-key "${options[@]}" "${components[@]}" >> "$GITHUB_OUTPUT"
+    - name: Restore the exact prerequisite transaction
+      id: restore
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: |
+          ${{ runner.temp }}/ci-prerequisites/*.deb
+          ${{ runner.temp }}/ci-prerequisites/manifest.json
+          ~/.cache/ms-playwright
+        key: ${{ steps.key.outputs.key }}
+    - name: Install and prove the locked prerequisites
+      shell: bash
+      env:
+        PREREQ_COMPONENTS: ${{ inputs.components }}
+        PREREQ_PYTHON: ${{ inputs.python }}
+        PREREQ_NODE: ${{ inputs.node-browser }}
+        PREREQ_CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
+      run: |
+        read -r -a components <<< "$PREREQ_COMPONENTS"
+        options=(--package-cache "$RUNNER_TEMP/ci-prerequisites")
+        [ "$PREREQ_NODE" != true ] || options+=(--node-browser)
+        [ "$PREREQ_CACHE_HIT" != true ] || options+=(--offline)
+        "$PREREQ_PYTHON" scripts/ci/ci_prerequisites.py "${options[@]}" "${components[@]}"
+    - name: Save proved prerequisites before tests
+      if: steps.restore.outputs.cache-hit != 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+      with:
+        path: |
+          ${{ runner.temp }}/ci-prerequisites/*.deb
+          ${{ runner.temp }}/ci-prerequisites/manifest.json
+          ~/.cache/ms-playwright
+        key: ${{ steps.key.outputs.key }}

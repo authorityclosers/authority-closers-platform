@@ -24,6 +24,9 @@ professional_gate_ref, after the owner confirmed the OpenAI DPA) (owner, 21 Oct 
   existing records); the summary prints its references for Root to check before installing.
 - ``--luna-c4`` (with ``--luna``): the hybrid, only the one-pass C4 request on Luna and C5
   kept on Gemini 3.8 Flash (profiles ``luna-c4-one-pass`` and ``luna-c4-one-pass-flex``).
+- ``--brain4`` (with ``--one-pass``): the one-pass request is recipe v2, the same read plus
+  the Brain 4.0 part (``one_pass.brain4_part``), on its own profiles beside v1's
+  (``gemini-one-pass-v2``, ``luna-c4-one-pass-v2``, each with ``-flex``).
 
 Writes ``hosted-approval.json`` (canonical bytes) and ``hosted-approval.sha256`` to
 ``--out`` and prints a content-free summary: the old and new digests, the profile added
@@ -40,7 +43,7 @@ from pathlib import Path
 
 from ac_platform.conversation_intelligence.activation_contract import load_hosted_approval_bundle
 from ac_platform.conversation_intelligence.provider_registry import parse_registry_config
-from ac_platform.one_pass import c2_route
+from ac_platform.one_pass import c2_route, markers
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -74,8 +77,17 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="with --luna: only the one-pass C4 request on Luna, C5 kept on Gemini 3.8 Flash",
     )
+    parser.add_argument(
+        "--brain4",
+        action="store_true",
+        help="with --one-pass: recipe v2, the one-pass request plus the Brain 4.0 part",
+    )
     arguments = parser.parse_args(argv)
     governance = None
+    if arguments.brain4 and not arguments.one_pass:
+        print(json.dumps({"refused": "brain4_needs_one_pass"}), file=sys.stderr)
+        return 2
+    recipe = markers.RECIPE_V2 if arguments.brain4 else markers.RECIPE
     if arguments.luna_c4 and not arguments.luna:
         print(json.dumps({"refused": "luna_c4_needs_luna"}), file=sys.stderr)
         return 2
@@ -107,6 +119,7 @@ def main(argv: list[str] | None = None) -> int:
         luna=arguments.luna,
         openai=openai,
         luna_report=not arguments.luna_c4,
+        recipe=recipe,
     )
     if saved.digest != derived.digest:
         print(
@@ -122,6 +135,7 @@ def main(argv: list[str] | None = None) -> int:
         one_pass=arguments.one_pass,
         luna=governance,
         luna_report=not arguments.luna_c4,
+        recipe=recipe,
     )
     arguments.out.mkdir(parents=True, exist_ok=True, mode=0o700)
     (arguments.out / "hosted-approval.json").write_bytes(sealed.to_json())
@@ -156,7 +170,8 @@ def main(argv: list[str] | None = None) -> int:
                 "bundle_after": sealed.digest,
                 "classic_configuration": classic.digest,
                 "gemini_c2_configuration": derived.digest,
-                "profile": (
+                "recipe": recipe,
+                "profile": c2_route.versioned(
                     (
                         c2_route.LUNA_C4_FLEX_PROFILE_ID
                         if arguments.flex
@@ -177,7 +192,8 @@ def main(argv: list[str] | None = None) -> int:
                     if arguments.one_pass
                     else c2_route.FLEX_PROFILE_ID
                     if arguments.flex
-                    else c2_route.PROFILE_ID
+                    else c2_route.PROFILE_ID,
+                    recipe,
                 ),
                 "policies": [str(item.tenant_id) for item in policies],
                 "classic_stages_unchanged": True,

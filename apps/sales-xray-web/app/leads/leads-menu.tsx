@@ -6,18 +6,11 @@
  * "pathetic"). The ⋯ beside the stage tabs opens it, on phones and computers.
  */
 
-import {
-  ChevronRight,
-  FlaskConical,
-  Import,
-  Plug,
-  Route,
-  UsersRound,
-} from "lucide-react";
+import { FlaskConical, Import, Plug, Route, UsersRound } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { ActionList, ActionRow } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
-import styles from "./leads.module.css";
 
 export type LeadsMenuItem = {
   key: string;
@@ -45,26 +38,17 @@ export function LeadsMenu({
 }) {
   return (
     <Sheet open={open} onClose={onClose} title="Leads settings" wide="center">
-      <ul className={styles.menuList}>
+      <ActionList label="Leads settings">
         {items.map((item) => (
-          <li key={item.key}>
-            <button
-              type="button"
-              className={styles.menuRow}
-              onClick={item.onPick}
-            >
-              <span className={styles.menuIcon} aria-hidden="true">
-                {ICONS[item.key]}
-              </span>
-              <span className={styles.menuWords}>
-                <strong>{item.label}</strong>
-                <small>{item.note}</small>
-              </span>
-              <ChevronRight size={18} aria-hidden="true" />
-            </button>
-          </li>
+          <ActionRow
+            key={item.key}
+            icon={ICONS[item.key]}
+            title={item.label}
+            note={item.note}
+            onClick={item.onPick}
+          />
         ))}
-      </ul>
+      </ActionList>
     </Sheet>
   );
 }

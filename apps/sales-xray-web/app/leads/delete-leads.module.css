@@ -137,8 +137,10 @@
   background: var(--sx-sunken);
 }
 
+/* Ticked: the accent, not red. Select now also gives, moves and re-stages
+   (22 Oct 2026); only Delete is red. */
 .pick[aria-checked="true"] {
-  background: var(--sx-bad-soft);
+  background: var(--sx-accent-soft);
 }
 
 .box {
@@ -156,8 +158,9 @@
 }
 
 .box[data-on] {
-  border-color: var(--sx-bad);
-  background: var(--sx-bad);
+  border-color: var(--sx-accent);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
 }
 
 .main {

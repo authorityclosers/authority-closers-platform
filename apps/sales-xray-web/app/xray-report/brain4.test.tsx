@@ -4,8 +4,8 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import type { Transcript } from "../report-contract";
 import { parseReportSettings, reportLook } from "../report-settings";
-import { brain4Band, readBrain4 } from "./brain4";
-import { Brain4Analysis } from "./brain4-view";
+import { brain4Band, brain4Highlights, readBrain4 } from "./brain4";
+import { Brain4Analysis, Brain4Pending } from "./brain4-view";
 import { readStructure } from "./structure";
 
 (
@@ -94,6 +94,24 @@ describe("Brain 4.0 in the Report", () => {
     expect(view.categories[0]).toMatchObject({ rated: 6, score: 3.8 });
   });
 
+  it("reads confidence, how many skills were rated and the call type", () => {
+    const dimensions = block().dimensions.map((d, i) => ({
+      ...d,
+      confidence: i === 0 ? "high" : "unsure",
+    }));
+    const view = readBrain4(
+      block({ call_type: "follow_up", dimensions }),
+      evidence,
+    )!;
+    expect(view.rated).toBe(17);
+    expect(view.callType).toBe("follow_up");
+    expect(view.dimensions[0].confidence).toBe("high");
+    expect(view.dimensions[1].confidence).toBeNull();
+    expect(
+      readBrain4(block({ call_type: "unknown" }), evidence)!.callType,
+    ).toBeNull();
+  });
+
   it("shows nothing that is not a beta Brain 4.0 block", () => {
     expect(readBrain4(null, evidence)).toBeNull();
     expect(readBrain4(block({ status: "official" }), evidence)).toBeNull();
@@ -163,13 +181,84 @@ describe("the Brain 4.0 section", () => {
     await act(async () => root.render(<Brain4Analysis view={view} />));
     const rows = host.querySelectorAll("[data-brain4]");
     expect(rows).toHaveLength(18);
-    expect(host.textContent).toContain("Beta");
+    expect(host.textContent).toContain("AI coaching score");
+    expect(host.textContent).not.toContain("Beta");
     expect(host.textContent).toContain("3.8 / 5");
     expect(host.textContent).toContain("Not enough evidence");
     const first = rows[3].querySelector("button")!;
-    expect(first.getAttribute("aria-label")).toContain("3 out of 5, beta");
+    expect(first.getAttribute("aria-label")).toContain("3 out of 5");
+    expect(first.getAttribute("aria-label")).not.toContain("beta");
     await act(async () => first.click());
     expect(host.textContent).toContain("On Your Next Call");
     expect(host.textContent).toContain("What happens to a lead");
+  });
+
+  it("is the coaching lead's structure: the scale, timed evidence and confidence", async () => {
+    const dimensions = block().dimensions.map((d) => ({
+      ...d,
+      confidence: "high",
+    }));
+    const view = readBrain4(
+      block({ call_type: "inbound", dimensions }),
+      evidence,
+    )!;
+    await act(async () => root.render(<Brain4Analysis view={view} />));
+    expect(host.textContent).toContain("AI coaching score · 18 skills");
+    expect(host.textContent).toContain("Inbound call");
+    expect(host.textContent).toContain("17 of 18 skills");
+    expect(host.textContent).toContain("5 clearly helped the call");
+    expect(host.textContent).not.toMatch(/beta|official|certified/i);
+    await act(async () =>
+      host.querySelector<HTMLButtonElement>("[data-brain4] button")!.click(),
+    );
+    expect(host.textContent).toMatch(/00:00–00:05/);
+    expect(host.textContent).toContain("Confidence: High");
+  });
+
+  it("says when a call was too short to judge", async () => {
+    const dimensions = block().dimensions.map((d) => ({
+      ...d,
+      rating: null,
+      shown_rating: null,
+      applicability: "not_enough_evidence",
+    }));
+    const view = readBrain4(block({ dimensions }), evidence)!;
+    expect(view.rated).toBe(0);
+    await act(async () => root.render(<Brain4Analysis view={view} />));
+    expect(host.textContent).toContain("too short");
+    expect(host.querySelectorAll("[data-brain4]")).toHaveLength(18);
+  });
+
+  it("says when a call has no AI coaching score yet", async () => {
+    await act(async () => root.render(<Brain4Pending />));
+    expect(host.textContent).toContain("isn't ready for this call yet");
+    expect(host.textContent).not.toContain("Beta");
+  });
+
+  it("gives the Overview its strength and improvement from the 18 skills", () => {
+    const dimensions = block().dimensions.map((d, i) => ({
+      ...d,
+      rating: i === 1 ? 5 : i === 15 ? 2 : d.rating,
+      shown_rating: i === 1 ? 5 : i === 15 ? 2 : d.shown_rating,
+      observed: i === 1 ? "You set a clear plan." : d.observed,
+      coaching: i === 15 ? "Ask what is behind the doubt." : d.coaching,
+    }));
+    const { strength, improvement } = brain4Highlights(
+      readBrain4(block({ dimensions }), evidence)!,
+    );
+    expect(strength?.text).toBe("Skill 2: You set a clear plan.");
+    expect(improvement?.text).toBe("Skill 16: Ask what is behind the doubt.");
+    expect(strength?.sources).toHaveLength(1);
+    const none = block().dimensions.map((d) => ({
+      ...d,
+      rating: null,
+      shown_rating: null,
+    }));
+    expect(
+      brain4Highlights(readBrain4(block({ dimensions: none }), evidence)!),
+    ).toEqual({
+      strength: null,
+      improvement: null,
+    });
   });
 });

@@ -17,6 +17,8 @@ import {
 import styles from "@/app/health/health.module.css";
 import { RetryJob } from "@/app/health/retry-job";
 import { adminRead } from "@/app/lib/server-api";
+import { CostMeter } from "@/app/usage/cost-meter";
+import { normalizeMeter } from "@/app/usage/meter-data";
 import {
   Card,
   Empty,
@@ -48,10 +50,11 @@ export default async function HealthPage({
 }) {
   const { days } = await searchParams;
   const window = WINDOWS.find((item) => item.key === days)?.key ?? "7";
-  const result = await adminRead(
-    `/v1/admin/conversation/health?days=${window}`,
-    normalizeHealth,
-  );
+  const [result, meter] = await Promise.all([
+    adminRead(`/v1/admin/conversation/health?days=${window}`, normalizeHealth),
+    // ₹/min now in production, from the metrics store (owner, 22 Oct 2026).
+    adminRead("/v1/admin/conversation/meter", normalizeMeter),
+  ]);
   const health = result.ok ? result.data : null;
   const peak = Math.max(
     1,
@@ -69,6 +72,13 @@ export default async function HealthPage({
       {!result.ok ? (
         <Unavailable title="Analysis health" reason={result.error} />
       ) : null}
+      <div id="cost-meter">
+        {meter.ok ? (
+          <CostMeter meter={meter.data} detail />
+        ) : (
+          <Unavailable title="₹/min now" reason={meter.error} />
+        )}
+      </div>
       {health ? (
         <>
           <Tiles label="Health">

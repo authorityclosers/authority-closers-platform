@@ -164,65 +164,42 @@ it("explains a workspace without Sales Xray access instead of failing each card"
   ).toBe(true);
 });
 
-it("renders both the ring and used-minutes text for finite allowances", async () => {
-  fetchMock.mockImplementation(async (url: string) => {
-    if (url.endsWith("/session")) {
-      return new Response(
-        JSON.stringify({
-          allowance: {
-            allowance_seconds: 6000,
-            committed_seconds: 1800,
-            available_seconds: 4200,
-            unlimited: false,
-          },
-        }),
-        { status: 200 },
-      );
-    }
-    return new Response(JSON.stringify({ detail: "Not Found" }), {
-      status: 404,
+it.each([
+  [
+    {
+      allowance_seconds: 6000,
+      committed_seconds: 1800,
+      available_seconds: 4200,
+      unlimited: false,
+    },
+  ],
+  [
+    {
+      allowance_seconds: 0,
+      committed_seconds: 0,
+      available_seconds: 0,
+      unlimited: true,
+    },
+  ],
+])(
+  "never shows minutes on Home (owner, 19 Oct 2026) for %j",
+  async (allowance) => {
+    fetchMock.mockImplementation(async (url: string) => {
+      if (url.endsWith("/session"))
+        return new Response(JSON.stringify({ allowance }), { status: 200 });
+      return new Response(JSON.stringify({ detail: "Not Found" }), {
+        status: 404,
+      });
     });
-  });
 
-  await renderPage(true);
+    await renderPage(true);
 
-  expect(host.textContent).toContain("70 min");
-  expect(host.textContent).toContain("left of 100 min");
-  const usedElement = host.querySelector('[title="30 of 100 min used"]');
-  expect(usedElement).not.toBeNull();
-  expect(usedElement?.textContent).toContain("30");
-  expect(usedElement?.textContent).toContain("min used");
-  const gaugeSvg = host.querySelector("svg");
-  expect(gaugeSvg).not.toBeNull();
-});
-
-it("renders unlimited allowances with clock icon and without used-minutes text", async () => {
-  fetchMock.mockImplementation(async (url: string) => {
-    if (url.endsWith("/session")) {
-      return new Response(
-        JSON.stringify({
-          allowance: {
-            allowance_seconds: 0,
-            committed_seconds: 0,
-            available_seconds: 0,
-            unlimited: true,
-          },
-        }),
-        { status: 200 },
-      );
-    }
-    return new Response(JSON.stringify({ detail: "Not Found" }), {
-      status: 404,
-    });
-  });
-
-  await renderPage(true);
-
-  expect(host.textContent).toContain("Unlimited");
-  expect(host.textContent).toContain("Analysis time");
-  expect(host.querySelector('[title*="min used"]')).toBeNull();
-  expect(host.textContent).not.toContain("min used");
-});
+    expect(host.querySelector("#metric-minutes-left")).toBeNull();
+    expect(host.textContent).not.toMatch(
+      /Minutes left|min left|min used|Unlimited|Analysis time/i,
+    );
+  },
+);
 
 function routeReads(routes: Record<string, () => Response>) {
   fetchMock.mockImplementation(async (url: string) => {
@@ -514,7 +491,8 @@ it("arrives whole from the server's reads, without reading again", async () => {
   expect(host.querySelector("#metric-reports-ready")?.textContent).toContain(
     "7",
   );
-  expect(host.textContent).toContain("70 min");
+  // The allowance is read, never shown (owner, 19 Oct 2026).
+  expect(host.textContent).not.toContain("70 min");
   expect(fetchMock).not.toHaveBeenCalled();
 });
 

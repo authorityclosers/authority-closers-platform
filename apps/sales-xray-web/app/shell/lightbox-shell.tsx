@@ -1,19 +1,27 @@
 "use client";
 
 import {
+  AudioLines,
   BarChart3,
+  Bell,
   Building2,
   ChevronDown,
-  Ellipsis,
   FolderOpen,
   GraduationCap,
+  Layers,
   LayoutGrid,
+  LifeBuoy,
   LogIn,
+  MessagesSquare,
   PanelLeftClose,
   PanelLeftOpen,
+  PhoneCall,
+  Plug,
   Plus,
   Search,
   Settings,
+  UserPlus,
+  UserRound,
   Users,
 } from "lucide-react";
 import Form from "next/form";
@@ -58,9 +66,7 @@ import { notify } from "../notice-center";
 import { opensInPlace } from "../settings-open";
 import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
-import { AllowanceRing } from "./allowance-ring";
-import { MinutesMeter } from "./minutes-meter";
-import { phoneTabFor, shellActiveFor } from "./phone-nav";
+import { phoneTabFor, shellActiveFor, type PhoneTab } from "./phone-nav";
 import { RailTip } from "./rail-tip";
 import { usePlacePrefetch, useHoverPrefetch } from "./route-prefetch";
 import { ScreenLink } from "./screen-link";
@@ -115,8 +121,12 @@ import {
 } from "./updates-client";
 import { ChatsTabIcon } from "../chats/chats-badge";
 import { AddLeadDialog } from "../leads/capture-dialogs";
+import { leadLink, readLeads } from "../leads/leads-client";
+import { CommandBar, type Command } from "../ui/command-bar";
+import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
 import { leavingOverlay } from "../ui/back-close";
+import { tick } from "../ui/haptics";
 import { LeadsTabIcon } from "../leads/leads-badge";
 import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
 import styles from "./lightbox-shell.module.css";
@@ -194,7 +204,7 @@ function resolvePageTitle(
   pageName?: string,
 ): string | null {
   if (pageName) return pageName;
-  if (active === "dashboard") return "Dashboard";
+  if (active === "dashboard") return "Home";
   if (heading) return heading.title;
   if (active === "calls") return "Calls";
   if (active === "leads") return "Leads";
@@ -394,6 +404,35 @@ function LightboxShellFrame({
     pageName ?? (inSettings(shownPath) ? "Settings" : undefined),
   );
   const phoneTab = phoneTabFor(shownPath, active);
+  // Phones: the large title shrinks once the page scrolls and the bar's
+  // hairline appears, as iOS does. The bar keeps its height, so nothing
+  // under it moves; an attribute, not state, so scrolling never re-renders.
+  const shellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    shell.removeAttribute("data-scrolled");
+    const onScroll = (event: Event) => {
+      const target = event.target;
+      const top =
+        target === document
+          ? window.scrollY
+          : target instanceof HTMLElement && target.matches(".studio-main")
+            ? target.scrollTop
+            : null;
+      if (top !== null) shell.toggleAttribute("data-scrolled", top > 8);
+    };
+    document.addEventListener("scroll", onScroll, {
+      capture: true,
+      passive: true,
+    });
+    return () =>
+      document.removeEventListener("scroll", onScroll, { capture: true });
+  }, [pathname]);
+  // A light tap in the hand when the phone's tab changes, as iOS does.
+  const tapTab = (tab: PhoneTab) => () => {
+    if (tab !== phoneTab) tick();
+  };
   // Phones call the dashboard Home, as its tab does (owner, 17 Oct).
   const barTitle = place === "dashboard" && !pageName ? "Home" : pageTitle;
   // The selected capsule glides to the new place, on the rail and the tabs.
@@ -425,20 +464,21 @@ function LightboxShellFrame({
     target.current?.focus({ preventScroll: true });
   }, [collapsed]);
 
+  // Ctrl K or ⌘K opens the command bar from anywhere (slice 9 of the new
+  // map): places, actions, settings, leads and calls in one search.
+  const [commandOpen, setCommandOpen] = useState(false);
+  const signedIn = authenticated && !loading;
   useEffect(() => {
+    if (!signedIn) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        // Search lives in the sidebar: open it first when it is collapsed.
-        if (expandButtonRef.current) {
-          expandButtonRef.current.click();
-          window.setTimeout(() => searchInputRef.current?.focus(), 80);
-        } else searchInputRef.current?.focus();
+        setCommandOpen((open) => !open);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [signedIn]);
 
   // Recents refetch when a call is created or finishes, and when the tab
   // comes back into view.
@@ -714,7 +754,7 @@ function LightboxShellFrame({
   const [createOpen, setCreateOpen] = useState(false);
   const [workspaceSheetOpen, setWorkspaceSheetOpen] = useState(false);
 
-  // Phones: the avatar in the top bar and More in the tab bar open one sheet.
+  // Phones: the avatar in the top bar opens You (there is no More tab).
   function toggleAccountSheet(event: MouseEvent<HTMLElement>) {
     if (!authenticated) return;
     accountAnchorRef.current = event.currentTarget;
@@ -791,6 +831,213 @@ function LightboxShellFrame({
       ? recentCalls
       : recentCallsForContext(getShellState(), recentContextKey);
   const newAnalysisHref = newCallHref(homeHref);
+
+  const go = useCallback(
+    (href: string) => {
+      if (router) router.push(href);
+      else window.location.assign(href);
+    },
+    [router],
+  );
+  const openLeadForm = useCallback(
+    () => setLeadForm((form) => ({ open: true, round: form.round + 1 })),
+    [],
+  );
+  const commands = useMemo<Command[]>(() => {
+    const place = (
+      label: string,
+      href: string,
+      icon: ReactNode,
+      keywords?: string,
+    ): Command => ({
+      id: `go:${href}`,
+      group: "Go to",
+      label,
+      keywords,
+      icon,
+      run: () => go(href),
+    });
+    const setting = (
+      label: string,
+      href: string,
+      icon: ReactNode,
+      hint: string,
+    ): Command => ({
+      id: `settings:${href}`,
+      group: "Settings",
+      label,
+      hint,
+      icon,
+      run: () => go(href),
+    });
+    return [
+      place("Home", "/dashboard", <LayoutGrid size={17} />, "dashboard sales"),
+      place("Leads", "/leads", <PhoneCall size={17} />, "pipeline stages"),
+      place("Chats", "/chats", <MessagesSquare size={17} />, "whatsapp inbox"),
+      place("Calls", "/analysis/calls", <FolderOpen size={17} />, "reports"),
+      place("Coaching", "/coaching", <GraduationCap size={17} />),
+      place("Prospects", "/prospects", <Users size={17} />),
+      ...(orgAdmin
+        ? [
+            place(
+              "Insights",
+              "/organisation/insights",
+              <BarChart3 size={17} />,
+              "company",
+            ),
+          ]
+        : []),
+      ...(inOrganisation
+        ? [
+            {
+              id: "add:lead",
+              group: "Actions",
+              label: "Add a lead",
+              hint: "A name and a number is enough",
+              icon: <UserPlus size={17} />,
+              run: openLeadForm,
+            },
+          ]
+        : []),
+      {
+        id: "add:call",
+        group: "Actions",
+        label: "Analyse a call",
+        hint: "Record or upload a call for its report",
+        icon: <AudioLines size={17} />,
+        keywords: "new analysis upload recording",
+        run: () => go(newAnalysisHref),
+      },
+      setting(
+        "Profile",
+        "/settings/profile",
+        <UserRound size={17} />,
+        "Your name, photo, phone and theme",
+      ),
+      setting(
+        "Selling",
+        "/settings/selling",
+        <PhoneCall size={17} />,
+        "Taking new leads, calling from your phone, alerts",
+      ),
+      setting(
+        "Notifications",
+        "/settings/notifications",
+        <Bell size={17} />,
+        "Lead alerts on your phone",
+      ),
+      ...(orgAdmin
+        ? [
+            setting(
+              "Team & roles",
+              "/settings/team",
+              <Users size={17} />,
+              "Members, invites and who can do what",
+            ),
+            setting(
+              "Lead stages",
+              "/leads?tab=stages",
+              <Layers size={17} />,
+              "Stages and pipelines",
+            ),
+            setting(
+              "Connected apps",
+              "/settings/apps",
+              <Plug size={17} />,
+              "Lead ads, WhatsApp, Messenger and Instagram",
+            ),
+            setting(
+              "AI on calls",
+              "/settings/call-ai",
+              <AudioLines size={17} />,
+              "How much AI reads each seller's calls",
+            ),
+          ]
+        : []),
+      setting(
+        "All settings",
+        "/settings",
+        <Settings size={17} />,
+        "Account, organisation, connections, this device",
+      ),
+      setting(
+        "Help & support",
+        "/settings/help",
+        <LifeBuoy size={17} />,
+        "First call guide and support",
+      ),
+    ];
+  }, [go, inOrganisation, newAnalysisHref, openLeadForm, orgAdmin]);
+  // Screens add their own commands and searches while they are on screen
+  // (ui/command-registry.ts).
+  const registered = useRegisteredCommands();
+  const allCommands = useMemo(
+    () => [...commands, ...registered.commands],
+    [commands, registered.commands],
+  );
+  const leadsSearchedElsewhere = registered.keys.includes("leads");
+  // Leads that match (the team's for owners and admins, your own for
+  // sellers), recent calls by name, and a step that searches every call;
+  // then whatever the screens on show find.
+  const searchEverything = useCallback(
+    async (text: string, signal: AbortSignal): Promise<Command[]> => {
+      const lower = text.toLocaleLowerCase();
+      const calls = visibleRecentCalls
+        .filter((call) => call.name.toLocaleLowerCase().includes(lower))
+        .slice(0, 3)
+        .map<Command>((call) => ({
+          id: `call:${call.id}`,
+          group: "Calls",
+          label: call.name,
+          hint: call.date,
+          icon: <FolderOpen size={17} />,
+          run: () => go(callHref(call.id)),
+        }));
+      const everyCall: Command = {
+        id: "calls:search",
+        group: "Calls",
+        label: `Search calls for “${text}”`,
+        icon: <Search size={17} />,
+        run: () => go(`${CALLS_PATH}?q=${encodeURIComponent(text)}`),
+      };
+      let leads: Command[] = [];
+      if (inOrganisation && !leadsSearchedElsewhere)
+        try {
+          const page = await readLeads(
+            { scope: orgAdmin ? "team" : "mine", search: text },
+            signal,
+          );
+          leads = page.leads.slice(0, 5).map((lead) => ({
+            id: `lead:${lead.lead_id}`,
+            group: "Leads",
+            label: withCapitals(lead.name),
+            hint: [lead.stage_label, lead.company ?? lead.city]
+              .filter(Boolean)
+              .join(" · "),
+            icon: <UserRound size={17} />,
+            // The lead's own address: Leads with its sheet up.
+            run: () => go(leadLink(lead.lead_id)),
+          }));
+        } catch {
+          // A failed read shows the calls only.
+        }
+      const found = await Promise.allSettled(
+        registered.searches.map((search) => search(text, signal)),
+      );
+      const theirs = found.flatMap((result) =>
+        result.status === "fulfilled" ? result.value : [],
+      );
+      return [...leads, ...theirs, ...calls, everyCall];
+    },
+    [
+      go,
+      inOrganisation,
+      leadsSearchedElsewhere,
+      orgAdmin,
+      registered.searches,
+      visibleRecentCalls,
+    ],
+  );
   const viewerId = access?.context?.personId ?? null;
   // A list with owners can mix people: then every row says whose it is.
   const recentsShowOwners = visibleRecentCalls.some((call) => call.owner);
@@ -886,6 +1133,7 @@ function LightboxShellFrame({
 
   return (
     <div
+      ref={shellRef}
       className={`${styles.shell} ${collapsed ? styles.collapsed : ""}`}
       data-lightbox-shell
       data-authenticated={authenticated}
@@ -930,13 +1178,13 @@ function LightboxShellFrame({
             <ScreenLink
               className={`${styles.stripBtn}${place === "dashboard" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/dashboard"
-              aria-label="Dashboard"
-              data-rail-tip="Dashboard"
+              aria-label="Home"
+              data-rail-tip="Home"
               aria-current={place === "dashboard" ? "page" : undefined}
             >
               <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
               <span className={styles.railPill} aria-hidden="true" />
-              <span style={RAIL_NAME_STYLE}>Dashboard</span>
+              <span style={RAIL_NAME_STYLE}>Home</span>
             </ScreenLink>
             <ScreenLink
               className={`${styles.stripBtn}${place === "leads" ? ` ${styles.stripBtnActive}` : ""}`}
@@ -1065,7 +1313,8 @@ function LightboxShellFrame({
           </div>
         </div>
 
-        <RailTip rail={railRef} />
+        {/* Open, the sidebar names every place: no hover labels then. */}
+        <RailTip rail={railRef} off={!collapsed} />
 
         {/* 248px Panel */}
         <div
@@ -1143,9 +1392,6 @@ function LightboxShellFrame({
                 aria-label="Search calls"
                 enterKeyHint="search"
               />
-              <kbd className={styles.searchKbd} aria-hidden="true">
-                {shortcut}
-              </kbd>
             </Form>
           )}
 
@@ -1320,11 +1566,22 @@ function LightboxShellFrame({
           ) : (
             <BrandLockup href={homeHref} />
           )}
-          {/* The account lives under More in the tab bar, not here too. */}
+          {/* You opens from the avatar on the left, not from here too. */}
           <div className={styles.barActions}>
             <ReviewBarChip live={leadsBadgeLive} />
+            {guest ? null : (
+              <button
+                type="button"
+                className={styles.barSearch}
+                onClick={() => setCommandOpen(true)}
+                aria-label="Search"
+                aria-haspopup="dialog"
+                aria-expanded={commandOpen}
+              >
+                <Search size={20} aria-hidden="true" />
+              </button>
+            )}
             {bell}
-            <MinutesMeter allowance={allowance} variant="pill" />
           </div>
         </header>
         <header className={styles.topBar}>
@@ -1358,8 +1615,20 @@ function LightboxShellFrame({
           {/* Pages can host their own toolbar here (the report's sections). */}
           <div className={styles.topBarCenter} data-shell-toolbar />
           <div className={styles.topBarRight}>
-            {/* First, so its arrival (or absence) moves nothing else. */}
-            <AllowanceRing allowance={shownAllowance} />
+            {guest ? null : (
+              <button
+                type="button"
+                className={styles.commandButton}
+                onClick={() => setCommandOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={commandOpen}
+                aria-keyshortcuts="Control+K Meta+K"
+              >
+                <Search size={15} aria-hidden="true" />
+                Search
+                <kbd aria-hidden="true">{shortcut}</kbd>
+              </button>
+            )}
             {(authenticated || sessionPending) && place !== "analyse" ? (
               <Link className={styles.newAnalysisButton} href={newAnalysisHref}>
                 <Plus size={15} aria-hidden="true" />
@@ -1404,10 +1673,10 @@ function LightboxShellFrame({
           </SectionBoundary>
         </main>
       </div>
-      {/* Owner, 17 and 20 Oct: five clear tabs on phones (Home, Leads, New,
-          Calls, More), nothing else. Chats opens from the Leads | Chats
-          switch; Prospects, Coaching and the organisation pages live in the
-          More sheet. */}
+      {/* The new map (owner, 22 Oct 2026): five tabs on phones, Home, Leads,
+          + (Add), Chats and Calls. Your avatar in the top bar opens You (your
+          settings, the organisation's, the other places, Log out), so there
+          is no More tab. */}
       <nav
         ref={tabBarRef}
         className={styles.bottomNav}
@@ -1416,6 +1685,7 @@ function LightboxShellFrame({
         <ScreenLink
           className={styles.bottomLink}
           href="/dashboard"
+          onClick={tapTab("dashboard")}
           aria-current={phoneTab === "dashboard" ? "page" : undefined}
         >
           <LayoutGrid size={20} aria-hidden="true" />
@@ -1427,11 +1697,10 @@ function LightboxShellFrame({
           <ScreenLink
             className={styles.bottomLink}
             href="/leads"
+            onClick={tapTab("leads")}
             aria-current={phoneTab === "leads" ? "page" : undefined}
           >
-            {/* Chats live inside Leads on phones (owner, 20 Oct: "5 tabs,
-                Chats inside Leads"), so unread chats count here too. */}
-            <LeadsTabIcon size={20} live={leadsBadgeLive} withChats />
+            <LeadsTabIcon size={20} live={leadsBadgeLive} />
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Leads</span>
           </ScreenLink>
@@ -1456,7 +1725,10 @@ function LightboxShellFrame({
           <button
             type="button"
             className={`${styles.bottomLink} ${styles.bottomNew}`}
-            onClick={() => setAddOpen(true)}
+            onClick={() => {
+              tick();
+              setAddOpen(true);
+            }}
             aria-label="Add a lead or a call"
             aria-haspopup="dialog"
             aria-expanded={addOpen}
@@ -1469,10 +1741,24 @@ function LightboxShellFrame({
             <span>Add</span>
           </button>
         )}
+        {/* Chats has its own tab and its own unread count. */}
+        {guest ? null : (
+          <ScreenLink
+            className={styles.bottomLink}
+            href="/chats"
+            onClick={tapTab("chats")}
+            aria-current={phoneTab === "chats" ? "page" : undefined}
+          >
+            <ChatsTabIcon size={20} live={leadsBadgeLive} />
+            <span className={styles.tabPill} aria-hidden="true" />
+            <span>Chats</span>
+          </ScreenLink>
+        )}
         {guest ? null : (
           <ScreenLink
             className={styles.bottomLink}
             href="/analysis/calls"
+            onClick={tapTab("calls")}
             aria-current={phoneTab === "calls" ? "page" : undefined}
           >
             <FolderOpen size={20} aria-hidden="true" />
@@ -1481,7 +1767,7 @@ function LightboxShellFrame({
           </ScreenLink>
         )}
         {/* Signed out shows Sign in (the phone app has its own sign-in
-            screen, so it hides this); an unconfirmed session keeps More. */}
+            screen, so it hides this). */}
         {guest ? (
           <ScreenLink
             className={`${styles.bottomLink} sx-web-only`}
@@ -1492,20 +1778,7 @@ function LightboxShellFrame({
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Sign in</span>
           </ScreenLink>
-        ) : (
-          <button
-            type="button"
-            className={styles.bottomLink}
-            onClick={toggleAccountSheet}
-            aria-haspopup="dialog"
-            aria-expanded={accountCardOpen && authenticated}
-            aria-current={phoneTab === "more" ? "page" : undefined}
-          >
-            <Ellipsis size={20} aria-hidden="true" />
-            <span className={styles.tabPill} aria-hidden="true" />
-            <span>More</span>
-          </button>
-        )}
+        ) : null}
         {/* Local live-data development only; never on a served site. */}
         <LocalSettingsButton className={styles.bottomLink} />
       </nav>
@@ -1587,6 +1860,14 @@ function LightboxShellFrame({
           }
         />
       ) : null}
+      {guest ? null : (
+        <CommandBar
+          open={commandOpen}
+          onClose={() => setCommandOpen(false)}
+          commands={allCommands}
+          search={searchEverything}
+        />
+      )}
       {guest ? null : (
         <AddSheet
           open={addOpen}

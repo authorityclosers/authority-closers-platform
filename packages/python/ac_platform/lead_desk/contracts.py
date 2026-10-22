@@ -148,6 +148,28 @@ class LeadPage(Model):
     stage_counts: dict[str, int] = Field(default_factory=dict)
 
 
+class BulkDone(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    done: int
+    # Gone, not on this desk, already there, or a stage that lead's pipeline lacks.
+    skipped: int
+    words: str
+
+
+class LeadMatch(Model):
+    """Whether a number is already a lead, for Add lead while typing (22 Oct 2026). A
+    manager, or the lead's own owner, gets the lead; a seller learns only that a teammate
+    has it (Add lead refuses that number anyway)."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    found: bool
+    lead_id: UUID | None = None
+    name: str | None = None
+    stage_label: str | None = None
+    owner_name: str | None = None
+    yours: bool = False
+
+
 class LeadsDeleted(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     deleted: int
@@ -496,6 +518,18 @@ class Reassign(Command):
     command_id: UUID
     expected_revision: int = Field(ge=1)
     person_id: UUID | None = None  # None: run the allocation rules again
+
+
+class BulkLeads(Command):
+    """Owners and admins act on many leads at once (22 Oct 2026): give them to a person
+    (none: the lead rules pick), move them to one of the stages, or to a pipeline."""
+
+    command_id: UUID
+    lead_ids: tuple[UUID, ...] = Field(min_length=1, max_length=500)
+    action: Literal["assign", "stage", "pipeline"]
+    person_id: UUID | None = None
+    step: str | None = Field(default=None, max_length=40)
+    pipeline: str | None = Field(default=None, max_length=40)
 
 
 class MovePipeline(Command):

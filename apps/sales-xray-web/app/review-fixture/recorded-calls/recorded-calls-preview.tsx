@@ -83,7 +83,6 @@ const SETUP = {
   device: "00000000-0000-4000-8000-0000000000d1",
   needsAllFiles: true,
   allFilesSupported: true,
-  testResult: "only_you",
   truecaller: true,
   recorderProfile: {
     kind: "folder",

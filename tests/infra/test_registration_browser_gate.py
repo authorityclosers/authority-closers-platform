@@ -377,16 +377,8 @@ def test_workflow_installs_browser_before_standalone_build_and_runs_gate_after()
         assert "if" not in step and not step.get("continue-on-error", False)
     assert install["timeout-minutes"] == 13
     assert required["timeout-minutes"] == 5
-    assert shlex.split(install["run"]) == [
-        "uv",
-        "run",
-        "--frozen",
-        "python",
-        "scripts/ci/ci_prerequisites.py",
-        "codec",
-        "filesystem",
-        "browser",
-    ]
+    assert install["uses"] == "./.github/actions/ci-prerequisites"
+    assert install["with"]["components"] == "codec filesystem browser"
     assert required["env"] == {
         gate.REQUIRED_FLAG: "1",
         "AC_LEARNER_E2E_BASE_URL": gate.BASE_URL,

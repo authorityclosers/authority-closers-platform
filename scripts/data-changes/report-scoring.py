@@ -15,6 +15,11 @@ The workspace is our own company's (Admin's "company" kind: a registered organis
 verified for an email domain of the operations staff), never chosen by name. Exactly one
 must exist unless ``--tenant-id`` names one of them.
 
+``--every-workspace`` (owner, 22 Oct 2026: "the new brain live on production" for every
+analysed call) chooses the same kind of version for everyone (Report settings' general
+scope) instead, and lists each workspace's resulting scoring; a workspace with its own
+organisation or industry choice keeps it and is listed under ``not_on_target``.
+
 Who acts: the AC control account named by ``--control-email``, through its newest current
 Admin session in the operations workspace, as an Admin request would. The script never
 reads or prints a session token. No current session: refused (sign in to Admin once).
@@ -49,7 +54,7 @@ DATA_CHANGE = "scripts/data-changes/report-scoring.py"
 OPERATOR = "claude-laptop:report-scoring"
 CHOSEN = "report_settings.scoring_chosen"
 SCORINGS = ("classic", "brain4_beta")
-LABELS = {"classic": "Classic scoring", "brain4_beta": "Brain 4.0 beta scoring"}
+LABELS = {"classic": "Classic scoring", "brain4_beta": "Brain 4.0 AI coaching score"}
 
 
 class Refused(RuntimeError):
@@ -69,6 +74,7 @@ class Command:
     issue: str
     reason: str
     tenant_id: UUID | None = None
+    every_workspace: bool = False
     apply: bool = False
 
 
@@ -79,6 +85,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--control-email", required=True)
     parser.add_argument("--scoring", required=True)
     parser.add_argument("--tenant-id", type=UUID)
+    parser.add_argument("--every-workspace", action="store_true")
     parser.add_argument("--approver", required=True)
     parser.add_argument("--issue", required=True)
     parser.add_argument("--reason", required=True, help="the approval, in the approver's words")
@@ -96,6 +103,8 @@ def check(command: Command) -> Command:
     approver, issue = command.approver.strip(), command.issue.strip()
     if not 1 <= len(approver) <= 120 or not 1 <= len(issue) <= 60:
         raise Refused("approver_and_issue_are_required")
+    if command.every_workspace and command.tenant_id is not None:
+        raise Refused("every_workspace_takes_no_tenant_id")
     return Command(
         environment=command.environment,
         control_email=command.control_email,
@@ -104,6 +113,7 @@ def check(command: Command) -> Command:
         issue=issue,
         reason=reason,
         tenant_id=command.tenant_id,
+        every_workspace=command.every_workspace,
         apply=command.apply,
     )
 
@@ -182,6 +192,15 @@ async def execute(
 
     command = check(command)
     actor = await _actor(database, command, operations_tenant_id)
+    if command.every_workspace:
+        return await _everyone(
+            database,
+            command,
+            actor,
+            operations_tenant_id=operations_tenant_id,
+            personal_tenant_id=personal_tenant_id,
+            now=clock or (lambda: datetime.now(UTC)),
+        )
     workspace = await _company(database, command, operations_tenant_id, personal_tenant_id)
     tenant = workspace.tenant_id
     now = clock or (lambda: datetime.now(UTC))
@@ -273,6 +292,142 @@ async def execute(
     return {**result, "status": "applied"}
 
 
+async def _everyone(
+    database: Any,
+    command: Command,
+    actor: Any,
+    *,
+    operations_tenant_id: UUID,
+    personal_tenant_id: UUID | None,
+    now: Callable[[], datetime],
+) -> dict[str, Any]:
+    """The general scope: one version for every workspace without its own choice."""
+    from ac_platform.audit.service import AuditRepository
+    from ac_platform.conversation_intelligence.application import ConversationApplication
+    from ac_platform.conversation_intelligence.report_settings_admin import (
+        ChoiceIntent,
+        ReportSettingsAdmin,
+        VersionIntent,
+    )
+    from ac_platform.organisations.workspace_kinds import classify_workspaces, ordered
+
+    kinds = await classify_workspaces(
+        database,
+        operations_tenant_id=operations_tenant_id,
+        personal_tenant_id=personal_tenant_id,
+    )
+    served = [
+        w
+        for w in ordered(kinds.values())
+        if w.kind in ("company", "customer", "personal") and w.status == "active"
+    ]
+    admin = ReportSettingsAdmin(
+        ConversationApplication(database, clock=now),
+        operations_tenant_id=operations_tenant_id,
+        organisation_ids=tuple(w.tenant_id for w in served),
+        personal_tenant_id=personal_tenant_id,
+    )
+    await admin.admit(actor)
+
+    async def states() -> list[dict[str, Any]]:
+        rows = []
+        for w in served:
+            effective = await admin.store.effective(w.tenant_id)
+            rows.append(
+                {
+                    "tenant_id": str(w.tenant_id),
+                    "name": w.name,
+                    "kind": w.kind,
+                    "version": effective["version"]["number"],
+                    "source": effective["source"],
+                    "scoring": effective["settings"]["report"]["scoring"],
+                }
+            )
+        return rows
+
+    versions = await admin.store.versions()
+    general = await admin.store.latest("general")
+    current = None if general is None else general.version_number
+    base_number = current if current in versions else 1
+    _, base = versions[base_number]
+    result: dict[str, Any] = {
+        "scope": "general",
+        "before": {"version": current, "scoring": base.report.scoring},
+    }
+    if base.report.scoring == command.scoring:
+        rows = await states()
+        return {
+            **result,
+            "after": result["before"],
+            "workspaces": rows,
+            "not_on_target": [r for r in rows if r["scoring"] != command.scoring],
+            "status": "no_op",
+        }
+    wanted = base.model_copy(
+        update={"report": base.report.model_copy(update={"scoring": command.scoring})}
+    )
+    number = next(
+        (
+            n
+            for n, (_, settings) in sorted(versions.items())
+            if settings.digest() == wanted.digest()
+        ),
+        None,
+    )
+    created = number is None
+    key = f"data-change:report-scoring:{command.issue}:general:{command.scoring}"
+    if number is None:
+        version = await admin.create_version(
+            actor,
+            VersionIntent(
+                label=LABELS[command.scoring],
+                note=command.reason[:500],
+                base_number=base_number,
+                settings=wanted,
+            ),
+            key=f"{key}:version"[:128],
+        )
+        number = int(version["number"])
+    await admin.choose(
+        actor,
+        ChoiceIntent(
+            scope="general",
+            version_number=number,
+            expected_version_number=current,
+            reason=command.reason[:300],
+        ),
+        key=f"{key}:choice"[:128],
+    )
+    rows = await states()
+    missed = [r for r in rows if r["scoring"] != command.scoring]
+    result["after"] = {"version": number, "scoring": command.scoring, "version_created": created}
+    result["workspaces"] = rows
+    result["not_on_target"] = missed
+    if not command.apply:
+        return {**result, "status": "dry_run"}
+    await AuditRepository(database).append_for_actor(
+        actor,
+        action=CHOSEN,
+        resource_type="conversation_report_settings_version",
+        resource_id=str(number),
+        payload={
+            "scope": "general",
+            "before": result["before"],
+            "after": result["after"],
+            "workspaces": len(rows),
+            "not_on_target": [r["tenant_id"] for r in missed],
+            "reason": command.reason,
+            "approval": {
+                "approver": command.approver,
+                "issue": command.issue,
+                "data_change": DATA_CHANGE,
+                "operator": OPERATOR,
+            },
+        },
+    )
+    return {**result, "status": "applied"}
+
+
 async def _run(command: Command, settings: Any) -> dict[str, Any]:
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -312,6 +467,7 @@ def main(
                 issue=args.issue,
                 reason=args.reason,
                 tenant_id=args.tenant_id,
+                every_workspace=bool(args.every_workspace),
                 apply=bool(args.apply),
             )
         )

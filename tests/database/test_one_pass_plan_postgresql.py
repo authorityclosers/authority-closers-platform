@@ -2,7 +2,8 @@
 one-pass C4 request runs C2, ONE C4 request over the whole call and today's C5, through
 the real broker router (prompt view and paid cap), with intercepted synthetic answers;
 then the call's pointer review and deep call data are published from that same read
-(one_pass.plan_publish), with no provider call."""
+(one_pass.plan_publish), with no provider call. Recipe v2 (the same read plus the Brain 4.0
+part) publishes the call's Brain 4.0 block inside that review."""
 
 from __future__ import annotations
 
@@ -17,7 +18,7 @@ import pytest
 from sqlalchemy import select
 
 from ac_platform.call_data.models import CallDataRun
-from ac_platform.conversation_intelligence import pointer_review_cli
+from ac_platform.conversation_intelligence import brain4, pointer_review_cli
 from ac_platform.conversation_intelligence.activation_contract import (
     StageApproval,
     load_hosted_approval_bundle,
@@ -52,6 +53,7 @@ from tests.database.test_conversation_processing_plan_postgresql import (
 )
 from tests.database.test_conversation_reporting_pipeline_postgresql import ReportingBroker
 from tests.database.test_conversation_worker_postgresql import _postgres_harness
+from tests.unit.conversation_intelligence.test_brain4 import answer as brain4_answer
 from tests.unit.one_pass.test_one_pass import _review
 
 MODEL = "gemini-3.8-flash"
@@ -65,8 +67,9 @@ def postgres_harness() -> Any:
     yield from _postgres_harness.__wrapped__()
 
 
-def _answer(segment: dict[str, Any]) -> dict[str, Any]:
-    """Call data, a note and the fixture review, citing this call's own first segment."""
+def _answer(segment: dict[str, Any], recipe: str | None = markers.RECIPE) -> dict[str, Any]:
+    """Call data, a note and the fixture review (v2: and a Brain 4.0 block), citing this
+    call's own first segment."""
     first = segment["id"]
     review = json.loads(
         json.dumps(_review()).replace('"s1"', f'"{first}"').replace('"s3"', f'"{first}"')
@@ -76,7 +79,7 @@ def _answer(segment: dict[str, Any]) -> dict[str, Any]:
         "follow_up": {"when": None, "about": None, "evidence": []},
         **review.pop("prospect"),
     }
-    return {
+    answer: dict[str, Any] = {
         "call_data": {
             "speakers": [{"speaker_id": segment["speaker_id"], "role": "prospect"}],
             "facts": [
@@ -92,6 +95,11 @@ def _answer(segment: dict[str, Any]) -> dict[str, Any]:
         "notes": [{"fact": "The speaker greeted the buyer.", "segments": [first]}],
         "review": review,
     }
+    if recipe == markers.RECIPE_V2:
+        answer["brain4"] = brain4_answer(
+            **{dimension: {"evidence": [first]} for dimension in brain4.DIMENSION_IDS}
+        )
+    return answer
 
 
 class OnePassBroker(ReportingBroker):
@@ -105,6 +113,7 @@ class OnePassBroker(ReportingBroker):
         if provider == "gemini" and body["systemInstruction"]["parts"][0]["text"].startswith(
             "AC_TASK_ADAPTER: gemini-json-v9\n"
         ):
+            system = body["systemInstruction"]["parts"][0]["text"].split("\n", 2)[2]
             user = json.loads(body["contents"][0]["parts"][0]["text"])
             envelope = {
                 "candidates": [
@@ -112,7 +121,13 @@ class OnePassBroker(ReportingBroker):
                         "finishReason": "STOP",
                         "content": {
                             "role": "model",
-                            "parts": [{"text": json.dumps(_answer(user["segments"][0]))}],
+                            "parts": [
+                                {
+                                    "text": json.dumps(
+                                        _answer(user["segments"][0], markers.recipe_of(system))
+                                    )
+                                }
+                            ],
                         },
                     }
                 ]
@@ -136,7 +151,12 @@ class OnePassBroker(ReportingBroker):
                         "content": [
                             {
                                 "type": "output_text",
-                                "text": json.dumps(_answer(user["segments"][0])),
+                                "text": json.dumps(
+                                    _answer(
+                                        user["segments"][0],
+                                        markers.recipe_of(body["instructions"]),
+                                    )
+                                ),
                             }
                         ],
                     }
@@ -166,7 +186,7 @@ def plan_publish_profile_fields() -> tuple[str, ...]:
     return tuple(PROFILE_FROM)
 
 
-async def _one_pass(setup: Any, provider: str) -> Any:
+async def _one_pass(setup: Any, provider: str, recipe: str = markers.RECIPE) -> Any:
     """The setup's configuration with its facts route as the one-pass request (on Gemini
     3.8 Flash, or on GPT-6 Luna with an OpenAI entry), saved, and its bundle's stages
     bound to it (C4 one request at the one-pass bound, priced by list-price evidence, as
@@ -190,8 +210,8 @@ async def _one_pass(setup: Any, provider: str) -> Any:
     routes = tuple(
         replace(
             route,
-            recipe_revision=markers.RECIPE,
-            prompt_revision=markers.PROMPT_REVISION,
+            recipe_revision=recipe,
+            prompt_revision=markers.PROMPT_REVISION_BY_RECIPE[recipe],
             **({"provider_id": "openai", "model_id": LUNA} if provider == "openai" else {}),
         )
         if route.task == "facts"
@@ -220,7 +240,7 @@ async def _one_pass(setup: Any, provider: str) -> Any:
             )
         if stage.stage == "C4":
             update.update(
-                recipe_revision=markers.RECIPE,
+                recipe_revision=recipe,
                 max_requests=1,
                 max_completion_tokens=16_000,
                 max_input_bytes=max(stage.max_input_bytes, markers.MAX_INPUT_BYTES),
@@ -257,16 +277,19 @@ async def _one_pass(setup: Any, provider: str) -> Any:
     return replace(setup, config=saved, bundle=bundle, broker=broker, worker=worker)
 
 
-@pytest.mark.parametrize("provider", ["gemini", "openai"])
+@pytest.mark.parametrize(
+    ("provider", "recipe"),
+    [("gemini", markers.RECIPE), ("openai", markers.RECIPE), ("gemini", markers.RECIPE_V2)],
+)
 def test_a_one_pass_plan_runs_one_c4_request_and_todays_c5(
-    postgres_harness: Any, tmp_path: Any, provider: str
+    postgres_harness: Any, tmp_path: Any, provider: str, recipe: str
 ) -> None:
     async def exercise() -> None:
         setup = await _setup(
             postgres_harness, tmp_path, text_provider="gemini", funded=True, text_cost_paise=COST
         )
         try:
-            setup = await _one_pass(setup, provider)
+            setup = await _one_pass(setup, provider, recipe)
             quote = await _quote(setup, "one-pass-plan-quote")
             assert [stage["provider"] for stage in quote["stages"]] == [
                 "elevenlabs",
@@ -286,7 +309,7 @@ def test_a_one_pass_plan_runs_one_c4_request_and_todays_c5(
                 c4 = next(task for task in tasks if task.stage == "C4")
                 checkpoint = await db.get(ConversationCheckpoint, c4.checkpoint_id)
                 assert checkpoint is not None
-                assert checkpoint.manifest["revision"] == markers.RECIPE
+                assert checkpoint.manifest["revision"] == recipe
                 packet = checkpoint.payload
                 assert (packet["chunk_index"], packet["chunk_count"]) == (1, 1)
                 statements = [item["statement"] for item in packet["observations"]]
@@ -323,7 +346,10 @@ def test_a_one_pass_plan_runs_one_c4_request_and_todays_c5(
                 read = await db.run_sync(lambda sync: plan_publish.c4_read(sync.connection(), row))
                 assert read is not None and read.run_id == c4.run_id
                 found = plan_publish.answer(setup.prepared.storage.root, read)
-                assert found is not None and set(found) == {"call_data", "notes", "review"}
+                assert read.recipe == recipe
+                parts = {"call_data", "notes", "review"}
+                assert found is not None
+                assert set(found) == (parts | {"brain4"} if recipe == markers.RECIPE_V2 else parts)
 
             def never(_body: Any) -> Any:
                 raise AssertionError("a one-pass report needs no provider call")
@@ -344,6 +370,7 @@ def test_a_one_pass_plan_runs_one_c4_request_and_todays_c5(
                 call_provider=never,
             )
             assert line["review"] == "published" and "attempt" not in line
+            assert line.get("brain4") == ("parsed" if recipe == markers.RECIPE_V2 else None)
             assert isinstance(line["call_data"], dict)
             async with setup.sessions() as db, db.begin():
                 review = await db.scalar(
@@ -364,6 +391,15 @@ def test_a_one_pass_plan_runs_one_c4_request_and_todays_c5(
                     if provider == "openai"
                     else {"version": calibration.VERSION, "label": "beta", "basis": "one_pass_c4"}
                 )
+                # v2: Brain 4.0's block from the same read, saved beside the pointers (beta).
+                if recipe == markers.RECIPE_V2:
+                    block = review.payload["brain4"]
+                    assert block["status"] == "beta"
+                    assert [item["id"] for item in block["dimensions"]] == list(
+                        brain4.DIMENSION_IDS
+                    )
+                else:
+                    assert "brain4" not in review.payload
                 deep = (
                     await db.scalars(
                         select(CallDataRun).where(

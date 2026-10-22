@@ -39,7 +39,7 @@ DURATIONS = Path("scripts/ci/wb-python-durations.json")
 WEB_EXT = (".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs")
 FORMAT_EXT = WEB_EXT + (".css", ".json", ".md", ".yml", ".yaml")
 # Changes here re-run everything: the CI itself, lockfiles and toolchain configuration.
-EVERYTHING = re.compile(r"^(\.github/workflows/workbench-checks\.yml|scripts/ci/(wb[-_]|python_test_shard|ci_prerequisites"
+EVERYTHING = re.compile(r"^(\.github/(workflows/workbench-checks\.yml|actions/ci-prerequisites/)|scripts/ci/(wb[-_]|python_test_shard|ci_prerequisites"
                         r"|python-test-exclusions)|package\.json|pnpm-lock\.yaml|pnpm-workspace\.yaml|pyproject\.toml"
                         r"|uv\.lock|tsconfig[^/]*\.json)")
 WEB = re.compile(r"^(apps/|packages/typescript/)")
@@ -322,4 +322,3 @@ if __name__ == "__main__":
         sys.exit(cmd_summary())
     sys.exit(f"usage: {sys.argv[0]} plan | web --task lint|tsc|vitest | py-family --fam a|b --out FILE"
              " | py-needs --shard I | summary")
-

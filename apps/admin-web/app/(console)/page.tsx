@@ -6,6 +6,8 @@ import { normalizeHealth } from "@/app/health/health-data";
 import { loadConsoleAccess } from "@/app/lib/console-access";
 import { visibleNavigation } from "@/app/lib/nav";
 import { adminRead } from "@/app/lib/server-api";
+import { CostMeter } from "@/app/usage/cost-meter";
+import { normalizeMeter } from "@/app/usage/meter-data";
 import {
   Empty,
   Kpi,
@@ -114,11 +116,15 @@ export default async function HomePage() {
   const access = await loadConsoleAccess();
   const groups = visibleNavigation(access).filter((group) => group.label);
   const name = access.displayName?.split(/\s+/)[0];
-  const today = groups.some((group) =>
-    group.items.some((item) => item.href === "/calls"),
-  )
-    ? await loadToday()
-    : null;
+  const can = (href: string) =>
+    groups.some((group) => group.items.some((item) => item.href === href));
+  // ₹/min now (owner, 22 Oct 2026), for the accounts that see cost on Health.
+  const [today, meter] = await Promise.all([
+    can("/calls") ? loadToday() : null,
+    can("/health")
+      ? adminRead("/v1/admin/conversation/meter", normalizeMeter)
+      : null,
+  ]);
   return (
     <Page>
       <PageHeader
@@ -130,6 +136,7 @@ export default async function HomePage() {
         ]}
       />
       {today ? <Today data={today} /> : null}
+      {meter?.ok ? <CostMeter meter={meter.data} /> : null}
       {groups.length === 0 ? (
         <Panel title="Nothing to open yet">
           <Empty

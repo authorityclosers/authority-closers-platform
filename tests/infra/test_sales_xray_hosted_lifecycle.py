@@ -212,7 +212,7 @@ def _make_release(
     }
     if openai:
         env_values["AC_XRAY_OPENAI_IDENTITY_DIR"] = (
-            "/etc/authority-closers/secrets/sales-xray/identities/openai"
+            f"/etc/authority-closers/secrets/sales-xray/identities/{environment}/openai"
         )
     env_file.write_text(
         "".join(f"{key}={env_values[key]}\n" for key in sorted(env_values)), encoding="utf-8"
@@ -399,11 +399,13 @@ def test_hosted_validator_projects_only_target_release_inputs(activation_root: P
     ]
 
 
+@pytest.mark.parametrize("environment", ["staging", "production"])
 def test_openai_provider_selects_dedicated_overlay_only_with_identity_path(
     activation_root: Path,
     monkeypatch: pytest.MonkeyPatch,
+    environment: str,
 ) -> None:
-    release, paths = _make_release(activation_root, openai=True)
+    release, paths = _make_release(activation_root, openai=True, environment=environment)
     identity_dir = paths["openai"]
     identity_dir.mkdir()
     token_file = identity_dir / "token"
@@ -414,7 +416,7 @@ def test_openai_provider_selects_dedicated_overlay_only_with_identity_path(
         os.chown(token_file, _VALIDATOR.WORKER_UID, _VALIDATOR.WORKER_GID)
         token_file.chmod(0o400)
     openai_identity_path = _portable(identity_dir)
-    monkeypatch.setattr(_VALIDATOR, "OPENAI_HOST_IDENTITY_DIR", openai_identity_path)
+    monkeypatch.setitem(_VALIDATOR.OPENAI_HOST_IDENTITY_DIRS, environment, openai_identity_path)
     env_values = dict(
         line.split("=", 1) for line in paths["env"].read_text(encoding="utf-8").splitlines()
     )
@@ -425,7 +427,7 @@ def test_openai_provider_selects_dedicated_overlay_only_with_identity_path(
     )
     _refresh_activation_inputs(paths)
 
-    result = _VALIDATOR.compose_inputs(release, "staging", OPERATIONS_TENANT)
+    result = _VALIDATOR.compose_inputs(release, environment, OPERATIONS_TENANT)
 
     assert result == (
         release / "compose.sales-xray-hosted-openai.yaml",
@@ -443,7 +445,7 @@ def test_openai_provider_selects_dedicated_overlay_only_with_identity_path(
     )
     _refresh_activation_inputs(paths)
     with pytest.raises(_VALIDATOR.ActivationError):
-        _VALIDATOR.compose_inputs(release, "staging", OPERATIONS_TENANT)
+        _VALIDATOR.compose_inputs(release, environment, OPERATIONS_TENANT)
 
 
 def test_hosted_validator_rejects_openai_mount_without_openai_provider(
@@ -454,7 +456,7 @@ def test_hosted_validator_rejects_openai_mount_without_openai_provider(
         line.split("=", 1) for line in paths["env"].read_text(encoding="utf-8").splitlines()
     )
     env_values["AC_XRAY_OPENAI_IDENTITY_DIR"] = (
-        "/etc/authority-closers/secrets/sales-xray/identities/openai"
+        "/etc/authority-closers/secrets/sales-xray/identities/staging/openai"
     )
     paths["env"].write_text(
         "".join(f"{key}={value}\n" for key, value in sorted(env_values.items())),
@@ -504,7 +506,147 @@ def test_hosted_validator_rejects_broad_openai_identity_parent(activation_root: 
         _VALIDATOR.ActivationError,
         match="OpenAI identity directory must use its dedicated host path",
     ):
-        _VALIDATOR._checked_openai_identity_dir(env_values["AC_XRAY_OPENAI_IDENTITY_DIR"])
+        _VALIDATOR._checked_openai_identity_dir(
+            env_values["AC_XRAY_OPENAI_IDENTITY_DIR"], "staging"
+        )
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_openai_identity_directory_is_bound_to_environment(environment: str) -> None:
+    prefix = "/etc/authority-closers/secrets/sales-xray/identities"
+    expected = f"{prefix}/{environment}/openai"
+    assert str(_VALIDATOR._checked_openai_identity_dir(expected, environment)) == expected
+    other = "production" if environment == "staging" else "staging"
+    for invalid in (
+        f"{prefix}/{other}/openai",
+        f"{prefix}/openai",
+        prefix,
+        f"{prefix}/{environment}",
+        f"{prefix}/{environment}/../{environment}/openai",
+        f"{expected}/.",
+        f"{expected}/",
+        f"{expected}/token",
+        "/arbitrary/openai",
+        "relative/openai",
+        None,
+    ):
+        with pytest.raises(_VALIDATOR.ActivationError, match="dedicated host path"):
+            _VALIDATOR._checked_openai_identity_dir(invalid, environment)
+    with pytest.raises(_VALIDATOR.ActivationError, match="dedicated host path"):
+        _VALIDATOR._checked_openai_identity_dir(expected, "development")
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_hosted_activation_rejects_other_environment_openai_identity(
+    activation_root: Path, environment: str
+) -> None:
+    release, paths = _make_release(activation_root, environment=environment, openai=True)
+    other = "production" if environment == "staging" else "staging"
+    values = dict(line.split("=", 1) for line in paths["env"].read_text().splitlines())
+    values["AC_XRAY_OPENAI_IDENTITY_DIR"] = _VALIDATOR.OPENAI_HOST_IDENTITY_DIRS[other]
+    paths["env"].write_text("".join(f"{key}={value}\n" for key, value in sorted(values.items())))
+    _refresh_activation_inputs(paths)
+    result = _validator_result(release, environment)
+    assert result.returncode == 2
+    assert result.stderr == "FAIL  Hosted Sales Xray activation validation failed.\n"
+    assert values["AC_XRAY_OPENAI_IDENTITY_DIR"] not in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_hosted_env_parser_binds_optional_openai_identity(
+    monkeypatch: pytest.MonkeyPatch, environment: str
+) -> None:
+    # Challenge-file metadata is unrelated to this directory selection proof.
+    monkeypatch.setattr(_VALIDATOR, "_validate_challenge_secret_reference", lambda _value: None)
+    values = {key: "/fictional/host/reference" for key in _VALIDATOR.ABSOLUTE_ENV_KEYS}
+    values.update(
+        AC_XRAY_SERVICE_SHA256="a" * 64,
+        AC_XRAY_APPROVAL_SHA256="b" * 64,
+        AC_XRAY_ACQUISITION_ENABLED="true",
+        AC_XRAY_NATIVE_IMAGE_REF="sha256:" + "c" * 64,
+        AC_XRAY_CHALLENGE_SITE_KEY="fictional-public-site-key",
+        AC_XRAY_ACQUISITION_POLICY_REVISION="fictional-policy-v1",
+    )
+
+    def parse():
+        return _VALIDATOR._parse_env(
+            "".join(f"{key}={value}\n" for key, value in sorted(values.items())).encode(),
+            environment,
+        )
+
+    assert "AC_XRAY_OPENAI_IDENTITY_DIR" not in parse()
+    values["AC_XRAY_OPENAI_IDENTITY_DIR"] = _VALIDATOR.OPENAI_HOST_IDENTITY_DIRS[environment]
+    assert parse() == values
+    other = "production" if environment == "staging" else "staging"
+    values["AC_XRAY_OPENAI_IDENTITY_DIR"] = _VALIDATOR.OPENAI_HOST_IDENTITY_DIRS[other]
+    with pytest.raises(_VALIDATOR.ActivationError, match="dedicated host path"):
+        parse()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX identity metadata contract")
+@pytest.mark.parametrize(
+    ("defect", "message"),
+    [
+        ("ancestor-symlink", "symbolic links"),
+        ("leaf-symlink", "symbolic links"),
+        ("ancestor-owner", "root-owned"),
+        ("ancestor-writable", "not be writable"),
+        ("ancestor-file", "not a directory"),
+        ("leaf-owner", "root-owned"),
+        ("leaf-writable", "not be writable"),
+        ("leaf-private", "not traversable"),
+        ("extra-file", "only its token file"),
+        ("token-owner", "ownership or mode"),
+        ("token-mode", "ownership or mode"),
+        ("token-hardlink", "nonempty regular file"),
+        ("token-symlink", "nonempty regular file"),
+        ("token-empty", "nonempty regular file"),
+        ("token-fifo", "nonempty regular file"),
+    ],
+)
+def test_openai_identity_metadata_protections_without_reading_token(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, defect: str, message: str
+) -> None:
+    identity = tmp_path / "staging" / "openai"
+    identity.mkdir(parents=True)
+    token = identity / "token"
+    token.write_bytes(b"fictional-token")
+    directory = [stat.S_IFDIR | 0o755, 1, 0, 1, 0, 0, 0, 0, 0, 0]
+    token_info = [stat.S_IFREG | 0o400, 2, 0, 1, 10001, 10001, 15, 0, 0, 0]
+    metadata = {path: list(directory) for path in (*identity.parents, identity)}
+    metadata[token] = token_info
+
+    def inspect(path: Path) -> os.stat_result:
+        return os.stat_result(metadata[path])
+
+    def refuse_read(*_args, **_kwargs):
+        pytest.fail("identity validation must not read token contents")
+
+    monkeypatch.setattr(Path, "open", refuse_read)
+    _VALIDATOR._validate_openai_identity_metadata(identity, lstat=inspect)
+    target = identity.parent if defect.startswith("ancestor-") else identity
+    if defect.endswith("symlink"):
+        metadata[token if defect == "token-symlink" else target][0] = stat.S_IFLNK | 0o777
+    elif defect.endswith("owner"):
+        metadata[token if defect == "token-owner" else target][4] = 1002
+    elif defect.endswith("writable"):
+        metadata[target][0] |= 0o020
+    elif defect == "ancestor-file":
+        metadata[target][0] = stat.S_IFREG | 0o444
+    elif defect == "leaf-private":
+        metadata[identity][0] = stat.S_IFDIR | 0o700
+    elif defect == "extra-file":
+        (identity / "unexpected").touch()
+    elif defect == "token-mode":
+        token_info[0] = stat.S_IFREG | 0o444
+    elif defect == "token-hardlink":
+        token_info[3] = 2
+    elif defect == "token-empty":
+        token_info[6] = 0
+    elif defect == "token-fifo":
+        token_info[0] = stat.S_IFIFO | 0o400
+    with pytest.raises(_VALIDATOR.ActivationError, match=message):
+        _VALIDATOR._validate_openai_identity_metadata(identity, lstat=inspect)
 
 
 def test_openai_identity_metadata_rejects_missing_directory(activation_root: Path) -> None:

@@ -27,6 +27,7 @@ import { UnlockButton } from "../report-sections/shared";
 import { useCallOutcome } from "../report-outcome-context";
 import type { Line } from "../report-story-model";
 import { PlayChip, type Select } from "../report-visuals/visuals";
+import { brain4Highlights, type Brain4View } from "./brain4";
 import { MoneyBag, TargetArrow } from "./icons";
 import {
   scoreBand,
@@ -554,11 +555,20 @@ export function OverviewScore({
   view: XrayView;
   onSelect?: Select;
 }) {
-  const { summary, score, stats, strength, improvement } = view.overview;
+  const { summary, score, stats } = view.overview;
   const scoring = scoringNote(view.scoring);
   const band = score ? scoreBand(score.value) : null;
   // A report settings version may hide scores; version 1 shows them.
-  const { scores } = useReportLook();
+  const { scores, scoring: rubric } = useReportLook();
+  // Brain 4.0 scoring (owner, 22 Oct 2026): its 18 skills replace the 27 pointers'
+  // score and highlights wherever the call has a Brain 4.0 read.
+  const coach =
+    rubric === "brain4_beta" && view.brain4 && !view.illustrative
+      ? view.brain4
+      : null;
+  const { strength, improvement } = coach
+    ? brain4Highlights(coach)
+    : view.overview;
   return (
     <div className={styles.xr} data-xray-part="overview">
       <section
@@ -588,7 +598,12 @@ export function OverviewScore({
         className={`${styles.card} ${styles.scoreCard}`}
         aria-label={scores ? "Overall score" : "Call statistics"}
       >
-        {scores ? (
+        {scores && coach ? (
+          <>
+            <CoachScore view={coach} />
+            <hr className={styles.rule} />
+          </>
+        ) : scores ? (
           <>
             <div
               className={`${styles.score} ${band ? BAND_TONE[band] : styles.neutral}`}
@@ -751,6 +766,47 @@ export function OverviewScore({
           <UnlockButton className={styles.save}>{GUEST.unlock}</UnlockButton>
         </section>
       ) : null}
+    </div>
+  );
+}
+
+const AREA: Record<string, string> = {
+  how_you_talk: "How You Talk",
+  understanding_the_buyer: "Understanding the Buyer",
+  moving_the_sale_forward: "Moving the Sale Forward",
+};
+
+/** The AI coaching score: each area's plain mean of its rated skills (1-5); no total. */
+function CoachScore({ view }: { view: Brain4View }) {
+  return (
+    <div
+      className={`${styles.score} ${styles.neutral}`}
+      data-xray-coach-score=""
+    >
+      <span className={styles.eyebrow}>AI Coaching Score</span>
+      {view.rated ? (
+        <ul className={styles.bullets}>
+          {view.categories.map((category) => (
+            <li key={category.id}>
+              <strong>
+                {category.score !== null
+                  ? `${category.score.toFixed(1)} / 5`
+                  : "–"}
+              </strong>{" "}
+              {AREA[category.id] ?? category.label}
+              <span className={styles.muted}>
+                {" "}
+                · {category.rated} of {category.of} skills rated
+              </span>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      <p className={styles.body}>
+        {view.rated
+          ? `Rated by AI on the coaching lead's Brain 4.0 rubric: ${view.rated} of 18 skills.`
+          : "This call was too short, or had too little conversation, to rate the 18 skills."}
+      </p>
     </div>
   );
 }

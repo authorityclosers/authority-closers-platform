@@ -14,7 +14,7 @@
 import { CheckCircle2, ChevronRight, Circle, Smartphone } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
-import { Button, Field } from "../ui/kit";
+import { Button } from "../ui/kit";
 import { Sheet } from "./lead-sheet";
 import { usePhoneOnboarded } from "./phone-onboarding";
 import { reportPhone } from "./leads-client";
@@ -26,14 +26,11 @@ import {
   callLogSetup,
   callLogStatus,
   inPhoneApp,
-  onPhoneCall,
   onPhoneSignal,
   setupMark,
   recorderOpen,
   setupOpen,
   setupStatus,
-  startTestCall,
-  TEST_LEAD,
   type CallLogStatus,
   type SetupStatus,
 } from "./native-phone";
@@ -45,9 +42,6 @@ import {
   EXPLAINERS,
   HIDDEN_TODO,
   recorderGuide,
-  TEST_CALL_STEPS,
-  TEST_RESULT_LINE,
-  TEST_RESULT_WORDS,
   TRUECALLER_NOTE,
   type PhoneCheck,
 } from "./phone-setup-words";
@@ -63,7 +57,6 @@ const ACTIONS = new Set<PhoneCheck>([
   "battery",
   "autostart",
   "callLog",
-  "testCall",
 ]);
 
 /** Xiaomi's hidden recordings folder: the Call recordings line asks for All files access (#49). */
@@ -74,12 +67,6 @@ export function needsAllFiles(status: SetupStatus): boolean {
 /** What a line says while it is not done yet, for this phone. */
 export function lineTodo(key: PhoneCheck, status: SetupStatus): string {
   if (key === "recordings" && needsAllFiles(status)) return HIDDEN_TODO;
-  if (
-    key === "testCall" &&
-    status.testResult !== "none" &&
-    status.testResult !== "both"
-  )
-    return TEST_RESULT_LINE[status.testResult] ?? CHECK_TODO.testCall;
   return CHECK_TODO[key];
 }
 
@@ -227,20 +214,8 @@ export function PhoneSetupSheet({
   const [note, setNote] = useState<string | null>(null);
   const [log, setLog] = useState<CallLogStatus | null>(null);
   const [sim, setSim] = useState("");
-  const [testNumber, setTestNumber] = useState("");
-  const [testing, setTesting] = useState(false);
   const { done, total } = setupProgress(status);
   const guide = recorderGuide(status.recorder, status.family);
-
-  // The test call ends and the phone checks its recording: show what it found.
-  useEffect(() => {
-    if (!open) return;
-    return onPhoneCall((call) => {
-      if (call.leadId !== TEST_LEAD || !call.final) return;
-      setTesting(false);
-      void setupStatus().then(onStatus);
-    });
-  }, [open, onStatus]);
 
   // Back from Android's settings (All files access) with the line done: back to the list.
   useEffect(() => {
@@ -251,9 +226,7 @@ export function PhoneSetupSheet({
         if (!next) return;
         onStatus(next);
         setView((current) =>
-          current && current !== "testCall" && next.checks[current]
-            ? null
-            : current,
+          current && next.checks[current] ? null : current,
         );
       });
     });
@@ -319,17 +292,6 @@ export function PhoneSetupSheet({
       : view
         ? EXPLAINERS[view]
         : undefined;
-  const testDigits = testNumber.replace(/\D/g, "");
-  const callTest = async () => {
-    setNote(null);
-    setTesting(true);
-    try {
-      await startTestCall(testNumber);
-    } catch {
-      setTesting(false);
-      setNote("The call didn't start. Check the number and try again.");
-    }
-  };
 
   return (
     <Sheet
@@ -367,9 +329,7 @@ export function PhoneSetupSheet({
                       <strong>{CHECK_LABELS[key]}</strong>
                       <small>{ok ? "Done" : lineTodo(key, status)}</small>
                     </span>
-                    {!ok &&
-                    ACTIONS.has(key) &&
-                    (key !== "testCall" || status.canTest) ? (
+                    {!ok && ACTIONS.has(key) ? (
                       <Button onClick={() => void show(key)}>Set up</Button>
                     ) : null}
                   </li>
@@ -411,43 +371,6 @@ export function PhoneSetupSheet({
                     <li key={step}>{step}</li>
                   ))}
                 </ol>
-              </>
-            ) : null}
-            {view === "testCall" ? (
-              <>
-                <ol className={styles.setupSteps}>
-                  {TEST_CALL_STEPS.map((step) => (
-                    <li key={step}>{step}</li>
-                  ))}
-                </ol>
-                <Field label="Their number">
-                  <input
-                    type="tel"
-                    inputMode="tel"
-                    autoComplete="tel"
-                    enterKeyHint="go"
-                    value={testNumber}
-                    disabled={testing}
-                    onChange={(event) => setTestNumber(event.target.value)}
-                  />
-                </Field>
-                {testing ? (
-                  <p className={styles.hint} role="status">
-                    After the call, Sales Xray checks the recording. This takes
-                    about half a minute.
-                  </p>
-                ) : TEST_RESULT_WORDS[status.testResult] ? (
-                  <p
-                    className={
-                      status.testResult === "both"
-                        ? styles.hint
-                        : styles.recordWarn
-                    }
-                    role="status"
-                  >
-                    {TEST_RESULT_WORDS[status.testResult]}
-                  </p>
-                ) : null}
               </>
             ) : null}
             {view === "autostart" ? (
@@ -557,16 +480,6 @@ export function PhoneSetupSheet({
                   }
                 >
                   Turn on
-                </Button>
-              ) : null}
-              {view === "testCall" ? (
-                <Button
-                  variant="primary"
-                  disabled={testing || testDigits.length < 6}
-                  aria-busy={testing || undefined}
-                  onClick={() => void callTest()}
-                >
-                  {status.testResult === "none" ? "Call" : "Call again"}
                 </Button>
               ) : null}
               <Button variant="ghost" onClick={() => setView(null)}>

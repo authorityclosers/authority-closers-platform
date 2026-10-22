@@ -14,13 +14,26 @@ const tipTarget = (node: EventTarget | null) =>
  * The icon rail's labels. One label is drawn on the page body beside the icon
  * under the mouse or keyboard focus, so no panel, page or bar can cover or
  * clip it. Each icon keeps its own accessible name; the label is visual only.
+ * `off` while the sidebar is open and every place shows its name.
  */
-export function RailTip({ rail }: { rail: RefObject<HTMLElement | null> }) {
+export function RailTip({
+  rail,
+  off = false,
+}: {
+  rail: RefObject<HTMLElement | null>;
+  off?: boolean;
+}) {
   const [tip, setTip] = useState<Tip | null>(null);
+  // Turning off takes any label down with it.
+  const [wasOff, setWasOff] = useState(off);
+  if (off !== wasOff) {
+    setWasOff(off);
+    if (off) setTip(null);
+  }
 
   useEffect(() => {
     const node = rail.current;
-    if (!node) return;
+    if (!node || off) return;
     const show = (target: HTMLElement | null) => {
       const text = target?.dataset.railTip;
       if (!target || !text) {
@@ -60,7 +73,7 @@ export function RailTip({ rail }: { rail: RefObject<HTMLElement | null> }) {
       window.removeEventListener("resize", hide);
       window.removeEventListener("scroll", hide, true);
     };
-  }, [rail]);
+  }, [off, rail]);
 
   if (!tip) return null;
   return createPortal(

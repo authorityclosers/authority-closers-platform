@@ -288,6 +288,33 @@
   white-space: nowrap;
 }
 
+/* Phones: the stage's own name above its bar, whole, with the count beside it
+   (Redmi at 360 px, 22 Oct 2026: the organisation's names were cut). */
+@media (max-width: 899.98px) {
+  .funnel a {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "label count"
+      "track track";
+    row-gap: 4px;
+    padding: 6px;
+  }
+
+  .funnelLabel {
+    grid-area: label;
+    overflow-wrap: anywhere;
+    white-space: normal;
+  }
+
+  .funnelCount {
+    grid-area: count;
+  }
+
+  .funnelTrack {
+    grid-area: track;
+  }
+}
+
 .funnelTrack {
   height: 12px;
   overflow: hidden;
@@ -391,6 +418,9 @@
 }
 
 .quiet {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
   margin: 0;
   padding: 14px;
   border: 1px dashed var(--sx-line-strong);

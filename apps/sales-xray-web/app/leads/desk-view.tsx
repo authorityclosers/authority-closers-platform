@@ -14,10 +14,11 @@
  */
 
 import { Hand, Inbox, Phone, X, type LucideIcon } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 
 import { ChannelMark } from "../chats/channel-mark";
 import { Avatar, Badge, Button, Kpi, Panel, Tiles, type Tone } from "../ui/kit";
+import { useRowKeys } from "../ui/row-keys";
 import { useRowGestures } from "./gestures";
 import {
   ago,
@@ -81,6 +82,8 @@ export function sourceText(
 /** What a list row can do beyond opening: swipe and hold (fingers only). */
 export type RowActions = {
   onCall?: (row: LeadRow) => void;
+  /** L on a computer: the lead opens on "How did the call go?". */
+  onLog?: (row: LeadRow) => void;
   onMessage?: (row: LeadRow) => void;
   onHold?: (row: LeadRow) => void;
 };
@@ -116,6 +119,7 @@ export function LeadLine({
       ref={rowRef}
       className={styles.leadLine}
       data-lead-row=""
+      data-row-key={row.lead_id}
       data-overdue={row.overdue || undefined}
       {...bind}
     >
@@ -306,6 +310,20 @@ export function DeskView({
   const upcoming = desk.upcoming ?? [];
   const callBack = desk.call_back ?? [];
   const next = upcoming[0];
+  const lists = useRef<HTMLDivElement>(null);
+  const byId = (id: string) =>
+    [...callBack, ...desk.queue, ...upcoming].find((row) => row.lead_id === id);
+  useRowKeys(lists, {
+    open: onOpen,
+    call: (id) => {
+      const row = byId(id);
+      if (row?.phone_last4) actions.onCall?.(row);
+    },
+    log: (id) => {
+      const row = byId(id);
+      if (row) actions.onLog?.(row);
+    },
+  });
   return (
     <>
       <div className={styles.compactStack}>{afterHero}</div>
@@ -340,7 +358,7 @@ export function DeskView({
         </Tiles>
       </div>
       <div className={styles.deskGrid}>
-        <div className={styles.deskMain}>
+        <div className={styles.deskMain} ref={lists}>
           {callBack.length ? (
             <Panel title="Call back" sub={`${callBack.length}`}>
               <ul className={styles.leadList} aria-label="Call back">

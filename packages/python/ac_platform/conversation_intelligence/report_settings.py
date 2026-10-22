@@ -46,8 +46,9 @@ INDUSTRY_PROFILES: dict[str, str] = {
 Complexity = Literal["simple", "standard", "expert"]
 ReportStyle = Literal["guided", "compact", "scorecard"]
 CoachingTone = Literal["supportive", "direct"]
-# Classic: the 27 pointers' AI scores. Brain 4.0 beta: the coaching lead's 18 dimensions
-# too, when the call's review has them (brain4.py), labelled beta (AC-SVAL gates).
+# Classic: the 27 pointers' AI scores. "brain4_beta" (the stored name; shown as the AI
+# coaching score since the owner's 22 Oct decision): the coaching lead's 18 dimensions
+# replace them on calls that have a Brain 4.0 read (brain4.py). Never called official.
 Scoring = Literal["classic", "brain4_beta"]
 
 # The Report's 27 pointers in the order the app shows them (xray-report/model.ts).
@@ -290,10 +291,11 @@ PARAMETERS: tuple[Parameter, ...] = (
         "report.scoring",
         "report",
         "Scoring rubric",
-        "Classic: the 27 pointers. Brain 4.0 beta: also the coaching lead's 18 skills, rated"
-        " 1-5 and labelled beta, on calls whose review has them.",
+        "Classic: the 27 pointers. Brain 4.0: the coaching lead's 18 skills, rated 1-5 by AI"
+        " (the AI coaching score), replace the 27 pointers on calls that have a Brain 4.0"
+        " read.",
         "choice",
-        choices=(("classic", "Classic"), ("brain4_beta", "Brain 4.0 beta")),
+        choices=(("classic", "Classic"), ("brain4_beta", "Brain 4.0 AI coaching score")),
         signals=("sx.pillar_read", "gold.agreement"),
     ),
     Parameter(

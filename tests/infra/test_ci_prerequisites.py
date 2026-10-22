@@ -3,7 +3,11 @@
 from __future__ import annotations
 
 import importlib.util
+import json
+import os
 import shlex
+import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -57,10 +61,14 @@ class FakeHost:
             tool = argv[argv.index("DEBIAN_FRONTEND=noninteractive") + 1]
             if tool == "dpkg":
                 return "repair"
+            if "--download-only" in argv:
+                return "apt-download"
+            if "--no-download" in argv:
+                return "offline-install"
             return "update" if "update" in argv else "install"
-        if argv[1:3] == ["-m", "playwright"]:
+        if argv[1:3] == ["-m", "playwright"] or argv[:3] == ["pnpm", "exec", "playwright"]:
             return "dry-run" if "--dry-run" in argv else "download"
-        if argv[1] == "-c":
+        if argv[1] in ("-c", "-e"):
             return "probe"
         return "version"
 
@@ -88,6 +96,14 @@ class FakeHost:
         self.now += 1
         if kind == "install":
             self.installed.update(argv[argv.index("--no-install-recommends") + 1 :])
+        if kind == "apt-download":
+            directory = Path(
+                next(a.split("=", 1)[1] for a in argv if a.startswith("Dir::Cache::archives="))
+            )
+            for package in [*argv[argv.index("--download-only") + 1 :], "transitive-lib"]:
+                (directory / f"{package}_1_amd64.deb").write_text(package)
+        if kind == "offline-install":
+            self.installed.update(Path(a).read_text() for a in argv if a.endswith(".deb"))
         return prereq.Result(0, "ffmpeg version 6.1" if kind == "version" else "")
 
     def of(self, kind: str) -> list[list[str]]:
@@ -217,6 +233,153 @@ def test_missing_command_after_install_fails_closed() -> None:
         tool.require(["filesystem"])
 
 
+def test_cold_cache_captures_dependencies_and_warm_cache_never_contacts_mirrors(tmp_path) -> None:
+    cold = FakeHost(installed={"util-linux", "e2fsprogs"})
+    tool, _ = helper(cold)
+    tool.package_cache = tmp_path
+    tool.require(["codec", "filesystem", "browser"])
+    assert len(cold.of("update")) == len(cold.of("apt-download")) == 1
+    assert cold.of("install") == []
+    record = json.loads((tmp_path / "manifest.json").read_text())
+    assert "transitive-lib_1_amd64.deb" in record["archives"]
+    (install,) = cold.of("offline-install")
+    assert "--no-download" in install and "--no-remove" in install
+    assert f"Dir::Cache::archives={tmp_path}/" in install
+    assert str(tmp_path / "transitive-lib_1_amd64.deb") in install
+
+    warm = FakeHost(installed={"util-linux", "e2fsprogs"}, failures={"update": ["timeout"] * 3})
+    tool, lines = helper(warm)
+    tool.package_cache, tool.offline = tmp_path, True
+    tool.require(["codec", "filesystem", "browser"])
+    assert warm.of("update") == warm.of("apt-download") == warm.of("download") == []
+    assert len(warm.of("offline-install")) == len(warm.of("probe")) == 1
+    assert len(warm.of("version")) == 2
+    assert warm.installed >= ALL_PACKAGES
+    assert any("no mirror access" in line for line in lines)
+
+
+@pytest.mark.parametrize("damage", ["changed", "removed", "extra", "request", "manifest"])
+def test_bad_warm_cache_fails_closed_without_network(tmp_path, damage) -> None:
+    tool, _ = helper(FakeHost())
+    tool.package_cache = tmp_path
+    tool.require(["codec"])
+    if damage == "changed":
+        (tmp_path / "ffmpeg_1_amd64.deb").write_text("corrupt")
+    elif damage == "removed":
+        (tmp_path / "ffmpeg_1_amd64.deb").unlink()
+    elif damage == "extra":
+        (tmp_path / "extra_1_amd64.deb").write_text("extra")
+    elif damage == "manifest":
+        (tmp_path / "manifest.json").unlink()
+    host = FakeHost()
+    tool, _ = helper(host)
+    tool.package_cache, tool.offline = tmp_path, True
+    with pytest.raises(prereq.PrerequisiteError, match="cache"):
+        tool.require(["filesystem"] if damage == "request" else ["codec"])
+    assert host.of("update") == host.of("apt-download") == host.of("offline-install") == []
+
+
+def test_fully_preinstalled_transaction_caches_without_apt(tmp_path) -> None:
+    host = FakeHost(installed=ALL_PACKAGES)
+    tool, _ = helper(host)
+    tool.package_cache = tmp_path
+    tool.require(["codec", "browser"])
+    assert json.loads((tmp_path / "manifest.json").read_text())["archives"] == {}
+    tool.offline = True
+    tool.require(["codec", "browser"])
+    assert host.of("update") == host.of("offline-install") == []
+    assert len(host.of("probe")) == 2
+
+
+def test_cache_key_tracks_runner_image_components_and_locked_node_packages(monkeypatch) -> None:
+    tool, _ = helper(FakeHost())
+    monkeypatch.setenv("ImageVersion", "20261022.1")
+    key = tool.cache_key(["codec", "browser"])
+    assert key == tool.cache_key(["browser", "codec"])
+    assert key != tool.cache_key(["codec"])
+    monkeypatch.setenv("ImageVersion", "20261023.1")
+    assert key != tool.cache_key(["codec", "browser"])
+    monkeypatch.setenv("ImageVersion", "20261022.1")
+    tool.node_browser = True
+    assert key != tool.cache_key(["codec", "browser"])
+    assert tool.playwright == ["pnpm", "exec", "playwright"]
+
+
+@pytest.mark.skipif(
+    not shutil.which("apt-get") or not shutil.which("dpkg-deb"), reason="Debian tools"
+)
+def test_real_apt_passes_local_archives_to_dpkg_without_indexes_or_network(tmp_path) -> None:
+    # Exercise real acquisition, not --simulate/--download-only (both can hide
+    # a wrong archive directory). Replace dpkg with a recorder so host package
+    # configuration and post-install hooks cannot run.
+    archives = []
+    directory = tmp_path / "archives"
+    (directory / "partial").mkdir(parents=True)
+    for name, dependency in [("ac-ci-fixture-dep", ""), ("ac-ci-fixture", "ac-ci-fixture-dep")]:
+        package = tmp_path / name
+        (package / "DEBIAN").mkdir(parents=True)
+        (package / "DEBIAN/control").write_text(
+            f"Package: {name}\nVersion: 1.0\nArchitecture: all\nMaintainer: CI <ci@example.test>\n"
+            + (f"Depends: {dependency}\n" if dependency else "")
+            + "Description: fictional CI offline acquisition fixture\n"
+        )
+        archive = directory / f"{name}_1.0_all.deb"
+        subprocess.run(  # noqa: S603 - fixed executable and fictional fixture paths
+            ["/usr/bin/dpkg-deb", "--build", str(package), str(archive)],
+            check=True,
+            capture_output=True,
+        )
+        archives.append(str(archive))
+    (tmp_path / "state/lists/partial").mkdir(parents=True)
+    (tmp_path / "empty-config").mkdir()
+    (tmp_path / "log").mkdir()
+    (tmp_path / "status").touch()
+    (tmp_path / "empty.conf").touch()
+    recorder = tmp_path / "dpkg-recorder"
+    calls = tmp_path / "dpkg-argv"
+    recorder.write_text("#!/bin/sh\nprintf '%s\\n' \"$@\" >> " + shlex.quote(str(calls)) + "\n")
+    recorder.chmod(0o700)
+    config = tmp_path / "apt.conf"
+    config.write_text(
+        f'Dir::Etc::parts "{tmp_path}/empty-config";\nDir::Etc::main "{tmp_path}/empty.conf";\n'
+    )
+    command = [
+        "/usr/bin/apt-get",
+        "--yes",
+        "--no-download",
+        "--no-remove",
+        "--no-install-recommends",
+    ]
+    for key, value in [
+        ("Dir::State", tmp_path / "state"),
+        ("Dir::State::status", tmp_path / "status"),
+        ("Dir::Cache", tmp_path / "empty-cache"),
+        ("Dir::Log", tmp_path / "log"),
+        ("Dir::Etc::sourcelist", tmp_path / "empty.conf"),
+        ("Dir::Etc::sourceparts", tmp_path / "empty-config"),
+        ("Dir::Bin::dpkg", recorder),
+        ("Debug::NoLocking", "1"),
+    ]:
+        command += ["-o", f"{key}={value}"]
+
+    def install(options):
+        return subprocess.run(  # noqa: S603 - real apt, isolated state, no-op dpkg, fictional inputs
+            [*command, *options, "install", *archives],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={**os.environ, "APT_CONFIG": str(config), "LC_ALL": "C"},
+        )
+
+    # This is the exact hosted failure, reproduced with no mirror or root access.
+    assert install([]).returncode != 0
+    result = install(["-o", f"Dir::Cache::archives={directory}/"])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "--unpack" in calls.read_text()
+    assert all(path in calls.read_text() for path in archives)
+    assert (tmp_path / "status").read_text() == ""
+
+
 def test_main_reports_a_github_error_and_nonzero(monkeypatch, capsys) -> None:
     def refuse(self, components):
         raise prereq.PrerequisiteError("apt-get update: failed after 3 bounded attempts")
@@ -285,14 +448,8 @@ def test_each_job_runs_one_bounded_locked_prerequisite_step(
     assert "if" not in step and not step.get("continue-on-error", False)
     assert step["timeout-minutes"] * 60 > prereq.DEADLINE_SECONDS
     assert step["timeout-minutes"] < job["timeout-minutes"]
-    assert shlex.split(step["run"]) == [
-        "uv",
-        "run",
-        "--frozen",
-        "python",
-        "scripts/ci/ci_prerequisites.py",
-        *components,
-    ]
+    assert step["uses"] == "./.github/actions/ci-prerequisites"
+    assert step["with"]["components"].split() == components
     locked = next(i for i, name in enumerate(names) if name and name.startswith("Install locked"))
     assert locked < names.index(step_name) < names.index(first_use)
 
@@ -311,3 +468,66 @@ def test_python_shards_coverage_and_evidence_are_unchanged() -> None:
     assert evidence["with"]["if-no-files-found"] == "error"
     aggregate = [step.get("name") for step in jobs["validate"]["steps"]]
     assert "Verify complete Python shard coverage" in aggregate
+
+
+def test_shared_action_uses_exact_cache_and_saves_before_downstream_tests() -> None:
+    action = yaml.safe_load((ROOT / ".github/actions/ci-prerequisites/action.yml").read_text())
+    steps = action["runs"]["steps"]
+    restore = next(s for s in steps if "/restore@" in s.get("uses", ""))
+    save = next(s for s in steps if "/save@" in s.get("uses", ""))
+    assert restore["with"] == save["with"]
+    assert "restore-keys" not in restore["with"]
+    assert "*.deb" in restore["with"]["path"]
+    assert "manifest.json" in restore["with"]["path"]
+    assert "ms-playwright" in restore["with"]["path"]
+    assert save["if"] == "steps.restore.outputs.cache-hit != 'true'"
+    install = next(s for s in steps if s["name"] == "Install and prove the locked prerequisites")
+    assert steps.index(restore) < steps.index(install) < steps.index(save)
+    assert "--offline" in install["run"] and "--package-cache" in install["run"]
+    assert "continue-on-error" not in install
+    for step in steps:
+        if "run" in step:
+            assert "${{ inputs." not in step["run"]
+
+
+def test_workbench_routes_action_changes_and_overlays_action_for_historical_sources() -> None:
+    spec = importlib.util.spec_from_file_location("wb_checks", ROOT / "scripts/ci/wb_checks.py")
+    assert spec and spec.loader
+    checks = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(checks)
+    families, full = checks.families(
+        {
+            "full": False,
+            "checks": [],
+            "changed_files": [".github/actions/ci-prerequisites/action.yml"],
+        }
+    )
+    assert families == {"py", "web", "visual"} and full
+    script = (ROOT / "scripts/ci/wb-ci").read_text()
+    # Read only the shell array, not incidental mentions elsewhere in the tool.
+    overlays = script.split("CI_FILES=(", 1)[1].split(")", 1)[0].split()
+    assert ".github/actions/ci-prerequisites/action.yml" in overlays
+    assert "scripts/ci/ci_prerequisites.py" in overlays
+
+
+def test_workbench_jobs_use_cached_proofs_and_foreground_dependency_failures() -> None:
+    jobs = yaml.safe_load((ROOT / ".github/workflows/workbench-checks.yml").read_text())["jobs"]
+    for name in ("py-tests", "visual", "e2e"):
+        steps = jobs[name]["steps"]
+        required = [s for s in steps if s.get("uses") == "./.github/actions/ci-prerequisites"]
+        assert len(required) == 1
+        assert "if" not in required[0] and not required[0].get("continue-on-error")
+    visual_steps = jobs["visual"]["steps"]
+    dependencies = next(
+        s for s in visual_steps if s.get("name") == "Install locked Node dependencies"
+    )
+    visual = next(s for s in visual_steps if "node-browser" in s.get("with", {}))
+    assert visual_steps.index(dependencies) < visual_steps.index(visual)
+    assert visual["with"] == {"components": "browser", "python": "python3", "node-browser": "true"}
+    scripts = "\n".join(s.get("run", "") for s in jobs["py-tests"]["steps"])
+    assert "prereq.rc" not in scripts and "pnpm.rc" not in scripts
+    node = next(
+        s for s in jobs["py-tests"]["steps"] if s.get("name") == "Install locked Node dependencies"
+    )
+    assert node["timeout-minutes"] == 6
+    assert "pnpm install --frozen-lockfile" in node["run"] and "&\n" not in node["run"]

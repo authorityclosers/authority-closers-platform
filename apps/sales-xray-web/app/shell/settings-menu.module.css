@@ -120,6 +120,17 @@
   box-shadow: var(--sx-shadow-1);
 }
 
+/* You and Organisation (the new map, 22 Oct 2026): a quiet heading over a
+   grouped list of settings, which is its own card. */
+.group {
+  display: grid;
+  gap: 6px;
+}
+
+.group .heading {
+  margin: 0 16px;
+}
+
 .heading {
   margin: 0 4px 6px;
   color: var(--sx-muted);

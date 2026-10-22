@@ -156,7 +156,8 @@ def _uses_one_pass(row: Any) -> bool:
     except (ProviderRegistryError, TypeError, ValueError):
         return False
     return any(
-        route.task == "facts" and route.recipe_revision == markers.RECIPE for route in config.routes
+        route.task == "facts" and route.recipe_revision in markers.RECIPES
+        for route in config.routes
     )
 
 

@@ -1848,3 +1848,392 @@
     padding-bottom: env(safe-area-inset-bottom, 0px);
   }
 }
+
+/* ---------- Liquid Glass (owner's pick, 22 Oct 2026) ----------
+   A floating glass capsule tab bar, a raised lens under the current tab, a
+   lit teal Add drop, a clear top bar with a large title; on computers one
+   sidebar material. */
+
+.mobileAvatar > span {
+  background: linear-gradient(
+    180deg,
+    var(--lx-avatar-top),
+    var(--lx-avatar-bottom)
+  );
+  color: white;
+  box-shadow: none;
+}
+
+@media (max-width: 899.98px) {
+  .mobileBar {
+    min-height: calc(62px + env(safe-area-inset-top, 0px));
+    border-bottom: 0;
+    background: var(--sx-glass);
+    box-shadow: 0 0.5px 0 var(--sx-hairline);
+  }
+
+  /* A large title, as iOS screens open with. */
+  .mobileWorkspace b {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    line-height: 1.1;
+  }
+
+  .mobileWorkspace small {
+    font-size: 12.5px;
+  }
+
+  .bottomNav {
+    right: max(14px, env(safe-area-inset-right, 0px));
+    bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    left: max(14px, env(safe-area-inset-left, 0px));
+    height: calc(var(--lx-bottom-nav-h) - 16px);
+    gap: 0;
+    padding: 6px;
+    border: 0.5px solid var(--sx-glass-edge);
+    border-radius: 999px;
+    background: var(--sx-glass);
+  }
+
+  .bottomLink {
+    border-radius: 999px;
+    gap: 3px;
+    font-size: 11px;
+    font-weight: 600;
+  }
+
+  /* The current tab sits in a raised lens: a brighter drop of glass. */
+  .tabPill {
+    background: var(--sx-glass-lens);
+    box-shadow:
+      0 1px 2px color-mix(in oklab, var(--lx-ink) 8%, transparent),
+      inset 0 0.5px 0 color-mix(in oklab, white 60%, transparent);
+  }
+
+  .bottomLink[aria-current="page"] {
+    color: var(--sx-accent);
+  }
+
+  /* A filled symbol for the current tab, as on iOS. */
+  .bottomLink[aria-current="page"] > svg {
+    fill: color-mix(in oklab, var(--sx-accent) 22%, transparent);
+  }
+
+  /* Add: a lit teal drop, the one coloured control in the bar. */
+  .newMark {
+    width: 46px;
+    height: 34px;
+    background: linear-gradient(
+      180deg,
+      var(--lx-teal-2) -20%,
+      var(--lx-teal) 70%
+    );
+    box-shadow:
+      inset 0 1px 1px color-mix(in oklab, white 45%, transparent),
+      inset 0 -1px 1px color-mix(in oklab, black 12%, transparent),
+      0 6px 16px -6px color-mix(in oklab, var(--lx-teal) 80%, transparent);
+  }
+}
+
+/* Computers: one sidebar material. */
+@media (min-width: 900px) {
+  .iconStrip {
+    border-right: 0;
+    background: var(--lx-paper-2);
+  }
+
+  .panel {
+    border-right: 0;
+    background: var(--lx-paper-2);
+    box-shadow: inset -0.5px 0 0 var(--sx-hairline);
+  }
+
+  .navRow {
+    border-radius: 10px;
+  }
+
+  .navRow[aria-current="page"],
+  .navRowActive {
+    background: var(--sx-fill);
+    box-shadow: none;
+  }
+
+  .stripBtn {
+    border-radius: 12px;
+  }
+
+  .stripBtnActive::before {
+    display: none;
+  }
+
+  .railPill {
+    background: var(--sx-fill-strong);
+  }
+}
+
+/* ---------- The command bar's triggers (slice 9 of the new map) ----------
+   Computers: Search with its shortcut in the top bar. Phones: a search
+   button beside the bell. */
+.commandButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sx-fill);
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    color var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.commandButton:hover {
+  background: var(--sx-fill-strong);
+  color: var(--sx-ink);
+}
+
+.commandButton kbd {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--sx-surface);
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.commandButton:focus-visible,
+.barSearch:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.barSearch {
+  display: none;
+}
+
+@media (max-width: 899.98px) {
+  .barSearch {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--sx-ink-2);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform var(--sx-dur-base) var(--sx-spring);
+  }
+
+  .barSearch:active {
+    transform: scale(var(--sx-press-scale));
+  }
+}
+
+/* ---------- One sidebar (slice 9 of the new map, 22 Oct 2026) ----------
+   Open, the icon rail and the panel draw as one 248 px sidebar: where you
+   work, then the places with their names, search, recent calls, and the bell
+   and your account at the foot (Linear's model). Collapsed, the 64 px icon
+   rail stays as it was, with its hover labels. The rail's names are hidden
+   inline (see RAIL_NAME_STYLE), so showing them here needs !important. */
+@media (min-width: 900px) {
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .sidebar {
+    flex-direction: column;
+    width: 248px;
+    background: var(--lx-paper-2);
+    box-shadow: inset -0.5px 0 0 var(--sx-hairline);
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .iconStrip,
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .panel {
+    display: contents;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripTop {
+    display: none;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .panelHeader {
+    order: 1;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 12px 12px 10px;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripNav {
+    order: 2;
+    display: grid;
+    gap: 2px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 12px;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .panelSearch {
+    order: 3;
+    box-sizing: border-box;
+    width: auto;
+    margin: 14px 12px 4px;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .recentsSection {
+    order: 4;
+    box-sizing: border-box;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    padding: 0 12px;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .panelSpacer {
+    order: 5;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripBottom {
+    order: 6;
+    flex-direction: row;
+    gap: 4px;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 8px 12px 12px;
+    border-top: 0.5px solid var(--sx-hairline);
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripBtn {
+    width: 100%;
+    height: 36px;
+    justify-content: flex-start;
+    gap: 10px;
+    padding: 0 10px;
+    border-radius: 10px;
+    color: var(--lx-ink-3);
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripBtnActive {
+    color: var(--lx-ink);
+  }
+
+  /* The foot: the bell at its own size, then your account. */
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripBottom
+    > .stripBtn {
+    flex: 1 1 auto;
+    width: auto;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripBtn
+    > span:last-child:not(.railPill) {
+    position: static !important;
+    width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+    clip-path: none !important;
+    font-size: 14px;
+    font-weight: 550;
+    text-overflow: ellipsis;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripBtnActive
+    > span:last-child:not(.railPill) {
+    font-weight: 650;
+  }
+}
+
+/* ---------- Large title and icon weights (Liquid Glass polish) ----------
+   Phones: the page's large title shrinks to the bar's size once the page
+   scrolls, and the bar's hairline appears (iOS's scroll edge); the bar
+   keeps its height, so nothing under it moves. Tab icons are drawn at the
+   weight of their labels, a little heavier for the current tab. */
+@media (max-width: 899.98px) {
+  .mobileBar {
+    box-shadow: none;
+    transition: box-shadow var(--sx-dur-fast) linear;
+  }
+
+  .mobileWorkspace b {
+    transition: font-size var(--sx-dur-base) var(--sx-ease-out);
+  }
+
+  .shell[data-scrolled] .mobileBar {
+    box-shadow: 0 0.5px 0 color-mix(in oklab, var(--lx-ink) 16%, transparent);
+  }
+
+  .shell[data-scrolled] .mobileWorkspace b {
+    font-size: 17px;
+  }
+
+  .bottomLink:not(.bottomNew) svg {
+    stroke-width: 1.75;
+  }
+
+  .bottomLink[aria-current="page"]:not(.bottomNew) svg {
+    stroke-width: 2.25;
+  }
+
+  /* Every tab's icon sits in the same 30 px row, the Add drop included, so
+     all five labels share one baseline. The lens is placed absolutely and
+     takes no row. */
+  .bottomLink {
+    display: grid;
+    grid-template-rows: 30px auto;
+    place-items: center;
+    align-content: center;
+    gap: 2px;
+  }
+
+  .bottomLink > svg {
+    margin-block: 0;
+  }
+
+  .newMark {
+    height: 30px;
+  }
+}
+
+@media (max-width: 899.98px) and (prefers-reduced-motion: reduce) {
+  .mobileBar,
+  .mobileWorkspace b {
+    transition: none;
+  }
+}

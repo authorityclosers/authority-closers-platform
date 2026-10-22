@@ -216,6 +216,7 @@ export function SelectBar({
   onAll,
   onClear,
   onDelete,
+  onActions,
 }: {
   count: number;
   /** Leads in this list on the server. */
@@ -226,6 +227,8 @@ export function SelectBar({
   onAll: () => void;
   onClear: () => void;
   onDelete: () => void;
+  /** Give, re-stage or move the ticked leads (owners and admins). */
+  onActions?: () => void;
 }) {
   const most = Math.min(total, DELETE_LIMIT);
   return (
@@ -249,6 +252,11 @@ export function SelectBar({
             Clear
           </Button>
         )}
+        {onActions ? (
+          <Button disabled={!count || busy} onClick={onActions}>
+            Actions
+          </Button>
+        ) : null}
         <button
           type="button"
           className={styles.danger}

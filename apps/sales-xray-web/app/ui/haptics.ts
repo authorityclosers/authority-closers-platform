@@ -1,7 +1,7 @@
 /**
  * A light tap felt in the hand (design system v2, owner 20 Oct: "top notch
  * apple like animations"): when a sheet passes the point where letting go
- * closes it, or a switch flips. Phones only, and only where the device can:
+ * closes it, a switch flips, the phone's tab changes or + opens Add. Phones only, and only where the device can:
  * the phone app's haptics plugin when it has one, else a 8 ms vibration.
  * Never a carrier of meaning; nothing breaks without it.
  */

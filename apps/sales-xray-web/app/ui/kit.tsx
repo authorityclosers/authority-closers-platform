@@ -387,16 +387,54 @@ export function Fact({
 export function Skeleton({
   width = "100%",
   height = 12,
+  radius,
 }: {
   width?: number | string;
   height?: number;
+  /** "pill" for chips and tabs, "circle" for avatars, or pixels. */
+  radius?: "pill" | "circle" | number;
 }) {
   return (
     <span
       className={styles.skeleton}
-      style={{ width, height }}
+      style={{
+        width,
+        height,
+        borderRadius:
+          radius === "pill" ? 999 : radius === "circle" ? "50%" : radius,
+      }}
       aria-hidden="true"
     />
+  );
+}
+
+/**
+ * A list row's outline at the row's own height (Liquid Glass polish, 22 Oct
+ * 2026: the outline is the final layout, so nothing moves when rows arrive):
+ * an avatar, a name and its context lines, and a chip at the end.
+ */
+export function SkeletonRow({
+  avatar = 40,
+  lines = 2,
+  end = true,
+}: {
+  /** The avatar's size, or false for a row without one. */
+  avatar?: number | false;
+  lines?: 1 | 2 | 3;
+  end?: boolean;
+}) {
+  return (
+    <span className={styles.skeletonRow} aria-hidden="true">
+      {avatar ? (
+        <Skeleton width={avatar} height={avatar} radius="circle" />
+      ) : null}
+      <span className={styles.skeletonLines}>
+        <Skeleton width="46%" height={14} />
+        {lines > 1 ? <Skeleton width="68%" height={11} /> : null}
+        {lines > 2 ? <Skeleton width="38%" height={11} /> : null}
+      </span>
+      {end ? <Skeleton width={52} height={22} radius="pill" /> : null}
+    </span>
   );
 }
 
@@ -579,6 +617,103 @@ export function Row({
         ) : null}
       </span>
       {end ? <span className={styles.rowEnd}>{end}</span> : null}
+    </li>
+  );
+}
+
+/**
+ * A list of things to do or open: menus, settings lists, action sheets
+ * (design system, 22 Oct 2026). Each row is one tap target at least 56 px
+ * tall: an icon tile in a tone, a title with one line of note, an optional
+ * end (a count, a value) and a chevron.
+ *
+ *   <ActionList label="Leads settings">
+ *     <ActionRow icon={<Users size={20} />} title="Team" note="Who takes leads" href="/leads?tab=team" />
+ *     <ActionRow icon={<Upload size={20} />} title="Import" note="A file of leads" onClick={openImport} />
+ *   </ActionList>
+ */
+export function ActionList({
+  children,
+  label,
+}: {
+  children: ReactNode;
+  label?: string;
+}) {
+  return (
+    <ul className={styles.actionList} aria-label={label}>
+      {children}
+    </ul>
+  );
+}
+
+export function ActionRow({
+  icon,
+  title,
+  note,
+  href,
+  onClick,
+  tone = "accent",
+  end,
+  trailing,
+  disabled = false,
+  chevron = true,
+}: {
+  icon?: ReactNode;
+  title: ReactNode;
+  note?: ReactNode;
+  /** A place to go: the row is a link. Otherwise it is a button. */
+  href?: string;
+  onClick?: () => void;
+  tone?: Tone;
+  end?: ReactNode;
+  /**
+   * An action of its own beside the row (remove a saved view), outside the
+   * row's button so the two never nest; give it its own label.
+   */
+  trailing?: ReactNode;
+  disabled?: boolean;
+  chevron?: boolean;
+}) {
+  const inside = (
+    <>
+      {icon ? (
+        <span className={styles.actionIcon} data-tone={tone} aria-hidden="true">
+          {icon}
+        </span>
+      ) : null}
+      <span className={styles.actionWords}>
+        <strong>{title}</strong>
+        {note ? <small>{note}</small> : null}
+      </span>
+      {end ? <span className={styles.actionEnd}>{end}</span> : null}
+      {chevron ? (
+        <ChevronRight
+          className={styles.actionChevron}
+          size={18}
+          aria-hidden="true"
+        />
+      ) : null}
+    </>
+  );
+  return (
+    <li className={styles.actionItem} data-trailing={trailing ? "" : undefined}>
+      {href && !disabled ? (
+        <Link href={href} className={styles.actionRow} onClick={onClick}>
+          {inside}
+        </Link>
+      ) : (
+        <button
+          type="button"
+          className={styles.actionRow}
+          onClick={onClick}
+          disabled={disabled}
+        >
+          {inside}
+        </button>
+      )}
+      {trailing ? (
+        <span className={styles.actionTrailing}>{trailing}</span>
+      ) : null}
     </li>
   );
 }

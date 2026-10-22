@@ -73,7 +73,8 @@ COMPANY_ID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-
 CALL_SORTS = ("newest", "cost", "per_minute", "audio", "tokens")
 STALE_AFTER = timedelta(minutes=45)
 INDIA = ZoneInfo("Asia/Kolkata")
-TEST_KINDS = frozenset({"canary", "qa"})
+# Never real use: release canaries, QA fixtures and the fictional synthetic calls.
+TEST_KINDS = frozenset({"canary", "qa", "synthetic"})
 PROVIDER_STAGES = ("C2", "C4", "C5")
 STAGE_LABELS = {
     "C1": "Audio check",
@@ -833,10 +834,16 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
     ]
     today_steps = [step for step in month_steps if india_day(step.at) == today]
     step_calls = {(step.environment, step.call) for step in steps}
-    window_calls = [
+    # Calls means analysed calls (owner's review, 22 Oct 2026: 115 calls for 69 analysed): a
+    # call only recorded and audio-checked (C1), never transcribed, is counted apart.
+    analysed_calls = {(step.environment, step.call) for step in steps if step.stage != "C1"}
+    recorded_calls = [
         call
         for call in calls.values()
         if counted(call.kind) and (call.environment, call.id) in step_calls
+    ]
+    window_calls = [
+        call for call in recorded_calls if (call.environment, call.id) in analysed_calls
     ]
     delivered = [
         call
@@ -854,6 +861,7 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         mine_month = [step for step in month_steps if step.environment == export.environment]
         mine_tests = [step for step in test_steps if step.environment == export.environment]
         env_calls = [call for call in window_calls if call.environment == export.environment]
+        env_recorded = [call for call in recorded_calls if call.environment == export.environment]
         env_delivered = [call for call in delivered if call.environment == export.environment]
         env_turn = [
             (call.report_at - call.at).total_seconds() * 1000
@@ -869,6 +877,7 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
                 "tests": _rupees(spend(mine_tests)),
                 "test_runs": len({s.call for s in mine_tests if s.stage == "C2"}),
                 "calls": len(env_calls),
+                "recorded_only": len(env_recorded) - len(env_calls),
                 "reports": len(env_delivered),
                 "audio_minutes": _minutes(audio(mine)),
                 "per_minute": _per_minute(spend(mine), audio(mine)),
@@ -945,6 +954,7 @@ def build_metrics(exports: Sequence[Export], scope: Scope) -> dict[str, Any]:
         "tests_window": _rupees(spend(test_steps)),
         "test_runs": len({(s.environment, s.call) for s in test_steps if s.stage == "C2"}),
         "calls": len(window_calls),
+        "recorded_only": len(recorded_calls) - len(window_calls),
         "reports": len(delivered),
         "audio_minutes": _minutes(audio(steps)),
         "per_minute": cohort([export.environment for export in chosen], days),
@@ -1588,9 +1598,7 @@ class AdminCostMetrics:
         person: str | None = None,
         fx: str = "daily",
     ) -> dict[str, Any]:
-        if actor.tenant_id != self.operations_tenant_id:
-            raise ConversationDenied("Cost and usage requires the AC operations workspace.")
-        await ConversationProviderAdmin(self.application).admit(actor)
+        await self.admit(actor)
         if type(days) is not int or not 1 <= days <= MAX_DAYS:
             raise ConversationError("Choose a window between 1 and 120 days.")
         if environment not in ENVIRONMENT_FILTERS:
@@ -1632,6 +1640,12 @@ class AdminCostMetrics:
         result["available"] = [export.environment for export in exports]
         result["here"] = self.here
         return result
+
+    async def admit(self, actor: ActorContext) -> None:
+        """Operations admins only, as every Sales X-Ray admin read."""
+        if actor.tenant_id != self.operations_tenant_id:
+            raise ConversationDenied("Cost and usage requires the AC operations workspace.")
+        await ConversationProviderAdmin(self.application).admit(actor)
 
     async def _name_here(self, exports: Sequence[Export], now: datetime) -> None:
         """This environment's organisation and person names, read live from its own database
