@@ -18,6 +18,8 @@
  * Call mode's "Save and call <name>", "Save and stop here" and who is next.
  * `?tab=all&stage=open&tap=filter` opens Filter (name or number, whose leads,
  * pipeline); add `&who=mine&q=pune` to see the filters that are on as chips.
+ * `?hub=1&after-call=1` opens the first lead as the lead hub: a call with its
+ * Report, a stage change, a note and a WhatsApp chat in one timeline.
  * `&views=1` keeps three saved views on this browser, one of them the view in use
  * (Open, Everyone); `&tap=views` then opens Views. `&q=` searches by name or city;
  * `?tab=all&stage=open&q=nagpurx` shows an empty list's "Clear filters".
@@ -70,6 +72,100 @@ const LEADS: [string, string | null, string | null, Stage, string, string][] = [
 ];
 
 /** `&pipelines=2`: two pipelines, half the leads in each. */
+/** `&hub=1`: the first lead has a day of history and a WhatsApp chat (lead hub). */
+const hub = () =>
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("hub") === "1";
+
+function hubEvents(now: number) {
+  const at = (minutes: number) =>
+    new Date(now - minutes * MINUTE).toISOString();
+  const base = {
+    actor_name: "rahul example",
+    stage: null,
+    stage_label: null,
+    reason: null,
+    reason_label: null,
+    connected: null,
+    note: null,
+    next_action_at: null,
+    owner_name: null,
+    previous_owner_name: null,
+    allocation_reason: null,
+    source_label: null,
+    submission_id: null,
+    simulated: null,
+    duration_seconds: null,
+  };
+  return [
+    {
+      ...base,
+      kind: "note",
+      at: at(20),
+      note: "Wants a Saturday visit with the family",
+    },
+    {
+      ...base,
+      kind: "stage",
+      at: at(118),
+      stage: "interested",
+      stage_label: "Site visit booked",
+    },
+    {
+      ...base,
+      kind: "call",
+      at: at(120),
+      connected: true,
+      direction: "outgoing",
+      duration_seconds: 254,
+      submission_id: "00000000-0000-4000-8000-000000000900",
+    },
+    {
+      ...base,
+      kind: "call",
+      at: at(60 * 26),
+      connected: false,
+      direction: "outgoing",
+      reason: "did_not_pick",
+      reason_label: "No answer",
+    },
+    { ...base, kind: "captured", at: at(60 * 27), source_label: "Facebook ad" },
+  ];
+}
+
+function hubChat(now: number) {
+  const at = (minutes: number) =>
+    new Date(now - minutes * MINUTE).toISOString();
+  const message = (
+    id: string,
+    minutes: number,
+    direction: string,
+    text: string,
+  ) => ({
+    id,
+    direction,
+    kind: "text",
+    text,
+    status: "read",
+    at: at(minutes),
+  });
+  return {
+    configured: true,
+    connected: true,
+    numbers: [],
+    messages: [
+      message("m1", 70, "in", "Is the 2 BHK still free this weekend?"),
+      message("m2", 66, "out", "Yes, Saturday 11 am works."),
+      message("m3", 64, "in", "Great, see you then"),
+    ],
+    windowOpen: true,
+    windowClosesAt: at(-60 * 22),
+    optedIn: true,
+    optInHow: "Lead form",
+    templates: [],
+  };
+}
+
 const twoPipelines = () =>
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).get("pipelines") === "2";
@@ -217,20 +313,41 @@ function answers(now: number, path: string): unknown {
       call_mode: "phone",
     };
   }
+  // A lead's chats (the lead hub reads them once): a WhatsApp chat with `&hub=1`.
+  const chat =
+    /^\/v1\/lead-desk\/leads\/([0-9a-f-]{36})\/(whatsapp|social)$/.exec(path);
+  if (chat)
+    return chat[2] === "whatsapp" && hub()
+      ? hubChat(Date.now())
+      : { configured: false, connected: false, threads: [], messages: [] };
   const one = /^\/v1\/lead-desk\/leads\/([0-9a-f-]{36})(\/dispose)?$/.exec(
     path,
   );
   const row = one ? all.find((item) => item.lead_id === one[1]) : undefined;
   if (row)
     return {
-      lead: row,
+      // `&hub=1`: the first lead's record agrees with its day of history.
+      lead:
+        hub() && row.lead_id === all[0].lead_id
+          ? {
+              ...row,
+              source: "meta",
+              source_label: "Facebook ad",
+              stage: "interested",
+              stage_label: "Site visit booked",
+              calls: 2,
+              attempts: 2,
+              created_at: new Date(Date.now() - 27 * 60 * MINUTE).toISOString(),
+            }
+          : row,
       phone: "+91 98765 43210",
       email: null,
       owner_reason: null,
       next_action_note: null,
       fields: [],
       source_fields: [],
-      events: [],
+      events:
+        hub() && row.lead_id === all[0].lead_id ? hubEvents(Date.now()) : [],
       can_edit: true,
       can_assign: true,
       reps: [],

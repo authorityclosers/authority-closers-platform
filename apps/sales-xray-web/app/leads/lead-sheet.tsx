@@ -67,6 +67,12 @@ import {
   type Stage,
 } from "./leads-client";
 import { LastCallBrief } from "./call-brief-card";
+import {
+  chatDays,
+  chatDayTitle,
+  useLeadConversations,
+  type ChatDay,
+} from "./lead-chats";
 import { CallNext } from "./call-next";
 import { chatFacts, chatOrigin } from "./chat-origin";
 import { SocialThread } from "./social-thread";
@@ -1080,23 +1086,73 @@ export function dayLabel(iso: string, now: Date = new Date()): string {
 export function History({
   events,
   onChanged,
+  chats = [],
+  brief = null,
 }: {
   events: LeadEvent[];
   onChanged?: (next: LeadDetail) => void;
+  /** The lead's chats, one line per app per day (lead hub, 22 Oct 2026). */
+  chats?: ChatDay[];
+  /** Under the newest call with a Report: what that call said. */
+  brief?: ReactNode;
 }) {
+  const briefAt = events.findIndex(
+    (event) => event.kind === "call" && event.submission_id,
+  );
+  // Newest first, calls and chats in one line of time.
+  const items: { at: string; index: number; chat?: ChatDay }[] = [
+    ...events.map((event, index) => ({ at: event.at, index })),
+    ...chats.map((chat, index) => ({
+      at: chat.at,
+      index: events.length + index,
+      chat,
+    })),
+  ];
+  if (chats.length)
+    items.sort(
+      (a, b) => Date.parse(b.at) - Date.parse(a.at) || a.index - b.index,
+    );
   return (
     <ol className={styles.history} aria-label="History">
-      {events.map((event, index) => {
+      {items.map((item, position) => {
+        const day = dayLabel(item.at);
+        const newDay =
+          position === 0 || dayLabel(items[position - 1].at) !== day;
+        const header = newDay ? (
+          <li className={styles.historyDay} aria-hidden="true">
+            {day}
+          </li>
+        ) : null;
+        if (item.chat)
+          return (
+            <Fragment key={item.chat.key}>
+              {header}
+              <li data-kind="chat">
+                <span className={styles.historyTitle}>
+                  {chatDayTitle(item.chat)}
+                </span>
+                {item.chat.last ? (
+                  <span className={styles.historyDetail}>
+                    {item.chat.last.mine ? "You: " : ""}
+                    {item.chat.last.text}
+                  </span>
+                ) : null}
+                <Link
+                  className={styles.historyLink}
+                  href={item.chat.href}
+                  prefetch={false}
+                >
+                  Open the chat
+                </Link>
+              </li>
+            </Fragment>
+          );
+        const event = events[item.index];
+        const index = item.index;
         const text = eventText(event);
-        const day = dayLabel(event.at);
-        const newDay = index === 0 || dayLabel(events[index - 1].at) !== day;
         return (
           <Fragment key={`${event.at}-${index}`}>
-            {newDay ? (
-              <li className={styles.historyDay} aria-hidden="true">
-                {day}
-              </li>
-            ) : null}
+            {header}
             <li
               key={`${event.at}-${index}`}
               data-kind={event.kind}
@@ -1134,6 +1190,9 @@ export function History({
                 {when(event.at)}
               </time>
             </li>
+            {index === briefAt && brief ? (
+              <li className={styles.historyBrief}>{brief}</li>
+            ) : null}
           </Fragment>
         );
       })}
@@ -1894,6 +1953,9 @@ export function LeadCard({
     ? others.filter((rep) => rep.name.toLocaleLowerCase().includes(needle))
     : others;
   const [moveError, setMoveError] = useState<string | null>(null);
+  // The lead's chats, read once for the timeline and the chat sections.
+  const conversations = useLeadConversations(lead.lead_id);
+  const chats = chatDays(lead.lead_id, conversations.wa, conversations.social);
   const sub = [lead.company, lead.city, lead.language]
     .filter(Boolean)
     .join(" · ");
@@ -2136,6 +2198,35 @@ export function LeadCard({
           the few things the engine is unsure of, asked one at a time. */}
       <CallFacts detail={detail} onChanged={onChanged} />
 
+      {/* The lead hub (approved map, slice 6, 22 Oct 2026): under the call, one
+          line of time: calls (the newest with what it said and its Report),
+          chats one line a day, notes and stage changes. Then the chats
+          themselves, then about the lead. */}
+      <section className={styles.historyBlock} aria-label="History">
+        <StorySoFar detail={detail} />
+        <h3 className={styles.stepLabel}>History</h3>
+        {detail.can_edit ? (
+          <NoteBox leadId={lead.lead_id} onSaved={onChanged} />
+        ) : null}
+        <History
+          events={detail.events}
+          onChanged={onChanged}
+          chats={chats}
+          brief={<LastCallBrief detail={detail} onChanged={onChanged} />}
+        />
+      </section>
+
+      <WhatsAppThread
+        leadId={lead.lead_id}
+        canSend={detail.can_edit}
+        shared={{ chat: conversations.wa }}
+      />
+      <SocialThread
+        leadId={lead.lead_id}
+        canSend={detail.can_edit}
+        shared={{ chat: conversations.social }}
+      />
+
       <section className={styles.panel} aria-label="Details">
         <div className={styles.panelHead}>
           <h3>Details</h3>
@@ -2293,20 +2384,6 @@ export function LeadCard({
       {detail.can_assign ? (
         <PipelinePanel detail={detail} onChanged={onChanged} />
       ) : null}
-
-      <LastCallBrief detail={detail} onChanged={onChanged} />
-
-      <WhatsAppThread leadId={lead.lead_id} canSend={detail.can_edit} />
-      <SocialThread leadId={lead.lead_id} canSend={detail.can_edit} />
-
-      <section className={styles.historyBlock} aria-label="History">
-        <StorySoFar detail={detail} />
-        <h3 className={styles.stepLabel}>History</h3>
-        {detail.can_edit ? (
-          <NoteBox leadId={lead.lead_id} onSaved={onChanged} />
-        ) : null}
-        <History events={detail.events} onChanged={onChanged} />
-      </section>
     </div>
   );
 }

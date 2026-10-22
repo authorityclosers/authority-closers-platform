@@ -5299,3 +5299,24 @@ a.repName {
     width: 64px;
   }
 }
+
+/* The lead hub's timeline: a chat day reads in one line; the newest call's
+   summary sits under it (22 Oct 2026). */
+.history li[data-kind="chat"] .historyDetail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history li[data-kind="chat"]::before {
+  background: var(--lx-teal);
+}
+
+/* The summary continues its call's line; nothing to say, no row. */
+.history li.historyBrief::before {
+  content: none;
+}
+
+.history li.historyBrief:empty {
+  display: none;
+}

@@ -145,15 +145,29 @@ export function SocialThread({
   leadId,
   canSend,
   onChanged,
+  shared,
 }: {
   leadId: string;
   canSend: boolean;
   onChanged?: () => void;
+  /** The lead page's own read of this chat (shared with its timeline); without
+      it, this reads the chat itself. `chat` undefined: still reading. */
+  shared?: { chat: SocialConversation | null | undefined };
 }) {
-  const [chat, setChat] = useState<SocialConversation | null>(null);
+  // What this section read or sent, for the lead it was for.
+  const [own, setOwn] = useState<{
+    leadId: string;
+    chat: SocialConversation | null;
+  } | null>(null);
+  const setChat = (next: SocialConversation | null) =>
+    setOwn({ leadId, chat: next });
+  const reads = !shared;
+  const chat =
+    own?.leadId === leadId ? own.chat : shared ? (shared.chat ?? null) : null;
   const ai = useLeadAi(leadId);
 
   useEffect(() => {
+    if (!reads) return;
     let live = true;
     waCall<SocialConversation>(`/leads/${leadId}/social`)
       .then(
@@ -163,7 +177,9 @@ export function SocialThread({
     return () => {
       live = false;
     };
-  }, [leadId]);
+    // setChat only writes this lead's own state.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leadId, reads]);
 
   if (!chat?.configured || !chat.threads.length) return null;
 
