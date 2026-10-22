@@ -18,7 +18,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -607,14 +607,23 @@ class LeadDesk:
 
     # ----- the desk --------------------------------------------------------------
 
-    async def desk(self) -> Desk:
+    async def desk(self, pipeline: str | None = None) -> Desk:
+        """My day. With ``pipeline``, its leads only (orchestrator, 23 Oct 2026: calling
+        one pipeline at a time, cold partner outreach apart from enquiries); today's
+        numbers stay the whole day's."""
         me = self.viewer.person_id
         day_start = self._day_start()
         day_end = day_start + timedelta(days=1)
+        in_pipeline = (
+            journeys.lead_in((await self._pipeline(pipeline)).key)
+            if pipeline is not None
+            else true()
+        )
         mine = and_(
             Lead.tenant_id == self.tenant_id,
             Lead.owner_person_id == me,
             Lead.stage.in_(OPEN_STAGES),
+            in_pipeline,
         )
         due = (
             await self.db.scalars(
@@ -678,6 +687,7 @@ class LeadDesk:
                         Lead.tenant_id == self.tenant_id,
                         Lead.owner_person_id.is_(None),
                         Lead.stage.in_(OPEN_STAGES),
+                        in_pipeline,
                     )
                 )
                 or 0
@@ -715,7 +725,7 @@ class LeadDesk:
             )
             or 0
         )
-        call_back = await self._call_back()
+        call_back = await self._call_back(in_pipeline)
         return Desk(
             me=await self.me(),
             numbers=Numbers(
@@ -747,7 +757,7 @@ class LeadDesk:
             call_back=call_back,
         )
 
-    async def _call_back(self) -> tuple[LeadRow, ...]:
+    async def _call_back(self, in_pipeline: Any = None) -> tuple[LeadRow, ...]:
         """My leads who called in the last few days and weren't reached since, newest first."""
         rows = (
             await self.db.execute(
@@ -767,6 +777,7 @@ class LeadDesk:
                     Lead.owner_person_id == self.viewer.person_id,
                     LeadEvent.kind.in_(("call", "result")),
                     LeadEvent.created_at >= self.now - timedelta(days=CALL_BACK_DAYS),
+                    true() if in_pipeline is None else in_pipeline,
                 )
                 .order_by(LeadEvent.created_at)
                 .limit(5000)
@@ -818,14 +829,19 @@ class LeadDesk:
         ).one()
         return Badge(overdue=int(row[0]), to_call=int(row[1]), generated_at=self.now)
 
-    async def next_lead(self, skip: UUID | None = None) -> LeadDetail | None:
-        """'Start calling': the one lead to call now (follow-ups due, then new leads)."""
+    async def next_lead(
+        self, skip: UUID | None = None, pipeline: str | None = None
+    ) -> LeadDetail | None:
+        """'Start calling': the one lead to call now (follow-ups due, then new leads), in
+        one pipeline when ``pipeline`` is given."""
         me = self.viewer.person_id
         mine = and_(
             Lead.tenant_id == self.tenant_id,
             Lead.owner_person_id == me,
             Lead.stage.in_(OPEN_STAGES),
         )
+        if pipeline is not None:
+            mine = and_(mine, journeys.lead_in((await self._pipeline(pipeline)).key))
         if skip is not None:
             mine = and_(mine, Lead.id != skip)
         lead = await self.db.scalar(
