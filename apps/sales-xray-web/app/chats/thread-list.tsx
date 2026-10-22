@@ -233,7 +233,9 @@ function ThreadRow({
                 data-none={!thread.ownerId || undefined}
               >
                 <UserRound size={11} aria-hidden="true" />
-                {thread.ownerName ?? "Unassigned"}
+                <span className={styles.ownerName}>
+                  {thread.ownerName ?? "Unassigned"}
+                </span>
               </span>
             ) : null}
             {since ? (

@@ -13,7 +13,6 @@
 
 import {
   ChevronLeft,
-  ChevronRight,
   MessageCircle,
   Route,
   Shuffle,
@@ -27,7 +26,7 @@ import { displayName } from "../display-name";
 import { notify } from "../notice-center";
 import { Sheet } from "../ui/sheet";
 import { readJourney, type StageView } from "./journey/journey-client";
-import { Button, Field } from "../ui/kit";
+import { ActionList, ActionRow, Button, Field } from "../ui/kit";
 import {
   bulkLeads,
   bulkWhatsApp,
@@ -56,6 +55,7 @@ const TITLES: Record<Exclude<Step, "menu">, string> = {
 const plural = (count: number, one: string, many = `${one}s`) =>
   `${count} ${count === 1 ? one : many}`;
 
+/** One choice on the sheet: the kit's action row. */
 function Row({
   icon,
   label,
@@ -70,23 +70,13 @@ function Row({
   onPick: () => void;
 }) {
   return (
-    <li>
-      <button
-        type="button"
-        className={styles.menuRow}
-        disabled={disabled}
-        onClick={onPick}
-      >
-        <span className={styles.menuIcon} aria-hidden="true">
-          {icon}
-        </span>
-        <span className={styles.menuWords}>
-          <strong>{label}</strong>
-          {note ? <small>{note}</small> : null}
-        </span>
-        <ChevronRight size={18} aria-hidden="true" />
-      </button>
-    </li>
+    <ActionRow
+      icon={icon}
+      title={label}
+      note={note}
+      disabled={disabled}
+      onClick={onPick}
+    />
   );
 }
 
@@ -278,7 +268,7 @@ export function BulkSheet({
           </button>
         ) : null}
         {step === "menu" ? (
-          <ul className={styles.menuList}>
+          <ActionList>
             <Row
               icon={<UsersRound size={20} />}
               label="Give to a person"
@@ -305,7 +295,7 @@ export function BulkSheet({
               note="Only to leads who said yes to WhatsApp"
               onPick={() => setStep("whatsapp")}
             />
-          </ul>
+          </ActionList>
         ) : null}
         {step === "whatsapp" ? (
           templates === null ? (
@@ -317,7 +307,7 @@ export function BulkSheet({
               <Link href="/settings/apps">Settings → Connected apps</Link>.
             </p>
           ) : !template ? (
-            <ul className={styles.menuList}>
+            <ActionList>
               {templates.map((item) => (
                 <Row
                   key={`${item.name}-${item.language}`}
@@ -327,7 +317,7 @@ export function BulkSheet({
                   onPick={() => pick(item)}
                 />
               ))}
-            </ul>
+            </ActionList>
           ) : (
             <div className={styles.bulkSend}>
               <p className={styles.bulkText}>{plan?.text ?? template.text}</p>
@@ -409,7 +399,7 @@ export function BulkSheet({
           team === null ? (
             <p className={styles.hint}>Loading your team…</p>
           ) : (
-            <ul className={styles.menuList}>
+            <ActionList>
               <Row
                 icon={<Shuffle size={20} />}
                 label="Let the lead rules pick"
@@ -429,7 +419,7 @@ export function BulkSheet({
                   }
                 />
               ))}
-            </ul>
+            </ActionList>
           )
         ) : null}
         {step === "stage" ? (
@@ -441,7 +431,7 @@ export function BulkSheet({
           ) : stages === null ? (
             <p className={styles.hint}>Loading the stages…</p>
           ) : (
-            <ul className={styles.menuList}>
+            <ActionList>
               {stages.map((stage) => (
                 <Row
                   key={stage.key}
@@ -452,11 +442,11 @@ export function BulkSheet({
                   onPick={() => void run({ action: "stage", step: stage.key })}
                 />
               ))}
-            </ul>
+            </ActionList>
           )
         ) : null}
         {step === "pipeline" && several(pipes) ? (
-          <ul className={styles.menuList}>
+          <ActionList>
             {pipes.pipelines
               .filter((item) => item.key !== pipeline)
               .map((item) => (
@@ -471,7 +461,7 @@ export function BulkSheet({
                   }
                 />
               ))}
-          </ul>
+          </ActionList>
         ) : null}
       </div>
     </Sheet>

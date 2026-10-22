@@ -43,7 +43,6 @@ import {
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { DeskChats } from "../chats/desk-chats";
-import { LeadsChatsSwitch } from "../chats/leads-chats-switch";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import { leavingOverlay } from "../ui/back-close";
 import { Badge, Button, Empty, PageHeader } from "../ui/kit";
@@ -714,8 +713,6 @@ export function LeadsRoute() {
             className={styles.pullSpinner}
             aria-hidden="true"
           />
-          {/* Phones: Leads | Chats (owner, 20 Oct: Chats inside Leads). */}
-          <LeadsChatsSwitch current="leads" />
           <PhoneSetupBar />
           <div className={styles.wideOnly}>
             <PageHeader
@@ -764,6 +761,31 @@ export function LeadsRoute() {
           ) : (
             <>
               <div className={styles.toolbar}>
+                {/* First in the toolbar so phones keep it at the first line's
+                    end; computers draw it last (orchestrator, 22 Oct 2026: the
+                    ⋯ stood alone on a line at 375 px). */}
+                <span className={styles.toolbarEnd}>
+                  {stageView ? (
+                    <button
+                      type="button"
+                      className={styles.toolButton}
+                      aria-label="Search leads"
+                      aria-pressed={searching || !!search}
+                      onClick={() => setSearching((value) => !value)}
+                    >
+                      <Search size={18} aria-hidden="true" />
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className={styles.toolButton}
+                    aria-label="Leads settings"
+                    aria-haspopup="dialog"
+                    onClick={() => setSettingsOpen(true)}
+                  >
+                    <Ellipsis size={18} aria-hidden="true" />
+                  </button>
+                </span>
                 {can && stageView && view !== TEST ? (
                   <label className={styles.ownerPicker}>
                     <UsersRound size={14} aria-hidden="true" />
@@ -809,27 +831,6 @@ export function LeadsRoute() {
                   onChanged={refresh}
                 />
                 <PhoneLogCard as="chip" />
-                <span className={styles.toolbarSpacer} />
-                {stageView ? (
-                  <button
-                    type="button"
-                    className={styles.toolButton}
-                    aria-label="Search leads"
-                    aria-pressed={searching || !!search}
-                    onClick={() => setSearching((value) => !value)}
-                  >
-                    <Search size={18} aria-hidden="true" />
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  className={styles.toolButton}
-                  aria-label="Leads settings"
-                  aria-haspopup="dialog"
-                  onClick={() => setSettingsOpen(true)}
-                >
-                  <Ellipsis size={18} aria-hidden="true" />
-                </button>
               </div>
               <StageTabs tabs={tabs} current={view} onChange={go} />
               {stageView && (searching || search) ? (

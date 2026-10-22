@@ -7,14 +7,12 @@
  */
 
 import { MessagesSquare } from "lucide-react";
-import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { Skeleton } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import styles from "./chats.module.css";
-import switchStyles from "./leads-chats-switch.module.css";
 
 /** The list beside the open chat (and, on wide screens, the lead). */
 export function ChatsFrame({
@@ -125,22 +123,6 @@ export function ThreadListSkeleton({ rows = 8 }: { rows?: number }) {
   );
 }
 
-/** Phones: the Leads | Chats switch as it will stand, before the counts. */
-function SwitchOutline() {
-  return (
-    <div className={styles.switchSlot}>
-      <nav className={switchStyles.switch} aria-label="Leads or chats">
-        <Link href="/leads" prefetch={false}>
-          Leads
-        </Link>
-        <Link href="/chats" prefetch={false} aria-current="page">
-          Chats
-        </Link>
-      </nav>
-    </div>
-  );
-}
-
 export function ChatsSkeleton() {
   // Unknown yet: keep the row's place (most who open Chats on a team manage it).
   const manages = useManagesChats();
@@ -150,7 +132,6 @@ export function ChatsSkeleton() {
         open={false}
         list={
           <>
-            <SwitchOutline />
             <FiltersSkeleton scopes={manages !== false} />
             <ThreadListSkeleton />
           </>

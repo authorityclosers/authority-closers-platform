@@ -4455,8 +4455,32 @@ a.repName {
   min-width: 0;
 }
 
-.toolbarSpacer {
-  flex: 1 1 0;
+/* Search and the ⋯ menu: last on a computer; on a phone they keep the first
+   line's right end and the chips flow beside and under them, so the ⋯ never
+   stands alone on a line (orchestrator, 22 Oct 2026). */
+.toolbarEnd {
+  display: inline-flex;
+  flex: none;
+  order: 1;
+  gap: 6px;
+  margin-left: auto;
+}
+
+@media (max-width: 899.98px) {
+  .toolbar {
+    display: flow-root;
+    margin-bottom: -3px;
+  }
+
+  .toolbar > * {
+    margin: 3px 6px 3px 0;
+    vertical-align: middle;
+  }
+
+  .toolbar > .toolbarEnd {
+    float: right;
+    margin: 0 0 0 6px;
+  }
 }
 
 .toolbarTitle {

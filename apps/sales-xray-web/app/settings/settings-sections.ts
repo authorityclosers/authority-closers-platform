@@ -73,7 +73,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   {
     id: "plan",
     label: "Plan & usage",
-    hint: "Your plan, minutes left and invoices",
+    hint: "Your plan and invoices",
     icon: CreditCard,
     group: "Account",
   },
