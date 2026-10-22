@@ -404,6 +404,31 @@ function LightboxShellFrame({
     pageName ?? (inSettings(shownPath) ? "Settings" : undefined),
   );
   const phoneTab = phoneTabFor(shownPath, active);
+  // Phones: the large title shrinks once the page scrolls and the bar's
+  // hairline appears, as iOS does. The bar keeps its height, so nothing
+  // under it moves; an attribute, not state, so scrolling never re-renders.
+  const shellRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const shell = shellRef.current;
+    if (!shell) return;
+    shell.removeAttribute("data-scrolled");
+    const onScroll = (event: Event) => {
+      const target = event.target;
+      const top =
+        target === document
+          ? window.scrollY
+          : target instanceof HTMLElement && target.matches(".studio-main")
+            ? target.scrollTop
+            : null;
+      if (top !== null) shell.toggleAttribute("data-scrolled", top > 8);
+    };
+    document.addEventListener("scroll", onScroll, {
+      capture: true,
+      passive: true,
+    });
+    return () =>
+      document.removeEventListener("scroll", onScroll, { capture: true });
+  }, [pathname]);
   // A light tap in the hand when the phone's tab changes, as iOS does.
   const tapTab = (tab: PhoneTab) => () => {
     if (tab !== phoneTab) tick();
@@ -1108,6 +1133,7 @@ function LightboxShellFrame({
 
   return (
     <div
+      ref={shellRef}
       className={`${styles.shell} ${collapsed ? styles.collapsed : ""}`}
       data-lightbox-shell
       data-authenticated={authenticated}

@@ -477,6 +477,23 @@ a.tile:active {
   animation: kit-sheen 1.8s var(--sx-ease-sheet) infinite;
 }
 
+/* A row's outline (SkeletonRow): the row's own height and gutter. */
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--sx-row-h);
+  box-sizing: border-box;
+  padding: 10px 16px;
+}
+
+.skeletonLines {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 7px;
+  min-width: 0;
+}
+
 @keyframes kit-sheen {
   from {
     background-position: 100vw 0;

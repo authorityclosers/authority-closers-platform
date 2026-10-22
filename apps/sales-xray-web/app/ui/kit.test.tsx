@@ -11,6 +11,7 @@ import {
   ActionList,
   ActionRow,
   Avatar,
+  SkeletonRow,
   Delta,
   Dialog,
   Empty,
@@ -351,4 +352,15 @@ it("puts a row's own action beside it, never inside its button", async () => {
   await act(async () => remove.click());
   expect(onRemove).toHaveBeenCalledTimes(1);
   expect(onOpen).not.toHaveBeenCalled();
+});
+
+it("outlines a row at its own shape: avatar circle, lines and a chip", () => {
+  const html = renderToStaticMarkup(<SkeletonRow lines={3} />);
+  expect(html).toContain('aria-hidden="true"');
+  expect(html).toContain("border-radius:50%");
+  expect(html).toContain("border-radius:999px");
+  expect(html.match(/height:11px/g)).toHaveLength(2);
+  expect(
+    renderToStaticMarkup(<SkeletonRow avatar={false} end={false} />),
+  ).not.toContain("border-radius");
 });

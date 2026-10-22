@@ -2179,3 +2179,42 @@
     font-weight: 650;
   }
 }
+
+/* ---------- Large title and icon weights (Liquid Glass polish) ----------
+   Phones: the page's large title shrinks to the bar's size once the page
+   scrolls, and the bar's hairline appears (iOS's scroll edge); the bar
+   keeps its height, so nothing under it moves. Tab icons are drawn at the
+   weight of their labels, a little heavier for the current tab. */
+@media (max-width: 899.98px) {
+  .mobileBar {
+    box-shadow: none;
+    transition: box-shadow var(--sx-dur-fast) linear;
+  }
+
+  .mobileWorkspace b {
+    transition: font-size var(--sx-dur-base) var(--sx-ease-out);
+  }
+
+  .shell[data-scrolled] .mobileBar {
+    box-shadow: 0 0.5px 0 var(--sx-hairline);
+  }
+
+  .shell[data-scrolled] .mobileWorkspace b {
+    font-size: 17px;
+  }
+
+  .bottomLink:not(.bottomNew) svg {
+    stroke-width: 1.75;
+  }
+
+  .bottomLink[aria-current="page"]:not(.bottomNew) svg {
+    stroke-width: 2.25;
+  }
+}
+
+@media (max-width: 899.98px) and (prefers-reduced-motion: reduce) {
+  .mobileBar,
+  .mobileWorkspace b {
+    transition: none;
+  }
+}

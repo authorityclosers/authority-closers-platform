@@ -387,16 +387,54 @@ export function Fact({
 export function Skeleton({
   width = "100%",
   height = 12,
+  radius,
 }: {
   width?: number | string;
   height?: number;
+  /** "pill" for chips and tabs, "circle" for avatars, or pixels. */
+  radius?: "pill" | "circle" | number;
 }) {
   return (
     <span
       className={styles.skeleton}
-      style={{ width, height }}
+      style={{
+        width,
+        height,
+        borderRadius:
+          radius === "pill" ? 999 : radius === "circle" ? "50%" : radius,
+      }}
       aria-hidden="true"
     />
+  );
+}
+
+/**
+ * A list row's outline at the row's own height (Liquid Glass polish, 22 Oct
+ * 2026: the outline is the final layout, so nothing moves when rows arrive):
+ * an avatar, a name and its context lines, and a chip at the end.
+ */
+export function SkeletonRow({
+  avatar = 40,
+  lines = 2,
+  end = true,
+}: {
+  /** The avatar's size, or false for a row without one. */
+  avatar?: number | false;
+  lines?: 1 | 2 | 3;
+  end?: boolean;
+}) {
+  return (
+    <span className={styles.skeletonRow} aria-hidden="true">
+      {avatar ? (
+        <Skeleton width={avatar} height={avatar} radius="circle" />
+      ) : null}
+      <span className={styles.skeletonLines}>
+        <Skeleton width="46%" height={14} />
+        {lines > 1 ? <Skeleton width="68%" height={11} /> : null}
+        {lines > 2 ? <Skeleton width="38%" height={11} /> : null}
+      </span>
+      {end ? <Skeleton width={52} height={22} radius="pill" /> : null}
+    </span>
   );
 }
 
