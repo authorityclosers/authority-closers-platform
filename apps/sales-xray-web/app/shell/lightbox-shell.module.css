@@ -1849,13 +1849,12 @@
   }
 }
 
-/* ---------- Design directions (dev preview, ui/sx-looks.css) ----------
-   Inert unless <html data-sx-look>. A "glass": a floating Liquid Glass
-   capsule, a raised lens under the current tab, a lit teal Add drop, a
-   clear top bar. B "pro": a bar docked to the edge, nearly solid, the
-   current tab marked by colour and weight only. */
+/* ---------- Liquid Glass (owner's pick, 22 Oct 2026) ----------
+   A floating glass capsule tab bar, a raised lens under the current tab, a
+   lit teal Add drop, a clear top bar with a large title; on computers one
+   sidebar material. */
 
-:global(:root[data-sx-look="glass"]) .mobileAvatar > span {
+.mobileAvatar > span {
   background: linear-gradient(
     180deg,
     var(--lx-avatar-top),
@@ -1865,16 +1864,8 @@
   box-shadow: none;
 }
 
-:global(:root[data-sx-look="pro"]) .mobileAvatar > span {
-  width: 30px;
-  height: 30px;
-  background: var(--lx-sunken);
-  color: var(--lx-ink-2);
-  box-shadow: 0 0 0 1px var(--lx-line);
-}
-
 @media (max-width: 899.98px) {
-  :global(:root[data-sx-look="glass"]) .mobileBar {
+  .mobileBar {
     min-height: calc(62px + env(safe-area-inset-top, 0px));
     border-bottom: 0;
     background: var(--sx-glass);
@@ -1882,18 +1873,18 @@
   }
 
   /* A large title, as iOS screens open with. */
-  :global(:root[data-sx-look="glass"]) .mobileWorkspace b {
+  .mobileWorkspace b {
     font-size: 24px;
     font-weight: 800;
     letter-spacing: -0.025em;
     line-height: 1.1;
   }
 
-  :global(:root[data-sx-look="glass"]) .mobileWorkspace small {
+  .mobileWorkspace small {
     font-size: 12.5px;
   }
 
-  :global(:root[data-sx-look="glass"]) .bottomNav {
+  .bottomNav {
     right: max(14px, env(safe-area-inset-right, 0px));
     bottom: calc(14px + env(safe-area-inset-bottom, 0px));
     left: max(14px, env(safe-area-inset-left, 0px));
@@ -1905,7 +1896,7 @@
     background: var(--sx-glass);
   }
 
-  :global(:root[data-sx-look="glass"]) .bottomLink {
+  .bottomLink {
     border-radius: 999px;
     gap: 3px;
     font-size: 11px;
@@ -1913,24 +1904,24 @@
   }
 
   /* The current tab sits in a raised lens: a brighter drop of glass. */
-  :global(:root[data-sx-look="glass"]) .tabPill {
+  .tabPill {
     background: var(--sx-glass-lens);
     box-shadow:
       0 1px 2px color-mix(in oklab, var(--lx-ink) 8%, transparent),
       inset 0 0.5px 0 color-mix(in oklab, white 60%, transparent);
   }
 
-  :global(:root[data-sx-look="glass"]) .bottomLink[aria-current="page"] {
+  .bottomLink[aria-current="page"] {
     color: var(--sx-accent);
   }
 
   /* A filled symbol for the current tab, as on iOS. */
-  :global(:root[data-sx-look="glass"]) .bottomLink[aria-current="page"] > svg {
+  .bottomLink[aria-current="page"] > svg {
     fill: color-mix(in oklab, var(--sx-accent) 22%, transparent);
   }
 
   /* Add: a lit teal drop, the one coloured control in the bar. */
-  :global(:root[data-sx-look="glass"]) .newMark {
+  .newMark {
     width: 46px;
     height: 34px;
     background: linear-gradient(
@@ -1943,128 +1934,40 @@
       inset 0 -1px 1px color-mix(in oklab, black 12%, transparent),
       0 6px 16px -6px color-mix(in oklab, var(--lx-teal) 80%, transparent);
   }
-
-  :global(:root[data-sx-look="pro"]) .mobileBar {
-    min-height: calc(52px + env(safe-area-inset-top, 0px));
-    border-bottom: 1px solid var(--lx-line);
-    background: var(--sx-glass);
-  }
-
-  :global(:root[data-sx-look="pro"]) .mobileWorkspace b {
-    font-size: 15px;
-    font-weight: 680;
-    letter-spacing: -0.01em;
-  }
-
-  :global(:root[data-sx-look="pro"]) .bottomNav {
-    right: 0;
-    bottom: 0;
-    left: 0;
-    height: calc(var(--lx-bottom-nav-h) + env(safe-area-inset-bottom, 0px));
-    gap: 0;
-    padding: 4px max(8px, env(safe-area-inset-right, 0px))
-      calc(4px + env(safe-area-inset-bottom, 0px))
-      max(8px, env(safe-area-inset-left, 0px));
-    border: 0;
-    border-top: 1px solid var(--lx-line);
-    border-radius: 0;
-    background: var(--sx-glass-thick);
-    box-shadow: none;
-  }
-
-  :global(:root[data-sx-look="pro"]) .bottomLink {
-    border-radius: 8px;
-    font-size: 11px;
-    font-weight: 550;
-  }
-
-  :global(:root[data-sx-look="pro"]) .tabPill {
-    display: none;
-  }
-
-  :global(:root[data-sx-look="pro"]) .bottomLink[aria-current="page"] {
-    color: var(--lx-ink);
-    font-weight: 700;
-  }
-
-  :global(:root[data-sx-look="pro"]) .newMark {
-    width: 40px;
-    height: 30px;
-    border-radius: 9px;
-    box-shadow: none;
-  }
 }
 
-/* Computers: one sidebar material (A) or crisp hairlines (B). */
+/* Computers: one sidebar material. */
 @media (min-width: 900px) {
-  :global(:root[data-sx-look="glass"]) .iconStrip {
+  .iconStrip {
     border-right: 0;
     background: var(--lx-paper-2);
   }
 
-  :global(:root[data-sx-look="glass"]) .panel {
+  .panel {
     border-right: 0;
     background: var(--lx-paper-2);
     box-shadow: inset -0.5px 0 0 var(--sx-hairline);
   }
 
-  :global(:root[data-sx-look="glass"]) .navRow {
+  .navRow {
     border-radius: 10px;
   }
 
-  :global(:root[data-sx-look="glass"]) .navRow[aria-current="page"],
-  :global(:root[data-sx-look="glass"]) .navRowActive {
+  .navRow[aria-current="page"],
+  .navRowActive {
     background: var(--sx-fill);
     box-shadow: none;
   }
 
-  :global(:root[data-sx-look="glass"]) .stripBtn {
+  .stripBtn {
     border-radius: 12px;
   }
 
-  :global(:root[data-sx-look="glass"]) .stripBtnActive::before {
+  .stripBtnActive::before {
     display: none;
   }
 
-  :global(:root[data-sx-look="glass"]) .railPill {
+  .railPill {
     background: var(--sx-fill-strong);
-  }
-
-  :global(:root[data-sx-look="pro"]) .iconStrip {
-    background: var(--lx-paper);
-  }
-
-  :global(:root[data-sx-look="pro"]) .panel {
-    background: var(--lx-paper);
-  }
-
-  :global(:root[data-sx-look="pro"]) .navRow {
-    min-height: 32px;
-    border-radius: 6px;
-    font-size: 13px;
-  }
-
-  :global(:root[data-sx-look="pro"]) .navRow[aria-current="page"],
-  :global(:root[data-sx-look="pro"]) .navRowActive {
-    background: var(--sx-fill-strong);
-    box-shadow: none;
-  }
-
-  :global(:root[data-sx-look="pro"]) .stripBtn {
-    width: 36px;
-    height: 36px;
-    border-radius: 8px;
-  }
-
-  :global(:root[data-sx-look="pro"]) .stripBtnActive::before {
-    display: none;
-  }
-
-  :global(:root[data-sx-look="pro"]) .railPill {
-    background: var(--sx-fill-strong);
-  }
-
-  :global(:root[data-sx-look="pro"]) .stripBtnActive {
-    color: var(--lx-ink);
   }
 }

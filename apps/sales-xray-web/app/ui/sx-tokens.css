@@ -5,6 +5,10 @@
  * Colours alias the Lightbox palette (lightbox/tokens.css), which stays the
  * only place with raw values, so light and dark come for free. Tints are
  * color-mix() of a token, never a new hex. One accent: teal.
+ *
+ * Liquid Glass (owner, 22 Oct 2026, look A of the design-direction proposal):
+ * Apple's text sizes on phones, a grouped ground under borderless cards, a
+ * lit glass for the floating layer and a livelier spring.
  */
 :root {
   /* ---------- Colour ---------- */
@@ -25,24 +29,25 @@
   --sx-bad-soft: color-mix(in oklab, var(--lx-danger) 10%, transparent);
   --sx-focus-ring: var(--lx-ring-focus);
 
-  /* ---------- Text: 12/13/14 for everything; titles and figures only ---------- */
-  --sx-text-xs: 12px; /* meta, captions, table heads */
-  --sx-text-sm: 13px; /* body, rows, controls */
-  --sx-text-md: 14px; /* emphasis, section titles */
-  --sx-text-panel: 600 15px / 1.35 var(--lx-font-ui);
-  /* v2: a sheet's or a phone page's own title, and a screen's large title. */
-  --sx-text-headline: 650 17px / 1.3 var(--lx-font-ui);
-  --sx-text-title: 650 20px / 1.25 var(--lx-font-ui);
-  --sx-text-kpi: 650 24px / 1.1 var(--lx-font-ui);
-  --sx-text-large: 700 28px / 1.15 var(--lx-font-display);
-  --sx-tracking-title: -0.015em;
+  /* ---------- Text: three body sizes, then panel, headline, title, figure
+     and large title. Computers 12.5/14/15; phones 13/15/16.5 (below). */
+  --sx-text-xs: 12.5px; /* meta, captions, table heads */
+  --sx-text-sm: 14px; /* body, rows, controls */
+  --sx-text-md: 15px; /* emphasis, names, section titles */
+  --sx-text-panel: 650 16px / 1.3 var(--lx-font-ui);
+  /* A sheet's or a phone page's own title, and a screen's large title. */
+  --sx-text-headline: 700 17px / 1.3 var(--lx-font-ui);
+  --sx-text-title: 750 22px / 1.2 var(--lx-font-ui);
+  --sx-text-kpi: 750 30px / 1.05 var(--lx-font-ui);
+  --sx-text-large: 800 32px / 1.1 var(--lx-font-ui);
+  --sx-tracking-title: -0.022em;
 
   /* ---------- Floors (minimums, not suggestions) ---------- */
   --sx-control-h: 32px; /* buttons and inputs; 44 px on touch below */
-  --sx-row-h: 40px;
+  --sx-row-h: 48px;
   --sx-table-head-h: 32px;
   --sx-panel-head-h: 42px;
-  --sx-badge-h: 20px;
+  --sx-badge-h: 22px;
   --sx-tile-min-h: 96px;
   --sx-bottom-nav-h: var(--lx-bottom-nav-h);
 
@@ -50,90 +55,90 @@
   --sx-radius-sm: var(--lx-radius-sm);
   --sx-radius-md: var(--lx-radius-md);
   --sx-radius-lg: var(--lx-radius-lg); /* cards */
-  --sx-radius-xl: 28px; /* sheets and the floating tab bar */
+  --sx-radius-xl: 32px; /* sheets and the floating tab bar */
   --sx-radius-pill: var(--lx-radius-pill);
-  --sx-gap: 16px; /* between surfaces */
+  --sx-gap: 20px; /* between surfaces */
   --sx-gutter: 16px; /* phone page edge */
 
   /* Floating surfaces (corner cards, menus, small dialogs) and the page behind
-     a modal. Tinted from the film colour, which is dark in both themes. */
+     a modal. */
   --sx-shadow-float:
-    0 14px 36px color-mix(in oklab, var(--lx-film) 16%, transparent),
-    0 2px 6px color-mix(in oklab, var(--lx-film) 6%, transparent);
-  --sx-scrim: color-mix(in oklab, var(--lx-film) 42%, transparent);
+    0 18px 44px -12px color-mix(in oklab, var(--lx-ink) 26%, transparent),
+    0 0 0 0.5px color-mix(in oklab, var(--lx-ink) 8%, transparent);
+  --sx-scrim: color-mix(in oklab, var(--lx-ink) 26%, transparent);
 
-  /* ---------- Surfaces and fills (design system v2) ----------
-     The ladder: paper (app ground) < surface (cards) < elevated (sheets,
-     menus, popovers). Fills are ink at low strength, so they read on any
-     surface in both themes: rest, hover, pressed. */
-  --sx-elevated: var(--lx-surface);
-  --sx-fill-soft: color-mix(in oklab, var(--lx-ink) 3.5%, transparent);
-  --sx-fill: color-mix(in oklab, var(--lx-ink) 6%, transparent);
-  --sx-fill-strong: color-mix(in oklab, var(--lx-ink) 10%, transparent);
-  --sx-hairline: color-mix(in oklab, var(--lx-ink) 9%, transparent);
+  /* ---------- Surfaces and fills ----------
+     The ladder: paper (the grouped ground) < surface (cards) < elevated
+     (sheets, menus, popovers). Fills are a grey at low strength, so they read
+     on any surface: rest, hover, pressed. */
+  --sx-elevated: var(--lx-elevated);
+  --sx-fill-soft: color-mix(in oklab, var(--lx-ink-3) 5%, transparent);
+  --sx-fill: color-mix(in oklab, var(--lx-ink-3) 9%, transparent);
+  --sx-fill-strong: color-mix(in oklab, var(--lx-ink-3) 14%, transparent);
+  --sx-hairline: color-mix(in oklab, var(--lx-ink) 7%, transparent);
   --sx-shadow-1:
-    0 1px 2px color-mix(in oklab, var(--lx-film) 6%, transparent),
-    0 0 0 1px var(--sx-hairline);
+    0 1px 2px color-mix(in oklab, var(--lx-ink) 5%, transparent),
+    0 0 0 0.5px color-mix(in oklab, var(--lx-ink) 4%, transparent);
   --sx-shadow-2:
-    0 8px 24px -12px color-mix(in oklab, var(--lx-film) 22%, transparent),
-    0 0 0 1px var(--sx-hairline);
+    0 12px 32px -16px color-mix(in oklab, var(--lx-ink) 26%, transparent),
+    0 0 0 0.5px color-mix(in oklab, var(--lx-ink) 6%, transparent);
 
   /* ---------- Glass (functional layer only) ----------
-     Bars, the tab bar, sheets and menus float over the page as frosted
-     glass: a translucent fill over a blur, a hairline edge and a faint top
-     shine (Apple's Liquid Glass, approximated for the web). Never on cards
-     or rows: content stays solid. Opaque where the browser can't blur, or
-     the person asks for less transparency or more contrast (below). */
-  --sx-glass: color-mix(in oklab, var(--lx-surface) 72%, transparent);
-  --sx-glass-thick: color-mix(in oklab, var(--lx-surface) 86%, transparent);
-  --sx-glass-blur: blur(22px) saturate(180%);
-  --sx-glass-edge: color-mix(in oklab, var(--lx-ink) 8%, transparent);
-  --sx-glass-shine: inset 0 1px 0
-    color-mix(in oklab, var(--lx-surface) 70%, transparent);
+     Bars, the tab bar, sheets and menus float over the page as Liquid Glass,
+     approximated for the web: a light tint over a strong blur, a lit rim (a
+     bright top edge, a faint lower one) and a hairline so it reads on white.
+     The lens is the brighter drop under the current tab. Never on cards or
+     rows: content stays solid. Opaque where the browser can't blur, or the
+     person asks for less transparency or more contrast; a lighter blur on
+     low-memory phones (below). */
+  --sx-glass: color-mix(in oklab, white 60%, transparent);
+  --sx-glass-thick: color-mix(in oklab, white 84%, transparent);
+  --sx-glass-blur: blur(24px) saturate(190%);
+  --sx-glass-edge: color-mix(in oklab, white 70%, transparent);
+  --sx-glass-shine:
+    inset 0 1px 0.5px color-mix(in oklab, white 95%, transparent),
+    inset 0 -0.5px 0 color-mix(in oklab, white 50%, transparent);
   --sx-glass-shadow:
-    0 12px 32px -14px color-mix(in oklab, var(--lx-film) 30%, transparent),
-    0 1px 3px color-mix(in oklab, var(--lx-film) 8%, transparent);
+    0 0 0 0.5px color-mix(in oklab, var(--lx-ink) 10%, transparent),
+    0 14px 34px -12px color-mix(in oklab, var(--lx-ink) 24%, transparent),
+    0 2px 6px color-mix(in oklab, var(--lx-ink) 5%, transparent);
+  --sx-glass-lens: color-mix(in oklab, white 92%, transparent);
 
   /* ---------- Press feedback ---------- */
-  --sx-press-scale: 0.97;
+  --sx-press-scale: 0.96;
 
-  /* ---------- Motion (design system v2, owner 20 Oct: "apple like") ----------
+  /* ---------- Motion (owner 20 Oct: "apple like") ----------
      Durations by job; springs as linear() curves sampled from a damped
      spring, so a sheet or a press settles instead of stopping dead. */
   --sx-dur-instant: 90ms; /* press feedback */
   --sx-dur-fast: 140ms; /* fades out, small state changes */
   --sx-dur-base: 220ms; /* most transitions */
   --sx-dur-page: 280ms; /* moving between places */
-  --sx-dur-sheet: 460ms; /* sheets settling */
+  --sx-dur-sheet: 520ms; /* sheets settling */
   --sx-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --sx-ease-in: cubic-bezier(0.4, 0, 1, 1);
   --sx-ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
-  /* A spring with a 4% overshoot: presses, toggles, pills. */
+  /* A lively spring with about 7% overshoot: presses, toggles, pills. */
   --sx-spring: linear(
     0,
-    0.042,
-    0.143,
-    0.275,
-    0.415,
-    0.55,
-    0.672,
-    0.775,
-    0.858,
-    0.922,
-    0.969,
-    1.001,
+    0.054,
+    0.18,
+    0.338,
+    0.5,
+    0.645,
+    0.767,
+    0.862,
+    0.931,
+    0.977,
+    1.006,
     1.022,
-    1.033,
-    1.038,
-    1.038,
-    1.035,
     1.03,
-    1.025,
-    1.02,
-    1.015,
+    1.031,
+    1.028,
+    1.022,
+    1.016,
     1.01,
-    1.007,
-    1.004,
+    1.005,
     1.002,
     1,
     0.999,
@@ -168,25 +173,52 @@
   );
 }
 
-/* Dark: floating surfaces step up the graphite ladder, edges glow faintly
-   instead of casting light shadows, and shadows go deeper. */
+/* Dark: true black under dark grey cards; floating layers are a lighter
+   grey glass with a faint lit rim, and shadows go deep. */
 :root[data-theme="dark"] {
-  --sx-elevated: color-mix(in oklab, var(--lx-ink) 5%, var(--lx-surface));
-  --sx-glass: color-mix(in oklab, var(--sx-elevated) 70%, transparent);
-  --sx-glass-thick: color-mix(in oklab, var(--sx-elevated) 86%, transparent);
-  --sx-glass-edge: color-mix(in oklab, var(--lx-ink) 11%, transparent);
-  --sx-glass-shine: inset 0 1px 0
-    color-mix(in oklab, var(--lx-ink) 8%, transparent);
-  --sx-glass-shadow:
-    0 16px 40px -12px color-mix(in oklab, var(--lx-film) 85%, transparent),
-    0 1px 3px color-mix(in oklab, var(--lx-film) 40%, transparent);
-  --sx-shadow-1: 0 0 0 1px var(--sx-hairline);
+  --sx-hairline: color-mix(in oklab, white 9%, transparent);
+  --sx-fill-soft: color-mix(in oklab, white 5%, transparent);
+  --sx-fill: color-mix(in oklab, white 9%, transparent);
+  --sx-fill-strong: color-mix(in oklab, white 14%, transparent);
+  --sx-shadow-1: 0 0 0 0.5px var(--sx-hairline);
   --sx-shadow-2:
-    0 10px 28px -12px color-mix(in oklab, var(--lx-film) 80%, transparent),
-    0 0 0 1px var(--sx-hairline);
+    0 14px 34px -14px color-mix(in oklab, black 80%, transparent),
+    0 0 0 0.5px var(--sx-hairline);
   --sx-shadow-float:
-    0 18px 44px color-mix(in oklab, var(--lx-film) 60%, transparent),
-    0 0 0 1px var(--sx-glass-edge);
+    0 18px 44px color-mix(in oklab, black 70%, transparent),
+    0 0 0 0.5px var(--sx-glass-edge);
+  --sx-scrim: color-mix(in oklab, black 55%, transparent);
+  --sx-glass: color-mix(in oklab, var(--lx-elevated) 58%, transparent);
+  --sx-glass-thick: color-mix(in oklab, var(--lx-elevated) 84%, transparent);
+  --sx-glass-blur: blur(24px) saturate(170%);
+  --sx-glass-edge: color-mix(in oklab, white 13%, transparent);
+  --sx-glass-shine:
+    inset 0 1px 0.5px color-mix(in oklab, white 18%, transparent),
+    inset 0 -0.5px 0 color-mix(in oklab, white 6%, transparent);
+  --sx-glass-shadow:
+    0 0 0 0.5px color-mix(in oklab, black 70%, transparent),
+    0 16px 40px -12px color-mix(in oklab, black 85%, transparent);
+  --sx-glass-lens: color-mix(in oklab, white 15%, transparent);
+}
+
+/* Phones: Apple's text sizes, so names and times read outdoors at arm's
+   length; touch controls 44 px. */
+@media (pointer: coarse) {
+  :root {
+    --sx-control-h: 44px;
+    --sx-text-xs: 13px;
+    --sx-text-sm: 15px;
+    --sx-text-md: 16.5px;
+  }
+}
+
+/* Low-memory phones (data-sx-glass="lite", ui/look.ts): a big blur under
+   the bars drops frames while scrolling, so a light blur and a thicker tint. */
+:root[data-sx-glass="lite"],
+:root[data-sx-glass="lite"][data-theme="dark"] {
+  --sx-glass: color-mix(in oklab, var(--lx-elevated) 92%, transparent);
+  --sx-glass-thick: color-mix(in oklab, var(--lx-elevated) 96%, transparent);
+  --sx-glass-blur: blur(8px);
 }
 
 /* Glass falls back to the solid elevated surface. */
@@ -235,12 +267,6 @@
     --sx-dur-sheet: 200ms;
     --sx-spring: var(--sx-ease-out);
     --sx-spring-calm: var(--sx-ease-out);
-  }
-}
-
-@media (pointer: coarse) {
-  :root {
-    --sx-control-h: 44px;
   }
 }
 

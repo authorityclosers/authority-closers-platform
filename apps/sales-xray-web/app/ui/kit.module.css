@@ -1161,7 +1161,7 @@ a.rowTitle:focus-visible::after {
 }
 
 /* ---------- Action rows (menus, settings lists, action sheets) ----------
-   Separate rows today; the looks below group them into one card. */
+   The Liquid Glass block below groups them into one inset card. */
 
 .actionList {
   display: grid;
@@ -1278,13 +1278,12 @@ a.rowTitle:focus-visible::after {
   color: var(--sx-muted);
 }
 
-/* ---------- Design directions (dev preview, ui/sx-looks.css) ----------
-   Inert unless <html data-sx-look>. A "glass": capsule buttons, filled
-   secondary buttons, soft tinted badges, borderless cards on the grouped
-   ground, filled fields, Apple's grey monogram avatars. B "pro": 8 px
-   shapes, hairline borders, badges as a dot and a word, nothing raised. */
+/* ---------- Liquid Glass (owner's pick, 22 Oct 2026) ----------
+   Capsule buttons, filled secondary buttons and fields, soft tinted badges,
+   borderless cards on the grouped ground, Apple's grey monogram avatars,
+   separators that start where the text does. */
 
-:global(:root[data-sx-look="glass"]) .button {
+.button {
   padding: 0 16px;
   border-color: transparent;
   border-radius: 999px;
@@ -1292,11 +1291,11 @@ a.rowTitle:focus-visible::after {
   font-weight: 650;
 }
 
-:global(:root[data-sx-look="glass"]) .button:hover:not(:disabled) {
+.button:hover:not(:disabled) {
   background: var(--sx-fill-strong);
 }
 
-:global(:root[data-sx-look="glass"]) .button[data-variant="primary"] {
+.button[data-variant="primary"] {
   background: linear-gradient(
     180deg,
     color-mix(in oklab, var(--lx-teal-2) 30%, var(--lx-teal)),
@@ -1307,55 +1306,54 @@ a.rowTitle:focus-visible::after {
     0 8px 18px -10px color-mix(in oklab, var(--lx-teal) 90%, transparent);
 }
 
-:global(:root[data-sx-look="glass"])
-  .button[data-variant="primary"]:hover:not(:disabled) {
+.button[data-variant="primary"]:hover:not(:disabled) {
   background: var(--lx-teal-hover);
 }
 
-:global(:root[data-sx-look="glass"]) .button[data-variant="ghost"],
-:global(:root[data-sx-look="glass"]) .button[data-variant="icon"] {
+.button[data-variant="ghost"],
+.button[data-variant="icon"] {
   background: transparent;
 }
 
-:global(:root[data-sx-look="glass"]) .badge {
+.badge {
   padding: 0 9px;
   font-weight: 650;
 }
 
-:global(:root[data-sx-look="glass"]) .badge:not([data-tone]),
-:global(:root[data-sx-look="glass"]) .badge[data-tone="neutral"] {
+.badge:not([data-tone]),
+.badge[data-tone="neutral"] {
   background: var(--sx-fill);
 }
 
-:global(:root[data-sx-look="glass"]) .panel,
-:global(:root[data-sx-look="glass"]) .tiles {
+.panel,
+.tiles {
   border-color: transparent;
   border-radius: var(--lx-radius-lg);
   box-shadow: var(--sx-shadow-1);
 }
 
-:global(:root[data-sx-look="glass"]) .panelHead {
+.panelHead {
   border-bottom-color: var(--lx-line-soft);
 }
 
-:global(:root[data-sx-look="glass"]) .segmented {
+.segmented {
   padding: 3px;
   border-radius: 999px;
 }
 
-:global(:root[data-sx-look="glass"]) .segment {
+.segment {
   border-radius: 999px;
   padding: 0 14px;
 }
 
-:global(:root[data-sx-look="glass"]) .segment[aria-pressed="true"] {
+.segment[aria-pressed="true"] {
   box-shadow:
     0 2px 6px color-mix(in oklab, var(--lx-ink) 10%, transparent),
     0 0 0 0.5px var(--sx-hairline);
 }
 
-:global(:root[data-sx-look="glass"]) .field :is(input, select, textarea),
-:global(:root[data-sx-look="glass"]) .inlineInput {
+.field :is(input, select, textarea),
+.inlineInput {
   min-height: max(var(--sx-control-h), 40px);
   padding: 0 14px;
   border-color: transparent;
@@ -1363,20 +1361,18 @@ a.rowTitle:focus-visible::after {
   background: var(--sx-fill);
 }
 
-:global(:root[data-sx-look="glass"])
-  .field
-  :is(input, select, textarea):hover:not(:focus) {
+.field :is(input, select, textarea):hover:not(:focus) {
   border-color: transparent;
   background: var(--sx-fill-strong);
 }
 
-:global(:root[data-sx-look="glass"]) .field :is(input, select, textarea):focus,
-:global(:root[data-sx-look="glass"]) .inlineInput:focus {
+.field :is(input, select, textarea):focus,
+.inlineInput:focus {
   border-color: var(--sx-accent);
   background: var(--sx-surface);
 }
 
-:global(:root[data-sx-look="glass"]) .avatar {
+.avatar {
   background: linear-gradient(
     180deg,
     var(--lx-avatar-top),
@@ -1387,15 +1383,15 @@ a.rowTitle:focus-visible::after {
 }
 
 /* Separators start where the text does, as in iOS lists. */
-:global(:root[data-sx-look="glass"]) .row {
+.row {
   padding: 10px 16px;
 }
 
-:global(:root[data-sx-look="glass"]) .row + .row {
+.row + .row {
   border-top: 0;
 }
 
-:global(:root[data-sx-look="glass"]) .row + .row::before {
+.row + .row::before {
   position: absolute;
   top: 0;
   right: 0;
@@ -1405,16 +1401,16 @@ a.rowTitle:focus-visible::after {
   content: "";
 }
 
-:global(:root[data-sx-look="glass"]) .row:has(> .avatar) + .row::before {
+.row:has(> .avatar) + .row::before {
   left: 60px;
 }
 
-:global(:root[data-sx-look="glass"]) .dialog {
+.dialog {
   padding: 22px;
   border-radius: 30px;
 }
 
-:global(:root[data-sx-look="glass"]) .emptyIcon {
+.emptyIcon {
   width: 44px;
   height: 44px;
   border-radius: 14px;
@@ -1424,128 +1420,27 @@ a.rowTitle:focus-visible::after {
 
 /* B: precision. */
 
-:global(:root[data-sx-look="pro"]) .button {
-  padding: 0 12px;
-  border-radius: 8px;
-  box-shadow: 0 1px 0 color-mix(in oklab, var(--lx-ink) 3%, transparent);
-  font-weight: 600;
-}
-
-:global(:root[data-sx-look="pro"]) .button[data-variant="primary"] {
-  box-shadow: inset 0 1px 0 color-mix(in oklab, white 14%, transparent);
-}
-
-:global(:root[data-sx-look="pro"]) .button[data-variant="ghost"],
-:global(:root[data-sx-look="pro"]) .button[data-variant="icon"] {
-  box-shadow: none;
-}
-
 /* A badge is a word with a coloured dot on a hairline. */
-:global(:root[data-sx-look="pro"]) .badge {
-  gap: 6px;
-  padding: 0 7px;
-  border: 1px solid var(--lx-line);
-  border-radius: 6px;
-  background: var(--sx-surface);
-  color: var(--sx-ink-2);
-  font-weight: 550;
-}
 
-:global(:root[data-sx-look="pro"]) .badge::before {
-  width: 6px;
-  height: 6px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--lx-muted-2);
-  content: "";
-}
+/* Action rows: one inset card with separators that start at the text, as in
+   iOS Settings. */
 
-:global(:root[data-sx-look="pro"]) .badge[data-tone] {
-  background: var(--sx-surface);
-  color: var(--sx-ink-2);
-}
-
-:global(:root[data-sx-look="pro"]) .badge[data-tone="accent"]::before,
-:global(:root[data-sx-look="pro"]) .badge[data-tone="good"]::before {
-  background: var(--lx-teal);
-}
-
-:global(:root[data-sx-look="pro"]) .badge[data-tone="warn"]::before {
-  background: var(--lx-warning);
-}
-
-:global(:root[data-sx-look="pro"]) .badge[data-tone="bad"]::before {
-  background: var(--lx-danger);
-}
-
-:global(:root[data-sx-look="pro"]) .panel,
-:global(:root[data-sx-look="pro"]) .tiles {
-  border-radius: 12px;
-  box-shadow: none;
-}
-
-:global(:root[data-sx-look="pro"]) .segmented {
-  border-radius: 8px;
-  box-shadow: inset 0 0 0 1px var(--lx-line);
-}
-
-:global(:root[data-sx-look="pro"]) .segment {
-  border-radius: 6px;
-}
-
-:global(:root[data-sx-look="pro"]) .segment[aria-pressed="true"] {
-  background: var(--sx-surface);
-  box-shadow: 0 0 0 1px var(--lx-line-strong);
-}
-
-:global(:root[data-sx-look="pro"]) .field :is(input, select, textarea),
-:global(:root[data-sx-look="pro"]) .inlineInput {
-  border-radius: 8px;
-}
-
-:global(:root[data-sx-look="pro"]) .avatar {
-  background: var(--lx-sunken);
-  color: var(--sx-ink-2);
-  box-shadow: inset 0 0 0 1px var(--lx-line);
-  font-weight: 650;
-}
-
-:global(:root[data-sx-look="pro"]) .dialog {
-  border-color: var(--lx-line);
-  border-radius: 12px;
-  background: var(--sx-elevated);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-}
-
-:global(:root[data-sx-look="pro"]) .emptyIcon {
-  border-radius: 8px;
-  box-shadow: inset 0 0 0 1px var(--lx-line);
-}
-
-/* Action rows: A groups them in one inset card with separators that start
-   at the text (iOS Settings); B in one hairline box. */
-
-:global(:root[data-sx-look]) .actionList {
+.actionList {
   gap: 0;
   overflow: hidden;
   border-radius: var(--lx-radius-lg);
   background: var(--sx-surface);
 }
 
-:global(:root[data-sx-look="glass"]) .actionList {
+.actionList {
   box-shadow: var(--sx-shadow-1);
 }
 
-:global(:root[data-sx-look="pro"]) .actionList {
-  border: 1px solid var(--lx-line);
-}
-
-:global(:root[data-sx-look]) .actionItem {
+.actionItem {
   position: relative;
 }
 
-:global(:root[data-sx-look]) .actionItem + .actionItem::before {
+.actionItem + .actionItem::before {
   position: absolute;
   z-index: 1;
   top: 0;
@@ -1556,27 +1451,22 @@ a.rowTitle:focus-visible::after {
   content: "";
 }
 
-:global(:root[data-sx-look="pro"]) .actionItem + .actionItem::before {
-  left: 0;
-  background: var(--lx-line);
-}
-
-:global(:root[data-sx-look]) .actionRow {
+.actionRow {
   border: 0;
   border-radius: 0;
   background: transparent;
 }
 
-:global(:root[data-sx-look]) .actionRow:hover:not(:disabled) {
+.actionRow:hover:not(:disabled) {
   background: var(--sx-fill-soft);
 }
 
-:global(:root[data-sx-look]) .actionRow:active:not(:disabled) {
+.actionRow:active:not(:disabled) {
   background: var(--sx-fill);
   transform: none;
 }
 
-:global(:root[data-sx-look="glass"]) .actionIcon {
+.actionIcon {
   width: 34px;
   height: 34px;
   border-radius: 10px;
@@ -1584,31 +1474,22 @@ a.rowTitle:focus-visible::after {
   color: var(--sx-accent-ink);
 }
 
-:global(:root[data-sx-look="glass"]) .actionIcon[data-tone="neutral"] {
+.actionIcon[data-tone="neutral"] {
   background: var(--lx-avatar-bottom);
   color: white;
 }
 
-:global(:root[data-sx-look="glass"]) .actionIcon[data-tone="good"] {
+.actionIcon[data-tone="good"] {
   background: var(--sx-good);
   color: var(--sx-accent-ink);
 }
 
-:global(:root[data-sx-look="glass"]) .actionIcon[data-tone="warn"] {
+.actionIcon[data-tone="warn"] {
   background: var(--lx-warning);
   color: white;
 }
 
-:global(:root[data-sx-look="glass"]) .actionIcon[data-tone="bad"] {
+.actionIcon[data-tone="bad"] {
   background: var(--lx-danger);
   color: white;
-}
-
-:global(:root[data-sx-look="pro"]) .actionIcon {
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--sx-fill);
-  color: var(--sx-ink-2);
-  box-shadow: inset 0 0 0 1px var(--lx-line);
 }

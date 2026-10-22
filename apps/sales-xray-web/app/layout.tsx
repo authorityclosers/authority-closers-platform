@@ -6,14 +6,17 @@ import "@fontsource-variable/noto-sans-devanagari/wght.css";
 import "@fontsource-variable/noto-serif-devanagari/wght.css";
 import "./lightbox/tokens.css";
 import "./styles.css";
-import "./ui/sx-looks.css";
 import { UploadSessionProvider } from "./hooks/upload-session";
 import { UploadIndicator } from "./shell/upload-indicator";
 import { themeControlEnabled, themeInitScript } from "./lightbox/theme";
 import { earlyReadsScript } from "./early-reads";
 import { sidebarInitScript } from "./shell/shell-store";
 import { inAppInitScript } from "./in-app";
-import { lookInitScript, lookPreviewEnabled } from "./ui/look";
+import {
+  glassInitScript,
+  themePreviewEnabled,
+  themePreviewScript,
+} from "./ui/look";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { LiveDataBanner } from "./live-data-banner";
 import { AppSession } from "./app-session";
@@ -38,8 +41,8 @@ export const viewport: Viewport = {
   viewportFit: "cover",
   interactiveWidget: "resizes-content",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f6fb" },
-    { media: "(prefers-color-scheme: dark)", color: "#0b0c0e" },
+    { media: "(prefers-color-scheme: light)", color: "#f2f3f7" },
+    { media: "(prefers-color-scheme: dark)", color: "#000000" },
   ],
 };
 export default async function Layout({
@@ -62,12 +65,12 @@ export default async function Layout({
     // The pre-paint script may change the theme attributes before hydration.
     <html lang="en" data-lx-root="" data-theme="light" suppressHydrationWarning>
       <body className="sales-xray-document">
-        {/* Dev only: ?look= previews a design direction and ?theme= a theme
-            (ui/look.ts); before the theme script, which reads it. */}
-        {lookPreviewEnabled({ NODE_ENV: process.env.NODE_ENV }) ? (
+        {/* Dev only: ?theme= sets the saved theme (ui/look.ts), before the
+            theme script, which reads it. */}
+        {themePreviewEnabled({ NODE_ENV: process.env.NODE_ENV }) ? (
           <script
-            id="sales-xray-look-init"
-            dangerouslySetInnerHTML={{ __html: lookInitScript() }}
+            id="sales-xray-theme-preview"
+            dangerouslySetInnerHTML={{ __html: themePreviewScript() }}
           />
         ) : null}
         {themeControl ? (
@@ -76,6 +79,11 @@ export default async function Layout({
             dangerouslySetInnerHTML={{ __html: themeInitScript() }}
           />
         ) : null}
+        {/* Low-memory phones get a lighter glass from the first paint. */}
+        <script
+          id="sales-xray-glass-init"
+          dangerouslySetInnerHTML={{ __html: glassInitScript() }}
+        />
         <script
           id="sales-xray-sidebar-init"
           dangerouslySetInnerHTML={{ __html: sidebarInitScript() }}
