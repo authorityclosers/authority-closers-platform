@@ -9,6 +9,7 @@ vi.mock("next/link", () => ({
 vi.mock("../notice-center", () => ({ notify: () => undefined }));
 
 import { resetBackCloseForTests } from "../ui/back-close";
+import { CallNext } from "./call-next";
 import { LeadSheet } from "./lead-sheet";
 import type { LeadDetail } from "./leads-client";
 
@@ -120,4 +121,19 @@ it("says who is next after a save, and calls them in one tap", async () => {
   expect(bar?.textContent).toContain("Saved. Next up: Asha Fictional");
   await act(async () => tile("Call Asha").click());
   expect(onNext).toHaveBeenCalledWith(TWO);
+});
+
+// One shared "Call next" (Liquid Glass split, 22 Oct 2026): the same card wherever it sits.
+it("says plainly when nobody else is due", async () => {
+  await act(async () =>
+    root.render(<CallNext lead={null} saved onCall={() => undefined} />),
+  );
+  expect(host.textContent).toBe("Saved. Nobody else is due now.");
+  await act(async () =>
+    root.render(
+      <CallNext lead={detail(TWO, "Asha Fictional")} onCall={() => undefined} />,
+    ),
+  );
+  expect(host.textContent).toContain("Next up: Asha Fictional");
+  expect(host.textContent).not.toContain("Saved.");
 });

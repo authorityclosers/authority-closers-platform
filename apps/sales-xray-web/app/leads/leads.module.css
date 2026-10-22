@@ -2574,12 +2574,6 @@ a.repName {
   white-space: nowrap;
 }
 
-.nextUp .callBarButton {
-  width: auto;
-  min-height: 44px;
-  padding: 0 18px;
-}
-
 /* Select → Actions → Send a WhatsApp: the template, its parts, who gets it. */
 .bulkSend {
   display: grid;

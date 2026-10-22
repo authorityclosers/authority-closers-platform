@@ -67,6 +67,7 @@ import {
   type Stage,
 } from "./leads-client";
 import { LastCallBrief } from "./call-brief-card";
+import { CallNext } from "./call-next";
 import { chatFacts, chatOrigin } from "./chat-origin";
 import { SocialThread } from "./social-thread";
 import { WhatsAppThread } from "./whatsapp-thread";
@@ -2480,26 +2481,7 @@ export function LeadSheet({
               </div>
             ) : null}
             {onNext && nextUp && nextUp.after === leadId ? (
-              <div className={styles.nextUp} role="status">
-                {nextUp.lead ? (
-                  <>
-                    <span>
-                      Saved. Next up: <strong>{nextUp.lead.lead.name}</strong>
-                      <small>{whyLine(nextUp.lead.lead)}</small>
-                    </span>
-                    <button
-                      type="button"
-                      className={styles.callBarButton}
-                      onClick={() => onNext(nextUp.lead!.lead.lead_id)}
-                    >
-                      <Phone size={17} aria-hidden="true" />
-                      Call {nextUp.lead.lead.name.split(" ")[0]}
-                    </button>
-                  </>
-                ) : (
-                  <span>Saved. Nobody else is due now.</span>
-                )}
-              </div>
+              <CallNext lead={nextUp.lead} saved onCall={onNext} />
             ) : null}
           </>
         ) : (
