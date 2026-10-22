@@ -343,14 +343,21 @@ Reviewed script checksums for this handoff:
 
 | Script | SHA256 |
 | --- | --- |
-| `reseal-dev-sales-xray-approval.py` | `44cfd752f5c57d937ffffb42de312916de9d903b7d202808ed4c717af121f391` |
+| `reseal-dev-sales-xray-approval.py` | `cb5123d209ad222df24cfece0132d85cdf416bc4c5465ea3fe887b62e8b8f96d` |
 | `refresh-dev-sales-xray-backend.py` | `951c82dcb3390ba1e0ffe836d2032deb9aee86c1232d2d8452674da5a6b8feb3` |
 | `prepare-sales-xray-native-activation.py` | `d026c11d2fee8671bf6418c46571d4c9209704f78a89cb5f11ecdcb6652728df` |
 
 The tool also enforces the two helper digests before it imports their code.
-The helper bytes and constants are unchanged from this task's latest-main base
-`bafeafc1533a717cb00062a06130cdb20027ce26`. The refresh digest was already updated
-on main by [AUT-477](/AUT/issues/AUT-477); do not substitute the prior installed
+This handoff's three-script set is pinned to source
+`c4db17c467cfa88fb55ee3c05b7d6f76d48f1a40`. The activation helper has the same
+bytes at `a81cb05b147c749018700633deb5a433ec53c17e`; the follow-up source updates
+the reseal tool's helper pin for [AUT-2187](/AUT/issues/AUT-2187).
+The earlier unchanged-helper statement described only the historical task base
+`bafeafc1533a717cb00062a06130cdb20027ce26`, with reseal script checksum
+`44cfd752f5c57d937ffffb42de312916de9d903b7d202808ed4c717af121f391`.
+That historical evidence does not describe the current handoff's helper set.
+The refresh digest was already updated on main by [AUT-477](/AUT/issues/AUT-477);
+do not substitute the prior installed
 [AUT-1460](/AUT/issues/AUT-1460) helper when executing this new three-script set.
 
 ```bash
