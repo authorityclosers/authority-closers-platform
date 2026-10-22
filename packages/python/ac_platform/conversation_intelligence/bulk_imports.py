@@ -150,10 +150,12 @@ class RecordingImports:
                 "The confirmed member is no longer available in this organisation."
             )
 
-    async def member_setup_complete(self, person_id: UUID) -> bool:
+    async def member_setup_complete(self, person_id: UUID | None) -> bool:
         # The worker holds a call whose owner has no complete Sales X-Ray profile
         # (name and phone) and nothing resumes the hold, so the upload's one-hour
         # source budget expires unprocessed (46 imported calls, 18 Oct 2026).
+        if person_id is None:
+            return False
         try:
             profile = await get_sales_xray_profile(self.database, person_id=person_id)
         except SalesXrayProfileUnavailable:
@@ -162,7 +164,7 @@ class RecordingImports:
 
     async def require_member_setup(self, person_id: UUID | None) -> None:
         """Refuse new import work before any minutes, lease or job exist."""
-        if person_id is None or not await self.member_setup_complete(person_id):
+        if not await self.member_setup_complete(person_id):
             raise ConversationConflict(MEMBER_SETUP_REQUIRED)
 
     async def items(self, batch_id: UUID) -> list[ConversationRecordingImportItem]:
