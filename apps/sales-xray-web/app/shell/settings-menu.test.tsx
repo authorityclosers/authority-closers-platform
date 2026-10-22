@@ -112,7 +112,7 @@ it.each<[Allowance, string | null]>([
       available_seconds: 600000,
       committed_seconds: 0,
     },
-    "166 h 40 min left",
+    null,
   ],
   [
     {
@@ -123,7 +123,7 @@ it.each<[Allowance, string | null]>([
     },
     null,
   ],
-])("does not invent a plan for %j", async (allowance, text) => {
+])("shows no minutes beside Plan & usage for %j", async (allowance, text) => {
   asPhone(false);
   const menu = await open({ allowance });
   const plan = menu.querySelector<HTMLAnchorElement>(

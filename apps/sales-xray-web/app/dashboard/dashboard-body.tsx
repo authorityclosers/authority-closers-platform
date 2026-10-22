@@ -14,7 +14,6 @@ import { SectionBoundary } from "../ui/section-boundary";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
   isEmptyAccount,
-  minutesLeft,
   type CallActivity,
   type CallSummary,
   type ReadResult,
@@ -24,8 +23,6 @@ import {
   AttentionAction,
   DayBars,
   DayBarsSkeleton,
-  MinutesRing,
-  MinutesUsed,
   StatusSplit,
   StatusSplitSkeleton,
 } from "./dashboard-visuals";
@@ -120,8 +117,6 @@ export function DashboardBody({
   const activity =
     activityState.status === "ready" ? activityState.value : null;
   const recent = recentState.status === "ready" ? recentState.value : null;
-  const allowance =
-    allowanceState.status === "ready" ? allowanceState.value : null;
   const failing = [summaryState, activityState, allowanceState, recentState]
     .map((state) => state.status)
     .includes("error");
@@ -162,7 +157,7 @@ export function DashboardBody({
       {sandbox?.sandbox ? <SandboxCard facts={sandbox} /> : null}
 
       {showGetStarted && !sales ? (
-        <GetStarted allowance={allowance} />
+        <GetStarted />
       ) : (
         <>
           {/* Sales first, call analysis second (owner, 22 Oct 2026); a
@@ -231,28 +226,7 @@ export function DashboardBody({
                     ) : null
                   }
                 />
-                <Figure
-                  id="metric-minutes-left"
-                  label="Minutes left"
-                  status={allowanceState.status}
-                  value={allowance ? minutesLeft(allowance).value : null}
-                  context={
-                    allowance ? (
-                      <>
-                        {minutesLeft(allowance).subtext}
-                        {allowance.unlimited ? null : (
-                          <span className={styles.used}>
-                            {" · "}
-                            <MinutesUsed allowance={allowance} />
-                          </span>
-                        )}
-                      </>
-                    ) : null
-                  }
-                  accessory={
-                    allowance ? <MinutesRing allowance={allowance} /> : null
-                  }
-                />
+                {/* No Minutes left here (owner, 19 Oct 2026: end users never see minutes, prices or validity; metering lives in Admin). */}
                 <Figure
                   id="metric-needs-attention"
                   label={
@@ -515,7 +489,7 @@ function SandboxCard({ facts }: { facts: SandboxFacts }) {
   );
 }
 
-function GetStarted({ allowance }: { allowance: Allowance | null }) {
+function GetStarted() {
   return (
     <section className={styles.getStarted} aria-labelledby="get-started">
       <div className={styles.getStartedCopy}>
@@ -553,13 +527,6 @@ function GetStarted({ allowance }: { allowance: Allowance | null }) {
           <Plus size={16} aria-hidden="true" />
           <span>Analyse a call</span>
         </Link>
-        {allowance ? (
-          <span className={styles.muted}>
-            {allowance.unlimited
-              ? "Unlimited analysis time"
-              : `${minutesLeft(allowance).value} ${minutesLeft(allowance).subtext}`}
-          </span>
-        ) : null}
       </div>
     </section>
   );

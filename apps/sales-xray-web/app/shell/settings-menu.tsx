@@ -52,7 +52,6 @@ import { createPortal } from "react-dom";
 
 import type { Allowance } from "../acquisition-client";
 import { useSalesXraySignOut } from "../account-navigation";
-import { formatAnalysisTime } from "../analysis-time";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { phoneCallsOpener, useInApp } from "../in-app-client";
 import { inPhoneApp } from "../leads/native-phone";
@@ -89,17 +88,6 @@ export function accountInitials(name: string | null, email: string | null) {
   const letters =
     parts.length > 1 ? parts[0][0] + parts[1][0] : source.slice(0, 2);
   return letters.toUpperCase() || "·";
-}
-
-function minutesLeft(allowance: Allowance | null) {
-  if (!allowance || allowance.unlimited) return null;
-  const left = formatAnalysisTime(allowance.available_seconds);
-  const total = formatAnalysisTime(allowance.allowance_seconds);
-  const share =
-    allowance.allowance_seconds > 0
-      ? Math.min(1, allowance.available_seconds / allowance.allowance_seconds)
-      : 0;
-  return { text: `${left} of ${total} left`, short: `${left} left`, share };
 }
 
 const noSubscription = () => () => {};
@@ -171,7 +159,6 @@ export function SettingsMenu({
   name,
   email,
   photoUrl,
-  allowance,
   organisation = false,
   insights = false,
   workspaces = [],
@@ -200,7 +187,8 @@ export function SettingsMenu({
   name: string | null;
   email: string | null;
   photoUrl?: string | null;
-  allowance: Allowance | null;
+  /** Not shown: end users never see minutes (owner, 19 Oct 2026). */
+  allowance?: Allowance | null;
 }) {
   const [view, setView] = useState<View>(initialView);
   // Each opening starts at the view the opener asked for.
@@ -225,7 +213,6 @@ export function SettingsMenu({
     () => updates.notes.filter((note) => !note.seen).map((note) => note.key),
     [updates.notes],
   );
-  const minutes = minutesLeft(allowance);
   const guide = useFirstCallGuideSwitch();
   const pathname = usePathname();
   const inApp = useInApp();
@@ -469,7 +456,6 @@ export function SettingsMenu({
         <Row
           icon={<Clock3 size={17} />}
           label="Plan & usage"
-          value={minutes?.short}
           href="/settings/plan"
           onClick={onClose}
         />

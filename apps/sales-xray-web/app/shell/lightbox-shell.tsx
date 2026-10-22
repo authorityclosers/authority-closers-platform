@@ -58,8 +58,6 @@ import { notify } from "../notice-center";
 import { opensInPlace } from "../settings-open";
 import { useWorkspaceAccess } from "../workspace-access";
 import { BrandLockup } from "./brand-lockup";
-import { AllowanceRing } from "./allowance-ring";
-import { MinutesMeter } from "./minutes-meter";
 import { phoneTabFor, shellActiveFor } from "./phone-nav";
 import { RailTip } from "./rail-tip";
 import { usePlacePrefetch, useHoverPrefetch } from "./route-prefetch";
@@ -1324,7 +1322,6 @@ function LightboxShellFrame({
           <div className={styles.barActions}>
             <ReviewBarChip live={leadsBadgeLive} />
             {bell}
-            <MinutesMeter allowance={allowance} variant="pill" />
           </div>
         </header>
         <header className={styles.topBar}>
@@ -1358,8 +1355,6 @@ function LightboxShellFrame({
           {/* Pages can host their own toolbar here (the report's sections). */}
           <div className={styles.topBarCenter} data-shell-toolbar />
           <div className={styles.topBarRight}>
-            {/* First, so its arrival (or absence) moves nothing else. */}
-            <AllowanceRing allowance={shownAllowance} />
             {(authenticated || sessionPending) && place !== "analyse" ? (
               <Link className={styles.newAnalysisButton} href={newAnalysisHref}>
                 <Plus size={15} aria-hidden="true" />
