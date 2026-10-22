@@ -503,3 +503,31 @@ def test_the_host_script_seals_the_hybrid_with_the_entry_from_the_configuration(
         assert one_pass_c2_seal.main([a for a in arguments if a != "--luna-c4"]) == 2
         capsys.readouterr()
     assert one_pass_c2_seal.main(["--luna-c4", *arguments[:8]]) == 2
+
+
+def test_a_seal_can_retire_profiles_to_stay_within_the_policy_cap() -> None:
+    classic, bundle = _classic()
+    flash_lite = c2_route.derive_configuration(classic)
+    one_pass = c2_route.derive_configuration(classic, one_pass=True)
+    first = c2_route.seal(bundle, classic, flash_lite)
+    assert [p.profile_id for p in first.acquisition_policy.profiles] == [c2_route.PROFILE_ID]
+    # The new profile in, the named one out, in one seal; classic stages untouched.
+    sealed = c2_route.seal(first, classic, one_pass, one_pass=True, retire=(c2_route.PROFILE_ID,))
+    assert [p.profile_id for p in sealed.acquisition_policy.profiles] == [
+        c2_route.ONE_PASS_PROFILE_ID
+    ]
+    assert sealed.acquisition_policy.stages == bundle.acquisition_policy.stages
+    assert ConversationProviderAdmin._approved_configuration(_row(one_pass), sealed)
+    with pytest.raises(ConversationDenied):  # the retired configuration is no longer approved
+        ConversationProviderAdmin._approved_configuration(_row(flash_lite), sealed)
+    # Nothing retired: the same bundle as before the option existed.
+    assert (
+        c2_route.seal(first, classic, one_pass, one_pass=True).digest
+        == c2_route.seal(first, classic, one_pass, one_pass=True, retire=()).digest
+    )
+    with pytest.raises(c2_route.SealError, match="retired_profile_not_in_policy"):
+        c2_route.seal(first, classic, one_pass, one_pass=True, retire=("no-such-profile",))
+    with pytest.raises(c2_route.SealError, match="cannot_retire_the_profile_being_sealed"):
+        c2_route.seal(
+            first, classic, one_pass, one_pass=True, retire=(c2_route.ONE_PASS_PROFILE_ID,)
+        )
