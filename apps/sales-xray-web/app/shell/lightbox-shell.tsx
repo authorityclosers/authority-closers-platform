@@ -1,18 +1,27 @@
 "use client";
 
 import {
+  AudioLines,
   BarChart3,
+  Bell,
   Building2,
   ChevronDown,
   FolderOpen,
   GraduationCap,
+  Layers,
   LayoutGrid,
+  LifeBuoy,
   LogIn,
+  MessagesSquare,
   PanelLeftClose,
   PanelLeftOpen,
+  PhoneCall,
+  Plug,
   Plus,
   Search,
   Settings,
+  UserPlus,
+  UserRound,
   Users,
 } from "lucide-react";
 import Form from "next/form";
@@ -112,6 +121,8 @@ import {
 } from "./updates-client";
 import { ChatsTabIcon } from "../chats/chats-badge";
 import { AddLeadDialog } from "../leads/capture-dialogs";
+import { readLeads } from "../leads/leads-client";
+import { CommandBar, type Command } from "../ui/command-bar";
 import { handOverLead } from "../leads/lead-handoff";
 import { leavingOverlay } from "../ui/back-close";
 import { LeadsTabIcon } from "../leads/leads-badge";
@@ -422,20 +433,21 @@ function LightboxShellFrame({
     target.current?.focus({ preventScroll: true });
   }, [collapsed]);
 
+  // Ctrl K or ⌘K opens the command bar from anywhere (slice 9 of the new
+  // map): places, actions, settings, leads and calls in one search.
+  const [commandOpen, setCommandOpen] = useState(false);
+  const signedIn = authenticated && !loading;
   useEffect(() => {
+    if (!signedIn) return;
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
-        // Search lives in the sidebar: open it first when it is collapsed.
-        if (expandButtonRef.current) {
-          expandButtonRef.current.click();
-          window.setTimeout(() => searchInputRef.current?.focus(), 80);
-        } else searchInputRef.current?.focus();
+        setCommandOpen((open) => !open);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, []);
+  }, [signedIn]);
 
   // Recents refetch when a call is created or finishes, and when the tab
   // comes back into view.
@@ -788,6 +800,193 @@ function LightboxShellFrame({
       ? recentCalls
       : recentCallsForContext(getShellState(), recentContextKey);
   const newAnalysisHref = newCallHref(homeHref);
+
+  const go = useCallback(
+    (href: string) => {
+      if (router) router.push(href);
+      else window.location.assign(href);
+    },
+    [router],
+  );
+  const openLeadForm = useCallback(
+    () => setLeadForm((form) => ({ open: true, round: form.round + 1 })),
+    [],
+  );
+  const commands = useMemo<Command[]>(() => {
+    const place = (
+      label: string,
+      href: string,
+      icon: ReactNode,
+      keywords?: string,
+    ): Command => ({
+      id: `go:${href}`,
+      group: "Go to",
+      label,
+      keywords,
+      icon,
+      run: () => go(href),
+    });
+    const setting = (
+      label: string,
+      href: string,
+      icon: ReactNode,
+      hint: string,
+    ): Command => ({
+      id: `settings:${href}`,
+      group: "Settings",
+      label,
+      hint,
+      icon,
+      run: () => go(href),
+    });
+    return [
+      place("Home", "/dashboard", <LayoutGrid size={17} />, "dashboard sales"),
+      place("Leads", "/leads", <PhoneCall size={17} />, "pipeline stages"),
+      place("Chats", "/chats", <MessagesSquare size={17} />, "whatsapp inbox"),
+      place("Calls", "/analysis/calls", <FolderOpen size={17} />, "reports"),
+      place("Coaching", "/coaching", <GraduationCap size={17} />),
+      place("Prospects", "/prospects", <Users size={17} />),
+      ...(orgAdmin
+        ? [
+            place(
+              "Insights",
+              "/organisation/insights",
+              <BarChart3 size={17} />,
+              "company",
+            ),
+          ]
+        : []),
+      ...(inOrganisation
+        ? [
+            {
+              id: "add:lead",
+              group: "Actions",
+              label: "Add a lead",
+              hint: "A name and a number is enough",
+              icon: <UserPlus size={17} />,
+              run: openLeadForm,
+            },
+          ]
+        : []),
+      {
+        id: "add:call",
+        group: "Actions",
+        label: "Analyse a call",
+        hint: "Record or upload a call for its report",
+        icon: <AudioLines size={17} />,
+        keywords: "new analysis upload recording",
+        run: () => go(newAnalysisHref),
+      },
+      setting(
+        "Profile",
+        "/settings/profile",
+        <UserRound size={17} />,
+        "Your name, photo, phone and theme",
+      ),
+      setting(
+        "Selling",
+        "/settings/selling",
+        <PhoneCall size={17} />,
+        "Taking new leads, calling from your phone, alerts",
+      ),
+      setting(
+        "Notifications",
+        "/settings/notifications",
+        <Bell size={17} />,
+        "Lead alerts on your phone",
+      ),
+      ...(orgAdmin
+        ? [
+            setting(
+              "Team & roles",
+              "/settings/team",
+              <Users size={17} />,
+              "Members, invites and who can do what",
+            ),
+            setting(
+              "Lead stages",
+              "/leads?tab=stages",
+              <Layers size={17} />,
+              "Stages and pipelines",
+            ),
+            setting(
+              "Connected apps",
+              "/settings/apps",
+              <Plug size={17} />,
+              "Lead ads, WhatsApp, Messenger and Instagram",
+            ),
+            setting(
+              "AI on calls",
+              "/settings/call-ai",
+              <AudioLines size={17} />,
+              "How much AI reads each seller's calls",
+            ),
+          ]
+        : []),
+      setting(
+        "All settings",
+        "/settings",
+        <Settings size={17} />,
+        "Account, organisation, connections, this device",
+      ),
+      setting(
+        "Help & support",
+        "/settings/help",
+        <LifeBuoy size={17} />,
+        "First call guide and support",
+      ),
+    ];
+  }, [go, inOrganisation, newAnalysisHref, openLeadForm, orgAdmin]);
+  // Leads that match (the team's for owners and admins, your own for
+  // sellers), recent calls by name, and a step that searches every call.
+  const searchEverything = useCallback(
+    async (text: string, signal: AbortSignal): Promise<Command[]> => {
+      const lower = text.toLocaleLowerCase();
+      const calls = visibleRecentCalls
+        .filter((call) => call.name.toLocaleLowerCase().includes(lower))
+        .slice(0, 3)
+        .map<Command>((call) => ({
+          id: `call:${call.id}`,
+          group: "Calls",
+          label: call.name,
+          hint: call.date,
+          icon: <FolderOpen size={17} />,
+          run: () => go(callHref(call.id)),
+        }));
+      const everyCall: Command = {
+        id: "calls:search",
+        group: "Calls",
+        label: `Search calls for “${text}”`,
+        icon: <Search size={17} />,
+        run: () => go(`${CALLS_PATH}?q=${encodeURIComponent(text)}`),
+      };
+      let leads: Command[] = [];
+      if (inOrganisation)
+        try {
+          const page = await readLeads(
+            { scope: orgAdmin ? "team" : "mine", search: text },
+            signal,
+          );
+          leads = page.leads.slice(0, 5).map((lead) => ({
+            id: `lead:${lead.lead_id}`,
+            group: "Leads",
+            label: withCapitals(lead.name),
+            hint: [lead.stage_label, lead.company ?? lead.city]
+              .filter(Boolean)
+              .join(" · "),
+            icon: <UserRound size={17} />,
+            run: () => {
+              handOverLead(lead.lead_id);
+              go("/leads");
+            },
+          }));
+        } catch {
+          // A failed read shows the calls only.
+        }
+      return [...leads, ...calls, everyCall];
+    },
+    [go, inOrganisation, orgAdmin, visibleRecentCalls],
+  );
   const viewerId = access?.context?.personId ?? null;
   // A list with owners can mix people: then every row says whose it is.
   const recentsShowOwners = visibleRecentCalls.some((call) => call.owner);
@@ -1140,9 +1339,6 @@ function LightboxShellFrame({
                 aria-label="Search calls"
                 enterKeyHint="search"
               />
-              <kbd className={styles.searchKbd} aria-hidden="true">
-                {shortcut}
-              </kbd>
             </Form>
           )}
 
@@ -1320,6 +1516,18 @@ function LightboxShellFrame({
           {/* You opens from the avatar on the left, not from here too. */}
           <div className={styles.barActions}>
             <ReviewBarChip live={leadsBadgeLive} />
+            {guest ? null : (
+              <button
+                type="button"
+                className={styles.barSearch}
+                onClick={() => setCommandOpen(true)}
+                aria-label="Search"
+                aria-haspopup="dialog"
+                aria-expanded={commandOpen}
+              >
+                <Search size={20} aria-hidden="true" />
+              </button>
+            )}
             {bell}
           </div>
         </header>
@@ -1354,6 +1562,20 @@ function LightboxShellFrame({
           {/* Pages can host their own toolbar here (the report's sections). */}
           <div className={styles.topBarCenter} data-shell-toolbar />
           <div className={styles.topBarRight}>
+            {guest ? null : (
+              <button
+                type="button"
+                className={styles.commandButton}
+                onClick={() => setCommandOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={commandOpen}
+                aria-keyshortcuts="Control+K Meta+K"
+              >
+                <Search size={15} aria-hidden="true" />
+                Search
+                <kbd aria-hidden="true">{shortcut}</kbd>
+              </button>
+            )}
             {(authenticated || sessionPending) && place !== "analyse" ? (
               <Link className={styles.newAnalysisButton} href={newAnalysisHref}>
                 <Plus size={15} aria-hidden="true" />
@@ -1578,6 +1800,14 @@ function LightboxShellFrame({
           }
         />
       ) : null}
+      {guest ? null : (
+        <CommandBar
+          open={commandOpen}
+          onClose={() => setCommandOpen(false)}
+          commands={commands}
+          search={searchEverything}
+        />
+      )}
       {guest ? null : (
         <AddSheet
           open={addOpen}

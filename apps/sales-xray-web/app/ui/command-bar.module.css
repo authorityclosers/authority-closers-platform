@@ -1,0 +1,142 @@
+/* The command bar (ui/command-bar.tsx): tokens only (ui/sx-tokens.css). */
+
+/* Phones: a tall search sheet, the box at the top, results under it.
+   Computers: the kit Sheet's centred panel. */
+
+.field {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  margin: 2px 0 8px;
+  padding: 0 12px 0 14px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-fill);
+}
+
+.field:focus-within {
+  box-shadow: 0 0 0 2px var(--sx-accent-soft);
+}
+
+.fieldIcon {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  outline: none;
+}
+
+.input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.esc {
+  flex: none;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: var(--sx-fill-strong);
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+/* Touch screens have no Escape key: the sheet closes by swipe or Back. */
+@media (pointer: coarse) {
+  .esc {
+    display: none;
+  }
+}
+
+.results {
+  display: grid;
+  min-height: min(56dvh, 440px);
+  max-height: min(64dvh, 520px);
+  align-content: start;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-bottom: 8px;
+}
+
+.group {
+  padding: 12px 10px 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.option {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 48px;
+  padding: 6px 10px;
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.option[aria-selected="true"] {
+  background: var(--sx-fill);
+}
+
+.option:active {
+  background: var(--sx-fill-strong);
+}
+
+.icon {
+  display: inline-grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.words {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.label {
+  overflow: hidden;
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hint {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.enter {
+  color: var(--sx-muted);
+}
+
+.none {
+  margin: 0;
+  padding: 24px 10px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  text-align: center;
+}

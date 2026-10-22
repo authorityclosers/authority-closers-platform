@@ -1971,3 +1971,71 @@
     background: var(--sx-fill-strong);
   }
 }
+
+/* ---------- The command bar's triggers (slice 9 of the new map) ----------
+   Computers: Search with its shortcut in the top bar. Phones: a search
+   button beside the bell. */
+.commandButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sx-fill);
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    color var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.commandButton:hover {
+  background: var(--sx-fill-strong);
+  color: var(--sx-ink);
+}
+
+.commandButton kbd {
+  padding: 1px 6px;
+  border-radius: 6px;
+  background: var(--sx-surface);
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.commandButton:focus-visible,
+.barSearch:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.barSearch {
+  display: none;
+}
+
+@media (max-width: 899.98px) {
+  .barSearch {
+    display: grid;
+    width: 44px;
+    height: 44px;
+    place-items: center;
+    padding: 0;
+    border: 0;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--sx-ink-2);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: transform var(--sx-dur-base) var(--sx-spring);
+  }
+
+  .barSearch:active {
+    transform: scale(var(--sx-press-scale));
+  }
+}

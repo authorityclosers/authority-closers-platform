@@ -120,8 +120,13 @@ it("makes the sidebar search open Calls with the typed text", () => {
       ?.querySelector('input[type="search"][name="q"]')
       ?.getAttribute("aria-label"),
   ).toBe("Search calls");
-  // The server cannot know the keyboard: it assumes Ctrl, not ⌘.
-  expect(form?.querySelector("kbd")?.textContent).toBe("Ctrl K");
+  // Ctrl K opens the command bar (slice 9 of the new map): its Search button
+  // in the top bar carries the shortcut, not this box. The server cannot know
+  // the keyboard: it assumes Ctrl, not ⌘.
+  expect(form?.querySelector("kbd")).toBeNull();
+  const search = host.querySelector("button[aria-keyshortcuts]");
+  expect(search?.textContent).toContain("Search");
+  expect(search?.querySelector("kbd")?.textContent).toBe("Ctrl K");
 });
 
 // The new map (owner, 22 Oct 2026): Home, Leads, + (Add), Chats, Calls.
