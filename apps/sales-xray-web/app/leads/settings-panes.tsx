@@ -85,10 +85,12 @@ function Waiting({
 export function LeadRulesPane() {
   const router = useRouter();
   return (
-    <TeamView
-      onChanged={() => undefined}
-      onOpen={(leadId) => router.push(leadLink(leadId))}
-    />
+    <div className={styles.pane}>
+      <TeamView
+        onChanged={() => undefined}
+        onOpen={(leadId) => router.push(leadLink(leadId))}
+      />
+    </div>
   );
 }
 
@@ -96,7 +98,11 @@ export function LeadRulesPane() {
 export function LeadStagesPane() {
   const { desk, error, retry } = useDesk();
   if (!desk) return <Waiting error={error} retry={retry} />;
-  return <JourneyTab canManage={desk.me.can_manage} />;
+  return (
+    <div className={styles.pane}>
+      <JourneyTab canManage={desk.me.can_manage} />
+    </div>
+  );
 }
 
 /** Settings → Lead sources: forms, sheets, webhooks, and Import (which opens on Leads). */
@@ -105,10 +111,12 @@ export function LeadSourcesPane() {
   const { desk, error, retry } = useDesk();
   if (!desk) return <Waiting error={error} retry={retry} />;
   return (
-    <SourcesView
-      sandbox={desk.sandbox}
-      onChanged={() => undefined}
-      onImport={() => router.push(`${LEADS_PATH}?import=file`)}
-    />
+    <div className={styles.pane}>
+      <SourcesView
+        sandbox={desk.sandbox}
+        onChanged={() => undefined}
+        onImport={() => router.push(`${LEADS_PATH}?import=file`)}
+      />
+    </div>
   );
 }

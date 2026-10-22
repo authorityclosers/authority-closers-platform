@@ -14,6 +14,7 @@ import {
   Avatar,
   Badge,
   Button,
+  Card,
   Dialog,
   Empty,
   Field,
@@ -548,7 +549,7 @@ export function TeamView({
       </Tiles>
 
       <Panel title="Sellers" sub={`${team.reps.length}`}>
-        <div className={styles.tableWrap}>
+        <div className={styles.tableWrap} data-has-cards="">
           <table className={styles.table}>
             <thead>
               <tr>
@@ -632,6 +633,57 @@ export function TeamView({
               ))}
             </tbody>
           </table>
+        </div>
+        {/* Phones: one seller in two lines, never a table to scroll sideways
+            (house rule; Settings → Lead rules, 22 Oct 2026). */}
+        <div className={styles.repCards} role="list" aria-label="Sellers">
+          {team.reps.map((rep) => (
+            <Card key={rep.person_id}>
+              <span className={styles.repCardHead}>
+                <Link
+                  className={styles.repName}
+                  href={`/organisation/people/${encodeURIComponent(rep.person_id)}`}
+                >
+                  <Avatar name={rep.name} size={24} />
+                  {rep.name}
+                </Link>
+                {rep.available ? (
+                  <Badge tone="good">Takes leads</Badge>
+                ) : (
+                  <Badge>Away</Badge>
+                )}
+                <button
+                  type="button"
+                  className={styles.repRules}
+                  onClick={() => {
+                    setEditRound((value) => value + 1);
+                    setEditing(rep);
+                  }}
+                  aria-label={`Edit ${rep.name}'s lead rules`}
+                  title="Lead rules"
+                >
+                  <SlidersHorizontal size={14} aria-hidden="true" />
+                </button>
+              </span>
+              <span>
+                {`${rep.open_leads}/${rep.max_open} open · ${rep.due_now} due · ${rep.calls_today} ${rep.calls_today === 1 ? "call" : "calls"} today · ${rep.connected_today} connected`}
+                {rep.first_call_minutes != null
+                  ? ` · first call ${rep.first_call_minutes} min`
+                  : ""}
+              </span>
+              <span>
+                {[...rep.languages, ...rep.areas, ...rep.interests].length
+                  ? [
+                      rep.languages.join(", "),
+                      rep.areas.join(", "),
+                      rep.interests.slice(0, 3).join(", "),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")
+                  : "No limits"}
+              </span>
+            </Card>
+          ))}
         </div>
       </Panel>
 

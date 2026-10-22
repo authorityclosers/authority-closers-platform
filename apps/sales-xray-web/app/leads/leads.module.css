@@ -5355,3 +5355,41 @@ a.repName {
     --sx-sheet-width: 640px;
   }
 }
+
+/* Lead rules → Sellers on a phone: a card per seller, not a sideways table. */
+.repCards {
+  display: none;
+}
+
+.repCardHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+
+.repCardHead .repRules {
+  margin-left: auto;
+}
+
+@media (max-width: 760px) {
+  .tableWrap[data-has-cards] {
+    display: none;
+  }
+
+  .repCards {
+    display: grid;
+  }
+}
+
+/* Leads' settings inside Settings: their own container, so the narrow-screen
+   rules (@container below 900 px) fold them as they do on Leads. */
+.pane {
+  container-type: inline-size;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--sx-gap);
+  min-width: 0;
+}

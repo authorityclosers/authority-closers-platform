@@ -16,7 +16,6 @@
  */
 
 import {
-  CalendarClock,
   ChevronRight,
   Flame,
   PhoneCall,
@@ -53,6 +52,7 @@ import {
 import { KIND_WORDS } from "../leads/stage-tabs";
 import { several, usePipelines } from "../leads/use-pipelines";
 import { Avatar, Delta, Segmented } from "../ui/kit";
+import { NeedsYou } from "./needs-you";
 import styles from "./sales-home.module.css";
 
 const PERIODS: { key: string; label: string }[] = [
@@ -283,12 +283,6 @@ function TeamHome({ desk }: { desk: Desk | null }) {
           <OutcomesSkeleton />
         )}
         <div className={styles.chips}>
-          {late ? (
-            <Link className={styles.chip} data-tone="bad" href="/leads">
-              <CalendarClock size={15} aria-hidden="true" />
-              {`${late} late ${late === 1 ? "follow-up" : "follow-ups"}`}
-            </Link>
-          ) : null}
           {mineDue ? (
             <Link className={styles.chip} href="/leads">
               <PhoneCall size={15} aria-hidden="true" />
@@ -297,6 +291,9 @@ function TeamHome({ desk }: { desk: Desk | null }) {
           ) : null}
         </div>
       </section>
+
+      {/* Approved map, slice 8: what is waiting on someone, before who sold what. */}
+      <NeedsYou desk={desk} late={shown ? late : undefined} />
 
       <section className={styles.block} aria-labelledby="sellers-title">
         <div className={styles.head}>
@@ -584,11 +581,45 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
   );
 }
 
+type HomeView = "team" | "mine";
+
+/** Owners and admins: Team, or My day (their own calls), kept in the address. */
+function useHomeView(): [HomeView, (next: HomeView) => void] {
+  const [view, setView] = useState<HomeView>(() =>
+    typeof window !== "undefined" &&
+    new URLSearchParams(window.location.search).get("view") === "mine"
+      ? "mine"
+      : "team",
+  );
+  const choose = (next: HomeView) => {
+    setView(next);
+    const params = new URLSearchParams(window.location.search);
+    if (next === "mine") params.set("view", "mine");
+    else params.delete("view");
+    const query = params.toString();
+    window.history.replaceState(
+      window.history.state,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
+  };
+  return [view, choose];
+}
+
+const VIEWS: { key: HomeView; label: string }[] = [
+  { key: "team", label: "Team" },
+  { key: "mine", label: "My day" },
+];
+
 export function SalesHome({ manager }: { manager: boolean }) {
   const desk = useDesk();
+  const [view, setView] = useHomeView();
   return (
     <div className={styles.home}>
       {manager ? (
+        <Segmented label="Show" value={view} onChange={setView} items={VIEWS} />
+      ) : null}
+      {manager && view === "team" ? (
         <TeamHome desk={desk.status === "ready" ? desk.desk : null} />
       ) : (
         <SellerHome state={desk} />
