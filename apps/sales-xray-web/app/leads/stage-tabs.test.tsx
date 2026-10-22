@@ -43,7 +43,7 @@ it("names the tabs by the business's own stages, with every stage's count", () =
     won: 1,
   });
   expect(tabs).toEqual([
-    { key: "open", label: "Open", count: 9 },
+    { key: "open", label: "All leads", count: 9 },
     { key: "new", label: "Enquiry", count: 4 },
     { key: "interested", label: "Interested", count: 3 },
     { key: "won", label: "Booked", count: 1 },
@@ -53,7 +53,7 @@ it("names the tabs by the business's own stages, with every stage's count", () =
 
 it("falls back to the six kinds, without counts until they arrive", () => {
   expect(stageTabs(null, null)).toEqual([
-    { key: "open", label: "Open", count: undefined },
+    { key: "open", label: "All leads", count: undefined },
     { key: "new", label: "New", count: undefined },
     { key: "not_connected", label: "Not contacted", count: undefined },
     { key: "follow_up", label: "Follow up", count: undefined },
@@ -73,7 +73,7 @@ it("marks the chosen tab and reports a tap", async () => {
       <StageTabs
         tabs={[
           { key: "desk", label: "To call", count: 2 },
-          { key: "open", label: "Open", count: 5 },
+          { key: "open", label: "All leads", count: 5 },
         ]}
         current="desk"
         onChange={onChange}

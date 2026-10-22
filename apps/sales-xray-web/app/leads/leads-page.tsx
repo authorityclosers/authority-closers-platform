@@ -328,6 +328,14 @@ export function LeadsRoute() {
   // (orchestrator, 23 Oct 2026: cold partner outreach apart from enquiries). The
   // choice is used before the pipelines are read, so the desk doesn't load twice.
   const pipes = usePipelines(authenticated);
+  // Several pipelines: their names, for the table's Pipeline column.
+  const pipelineNames = useMemo(
+    () =>
+      several(pipes)
+        ? new Map(pipes.pipelines.map((item) => [item.key, item.name]))
+        : null,
+    [pipes],
+  );
   const [pipelineChoice, setPipelineChoice] = useState(() => ({
     at: contextKey,
     value: storedToCall(contextKey),
@@ -756,7 +764,7 @@ export function LeadsRoute() {
   ];
   const stageLabel =
     tabs.find((tab) => tab.key === view)?.label ??
-    (view === "open" ? "Open" : "this stage");
+    (view === "open" ? "All leads" : "this stage");
 
   // Leads → Filter (stage lists only): whose leads, the pipeline, a name or number.
   const filterable = stageView && view !== TEST;
@@ -768,7 +776,7 @@ export function LeadsRoute() {
   const describeView = (spec: ViewSpec) =>
     [
       tabs.find((tab) => tab.key === spec.stage)?.label ??
-        (spec.stage === "open" ? "Open" : "A stage"),
+        (spec.stage === "open" ? "All leads" : "A stage"),
       spec.pipeline
         ? (pipes?.pipelines.find((item) => item.key === spec.pipeline)?.name ??
           null)
@@ -1026,6 +1034,8 @@ export function LeadsRoute() {
               onClearFilters={clearFilters}
               onAdd={() => begin("adding", setAdding)}
               onShowOpen={() => go("open")}
+              layoutOwner={contextKey}
+              pipelineNames={pipelineNames}
               tools={
                 view === TEST ? null : (
                   <ViewsChip

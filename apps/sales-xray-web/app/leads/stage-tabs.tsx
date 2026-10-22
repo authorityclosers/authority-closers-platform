@@ -60,7 +60,8 @@ export function stageTabs(
     ? OPEN_KINDS.reduce((sum, kind) => sum + (counts[kind] ?? 0), 0)
     : undefined;
   return [
-    { key: "open", label: "Open", count: open },
+    // Every open lead, in every stage (owner, 23 Oct 2026: "All leads").
+    { key: "open", label: "All leads", count: open },
     ...kinds.map((kind) => {
       const own = live.filter((stage) => stage.kind === kind);
       return {

@@ -7,7 +7,14 @@
  * owners and admins, and hands the stage counts up for the tabs.
  */
 
-import { ListChecks, SearchX, UserPlus, Users } from "lucide-react";
+import {
+  List,
+  ListChecks,
+  SearchX,
+  Table2,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 
 import { notify } from "../notice-center";
@@ -29,6 +36,8 @@ import {
   type LeadsDeleted,
 } from "./leads-client";
 import { BulkSheet } from "./bulk-sheet";
+import { LeadsTable, useWideScreen } from "./leads-table";
+import { QuickAddBar } from "./quick-add";
 import styles from "./leads.module.css";
 
 export type Scope = "mine" | "team" | "unassigned";
@@ -36,6 +45,20 @@ export type Scope = "mine" | "team" | "unassigned";
 /** Test and sample leads in every stage, easy to clear (owners and admins). */
 export const TEST = "test";
 const NONE: ReadonlyMap<string, string> = new Map();
+
+/** List or Table, remembered per person and workspace on this device. */
+type Layout = "list" | "table";
+const layoutKey = (owner: string) => `sx:leads-layout:${owner}`;
+function storedLayout(owner: string | undefined): Layout {
+  if (!owner || typeof window === "undefined") return "list";
+  try {
+    return window.localStorage.getItem(layoutKey(owner)) === "table"
+      ? "table"
+      : "list";
+  } catch {
+    return "list";
+  }
+}
 
 export function ListView({
   canManage,
@@ -54,6 +77,8 @@ export function ListView({
   onClearFilters,
   onAdd,
   onShowOpen,
+  layoutOwner,
+  pipelineNames = null,
 }: {
   canManage: boolean;
   /** "open", a stage kind, or "test". */
@@ -80,7 +105,35 @@ export function ListView({
   /** An empty Open list offers Add lead; another stage, the open leads. */
   onAdd?: () => void;
   onShowOpen?: () => void;
+  /** Who chose List or Table (person and workspace), for remembering it. */
+  layoutOwner?: string;
+  /** Several pipelines: each one's name, for the table's Pipeline column. */
+  pipelineNames?: ReadonlyMap<string, string> | null;
 }) {
+  // Table on a computer (owner P0, 23 Oct 2026); phones keep the list.
+  const wide = useWideScreen();
+  const [layout, setLayout] = useState(() => ({
+    owner: layoutOwner,
+    value: storedLayout(layoutOwner),
+  }));
+  if (layout.owner !== layoutOwner)
+    setLayout({ owner: layoutOwner, value: storedLayout(layoutOwner) });
+  const asTable = wide && layout.value === "table";
+  const chooseLayout = (value: Layout) => {
+    setLayout({ owner: layoutOwner, value });
+    if (!layoutOwner) return;
+    try {
+      window.localStorage.setItem(layoutKey(layoutOwner), value);
+    } catch {
+      // Storage blocked: the choice lasts for this visit.
+    }
+  };
+  const tableKeys = useRef<HTMLDivElement>(null);
+  // Quick add where a new lead lands: All leads and New (owner P0, 23 Oct 2026).
+  const quickAdd =
+    stage === "open" || stage === "new"
+      ? { pipeline, onAdded: () => onChanged?.() }
+      : null;
   const [loaded, setLoaded] = useState<{
     key: string;
     question: string;
@@ -138,7 +191,22 @@ export function ListView({
         if (row) actions?.onLog?.(row);
       },
     },
-    !selecting,
+    !selecting && !asTable,
+  );
+  useRowKeys(
+    tableKeys,
+    {
+      open: onOpen,
+      call: (id) => {
+        const row = byId(id);
+        if (row?.phone_last4) actions?.onCall?.(row);
+      },
+      log: (id) => {
+        const row = byId(id);
+        if (row) actions?.onLog?.(row);
+      },
+    },
+    !selecting && asTable,
   );
   const ask = {
     scope,
@@ -285,6 +353,22 @@ export function ListView({
           </span>
           <span className={styles.listTools}>
             {selecting ? null : tools}
+            {wide && rows.length ? (
+              <button
+                type="button"
+                className={styles.statusChip}
+                aria-pressed={asTable}
+                title={asTable ? "Show as a list" : "Show as a table"}
+                onClick={() => chooseLayout(asTable ? "list" : "table")}
+              >
+                {asTable ? (
+                  <List size={14} aria-hidden="true" />
+                ) : (
+                  <Table2 size={14} aria-hidden="true" />
+                )}
+                Table
+              </button>
+            ) : null}
             {canManage && rows.length ? (
               <button
                 type="button"
@@ -307,6 +391,15 @@ export function ListView({
             ) : null}
           </span>
         </div>
+        {quickAdd &&
+        page !== null &&
+        !selecting &&
+        !(asTable && rows.length) ? (
+          <QuickAddBar
+            pipeline={quickAdd.pipeline}
+            onAdded={quickAdd.onAdded}
+          />
+        ) : null}
         {error ? (
           <p className={styles.error} role="alert">
             {error}
@@ -333,26 +426,40 @@ export function ListView({
           />
         ) : (
           <>
-            <ul className={styles.leadList} aria-label="Leads" ref={list}>
-              {rows.map((row) =>
-                selecting ? (
-                  <SelectLine
-                    key={row.lead_id}
-                    row={row}
-                    selected={chosen.has(row.lead_id)}
-                    onToggle={toggle}
-                  />
-                ) : (
-                  <LeadLine
-                    key={row.lead_id}
-                    row={row}
-                    onOpen={onOpen}
-                    showOwner={scope !== "mine"}
-                    actions={actions}
-                  />
-                ),
-              )}
-            </ul>
+            {asTable ? (
+              <LeadsTable
+                rows={rows}
+                onOpen={onOpen}
+                showOwner={scope !== "mine"}
+                pipelineNames={pipeline ? null : pipelineNames}
+                selecting={selecting}
+                chosen={chosen}
+                onToggle={toggle}
+                keysRef={tableKeys}
+                quickAdd={selecting ? null : quickAdd}
+              />
+            ) : (
+              <ul className={styles.leadList} aria-label="Leads" ref={list}>
+                {rows.map((row) =>
+                  selecting ? (
+                    <SelectLine
+                      key={row.lead_id}
+                      row={row}
+                      selected={chosen.has(row.lead_id)}
+                      onToggle={toggle}
+                    />
+                  ) : (
+                    <LeadLine
+                      key={row.lead_id}
+                      row={row}
+                      onOpen={onOpen}
+                      showOwner={scope !== "mine"}
+                      actions={actions}
+                    />
+                  ),
+                )}
+              </ul>
+            )}
             {page.next_offset !== null ? (
               <div className={styles.more}>
                 <Button onClick={more} disabled={loadingMore}>

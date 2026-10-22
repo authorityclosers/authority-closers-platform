@@ -1,0 +1,279 @@
+/* Leads as a table on a computer (owner P0, 23 Oct 2026). Tokens only. */
+
+.wrap {
+  min-width: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+
+/* The head stays in view while the page scrolls. */
+.table thead th {
+  position: sticky;
+  z-index: 1;
+  top: 0;
+  padding: 0;
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-align: left;
+}
+
+.table thead th:first-child {
+  border-top-left-radius: var(--sx-radius-md);
+}
+
+.table thead th:last-child {
+  border-top-right-radius: var(--sx-radius-md);
+}
+
+.sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.sort:hover,
+.sort:focus-visible {
+  color: var(--sx-ink);
+}
+
+.table td {
+  overflow: hidden;
+  height: 48px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--sx-line);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table tbody tr {
+  cursor: pointer;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .table tbody tr:hover td {
+    background: var(--sx-fill-soft);
+  }
+}
+
+.table tbody tr[data-selected] td {
+  background: var(--sx-accent-soft);
+}
+
+/* Column widths, as shares: the name takes what is left (a quarter of the
+   table with every column, more when Pipeline or Owner is not shown). */
+.table [data-column="phone"] {
+  width: 8%;
+}
+
+.table [data-column="stage"],
+.table [data-column="pipeline"],
+.table [data-column="source"] {
+  width: 11%;
+}
+
+.table [data-column="owner"],
+.table [data-column="next"],
+.table [data-column="last"] {
+  width: 12%;
+}
+
+.pick {
+  width: 44px;
+  text-align: center;
+}
+
+.name {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.name strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+
+.name small {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+}
+
+.name:focus-visible {
+  border-radius: var(--sx-radius-sm);
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.phone {
+  font-variant-numeric: tabular-nums;
+}
+
+.stage {
+  display: inline-block;
+  max-width: 100%;
+  padding: 2px 8px;
+  overflow: hidden;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+
+.quiet {
+  color: var(--sx-muted);
+}
+
+.table [data-late] {
+  color: var(--lx-danger);
+  font-weight: 600;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Quick add (owner P0, 23 Oct 2026): the table's last line, or a line above
+   the list on phones. */
+.quickRow td {
+  height: 52px;
+  border-top: 1px solid var(--sx-line);
+  background: var(--sx-fill-soft);
+}
+
+.quickAdd {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.quickAdd .quickInput {
+  flex: 1 1 140px;
+}
+
+.quickInput {
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+}
+
+.quickInput:focus-visible {
+  border-color: var(--sx-accent);
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.quickEnd {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  min-width: 0;
+}
+
+.quickButton {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.quickButton:disabled {
+  color: var(--sx-muted);
+  cursor: default;
+}
+
+.quickButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.quickHint {
+  overflow: hidden;
+  color: var(--lx-danger);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.quickAdd .quickHint {
+  flex-basis: 100%;
+  white-space: normal;
+}
+
+/* Phones: the name on its own line, the number and Add under it. */
+@media (max-width: 600px) {
+  .quickAdd .quickInput:first-child {
+    flex-basis: 100%;
+  }
+}
