@@ -657,6 +657,44 @@
   background: var(--lx-closing);
 }
 
+/* The history's day headers, and the story so far above it (22 Oct 2026). */
+.history li.historyDay {
+  padding: 4px 0 8px;
+  border-left: 0;
+  margin-left: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.history li.historyDay::before {
+  content: none;
+}
+
+.story {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+}
+
+.storyTitle {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.story ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
 /* Mark private: the seller's own phone-logged call, hidden from the team. */
 .privateTag {
   margin-left: 6px;

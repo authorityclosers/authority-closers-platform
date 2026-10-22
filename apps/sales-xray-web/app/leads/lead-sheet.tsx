@@ -26,6 +26,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import {
+  Fragment,
   useCallback,
   useContext,
   useEffect,
@@ -933,6 +934,73 @@ function PrivacyButton({
   );
 }
 
+/**
+ * The lead's story in a few lines, before its history (the ease-of-use wave, 22 Oct
+ * 2026: "a lead timeline that reads like a story"): where it came from, how often it
+ * was tried and talked to, how the last call went, and where it stands now.
+ */
+export function storyLines(
+  detail: LeadDetail,
+  now: Date = new Date(),
+): string[] {
+  const lead = detail.lead;
+  const source = lead.source_label.startsWith("File:")
+    ? "a file import"
+    : lead.source_label;
+  const lines = [`Came in ${ago(lead.created_at, now)} from ${source}.`];
+  const results = detail.events.filter((event) => event.kind === "result");
+  const talks = results.filter((event) => event.connected).length;
+  if (!lead.attempts) lines.push("Not called yet.");
+  else
+    lines.push(
+      `Tried ${lead.attempts} time${lead.attempts === 1 ? "" : "s"}${
+        talks
+          ? `, talked ${talks === 1 ? "once" : `${talks} times`}`
+          : ", not reached yet"
+      }.`,
+    );
+  const last = results[0];
+  if (last)
+    lines.push(
+      last.connected
+        ? `Last talk ${ago(last.at, now)}: ${last.stage_label ?? "talked"}.`
+        : `Last try ${ago(last.at, now)}: ${(last.reason_label ?? "not reached").toLowerCase()}.`,
+    );
+  lines.push(
+    `Now: ${lead.stage_label}${
+      lead.next_action_at ? `, next call ${when(lead.next_action_at, now)}` : ""
+    }.`,
+  );
+  return lines;
+}
+
+function StorySoFar({ detail }: { detail: LeadDetail }) {
+  return (
+    <div className={styles.story}>
+      <span className={styles.storyTitle}>The story so far</span>
+      <ul>
+        {storyLines(detail).map((line) => (
+          <li key={line}>{line}</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** "Today", "Yesterday" or "Mon 20 Oct": the history's day headers. */
+export function dayLabel(iso: string, now: Date = new Date()): string {
+  const at = new Date(iso);
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  if (at.toDateString() === now.toDateString()) return "Today";
+  if (at.toDateString() === yesterday.toDateString()) return "Yesterday";
+  return at.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 export function History({
   events,
   onChanged,
@@ -944,44 +1012,53 @@ export function History({
     <ol className={styles.history} aria-label="History">
       {events.map((event, index) => {
         const text = eventText(event);
+        const day = dayLabel(event.at);
+        const newDay = index === 0 || dayLabel(events[index - 1].at) !== day;
         return (
-          <li
-            key={`${event.at}-${index}`}
-            data-kind={event.kind}
-            data-missed={
-              event.direction === "missed" || event.direction === "rejected"
-                ? true
-                : undefined
-            }
-          >
-            <span className={styles.historyTitle}>
-              {text.title}
-              {event.private ? (
-                <span className={styles.privateTag}>Private</span>
-              ) : null}
-            </span>
-            {text.detail ? (
-              <span className={styles.historyDetail}>
-                {event.private
-                  ? "Only you see this call. It isn't counted."
-                  : text.detail}
+          <Fragment key={`${event.at}-${index}`}>
+            {newDay ? (
+              <li className={styles.historyDay} aria-hidden="true">
+                {day}
+              </li>
+            ) : null}
+            <li
+              key={`${event.at}-${index}`}
+              data-kind={event.kind}
+              data-missed={
+                event.direction === "missed" || event.direction === "rejected"
+                  ? true
+                  : undefined
+              }
+            >
+              <span className={styles.historyTitle}>
+                {text.title}
+                {event.private ? (
+                  <span className={styles.privateTag}>Private</span>
+                ) : null}
               </span>
-            ) : null}
-            {onChanged ? (
-              <PrivacyButton event={event} onChanged={onChanged} />
-            ) : null}
-            {event.kind === "call" && event.submission_id ? (
-              <Link
-                className={styles.historyLink}
-                href={callHref(event.submission_id)}
-              >
-                Open the call&apos;s Report
-              </Link>
-            ) : null}
-            <time className={styles.historyTime} dateTime={event.at}>
-              {when(event.at)}
-            </time>
-          </li>
+              {text.detail ? (
+                <span className={styles.historyDetail}>
+                  {event.private
+                    ? "Only you see this call. It isn't counted."
+                    : text.detail}
+                </span>
+              ) : null}
+              {onChanged ? (
+                <PrivacyButton event={event} onChanged={onChanged} />
+              ) : null}
+              {event.kind === "call" && event.submission_id ? (
+                <Link
+                  className={styles.historyLink}
+                  href={callHref(event.submission_id)}
+                >
+                  Open the call&apos;s Report
+                </Link>
+              ) : null}
+              <time className={styles.historyTime} dateTime={event.at}>
+                {when(event.at)}
+              </time>
+            </li>
+          </Fragment>
         );
       })}
     </ol>
@@ -2145,6 +2222,7 @@ export function LeadCard({
       <SocialThread leadId={lead.lead_id} canSend={detail.can_edit} />
 
       <section className={styles.historyBlock} aria-label="History">
+        <StorySoFar detail={detail} />
         <h3 className={styles.stepLabel}>History</h3>
         {detail.can_edit ? (
           <NoteBox leadId={lead.lead_id} onSaved={onChanged} />
