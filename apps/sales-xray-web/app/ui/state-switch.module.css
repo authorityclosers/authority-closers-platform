@@ -1,0 +1,224 @@
+/* Switches that matter (state-switch.tsx). On is teal; off and paused are
+   amber, because both mean the work isn't coming to you; the words under the
+   label say which. Only --sx-* and --lx-* tokens. */
+
+.place {
+  display: grid;
+  gap: 10px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--sx-row-h);
+}
+
+.icon {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-accent);
+  color: var(--lx-on-teal);
+  transition: background-color var(--sx-dur-base) var(--sx-ease-out);
+}
+
+.row[data-tone="off"] .icon,
+.row[data-tone="held"] .icon {
+  background: color-mix(in oklab, var(--sx-warn) 16%, transparent);
+  color: var(--lx-focus-ink);
+}
+
+.words {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.words strong {
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+}
+
+.words small {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.35;
+}
+
+.words small.reason {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-inline-end: 6px;
+  border-radius: 50%;
+  background: var(--sx-good);
+  vertical-align: 1px;
+}
+
+[data-tone="off"] .dot,
+[data-tone="held"] .dot {
+  background: var(--sx-warn);
+}
+
+/* The switch itself: iOS's 51 x 31, inside a 44 px target. */
+.switch {
+  position: relative;
+  display: inline-grid;
+  width: 51px;
+  height: 44px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.switch > span {
+  position: relative;
+  width: 51px;
+  height: 31px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-strong);
+  transition: background-color var(--sx-dur-base) var(--sx-ease-out);
+}
+
+.switch > span::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: white;
+  box-shadow:
+    0 3px 8px color-mix(in oklab, black 15%, transparent),
+    0 1px 1px color-mix(in oklab, black 16%, transparent);
+  content: "";
+  transition: transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.switch[aria-checked="true"] > span {
+  background: var(--sx-good);
+}
+
+.switch[aria-checked="true"] > span::after {
+  transform: translateX(20px);
+}
+
+.switch:focus-visible {
+  outline: none;
+}
+
+.switch:focus-visible > span {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
+.switch:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+/* The way past an automatic pause, or who can lift it. */
+.override {
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  padding-inline-start: 52px;
+}
+
+.override small,
+.who {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.who {
+  padding-inline-start: 52px;
+}
+
+/* The chip in a page header: it opens the sheet, it never flips. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--sx-good) 12%, transparent);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.chip[data-tone="off"],
+.chip[data-tone="held"] {
+  background: color-mix(in oklab, var(--sx-warn) 16%, transparent);
+  color: var(--lx-focus-ink);
+}
+
+.chip:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
+/* The sheet: what ON means, the row, the override; or the question. */
+.status {
+  display: grid;
+  gap: 14px;
+}
+
+.meaning {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.points {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.points li {
+  position: relative;
+  padding-inline-start: 18px;
+  font-size: var(--sx-text-md);
+  line-height: 1.4;
+}
+
+.points li::before {
+  position: absolute;
+  top: 0.55em;
+  left: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sx-warn);
+  content: "";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .icon,
+  .switch > span,
+  .switch > span::after {
+    transition: none;
+  }
+}
