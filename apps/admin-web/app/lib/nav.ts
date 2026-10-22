@@ -241,8 +241,6 @@ export const NAVIGATION: readonly NavGroup[] = [
         label: "Offer Studio",
         icon: "offers",
         need: { kind: "salesXray" },
-        // Listed once /offers is built (the Offer Studio session removes this line).
-        soon: true,
       },
     ],
   },

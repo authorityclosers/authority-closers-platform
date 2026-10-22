@@ -23,7 +23,11 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
+
+import { blankOffer } from "../offers/offer-model";
+import { useStudio, withOffer } from "../offers/offer-store";
 
 import {
   CATALOGUE,
@@ -142,6 +146,56 @@ function FeatureCard({
   );
 }
 
+/** Puts the feature in the studio's current offer (or starts one), in this browser. */
+function AddToOffer({ feature }: { feature: Feature }) {
+  const { studio, save } = useStudio();
+  const offer =
+    studio.offers.find((o) => o.id === studio.activeId) ??
+    studio.offers[0] ??
+    null;
+  const inOffer = offer?.stack.some((s) => s.featureId === feature.id) ?? false;
+  const name = offer ? offer.naming.chosen || offer.name : "";
+  const toggle = () => {
+    const item = { featureId: feature.id, worth: 0, label: "" };
+    if (!offer) {
+      const created = { ...blankOffer(), stack: [item] };
+      save({
+        ...studio,
+        offers: [...studio.offers, created],
+        activeId: created.id,
+      });
+      return;
+    }
+    save(
+      withOffer(studio, {
+        ...offer,
+        stack: inOffer
+          ? offer.stack.filter((s) => s.featureId !== feature.id)
+          : [...offer.stack, item],
+      }),
+    );
+  };
+  return (
+    <span className={styles.sheetActions}>
+      <button
+        type="button"
+        className={styles.addToOffer}
+        aria-pressed={inOffer}
+        onClick={toggle}
+      >
+        {inOffer
+          ? `In “${name}” · remove`
+          : offer
+            ? `Add to “${name}”`
+            : "Start an offer with this"}
+      </button>
+      <Link className={styles.studioLink} href="/offers">
+        Open the Offer Studio
+      </Link>
+    </span>
+  );
+}
+
 function FeatureSheet({
   feature,
   onClose,
@@ -242,6 +296,7 @@ function FeatureSheet({
               </div>
             ) : null}
           </dl>
+          <AddToOffer feature={feature} />
           {feature.preview ? (
             <a
               className={styles.previewLink}

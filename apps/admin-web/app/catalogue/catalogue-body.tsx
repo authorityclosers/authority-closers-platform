@@ -3,6 +3,8 @@
  * searchable cards and "From the code". Shared by /catalogue and its
  * dev-only fixture.
  */
+import Link from "next/link";
+
 import { CATALOGUE } from "./catalogue-data";
 import { CatalogueView } from "./catalogue-view";
 import { CodeInventory } from "./code-inventory";
@@ -20,6 +22,9 @@ export function CatalogueBody({ query = "" }: { query?: string }) {
           Every feature across Sales X-Ray, the Android app, Admin, the Academy
           and the platform, read from the code and the releases on main.
         </p>
+        <Link className={styles.heroLink} href="/offers">
+          Build an offer from these features in the Offer Studio →
+        </Link>
         <ul className={styles.stats}>
           <li>
             <strong>{CATALOGUE.features.length}</strong>

@@ -1,8 +1,8 @@
 {
   "schema": 1,
   "source": {
-    "commit": "f5f1bdbf",
-    "date": "2026-10-22T19:27:19+00:00",
+    "commit": "93afe423",
+    "date": "2026-10-22T19:48:33+00:00",
     "main": "origin/main"
   },
   "latest_release": {
@@ -2139,6 +2139,11 @@
           "anchor": "admin:/catalogue",
           "path": "apps/admin-web/app/(console)/catalogue/page.tsx",
           "exists": true
+        },
+        {
+          "anchor": "admin:/offers",
+          "path": "apps/admin-web/app/(console)/offers/page.tsx",
+          "exists": true
         }
       ],
       "api": {
@@ -3038,7 +3043,7 @@
       "app": "Sales X-Ray",
       "key": "sx",
       "pages": 38,
-      "fixtures": 39,
+      "fixtures": 40,
       "named": 18,
       "unnamed": [
         "/",
@@ -3066,9 +3071,9 @@
     {
       "app": "AC Admin",
       "key": "admin",
-      "pages": 46,
-      "fixtures": 6,
-      "named": 25,
+      "pages": 47,
+      "fixtures": 7,
+      "named": 26,
       "unnamed": [
         "/",
         "/calls/[recordingId]",

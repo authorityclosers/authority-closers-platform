@@ -787,7 +787,7 @@
       "category": "admin",
       "value": "Everything AC does, from the code, and a studio to turn it into offers.",
       "for": ["AC staff"],
-      "anchors": ["admin:/catalogue"]
+      "anchors": ["admin:/catalogue", "admin:/offers"]
     },
     {
       "id": "api-keys",

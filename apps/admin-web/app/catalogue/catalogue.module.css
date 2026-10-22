@@ -692,6 +692,41 @@
   text-decoration: none;
 }
 
+.sheetActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.addToOffer {
+  height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--lx-radius-pill);
+  background: var(--sx-ink);
+  color: var(--sx-paper);
+  font: 650 14px / 1 var(--lx-font-ui);
+  cursor: pointer;
+}
+
+.addToOffer[aria-pressed="true"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.studioLink,
+.heroLink {
+  color: var(--sx-accent);
+  font: 650 14px / 1.2 var(--lx-font-ui);
+  text-decoration: none;
+}
+
+.studioLink:hover,
+.heroLink:hover {
+  text-decoration: underline;
+}
+
 /* ---------- From the code ---------- */
 
 .inventory {
