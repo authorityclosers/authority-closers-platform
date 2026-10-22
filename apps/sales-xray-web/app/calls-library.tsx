@@ -458,21 +458,11 @@ function CallsLibraryContent({
   // Phones show row checkboxes only in Select mode; desktops always do.
   const [selecting, setSelecting] = useState(false);
   // Keys on a computer (Liquid Glass slice 9, 22 Oct 2026): J/K move through
-  // the calls, Enter opens the call's preview (its Report where there is none).
+  // the calls. Enter is the row's own button: it opens the call's Report, as a
+  // click does (the release's browser proof presses it; wb-ci 39763038763).
   // Calls carry no lead here, so C and L have nothing to act on.
   const rowsRef = useRef<HTMLDivElement>(null);
-  useRowKeys(
-    rowsRef,
-    {
-      open: (id) => {
-        const submission = submissions.find((item) => item.id === id);
-        if (!submission) return;
-        if (insights) setPreviewId(id);
-        else openSubmission(submission);
-      },
-    },
-    !preview,
-  );
+  useRowKeys(rowsRef, {}, !preview);
   // Dates in the browser's language and zone; a page drawn on the server
   // starts from the server's (display-clock.tsx), so it keeps its words.
   const dates = useDisplayDates();
