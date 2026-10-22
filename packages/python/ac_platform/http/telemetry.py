@@ -299,6 +299,15 @@ def install_telemetry_http(
         else None
     )
 
+    # Until every write seam is composed nothing can be stored, so the
+    # taxonomy lists no events and clients send none (rather than one refused
+    # batch per page).
+    storing = (
+        consent_resolver is not None
+        and configured_retention_days is not None
+        and configured_policy_id is not None
+        and admission is not None
+    )
     router = APIRouter(prefix="/v1", tags=["telemetry"])
     actor_dependency = Depends(require_actor)
     repository = PlanningRepository()
@@ -319,6 +328,7 @@ def install_telemetry_http(
                     takes_call=definition.takes_call,
                 )
                 for name, definition in surface.events.items()
+                if storing
             ],
             disclaimer=surface.disclaimer,
         )

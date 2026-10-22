@@ -304,7 +304,7 @@ def test_one_person_stores_at_most_the_daily_cap(harness: _Harness) -> None:
     assert len(harness.stored()) == 2
 
 
-def test_the_composed_route_takes_sales_xray_events_but_stores_none_until_consent(
+def test_the_composed_route_lists_and_stores_nothing_until_consent(
     harness: _Harness,
 ) -> None:
     application = FastAPI()
@@ -312,8 +312,8 @@ def test_the_composed_route_takes_sales_xray_events_but_stores_none_until_consen
     context = SimpleNamespace(settings=harness.settings, require_actor=harness.require_actor)
     telemetry_route.install(application, context)  # type: ignore[arg-type]
     client = TestClient(application)
-    names = {item["event_name"] for item in client.get("/v1/telemetry/taxonomy").json()["events"]}
-    assert names == set(SALES_XRAY_EVENTS)
+    # No events listed, so the app sends none (no refused batch on every page).
+    assert client.get("/v1/telemetry/taxonomy").json()["events"] == []
     response = client.post(
         "/v1/telemetry/events", json={"events": [harness.event()]}, headers=_ORIGIN
     )
