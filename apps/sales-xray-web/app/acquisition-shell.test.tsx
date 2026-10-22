@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import type { Allowance } from "./acquisition-client";
 import { AcquisitionShell, showsPolicyFooter } from "./acquisition-shell";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { updateShellState } from "./shell/shell-store";
@@ -183,18 +184,19 @@ it("uses compact, truthful page headings with no greeting or estimated duration"
 });
 
 it("never shows analysis minutes in the shell (owner, 19 Oct 2026: metering lives in Admin)", () => {
-  for (const shown of [
+  const shown: Allowance[] = [
     allowance,
     {
       allowance_seconds: 600000,
       available_seconds: 600000,
       committed_seconds: 0,
     },
-    { ...allowance, available_seconds: 0, unlimited: true },
-  ]) {
+    { ...allowance, available_seconds: 0, unlimited: true as const },
+  ];
+  for (const each of shown) {
     const shell = render(
       renderToStaticMarkup(
-        <AcquisitionShell authenticated allowance={shown}>
+        <AcquisitionShell authenticated allowance={each}>
           <p>Content</p>
         </AcquisitionShell>,
       ),
