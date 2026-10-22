@@ -32,12 +32,21 @@ from ac_platform.conversation_intelligence.checkpoints import content_hash
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.models import ConversationCommand
 from ac_platform.identity.models import Person
+from ac_platform.identity.sales_xray_profile import (
+    SalesXrayProfileUnavailable,
+    get_sales_xray_profile,
+)
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership
 
 IMPORT_LIFETIME = timedelta(days=7)
 IMPORT_SOURCE_NAMESPACE = UUID("3d11e2cc-3b70-4f8d-ae49-52b5d7cec676")
 IMPORT_ACTION = "recording_import_confirmed"
+MEMBER_SETUP_REQUIRED = (
+    "This member must add their name and phone number in Sales X-Ray before their calls "
+    "can be analysed. Their recordings wait in this import for up to 7 days; resume once "
+    "they have."
+)
 
 
 def path_digest(value: str) -> str:
@@ -140,6 +149,21 @@ class RecordingImports:
             raise ConversationDenied(
                 "The confirmed member is no longer available in this organisation."
             )
+
+    async def member_setup_complete(self, person_id: UUID) -> bool:
+        # The worker holds a call whose owner has no complete Sales X-Ray profile
+        # (name and phone) and nothing resumes the hold, so the upload's one-hour
+        # source budget expires unprocessed (46 imported calls, 18 Oct 2026).
+        try:
+            profile = await get_sales_xray_profile(self.database, person_id=person_id)
+        except SalesXrayProfileUnavailable:
+            return False
+        return profile.profile_complete
+
+    async def require_member_setup(self, person_id: UUID | None) -> None:
+        """Refuse new import work before any minutes, lease or job exist."""
+        if person_id is None or not await self.member_setup_complete(person_id):
+            raise ConversationConflict(MEMBER_SETUP_REQUIRED)
 
     async def items(self, batch_id: UUID) -> list[ConversationRecordingImportItem]:
         return list(
@@ -267,12 +291,21 @@ class RecordingImports:
         rows = []
         items = await self.items(batch.id)
         unavailable_members = set()
+        setup_pending = set()
         for person_id in {item.person_id for item in items if item.usage_id is None} - {None}:
             try:
                 await self.member(person_id)
             except ConversationDenied:
                 unavailable_members.add(person_id)
+                continue
+            if not await self.member_setup_complete(person_id):
+                setup_pending.add(person_id)
         for item in items:
+            waiting_setup = (
+                utc(batch.expires_at) > now
+                and item.usage_id is None
+                and item.person_id in setup_pending
+            )
             result: dict[str, Any] = {
                 "item_index": item.item_index,
                 "path_sha256": item.path_sha256,
@@ -286,8 +319,10 @@ class RecordingImports:
                 "state": "expired"
                 if utc(batch.expires_at) <= now
                 else "needs_member"
-                if item.person_id is None or item.person_id in unavailable_members
+                if item.person_id is None or item.person_id in unavailable_members or waiting_setup
                 else "awaiting_upload",
+                # Old clients skip needs_member; newer ones say who must finish setup.
+                "member_setup_required": waiting_setup,
                 "run_state": None,
                 "current_stage": None,
                 "minute_state": None,

@@ -20,6 +20,8 @@ export type ImportItem = {
   minuteState: string | null;
   retryAvailable: boolean;
   runState: string | null;
+  /** Waits for its member to add a name and phone number before it uploads. */
+  memberSetupRequired: boolean;
 };
 export type ImportBatch = {
   id: string;
@@ -89,7 +91,9 @@ export function readImportBatch(value: unknown): ImportBatch | null {
       ![null, "reserved", "released", "delivered"].includes(
         file.minute_state as string | null,
       ) ||
-      typeof file.retry_available !== "boolean"
+      typeof file.retry_available !== "boolean" ||
+      (file.member_setup_required !== undefined &&
+        typeof file.member_setup_required !== "boolean")
     )
       return null;
     items.push({
@@ -110,6 +114,8 @@ export function readImportBatch(value: unknown): ImportBatch | null {
         )
           ? file.run_state
           : null,
+      memberSetupRequired:
+        file.state === "needs_member" && file.member_setup_required === true,
     });
   }
   if (

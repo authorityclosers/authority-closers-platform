@@ -56,6 +56,7 @@ const fixture: ImportBatch = {
       minuteState: "delivered",
       retryAvailable: false,
       runState: "done",
+      memberSetupRequired: false,
     },
   ],
 };
@@ -308,6 +309,47 @@ it("restored mixed failed batches retain per-call navigation in both rows and ph
   }
   expect(navigations).toHaveLength(6);
   expect(button("Resume analysis").disabled).toBe(true);
+  for (const operation of Object.values(operations))
+    expect(operation).not.toHaveBeenCalled();
+});
+
+it("says which recordings wait for their member's setup instead of calling them unassigned", async () => {
+  const waiting: ImportBatch = {
+    ...fixture,
+    terminalState: null,
+    items: [
+      fixture.items[0]!,
+      {
+        ...fixture.items[0]!,
+        index: 1,
+        submissionId: null,
+        state: "needs_member",
+        stage: null,
+        minuteState: null,
+        runState: null,
+        memberSetupRequired: true,
+      },
+      {
+        ...fixture.items[0]!,
+        index: 2,
+        personId: null,
+        submissionId: null,
+        state: "needs_member",
+        stage: null,
+        minuteState: null,
+        runState: null,
+      },
+    ],
+  };
+  await act(async () =>
+    root.render(<BulkRecordingImport policy={null} initialBatch={waiting} />),
+  );
+  expect(
+    [...host.querySelectorAll("tbody tr")].map(
+      (row) => row.querySelectorAll("td")[1]!.textContent,
+    ),
+  ).toEqual(["Done", "Waiting for member setup", "Unassigned"]);
+  expect(host.textContent).toContain("Ask them to finish setup, then resume.");
   for (const operation of Object.values(operations))
     expect(operation).not.toHaveBeenCalled();
 });

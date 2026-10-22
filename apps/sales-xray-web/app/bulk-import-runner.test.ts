@@ -104,6 +104,28 @@ describe("batch intake commands", () => {
     response.total_bytes = MAX_ACQUISITION_FILE_BYTES + 1;
     expect(readImportBatch(response)).toBeNull();
   });
+  it("reads a member-setup wait only on a recording that waits for its member", () => {
+    expect(batch().items[0]!.memberSetupRequired).toBe(false);
+    const waiting = {
+      ...raw(),
+      files: [
+        {
+          ...raw().files[0]!,
+          state: "needs_member",
+          member_setup_required: true,
+        },
+      ],
+    };
+    expect(readImportBatch(waiting)?.items[0]?.memberSetupRequired).toBe(true);
+    waiting.files[0]!.state = "awaiting_upload";
+    expect(readImportBatch(waiting)?.items[0]?.memberSetupRequired).toBe(false);
+    expect(
+      readImportBatch({
+        ...waiting,
+        files: [{ ...waiting.files[0]!, member_setup_required: "yes" }],
+      }),
+    ).toBeNull();
+  });
   it("returns unavailable for sparse, invented or mismatched progress", () => {
     expect(readImportBatch({})).toBeNull();
     const invalid = raw();
