@@ -5393,3 +5393,34 @@ a.repName {
   gap: var(--sx-gap);
   min-width: 0;
 }
+
+/* The lead's Call row on narrow phones (Liquid Glass, 22 Oct 2026). With the
+   phone type scale the number needs about 110 px, and two 72 px tiles leave
+   Call too little at 360-375 px, so the number spilled out of its button. The
+   row measures its own width: below 340 px the WhatsApp and SMS tiles narrow
+   to 60 px; below 300 px they show their icons only (their names stay as
+   aria-labels). Every tile stays 52 px or more wide and 56 px tall. */
+.actions[data-contact] {
+  container-type: inline-size;
+}
+
+@container (max-width: 339.98px) {
+  .actions[data-contact] .contactIcon {
+    width: 60px;
+  }
+
+  .actions[data-contact] .callButton {
+    gap: 10px;
+    padding-inline: 14px;
+  }
+}
+
+@container (max-width: 299.98px) {
+  .actions[data-contact] .contactIcon {
+    width: 52px;
+  }
+
+  .actions[data-contact] .contactIcon small {
+    display: none;
+  }
+}
