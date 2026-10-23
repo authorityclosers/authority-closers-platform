@@ -1313,7 +1313,7 @@ export function PlanAndBillingPane({
             {loading
               ? "Loading…"
               : unread
-                ? "Unavailable"
+                ? "Couldn't load"
                 : isCancelled
                   ? "Cancels at period end"
                   : current?.status === "active"

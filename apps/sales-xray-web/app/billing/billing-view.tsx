@@ -200,7 +200,7 @@ export function BillingView({
                                 current?.status === "cancelled"
                               ? "Ended"
                               : unread
-                                ? "Unavailable"
+                                ? "Couldn't load"
                                 : (mePlan?.plan.name ?? "Trial")}
                 </span>
               </div>
