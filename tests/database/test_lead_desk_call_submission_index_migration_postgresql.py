@@ -105,7 +105,10 @@ def test_rollback_without_call_history_drops_the_index_concurrently(
         ).scalar_one()
         assert calls == 0  # the module's database holds no call history
         connection.commit()
-        with Operations.context(MigrationContext.configure(connection)):
+        # As alembic runs it: inside the migration's transaction, which the rollback's
+        # history check joins and its autocommit block commits.
+        context = MigrationContext.configure(connection)
+        with Operations.context(context), context.begin_transaction():
             migration().downgrade()
         connection.commit()
     assert _index(postgres_harness) is None
