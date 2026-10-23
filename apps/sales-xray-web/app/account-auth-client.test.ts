@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ACCOUNT_CLOSED,
   AUTH_COMPLETE_MESSAGE,
   emailCodeRequest,
   isAuthCompleteMessage,
@@ -269,6 +270,46 @@ it("sends only a same-origin JSON auth request and never exposes provider error 
     JSON.stringify({ email: "fictional@example.test", code: "123456" }),
   );
   expect(maskedEmail("fictional@example.test")).toBe("f•••@example.test");
+});
+
+// Settings -> Security -> Delete account closed the account: every way in says so.
+it("names a closed account on code, password and provider sign-in", async () => {
+  const closed = () =>
+    new Response(
+      JSON.stringify({
+        code: "account_closed",
+        title: "This account is closed",
+      }),
+      { status: 403 },
+    );
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation(async () => closed()),
+  );
+  await expect(
+    emailCodeRequest("verify", new AbortController().signal, {
+      email: "fictional@example.test",
+      code: "123456",
+    }),
+  ).rejects.toThrow(ACCOUNT_CLOSED);
+  await expect(
+    passwordLogin("fictional@example.test", "x", new AbortController().signal),
+  ).rejects.toThrow(ACCOUNT_CLOSED);
+  const flow = "8f7c4b1e-2d3a-4c5b-9e6f-0a1b2c3d4e5f";
+  expect(
+    parseAuthCompletionQuery({ flow, auth_result: "account_closed" }),
+  ).toEqual({ flow, result: "account_closed" });
+  // Any other 403 stays the plain "unavailable".
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(new Response("{}", { status: 403 })),
+  );
+  await expect(
+    emailCodeRequest("verify", new AbortController().signal, {
+      email: "fictional@example.test",
+      code: "123456",
+    }),
+  ).rejects.toThrow("sign-in-unavailable");
 });
 
 it("requests current Sales X-Ray consent capability on the correct surface", async () => {

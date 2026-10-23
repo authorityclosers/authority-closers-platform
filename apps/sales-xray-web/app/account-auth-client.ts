@@ -103,11 +103,29 @@ export async function emailCodeRequest(
     },
   );
   // Do not echo server/provider bodies, email-existence details or raw errors.
-  if (!response.ok)
+  if (!response.ok) {
+    if (await isClosedAccount(response)) throw new Error(ACCOUNT_CLOSED);
     throw new Error(
       response.status === 429 ? "rate-limited" : "sign-in-unavailable",
     );
+  }
   return response.json() as Promise<unknown>;
+}
+
+/**
+ * Settings -> Security -> Delete account closed this account (its deletion is
+ * waiting): every sign-in answers 403 "account_closed" until it is carried out.
+ */
+export const ACCOUNT_CLOSED = "account-closed";
+export const ACCOUNT_CLOSED_MESSAGE =
+  "This account is closed because its deletion was asked for. If that was a mistake, write to admin@authorityclosers.com.";
+
+async function isClosedAccount(response: Response) {
+  if (response.status !== 403) return false;
+  const body = (await response.json().catch(() => null)) as {
+    code?: unknown;
+  } | null;
+  return body?.code === "account_closed";
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -129,7 +147,9 @@ export type AuthCompletionResult =
   /** Settings -> Connect: that provider account signs in to another account. */
   | "already_linked"
   /** Settings -> Connect: sign in again first (within 10 minutes). */
-  | "fresh_sign_in";
+  | "fresh_sign_in"
+  /** The account's deletion was asked for, which closed it. */
+  | "account_closed";
 
 const AUTH_COMPLETION_RESULTS = new Set<AuthCompletionResult>([
   "success",
@@ -141,6 +161,7 @@ const AUTH_COMPLETION_RESULTS = new Set<AuthCompletionResult>([
   "linked",
   "already_linked",
   "fresh_sign_in",
+  "account_closed",
 ]);
 
 export function parseAuthCompletionQuery(
@@ -387,7 +408,10 @@ export async function passwordLogin(
     headers: { accept: "application/json", "content-type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  if (!response.ok) throw new Error("Password sign-in was not confirmed");
+  if (!response.ok) {
+    if (await isClosedAccount(response)) throw new Error(ACCOUNT_CLOSED);
+    throw new Error("Password sign-in was not confirmed");
+  }
   return readCanonicalSession(signal);
 }
 

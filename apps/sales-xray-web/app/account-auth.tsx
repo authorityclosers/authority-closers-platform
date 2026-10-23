@@ -27,6 +27,8 @@ import {
 import { BrandMark } from "./shell/brand-lockup";
 import { ThemeToggle } from "./shell/theme-toggle";
 import {
+  ACCOUNT_CLOSED,
+  ACCOUNT_CLOSED_MESSAGE,
   emailCodeRequest,
   isAuthCompleteMessage,
   maskedEmail,
@@ -258,6 +260,7 @@ export function signInProblem(
   provider: SignInProvider,
 ) {
   const label = providerLabel(provider);
+  if (result === "account_closed") return ACCOUNT_CLOSED_MESSAGE;
   if (result === "account_exists")
     // No method hints: staff never get email codes, and naming staff here would
     // tell anyone with that email which kind of account it is.
@@ -573,9 +576,11 @@ export function AccountAuth({
       codeAccepted = true;
       await readCanonicalSession(request.signal);
       if (!request.signal.aborted) complete();
-    } catch {
+    } catch (failure) {
       if (!request.signal.aborted) {
-        if (codeAccepted) {
+        if (failure instanceof Error && failure.message === ACCOUNT_CLOSED) {
+          setError(ACCOUNT_CLOSED_MESSAGE);
+        } else if (codeAccepted) {
           setSessionCheckNeeded(true);
           setError(
             "Your code was accepted, but your account session could not be confirmed. Check again below.",
@@ -628,10 +633,12 @@ export function AccountAuth({
     try {
       await passwordLogin(address, password, request.signal);
       if (!request.signal.aborted) complete();
-    } catch {
+    } catch (failure) {
       if (!request.signal.aborted)
         setError(
-          "We couldn’t complete password sign-in. Check your details or try again later.",
+          failure instanceof Error && failure.message === ACCOUNT_CLOSED
+            ? ACCOUNT_CLOSED_MESSAGE
+            : "We couldn’t complete password sign-in. Check your details or try again later.",
         );
     } finally {
       if (passwordRef.current) passwordRef.current.value = "";

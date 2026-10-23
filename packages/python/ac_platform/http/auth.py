@@ -112,8 +112,8 @@ from ac_platform.identity.sales_xray_profile import (
     normalize_profile_name,
     update_sales_xray_profile,
 )
-from ac_platform.identity.services import AuthorizationDenied as IdentityAuthorizationDenied
 from ac_platform.identity.services import (
+    AccountClosedError,
     ConflictingProviderIdentityError,
     IdentityConcurrencyError,
     IdentityResolutionError,
@@ -127,6 +127,7 @@ from ac_platform.identity.services import (
     VerifiedProviderAssertion,
     validate_verified_provider_assertion,
 )
+from ac_platform.identity.services import AuthorizationDenied as IdentityAuthorizationDenied
 from ac_platform.identity.sign_in_methods import PROVIDER_ISSUERS, session_is_fresh
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
@@ -1555,6 +1556,7 @@ def _sales_xray_auth_result_response(
         "linked",
         "already_linked",
         "fresh_sign_in",
+        "account_closed",
     ],
     transaction_cookie_names: tuple[str, ...],
     flow_id: UUID | None = None,
@@ -1773,7 +1775,15 @@ async def identity_error_handler(
     request: Request,
     error: IdentityServiceError,
 ) -> JSONResponse:
-    if isinstance(error, TenantScopeDeniedError):
+    if isinstance(error, AccountClosedError):
+        error_status = status.HTTP_403_FORBIDDEN
+        code = "account_closed"
+        title = "This account is closed"
+        detail = (
+            "This account was closed when its deletion was requested. If that was a "
+            "mistake, write to admin@authorityclosers.com before it is deleted."
+        )
+    elif isinstance(error, TenantScopeDeniedError):
         error_status = status.HTTP_403_FORBIDDEN
         code = "tenant_context_denied"
         title = "Tenant context is not allowed"
@@ -4090,7 +4100,10 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
-                    result="failed",
+                    # Its deletion request closed the account: say so, not "failed".
+                    result=(
+                        "account_closed" if isinstance(error, AccountClosedError) else "failed"
+                    ),
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
                     app_handoff=app_handoff,

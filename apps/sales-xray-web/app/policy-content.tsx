@@ -33,7 +33,7 @@ const UPDATED: Record<PolicySlug, [string, string]> = {
   refunds: ["2026-10-16", "16 October 2026"],
   delivery: ["2026-10-03", "3 October 2026"],
   contact: ["2026-10-16", "16 October 2026"],
-  "data-deletion": ["2026-10-20", "20 October 2026"],
+  "data-deletion": ["2026-10-23", "23 October 2026"],
 };
 
 type Section = {
@@ -47,8 +47,15 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "How to ask",
       paragraphs: [
-        'Email admin@authorityclosers.com from the email address your data is linked to, with the subject "Delete my data". Say what you want deleted: your whole account, particular recordings or reports, or a lead.',
+        "In Sales X-Ray, open Settings, then Security, then Delete account, and type DELETE to confirm. Your account closes at once, you are signed out on every device, and we email you to confirm.",
+        'Or email admin@authorityclosers.com from the email address your data is linked to, with the subject "Delete my data". Say what you want deleted: your whole account, particular recordings or reports, or a lead.',
         "If you have a Sales X-Ray account, you can also ask for a recording or report to be deleted from inside your account.",
+      ],
+    },
+    {
+      title: "If you own an organisation",
+      paragraphs: [
+        "If your organisation has other members, make one of them the owner first (Organisation, then Members), so your team keeps its workspace. An organisation you are the only member of closes with your account.",
       ],
     },
     {
@@ -85,7 +92,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "When",
       paragraphs: [
-        "We confirm that we received your request as soon as it arrives, and complete the deletion within 2 days.",
+        "We confirm that we received your request as soon as it arrives, and complete the deletion within 2 days. If you change your mind, write to us before then.",
       ],
     },
     {
