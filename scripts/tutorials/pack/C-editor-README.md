@@ -5,7 +5,7 @@ Everything to cut your own version of each tutorial. One folder per tutorial.
 ## In each tutorial folder
 
 | File                        | What it is                                                                                                                     |
-| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ | ---- | ---------------------------------------------------- |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `<id>.fcpxml`               | Timeline for Final Cut Pro or DaVinci Resolve (File > Import > Timeline). 1920x1080, 30 fps.                                   |
 | `<id>-premiere.xml`         | The same timeline for Premiere Pro (File > Import).                                                                            |
 | `<id>-reference-silent.mp4` | Our framed cut (phone in a bezel, step titles), no sound. Match it or ignore it.                                               |
@@ -13,7 +13,7 @@ Everything to cut your own version of each tutorial. One folder per tutorial.
 | `media/clips/`              | Raw screen recordings. Phone: 1170x2532 (390x844 at 3x). Computer: 2880x1800 (1440x900 at 2x). H.264, 30 fps.                  |
 | `media/stills/`             | Lossless PNG stills, named `<tutorial>--<shot>--<moment>.png`.                                                                 |
 | `media/cards/`              | Our title and end cards (PNG, 1920x1080).                                                                                      |
-| `media/voice/en             | hi                                                                                                                             | mr/` | The AI voice line for each shot, per language (MP3). |
+| `media/voice/<lang>/`       | The AI voice line for each shot, per language (en, hi, mr), MP3.                                                               |
 | `captions/`                 | SRT per language. Hinglish and Marathi-English come in Roman script (`-hi.srt`, `-mr.srt`) and Devanagari (`-devanagari.srt`). |
 
 ## Timeline layout

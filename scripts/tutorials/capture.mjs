@@ -179,6 +179,12 @@ async function act(page, a, device, stills) {
       await loc.fill(a.text);
       await page.waitForTimeout(a.ms ?? 600);
       break;
+    case "hide":
+      // Only for messages the dev fixtures add ("Sample data only."); never for product UI.
+      await loc.evaluate((el) => {
+        el.style.visibility = "hidden";
+      });
+      break;
     case "scrollto":
       // Brings a heading to the top of the screen, leaving room above it (sticky bars included).
       await loc.evaluate((el) => {

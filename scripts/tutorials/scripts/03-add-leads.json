@@ -229,6 +229,13 @@
           "ms": 1500
         },
         {
+          "do": "hide",
+          "target": {
+            "text": "Sample data only."
+          },
+          "optional": true
+        },
+        {
           "do": "highlight",
           "target": {
             "placeholder": "Or paste rows from a sheet, a CSV or ChatGPT"

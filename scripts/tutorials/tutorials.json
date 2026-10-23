@@ -106,9 +106,7 @@
       ],
       "screens": [
         "/review-fixture/calls",
-        "/review-fixture/report",
-        "/review-fixture/report/pillars",
-        "/review-fixture/prospects"
+        "/review-fixture/report/story?example=coach&clean=1"
       ],
       "native": false,
       "batch": 1

@@ -280,12 +280,19 @@
         {
           "do": "highlight",
           "target": {
-            "text": "How did the call with Asha go?"
+            "text": "Log a call"
           },
-          "ms": 1400
+          "ms": 1500
         },
         {
           "do": "unhighlight"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "text": "Log a call"
+          },
+          "ms": 1300
         },
         {
           "do": "tap",
@@ -324,27 +331,27 @@
       ],
       "en": {
         "say": [
-          "After the call, tap how it went.",
+          "After a call, the app asks how it went. Or tap Log a call, any time.",
           "We talked? Pick what happens next, like Call back or Site visit booked, and add a quick note."
         ]
       },
       "hi": {
         "say": [
-          "Call के बाद, tap कीजिए call कैसा रहा.",
+          "Call के बाद app खुद पूछता है कि call कैसा रहा. या कभी भी Log a call पे tap कीजिए.",
           "We talked? तो चुनिए आगे क्या होगा, जैसे Call back या Site visit booked, और एक छोटा सा note लिख दीजिए."
         ],
         "caption": [
-          "Call ke baad, tap kijiye call kaisa raha.",
+          "Call ke baad app khud poochta hai ki call kaisa raha. Ya kabhi bhi Log a call pe tap kijiye.",
           "We talked? Toh chuniye aage kya hoga, jaise Call back ya Site visit booked, aur ek chhota sa note likh dijiye."
         ]
       },
       "mr": {
         "say": [
-          "Call झाल्यावर, tap करा call कसा झाला.",
+          "Call नंतर app स्वतः विचारतो की call कसा झाला. किंवा कधीही Log a call वर tap करा.",
           "We talked? मग निवडा पुढे काय होणार, जसं Call back किंवा Site visit booked, आणि एक छोटी note लिहा."
         ],
         "caption": [
-          "Call jhalyavar, tap kara call kasa jhala.",
+          "Call nantar app swatah vichaarto ki call kasa jhala. Kinva kadhihi Log a call var tap kara.",
           "We talked? Mag nivda pudhe kay honar, jasa Call back kinva Site visit booked, aani ek chhoti note liha."
         ]
       }
