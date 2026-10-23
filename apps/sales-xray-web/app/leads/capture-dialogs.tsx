@@ -710,6 +710,13 @@ const MAPPABLE = [
   "interest",
 ];
 
+/** A file's stage and owner columns (owner P0, 23 Oct 2026): names, matched by the server. */
+const COLUMN_LABELS: Record<string, string> = {
+  ...FIELD_LABELS,
+  stage: "Stage",
+  owner: "Owner",
+};
+
 export function ImportDialog({
   open,
   canManage,
@@ -860,8 +867,33 @@ export function ImportDialog({
                 <dd>{result.skipped}</dd>
               </div>
             ) : null}
+            {result.staged ? (
+              <div>
+                <dt>Given their stage</dt>
+                <dd>{result.staged}</dd>
+              </div>
+            ) : null}
+            {result.owned ? (
+              <div>
+                <dt>Given the owner named</dt>
+                <dd>{result.owned}</dd>
+              </div>
+            ) : null}
           </dl>
-        ) : !preview ? (
+        ) : null}
+        {result?.unmatched_stages?.length ? (
+          <p className={styles.hint}>
+            No stage called {result.unmatched_stages.join(", ")}: those leads
+            stay New.
+          </p>
+        ) : null}
+        {result?.unmatched_owners?.length ? (
+          <p className={styles.hint}>
+            Nobody on your team called {result.unmatched_owners.join(", ")}:
+            those leads went by the lead rules.
+          </p>
+        ) : null}
+        {result ? null : !preview ? (
           <>
             <label
               className={styles.drop}
@@ -929,33 +961,45 @@ export function ImportDialog({
               {preview.repeats_in_file
                 ? `, ${preview.repeats_in_file} repeated in the file`
                 : ""}
+              {preview.known_leads
+                ? `, ${preview.known_leads} already ${preview.known_leads === 1 ? "a lead" : "leads"} (kept as they are, not added again)`
+                : ""}
               .
             </p>
             <div className={styles.formGrid}>
-              {MAPPABLE.map((field) => (
-                <Field key={field} label={FIELD_LABELS[field]}>
-                  <select
-                    value={mapping[field] ?? ""}
-                    onChange={(event) =>
-                      setMapping((current) => {
-                        const next = { ...current };
-                        if (event.target.value)
-                          next[field] = event.target.value;
-                        else delete next[field];
-                        return next;
-                      })
-                    }
-                  >
-                    <option value="">Not in this file</option>
-                    {preview.headers.map((header) => (
-                      <option key={header} value={header}>
-                        {header}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              ))}
+              {[...MAPPABLE, "stage", ...(canManage ? ["owner"] : [])].map(
+                (field) => (
+                  <Field key={field} label={COLUMN_LABELS[field]}>
+                    <select
+                      value={mapping[field] ?? ""}
+                      onChange={(event) =>
+                        setMapping((current) => {
+                          const next = { ...current };
+                          if (event.target.value)
+                            next[field] = event.target.value;
+                          else delete next[field];
+                          return next;
+                        })
+                      }
+                    >
+                      <option value="">Not in this file</option>
+                      {preview.headers.map((header) => (
+                        <option key={header} value={header}>
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                ),
+              )}
             </div>
+            {mapping.stage || (canManage && mapping.owner) ? (
+              <p className={styles.hint}>
+                Stages are matched by name to the pipeline&apos;s stages, and
+                owners to your team. One that doesn&apos;t match stays New, or
+                goes by the lead rules.
+              </p>
+            ) : null}
             <div className={styles.previewTable}>
               <table className={styles.table}>
                 <thead>

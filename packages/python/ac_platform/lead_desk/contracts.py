@@ -404,6 +404,8 @@ class ImportPreview(Model):
     mapping: dict[str, str]
     with_phone: int
     repeats_in_file: int
+    # Numbers in the file that are already leads (anyone's): kept there, never added again.
+    known_leads: int = 0
 
 
 class ImportResult(Model):
@@ -412,6 +414,12 @@ class ImportResult(Model):
     skipped: int
     assigned: int
     waiting: int
+    # Stage and owner columns (paste import, 23 Oct 2026): new leads given the stage or the
+    # owner their row named, and the names that matched no stage or teammate (the first ten).
+    staged: int = 0
+    owned: int = 0
+    unmatched_stages: tuple[str, ...] = ()
+    unmatched_owners: tuple[str, ...] = ()
 
 
 class SourceView(Model):

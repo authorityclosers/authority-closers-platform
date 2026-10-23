@@ -10,6 +10,13 @@ vi.mock("./leads-client", async (original) => ({
   commitImport: (...args: unknown[]) => commitImport(...args),
 }));
 
+// One pipeline: Import doesn't ask which (and reads nothing to know it).
+vi.mock("./use-pipelines", () => ({
+  usePipelines: () => null,
+  several: () => false,
+  forgetPipelines: () => undefined,
+}));
+
 import { resetBackCloseForTests } from "../ui/back-close";
 import { ImportDialog } from "./capture-dialogs";
 
@@ -22,7 +29,7 @@ import { ImportDialog } from "./capture-dialogs";
 let root: Root;
 let host: HTMLDivElement;
 
-async function mount(pasted: string | null = null) {
+async function mount(pasted: string | null = null, canManage = false) {
   previewImport.mockImplementation(async (file: File) => ({
     file_name: file.name,
     headers: ["Name", "Phone"],
@@ -50,7 +57,7 @@ async function mount(pasted: string | null = null) {
     root.render(
       <ImportDialog
         open
-        canManage={false}
+        canManage={canManage}
         onClose={() => undefined}
         onDone={() => undefined}
         pasted={pasted}
@@ -127,4 +134,97 @@ it("reads rows pasted into its box, and says when the text holds none", async ()
   expect(await (previewImport.mock.calls[0][0] as File).text()).toBe(
     "Name,Phone\nAsha Example,9876543210",
   );
+});
+
+// Stage and owner columns, and numbers already leads (owner P0, 23 Oct 2026).
+it("maps stage and owner columns, says which numbers are already leads, and what matched", async () => {
+  previewImport.mockImplementation(async (file: File) => ({
+    file_name: file.name,
+    headers: ["Name", "Phone", "Status", "Assigned to"],
+    rows: [
+      {
+        Name: "Asha Example",
+        Phone: "98765 43210",
+        Status: "Interested",
+        "Assigned to": "Swamini",
+      },
+    ],
+    total_rows: 1,
+    truncated: false,
+    mapping: {
+      name: "Name",
+      phone: "Phone",
+      stage: "Status",
+      owner: "Assigned to",
+    },
+    with_phone: 1,
+    repeats_in_file: 0,
+    known_leads: 1,
+  }));
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  commitImport.mockResolvedValue({
+    created: 3,
+    repeats: 1,
+    skipped: 0,
+    assigned: 3,
+    waiting: 0,
+    staged: 2,
+    owned: 1,
+    unmatched_stages: ["Hot lead"],
+    unmatched_owners: ["Nobody Known"],
+  });
+  await act(async () =>
+    root.render(
+      <ImportDialog
+        open
+        canManage
+        onClose={() => undefined}
+        onDone={() => undefined}
+        pasted={
+          "Name\tPhone\tStatus\tAssigned to\nAsha Example\t98765 43210\tInterested\tSwamini"
+        }
+      />,
+    ),
+  );
+  await settle();
+  const dialog = host.querySelector("dialog")!;
+  expect(dialog.textContent).toContain(
+    "1 already a lead (kept as they are, not added again)",
+  );
+  const labels = Array.from(
+    dialog.querySelectorAll("label > span:first-child"),
+    (span) => span.textContent?.trim(),
+  );
+  expect(labels).toEqual(expect.arrayContaining(["Stage", "Owner"]));
+  expect(dialog.textContent).toContain(
+    "Stages are matched by name to the pipeline's stages",
+  );
+  const add = Array.from(dialog.querySelectorAll("button")).find((button) =>
+    button.textContent?.trim().startsWith("Import"),
+  )!;
+  await act(async () => add.click());
+  await settle();
+  expect(commitImport.mock.calls[0][1]).toMatchObject({
+    stage: "Status",
+    owner: "Assigned to",
+  });
+  const text = dialog.textContent ?? "";
+  expect(text).toContain("Given their stage2");
+  expect(text).toContain("Given the owner named1");
+  expect(text).toContain("No stage called Hot lead: those leads stay New.");
+  expect(text).toContain(
+    "Nobody on your team called Nobody Known: those leads went by the lead rules.",
+  );
+});
+
+it("leaves Owner out for a seller", async () => {
+  const dialog = await mount("Name\tPhone\nAsha Example\t98765 43210");
+  const labels = Array.from(
+    dialog.querySelectorAll("label > span:first-child"),
+    (span) => span.textContent?.trim(),
+  );
+  expect(labels).toContain("Stage");
+  expect(labels).not.toContain("Owner");
 });

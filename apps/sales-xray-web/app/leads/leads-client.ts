@@ -268,6 +268,8 @@ export type ImportPreview = {
   mapping: Record<string, string>;
   with_phone: number;
   repeats_in_file: number;
+  /** Numbers in the file that are already leads: kept there, never added again. */
+  known_leads?: number;
 };
 
 export type ImportResult = {
@@ -276,6 +278,12 @@ export type ImportResult = {
   skipped: number;
   assigned: number;
   waiting: number;
+  /** Stage and owner columns: new leads given the stage or owner their row named. */
+  staged?: number;
+  owned?: number;
+  /** What matched no stage or teammate (the first ten). */
+  unmatched_stages?: string[];
+  unmatched_owners?: string[];
 };
 
 export type SourceView = {

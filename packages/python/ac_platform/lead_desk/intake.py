@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import re
 import secrets
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from typing import Any, Final
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4, uuid5
@@ -26,12 +26,14 @@ from ac_platform.lead_desk.capture import (
     FIELDS,
     REFERENCE_KEYS,
     CaptureError,
+    clean,
     language_name,
     normalise_phone,
     read_csv,
     read_file,
     suggest_mapping,
 )
+from ac_platform.lead_desk.capture import key as header_key
 from ac_platform.lead_desk.contracts import (
     ImportCommand,
     ImportPreview,
@@ -41,6 +43,7 @@ from ac_platform.lead_desk.contracts import (
     Sources,
     SourceView,
 )
+from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead, LeadRep, LeadSource
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, content_ref
 from ac_platform.tenancy.models import Membership
@@ -55,6 +58,74 @@ SANDBOX_PEOPLE = UUID("1dfdfac9-bfa2-49ab-b061-d98776454e0f")
 
 def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+# Stage and owner columns (paste import, 23 Oct 2026): the headers that usually hold them.
+STAGE_HEADERS: Final[tuple[str, ...]] = (
+    "stage",
+    "lead_stage",
+    "status",
+    "lead_status",
+    "pipeline_stage",
+)
+OWNER_HEADERS: Final[tuple[str, ...]] = (
+    "owner",
+    "lead_owner",
+    "assigned_to",
+    "assignee",
+    "assigned",
+    "sales_rep",
+    "salesperson",
+    "sales_person",
+    "rep",
+    "counsellor",
+    "counselor",
+    "caller",
+    "agent",
+)
+# Names that matched nothing are said back, the first this many.
+UNMATCHED_SHOWN: Final[int] = 10
+
+
+def suggest_columns(headers: Iterable[str], taken: Mapping[str, str]) -> dict[str, str]:
+    """The stage and owner columns, when a header says which they are."""
+    by_key = {header_key(header): header for header in headers}
+    found: dict[str, str] = {}
+    for name, aliases in (("stage", STAGE_HEADERS), ("owner", OWNER_HEADERS)):
+        for alias in aliases:
+            header = by_key.get(alias)
+            if header is not None and header not in (*taken.values(), *found.values()):
+                found[name] = header
+                break
+    return found
+
+
+def match_stage(journey: journeys.Journey, text: str) -> journeys.Stage | None:
+    """The pipeline's stage a sheet names: by its label or key, else by its kind's word
+    ("Interested", "Won", "Lost"), the first live stage of that kind."""
+    wanted = header_key(text)
+    live = [stage for stage in journey.stages if not stage.archived]
+    for stage in live:
+        if wanted in (header_key(stage.label), header_key(stage.key)):
+            return stage
+    return next((stage for stage in live if stage.kind == wanted), None)
+
+
+def people_index(people: Iterable[tuple[UUID, str]]) -> dict[str, UUID | None]:
+    """Who an owner column can name: a teammate's full name, or a first name only one
+    teammate has. Two people with the same name match neither (None)."""
+    index: dict[str, UUID | None] = {}
+    firsts: dict[str, set[UUID]] = {}
+    for person_id, name in people:
+        whole = header_key(name)
+        if whole:
+            index[whole] = person_id if index.get(whole, person_id) == person_id else None
+        words = name.split()
+        if words and header_key(words[0]):
+            firsts.setdefault(header_key(words[0]), set()).add(person_id)
+    for first, ids in firsts.items():
+        index.setdefault(first, next(iter(ids)) if len(ids) == 1 else None)
+    return index
 
 
 def _result(outcomes: list[str], desk_leads: list[Lead | None]) -> ImportResult:
@@ -90,13 +161,29 @@ class Intake:
         except CaptureError as error:
             raise DeskError(422, str(error)) from None
         mapping = suggest_mapping(sheet.headers)
+        mapping.update(suggest_columns(sheet.headers, mapping))
+        _, config = await self.desk.settings()
         phones: list[str] = []
         if "phone" in mapping:
             phones = [
                 phone
                 for row in sheet.rows
-                if (phone := normalise_phone(row.get(mapping["phone"]))) is not None
+                if (
+                    phone := normalise_phone(
+                        row.get(mapping["phone"]), default_country=config["default_country"]
+                    )
+                )
+                is not None
             ]
+        known = 0
+        if phones:
+            known = (
+                await self.db.scalar(
+                    select(func.count(func.distinct(Lead.phone))).where(
+                        Lead.tenant_id == self.tenant_id, Lead.phone.in_(set(phones))
+                    )
+                )
+            ) or 0
         return ImportPreview(
             file_name=file_name[:200],
             headers=sheet.headers,
@@ -106,6 +193,7 @@ class Intake:
             mapping=mapping,
             with_phone=len(phones),
             repeats_in_file=len(phones) - len(set(phones)),
+            known_leads=known,
         )
 
     async def commit(self, command: ImportCommand) -> ImportResult:
@@ -119,11 +207,29 @@ class Intake:
         else:
             assign = command.assign
         reps = await self.desk._reps()
+        # A row may name its lead's stage, and (owners and admins) its owner.
+        stage_header = command.mapping.get("stage") or None
+        owner_header = (
+            (command.mapping.get("owner") or None) if self.desk.viewer.can_manage else None
+        )
+        people = (
+            people_index((rep.state.person_id, rep.state.name) for rep in reps)
+            if owner_header
+            else {}
+        )
+        journeys_read: dict[str, journeys.Journey] = {}
+        staged = owned = 0
+        missing_stages: dict[str, None] = {}
+        missing_owners: dict[str, None] = {}
         outcomes: list[str] = []
         leads: list[Lead | None] = []
         label = f"File: {command.file_name}"[:120]
-        for row in command.rows:
+        for index, row in enumerate(command.rows):
             record = {str(k)[:120]: str(v)[:1000] for k, v in row.items() if v not in (None, "")}
+            named = clean(row.get(owner_header)) if owner_header else None
+            person = people.get(header_key(named)) if named else None
+            if named and person is None:
+                missing_owners.setdefault(named[:80])
             try:
                 lead, outcome = await self.desk.ingest(
                     record,
@@ -131,7 +237,8 @@ class Intake:
                     source_label=label,
                     source_ref=content_ref(record),
                     mapping=mapping,
-                    assign=assign,  # type: ignore[arg-type]
+                    assign="person" if person else assign,  # type: ignore[arg-type]
+                    person_id=person,
                     actor=self.desk.viewer.person_id,
                     test_data=self.desk.sandbox,
                     reps=reps,
@@ -141,8 +248,41 @@ class Intake:
                 lead, outcome = None, "skipped"
             outcomes.append(outcome)
             leads.append(lead)
+            # Only new leads take the row's stage and owner; a number already a lead keeps its own.
+            if lead is None or outcome != "created":
+                continue
+            if person is not None:
+                owned += 1
+            wanted = clean(row.get(stage_header)) if stage_header else None
+            if not wanted:
+                continue
+            pipeline = journeys.pipeline_of(lead)
+            if pipeline not in journeys_read:
+                journeys_read[pipeline] = await journeys.read(self.db, self.tenant_id, pipeline)
+            journey = journeys_read[pipeline]
+            stage = match_stage(journey, wanted)
+            if stage is None:
+                missing_stages.setdefault(wanted[:80])
+                continue
+            staged += 1
+            now = journey.resolve(lead.stage, lead.step)
+            if now is None or now.key != stage.key:
+                self.desk.to_stage(
+                    lead,
+                    journey,
+                    stage,
+                    note=None,
+                    command_id=uuid5(command.command_id, f"import-stage:{index}"),
+                )
         await self.db.flush()
-        return _result(outcomes, leads)
+        return _result(outcomes, leads).model_copy(
+            update={
+                "staged": staged,
+                "owned": owned,
+                "unmatched_stages": tuple(missing_stages)[:UNMATCHED_SHOWN],
+                "unmatched_owners": tuple(missing_owners)[:UNMATCHED_SHOWN],
+            }
+        )
 
     # ----- sources ---------------------------------------------------------------
 
