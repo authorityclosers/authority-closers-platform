@@ -25,7 +25,9 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationReportMinuteEvent,
 )
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
+from ac_platform.conversation_intelligence.acquisition_usage import RECEIPT_CEILING_SECONDS
 from ac_platform.conversation_intelligence.application import ConversationDenied
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 from ac_platform.db.models import model_metadata
 from tests.database.test_conversation_acquisition_postgresql import issue, service, source
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -37,13 +39,20 @@ def postgres_harness():
     yield from _postgres_harness.__wrapped__()
 
 
-def test_two_hours_uses_existing_organisation_plan_and_sufficient_allowance(postgres_harness):
+def _refusal(seconds: int) -> str:
+    """The per-call limit is checked before the remaining trial minutes."""
+    return "longest call" if seconds > CALL_LIMIT_SECONDS else "remaining trial minutes"
+
+
+def test_the_longest_call_uses_existing_organisation_plan_and_sufficient_allowance(
+    postgres_harness,
+):
     async def exercise():
         engine = create_async_engine(postgres_harness.url)
         try:
             state = await seed(engine, role="owner")
             foreign = await seed(engine)
-            measured = source(7200)
+            measured = source(CALL_LIMIT_SECONDS)
             async with AsyncSession(engine) as db, db.begin():
                 app = AcquisitionSessions(
                     db,
@@ -58,31 +67,37 @@ def test_two_hours_uses_existing_organisation_plan_and_sufficient_allowance(post
                 await app.ledger.write_lot(
                     account=account,
                     kind="period_grant",
-                    seconds=7200,
+                    seconds=CALL_LIMIT_SECONDS,
                     valid_from=state.now,
-                    source_ref="fictional-two-hour-allowance:" + str(uuid4()),
+                    source_ref="fictional-longest-call-allowance:" + str(uuid4()),
                     actor_type="system",
                     plan_key="organisation",
                 )
-                assert (await app.allowance(actor=state.actor))["available_seconds"] == 7200
+                assert (await app.allowance(actor=state.actor))[
+                    "available_seconds"
+                ] == CALL_LIMIT_SECONDS
                 usage_id = await app.reserve(measured, actor=state.actor)
                 assert await app.reserve(measured, actor=state.actor) == usage_id
                 with pytest.raises(ConversationDenied, match="remaining trial minutes"):
                     await app.reserve(source(1), actor=state.actor)
-                await app.settle(usage_id, charged_seconds=7200, receipt_sha256="d" * 64)
-                await app.settle(usage_id, charged_seconds=7200, receipt_sha256="d" * 64)
+                await app.settle(
+                    usage_id, charged_seconds=CALL_LIMIT_SECONDS, receipt_sha256="d" * 64
+                )
+                await app.settle(
+                    usage_id, charged_seconds=CALL_LIMIT_SECONDS, receipt_sha256="d" * 64
+                )
                 assert await app.allowance(actor=state.actor) == {
-                    "allowance_seconds": 7200,
-                    "committed_seconds": 7200,
+                    "allowance_seconds": CALL_LIMIT_SECONDS,
+                    "committed_seconds": CALL_LIMIT_SECONDS,
                     "available_seconds": 0,
                 }
                 stored = await db.get(ConversationAcquisitionUsage, usage_id)
                 assert stored.source_sha256 == measured.source_sha256
                 assert stored.duration_evidence_sha256 == measured.duration_evidence_sha256
-                assert stored.reserved_seconds == 7200
+                assert stored.reserved_seconds == CALL_LIMIT_SECONDS
                 assert (
                     await db.get(ConversationAcquisitionSettlement, usage_id)
-                ).charged_seconds == (7200)
+                ).charged_seconds == CALL_LIMIT_SECONDS
             async with AsyncSession(engine) as db, db.begin():
                 with pytest.raises(ConversationDenied):
                     await service(db, foreign).reserve(measured, actor=state.actor)
@@ -105,10 +120,11 @@ def test_larger_receipt_ceiling_does_not_expand_trial_allowance(postgres_harness
             async with AsyncSession(engine) as db, db.begin():
                 app = service(db, state)
                 assert (await app.allowance(token=guest.token))["available_seconds"] == 3600
-                with pytest.raises(ConversationDenied, match="longest call"):
-                    await app.reserve(source(7200), token=guest.token)
-                with pytest.raises(ConversationDenied, match="remaining trial minutes"):
-                    await app.reserve(source(4000), token=guest.token)
+                # A 3,600-second trial never takes the longest receipt, nor 4,000 seconds;
+                # the message names whichever bound the call crosses first.
+                for seconds in (RECEIPT_CEILING_SECONDS, 4000):
+                    with pytest.raises(ConversationDenied, match=_refusal(seconds)):
+                        await app.reserve(source(seconds), token=guest.token)
                 assert (
                     await db.scalar(select(func.count()).select_from(ConversationAcquisitionUsage))
                     == 0

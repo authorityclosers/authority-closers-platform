@@ -8,6 +8,7 @@ import httpx
 import pytest
 from fastapi import FastAPI
 
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 from ac_platform.http.auth import AuthenticatedTransaction, AuthenticationRequired
 from ac_platform.http.conversation_acquisition import install_acquisition_http
 from ac_platform.kernel.authz import ActorContext
@@ -76,7 +77,7 @@ async def test_me_reads_share_allowance_and_refuse_guest_or_foreign_workspace(
                 assert response.json() == {
                     "plan": {"key": "trial", "name": "Trial"},
                     "allowance": allowance,
-                    "longest_call_seconds": 7200,
+                    "longest_call_seconds": CALL_LIMIT_SECONDS,
                 }
             else:
                 assert response.json() == {"allowance": allowance, **usage.return_value}

@@ -217,8 +217,9 @@ def test_reduced_trial_preserves_historical_usage_and_same_source_replay(
                 app = service(db, state)
                 with monkeypatch.context() as historical:
                     # Admitted under the former 100-minute trial (trial policy v1
-                    # before the shared quota was reduced).
+                    # before the shared quota and its per-call cap were reduced).
                     historical.setitem(trial_policy_module._SECONDS, "v1", 6000)
+                    historical.setitem(trial_policy_module._PER_CALL, "v1", 6000)
                     original_usage = await app.reserve(original_source, token=guest.token)
             async with AsyncSession(engine) as db, db.begin():
                 app = service(db, state)
