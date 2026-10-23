@@ -3,13 +3,16 @@ MCP tool list and the discovery documents."""
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
 from ac_platform.integrations import first_party, mcp_http, oauth, scopes
+from ac_platform.integrations.api_http import ApiError
 from ac_platform.integrations.errors import IntegrationError
 from ac_platform.integrations.oauth_http import (
     MCP_SCOPES,
@@ -127,6 +130,8 @@ def test_return_addresses_are_https_or_this_computer(uri: str, allowed: bool) ->
 def test_mcp_tools_follow_the_connection_scopes() -> None:
     every = {tool["name"] for tool in mcp_http.listed(frozenset(scopes.SCOPES))}
     assert every == {
+        "search",
+        "fetch",
         "whoami",
         "list_calls",
         "get_call",
@@ -136,10 +141,152 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "add_lead",
     }
     reading = {tool["name"] for tool in mcp_http.listed(frozenset({"calls:read"}))}
-    assert reading == {"whoami", "list_calls", "get_call"}
+    assert reading == {"search", "fetch", "whoami", "list_calls", "get_call"}
+    leads = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:read"}))}
+    assert leads == {"search", "fetch", "whoami", "list_leads", "get_lead"}
+    assert {tool["name"] for tool in mcp_http.listed(frozenset({"webhooks:manage"}))} == {"whoami"}
     for tool in mcp_http.listed(frozenset(scopes.SCOPES)):
         assert "scope" not in tool and tool["inputSchema"]["type"] == "object"
         assert tool["annotations"]["readOnlyHint"] is (tool["name"] != "add_lead")
+
+
+BASE = "https://salesxray.example.test"
+CALL = "11111111-1111-4111-8111-111111111111"
+UNTITLED = "22222222-2222-4222-8222-222222222222"
+LEAD = "33333333-3333-4333-8333-333333333333"
+
+
+class FakeReader:
+    """Answers like ``Reader`` for one person's fictional calls and leads."""
+
+    base = BASE
+
+    def __init__(self, granted: set[str], *, personal: bool = False) -> None:
+        self.key = SimpleNamespace(scopes=frozenset(granted))
+        self.personal = personal
+        self.searched: list[str | None] = []
+
+    def _call(self, call_id: str, title: str | None, day: str) -> dict[str, Any]:
+        return {
+            "id": call_id,
+            "title": title,
+            "created_at": f"2026-10-{day}T10:00:00+00:00",
+            "duration_seconds": 600,
+            "has_report": title is not None,
+            "open_url": f"{BASE}/analysis/calls/{call_id}",
+        }
+
+    async def calls(self, before: object) -> dict[str, Any]:
+        calls = [
+            self._call(CALL, "Discovery with Fictional Traders", "20"),
+            self._call(UNTITLED, None, "21"),
+        ]
+        return {"calls": calls, "next_before": None}
+
+    async def call(self, call_id: object) -> dict[str, Any]:
+        if str(call_id) != CALL:
+            raise ApiError(404, "call_missing", "That call is not here, or not yours to read.")
+        return {
+            **self._call(CALL, "Discovery with Fictional Traders", "20"),
+            "facts": [{"key": "budget"}],
+        }
+
+    async def leads(
+        self, stage: object, offset: int, limit: int, search: str | None = None
+    ) -> dict[str, Any]:
+        if self.personal:
+            raise ApiError(
+                403, "organisation_only", "Leads are kept in organisations, not Personal."
+            )
+        self.searched.append(search)
+        row = {
+            "lead_id": LEAD,
+            "name": "Asha Fictional",
+            "company": "Fictional Traders",
+            "stage_label": "New",
+        }
+        found = search is not None and search.casefold() in "asha fictional fictional traders"
+        return {"leads": [row] if found else [], "total": int(found), "next_offset": None}
+
+    async def lead(self, lead_id: object) -> dict[str, Any]:
+        row = {"lead_id": LEAD, "name": "Asha Fictional", "stage_label": "New"}
+        return {"lead": row, "phone": "+910000000000", "email": None, "fields": [], "events": []}
+
+
+async def _tool(reader: FakeReader, name: str, args: dict[str, Any]) -> dict[str, Any]:
+    message = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "tools/call",
+        "params": {"name": name, "arguments": args},
+    }
+    answer = await mcp_http.handle(cast(Any, reader), message)
+    assert answer is not None
+    result: dict[str, Any] = answer["result"]
+    if not result["isError"]:
+        assert json.loads(result["content"][0]["text"]) == result["structuredContent"]
+    return result
+
+
+async def test_search_finds_calls_and_leads_in_chatgpts_shape() -> None:
+    reader = FakeReader({"calls:read", "leads:read", "reports:read"})
+    found = (await _tool(reader, "search", {"query": "fictional"}))["structuredContent"]
+    assert found == {
+        "results": [
+            {
+                "id": f"call:{CALL}",
+                "title": "Discovery with Fictional Traders",
+                "url": f"{BASE}/analysis/calls/{CALL}",
+            },
+            {
+                "id": f"lead:{LEAD}",
+                "title": "Asha Fictional · Fictional Traders · New",
+                "url": f"{BASE}/leads?lead={LEAD}",
+            },
+        ]
+    }
+    # An untitled call is found by its date; a question falls back to its longest word.
+    dated = (await _tool(reader, "search", {"query": "2026-10-21"}))["structuredContent"]
+    assert dated["results"][0] == {
+        "id": f"call:{UNTITLED}",
+        "title": "Call on 2026-10-21",
+        "url": f"{BASE}/analysis/calls/{UNTITLED}",
+    }
+    reader.searched.clear()
+    asked = await _tool(reader, "search", {"query": "who is Asha"})
+    assert reader.searched == ["who is Asha", "Asha"]
+    assert [item["id"] for item in asked["structuredContent"]["results"]] == [f"lead:{LEAD}"]
+
+
+async def test_search_keeps_to_the_connection_and_personal_has_no_leads() -> None:
+    calls_only = FakeReader({"calls:read"})
+    found = (await _tool(calls_only, "search", {"query": "fictional"}))["structuredContent"]
+    assert [item["id"] for item in found["results"]] == [f"call:{CALL}"]
+    assert calls_only.searched == []
+    personal = FakeReader({"calls:read", "leads:read"}, personal=True)
+    found = (await _tool(personal, "search", {"query": "fictional"}))["structuredContent"]
+    assert [item["id"] for item in found["results"]] == [f"call:{CALL}"]
+    for reader, args in (
+        (FakeReader({"webhooks:manage"}), {"query": "fictional"}),
+        (calls_only, {"query": ""}),
+        (calls_only, {"query": "x" * 201}),
+    ):
+        assert (await _tool(reader, "search", args))["isError"] is True
+
+
+async def test_fetch_reads_one_search_result() -> None:
+    reader = FakeReader({"calls:read", "leads:read", "reports:read"})
+    call = (await _tool(reader, "fetch", {"id": f"call:{CALL}"}))["structuredContent"]
+    assert set(call) == {"id", "title", "text", "url", "metadata"}
+    assert call["id"] == f"call:{CALL}" and call["url"] == f"{BASE}/analysis/calls/{CALL}"
+    assert json.loads(call["text"])["facts"] == [{"key": "budget"}]
+    assert call["metadata"] == {"kind": "call", "report_ready": True}
+    lead = (await _tool(reader, "fetch", {"id": f"lead:{LEAD}"}))["structuredContent"]
+    assert lead["title"] == "Asha Fictional" and lead["url"] == f"{BASE}/leads?lead={LEAD}"
+    assert json.loads(lead["text"])["phone"] == "+910000000000"
+    assert lead["metadata"] == {"kind": "lead", "stage": "New"}
+    for wrong in (f"note:{CALL}", "call:nope", CALL, f"call:{UNTITLED}"):
+        assert (await _tool(reader, "fetch", {"id": wrong}))["isError"] is True
 
 
 def test_server_metadata_describes_connect() -> None:
