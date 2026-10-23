@@ -52,6 +52,7 @@ import { SettingsShell, currentSection } from "./settings-shell";
 import {
   SETTINGS_LINKS,
   SETTINGS_SECTIONS,
+  hubAddress,
   accountRedirect,
   isSettingsSection,
   settingsPath,
@@ -124,35 +125,40 @@ it("lists every section in groups on the Settings page", async () => {
   const links = [
     ...host.querySelectorAll<HTMLAnchorElement>("a[href^='/settings/']"),
   ];
-  // Once in the side list (computers), once as cards (the page itself).
+  // Once in the side list (computers), once as cards (the page itself);
+  // the organisation's sections live in its hub (owner, 23 Oct 2026).
   expect(new Set(links.map((link) => link.getAttribute("href")))).toEqual(
-    new Set(SETTINGS_SECTIONS.map((item) => `/settings/${item.id}`)),
+    new Set(
+      SETTINGS_SECTIONS.filter((item) => !hubAddress(item.id)).map(
+        (item) => `/settings/${item.id}`,
+      ),
+    ),
   );
   expect(
     host.querySelector('nav[aria-label="Settings sections"]'),
   ).not.toBeNull();
-  expect(host.textContent).toContain("Connections");
+  expect(host.textContent).toContain("Organisation");
   expect(host.textContent).toContain("Google, Facebook and Apple sign-in");
   expect(host.querySelector("a[aria-current='page']")).toBeNull();
 });
 
 it("shows one section with its title, the way back, and the side list lit", async () => {
-  nav.pathname = "/settings/team";
+  nav.pathname = "/settings/selling";
   await act(async () =>
     root.render(
       <SettingsShell>
-        <p>team section</p>
+        <p>selling section</p>
       </SettingsShell>,
     ),
   );
-  expect(host.querySelector("h1")?.textContent).toBe("Team & roles");
+  expect(host.querySelector("h1")?.textContent).toBe("Selling");
   expect(host.querySelector('a[href="/settings"]')?.textContent).toContain(
     "Settings",
   );
   expect(
     host.querySelector("a[aria-current='page']")?.getAttribute("href"),
-  ).toBe("/settings/team");
-  expect(host.textContent).toContain("team section");
+  ).toBe("/settings/selling");
+  expect(host.textContent).toContain("selling section");
 });
 
 it("builds each section from the existing screens, with only its own parts", async () => {
@@ -204,38 +210,42 @@ it("sends an old /account address to its section", async () => {
 });
 
 it("keeps the Settings frame while the session is checked", async () => {
-  nav.pathname = "/settings/apps";
+  nav.pathname = "/settings/notifications";
   await act(async () => root.render(<SettingsSkeleton />));
   const status = host.querySelector(
     '[role="status"][aria-label="Loading settings"]',
   );
   expect(status?.getAttribute("aria-busy")).toBe("true");
-  expect(host.querySelector("h1")?.textContent).toBe("Connected apps");
+  expect(host.querySelector("h1")?.textContent).toBe("Notifications");
   expect(
     host.querySelector("a[aria-current='page']")?.getAttribute("href"),
-  ).toBe("/settings/apps");
+  ).toBe("/settings/notifications");
   // The overview needs no data, so it is the page itself.
   nav.pathname = "/settings";
   await act(async () => root.render(<SettingsSkeleton />));
   expect(host.querySelector("h1")?.textContent).toBe("Settings");
   expect(host.querySelectorAll("a[data-variant='list']")).toHaveLength(
-    SETTINGS_SECTIONS.length + SETTINGS_LINKS.length,
+    SETTINGS_SECTIONS.filter((item) => !hubAddress(item.id)).length +
+      SETTINGS_LINKS.length,
   );
 });
 
-it("keeps Lead stages in Settings, in the Organisation group", async () => {
+// Owner, 23 Oct 2026: the organisation's settings live in its hub, so the
+// Organisation group is one way there.
+it("sends the organisation's settings to its hub", async () => {
   nav.pathname = "/settings";
   await act(async () =>
     root.render(<SettingsShell>{<SettingsPage />}</SettingsShell>),
   );
-  const stages = [
-    ...host.querySelectorAll<HTMLAnchorElement>('a[href="/settings/stages"]'),
+  expect(host.querySelector('a[href="/settings/stages"]')).toBeNull();
+  const hub = [
+    ...host.querySelectorAll<HTMLAnchorElement>('a[href="/organisation"]'),
   ];
   // Once in the side list, once as a card on the overview.
-  expect(stages).toHaveLength(2);
+  expect(hub).toHaveLength(2);
   expect(
-    stages.every((link) => link.closest('section[aria-label="Organisation"]')),
+    hub.every((link) => link.closest('section[aria-label="Organisation"]')),
   ).toBe(true);
-  expect(stages[0].textContent).toContain("Lead stages");
-  expect(stages.some((link) => link.getAttribute("aria-current"))).toBe(false);
+  expect(hubAddress("stages")).toBe("/organisation?tab=leads&part=stages");
+  expect(hubAddress("profile")).toBeNull();
 });

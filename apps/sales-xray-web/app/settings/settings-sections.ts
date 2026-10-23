@@ -185,12 +185,40 @@ export type SettingsLink = Omit<SettingsSection, "id"> & {
   href: string;
 };
 
-export const SETTINGS_LINKS: readonly SettingsLink[] = [];
+export const SETTINGS_LINKS: readonly SettingsLink[] = [
+  {
+    // Owner, 23 Oct 2026: the organisation's settings live in its hub.
+    key: "organisation",
+    label: "Organisation",
+    hint: "Team, leads setup, connections, AI on calls and company",
+    icon: Building2,
+    group: "Organisation",
+    href: "/organisation",
+  },
+];
+
+/**
+ * Where each of the organisation's sections lives in its hub (org-hub.tsx).
+ * Settings doesn't list these; their old addresses go there (hub-redirect).
+ */
+const HUB_ADDRESSES: Partial<Record<SettingsSectionId, string>> = {
+  organisation: "/organisation?tab=company",
+  team: "/organisation?tab=team",
+  "lead-rules": "/organisation?tab=leads&part=rules",
+  stages: "/organisation?tab=leads&part=stages",
+  sources: "/organisation?tab=leads&part=sources",
+  "call-ai": "/organisation?tab=call-ai",
+  apps: "/organisation?tab=connections&part=apps",
+  "ai-replies": "/organisation?tab=connections&part=ai-replies",
+  developers: "/organisation?tab=connections&part=developers",
+};
+
+export const hubAddress = (id: SettingsSectionId): string | null =>
+  HUB_ADDRESSES[id] ?? null;
 
 export const SETTINGS_GROUPS = [
   "Account",
   "Organisation",
-  "Connections",
   "This device",
 ] as const;
 

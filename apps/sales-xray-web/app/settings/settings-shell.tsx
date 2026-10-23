@@ -14,6 +14,7 @@ import {
   SETTINGS_GROUPS,
   SETTINGS_LINKS,
   SETTINGS_SECTIONS,
+  hubAddress,
   isSettingsSection,
   sectionById,
   type SettingsSectionId,
@@ -41,35 +42,35 @@ export function SectionList({
         <section key={group} className={styles.group} aria-label={group}>
           <h2>{group}</h2>
           <ul>
-            {SETTINGS_SECTIONS.filter((item) => item.group === group).map(
-              ({ id, label, hint, icon: Icon }) => (
-                <li key={id}>
-                  <Link
-                    href={`/settings/${id}`}
-                    className={styles.item}
-                    aria-current={current === id ? "page" : undefined}
-                    data-variant={variant}
-                  >
-                    <span className={styles.icon} aria-hidden="true">
-                      <Icon size={17} />
-                    </span>
-                    <span className={styles.text}>
-                      <span className={styles.label}>{label}</span>
-                      {variant === "list" ? (
-                        <span className={styles.hint}>{hint}</span>
-                      ) : null}
-                    </span>
+            {SETTINGS_SECTIONS.filter(
+              (item) => item.group === group && !hubAddress(item.id),
+            ).map(({ id, label, hint, icon: Icon }) => (
+              <li key={id}>
+                <Link
+                  href={`/settings/${id}`}
+                  className={styles.item}
+                  aria-current={current === id ? "page" : undefined}
+                  data-variant={variant}
+                >
+                  <span className={styles.icon} aria-hidden="true">
+                    <Icon size={17} />
+                  </span>
+                  <span className={styles.text}>
+                    <span className={styles.label}>{label}</span>
                     {variant === "list" ? (
-                      <ChevronRight
-                        size={16}
-                        aria-hidden="true"
-                        className={styles.chevron}
-                      />
+                      <span className={styles.hint}>{hint}</span>
                     ) : null}
-                  </Link>
-                </li>
-              ),
-            )}
+                  </span>
+                  {variant === "list" ? (
+                    <ChevronRight
+                      size={16}
+                      aria-hidden="true"
+                      className={styles.chevron}
+                    />
+                  ) : null}
+                </Link>
+              </li>
+            ))}
             {SETTINGS_LINKS.filter((item) => item.group === group).map(
               ({ key, href, label, hint, icon: Icon }) => (
                 <li key={key}>
