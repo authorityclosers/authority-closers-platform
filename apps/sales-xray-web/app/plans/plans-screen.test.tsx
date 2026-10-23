@@ -668,7 +668,11 @@ it.each([
       expect(text()).not.toContain("could not be loaded");
       expect(text()).toContain("No renewal scheduled");
     } else {
-      await until(() => text().includes("Billing details could not be loaded"));
+      // A read that failed: quiet placeholders and one corner card (owner rule).
+      await until(() => text().includes("Not loaded"));
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "billing-read-error" }),
+      );
       expect(text()).not.toContain("No invoices or receipts yet");
       await click("Refresh status");
       await until(() => text().includes("62 min (1 h 2 min) left"));

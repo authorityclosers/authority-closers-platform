@@ -235,7 +235,9 @@ it("retries failed invoice reads without changing billing state", async () => {
     );
   });
   const pane = await openBilling();
-  expect(pane.textContent).toContain("Invoices and receipts: not loaded.");
+  expect(pane.textContent).toContain(
+    "Invoices and receipts are currently unavailable.",
+  );
   expect(pane.querySelector('[role="alert"]')).toBeNull();
   expect(pane.textContent).toContain("No subscription yet.");
   expect(pane.textContent).not.toContain("No invoices or receipts yet.");

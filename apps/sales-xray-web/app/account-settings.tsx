@@ -1536,7 +1536,9 @@ export function PlanAndBillingPane({
               Loading invoices…
             </p>
           ) : invoicesStatus !== "ready" ? (
-            <p className={styles.muted}>Invoices and receipts: not loaded.</p>
+            <p className={styles.muted}>
+              Invoices and receipts are currently unavailable.
+            </p>
           ) : documents.length === 0 ? (
             <p className={styles.muted}>No invoices or receipts yet.</p>
           ) : (
