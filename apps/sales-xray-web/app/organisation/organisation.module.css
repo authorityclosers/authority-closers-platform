@@ -327,9 +327,49 @@
 /* ---------- Calls table ---------- */
 
 .callTable,
+/* The table measures its own width: inside Settings beside the sidebar
+   (about 230 px at a 980 px window) it takes the phone's stacked rows, where
+   the five columns left the name no room (tutorial 09 check, 23 Oct 2026). */
 .memberTable {
+  container-type: inline-size;
   display: grid;
   min-width: 0;
+}
+
+@container (max-width: 559.98px) {
+  .memberHead {
+    display: none;
+  }
+
+  .memberRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "person person"
+      "role actions";
+    gap: 2px 10px;
+    padding: 10px 14px 6px;
+  }
+
+  .memberRow > .person {
+    grid-area: person;
+  }
+
+  .memberRow > .roleCell {
+    grid-area: role;
+    padding-left: 34px;
+  }
+
+  .memberRow > .rowActions {
+    grid-area: actions;
+  }
+
+  .memberRow .rowActions {
+    opacity: 1;
+  }
+
+  .memberRow > .dateCell {
+    display: none;
+  }
 }
 
 .callHead,

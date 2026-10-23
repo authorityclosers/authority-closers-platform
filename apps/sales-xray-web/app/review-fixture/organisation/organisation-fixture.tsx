@@ -76,7 +76,7 @@ const member = (
 });
 
 const MEMBERS = [
-  member(OWNER, "vikram example", "vikram@fictionalhomes.example", "owner", {
+  member(OWNER, "vikram example", "vikram@fictionalhomes.in", "owner", {
     joined: 120,
     active: 0,
     calls: 14,
@@ -84,28 +84,28 @@ const MEMBERS = [
   member(
     "00000000-0000-4000-8000-000000000002",
     "swamini fictional",
-    "swamini@fictionalhomes.example",
+    "swamini@fictionalhomes.in",
     "admin",
     { joined: 90, active: 0, calls: 31 },
   ),
   member(
     "00000000-0000-4000-8000-000000000003",
     "rahul example",
-    "rahul@fictionalhomes.example",
+    "rahul@fictionalhomes.in",
     "member",
     { joined: 60, active: 1, calls: 22 },
   ),
   member(
     "00000000-0000-4000-8000-000000000006",
     "priya sample",
-    "priya@fictionalhomes.example",
+    "priya@fictionalhomes.in",
     "member",
     { joined: 21, active: 2, calls: 11 },
   ),
   member(
     null,
     null,
-    "anil@fictionalhomes.example",
+    "anil@fictionalhomes.in",
     "member",
     { joined: 0, active: null, calls: 0 },
     "00000000-0000-4000-8000-000000000042",
@@ -114,7 +114,7 @@ const MEMBERS = [
 
 function install() {
   if (typeof window === "undefined") return true;
-  let domains = ["fictionalhomes.example"];
+  let domains = ["fictionalhomes.in"];
   let autoJoin = true;
   const organisation = () => ({
     tenant_id: TENANT,
@@ -152,7 +152,7 @@ function install() {
       address: "Baner Road",
       industry: "Real estate",
       team_size: "11-50",
-      website: "https://fictionalhomes.example",
+      website: "https://fictionalhomes.in",
       city: "Pune",
       logo_url: null,
     }),
@@ -222,7 +222,7 @@ function Actions() {
           'input[placeholder="Invite people by email"]',
         );
         if (!field) return;
-        type(field, "neha@fictionalhomes.example");
+        type(field, "neha@fictionalhomes.in");
         window.setTimeout(() => {
           const send = [
             ...(field.form?.querySelectorAll<HTMLButtonElement>("button") ??
