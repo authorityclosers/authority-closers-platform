@@ -90,3 +90,15 @@
     font-size: 20px;
   }
 }
+
+.moreMinutes {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-left: 6px;
+  padding: 0 4px;
+  color: var(--lx-ink, currentColor);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}

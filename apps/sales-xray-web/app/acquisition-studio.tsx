@@ -495,6 +495,8 @@ export function AcquisitionStudio({
       message:
         "Choose a plan or a top-up to analyse more calls. Your recordings stay private.",
       action: { label: "See plans", run: () => router.push("/plans") },
+      // Stays until the seller closes it (info cards otherwise leave after 5 s).
+      timeout: 0,
     });
     return () => dismissNotice(id);
   }, [minutesOut, router]);
@@ -3650,6 +3652,7 @@ export function AcquisitionStudio({
                     advertisedTrial,
                     allowanceUnknown,
                   )}
+                  moreMinutesHref={minutesOut ? "/plans" : undefined}
                 />
               ) : null}
               {embedded && !submission && !report && !deletionOnlyId && (
