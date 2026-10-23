@@ -92,6 +92,8 @@ export type SetupPreview = Readonly<{
   orgName?: string;
   applied?: string;
   invited?: string[];
+  /** Review fixtures: where the flow would go next, instead of going there. */
+  onLeave?: (href: string) => void;
 }>;
 
 /** A request key for retries; randomUUID is missing on the plain-http dev edge. */
@@ -238,6 +240,11 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
 
   const steps = stepsFor(path);
   const step = steps[Math.min(index, steps.length - 1)];
+
+  function exit(mark: "done" | "skipped", href: string) {
+    if (preview?.onLeave) preview.onLeave(href);
+    else leave(person?.personId, mark, href);
+  }
 
   function go(next: SetupStep, nextPath: SetupPath = path) {
     const at = stepsFor(nextPath).indexOf(next);
@@ -453,9 +460,7 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
             type="button"
             className={styles.skip}
             disabled={busy}
-            onClick={() =>
-              leave(person.personId, step === "first" ? "done" : "skipped", "/")
-            }
+            onClick={() => exit(step === "first" ? "done" : "skipped", "/")}
           >
             {step === "first" ? "Go to Home" : "Skip setup"}
           </button>
@@ -791,7 +796,7 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
             <button
               type="button"
               className={styles.primary}
-              onClick={() => leave(person.personId, "done", firstAction.href)}
+              onClick={() => exit("done", firstAction.href)}
             >
               {firstAction.label}
             </button>
@@ -799,7 +804,7 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
               <button
                 type="button"
                 className={styles.secondary}
-                onClick={() => leave(person.personId, "done", newCallHref("/"))}
+                onClick={() => exit("done", newCallHref("/"))}
               >
                 <AudioLines size={16} aria-hidden="true" />
                 Analyse a call instead

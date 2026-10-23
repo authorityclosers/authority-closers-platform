@@ -115,6 +115,43 @@ it("renders all three local preview states without auth traffic or success callb
   expect(onAuthenticated).not.toHaveBeenCalled();
 });
 
+// /review-fixture/sign-in: a provider press goes to the fixture, never to the
+// provider, and the password step has its own still view.
+it("hands a provider press to the review fixture and opens nothing", async () => {
+  const fetcher = vi.fn(async () =>
+    Response.json({ ...config, facebook_enabled: true }),
+  );
+  const open = vi.fn();
+  const reviewProvider = vi.fn();
+  vi.stubGlobal("fetch", fetcher);
+  vi.stubGlobal("open", open);
+  await act(async () =>
+    root.render(
+      <AccountAuth onAuthenticated={vi.fn()} reviewProvider={reviewProvider} />,
+    ),
+  );
+  await flush();
+  await act(async () =>
+    host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+  );
+  await click("Continue with Facebook");
+  expect(reviewProvider).toHaveBeenCalledExactlyOnceWith("facebook");
+  expect(open).not.toHaveBeenCalled();
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () =>
+    root.render(
+      <AccountAuth onAuthenticated={vi.fn()} previewState="auth.password" />,
+    ),
+  );
+  await flush();
+  expect(host.querySelector("#account-password")).not.toBeNull();
+  expect(
+    host.querySelector<HTMLInputElement>("#account-password-email")?.value,
+  ).toBe("sample@example.test");
+});
+
 it("returns to the staged call with the same selected file and no navigation", async () => {
   const onCancel = vi.fn();
   const fetcher = vi.fn();

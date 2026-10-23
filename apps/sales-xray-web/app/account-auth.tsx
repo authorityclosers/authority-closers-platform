@@ -60,7 +60,11 @@ import {
   type NativeSignInProvider,
 } from "./leads/native-phone";
 
-export type AccountAuthPreviewState = "auth.email" | "auth.code" | "auth.error";
+export type AccountAuthPreviewState =
+  | "auth.email"
+  | "auth.code"
+  | "auth.password"
+  | "auth.error";
 
 const PREVIEW_CONFIG: EmailCodeConfig = {
   enabled: true,
@@ -280,17 +284,25 @@ export function AccountAuth({
   onAuthenticated,
   onCancel,
   previewState,
+  reviewProvider,
 }: {
   selectedFile?: { name: string; size: number } | null;
   onAuthenticated: () => void;
   onCancel?: (selectedFile: { name: string; size: number }) => void;
   previewState?: AccountAuthPreviewState;
+  /** Review fixtures only (never in production): a provider press goes here,
+   * not to Google, Apple or Facebook (/review-fixture/sign-in). */
+  reviewProvider?: (provider: SignInProvider) => void;
 }) {
   const preview = process.env.NODE_ENV !== "production" && !!previewState;
+  const reviewSignIn =
+    process.env.NODE_ENV !== "production" ? reviewProvider : undefined;
   const [config, setConfig] = useState<EmailCodeConfig | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [email, setEmail] = useState(
-    previewState === "auth.code" ? "sample@example.test" : "",
+    previewState === "auth.code" || previewState === "auth.password"
+      ? "sample@example.test"
+      : "",
   );
   const [consent, setConsent] = useState(false);
   // Owner, 23 Oct 2026 ("not progressive"): the buttons are never greyed out;
@@ -299,7 +311,11 @@ export function AccountAuth({
   const consentRef = useRef<HTMLInputElement>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<"email" | "code" | "password" | "confirmed">(
-    previewState === "auth.code" ? "code" : "email",
+    previewState === "auth.code"
+      ? "code"
+      : previewState === "auth.password"
+        ? "password"
+        : "email",
   );
   const [pending, setPending] = useState(false);
   const [popupActive, setPopupActive] = useState(false);
@@ -338,7 +354,9 @@ export function AccountAuth({
   const displayedStep = preview
     ? previewState === "auth.code"
       ? "code"
-      : "email"
+      : previewState === "auth.password"
+        ? "password"
+        : "email"
     : step;
   const displayedEmail =
     previewState === "auth.code" && preview ? "sample@example.test" : email;
@@ -778,6 +796,10 @@ export function AccountAuth({
   function startProvider(provider: SignInProvider) {
     if (!preview && !consent) {
       askConsent();
+      return;
+    }
+    if (reviewSignIn && !preview) {
+      reviewSignIn(provider);
       return;
     }
     if (
