@@ -564,21 +564,20 @@ FEATURES: tuple[tuple[str, str, Callable[[Row], bool]], ...] = (
 
 def _features(rows: Sequence[Row]) -> dict[str, Any]:
     active = {row.person for row in rows}
-    out = []
-    for key, label, test in FEATURES:
-        people = _people(rows, test)
-        out.append({"feature": key, "label": label, "people": len(people)})
+    counts = [(key, label, len(_people(rows, test))) for key, label, test in FEATURES]
     for feature, items in _groups(
         [row for row in rows if row.event == "sx.feature_used"],
         lambda row: str(row.payload.get("feature", "")),
     ).items():
         if feature:
-            out.append(
-                {"feature": feature, "label": feature, "people": len({r.person for r in items})}
-            )
-    for item in out:
-        item["share"] = _share(item["people"], len(active))
-    return {"active_people": len(active), "rows": sorted(out, key=lambda item: -item["people"])}
+            counts.append((feature, feature, len({r.person for r in items})))
+    return {
+        "active_people": len(active),
+        "rows": [
+            {"feature": key, "label": label, "people": people, "share": _share(people, len(active))}
+            for key, label, people in sorted(counts, key=lambda item: -item[2])
+        ],
+    }
 
 
 def _top(values: Iterable[str], count: int = 3) -> list[str]:
