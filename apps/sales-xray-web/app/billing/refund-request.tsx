@@ -1,5 +1,6 @@
 "use client";
 
+import { CircleCheck, Clock3 } from "lucide-react";
 import { useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 
@@ -55,13 +56,9 @@ export function RefundRequest({
   const inBrowser = useInBrowser();
 
   if (result?.state === "refunded" || result?.state === "pending")
-    return (
-      <span role="status">
-        {result.state === "refunded" ? "Refunded" : "Refund requested"}
-      </span>
-    );
-  if (refund?.state === "pending") return <span>Refund requested</span>;
-  if (refund?.state === "refunded") return <span>Refunded</span>;
+    return <RefundState state={result.state} live />;
+  if (refund?.state === "pending" || refund?.state === "refunded")
+    return <RefundState state={refund.state} />;
   if (refund?.state !== "available") return null;
 
   const submit = async () => {
@@ -165,5 +162,26 @@ export function RefundRequest({
       </button>
       {inBrowser ? createPortal(sheet, document.body) : null}
     </>
+  );
+}
+
+/** Where a refund stands, as a small chip with its icon. */
+function RefundState({
+  state,
+  live = false,
+}: {
+  state: "pending" | "refunded";
+  live?: boolean;
+}) {
+  const Icon = state === "refunded" ? CircleCheck : Clock3;
+  return (
+    <span
+      className={styles.state}
+      data-state={state}
+      role={live ? "status" : undefined}
+    >
+      <Icon size={14} aria-hidden="true" />
+      {state === "refunded" ? "Refunded" : "Refund requested"}
+    </span>
   );
 }

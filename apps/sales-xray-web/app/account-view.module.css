@@ -891,7 +891,7 @@
   width: 100vw;
   height: 100dvh;
   z-index: 1000;
-  background: var(--lx-paper-1, #f8f9fa);
+  background: var(--lx-paper);
   display: flex;
   flex-direction: column;
 }

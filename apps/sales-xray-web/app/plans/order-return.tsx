@@ -1,7 +1,7 @@
 "use client";
 
 import { RefundRequest } from "../billing/refund-request";
-import { CircleCheck, CircleX, Clock3, RefreshCw } from "lucide-react";
+import { CircleX, Clock3, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -17,6 +17,7 @@ import { count, day, formatMoney, minutes } from "../billing/money";
 import { useWorkspaceAccess } from "../workspace-access";
 import { AnimatedCountUp } from "./animated-count-up";
 import styles from "./plans.module.css";
+import { ResultSeal } from "./result-seal";
 import { formatPurchaseMinutes } from "./purchase-time";
 import { askFeedback } from "../feedback/ask";
 
@@ -267,14 +268,25 @@ function OrderReturnState({
     if (order.status === "paid") {
       body = (
         <>
-          <CircleCheck
-            className={styles.iconGood}
-            size={40}
-            aria-hidden="true"
-          />
-          <h2>Payment confirmed</h2>
+          <div className={styles.resultHead}>
+            <ResultSeal tone={refunded ? "refund" : "good"} />
+            <div>
+              <h2>
+                {!refunded
+                  ? "Payment confirmed"
+                  : order.refund?.state === "refunded"
+                    ? "Refunded"
+                    : "Refund requested"}
+              </h2>
+              <p className={styles.resultLead}>
+                {refunded
+                  ? `${formatMoney(order.amount)} goes back to the way you paid. This payment's minutes have left your balance.`
+                  : `${what} · ${formatMoney(order.amount)}`}
+              </p>
+            </div>
+          </div>
           {refunded ? null : <AnimatedCountUp targetMinutes={order.minutes} />}
-          <dl className={styles.rows}>
+          <dl className={`${styles.rows} ${styles.receipt}`}>
             <div>
               <dt>{order.kind === "top_up" ? "Top-up" : "Plan"}</dt>
               <dd>{what}</dd>
@@ -311,32 +323,33 @@ function OrderReturnState({
               </dd>
             </div>
           </dl>
-          <div className={styles.actions}>
-            <Link className={styles.primary} href="/new-analysis">
+          <div className={styles.resultActions}>
+            <Link className={styles.pay} href="/new-analysis">
               Analyse a call
             </Link>
-            <Link className={styles.ghost} href={plansHref}>
-              See your plan
-            </Link>
-            <Link className={styles.ghost} href={billingHref}>
-              Billing &amp; receipts
-            </Link>
+            <div className={styles.resultLinks}>
+              <Link className={styles.ghost} href={plansHref}>
+                See your plan
+              </Link>
+              <Link className={styles.ghost} href={billingHref}>
+                Billing &amp; receipts
+              </Link>
+            </div>
           </div>
-          {order.refund?.state === "available" &&
-          order.refund.refundableUntil ? (
-            <p className={styles.hint}>
-              Changed your mind? Ask for a refund until{" "}
-              {day(order.refund.refundableUntil)} if you have not used any
-              minutes.
-            </p>
-          ) : null}
-          {order.refund && requestRefund ? (
-            <div className={styles.actions}>
+          {order.refund?.state === "available" && requestRefund ? (
+            <div className={styles.refundNote}>
+              <p>
+                Changed your mind? You can ask for a full refund
+                {order.refund.refundableUntil
+                  ? ` until ${day(order.refund.refundableUntil)}`
+                  : ""}{" "}
+                if none of this payment&apos;s minutes are used.
+              </p>
               <RefundRequest
                 refund={order.refund}
                 amount={formatMoney(order.amount)}
                 onRequest={requestRefund}
-                className={styles.ghost}
+                className={styles.copy}
               />
             </div>
           ) : null}

@@ -331,11 +331,36 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: 12px;
-  border-radius: var(--lx-radius-sm, 10px);
-  background: var(--lx-paper-2);
+  padding: 14px;
+  border-radius: var(--lx-radius-md, 14px);
+  background: var(--lx-warning-soft);
   border: 1px solid var(--lx-line);
-  font: 500 13px/1.4 var(--lx-font-ui);
+  color: var(--lx-ink-2);
+  font: 500 13.5px/1.45 var(--lx-font-ui);
+  animation: rise 220ms var(--lx-ease-move, ease-out) backwards;
+}
+
+.confirmBox p {
+  margin: 0;
+}
+
+.confirmTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--lx-ink);
+  font: 700 15px/1.3 var(--lx-font-ui);
+}
+
+.confirmTitle svg {
+  color: var(--lx-warning);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
 }
 
 .docLink {
@@ -396,4 +421,137 @@
     font-weight: 600;
     text-align: left;
   }
+}
+
+/* Polish (owner, 23 Oct 2026: "nice looks and finished, professional"). */
+
+.lead {
+  margin: 0;
+  color: var(--lx-ink-2);
+  font: 500 14px/1.5 var(--lx-font-ui);
+}
+
+/* Label and value rows (Renewal & Payment): labels never wrap mid-word. */
+.rows {
+  display: grid;
+  gap: 0;
+  margin: 0;
+}
+
+.rows > div {
+  display: grid;
+  grid-template-columns: minmax(96px, auto) minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--lx-line);
+  font: 500 13.5px/1.45 var(--lx-font-ui);
+}
+
+.rows > div:last-child {
+  border-bottom: 0;
+}
+
+.rows dt {
+  color: var(--lx-muted);
+}
+
+.rows dd {
+  margin: 0;
+  color: var(--lx-ink);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.statusChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 9px;
+  border-radius: var(--lx-radius-pill, 999px);
+  background: var(--lx-strength-soft);
+  color: var(--lx-strength-ink);
+  font: 700 12px/1.5 var(--lx-font-ui);
+}
+
+.statusChip[data-tone="refund"] {
+  background: var(--lx-sunken);
+  color: var(--lx-ink-2);
+}
+
+/* While billing loads: the cards' outline at their final sizes. */
+.skeletonCard {
+  min-height: 240px;
+}
+
+.skeletonCard i {
+  display: block;
+  height: 14px;
+  border-radius: 7px;
+  background: linear-gradient(
+    90deg,
+    var(--lx-sunken) 0%,
+    var(--lx-paper-2) 50%,
+    var(--lx-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s ease-in-out infinite;
+}
+
+.skeletonCard i[data-size="title"] {
+  width: 40%;
+  height: 18px;
+}
+
+.skeletonCard i[data-size="big"] {
+  width: 55%;
+  height: 30px;
+}
+
+.skeletonCard i:nth-of-type(4) {
+  width: 70%;
+}
+
+.skeletonCard i[data-size="button"] {
+  width: 130px;
+  height: 38px;
+  margin-top: auto;
+  border-radius: var(--lx-radius-sm, 10px);
+}
+
+@keyframes shimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeletonCard i,
+  .confirmBox {
+    animation: none;
+  }
+}
+
+/* Phones: the plan's one primary across the card, the rest side by side. */
+@media (max-width: 560px) {
+  .planActions > * {
+    flex: 1 1 calc(50% - 5px);
+    min-height: 44px;
+  }
+
+  .planActions > :first-child {
+    flex-basis: 100%;
+  }
+
+  .rows > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 2px;
+  }
+}
+
+/* Invoices read as a table across the page on computers. */
+.wide {
+  grid-column: 1 / -1;
 }

@@ -419,7 +419,13 @@ it("loads billing usage and invoices, and cancels renewal at period end", async 
   );
   await click("Cancel renewal");
   await click("Yes, cancel renewal");
-  expect(text()).toContain("Try again");
+  // A failed update is a corner card (owner rule), not text in the page.
+  expect(notify).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "billing-update-error",
+      message: "Try again",
+    }),
+  );
   await click("Yes, cancel renewal");
   await until(() => text().includes("Cancels at period end"));
   expect(cancelSubscription.mock.calls[0][2]).toBe(

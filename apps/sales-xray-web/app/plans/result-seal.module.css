@@ -1,0 +1,80 @@
+.seal {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+  animation: seal-in 360ms var(--lx-ease-pop, ease-out) backwards;
+}
+
+.seal::after {
+  position: absolute;
+  inset: -6px;
+  border: 2px solid var(--lx-teal);
+  border-radius: 50%;
+  opacity: 0;
+  content: "";
+  animation: seal-ring 900ms 240ms ease-out;
+}
+
+.seal[data-tone="refund"] {
+  background: var(--lx-sunken);
+  color: var(--lx-ink-2);
+}
+
+.seal[data-tone="refund"]::after {
+  content: none;
+}
+
+.svg {
+  width: 36px;
+  height: 36px;
+}
+
+.tick {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 3.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 30;
+  stroke-dashoffset: 0;
+  animation: tick-draw 420ms 160ms var(--lx-ease-move, ease-out) backwards;
+}
+
+@keyframes seal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+}
+
+@keyframes seal-ring {
+  0% {
+    opacity: 0.5;
+    transform: scale(0.85);
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.25);
+  }
+}
+
+@keyframes tick-draw {
+  from {
+    stroke-dashoffset: 30;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .seal,
+  .seal::after,
+  .tick {
+    animation: none;
+  }
+}

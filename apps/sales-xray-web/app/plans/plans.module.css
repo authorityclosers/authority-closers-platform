@@ -842,6 +842,128 @@
   color: var(--lx-muted);
 }
 
+/* Payment confirmed (owner, 23 Oct 2026: "nice looks and finished, professional"):
+   the seal and what was bought, the minutes, a receipt, one way on. */
+.page[data-order-return] {
+  justify-items: center;
+}
+
+.page[data-order-return] .result {
+  box-sizing: border-box;
+  width: 100%;
+  gap: 16px;
+}
+
+.resultHead {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.resultHead > div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.resultLead {
+  margin: 0;
+  color: var(--lx-muted);
+  font: 500 14px/1.45 var(--lx-font-ui);
+  font-variant-numeric: tabular-nums;
+}
+
+.receipt {
+  width: 100%;
+  box-sizing: border-box;
+  gap: 0;
+  padding: 2px 14px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-md, 14px);
+  background: var(--lx-paper-2);
+}
+
+.receipt div {
+  padding: 10px 0;
+  border-bottom: 1px dashed var(--lx-line);
+}
+
+.receipt div:last-child {
+  border-bottom: 0;
+}
+
+.resultActions {
+  display: grid;
+  gap: 8px;
+  width: 100%;
+}
+
+/* Full width means border to border: padding sits inside (no sideways scroll). */
+.resultActions > a,
+.resultActions > button,
+.resultLinks > a {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.resultLinks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.resultLinks > a {
+  min-height: 44px;
+}
+
+.refundNote {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-md, 14px);
+  color: var(--lx-ink-2);
+  font: 500 13px/1.5 var(--lx-font-ui);
+}
+
+.refundNote p {
+  flex: 1 1 220px;
+  margin: 0;
+}
+
+/* The review fixture's stand-in for the payment partner's page. */
+.testPayPage {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 16px;
+  justify-items: center;
+}
+
+.testPayPage .result {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 440px;
+  margin-top: 4vh;
+}
+
+.testPayTag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--lx-radius-pill, 999px);
+  background: var(--lx-warning-soft);
+  color: var(--lx-warning);
+  font: 700 12px/1.2 var(--lx-font-ui);
+}
+
 /* Rules under the frame. */
 .rules ul {
   display: grid;
@@ -1369,7 +1491,7 @@
   width: 100vw;
   max-width: 100vw;
   overflow: hidden;
-  background: var(--lx-paper-1, #f8f9fa);
+  background: var(--lx-paper);
   color: var(--lx-ink, #0f172a);
 }
 
