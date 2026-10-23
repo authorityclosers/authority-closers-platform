@@ -196,6 +196,8 @@ describe("Lightbox token derivative", () => {
       // One teal accent (owner, 11 Oct 2026): info is slate, not blue.
       ["info", "#56637a"],
       ["info-soft", "#eceff4"],
+      // The brand's Mint on film (brand B "Insight", owner, 23 Oct 2026).
+      ["glow", "#3debb0"],
     ]);
     const addedLight = new Set([
       "elevated",
