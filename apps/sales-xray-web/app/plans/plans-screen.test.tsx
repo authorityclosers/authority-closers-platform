@@ -298,7 +298,17 @@ it("prices two team seats yearly, accepts the server total and warns about renew
 
 it("requires an enterprise name and allows an omitted GSTIN", async () => {
   const checkout = vi.fn(fixtureBilling.checkout);
-  await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
+  // Enterprise on sale; until then it is Talk to us (owner, 30 Sep 2026).
+  const readPlans = async () =>
+    parsePlans({
+      plans: FIXTURE_PLANS.plans.map((p) =>
+        p.key === "enterprise" ? { ...p, status: "active" } : p,
+      ),
+    });
+  await render(
+    <PlansPurchase client={{ ...fixtureBilling, checkout, readPlans }} />,
+  );
+  await until(() => Boolean(button("Get Enterprise")));
   await click("Get Enterprise");
   await click("Review total");
   expect(checkout).not.toHaveBeenCalled();
