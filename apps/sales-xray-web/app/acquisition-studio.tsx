@@ -201,6 +201,25 @@ const message = (error: unknown) =>
     ? error
     : "This result could not be verified. Try again; your completed work stays saved.";
 
+/** A signed-in seller with no minutes left (or too few for this recording) is sent to Plans. */
+export function analysisMinutesOut(
+  authenticated: boolean,
+  allowance: Allowance | null,
+  error: string | AcquisitionError,
+): boolean {
+  if (!authenticated) return false;
+  if (
+    error instanceof AcquisitionError &&
+    error.reason === "trial_allowance_insufficient"
+  )
+    return true;
+  return (
+    allowance !== null &&
+    !allowance.unlimited &&
+    allowance.available_seconds === 0
+  );
+}
+
 export function remainingAllowanceLabel(
   allowance: Allowance | null,
   advertisedSeconds: number | null,
@@ -461,13 +480,11 @@ export function AcquisitionStudio({
   const [statusCard, setStatusCard] = useState(false);
   const statusMissRef = useRef({ id: "", count: 0 });
   // Out of minutes: point a signed-in seller at Plans (a plan or a top-up) instead of a dead end.
-  const minutesOut =
-    access?.authenticated === true &&
-    ((allowance !== null &&
-      !allowance.unlimited &&
-      allowance.available_seconds === 0) ||
-      (error instanceof AcquisitionError &&
-        error.reason === "trial_allowance_insufficient"));
+  const minutesOut = analysisMinutesOut(
+    access?.authenticated === true,
+    allowance,
+    error,
+  );
   useEffect(() => {
     if (!minutesOut) return;
     const id = "analysis-minutes-out";

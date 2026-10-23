@@ -18,8 +18,10 @@ import Page from "./page";
 import { AppSession } from "./app-session";
 import {
   AcquisitionStudio,
+  analysisMinutesOut,
   remainingAllowanceLabel,
 } from "./acquisition-studio";
+import { AcquisitionError } from "./acquisition-client";
 import {
   UploadSessionProvider,
   UploadSessionStore,
@@ -1913,6 +1915,26 @@ it.each([
   expect(
     remainingAllowanceLabel(confirmed, allowance.allowance_seconds, false),
   ).toBe(expected);
+});
+
+it("sends a signed-in seller with no minutes left to Plans, never a guest", () => {
+  const empty = {
+    allowance_seconds: 6000,
+    committed_seconds: 6000,
+    available_seconds: 0,
+  };
+  const some = { ...empty, committed_seconds: 5940, available_seconds: 60 };
+  const tooLong = new AcquisitionError(403, "trial_allowance_insufficient");
+  expect(analysisMinutesOut(true, empty, "")).toBe(true);
+  expect(analysisMinutesOut(true, some, "")).toBe(false);
+  expect(analysisMinutesOut(true, some, tooLong)).toBe(true);
+  expect(analysisMinutesOut(true, { ...empty, unlimited: true }, "")).toBe(
+    false,
+  );
+  expect(analysisMinutesOut(true, null, "")).toBe(false);
+  expect(analysisMinutesOut(false, empty, tooLong)).toBe(false);
+  expect(tooLong.message).toContain("Get more minutes from Plans");
+  expect(tooLong.message).not.toMatch(/₹|price|cost/i);
 });
 
 it("does not present a legacy tester flag as a plan or finite balance", () => {
