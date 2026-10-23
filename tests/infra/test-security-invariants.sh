@@ -121,7 +121,7 @@ grep -q 'full 40-character lowercase Git SHA' "$foundation/scripts/install-found
 grep -Fxq '/usr/local/sbin/ac-infisical-run-backup' \
   "$foundation/config/release/install-scope-backup.txt"
 [[ "$(grep -Ec '^/' "$foundation/config/release/install-scope-backup.txt")" -eq 26 ]]
-grep -Fq 'AC_INSTALL_SCOPE accepts only backup.' "$foundation/scripts/install-foundation-release.sh"
+grep -Fq 'AC_INSTALL_SCOPE accepts only backup or drive-backup.' "$foundation/scripts/install-foundation-release.sh"
 # shellcheck disable=SC2016  # This exact source snippet is a static assertion.
 grep -Fq 'if [[ "$test_mode" == 0 && "$scoped_backup_install" == 0 ]]; then' \
   "$foundation/scripts/install-foundation-release.sh"
