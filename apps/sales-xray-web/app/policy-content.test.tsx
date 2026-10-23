@@ -119,7 +119,8 @@ it("names Google (Gemini) for AI-drafted replies, and what is never sent", () =>
   expect(markup).toContain(
     "does not send Google the answers given in Facebook or Instagram lead forms",
   );
-  expect(markup).toContain('dateTime="2026-10-21"');
+  // Dated 24 Oct 2026: the Usage analytics section (telemetry option B).
+  expect(markup).toContain('dateTime="2026-10-24"');
 });
 
 it("names the AI providers for call analysis, OpenAI with its training and retention terms", () => {
