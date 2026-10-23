@@ -52,7 +52,9 @@ function Tile({
 }
 
 /** What Sales Xray earned: collected, refunded, net, GST and recurring revenue. */
-export function RevenuePanel() {
+export function RevenuePanel({
+  fetcher = fetch,
+}: { fetcher?: typeof fetch } = {}) {
   const [mode, setMode] = useState<RevenueMode>("live");
   const [windowKey, setWindowKey] =
     useState<RevenueWindow["key"]>("this_month");
@@ -63,7 +65,7 @@ export function RevenuePanel() {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadRevenue(mode, controller.signal)
+    loadRevenue(mode, controller.signal, fetcher)
       .then((result) => {
         if (controller.signal.aborted) return;
         setData(result);
@@ -82,7 +84,7 @@ export function RevenuePanel() {
         if (!controller.signal.aborted) setPending(false);
       });
     return () => controller.abort();
-  }, [mode, retry]);
+  }, [fetcher, mode, retry]);
 
   const choose = (next: RevenueMode) => {
     if (next === mode) return;

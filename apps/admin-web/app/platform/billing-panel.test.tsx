@@ -49,7 +49,7 @@ it("shows orders, payments, refunds and subscriptions from the fixture", async (
     "Bought the wrong plan",
     "Succeeded",
     "Cancelled at period end",
-    "The platform does not issue invoices yet",
+    "Every verified payment gets a numbered GST tax invoice",
   ])
     expect(text).toContain(expected);
   expect(
