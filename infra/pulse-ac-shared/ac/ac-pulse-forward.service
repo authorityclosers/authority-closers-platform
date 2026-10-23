@@ -1,0 +1,14 @@
+[Unit]
+Description=pulse.authorityclosers.com -> the shared Pulse on ea (Authority Closers organisation; restricted SSH forward, AUT-2207)
+After=network-online.target
+Wants=network-online.target
+Conflicts=ac-pulse-redirect.service
+StartLimitIntervalSec=0
+
+[Service]
+ExecStart=/usr/bin/ssh -NT -o BatchMode=yes -o ExitOnForwardFailure=yes -o ServerAliveInterval=15 -o ServerAliveCountMax=3 -o ConnectTimeout=20 -o StrictHostKeyChecking=yes -o UserKnownHostsFile=/etc/pulse/secrets/known_hosts -i /etc/pulse/secrets/forward_ed25519 -L 127.0.0.1:8090:127.0.0.1:4002 pulsesync@187.53.141.187
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
