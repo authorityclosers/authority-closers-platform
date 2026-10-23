@@ -1,0 +1,32 @@
+#!/usr/bin/env python3
+"""AC server: pulse.authorityclosers.com now lives in the shared Pulse (owner approval 23 Oct 2026, AUT-2207).
+
+Listens where AC's own Pulse used to (127.0.0.1:8090, behind AC's Cloudflare tunnel) and answers every request with a
+301 to the same path and query on https://ac-pulse.estateautopilots.com. Nothing else: no files, no state, no logs of
+query strings. Stop it (systemctl stop ac-pulse-redirect) before starting the old install again for a rollback.
+"""
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+TARGET = "https://ac-pulse.estateautopilots.com"
+
+
+class Redirect(BaseHTTPRequestHandler):
+    server_version = "ac-pulse-redirect"
+    sys_version = ""
+
+    def _go(self) -> None:
+        path = self.path if self.path.startswith("/") else "/"
+        self.send_response(301)
+        self.send_header("Location", TARGET + path)
+        self.send_header("Cache-Control", "public, max-age=3600")
+        self.send_header("Content-Length", "0")
+        self.end_headers()
+
+    do_GET = do_HEAD = do_POST = do_PUT = do_PATCH = do_DELETE = do_OPTIONS = _go
+
+    def log_message(self, fmt: str, *args: object) -> None:  # no request lines (paths can carry tokens)
+        return
+
+
+if __name__ == "__main__":
+    ThreadingHTTPServer(("127.0.0.1", 8090), Redirect).serve_forever()

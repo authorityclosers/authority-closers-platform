@@ -1,0 +1,74 @@
+#!/usr/bin/env python3
+"""AC server: Authority Closers' tasks in the shared Pulse (owner approval 23 Oct 2026, AUT-2207).
+
+The one way AC's tools read and write AC's Pulse tasks since AC moved into the shared Pulse on ea. It sends a JSON
+request over the restricted key /etc/pulse/secrets/ac_tasks_ed25519 to ea's pulse-ac-tasks route, which runs only a
+fixed set of task operations inside Authority Closers' organisation (no SQL from here), and prints ea's JSON answer.
+Root only (the key is root's): run it with sudo.
+
+  ac-pulse-tasks people
+  ac-pulse-tasks find '{"titleLike": "Revenue", "open": true}'
+  ac-pulse-tasks get '{"id": "<task uuid>"}'
+  ac-pulse-tasks save '{"fields": {"title": "…", "assigneeId": "<person>", "parentId": "<task>", "notes": "…"}, "guessCategoryFrom": "…"}'
+  ac-pulse-tasks save '{"id": "<task uuid>", "fields": {"notes": "…"}}'
+  ac-pulse-tasks move '{"id": "<task uuid>", "status": "done", "note": "…"}'
+  ac-pulse-tasks comment '{"taskId": "<task uuid>", "body": "…"}'
+  ac-pulse-tasks ensure '{"marker": "<unique text kept in notes>", "fields": {...}, "parent": {"title": "…", "fields": {...}}}'
+  ac-pulse-tasks close '{"marker": "…", "status": "done", "note": "…"}'
+  ac-pulse-tasks state '{"markers": ["…"]}'
+  ac-pulse-tasks --batch request.json        # {"as", "actor", "dry", "ops": [{"op": …}, …]} in one transaction
+Options: --as <AC username> (default suyash: writes are made as that person), --actor <label for the audit trail>,
+--dry (everything rolled back). Operation details: /usr/local/sbin/pulse-ac-tasks-root on ea.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import subprocess
+import sys
+
+KEY = "/etc/pulse/secrets/ac_tasks_ed25519"
+EA = "pulsesync@187.53.141.187"
+SSH = ["ssh", "-i", KEY, "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "-o", "StrictHostKeyChecking=yes",
+       "-o", "UserKnownHostsFile=/etc/pulse/secrets/known_hosts", EA]
+
+
+def call(request: dict, timeout: int = 120) -> dict:
+    """Send one request; return ea's answer (raises on transport errors or an error answer)."""
+    proc = subprocess.run(SSH, input=json.dumps(request, ensure_ascii=False), capture_output=True, text=True,
+                          timeout=timeout, check=False)
+    try:
+        out = json.loads(proc.stdout.strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError):
+        raise RuntimeError(f"no answer from ea (ssh {proc.returncode}): {proc.stderr.strip()[-300:]}") from None
+    if "error" in out:
+        raise RuntimeError(out["error"])
+    return out
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    ap.add_argument("op", nargs="?", help="people, find, get, save, move, comment, file, ensure, close, state")
+    ap.add_argument("args", nargs="?", default="{}", help="the operation's arguments as a JSON object")
+    ap.add_argument("--batch", help="a whole request as JSON (file path, or - for stdin)")
+    ap.add_argument("--as", dest="who", default="suyash")
+    ap.add_argument("--actor", default="ac-pulse-tasks")
+    ap.add_argument("--dry", action="store_true")
+    a = ap.parse_args()
+    if a.batch:
+        req = json.load(sys.stdin if a.batch == "-" else open(a.batch, encoding="utf-8"))
+    elif a.op:
+        req = {"as": a.who, "actor": a.actor, "dry": a.dry, "ops": [{"op": a.op, **json.loads(a.args)}]}
+    else:
+        ap.error("an operation or --batch")
+    try:
+        out = call(req)
+    except RuntimeError as e:
+        print(json.dumps({"error": str(e)}), file=sys.stderr)
+        return 1
+    print(json.dumps(out if a.batch else out["results"][0]["r"], ensure_ascii=False, indent=1))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -1,0 +1,5 @@
+#!/bin/bash
+# EA server: forced SSH command for Authority Closers task route (pulsesync, key ac-pulse-tasks; AUT-2207).
+# The JSON request comes on stdin; the client command line is ignored.
+set -euo pipefail
+exec sudo -n /usr/local/sbin/pulse-ac-tasks-root

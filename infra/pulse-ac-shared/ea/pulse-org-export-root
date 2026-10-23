@@ -1,0 +1,17 @@
+#!/bin/bash
+# EA server: one organisation's rows from the shared Pulse (production), as a pulse-org-move bundle streamed as a tar on
+# stdout, for that organisation's own encrypted off-site copy. Owner approval 23 Oct 2026 (AUT-2207: "nightly AC export
+# to AC Drive"). Read only: one repeatable-read, read-only snapshot; lowest CPU and I/O priority. Only organisations
+# listed in /etc/pulse-org-export.allow (one handle per line). Restore: pulse-org-move.py import into a Pulse on the same
+# release (docs in the AC workbench, scripts/data-changes/pulse-org-move.py). Like the pg_dump backups before it, the copy
+# keeps the people's password records and two-step state (hashes, encrypted again on ac before it leaves).
+set -euo pipefail
+umask 077
+org="${1:-}"
+[[ -n "$org" ]] && grep -qxF -- "$org" /etc/pulse-org-export.allow || { echo "pulse-org-export: organisation not allowed: $org" >&2; exit 2; }
+install -d -m 700 /var/lib/pulse-org-export
+work="$(mktemp -d /var/lib/pulse-org-export/run.XXXXXX)"
+trap 'rm -rf "$work"' EXIT
+nice -n 19 ionice -c3 python3 /usr/local/lib/pulse-org-move/pulse-org-move.py export --exec "docker exec -i ea-postgres" \
+  --db-user ea_admin --database pulse --org "$org" --out "$work/bundle" --carry-passwords >&2
+tar -C "$work" -cf - bundle

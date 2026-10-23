@@ -1,0 +1,92 @@
+#!/usr/bin/env python3
+"""AC server: forward Dipak's sample structures from AC Pulse to strike 1678 (owner order, 16 Oct 2026).
+
+Every run (ac-pulse-sample-watch.timer, 15 min) reads, read-only, the AC Pulse tasks
+"Prospect's Information -New Sample Structure" and "Coaching Structure- New Sample Structure": notes, proof items,
+comments and attached files. When their content is new, it saves the files under
+/home/acdev/strikes/1678/samples/<task>/, appends one section to /home/acdev/strikes/1678/INBOX.md and tells the
+owner on Telegram. State: /var/lib/ac-pulse-sample-watch/. Log: /var/log/ac-pulse-sample-watch.log.
+
+Since 23 Oct 2026 (AUT-2207) AC's Pulse is an organisation in the shared Pulse on ea: the watch reads through
+ac-pulse-tasks (ea's restricted AC task route, read operations "get" and "file"), never with SQL.
+"""
+import base64, datetime, hashlib, json, os, pathlib, pwd, re, subprocess, sys
+
+TASKS = {
+    "prospect": ("Prospect's Information -New Sample Structure", "Prospect's Information Section (due 17 Oct)"),
+    "coaching": ("Coaching Structure- New Sample Structure", "Coaching Section Functional with New Style (due 19 Oct)"),
+}
+STRIKE = pathlib.Path("/home/acdev/strikes/1678")
+STATE = pathlib.Path("/var/lib/ac-pulse-sample-watch")
+LOG = pathlib.Path("/var/log/ac-pulse-sample-watch.log")
+ACDEV = pwd.getpwnam("acdev")
+
+
+def log(msg):
+    with LOG.open("a") as f:
+        f.write(f"{datetime.datetime.now(datetime.timezone.utc):%Y-%m-%dT%H:%M:%SZ} {msg}\n")
+
+
+def tasks(op, **args):
+    """One read from AC's task route on ea (rolled back: the watch never writes)."""
+    req = {"as": "suyash", "actor": "ac-pulse-sample-watch", "dry": True, "ops": [{"op": op, **args}]}
+    out = subprocess.run(["/usr/local/bin/ac-pulse-tasks", "--batch", "-"], input=json.dumps(req), capture_output=True,
+                         text=True, timeout=120)
+    if out.returncode != 0:
+        raise RuntimeError(out.stderr.strip()[:300])
+    return json.loads(out.stdout)["results"][0]["r"]
+
+
+def main():
+    STATE.mkdir(parents=True, exist_ok=True)
+    for key, (title, target) in TASKS.items():
+        d = tasks("get", title=title)
+        if not d:
+            log(f"{key}: task not found"); continue
+        d["notes"] = d.get("notes") or ""
+        has = d["notes"].strip() or d["proof"] or d["comments"] or d["files"]
+        if not has:
+            continue
+        fp = hashlib.sha256(json.dumps({k: d[k] for k in ("notes", "proof", "comments", "files")}, sort_keys=True).encode()).hexdigest()
+        sf = STATE / f"{key}.sha256"
+        if sf.exists() and sf.read_text().strip() == fp:
+            continue
+        outdir = STRIKE / "samples" / key
+        outdir.mkdir(parents=True, exist_ok=True)
+        saved = []
+        for f in d["files"]:
+            b64 = (tasks("file", id=f["id"]) or {}).get("base64") or ""
+            name = re.sub(r"[^A-Za-z0-9._ -]", "_", f["name"] or f["id"])[:120]
+            p = outdir / name
+            p.write_bytes(base64.b64decode(b64))
+            os.chown(p, ACDEV.pw_uid, ACDEV.pw_gid)
+            saved.append(str(p))
+        for p in [STRIKE / "samples", outdir]:
+            os.chown(p, ACDEV.pw_uid, ACDEV.pw_gid)
+        now = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds")
+        lines = [f"\n## Owner relay: Dipak's {key} sample structure arrived in AC Pulse, {now}",
+                 f"Source: AC Pulse task \"{title}\" (status {d['status']}). Use it as the structure for \"{target}\".",
+                 "Owner order (16 Oct): build Prospect's Information and Coaching from Dipak's samples. Report progress in NOTES.md."]
+        if d["notes"].strip():
+            lines += ["", "### Notes", d["notes"].strip()]
+        if d["comments"]:
+            lines += ["", "### Comments"] + [f"- {c['by']} ({c['at'][:16]}): {c['body']}" for c in d["comments"]]
+        if d["proof"]:
+            lines += ["", "### Proof items"] + [f"- {p['kind']}: {p.get('label') or ''} {p.get('url') or ''} {p.get('file') or ''}".rstrip() for p in d["proof"]]
+        if saved:
+            lines += ["", "### Files saved"] + [f"- {s}" for s in saved]
+        with (STRIKE / "INBOX.md").open("a") as f:
+            f.write("\n".join(lines) + "\n")
+        sf.write_text(fp)
+        log(f"{key}: forwarded ({len(saved)} files, {len(d['comments'])} comments)")
+        subprocess.run(["/usr/local/sbin/ac-notify-owner",
+                        f"Dipak's {key} sample is in AC Pulse; I sent it to strike 1678 to build \"{target}\"."],
+                       capture_output=True, timeout=30)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as e:  # never crash-loop the timer; the log says why
+        log(f"error: {e}")
+        sys.exit(1)
