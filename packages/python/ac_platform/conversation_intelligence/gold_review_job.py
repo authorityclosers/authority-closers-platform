@@ -257,8 +257,16 @@ async def _assign(
         evidence = await service._evidence(review.run_id, now, report_id=review.report_draft_id)
         if review.transcript_revision != evidence.transcript["revision"] or review.payload is None:
             return False
-        bound_review = await GoldReviews(service)._review(evidence, review.id)
+        gold = GoldReviews(service)
+        bound_review = await gold._review(evidence, review.id)
         ai_lines(bound_review.payload or {})
+        items = None
+        if plan.mode == "report":
+            # The coaching lead reviews the Report he would see: wait for Brain 4.0's read.
+            found, _, route = await gold.report_items(evidence, bound_review)
+            if route["brain4"] is None:
+                return False
+            items = len(found)
         _, assignment = await service._persist_assignment(
             reviewer_person_id=reviewer.person_id,
             creator_id=reviewer.designated_by,
@@ -278,6 +286,7 @@ async def _assign(
             created_at=now,
             mode=plan.mode,
             checkpoint=plan.name,
+            items=items,
         )
     )
     await database.flush()

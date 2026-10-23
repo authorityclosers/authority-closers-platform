@@ -16,10 +16,24 @@ from ac_platform.conversation_intelligence.gold_checkpoint import (
 )
 
 START = datetime(2026, 10, 21, 10, tzinfo=UTC)
+# The first checkpoint's sample (fresh-1, 21 Oct): the sampling rule's tests use it.
+BASE: dict[str, object] = {
+    "name": "fresh-1",
+    "since": "2026-10-21T09:51:31Z",
+    "mode": "brain4_blind",
+    "daily": 5,
+    "total": 25,
+    "assign_from_hour": 8,
+    "minutes": (10, 30),
+    "workspaces": "company",
+    "at_least": {"price": 15, "objection": 12, "decision": 12},
+    "mix": {"first_call": 15, "follow_up": 10, "won": 5, "lost": 5, "pending": 5},
+    "salespeople": {"at_least": 3, "at_most_each": 10},
+}
 
 
 def plan(**changes: object) -> Checkpoint:
-    data = gold_checkpoint.current().model_dump()
+    data = dict(BASE)
     data.update(changes)
     if "daily" not in changes:
         data["daily"] = min(data["daily"], data["total"])
@@ -30,16 +44,15 @@ def call(n: int, person: str, *found: str) -> Candidate:
     return Candidate(f"call-{n:03d}", person, START + timedelta(minutes=n), frozenset(found))
 
 
-def test_the_checkpoint_in_force_is_the_approved_one() -> None:
+def test_the_checkpoint_in_force_is_the_report_review() -> None:
     current = gold_checkpoint.current()
-    assert (current.mode, current.daily, current.total) == ("brain4_blind", 5, 25)
+    assert (current.name, current.mode, current.daily) == ("review-1", "report", 5)
     assert current.minutes == (10, 30)
+    # Our own workspaces until the owner approves customer calls.
     assert current.workspaces == "company"
-    assert current.at_least == {"price": 15, "objection": 12, "decision": 12}
-    assert current.mix == {"first_call": 15, "follow_up": 10, "won": 5, "lost": 5, "pending": 5}
-    assert (current.salespeople.at_least, current.salespeople.at_most_each) == (3, 10)
-    # Gate 3 is one number away.
-    assert plan(total=50).total == 50
+    assert current.at_least == {} and current.mix == {}
+    # The first sample stays valid, and Gate 3 is one number away.
+    assert plan().mode == "brain4_blind" and plan(total=50).total == 50
 
 
 @pytest.mark.parametrize(
@@ -122,7 +135,7 @@ def test_every_call_is_the_reader_before_checkpoints() -> None:
 
 def test_progress_is_counts_only() -> None:
     picked = [call(1, "rep-a", "price"), call(2, "rep-b", "price", "won")]
-    report = progress(gold_checkpoint.current(), picked)
+    report = progress(plan(), picked)
     assert report["chosen"] == 2 and report["salespeople"] == 2
     assert report["at_least"]["price"] == {"want": 15, "have": 2}
     assert report["mix"]["won"] == {"want": 5, "have": 1}

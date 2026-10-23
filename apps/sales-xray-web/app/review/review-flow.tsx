@@ -13,6 +13,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { notify } from "../notice-center";
 import { BlindFlow } from "./blind-flow";
+import { ReportFlow } from "./report-flow";
 import {
   REASONS,
   REASON_WORDS,
@@ -63,7 +64,8 @@ function draftFrom(row: SavedRow | undefined): Draft {
   const value = row?.value;
   if (!value || value.skip) return EMPTY;
   return {
-    verdict: value.verdict ?? null,
+    // "fix" belongs to the Report review; a line save never carries it.
+    verdict: value.verdict === "fix" ? null : (value.verdict ?? null),
     status: value.status ?? null,
     score: value.score ?? null,
     reasons: value.reasons ?? [],
@@ -286,6 +288,7 @@ export function ReviewFlow({
     const onKey = (event: KeyboardEvent) => {
       if (
         workspace?.mode === "brain4_blind" ||
+        workspace?.mode === "report" ||
         event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement ||
         event.metaKey ||
@@ -330,6 +333,15 @@ export function ReviewFlow({
   if (workspace.mode === "brain4_blind")
     return (
       <BlindFlow
+        assignmentId={assignmentId}
+        workspace={workspace}
+        onFinished={onFinished}
+        onReload={load}
+      />
+    );
+  if (workspace.mode === "report")
+    return (
+      <ReportFlow
         assignmentId={assignmentId}
         workspace={workspace}
         onFinished={onFinished}

@@ -220,7 +220,33 @@ const sampleSchema = z.object({
   mix: z.record(z.string(), progressCount).catch({}).default({}),
 });
 
+/**
+ * Report review (owner, 23 Oct): the coaching lead agrees, disagrees or fixes every item
+ * of a call's Report. Per section and per engine module (analysis_engine.registry); the
+ * server names both, so a new section or module needs no change here.
+ */
+const reviewRow = z.object({
+  key: z.array(z.string()).catch([]).default([]),
+  names: z.array(z.string()).catch([]).default([]),
+  labels: count,
+  calls: count,
+  agree: count,
+  disagree: count,
+  fix: count,
+  agree_rate: rate,
+  agree_ci: interval,
+  rating_moved: rate,
+});
+const reviewSchema = z.object({
+  items: count,
+  skipped: count,
+  calls: count,
+  by_section: z.array(reviewRow).catch([]).default([]),
+  by_module: z.array(reviewRow).catch([]).default([]),
+});
+
 export type Blind = z.infer<typeof blindSchema>;
+export type ReportReview = z.infer<typeof reviewSchema>;
 export type Sample = z.infer<typeof sampleSchema>;
 
 export const brain4Evaluation = z.object({
@@ -266,6 +292,7 @@ export const brain4Evaluation = z.object({
     .catch([])
     .default([]),
   blind: blindSchema.catch(blindSchema.parse({})),
+  review: reviewSchema.catch(reviewSchema.parse({})),
   sample: sampleSchema.nullable().catch(null).default(null),
   stability: z
     .record(z.string(), z.object({ calls: z.number(), same: z.number() }))

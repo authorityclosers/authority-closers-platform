@@ -63,6 +63,11 @@ def test_empty_gold_migration_downgrade_and_reupgrade(postgres_harness) -> None:
         verdict = classify_source(path.read_text(), str(path))
         check_operations([verdict], set())
         assert verdict.verdict == "additive"
+    # 0123 (23 Oct) widens the mode check (drop and re-create, as 0114) and adds items.
+    report = gold_migration("20261023_0123_gold_report_review.py")
+    assert (report.revision, report.down_revision) == ("20261023_0123", "20261022_0122")
+    path = Path(report.__file__)
+    check_operations([classify_source(path.read_text(), str(path))], set())
     tables = {
         "conversation_gold_reviewers",
         "conversation_gold_assignments",
@@ -73,6 +78,7 @@ def test_empty_gold_migration_downgrade_and_reupgrade(postgres_harness) -> None:
         # Match env.py so Alembic applies the repository's constraint names.
         context = MigrationContext.configure(connection, opts={"target_metadata": model_metadata()})
         with Operations.context(context):
+            report.downgrade()
             checkpoints.downgrade()
             columns = {
                 c["name"] for c in inspect(connection).get_columns("conversation_gold_assignments")
@@ -82,6 +88,7 @@ def test_empty_gold_migration_downgrade_and_reupgrade(postgres_harness) -> None:
             assert not tables & set(inspect(connection).get_table_names())
             module.upgrade()
             checkpoints.upgrade()
+            report.upgrade()
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []
 
 

@@ -1,14 +1,14 @@
 {
-  "name": "fresh-1",
-  "about": "First checkpoint after the 21 Oct 2026 reset: 25 chosen calls, about 20 rated per Brain 4.0 dimension (docs/research/2026-10-21-brain4). Raise total to 50 for AC-SVAL-01 Gate 3.",
+  "name": "review-1",
+  "about": "The coaching lead reviews every item of a call's Report (owner, 23 Oct 2026): at most 5 calls a day, 10-30 minutes, our own workspaces until the owner approves customer calls (then workspaces becomes any). Replaces fresh-1 (blind Brain 4.0 ratings), which found no call to choose.",
   "since": "2026-10-21T09:51:31Z",
-  "mode": "brain4_blind",
+  "mode": "report",
   "daily": 5,
-  "total": 25,
+  "total": 500,
   "assign_from_hour": 8,
   "minutes": [10, 30],
   "workspaces": "company",
-  "at_least": { "price": 15, "objection": 12, "decision": 12 },
-  "mix": { "first_call": 15, "follow_up": 10, "won": 5, "lost": 5, "pending": 5 },
-  "salespeople": { "at_least": 3, "at_most_each": 10 }
+  "at_least": {},
+  "mix": {},
+  "salespeople": { "at_least": 1, "at_most_each": 500 }
 }

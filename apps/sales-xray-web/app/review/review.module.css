@@ -633,6 +633,23 @@
   color: var(--sx-accent-ink);
 }
 
+/* ---- Report review (owner, 23 Oct) ------------------------------------- */
+
+.rating[data-ai] {
+  border-style: dashed;
+}
+
+.note[data-tall] {
+  height: auto;
+  min-height: 60px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.said[data-detail] {
+  color: var(--sx-ink-2);
+}
+
 .rating:disabled,
 .chip:disabled {
   opacity: 0.5;
