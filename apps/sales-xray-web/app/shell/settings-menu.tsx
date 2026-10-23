@@ -17,7 +17,6 @@
  * 5. the phone app download (website only) and the first-call guide.
  */
 import {
-  AudioLines,
   BarChart3,
   Bell,
   Bug,
@@ -27,13 +26,11 @@ import {
   Clock3,
   Compass,
   GraduationCap,
-  Layers,
   LifeBuoy,
   ListChecks,
   LogOut,
   MailOpen,
   PhoneCall,
-  Plug,
   Rows3,
   Settings2,
   Smartphone,
@@ -376,35 +373,20 @@ export function SettingsMenu({
     href: `/settings/${id}`,
     icon,
   }));
-  // Leads' settings have one home in Settings since slice 5 (22 Oct 2026).
-  // Owner, 23 Oct 2026: team and organisation were "too hidden", so the
-  // organisation's own page leads the group.
+  // Owner, 23 Oct 2026: the organisation's hub holds every management area
+  // (team, analytics, insights, leads setup, connections, company), so You
+  // offers the hub and its most used tab.
   const theirs = [
     {
-      label: "Team & organisation",
-      hint: "Members, invites, roles and company details",
-      href: "/settings/team",
+      label: "Organisation",
+      hint: "Team, analytics, insights, leads setup, connections and company",
+      href: "/organisation",
+      icon: <Building2 size={18} />,
+    },
+    {
+      ...sectionById("team"),
+      href: "/organisation?tab=team",
       icon: <UsersRound size={18} />,
-    },
-    {
-      ...sectionById("lead-rules"),
-      href: "/settings/lead-rules",
-      icon: <ListChecks size={18} />,
-    },
-    {
-      ...sectionById("stages"),
-      href: "/settings/stages",
-      icon: <Layers size={18} />,
-    },
-    {
-      ...sectionById("apps"),
-      href: "/settings/apps",
-      icon: <Plug size={18} />,
-    },
-    {
-      ...sectionById("call-ai"),
-      href: "/settings/call-ai",
-      icon: <AudioLines size={18} />,
     },
   ];
 

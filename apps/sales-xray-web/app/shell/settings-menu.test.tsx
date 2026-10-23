@@ -455,13 +455,7 @@ it("puts your settings, and an organisation's for its managers, in You", async (
     "/settings/selling",
     "/settings/notifications",
   ]);
-  expect(manager.theirs).toEqual([
-    "/settings/team",
-    "/settings/lead-rules",
-    "/settings/stages",
-    "/settings/apps",
-    "/settings/call-ai",
-  ]);
+  expect(manager.theirs).toEqual(["/organisation", "/organisation?tab=team"]);
   await act(async () => root.unmount());
   host.remove();
   const seller = await rows({ organisation: true, insights: false });

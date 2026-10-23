@@ -234,8 +234,15 @@ const subscribeNothing = () => () => {};
 // the visible label floats above every layer on hover or focus (rail-tip.tsx).
 /** Every open lead (owner, 23 Oct 2026: "All leads one tap from anywhere"). */
 const ALL_LEADS_HREF = "/leads?tab=all&stage=open";
-/** Team management: members, invites and roles, with the company beside it. */
-const TEAM_HREF = "/settings/team";
+/** The organisation hub's Team tab: members, invites and roles. */
+const TEAM_HREF = "/organisation?tab=team";
+/** Where each organisation setting lives in the hub (org-hub.tsx). */
+const HUB = {
+  rules: "/organisation?tab=leads&part=rules",
+  stages: "/organisation?tab=leads&part=stages",
+  apps: "/organisation?tab=connections&part=apps",
+  callAi: "/organisation?tab=call-ai",
+};
 
 /**
  * Add lead (about 1,000 lines with the pipelines it reads) loads when it is
@@ -809,16 +816,10 @@ function LightboxShellFrame({
       workspace.kind === "organisation" &&
       (workspace.role === "owner" || workspace.role === "admin"),
   );
-  // Owners and admins manage the team in Settings; everyone else sees the
-  // organisation's overview.
-  const orgLabel = orgAdmin ? "Team & organisation" : "Organisation";
-  const orgHref = orgAdmin ? TEAM_HREF : "/organisation";
-  const orgHere = orgAdmin
-    ? Boolean(
-        shownPath?.startsWith(TEAM_HREF) ||
-          shownPath?.startsWith("/settings/organisation"),
-      )
-    : place === "organisation";
+  // One way into the organisation: its hub, every area a tab (owner, 23 Oct
+  // 2026: "if organisation is clicked there should be clearly visible all
+  // management options").
+  const orgHere = place === "organisation";
   const branding = useBranding(inOrganisation);
   // Confirmed signed out (not merely unknown yet): nothing personal to show.
   const guest = !authenticated && !sessionPending && !loading;
@@ -918,21 +919,17 @@ function LightboxShellFrame({
               <Rows3 size={17} />,
               "every open lead list",
             ),
-            ...(orgAdmin
-              ? [
-                  place(
-                    "Team & organisation",
-                    TEAM_HREF,
-                    <UsersRound size={17} />,
-                    "members invites roles company",
-                  ),
-                ]
-              : []),
             place(
-              orgAdmin ? "Organisation overview" : "Organisation",
+              "Team",
+              TEAM_HREF,
+              <UsersRound size={17} />,
+              "members invites roles organisation",
+            ),
+            place(
+              "Organisation",
               "/organisation",
               <Building2 size={17} />,
-              "calls people company",
+              "team analytics insights company settings",
             ),
           ]
         : []),
@@ -989,31 +986,31 @@ function LightboxShellFrame({
         ? [
             setting(
               "Team & roles",
-              "/settings/team",
+              TEAM_HREF,
               <Users size={17} />,
               "Members, invites and who can do what",
             ),
             setting(
               "Lead rules",
-              "/settings/lead-rules",
+              HUB.rules,
               <Users size={17} />,
               "Who gets new leads, limits and work hours",
             ),
             setting(
               "Lead stages",
-              "/settings/stages",
+              HUB.stages,
               <Layers size={17} />,
               "Stages and pipelines",
             ),
             setting(
               "Connected apps",
-              "/settings/apps",
+              HUB.apps,
               <Plug size={17} />,
               "Lead ads, WhatsApp, Messenger and Instagram",
             ),
             setting(
               "AI on calls",
-              "/settings/call-ai",
+              HUB.callAi,
               <AudioLines size={17} />,
               "How much AI reads each seller's calls",
             ),
@@ -1316,22 +1313,18 @@ function LightboxShellFrame({
               <span style={RAIL_NAME_STYLE}>Calls</span>
             </ScreenLink>
             {/* Owner, 23 Oct 2026: team and organisation were "too hidden";
-                owners and admins find them right after the daily places. */}
+                the hub sits right after the daily places. */}
             {inOrganisation || place === "organisation" ? (
               <ScreenLink
                 className={`${styles.stripBtn}${orgHere ? ` ${styles.stripBtnActive}` : ""}`}
-                href={orgHref}
-                aria-label={orgLabel}
-                data-rail-tip={orgLabel}
+                href="/organisation"
+                aria-label="Organisation"
+                data-rail-tip="Organisation"
                 aria-current={orgHere ? "page" : undefined}
               >
-                {orgAdmin ? (
-                  <UsersRound size={20} strokeWidth={1.75} aria-hidden="true" />
-                ) : (
-                  <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
-                )}
+                <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
                 <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>{orgLabel}</span>
+                <span style={RAIL_NAME_STYLE}>Organisation</span>
               </ScreenLink>
             ) : null}
             <ScreenLink
@@ -1380,16 +1373,14 @@ function LightboxShellFrame({
           <div className={styles.stripBottom}>
             {bell}
             <Link
-              className={`${styles.stripBtn}${place === "account" && !orgHere ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "account" ? ` ${styles.stripBtnActive}` : ""}`}
               href={accountHref}
               onClick={openAccount}
               aria-label={accountLabel}
               data-rail-tip={accountLabel}
               aria-haspopup={authenticated ? "dialog" : undefined}
               aria-expanded={authenticated ? accountCardOpen : undefined}
-              aria-current={
-                place === "account" && !orgHere ? "page" : undefined
-              }
+              aria-current={place === "account" ? "page" : undefined}
               data-news={authenticated && unseenNews > 0 ? "" : undefined}
             >
               <Settings size={20} strokeWidth={1.75} aria-hidden="true" />

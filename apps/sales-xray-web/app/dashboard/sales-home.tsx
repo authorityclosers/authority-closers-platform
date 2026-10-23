@@ -346,9 +346,9 @@ function TeamHome({ desk }: { desk: Desk | null }) {
           <ActionRow
             icon={<UsersRound size={20} />}
             tone="neutral"
-            title="Team & organisation"
-            note="Members, invites, roles and company details"
-            href="/settings/team"
+            title="Organisation"
+            note="Team, analytics, insights and settings"
+            href="/organisation"
           />
         </ActionList>
       </section>
