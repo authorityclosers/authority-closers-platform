@@ -72,11 +72,12 @@ class BugReportStore:
     # ---------- writing ----------
 
     async def find_command(self, person_id: UUID, command_id: UUID) -> BugReport | None:
-        return await self.database.scalar(
+        found: BugReport | None = await self.database.scalar(
             select(BugReport).where(
                 BugReport.person_id == person_id, BugReport.command_id == command_id
             )
         )
+        return found
 
     async def create(
         self,
