@@ -61,8 +61,11 @@ def downgrade() -> None:
         "conversation_gold_assignments",
         type_="check",
     )
+    # Written as PostgreSQL stores 0118's check after a dump and restore (element casts inside
+    # ARRAY[...]), so the rollback gives back the exact schema the migration gate compares.
     op.create_check_constraint(
         "gold_mode",
         "conversation_gold_assignments",
-        "mode IS NULL OR mode IN ('lines', 'brain4_blind')",
+        "mode IS NULL OR (mode)::text = ANY (ARRAY[('lines'::character varying)::text,"
+        " ('brain4_blind'::character varying)::text])",
     )
