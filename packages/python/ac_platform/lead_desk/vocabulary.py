@@ -8,6 +8,11 @@ After every call the seller answers "Was the call connected?":
 - Connected: pick the lead's stage. Won and Lost close the lead; Follow-up
   and Interested need a next follow-up date and time.
 
+Junk (Lead OS, 24 Oct 2026) is the seventh desk stage: a fake, invalid or unusable
+lead. It is closed like Won and Lost but kept apart from both, so it never counts as a
+lost sale. A lead is never made Junk because calls went unanswered; a seller marks it,
+with a reason.
+
 Evidence: docs/product/lead-desk/neodove-evidence.md (section 1.6 and 9.1).
 """
 
@@ -16,7 +21,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Final, Literal
 
-Stage = Literal["new", "not_connected", "follow_up", "interested", "won", "lost"]
+Stage = Literal["new", "not_connected", "follow_up", "interested", "won", "lost", "junk"]
 ConnectedStage = Literal["follow_up", "interested", "won", "lost"]
 Reason = Literal[
     "did_not_pick",
@@ -39,9 +44,10 @@ STAGES: Final[tuple[Stage, ...]] = (
     "interested",
     "won",
     "lost",
+    "junk",
 )
 OPEN_STAGES: Final[frozenset[str]] = frozenset({"new", "not_connected", "follow_up", "interested"})
-CLOSED_STAGES: Final[frozenset[str]] = frozenset({"won", "lost"})
+CLOSED_STAGES: Final[frozenset[str]] = frozenset({"won", "lost", "junk"})
 CONNECTED_STAGES: Final[tuple[ConnectedStage, ...]] = ("follow_up", "interested", "won", "lost")
 NEEDS_FOLLOW_UP: Final[frozenset[str]] = frozenset({"follow_up", "interested"})
 REASONS: Final[tuple[Reason, ...]] = (
@@ -77,6 +83,7 @@ STAGE_LABELS: Final[dict[str, str]] = {
     "interested": "Interested",
     "won": "Won",
     "lost": "Lost",
+    "junk": "Junk",
 }
 REASON_LABELS: Final[dict[str, str]] = {
     "did_not_pick": "Did not pick",
@@ -142,6 +149,34 @@ MESSAGE_TEMPLATES: Final[tuple[tuple[str, str, str], ...]] = (
         "Hi {first_name}, thank you for your time today. As promised, here are the details:",
     ),
 )
+# Why a lead was lost, and why it is junk (Lead OS, 24 Oct 2026). A business's own
+# stage list may carry its own lists; these are the defaults. "other" always needs a
+# note. The first five lost reasons are the sales team's own list; price, not now and
+# not a fit let a call's objection name a reason.
+OTHER_REASON: Final[str] = "other"
+LOST_REASONS: Final[tuple[tuple[str, str], ...]] = (
+    ("not_interested", "Not interested"),
+    ("chose_other", "Chose another provider"),
+    ("declined_offer", "Declined the offer"),
+    ("decided_not_to_proceed", "Decided not to proceed"),
+    ("no_response", "No response after follow-ups"),
+    ("price", "Price or budget"),
+    ("not_now", "Not the right time"),
+    ("not_a_fit", "Not a fit"),
+    (OTHER_REASON, "Other"),
+)
+JUNK_REASONS: Final[tuple[tuple[str, str], ...]] = (
+    ("fake", "Fake enquiry"),
+    ("invalid_number", "Wrong or invalid number"),
+    ("someone_else", "Number belongs to someone else"),
+    ("unusable_contact", "Contact details unusable"),
+    ("unreachable_verified", "Switched off or unreachable after checks"),
+    ("spam_test", "Spam or test entry"),
+    (OTHER_REASON, "Other"),
+)
+# Lost leads that come in by import have no reason given (DESIGN §2.4).
+IMPORTED_LOST: Final[str] = "imported"
+
 TEMPLATE_KEYS: Final[frozenset[str]] = frozenset(key for key, _, _ in MESSAGE_TEMPLATES)
 TEMPLATE_LABELS: Final[dict[str, str]] = {key: label for key, label, _ in MESSAGE_TEMPLATES}
 
@@ -160,8 +195,11 @@ def stage_after_connected(stage: str) -> str:
 
 
 def stage_after_not_connected(current: str) -> str:
-    """A lead keeps a stage it already earned; an unreached lead becomes Not connected."""
-    if current in {"follow_up", "interested"}:
+    """A lead keeps a stage it already earned; an unreached lead becomes Not connected.
+
+    A closed lead (Won, Lost or Junk) stays closed: an unanswered call never reopens
+    it, and never makes a lead Junk (the sales team's spec, 24 Oct 2026)."""
+    if current in {"follow_up", "interested"} or current in CLOSED_STAGES:
         return current
     return "not_connected"
 

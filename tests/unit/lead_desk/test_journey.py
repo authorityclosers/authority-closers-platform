@@ -13,6 +13,7 @@ import pytest
 
 from ac_platform.lead_desk.journey import engine, mapping
 from ac_platform.lead_desk.journey.model import (
+    JUNK,
     Journey,
     JourneyError,
     Stage,
@@ -53,10 +54,14 @@ def test_every_profile_is_a_valid_list_and_named_by_industry() -> None:
 def test_the_default_profile_keeps_the_desks_own_six_stages() -> None:
     journey = default_journey()
     assert journey.version == 0
-    assert [stage.key for stage in journey.stages] == list(KINDS)
+    six = [kind for kind in KINDS if kind != "junk"]
+    assert [stage.key for stage in journey.stages] == six
     for kind in KINDS:
         stage = journey.resolve(kind, None)
         assert stage is not None and stage.key == kind
+    # Junk (Lead OS, 24 Oct 2026) is the desk's own stage in a list without one.
+    assert journey.resolve("junk", None) is JUNK
+    assert [stage.key for stage in journey.board()] == [*six, "junk"]
 
 
 @pytest.mark.parametrize(
@@ -70,6 +75,10 @@ def test_the_default_profile_keeps_the_desks_own_six_stages() -> None:
         ("Policy issued", "won"),
         ("Enrolled", "won"),
         ("Not interested", "lost"),
+        ("Junk", "disqualified"),
+        ("Spam", "disqualified"),
+        ("Fake enquiry", "disqualified"),
+        ("Wrong number", "disqualified"),
         ("Interested", "qualified"),
         ("Quote shared", "proposal"),
         ("Documents collected", "application"),
