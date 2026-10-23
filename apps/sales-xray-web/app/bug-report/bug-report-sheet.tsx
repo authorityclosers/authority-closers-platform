@@ -49,8 +49,8 @@ import { scrubRoute } from "./scrub";
 /** Screens that can show call details or messages: no picture unless chosen. */
 const PRIVATE_SCREENS = [
   /^\/analysis\/calls\/[^/]+/,
-  /^\/chats\b/,
-  /^\/review\b/,
+  /^\/chats(?:\/|$)/,
+  /^\/review(?:\/|$)/,
 ];
 
 export function privateScreen(path: string): boolean {

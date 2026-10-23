@@ -9,7 +9,7 @@
  * and pictures from other sites (blank boxes). Nothing leaves the device here;
  * the person sees the picture and chooses to send it.
  *
- * Fails quietly: any problem, or more than eight seconds, gives null, and the
+ * Fails quietly: any problem, or more than ten seconds, gives null, and the
  * reporter offers "Choose a picture" instead.
  */
 
@@ -19,7 +19,7 @@ const SVG_NS = "http://www.w3.org/2000/svg";
 const MAX_NODES = 8000;
 const MAX_EDGE = 1600;
 const MAX_INLINE_BYTES = 3 * 1024 * 1024;
-const TIME_LIMIT_MS = 8000;
+const TIME_LIMIT_MS = 10000;
 // A picture has nothing to scroll: no scroll bars over its panels.
 const NO_SCROLLBARS =
   "*{scrollbar-width:none!important}*::-webkit-scrollbar{display:none!important}";
@@ -229,10 +229,28 @@ async function inlineImages(run: Run) {
   }
 }
 
-/** The page's own fonts (same site), so the picture's text looks like the screen. */
+const FONT_TIME_MS = 2500;
+
+function family(value: string): string {
+  return value.replace(/["']/g, "").trim().toLowerCase();
+}
+
+function range(value: string): string {
+  return value.replace(/\s+/g, "").toLowerCase();
+}
+
+/**
+ * The page's own fonts (same site) that it has actually loaded, fetched
+ * together, so the picture's text looks like the screen. If they take longer
+ * than 2.5 seconds the picture uses the device's fonts instead.
+ */
 async function fontRules(): Promise<string> {
-  const rules: string[] = [];
-  let total = 0;
+  const loaded = new Set(
+    Array.from(document.fonts ?? [])
+      .filter((face) => face.status === "loaded")
+      .map((face) => `${family(face.family)}|${range(face.unicodeRange)}`),
+  );
+  const wanted: Array<{ text: string; urls: Array<[string, URL]> }> = [];
   for (const sheet of Array.from(document.styleSheets)) {
     let list: CSSRuleList;
     try {
@@ -242,29 +260,44 @@ async function fontRules(): Promise<string> {
     }
     for (const rule of Array.from(list)) {
       if (!(rule instanceof CSSFontFaceRule)) continue;
-      let text = rule.cssText;
-      const urls = [...text.matchAll(/url\(["']?([^"')]+)["']?\)/g)];
-      let usable = true;
-      for (const [whole, raw] of urls) {
+      const key = `${family(rule.style.getPropertyValue("font-family"))}|${range(
+        rule.style.getPropertyValue("unicode-range") || "U+0-10FFFF",
+      )}`;
+      if (!loaded.has(key)) continue;
+      const urls: Array<[string, URL]> = [];
+      for (const [whole, raw] of rule.cssText.matchAll(
+        /url\(["']?([^"')]+)["']?\)/g,
+      )) {
         try {
-          const url = new URL(raw, sheet.href ?? window.location.href);
-          if (url.origin !== window.location.origin) {
-            usable = false;
-            break;
-          }
-          const blob = await (await fetch(url)).blob();
-          total += blob.size;
-          if (total > MAX_INLINE_BYTES) return rules.join("");
-          text = text.replace(whole, `url("${await asDataUrl(blob)}")`);
+          urls.push([whole, new URL(raw, sheet.href ?? window.location.href)]);
         } catch {
-          usable = false;
-          break;
+          // Left out.
         }
       }
-      if (usable) rules.push(text);
+      if (urls.every(([, url]) => url.origin === window.location.origin)) {
+        wanted.push({ text: rule.cssText, urls });
+      }
     }
   }
-  return rules.join("");
+  const embed = Promise.all(
+    wanted.map(async ({ text, urls }) => {
+      let rule = text;
+      for (const [whole, url] of urls) {
+        const blob = await (await fetch(url)).blob();
+        rule = rule.replace(whole, `url("${await asDataUrl(blob)}")`);
+      }
+      return rule;
+    }),
+  ).then((rules) => {
+    const css = rules.join("");
+    return css.length > MAX_INLINE_BYTES * 1.4 ? "" : css;
+  });
+  return Promise.race([
+    embed.catch(() => ""),
+    new Promise<string>((resolve) =>
+      window.setTimeout(() => resolve(""), FONT_TIME_MS),
+    ),
+  ]);
 }
 
 function escapeStyle(text: string): string {

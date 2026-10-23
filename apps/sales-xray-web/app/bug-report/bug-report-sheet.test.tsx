@@ -229,6 +229,9 @@ it("takes no picture of screens that can show calls or messages", async () => {
   expect(privateScreen("/analysis/calls/2b1f")).toBe(true);
   expect(privateScreen("/chats")).toBe(true);
   expect(privateScreen("/leads")).toBe(false);
+  expect(privateScreen("/review")).toBe(true);
+  expect(privateScreen("/review/figures")).toBe(true);
+  expect(privateScreen("/review-fixture/bug-report")).toBe(false);
   window.history.replaceState(null, "", "/analysis/calls/2b1f");
   await act(async () => openBugReport());
   await pause(450);
