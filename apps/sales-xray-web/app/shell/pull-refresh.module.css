@@ -1,0 +1,97 @@
+/* Pull to refresh (pull-refresh.tsx): the brand's bars, small, on a paper
+   pill that drops in from the top. --pull runs 0 to 1 with the finger.
+   Tokens only. */
+.mark {
+  --pull: 0;
+  position: absolute;
+  top: 0;
+  left: 50%;
+  z-index: 3;
+  display: flex;
+  box-sizing: border-box;
+  width: 44px;
+  height: 28px;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 3px;
+  padding: 7px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  box-shadow: 0 6px 16px -10px
+    color-mix(in oklab, var(--sx-ink) 45%, transparent);
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(-50%, -40px, 0);
+  transition:
+    transform var(--lx-dur-move) var(--lx-ease-move),
+    opacity var(--lx-dur-move) var(--lx-ease-move);
+}
+
+/* Short outer bars, taller inner ones; the middle one is the i's stem. */
+.mark i {
+  --h: 1;
+  position: relative;
+  width: 3px;
+  height: calc(3px + 9px * var(--pull) * var(--h));
+  border-radius: 2px;
+  background: var(--sx-accent);
+  transform-origin: bottom;
+}
+
+.mark i:nth-child(1),
+.mark i:nth-child(5) {
+  --h: 0.5;
+}
+
+.mark i:nth-child(3) {
+  --h: 0.65;
+}
+
+/* The i's dot, once the pull is far enough to refresh. */
+.mark i[data-dot]::before {
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 0;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--sx-accent);
+  content: "";
+  opacity: calc((var(--pull) - 0.95) * 20);
+}
+
+/* Reading again: the bars breathe, the i stays still. */
+.mark[data-mode="busy"] i:not([data-dot]) {
+  animation: pullBreathe 0.9s ease-in-out infinite;
+}
+
+.mark[data-mode="busy"] i:nth-child(2) {
+  animation-delay: -0.15s;
+}
+
+.mark[data-mode="busy"] i:nth-child(4) {
+  animation-delay: -0.3s;
+}
+
+.mark[data-mode="busy"] i:nth-child(5) {
+  animation-delay: -0.45s;
+}
+
+@keyframes pullBreathe {
+  0%,
+  100% {
+    transform: scaleY(0.5);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark,
+  .mark i {
+    animation: none !important;
+    transition: opacity var(--lx-dur-move) linear;
+  }
+}

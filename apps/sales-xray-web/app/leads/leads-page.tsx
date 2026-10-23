@@ -63,7 +63,7 @@ import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
 import { cachedDesk, rememberDesk } from "./desk-cache";
 import { DeskView, toCallNow, whyLine, type RowActions } from "./desk-view";
-import { usePullToRefresh } from "./gestures";
+import { PullMark, usePullToRefresh } from "../shell/pull-refresh";
 import {
   MAIN_PIPELINE,
   readJourney,
@@ -970,11 +970,7 @@ export function LeadsRoute() {
           data-tab={manage ?? (stageView ? "all" : "desk")}
           data-call-bar={view === "desk" && toCall > 0 ? "" : undefined}
         >
-          <div
-            ref={spinner}
-            className={styles.pullSpinner}
-            aria-hidden="true"
-          />
+          <PullMark mark={spinner} />
           <PhoneSetupBar />
           <div className={styles.wideOnly}>
             <PageHeader
