@@ -43,6 +43,8 @@ def _index(engine: Engine) -> tuple[str, bool] | None:
             text(
                 "SELECT pg_get_indexdef(i.indexrelid), i.indisvalid FROM pg_index i"
                 " JOIN pg_class c ON c.oid = i.indexrelid WHERE c.relname = :name"
+                # This module's schema only: CI shares one database between modules.
+                " AND c.relnamespace = current_schema()::regnamespace"
             ),
             {"name": INDEX},
         ).first()
