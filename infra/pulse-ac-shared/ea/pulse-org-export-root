@@ -8,7 +8,10 @@
 set -euo pipefail
 umask 077
 org="${1:-}"
-[[ -n "$org" ]] && grep -qxF -- "$org" /etc/pulse-org-export.allow || { echo "pulse-org-export: organisation not allowed: $org" >&2; exit 2; }
+if [[ -z "$org" ]] || ! grep -qxF -- "$org" /etc/pulse-org-export.allow; then
+  echo "pulse-org-export: organisation not allowed: $org" >&2
+  exit 2
+fi
 install -d -m 700 /var/lib/pulse-org-export
 work="$(mktemp -d /var/lib/pulse-org-export/run.XXXXXX)"
 trap 'rm -rf "$work"' EXIT

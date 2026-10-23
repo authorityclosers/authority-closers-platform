@@ -7,7 +7,8 @@
 - New table ``bug_report_attachments``: a voice note sent with a bug report, written with it
   and never changed; the file sits in the Sales X-Ray store beside the report's picture.
 
-Rollback: forward-only (the restore-drill policy); answers and attachments are history.
+Rollback: possible only while both tables are empty; once they hold answers or attachments,
+the history requires forward recovery (the 0088+ restore-drill policy).
 
 Chain: after 20261023_0126.
 """
@@ -80,6 +81,20 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError(
-        "Feedback and bug attachments are forward-only: a later migration changes them."
+    # Fence inserts before the history check, then remove only empty tables.
+    op.execute(
+        sa.text("LOCK TABLE feedback_responses, bug_report_attachments IN ACCESS EXCLUSIVE MODE")
     )
+    answers = sa.table("feedback_responses", sa.column("id"))
+    attachments = sa.table("bug_report_attachments", sa.column("id"))
+    used = sa.or_(
+        sa.exists().where(answers.c.id.is_not(None)),
+        sa.exists().where(attachments.c.id.is_not(None)),
+    )
+    if op.get_bind().scalar(sa.select(used)):
+        raise RuntimeError("Feedback and bug attachment history requires forward recovery.")
+    op.drop_table("bug_report_attachments")
+    op.drop_index("ix_feedback_tenant", table_name="feedback_responses")
+    op.drop_index("ix_feedback_person", table_name="feedback_responses")
+    op.drop_index("ix_feedback_moment", table_name="feedback_responses")
+    op.drop_table("feedback_responses")

@@ -1,7 +1,7 @@
 """Feedback and bug voice notes on PostgreSQL (owner, 23 Oct 2026: a reviews engine, and a
 bug reporter with voice notes that tells testers when their report is fixed).
 
-The migration passes the schema gate and is forward-only; answers are append-only and a
+The migration passes the schema gate, rolls back only while empty; answers are append-only and a
 retry finds the first; the asking state counts answers, "don't ask again" and subjects; a
 "Not good" with words becomes a bug report; the team's summary groups by moment, release
 and day; a voice note is kept with its report and played back to the team; a person sees
@@ -14,6 +14,7 @@ from __future__ import annotations
 import base64
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 from uuid import uuid4
 
@@ -70,7 +71,12 @@ def test_migration_chain_schema_gate_and_forward_only() -> None:
     found = classify_source(path.read_text(), str(path))
     check_operations([found], set())
     assert found.verdict == "additive"
-    with pytest.raises(RuntimeError, match="forward-only"):
+    # Rollback is allowed only while both tables are empty; history forces forward recovery.
+    module.op = SimpleNamespace(
+        execute=lambda statement: None,
+        get_bind=lambda: SimpleNamespace(scalar=lambda statement: 1),
+    )
+    with pytest.raises(RuntimeError, match="history requires forward recovery"):
         module.downgrade()
 
 

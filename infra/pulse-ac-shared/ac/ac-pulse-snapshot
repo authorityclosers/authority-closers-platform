@@ -51,6 +51,8 @@ local_size=$(stat -c %s "$DIR/$name.tar.gpg")
 remote_size=$("${RC[@]}" size "$REMOTE/$name" --json --include "*.gpg" | python3 -c 'import json,sys; print(json.load(sys.stdin)["bytes"])')
 [[ "$local_size" == "$remote_size" ]] || { say "$name off-site size mismatch $local_size vs $remote_size"; exit 1; }
 rm -f "$DIR/$name.tar.gpg"
+# Our own fixed file names; ls -t gives newest first, so everything after the 14 newest goes.
+# shellcheck disable=SC2012
 ls -1t "$DIR"/pulse-shared-*.tar 2>/dev/null | tail -n +15 | while read -r f; do rm -f "$f" "$f.sha256"; done
 "${RC[@]}" delete "$REMOTE" --min-age 30d --quiet || true
 "${RC[@]}" rmdirs "$REMOTE" --leave-root --quiet || true

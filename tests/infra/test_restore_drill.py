@@ -1269,6 +1269,7 @@ def test_checked_in_migrations_preserve_forward_only_recovery_policy() -> None:
             "20261023_0124",
             "20261023_0125",
             "20261023_0126",
+            "20261023_0127",
         }:
             # These constraint-only migrations permit compatible rollback, but
             # unsupported retained history must force forward recovery.
