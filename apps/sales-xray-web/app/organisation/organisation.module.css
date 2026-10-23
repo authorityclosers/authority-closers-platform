@@ -336,42 +336,6 @@
   min-width: 0;
 }
 
-@container (max-width: 559.98px) {
-  .memberHead {
-    display: none;
-  }
-
-  .memberRow {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-areas:
-      "person person"
-      "role actions";
-    gap: 2px 10px;
-    padding: 10px 14px 6px;
-  }
-
-  .memberRow > .person {
-    grid-area: person;
-  }
-
-  .memberRow > .roleCell {
-    grid-area: role;
-    padding-left: 34px;
-  }
-
-  .memberRow > .rowActions {
-    grid-area: actions;
-  }
-
-  .memberRow .rowActions {
-    opacity: 1;
-  }
-
-  .memberRow > .dateCell {
-    display: none;
-  }
-}
-
 .callHead,
 .callRow {
   display: grid;
@@ -2119,5 +2083,43 @@
   .bone,
   .formSkeleton span {
     animation: none;
+  }
+}
+
+/* The members table, narrow (see .memberTable): last in the file, so it wins
+   over the base grid above at equal specificity. */
+@container (max-width: 559.98px) {
+  .memberHead {
+    display: none;
+  }
+
+  .memberRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "person person"
+      "role actions";
+    gap: 2px 10px;
+    padding: 10px 14px 6px;
+  }
+
+  .memberRow > .person {
+    grid-area: person;
+  }
+
+  .memberRow > .roleCell {
+    grid-area: role;
+    padding-left: 34px;
+  }
+
+  .memberRow > .rowActions {
+    grid-area: actions;
+  }
+
+  .memberRow .rowActions {
+    opacity: 1;
+  }
+
+  .memberRow > .dateCell {
+    display: none;
   }
 }
