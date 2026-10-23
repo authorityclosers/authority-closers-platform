@@ -212,6 +212,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "review_pipelines",
         "review_verdicts",
         "admin_staff_keys",
+        "admin_offer_versions",
         "partner_handover_recipients",
         "partner_lead_events",
         "partner_lead_attempts",

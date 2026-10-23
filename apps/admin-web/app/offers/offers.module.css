@@ -1234,6 +1234,61 @@
   font-size: 14px;
 }
 
+/* ---------- Shared offers ---------- */
+
+.shared {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border-radius: var(--of-radius);
+  background: var(--sx-surface);
+  box-shadow:
+    0 0 0 1px var(--sx-line),
+    var(--of-shadow);
+}
+
+.sharedList {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sharedList > li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: var(--sx-sunken);
+}
+
+.versions {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 4px;
+  margin: 0;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--sx-line);
+  list-style: none;
+}
+
+.versions li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--sx-ink-2);
+  font-size: 13px;
+}
+
+.add[aria-pressed="true"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
 /* ---------- Narrow screens ---------- */
 
 @media (max-width: 1100px) {

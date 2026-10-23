@@ -113,6 +113,8 @@ export type Offer = Readonly<{
   }>;
   tiers: readonly Tier[];
   ideas: readonly Idea[];
+  /** The shared store's copy this draft came from or was saved to; null: browser only. */
+  shared: Readonly<{ id: string; version: number }> | null;
 }>;
 
 export type Studio = Readonly<{
@@ -247,6 +249,7 @@ export function blankOffer(
     voice: { tones: [], say: "", never: "", tagline: "", pitch: "" },
     tiers: [],
     ideas: [],
+    shared: null,
   };
 }
 
@@ -589,7 +592,20 @@ export function normalizeOffer(
         column: column(i.column),
         votes: Math.min(99, Math.floor(num(i.votes))),
       })),
+    shared: readShared(o.shared),
   };
+}
+
+const SHARED_ID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function readShared(value: unknown): Offer["shared"] {
+  const s = obj(value);
+  const id = str(s.id, 40);
+  const version = num(s.version);
+  return SHARED_ID.test(id) && Number.isInteger(version) && version >= 1
+    ? { id, version }
+    : null;
 }
 
 /** A studio from untrusted JSON (a file, an old browser copy); throws on something that isn't one. */
@@ -623,7 +639,7 @@ export function mergeStudios(current: Studio, incoming: Studio): Studio {
   const ids = new Set(current.offers.map((o) => o.id));
   const added = incoming.offers.map((o) =>
     ids.has(o.id)
-      ? { ...o, id: newId("offer"), name: `${o.name} (imported)` }
+      ? { ...o, id: newId("offer"), name: `${o.name} (imported)`, shared: null }
       : o,
   );
   return {

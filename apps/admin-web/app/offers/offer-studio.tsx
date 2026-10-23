@@ -20,6 +20,7 @@ import {
   Search,
   Trash2,
   Upload,
+  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useRef, useState, type ReactNode } from "react";
@@ -60,6 +61,7 @@ import {
 } from "./offer-model";
 import { STUDIO_KEY, useStudio, withOffer } from "./offer-store";
 import styles from "./offers.module.css";
+import { SharedPanel } from "./shared-panel";
 
 const TABS = [
   ["bundle", "Bundle"],
@@ -1490,13 +1492,14 @@ export function OfferStudio({
   const [tab, setTab] = useState<Tab>("bundle");
   const [message, setMessage] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   const offer =
     studio.offers.find((o) => o.id === studio.activeId) ??
     studio.offers[0] ??
     null;
 
-  const commit = (next: Studio) => {
+  const commit = (next: Studio | ((current: Studio) => Studio)) => {
     if (!save(next))
       setMessage("This browser wouldn't save. Export a copy now.");
   };
@@ -1573,6 +1576,7 @@ export function OfferStudio({
                     ...offer,
                     id: newId("offer"),
                     name: `${offer.name} (copy)`,
+                    shared: null,
                   };
                   commit({
                     ...studio,
@@ -1603,6 +1607,15 @@ export function OfferStudio({
               </button>
             </>
           ) : null}
+          <button
+            type="button"
+            className={styles.add}
+            aria-pressed={sharing}
+            onClick={() => setSharing((open) => !open)}
+          >
+            <UsersRound size={14} aria-hidden="true" />
+            {offer?.shared ? `Shared · v${offer.shared.version}` : "Shared"}
+          </button>
           <button
             type="button"
             className={styles.add}
@@ -1657,6 +1670,15 @@ export function OfferStudio({
             ×
           </button>
         </p>
+      ) : null}
+
+      {sharing ? (
+        <SharedPanel
+          studio={studio}
+          offer={creating ? null : offer}
+          commit={commit}
+          onClose={() => setSharing(false)}
+        />
       ) : null}
 
       {!offer || creating ? (
