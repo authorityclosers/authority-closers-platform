@@ -19,6 +19,7 @@ from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.application.settings import Settings
+from ac_platform.billing.current_plan import current_personal_plan
 from ac_platform.conversation_intelligence.acquisition_challenge import UploadChallenge
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
 from ac_platform.conversation_intelligence.acquisition_usage import (
@@ -299,9 +300,14 @@ def install_acquisition_http(
             actor = auth.resolved.actor
             app = service(auth.database, await workspace(auth.database, actor))
             allowance = await result(app.allowance(actor=actor, shared_identity_locks=True))
+            current = await current_personal_plan(
+                auth.database, tenant_id=app.tenant_id, person_id=actor.person_id, now=app.clock()
+            )
         return {
             "plan": (
-                {"key": "trial", "name": "Trial"}
+                {"key": current.key, "name": current.name}
+                if current is not None
+                else {"key": "trial", "name": "Trial"}
                 if app.trial_enabled
                 else {"key": "none", "name": "No plan"}
             ),
