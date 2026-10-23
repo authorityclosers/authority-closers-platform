@@ -36,6 +36,7 @@ import {
 } from "./acquisition-client";
 import { useSalesXraySignOut } from "./account-navigation";
 import type { BillingViewProps } from "./billing/billing-view";
+import { useWorkspaceAccess } from "./workspace-access";
 import { useBillingAccount } from "./billing/use-billing-account";
 import { count, day, formatMoney, money } from "./billing/money";
 import {
@@ -1259,6 +1260,18 @@ export function PlanAndBillingPane({
   onRetry: () => void;
 }) {
   const [cancelAsk, setCancelAsk] = useState(false);
+  // Offer only the top-up the selected workspace can buy: Personal in a personal
+  // workspace, Organisation in an organisation (unknown: both).
+  const access = useWorkspaceAccess();
+  const workspaceKind = access?.workspaces?.find(
+    (workspace) => workspace.tenant_id === access.context?.tenantId,
+  )?.kind;
+  const packs = workspaceKind
+    ? topUpPacks.filter(
+        (pack) =>
+          (pack.planKey === "personal") === (workspaceKind === "personal"),
+      )
+    : topUpPacks;
   const current = subs?.current;
   const isCancelled = current?.cancelAtPeriodEnd === true;
   const canCancel =
@@ -1466,7 +1479,7 @@ export function PlanAndBillingPane({
           </div>
         </div>
         <div className={styles.topUpsMiniGrid}>
-          {topUpPacks.map((pack) => {
+          {packs.map((pack) => {
             const total =
               pack.pricePaise +
               (pack.gstInclusive
