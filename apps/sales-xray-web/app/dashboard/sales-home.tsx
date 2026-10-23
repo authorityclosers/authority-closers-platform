@@ -348,7 +348,7 @@ function TeamHome({ desk }: { desk: Desk | null }) {
             tone="neutral"
             title="Team & organisation"
             note="Members, invites, roles and company details"
-            href="/organisation"
+            href="/settings/team"
           />
         </ActionList>
       </section>

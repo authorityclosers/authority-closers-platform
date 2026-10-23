@@ -382,7 +382,7 @@ export function SettingsMenu({
     {
       label: "Team & organisation",
       hint: "Members, invites, roles and company details",
-      href: "/organisation",
+      href: "/settings/team",
       icon: <UsersRound size={18} />,
     },
     {

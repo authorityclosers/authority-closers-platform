@@ -233,6 +233,8 @@ const subscribeNothing = () => () => {};
 // the visible label floats above every layer on hover or focus (rail-tip.tsx).
 /** Every open lead (owner, 23 Oct 2026: "All leads one tap from anywhere"). */
 const ALL_LEADS_HREF = "/leads?tab=all&stage=open";
+/** Team management: members, invites and roles, with the company beside it. */
+const TEAM_HREF = "/settings/team";
 
 /**
  * Add lead (about 1,000 lines with the pipelines it reads) loads when it is
@@ -806,7 +808,16 @@ function LightboxShellFrame({
       workspace.kind === "organisation" &&
       (workspace.role === "owner" || workspace.role === "admin"),
   );
+  // Owners and admins manage the team in Settings; everyone else sees the
+  // organisation's overview.
   const orgLabel = orgAdmin ? "Team & organisation" : "Organisation";
+  const orgHref = orgAdmin ? TEAM_HREF : "/organisation";
+  const orgHere = orgAdmin
+    ? Boolean(
+        shownPath?.startsWith(TEAM_HREF) ||
+          shownPath?.startsWith("/settings/organisation"),
+      )
+    : place === "organisation";
   const branding = useBranding(inOrganisation);
   // Confirmed signed out (not merely unknown yet): nothing personal to show.
   const guest = !authenticated && !sessionPending && !loading;
@@ -906,11 +917,21 @@ function LightboxShellFrame({
               <Rows3 size={17} />,
               "every open lead list",
             ),
+            ...(orgAdmin
+              ? [
+                  place(
+                    "Team & organisation",
+                    TEAM_HREF,
+                    <UsersRound size={17} />,
+                    "members invites roles company",
+                  ),
+                ]
+              : []),
             place(
-              orgAdmin ? "Team & organisation" : "Organisation",
+              orgAdmin ? "Organisation overview" : "Organisation",
               "/organisation",
-              <UsersRound size={17} />,
-              "members invites roles company",
+              <Building2 size={17} />,
+              "calls people company",
             ),
           ]
         : []),
@@ -1297,11 +1318,11 @@ function LightboxShellFrame({
                 owners and admins find them right after the daily places. */}
             {inOrganisation || place === "organisation" ? (
               <ScreenLink
-                className={`${styles.stripBtn}${place === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
-                href="/organisation"
+                className={`${styles.stripBtn}${orgHere ? ` ${styles.stripBtnActive}` : ""}`}
+                href={orgHref}
                 aria-label={orgLabel}
                 data-rail-tip={orgLabel}
-                aria-current={place === "organisation" ? "page" : undefined}
+                aria-current={orgHere ? "page" : undefined}
               >
                 {orgAdmin ? (
                   <UsersRound size={20} strokeWidth={1.75} aria-hidden="true" />
@@ -1358,14 +1379,16 @@ function LightboxShellFrame({
           <div className={styles.stripBottom}>
             {bell}
             <Link
-              className={`${styles.stripBtn}${place === "account" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "account" && !orgHere ? ` ${styles.stripBtnActive}` : ""}`}
               href={accountHref}
               onClick={openAccount}
               aria-label={accountLabel}
               data-rail-tip={accountLabel}
               aria-haspopup={authenticated ? "dialog" : undefined}
               aria-expanded={authenticated ? accountCardOpen : undefined}
-              aria-current={place === "account" ? "page" : undefined}
+              aria-current={
+                place === "account" && !orgHere ? "page" : undefined
+              }
               data-news={authenticated && unseenNews > 0 ? "" : undefined}
             >
               <Settings size={20} strokeWidth={1.75} aria-hidden="true" />

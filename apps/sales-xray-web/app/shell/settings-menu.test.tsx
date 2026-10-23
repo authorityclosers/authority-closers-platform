@@ -456,7 +456,7 @@ it("puts your settings, and an organisation's for its managers, in You", async (
     "/settings/notifications",
   ]);
   expect(manager.theirs).toEqual([
-    "/organisation",
+    "/settings/team",
     "/settings/lead-rules",
     "/settings/stages",
     "/settings/apps",

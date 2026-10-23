@@ -167,7 +167,9 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
   );
   expect(seller).not.toBeNull();
   // Owner, 23 Oct 2026: team and organisation one tap from Home.
-  const team = host.querySelector<HTMLAnchorElement>('a[href="/organisation"]');
+  const team = host.querySelector<HTMLAnchorElement>(
+    'a[href="/settings/team"]',
+  );
   expect(team?.textContent).toContain("Team & organisation");
 });
 

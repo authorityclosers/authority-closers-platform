@@ -7,7 +7,7 @@
  * `?section=team` and `?section=organisation` read a fictional organisation
  * (tutorial 09): members with roles, an invitation waiting, a verified email
  * domain; `&invite=1` shows inviting by email, `&switcher=open` the
- * workspace switcher (../organisation/organisation-fixture).
+ * workspace switcher (../_fixtures/organisation-fixture).
  */
 
 import { useSearchParams } from "next/navigation";
@@ -18,7 +18,7 @@ import { SettingsSectionView } from "../../settings/sections";
 import { SettingsShell } from "../../settings/settings-shell";
 import { isSettingsSection } from "../../settings/settings-sections";
 import { FixtureWorkspace } from "../leads/leads-preview";
-import { OrganisationFixture } from "../organisation/organisation-fixture";
+import { OrganisationFixture } from "../_fixtures/organisation-fixture";
 
 function Section() {
   const id = useSearchParams().get("section");
