@@ -2,7 +2,9 @@
  * "We'll tell you when it's fixed": the app looks at the person's own reports
  * now and then (at most every six hours, a few seconds after the frame is up)
  * and says so in a corner card when one has been fixed since it last looked.
- * What it last saw is kept on this device; the first look only remembers.
+ * What it last saw is kept on this device. It looks only while a report sent
+ * from this device is still open, so most people, who never send one, never
+ * cost a request.
  */
 
 import { myReports, type MyReport } from "./bug-report-client";
@@ -51,17 +53,25 @@ export function newlyFixed(
   );
 }
 
+const SETTLED = new Set(["fixed", "verified", "closed"]);
+
+function seenHere(): Record<string, string> | null {
+  try {
+    return JSON.parse(load(KEY) ?? "null") as Record<string, string> | null;
+  } catch {
+    return null;
+  }
+}
+
 /** Look now if it is time; returns the reports fixed since the last look. */
 export async function lookForFixes(now = Date.now()): Promise<MyReport[]> {
+  const seen = seenHere();
+  if (!seen || !Object.values(seen).some((status) => !SETTLED.has(status))) {
+    return [];
+  }
   const looked = Number(load(LOOKED) ?? 0);
   if (now - looked < EVERY_MS) return [];
   const reports = await myReports();
-  let seen: Record<string, string> | null = null;
-  try {
-    seen = JSON.parse(load(KEY) ?? "null") as Record<string, string> | null;
-  } catch {
-    seen = null;
-  }
   const fixed = newlyFixed(reports, seen);
   save(
     KEY,
