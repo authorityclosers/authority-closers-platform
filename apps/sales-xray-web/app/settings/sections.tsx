@@ -25,6 +25,7 @@ import {
   LeadStagesPane,
 } from "../leads/settings-panes";
 import { OrganisationView } from "../organisation/organisation-view";
+import { useApkLinksAllowed } from "../purchase-policy";
 import { Panel } from "../ui/kit";
 import { ConnectedApps } from "./connected-apps";
 import { DevelopersSection } from "./developers";
@@ -86,21 +87,36 @@ function Notifications() {
 }
 
 function Devices() {
+  // The Google Play app updates only through Play: no APK link there (Play policy).
+  const apkLinks = useApkLinksAllowed();
   return (
     <div className={styles.stack}>
       <Panel title="Sales X-Ray on your phone">
-        <Note
-          icon={<Download size={18} />}
-          title="Android app"
-          href="/apps"
-          action="Get the app"
-        >
-          Calls, leads and alerts on your phone. It can also pick up your call
-          recordings for analysis.
-        </Note>
-        <a className={styles.download} href={ANDROID_APK_URL} rel="noopener">
-          Download for Android
-        </a>
+        {apkLinks ? (
+          <>
+            <Note
+              icon={<Download size={18} />}
+              title="Android app"
+              href="/apps"
+              action="Get the app"
+            >
+              Calls, leads and alerts on your phone. It can also pick up your
+              call recordings for analysis.
+            </Note>
+            <a
+              className={styles.download}
+              href={ANDROID_APK_URL}
+              rel="noopener"
+            >
+              Download for Android
+            </a>
+          </>
+        ) : (
+          <Note icon={<Smartphone size={18} />} title="Android app">
+            You&apos;re using Sales X-Ray from Google Play. Updates come from
+            Google Play.
+          </Note>
+        )}
       </Panel>
       <Panel title="Call recording">
         <Note

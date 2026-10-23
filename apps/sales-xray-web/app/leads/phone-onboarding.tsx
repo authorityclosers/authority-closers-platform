@@ -41,7 +41,7 @@ import {
 } from "./native-phone";
 import {
   ALL_FILES_EXPLAINER,
-  EXPLAINERS,
+  explainerFor,
   recorderSteps,
 } from "./phone-setup-words";
 import styles from "./phone-onboarding.module.css";
@@ -147,7 +147,7 @@ function screenFor(
   const words =
     step === "recordings" && hidesRecordings(status)
       ? ALL_FILES_EXPLAINER
-      : EXPLAINERS[step];
+      : explainerFor(step, status.store);
   const icon =
     step === "calls" ? Phone : step === "notifications" ? Bell : FileAudio;
   return {

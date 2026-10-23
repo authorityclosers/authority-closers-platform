@@ -100,6 +100,11 @@ it("asks for the account's deletion by email from Security, and deletes nothing"
   expect(request.searchParams.get("subject")).toBe("Delete my data");
   expect(links[1].textContent).toBe("How deletion works");
   expect(links[1].getAttribute("href")).toBe("/data-deletion");
+  // The address is written out for phones with no mail app (Play review phones).
+  expect(region.textContent).toContain(
+    "Email admin@authorityclosers.com with the subject “Delete my data” from",
+  );
+  expect(region.textContent).toContain("finish within 2 days");
   // Asking deletes nothing: no request but reads went out.
   expect(sent.filter((item) => item.method !== "GET")).toEqual([]);
 });

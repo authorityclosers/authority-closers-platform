@@ -23,6 +23,7 @@ import { useState, useSyncExternalStore } from "react";
 
 import { Badge } from "../ui/kit";
 import { inPhoneApp } from "../leads/native-phone";
+import { useApkLinksAllowed } from "../purchase-policy";
 import { formatSize, type AndroidRelease } from "./release";
 import styles from "./apps.module.css";
 
@@ -302,6 +303,7 @@ const SOON = [
 
 export function AppsView({ android }: { android: AndroidRelease }) {
   const device = useDevice();
+  const apkLinks = useApkLinksAllowed();
   const facts = [
     android.version ? `Version ${android.version}` : null,
     formatSize(android.sizeBytes),
@@ -333,75 +335,92 @@ export function AppsView({ android }: { android: AndroidRelease }) {
           </span>
           <span>
             <strong>Android</strong>
-            <small>{facts.length ? facts.join(" · ") : "Newest build"}</small>
+            <small>
+              {!apkLinks
+                ? "From Google Play"
+                : facts.length
+                  ? facts.join(" · ")
+                  : "Newest build"}
+            </small>
           </span>
           <Badge tone="good">Ready</Badge>
         </div>
 
-        {device.app ? (
+        {!apkLinks ? (
+          <p className={styles.note} role="status">
+            You&apos;re using Sales X-Ray from Google Play. Updates come from
+            Google Play.
+          </p>
+        ) : device.app ? (
           <p className={styles.note} role="status">
             You&apos;re already using the app. Updates download from here too.
           </p>
         ) : null}
 
-        <div className={styles.get}>
-          <a className={styles.download} href={android.url} download>
-            <Download size={20} aria-hidden="true" />
-            Download for Android
-          </a>
-          {device.android ? null : (
-            <figure className={styles.qrBox}>
-              <QRCodeSVG
-                value={android.url}
-                size={148}
-                marginSize={2}
-                className={styles.qr}
-                title="Scan with your Android phone's camera"
-              />
-              <figcaption>Scan with your phone&apos;s camera</figcaption>
-            </figure>
-          )}
-        </div>
+        {/* The Google Play app updates only through Play (Play policy): no file to download. */}
+        {apkLinks ? (
+          <>
+            <div className={styles.get}>
+              <a className={styles.download} href={android.url} download>
+                <Download size={20} aria-hidden="true" />
+                Download for Android
+              </a>
+              {device.android ? null : (
+                <figure className={styles.qrBox}>
+                  <QRCodeSVG
+                    value={android.url}
+                    size={148}
+                    marginSize={2}
+                    className={styles.qr}
+                    title="Scan with your Android phone's camera"
+                  />
+                  <figcaption>Scan with your phone&apos;s camera</figcaption>
+                </figure>
+              )}
+            </div>
 
-        {android.sha256 ? (
-          <details className={styles.check}>
-            <summary>Check the file (SHA-256)</summary>
-            <p>
-              <code>{android.sha256}</code>
-              <CopyValue value={android.sha256} label="SHA-256" />
+            {android.sha256 ? (
+              <details className={styles.check}>
+                <summary>Check the file (SHA-256)</summary>
+                <p>
+                  <code>{android.sha256}</code>
+                  <CopyValue value={android.sha256} label="SHA-256" />
+                </p>
+              </details>
+            ) : null}
+
+            <ol className={styles.steps} aria-label="Install on Android">
+              <li>
+                <OpenPrompt />
+                <span>
+                  <strong>1. Download and open</strong>
+                  Tap Download, then Open when it finishes.
+                </span>
+              </li>
+              <li>
+                <AndroidPrompt />
+                <span>
+                  <strong>2. Allow the install</strong>
+                  If the phone asks, tap Settings, turn on &ldquo;Allow from
+                  this source&rdquo;, go back and tap Install.
+                </span>
+              </li>
+              <li>
+                <SignInPrompt />
+                <span>
+                  <strong>3. Sign in</strong>
+                  Open Sales X-Ray and sign in with the code we email you. On a
+                  lead, tap Call and allow Phone, Call history and Music and
+                  audio.
+                </span>
+              </li>
+            </ol>
+            <p className={styles.small}>
+              Works best on phones that record calls by themselves: Samsung,
+              Xiaomi, Redmi, POCO, OnePlus, Realme, Oppo, Vivo and Motorola.
             </p>
-          </details>
+          </>
         ) : null}
-
-        <ol className={styles.steps} aria-label="Install on Android">
-          <li>
-            <OpenPrompt />
-            <span>
-              <strong>1. Download and open</strong>
-              Tap Download, then Open when it finishes.
-            </span>
-          </li>
-          <li>
-            <AndroidPrompt />
-            <span>
-              <strong>2. Allow the install</strong>
-              If the phone asks, tap Settings, turn on &ldquo;Allow from this
-              source&rdquo;, go back and tap Install.
-            </span>
-          </li>
-          <li>
-            <SignInPrompt />
-            <span>
-              <strong>3. Sign in</strong>
-              Open Sales X-Ray and sign in with the code we email you. On a
-              lead, tap Call and allow Phone, Call history and Music and audio.
-            </span>
-          </li>
-        </ol>
-        <p className={styles.small}>
-          Works best on phones that record calls by themselves: Samsung, Xiaomi,
-          Redmi, POCO, OnePlus, Realme, Oppo, Vivo and Motorola.
-        </p>
       </section>
 
       <section className={styles.soon} aria-label="Coming soon">

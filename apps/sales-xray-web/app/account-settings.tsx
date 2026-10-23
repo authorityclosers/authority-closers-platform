@@ -690,10 +690,14 @@ function DeleteAccountRow({ email }: { email: string | null }) {
           role="region"
           aria-label="Delete account"
         >
+          {/* The address is written out too: a phone with no mail app can't
+              open the mailto link (Google Play's review phones). */}
           <p className={styles.muted}>
-            Send the request from the email address your account uses
+            Email {DELETION_ADDRESS} with the subject &ldquo;{DELETION_SUBJECT}
+            &rdquo; from the email address your account uses
             {email ? ` (${email})` : ""}. Say if you only want some recordings
-            or reports deleted instead of the whole account.
+            or reports deleted instead of the whole account. We confirm when it
+            arrives and finish within 2 days.
           </p>
           <div className={styles.deleteAccountActions}>
             <a className={styles.danger} href={request}>

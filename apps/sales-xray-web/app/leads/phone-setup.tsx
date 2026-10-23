@@ -36,10 +36,10 @@ import {
 } from "./native-phone";
 import {
   ALL_FILES_EXPLAINER,
-  CHECK_LABELS,
   CHECK_ORDER,
   CHECK_TODO,
-  EXPLAINERS,
+  checkLabel,
+  explainerFor,
   HIDDEN_TODO,
   recorderGuide,
   TRUECALLER_NOTE,
@@ -295,7 +295,7 @@ export function PhoneSetupSheet({
     view === "recordings" && needsAllFiles(status)
       ? ALL_FILES_EXPLAINER
       : view
-        ? EXPLAINERS[view]
+        ? explainerFor(view, status.store)
         : undefined;
 
   return (
@@ -331,7 +331,7 @@ export function PhoneSetupSheet({
                       <Circle size={20} aria-label="To do" />
                     )}
                     <span>
-                      <strong>{CHECK_LABELS[key]}</strong>
+                      <strong>{checkLabel(key, status.store)}</strong>
                       <small>{ok ? "Done" : lineTodo(key, status)}</small>
                     </span>
                     {!ok && ACTIONS.has(key) ? (
@@ -350,8 +350,11 @@ export function PhoneSetupSheet({
             </p>
           </>
         ) : (
-          <section className={styles.setupView} aria-label={CHECK_LABELS[view]}>
-            <h3>{CHECK_LABELS[view]}</h3>
+          <section
+            className={styles.setupView}
+            aria-label={checkLabel(view, status.store)}
+          >
+            <h3>{checkLabel(view, status.store)}</h3>
             {explainer ? (
               <dl>
                 <div>

@@ -56,6 +56,15 @@ export function usePurchasesAllowed(): boolean {
   return !inApp || known === "direct";
 }
 
+/**
+ * True where Sales X-Ray may link to the download-link app (the APK). A Play app updates
+ * only through Google Play (Play's Device and Network Abuse policy), so the Play app, and
+ * an app that hasn't said its store yet, offer no APK download.
+ */
+export function useApkLinksAllowed(): boolean {
+  return usePurchasesAllowed();
+}
+
 /** Its children where purchases are allowed, else the fallback. */
 export function PurchaseGate({
   children,

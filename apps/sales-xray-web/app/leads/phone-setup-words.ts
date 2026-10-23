@@ -102,6 +102,48 @@ export const EXPLAINERS: Partial<Record<PhoneCheck, Explainer>> = {
 };
 
 /**
+ * The Google Play build reads no call history (Play's call log policy, 23 Oct
+ * 2026). Android still asks for Phone and Music and audio on the Calls step, so
+ * the screen before it says exactly that, and the battery screen has no calls
+ * to log.
+ */
+const PLAY_EXPLAINERS: Partial<Record<PhoneCheck, Explainer>> = {
+  calls: {
+    title: "Calls",
+    reads:
+      "Whether a call you start from Sales X-Ray is ringing, on or over, so the app can time it, and your Phone app's call recordings, so the one for that call can be found. Not your call history or contacts.",
+    sends:
+      "Only calls you make to your leads from Sales X-Ray: when they happened and how long they lasted. A recording leaves your phone only when you choose to analyse it.",
+    why: "So every call you make from Sales X-Ray is logged on the lead and the after-call answer is filled in for you.",
+    allow: "Allow calls",
+  },
+  battery: {
+    title: "Battery unrestricted",
+    reads: "Nothing.",
+    sends: "Nothing.",
+    why: "Android stops apps in the background to save battery. Sales X-Ray needs to wake up now and then to show your lead alerts on time. It uses very little battery.",
+    allow: "Open battery settings",
+  },
+};
+
+const PLAY_LABELS: Partial<Record<PhoneCheck, string>> = { calls: "Calls" };
+
+/** The screen shown before Android asks, for this build of the app. */
+export function explainerFor(
+  key: PhoneCheck,
+  store: "direct" | "play",
+): Explainer | undefined {
+  return (
+    (store === "play" ? PLAY_EXPLAINERS[key] : undefined) ?? EXPLAINERS[key]
+  );
+}
+
+/** A checklist line's name, for this build of the app. */
+export function checkLabel(key: PhoneCheck, store: "direct" | "play"): string {
+  return (store === "play" ? PLAY_LABELS[key] : undefined) ?? CHECK_LABELS[key];
+}
+
+/**
  * Xiaomi, Redmi and POCO keep call recordings in a folder other apps can't see
  * (Redmi audit #49): Android shows it to Sales Xray only with All files access.
  */
