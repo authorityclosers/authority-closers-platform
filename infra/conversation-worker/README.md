@@ -56,8 +56,8 @@ repositories. Do not mount the whole recording store, user home, host root,
 Docker socket or any key directory. Source and output are different paths.
 
 The source is a regular file <=128 MiB, accessible only to the worker's approved
-UID mapping. The output is a separate **64 MiB quota-limited private filesystem**,
-owned by mapped UID/GID10001 and mode0700. A host-mounted tmpfs with size64m,
+UID mapping. The output is a separate **128 MiB quota-limited private filesystem**,
+owned by mapped UID/GID10001 and mode0700. A host-mounted tmpfs with size128m,
 nosuid,nodev,noexec can satisfy this temporary-output requirement; provision it
 through the infrastructure owner, not by this image. An ordinary unbounded bind
 directory does not satisfy the disk boundary. Tmpfs outputs are ephemeral: the
@@ -170,7 +170,9 @@ native f64 rows, the packed feature file, and the source snapshot. It is
 source ceiling. The one-hour 768 MiB work limit admits the mono case but rejects
 stereo; the 1,536 MiB work limit admits both with the same two-hour/channel
 contract. The decoded stereo PCM (921,728,000 bytes) is the largest file, under
-the 1 GiB file bound. Measured on the 4-core host (23 Oct 2026, a 7,195 s
+the 1 GiB file bound; packed stereo features (95,040,032 bytes) plus the
+checkpoint fit the 128 MiB output filesystem (a 64 MiB one admits two-hour mono
+but not stereo past about 84 minutes). Measured on the 4-core host (23 Oct 2026, a 7,195 s
 fictional MP3, one CPU): the whole inspection took 124 s mono and 248 s stereo,
 with a cgroup memory peak of 737 MB and 1,380 MB and a /work peak of 669 MB and
 1,309 MB; the timeouts above were doubled with the window.
@@ -205,7 +207,7 @@ Provider processing, public storage, staging and production remain separate gate
 The database/credential worker connects to a separately supervised helper through
 `SocketNativeRuntime` and never receives Docker access. Start
 `scripts/native_runtime_helper.py` under the dedicated host supervisor with the
-exact approved image digest, private scratch root, pre-provisioned 64 MiB
+exact approved image digest, private scratch root, pre-provisioned 128 MiB
 mode-0700 output tmpfs and worker peer UID/GID. The helper accepts one bounded
 canonical request at a time, checks the Unix peer credential, source hash and
 workspace scope, then invokes this candidate image through the fixed command

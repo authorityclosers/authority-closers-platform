@@ -55,7 +55,16 @@ REVIEWED_RENDERERS: Mapping[str, frozenset[str]] = {
         {"staging", "production"}
     ),
     "88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76": ENVIRONMENTS,
+    # 120-minute calls (owner, 23 Oct 2026): a 128 MiB native output tmpfs for
+    # two-hour stereo features and a 1600 s stop for the 1500 s container deadline.
+    "e51105e97dfa6d7b7e3287990a4724e744ecde57a86fd6488f8375410d525acf": ENVIRONMENTS,
 }
+# The one-hour renderer's 64 MiB output and the two-hour renderer's 128 MiB one;
+# each reviewed renderer above renders exactly one of them.
+NATIVE_OUTPUT_MOUNT_OPTIONS = (
+    "Options=size=64m,mode=0700,uid=10001,gid=10001,nosuid,nodev,noexec\n",
+    "Options=size=128m,mode=0700,uid=10001,gid=10001,nosuid,nodev,noexec\n",
+)
 NATIVE_GROUP_NAME = "ac-sales-xray-native"
 NATIVE_GROUP_GID = 10001
 NATIVE_READINESS_TIMEOUT_SECONDS = 10.0
@@ -472,9 +481,10 @@ def _validate_descriptor(
     required_mount_fragments = (
         "What=tmpfs",
         f"Where=/srv/authority-closers/sales-xray/{environment}/scratch/native-output-tmpfs",
-        "Options=size=64m,mode=0700,uid=10001,gid=10001,nosuid,nodev,noexec",
     )
-    if any(fragment not in mount for fragment in required_mount_fragments):
+    if any(fragment not in mount for fragment in required_mount_fragments) or not any(
+        option in mount for option in NATIVE_OUTPUT_MOUNT_OPTIONS
+    ):
         raise _fail("native_units_mount_binding_invalid")
 
 
