@@ -66,3 +66,17 @@ def test_apply_needs_the_approval(capsys: pytest.CaptureFixture[str]) -> None:
     with pytest.raises(SystemExit):
         change.main(["--apply", "--approver", "Owner"])
     assert "--words" in capsys.readouterr().err
+
+
+def test_another_pulse_is_a_flag_away() -> None:
+    target = change.Target(
+        runner=("ssh", "ea", "docker", "exec", "-i", "pulse-db"),
+        org_slug="authority-closers-ac",
+        founder_email="Founder@Example.com",
+    )
+    script = change.sql(change.rows(CATALOGUE), actor="x", apply=False, target=target)
+    assert "slug = 'authority-closers-ac'" in script
+    assert "lower(email) = 'founder@example.com'" in script
+    assert "__ORG_SLUG__" not in script and "__FOUNDER_EMAIL__" not in script
+    with pytest.raises(AssertionError):
+        change.sql([], actor="x", apply=False, target=change.Target(org_slug="x' or '1"))

@@ -31,6 +31,10 @@ Audit: ``pulse.actor_account`` names this script, the approver and the issue, so
 audit trigger records the module document change; one more ``pulse.audit_event`` records the
 catalogue load with its counts.
 
+Another Pulse: --exec (how psql is reached, e.g. "ssh ea sudo docker exec -i <container>"),
+--database, --db-user, --org-slug, --founder-email and --backups; the keys and the upsert make
+a re-run there, or here, change only what differs.
+
 Run on ac as root (it uses docker):
   python3 scripts/data-changes/pulse-hq-ac-catalogue.py                       # dry run
   python3 scripts/data-changes/pulse-hq-ac-catalogue.py --apply \\
@@ -41,16 +45,18 @@ from __future__ import annotations
 
 import argparse
 import json
+import shlex
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 ROOT = Path(__file__).resolve().parents[2]
 CATALOGUE = ROOT / "apps" / "admin-web" / "app" / "catalogue" / "catalogue.generated.json"
-CONTAINER = "pulse-postgres-1"
+EXEC = "docker exec -i pulse-postgres-1"
 DATABASE = "pulse"
 DB_USER = "pulse_admin"
 ORG_SLUG = "authority-closers"
@@ -178,13 +184,30 @@ def rows(catalogue: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-def sql(features: list[dict[str, Any]], *, actor: str, apply: bool) -> str:
+@dataclass(frozen=True)
+class Target:
+    """Which Pulse database and organisation: AC's own by default, any other by flag."""
+
+    runner: tuple[str, ...] = tuple(shlex.split(EXEC))
+    database: str = DATABASE
+    user: str = DB_USER
+    org_slug: str = ORG_SLUG
+    founder_email: str = FOUNDER_EMAIL
+    backups: Path = BACKUPS
+
+
+def sql(
+    features: list[dict[str, Any]], *, actor: str, apply: bool, target: Target | None = None
+) -> str:
     """The whole change as one psql script: before, the change, after, then commit or rollback."""
+    target = target or Target()
     data = json.dumps(features, ensure_ascii=False)
     assert "$ac_catalogue$" not in data and "$ac_actor$" not in actor
+    for value in (target.org_slug, target.founder_email):
+        assert "'" not in value and "__" not in value, value
     tokens = {
-        "__ORG_SLUG__": ORG_SLUG,
-        "__FOUNDER_EMAIL__": FOUNDER_EMAIL,
+        "__ORG_SLUG__": target.org_slug,
+        "__FOUNDER_EMAIL__": target.founder_email.lower(),
         "__ACTOR__": actor,
         "__COUNT__": str(len(features)),
         "__END_NOTE__": "== APPLIED (committed)"
@@ -199,9 +222,9 @@ def sql(features: list[dict[str, Any]], *, actor: str, apply: bool) -> str:
     return script
 
 
-def psql(script: str) -> int:
-    process = subprocess.run(  # noqa: S603 - fixed argv; the SQL goes in on stdin
-        ["docker", "exec", "-i", CONTAINER, "psql", "-U", DB_USER, "-d", DATABASE],  # noqa: S607
+def psql(script: str, target: Target) -> int:
+    process = subprocess.run(  # noqa: S603 - argv from the operator's flags; SQL on stdin
+        [*target.runner, "psql", "-U", target.user, "-d", target.database],
         input=script,
         text=True,
         check=False,
@@ -209,18 +232,18 @@ def psql(script: str) -> int:
     return process.returncode
 
 
-def snapshot() -> Path:
-    """A custom-format pg_dump of AC's Pulse, next to the auto-update's backups."""
-    target = BACKUPS / f"pulse-{datetime.now(UTC):%Y%m%dT%H%M%SZ}-before-pulse-hq.dump"
-    with target.open("wb") as out:
-        dump = subprocess.run(  # noqa: S603 - fixed argv
-            ["docker", "exec", CONTAINER, "pg_dump", "-U", DB_USER, "-d", DATABASE, "-Fc"],  # noqa: S607
+def snapshot(target: Target) -> Path:
+    """A custom-format pg_dump of the target Pulse (AC's: next to the auto-update's backups)."""
+    path = target.backups / f"pulse-{datetime.now(UTC):%Y%m%dT%H%M%SZ}-before-pulse-hq.dump"
+    with path.open("wb") as out:
+        dump = subprocess.run(  # noqa: S603 - argv from the operator's flags
+            [*target.runner, "pg_dump", "-U", target.user, "-d", target.database, "-Fc"],
             stdout=out,
             check=False,
         )
-    if dump.returncode != 0 or target.stat().st_size < 100_000:
-        raise SystemExit(f"Snapshot failed ({dump.returncode}); nothing was changed: {target}")
-    return target
+    if dump.returncode != 0 or path.stat().st_size < 100_000:
+        raise SystemExit(f"Snapshot failed ({dump.returncode}); nothing was changed: {path}")
+    return path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -231,7 +254,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--issue", default="", help="the issue or card this change belongs to")
     parser.add_argument("--catalogue", type=Path, default=CATALOGUE)
     parser.add_argument("--print-sql", action="store_true", help="print the SQL and stop")
+    # Another Pulse (e.g. AC as an organisation in EA's production Pulse): where psql runs and
+    # which organisation; the defaults are AC's own Pulse on ac.
+    parser.add_argument("--exec", default=EXEC, help=f"how to reach psql (default: {EXEC})")
+    parser.add_argument("--database", default=DATABASE)
+    parser.add_argument("--db-user", default=DB_USER)
+    parser.add_argument("--org-slug", default=ORG_SLUG)
+    parser.add_argument("--founder-email", default=FOUNDER_EMAIL, help="who the rows are by")
+    parser.add_argument("--backups", type=Path, default=BACKUPS, help="where the snapshot goes")
     args = parser.parse_args(argv)
+    target = Target(
+        runner=tuple(shlex.split(args.exec)),
+        database=args.database,
+        user=args.db_user,
+        org_slug=args.org_slug,
+        founder_email=args.founder_email,
+        backups=args.backups,
+    )
 
     if args.apply and not (args.approver.strip() and args.words.strip() and args.issue.strip()):
         parser.error("--apply needs --approver, --words (verbatim) and --issue")
@@ -242,16 +281,16 @@ def main(argv: list[str] | None = None) -> int:
         f"issue: {args.issue or 'none'} · words: {args.words or 'none'}",
         500,
     )
-    script = sql(features, actor=actor, apply=args.apply)
+    script = sql(features, actor=actor, apply=args.apply, target=target)
     if args.print_sql:
         print(script)
         return 0
-    if not shutil.which("docker"):
-        raise SystemExit("Run this on ac as root: it reaches Pulse's database through docker.")
-    print(f"{len(features)} AC features from {args.catalogue}")
+    if not target.runner or not shutil.which(target.runner[0]):
+        raise SystemExit(f"Can't run {target.runner[:1]}: on ac, run this as root (docker).")
+    print(f"{len(features)} AC features from {args.catalogue} -> {target.org_slug}")
     if args.apply:
-        print(f"Snapshot: {snapshot()}")
-    return psql(script)
+        print(f"Snapshot: {snapshot(target)}")
+    return psql(script, target)
 
 
 if __name__ == "__main__":
