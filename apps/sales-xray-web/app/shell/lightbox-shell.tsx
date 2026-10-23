@@ -123,7 +123,6 @@ import {
   type UpdateNotification,
 } from "./updates-client";
 import { ChatsTabIcon } from "../chats/chats-badge";
-import { leadLink, readLeads } from "../leads/leads-client";
 import { CommandBar, type Command } from "../ui/command-bar";
 import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
@@ -1046,6 +1045,8 @@ function LightboxShellFrame({
       let leads: Command[] = [];
       if (inOrganisation && !leadsSearchedElsewhere)
         try {
+          // Loaded on the first search, not with every page.
+          const { leadLink, readLeads } = await import("../leads/leads-client");
           const page = await readLeads(
             { scope: orgAdmin ? "team" : "mine", search: text },
             signal,
