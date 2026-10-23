@@ -83,6 +83,7 @@ from ac_platform.conversation_intelligence.worker_account_gate import (
 from ac_platform.identity.models import Person
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository, RecoveryStateRepository
+from ac_platform.outbox.tenant_turns import TenantTurns
 from ac_platform.tenancy.models import Membership, Tenant
 
 _T = TypeVar("_T")
@@ -332,6 +333,8 @@ class OfflineConversationWorker:
             AUDIOATLAS_HOSTED_RECIPE if c1_rate == HOSTED_C1_RATE else AUDIOATLAS_RECIPE
         )
         self.lease_for, self.heartbeat_every = lease_for, heartbeat_every
+        # One organisation's bulk import must not hold the others' calls.
+        self.tenant_turns = TenantTurns()
 
     async def claim(self) -> Work | None:
         async with self.sessions() as db, db.begin():
@@ -341,6 +344,7 @@ class OfflineConversationWorker:
                 kinds=(LOCAL_JOB, DELETE_JOB),
                 limit=1,
                 lease_for=min(self.lease_for, timedelta(seconds=30)),
+                turns=self.tenant_turns,
             )
             await self._recover_terminal_local_job(db, recovery.generation)
             if not jobs:

@@ -304,7 +304,7 @@ async function request(path: string, init: RequestInit = {}): Promise<unknown> {
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError")
       throw error;
-    throw new IntegrationsError("Sales Xray isn't answering. Try again.", 0);
+    throw new IntegrationsError("Sales X-Ray isn't answering. Try again.", 0);
   }
   if (!response.ok) {
     let detail: string | undefined;

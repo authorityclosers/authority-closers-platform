@@ -16,11 +16,11 @@ export function WorkspaceNoAccess({ workspace }: { workspace: string | null }) {
         <ShieldOff size={24} />
       </span>
       <h2 id="no-access-title">
-        Sales Xray isn&apos;t on for this workspace yet
+        Sales X-Ray isn&apos;t on for this workspace yet
       </h2>
       <p>
         {workspace ? `${workspace}. ` : ""}
-        Your calls are in your personal account. An owner can switch Sales Xray
+        Your calls are in your personal account. An owner can switch Sales X-Ray
         on for this organisation, and then its calls and numbers show here.
       </p>
       <button

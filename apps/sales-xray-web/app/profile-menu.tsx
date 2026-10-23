@@ -1,5 +1,6 @@
 "use client";
 
+import { usePurchasesAllowed } from "./purchase-policy";
 import {
   ArrowUpRight,
   CircleUserRound,
@@ -106,6 +107,7 @@ export function ProfileMenu({
   pending?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const purchasesAllowed = usePurchasesAllowed();
   // Back (the button, the phone's gesture or key) closes it (owner, 22 Oct).
   useBackClose(open, () => setOpen(false));
   const [signingOut, setSigningOut] = useState(false);
@@ -383,14 +385,17 @@ export function ProfileMenu({
               <Mail size={16} aria-hidden="true" />
               <span>Email the AC team</span>
             </a>
-            <Link
-              href="/pricing"
-              className={styles.item}
-              onClick={() => setOpen(false)}
-            >
-              <Tag size={16} aria-hidden="true" />
-              <span>Pricing</span>
-            </Link>
+            {purchasesAllowed ? (
+              <Link
+                href="/pricing"
+                className={styles.item}
+                onClick={() => setOpen(false)}
+              >
+                <Tag size={16} aria-hidden="true" />
+                <span>Pricing</span>
+              </Link>
+            ) : null}
+
             <a
               href="https://app.authorityclosers.com/privacy"
               target="_blank"

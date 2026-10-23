@@ -68,7 +68,7 @@ export const SKIP_WORDS: Record<SkipReason, string> = {
  * Blind Brain 4.0 mode (orchestrator, 21 Oct): the reviewer rates the 18 dimensions
  * 1-5 before Brain 4.0's ratings are shown; "-" says why there is no rating.
  */
-export type Mode = "lines" | "brain4_blind";
+export type Mode = "lines" | "brain4_blind" | "report";
 export type DimensionSkip = "not_applicable" | "not_sure" | "audio_unclear";
 export const DIMENSION_SKIP_WORDS: Record<DimensionSkip, string> = {
   not_applicable: "Didn't come up",
@@ -110,6 +110,25 @@ export type Brain4Reveal = {
   call_type?: string;
   dimensions: Brain4Dimension[];
 };
+
+/**
+ * Report review (owner, 23 Oct): every item of the call's Report, built by the server
+ * from the Report's own structure, so a new section shows here with no code change.
+ * Each item is agreed, disagreed or fixed (a rating 1-5, or the right words).
+ */
+export type ReportVerdict = "agree" | "disagree" | "fix";
+export type ReportItem = {
+  id: string;
+  section: string;
+  label: string;
+  kind: "rating" | "text";
+  rating: number | null;
+  text: string | null;
+  detail: string | null;
+  evidence: Evidence[];
+  number?: number;
+};
+export type ReportSection = { id: string; label: string; items: ReportItem[] };
 
 export type Badge = {
   reviewer: boolean;
@@ -155,7 +174,7 @@ export type Pointer = {
 };
 export type Line = { target: string; label: string; ai: unknown };
 export type SavedValue = {
-  verdict?: Verdict | null;
+  verdict?: Verdict | ReportVerdict | null;
   score?: number | null;
   opinion?: string;
   status?: AiStatus;
@@ -166,6 +185,8 @@ export type SavedValue = {
   rating?: number;
   moment?: MomentValue;
   blind?: boolean;
+  // Report review.
+  correction?: string;
 };
 export type SavedRow = {
   id: string;
@@ -188,6 +209,7 @@ export type Workspace = {
   dimensions?: Dimension[];
   revealed?: boolean;
   brain4?: Brain4Reveal | null;
+  sections?: ReportSection[];
   lines: Line[];
   saved: SavedRow[];
   audio_source_url: string;
@@ -222,7 +244,7 @@ export type Summary = {
   calls_started: number;
   median_seconds: number | null;
   agreement: number | null;
-  verdicts: Record<Verdict, number>;
+  verdicts: Record<Verdict, number> & { fix?: number };
 };
 export type Metrics = {
   scope: "reviewer" | "owner";
@@ -326,7 +348,7 @@ export function readWorkspace(id: string, signal?: AbortSignal) {
 }
 
 export type LineSave = {
-  verdict?: Verdict | null;
+  verdict?: Verdict | ReportVerdict | null;
   score?: number | null;
   opinion?: string;
   status?: AiStatus | null;
@@ -335,6 +357,7 @@ export type LineSave = {
   seconds?: number;
   rating?: number | null;
   moment?: MomentValue | null;
+  correction?: string | null;
 };
 
 export function saveLine(

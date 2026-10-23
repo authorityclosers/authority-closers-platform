@@ -2,11 +2,15 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
+  appVersion,
   audioFormat,
   deviceClass,
+  deviceTier,
+  network,
   readBand,
   routeTemplate,
   safePayload,
+  screenOf,
   sizeBand,
   TELEMETRY_EVENT_NAMES,
   TelemetryClient,
@@ -243,4 +247,69 @@ it("names pages by their templates, never their ids, and bands reads and screens
   expect(deviceClass(390)).toBe("phone");
   expect(deviceClass(820)).toBe("tablet");
   expect(deviceClass(1440)).toBe("desktop");
+});
+
+it("says how capable the device and network are, and the app's version", () => {
+  expect(deviceTier(8, 8)).toBe("high");
+  expect(deviceTier(8, 4)).toBe("mid");
+  expect(deviceTier(4, 8)).toBe("low");
+  expect(deviceTier(8, 2)).toBe("low");
+  expect(deviceTier(6, undefined)).toBe("mid");
+  expect(deviceTier(undefined, undefined)).toBe("unknown");
+  expect(network({ effectiveType: "slow-2g", type: "cellular" }, true)).toEqual(
+    {
+      net: "slow_2g",
+      link: "cellular",
+    },
+  );
+  expect(network(undefined, false)).toEqual({
+    net: "unknown",
+    link: "offline",
+  });
+  expect(appVersion("Mozilla/5.0 (Linux) SalesXrayApp/0.3.88 Chrome")).toBe(
+    "0.3.88",
+  );
+  expect(appVersion("Mozilla/5.0 Chrome")).toBeNull();
+  expect(screenOf("/leads")).toBe("leads");
+  expect(screenOf("/leads", "?lead=abc")).toBe("lead");
+  expect(screenOf("/analysis/calls/3f2b7d10-aaaa")).toBe("report");
+  expect(screenOf("/login")).toBe("other");
+});
+
+it("carries where an event ran and stops automatic capture when nothing is recorded", async () => {
+  const telemetry = client(true, () => ({
+    route: "/leads",
+    device: "phone",
+    app: "android",
+    tier: "low",
+    net: "4g",
+    link: "wifi",
+    appVersion: "0.3.88",
+  }));
+  telemetry.setSession(SESSION);
+  expect(telemetry.active()).toBe(true);
+  telemetry.track("sx.screen_viewed", { screen: "leads", nav: "first" });
+  await vi.runAllTimersAsync();
+  expect(sent()[0]?.payload).toEqual({
+    screen: "leads",
+    nav: "first",
+    device: "phone",
+    app: "android",
+    tier: "low",
+    net: "4g",
+    link: "wifi",
+    app_version: "0.3.88",
+  });
+
+  // The server lists nothing for someone who turned it off: capture stops,
+  // until Settings, Privacy asks again.
+  calls = [];
+  taxonomy = [];
+  const off = client(true);
+  off.setSession(SESSION);
+  off.track("sx.sign_out", {});
+  await vi.runAllTimersAsync();
+  expect(off.active()).toBe(false);
+  off.refresh();
+  expect(off.active()).toBe(true);
 });

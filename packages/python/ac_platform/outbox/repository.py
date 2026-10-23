@@ -41,6 +41,7 @@ from ac_platform.outbox.policy import (
     recovery_actor_id,
     recovery_hold_timestamp,
 )
+from ac_platform.outbox.tenant_turns import TenantTurns, turn_order
 from ac_platform.telemetry.redaction import sanitize_error
 
 MAX_JOB_LEASE = timedelta(minutes=15)
@@ -324,12 +325,17 @@ def build_job_claim_statement(
     recovery_generation: int,
     limit: int = 1,
     kinds: Iterable[str] | None = None,
+    tenant_ranks: Mapping[UUID, int] | None = None,
 ) -> Select[tuple[Job]]:
     """Build the row-locking claim query.
 
     PostgreSQL executes the ``FOR UPDATE SKIP LOCKED`` seam. Dialects without
     row-lock support simply ignore that clause, which keeps unit tests useful
     while leaving the production concurrency contract visible in one place.
+
+    ``tenant_ranks`` (from :class:`TenantTurns`) makes the claim round-robin by
+    organisation: the least recently served organisation goes first, and each
+    organisation keeps the plain queue order. Without it the order is FIFO.
     """
 
     if limit < 1 or limit > 500:
@@ -367,10 +373,14 @@ def build_job_claim_statement(
     ]
     if normalized_kinds is not None:
         predicates.append(Job.kind.in_(normalized_kinds))
+    order: list[Any] = [Job.available_at.asc(), Job.created_at.asc(), Job.id.asc()]
+    turn = turn_order(Job.tenant_id, tenant_ranks)
+    if turn is not None:
+        order.insert(0, turn.asc())
     return (
         select(Job)
         .where(*predicates)
-        .order_by(Job.available_at.asc(), Job.created_at.asc(), Job.id.asc())
+        .order_by(*order)
         .limit(limit)
         .with_for_update(skip_locked=True)
     )
@@ -1391,11 +1401,14 @@ class JobRepository:
         lease_for: timedelta = timedelta(minutes=5),
         limit: int = 1,
         kinds: Iterable[str] | None = None,
+        turns: TenantTurns | None = None,
     ) -> list[Job]:
         """Claim eligible jobs and increment their durable attempt counters.
 
         ``kinds=None`` preserves the explicit whole-table behavior used by
         recovery tooling. Every worker must provide its exact allowlist.
+        ``turns`` makes the claim round-robin by organisation and records
+        each claimed job's organisation; pass the worker's one shared instance.
         """
 
         _lease_seconds(lease_for)
@@ -1419,6 +1432,7 @@ class JobRepository:
                         recovery_generation=recovery_state.generation,
                         limit=limit,
                         kinds=normalized_kinds,
+                        tenant_ranks=turns.ranks() if turns is not None else None,
                     )
                 )
             ).all()
@@ -1453,6 +1467,8 @@ class JobRepository:
                 row.last_error = None
                 row.updated_at = current_time
                 await self._session.flush()
+            if turns is not None:
+                turns.served(row.tenant_id)
             claimed.append(row)
         return claimed
 

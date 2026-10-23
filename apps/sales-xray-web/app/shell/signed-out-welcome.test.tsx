@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -57,6 +60,23 @@ it("uses the app's own sign-in when it has one", async () => {
   await act(async () => links[0].click());
   expect(requestAccountSignIn).toHaveBeenCalledOnce();
   expect(links[1].getAttribute("href")).toBe("/analysis/new");
+});
+
+it("fits above the phone tab bar: compact rows, a 44 px guest link, no wave on short screens", () => {
+  // Redmi test, 23 Oct: the guest link and account line sat under the bar.
+  const css = readFileSync(
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "signed-out-welcome.module.css",
+    ),
+    "utf8",
+  );
+  const phone = css.slice(css.indexOf("@media (max-width: 899.98px) {"));
+  expect(phone).toMatch(/\.points li \{[^}]*font-size: var\(--sx-text-sm\)/);
+  expect(phone).toMatch(/\.guest \{[^}]*min-height: 44px/);
+  expect(css).toMatch(
+    /@media \(max-width: 899\.98px\) and \(max-height: 760px\) \{\s*\.wave \{\s*display: none;/,
+  );
 });
 
 it("never sends sign-in back to sign-in or off the site", () => {

@@ -89,6 +89,9 @@ _ALLOWED_ROUTE_TEMPLATES = frozenset(LEARNER_ROUTE_TEMPLATES + SALES_XRAY_ROUTE_
 
 # A short code a screen chose (a surface or error code), never free text.
 _TOKEN_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
+# A version or fingerprint label ("0.3.88", "e1a2b3c4"): lower-case letters, digits, dots
+# and dashes, never free text.
+_LABEL_PATTERN = re.compile(r"^[a-z0-9][a-z0-9._-]{0,31}$")
 
 
 def _no_values() -> Mapping[str, frozenset[str]]:
@@ -104,10 +107,10 @@ class TelemetryEventDefinition:
     """Immutable server-owned schema entry for one analytics event.
 
     Learner events list their payload keys only.  Sales X-Ray events also type
-    every key: one of a fixed set of values, a short code token, a number from 0
-    to a cap, or a flag; ``required`` keys must be present, and ``takes_call``
-    events may name the call they are about (``call_id``), which the server
-    stores only as a keyed hash.
+    every key: one of a fixed set of values, a short code token, a version or
+    fingerprint label, a number from 0 to a cap, or a flag; ``required`` keys
+    must be present, and ``takes_call`` events may name the call they are about
+    (``call_id``), which the server stores only as a keyed hash.
     """
 
     event_version: str
@@ -116,6 +119,7 @@ class TelemetryEventDefinition:
     values: Mapping[str, frozenset[str]] = field(default_factory=_no_values)
     numbers: Mapping[str, float] = field(default_factory=_no_numbers)
     tokens: frozenset[str] = frozenset()
+    labels: frozenset[str] = frozenset()
     flags: frozenset[str] = frozenset()
     required: frozenset[str] = frozenset()
     takes_call: bool = False
@@ -146,6 +150,9 @@ def check_payload_values(definition: TelemetryEventDefinition, payload: Mapping[
         elif key in definition.tokens:
             if not isinstance(value, str) or not _TOKEN_PATTERN.fullmatch(value):
                 raise ValueError("payload code is not a short lower-case token")
+        elif key in definition.labels:
+            if not isinstance(value, str) or not _LABEL_PATTERN.fullmatch(value):
+                raise ValueError("payload label is not a short version or fingerprint")
         elif key in definition.flags and not isinstance(value, bool):
             raise ValueError("payload flag is not true or false")
 
@@ -374,6 +381,9 @@ class TelemetrySurface:
     call_refs: CallRefResolver | None = None
     # Events one person may store in any 24 hours (counted in the database).
     person_daily_cap: int | None = None
+    # How often (at most, per process) a write also deletes one bounded batch of this
+    # surface's expired events, every workspace's, so retention holds without a scheduler.
+    purge_every: timedelta | None = None
 
 
 LEARNER_SURFACE = TelemetrySurface(

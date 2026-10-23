@@ -189,7 +189,7 @@ describe("PhoneOnboarding", () => {
 
     expect(host.textContent).toContain("Your phone is ready");
     expect(localStorage.getItem(ONBOARDED_KEY)).toBeNull();
-    await act(async () => button("Open Sales Xray").click());
+    await act(async () => button("Open Sales X-Ray").click());
     expect(localStorage.getItem(ONBOARDED_KEY)).not.toBeNull();
     expect(host.textContent).toBe("");
   });

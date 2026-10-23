@@ -93,6 +93,9 @@ class WorkerServiceConfig(StrictConfig):
     native_socket_path: str
     native_image_ref: Annotated[str, Field(pattern=r"^(?:[A-Za-z0-9._/-]+@)?sha256:[0-9a-f]{64}$")]
     providers: Annotated[list[ProviderLauncherConfig], Field(min_length=0, max_length=5)]
+    # Provider stages waiting on their providers at once (launch capacity,
+    # 23 Oct 2026). Each one holds a DB connection and one provider child.
+    provider_consumers: Annotated[int, Field(ge=1, le=8)] = 1
 
     @field_validator("operations_tenant_id", mode="before")
     @classmethod

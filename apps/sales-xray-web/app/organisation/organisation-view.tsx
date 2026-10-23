@@ -217,6 +217,7 @@ export function OrganisationView({
   sections,
   integrationParts,
   integrationOptions,
+  headless = false,
 }: {
   /** The page's first reads made on the server (dev), or null. */
   initial?: ServerOrganisation | null;
@@ -230,6 +231,8 @@ export function OrganisationView({
   integrationParts?: readonly IntegrationPart[];
   /** Settings → Developers: what goes between the parts, and a new key. */
   integrationOptions?: IntegrationsPanelOptions;
+  /** Inside the organisation hub, which has the header (org-hub.tsx). */
+  headless?: boolean;
 }) {
   const router = useOptionalRouter();
   const access = useWorkspaceAccess();
@@ -455,7 +458,7 @@ export function OrganisationView({
         />
       ) : (
         <>
-          {integrationsOnly ? null : (
+          {integrationsOnly || headless ? null : (
             <header className={styles.header}>
               <span className={styles.orgTile} aria-hidden="true">
                 <OrgLogo src={branding?.logoUrl} fallback={initials(name)} />

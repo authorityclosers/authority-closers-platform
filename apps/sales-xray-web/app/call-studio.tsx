@@ -1231,7 +1231,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
               <BrandMark />
             </span>
             <span>
-              Dipak’s <strong>Sales Xray</strong>
+              Dipak’s <strong>Sales X-Ray</strong>
               <small>AUTHORITY CLOSERS</small>
             </span>
           </Link>
@@ -1411,7 +1411,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
                   {measuredUpload === "checking"
                     ? "Your browser can’t preview this recording. Checking private upload…"
                     : measuredUpload === "available"
-                      ? "Your browser can’t preview this recording. Choose this file in New analysis; Sales Xray will check its length before analysis."
+                      ? "Your browser can’t preview this recording. Choose this file in New analysis; Sales X-Ray will check its length before analysis."
                       : "Your browser can’t preview this recording, and private upload is unavailable here. Choose a WAV or MP3 copy, or try again later."}
                 </p>
                 {measuredUpload === "available" && (
@@ -2042,7 +2042,7 @@ export function CallStudio({ homeHref = "/", variant }: CallStudioProps) {
         </details>
         {!embedded && (
           <footer className="studio-footer">
-            <span>Sales Xray · Authority Closers</span>
+            <span>Sales X-Ray · Authority Closers</span>
           </footer>
         )}
       </Main>

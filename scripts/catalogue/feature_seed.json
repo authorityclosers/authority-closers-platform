@@ -1,0 +1,1072 @@
+{
+  "version": 1,
+  "about": "Product words for every feature in AC Admin's Feature catalogue. The code decides status: scripts/catalogue/build_feature_catalogue.py checks each feature's anchors in the workbench and in every release on main, then writes apps/admin-web/app/catalogue/catalogue.generated.json. Edit words here; never type a status or version by hand except 'planned'.",
+  "products": [
+    {
+      "id": "sales-xray",
+      "name": "Sales X-Ray",
+      "line": "The sales CRM that records, analyses and coaches every call"
+    },
+    {
+      "id": "android",
+      "name": "Sales X-Ray for Android",
+      "line": "Calls, recordings and leads on the seller's own phone"
+    },
+    {
+      "id": "admin",
+      "name": "AC Admin",
+      "line": "The back office: quality, cost, accounts and releases"
+    },
+    {
+      "id": "academy",
+      "name": "AC Academy",
+      "line": "Courses, practice and certificates for sales learners"
+    },
+    {
+      "id": "coach",
+      "name": "Coach Studio",
+      "line": "Where coaches build and publish programs"
+    },
+    {
+      "id": "platform",
+      "name": "Platform",
+      "line": "Sign-in, organisations, billing, developers and safety under every app"
+    }
+  ],
+  "categories": [
+    {
+      "id": "calling",
+      "name": "Calling and recording",
+      "line": "Every call made, recorded and filed without effort",
+      "icon": "phone"
+    },
+    {
+      "id": "leads",
+      "name": "Leads CRM and pipelines",
+      "line": "One place for every lead, stage and next step",
+      "icon": "leads"
+    },
+    {
+      "id": "analysis",
+      "name": "Call analysis and Brain 4.0",
+      "line": "AI that reads every call like a top sales coach",
+      "icon": "brain"
+    },
+    {
+      "id": "coaching",
+      "name": "Coaching and team insight",
+      "line": "Turn calls into better sellers, week after week",
+      "icon": "coach"
+    },
+    {
+      "id": "chats",
+      "name": "Chats and WhatsApp",
+      "line": "Every message from every channel in one inbox",
+      "icon": "chat"
+    },
+    {
+      "id": "ads",
+      "name": "Meta, Google and ads",
+      "line": "Leads from ads arrive, get called and report back",
+      "icon": "ads"
+    },
+    {
+      "id": "team",
+      "name": "Teams and organisations",
+      "line": "Owners, managers and sellers each see what they need",
+      "icon": "team"
+    },
+    {
+      "id": "admin",
+      "name": "Admin, quality and cost",
+      "line": "How AC keeps analysis right and cost per minute low",
+      "icon": "admin"
+    },
+    {
+      "id": "developer",
+      "name": "Developer platform",
+      "line": "API keys, webhooks, Connect and MCP for partners and AI",
+      "icon": "code"
+    },
+    {
+      "id": "apps",
+      "name": "Android app",
+      "line": "The phone that sells: dialler, recorder and CRM together",
+      "icon": "android"
+    },
+    {
+      "id": "academy",
+      "name": "Academy and learning",
+      "line": "Programs, practice and proof of skill",
+      "icon": "academy"
+    },
+    {
+      "id": "platform",
+      "name": "Platform, trust and billing",
+      "line": "Sign-in, privacy, backups, releases and plans",
+      "icon": "shield"
+    }
+  ],
+  "audiences": [
+    "Sellers",
+    "Sales managers",
+    "Business owners",
+    "Learners",
+    "Coaches",
+    "Developers",
+    "AC staff"
+  ],
+  "features": [
+    {
+      "id": "start-calling",
+      "name": "Start calling desk",
+      "product": "sales-xray",
+      "category": "calling",
+      "value": "One tap calls the next lead in line, with today's late and coming-up counts.",
+      "for": ["Sellers"],
+      "anchors": [
+        "apps/sales-xray-web/app/leads/desk-view.tsx",
+        "packages/python/ac_platform/lead_desk"
+      ],
+      "api": ["/v1/lead-desk"],
+      "fixture": "/review-fixture/cold-calling",
+      "details": [
+        "Queue ordered by who is due first",
+        "Per-pipeline queue on dev (cold outreach apart from enquiries)",
+        "Swipe asks before calling"
+      ]
+    },
+    {
+      "id": "after-call-sheet",
+      "name": "After-call sheet",
+      "product": "sales-xray",
+      "category": "calling",
+      "value": "The moment a call ends, log what happened and book the next call in two taps.",
+      "for": ["Sellers"],
+      "anchors": ["apps/sales-xray-web/app/leads/capture-dialogs.tsx"],
+      "fixture": "/review-fixture/leads",
+      "details": [
+        "Outcome, stage and next call in one sheet",
+        "Call back and Someday follow-ups",
+        "Work hours respected"
+      ]
+    },
+    {
+      "id": "dialler-recordings",
+      "name": "Dialler calls recorded and filed",
+      "product": "android",
+      "category": "calling",
+      "value": "Calls from the phone's own dialler are logged to the lead with their recording attached.",
+      "for": ["Sellers", "Sales managers"],
+      "anchors": ["sx:/review-fixture/recorded-calls"],
+      "fixture": "/review-fixture/recorded-calls",
+      "details": [
+        "Works with Xiaomi's built-in recorder",
+        "Incoming and outgoing lead calls",
+        "No manual upload"
+      ]
+    },
+    {
+      "id": "upload-any-recording",
+      "name": "Upload any recording",
+      "product": "sales-xray",
+      "category": "calling",
+      "value": "Drop in any call recording up to 100 MB, from MP3 and MP4 to phone AMR, WMA and CAF.",
+      "for": ["Sellers", "Sales managers"],
+      "anchors": [
+        "sx:/analysis/new",
+        "apps/sales-xray-web/app/bulk-recording-import.tsx"
+      ],
+      "api": ["/v1/conversation/acquisition", "/v1/conversation/recordings"],
+      "details": [
+        "Bulk import of many calls at once",
+        "Details step keeps your answers",
+        "Calls are never left as Untitled call"
+      ]
+    },
+    {
+      "id": "calls-library",
+      "name": "Calls library",
+      "product": "sales-xray",
+      "category": "calling",
+      "value": "Every call with its lead, stage and report, listed in about a tenth of a second.",
+      "for": ["Sellers", "Sales managers"],
+      "anchors": ["sx:/calls"],
+      "fixture": "/review-fixture/calls",
+      "details": [
+        "Reports first",
+        "Calls say a lead's stage the same way the Report does",
+        "Calls report and CSV export"
+      ]
+    },
+    {
+      "id": "phone-setup",
+      "name": "Phone setup checklist",
+      "product": "android",
+      "category": "calling",
+      "value": "Shows exactly where the phone saves recordings and asks for one permission at a time.",
+      "for": ["Sellers"],
+      "anchors": ["apps/sales-xray-web/app/leads/phone-setup.tsx"],
+      "fixture": "/review-fixture/settings"
+    },
+    {
+      "id": "mark-private",
+      "name": "Mark a call private",
+      "product": "sales-xray",
+      "category": "calling",
+      "value": "Personal calls stay personal: one tap keeps a call out of the CRM and analysis.",
+      "for": ["Sellers"],
+      "anchors": ["apps/sales-xray-web/app/leads#Mark private"]
+    },
+    {
+      "id": "leads-stage-tabs",
+      "name": "Leads on one page",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "All leads on one page with stage tabs and a Start calling bar on top.",
+      "for": ["Sellers", "Sales managers"],
+      "anchors": ["apps/sales-xray-web/app/leads/stage-tabs.tsx"],
+      "api": ["/v1/lead-desk"],
+      "fixture": "/review-fixture/leads"
+    },
+    {
+      "id": "lead-stages",
+      "name": "Lead stages for your business",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Stages that match how your kind of business sells, ready on day one and editable.",
+      "for": ["Business owners", "Sales managers"],
+      "anchors": ["sx:/review-fixture/lead-stages"],
+      "fixture": "/review-fixture/lead-stages"
+    },
+    {
+      "id": "lead-pipelines",
+      "name": "Lead pipelines",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Keep partner outreach, enquiries and enrolments in separate pipelines with their own stages.",
+      "for": ["Business owners", "Sales managers"],
+      "anchors": ["apps/sales-xray-web/app/leads/use-pipelines.ts"],
+      "api": ["/v1/lead-desk"],
+      "fixture": "/review-fixture/stage-options",
+      "details": [
+        "Home funnel per pipeline",
+        "Call one pipeline at a time (on dev)"
+      ]
+    },
+    {
+      "id": "lead-hub",
+      "name": "Lead page as the hub",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Every call, chat, note and next step for one person on a single page.",
+      "for": ["Sellers"],
+      "anchors": ["apps/sales-xray-web/app/leads/lead-sheet.tsx"],
+      "fixture": "/review-fixture/leads"
+    },
+    {
+      "id": "lead-rules",
+      "name": "Lead rules and assignment",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Owners decide who gets which lead and when, so no lead waits.",
+      "for": ["Business owners", "Sales managers"],
+      "anchors": [
+        "packages/python/ac_platform/lead_desk/allocation.py",
+        "apps/sales-xray-web/app/leads/taking-switch.tsx"
+      ],
+      "details": [
+        "Taking new leads switch per seller",
+        "Assign to a person on import"
+      ]
+    },
+    {
+      "id": "lead-delete",
+      "name": "Delete leads safely",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Owners and admins remove a lead with one confirm, and every delete is audited.",
+      "for": ["Business owners"],
+      "anchors": ["sx:/review-fixture/lead-delete"],
+      "fixture": "/review-fixture/lead-delete"
+    },
+    {
+      "id": "ready-messages",
+      "name": "Ready WhatsApp and SMS messages",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Send the right follow-up message from a lead in one tap.",
+      "for": ["Sellers"],
+      "anchors": ["apps/sales-xray-web/app/leads/message-sheet.tsx"]
+    },
+    {
+      "id": "sales-home",
+      "name": "Sales home",
+      "product": "sales-xray",
+      "category": "leads",
+      "value": "Home starts with sales: today's calls, the funnel and who needs a call now.",
+      "for": ["Sellers", "Sales managers", "Business owners"],
+      "anchors": ["apps/sales-xray-web/app/dashboard/sales-home.tsx"],
+      "fixture": "/review-fixture/home"
+    },
+    {
+      "id": "the-report",
+      "name": "The call Report",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "Every call becomes a clear Report: what happened, what the buyer needs and what to do next.",
+      "for": ["Sellers", "Sales managers"],
+      "anchors": ["sx:/analysis/calls/[callId]"],
+      "fixture": "/review-fixture/report",
+      "details": [
+        "Report, Prospect and Coaching parts",
+        "Header names the call's lead and opens it",
+        "Plain sales words"
+      ]
+    },
+    {
+      "id": "brain-4",
+      "name": "Brain 4.0 coaching score",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "One AI coaching score per call, built from how top closers sell, with the moments that moved it.",
+      "for": ["Sellers", "Sales managers"],
+      "anchors": [
+        "packages/python/ac_platform/conversation_intelligence/brain4.py",
+        "admin:/gold/brain4"
+      ],
+      "fixture": "/review-fixture/report/pillars",
+      "details": [
+        "Replaced the 27 pointers",
+        "Blind-reviewed against gold calls"
+      ]
+    },
+    {
+      "id": "one-pass",
+      "name": "One-pass analysis",
+      "product": "platform",
+      "category": "analysis",
+      "value": "Transcribes and analyses a call in one AI pass, so reports come fast and cost paise per minute.",
+      "for": ["AC staff", "Business owners"],
+      "anchors": ["packages/python/ac_platform/one_pass"],
+      "details": [
+        "Gemini Flash-Lite with a classic fallback",
+        "Long calls transcribed in parts",
+        "Flex pricing with automatic fallback"
+      ]
+    },
+    {
+      "id": "call-data-engine",
+      "name": "Call data engine",
+      "product": "platform",
+      "category": "analysis",
+      "value": "Fast and deep pipelines turn each call into facts any screen, report or partner can use.",
+      "for": ["AC staff", "Developers"],
+      "anchors": ["packages/python/ac_platform/call_data"],
+      "api": ["/v1/call-data", "/v1/conversation"],
+      "fixture": "/review-fixture/call-facts"
+    },
+    {
+      "id": "prospect-profile",
+      "name": "Prospect profile",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "Who the buyer is, with need, budget, authority and timing in their own words.",
+      "for": ["Sellers"],
+      "anchors": [
+        "sx:/prospects",
+        "packages/python/ac_platform/conversation_intelligence/prospect_profile.py"
+      ],
+      "api": ["/v1/conversation/prospects"],
+      "fixture": "/review-fixture/prospects",
+      "details": [
+        "What to remember before the next call",
+        "Quotes jump to the moment in the call"
+      ]
+    },
+    {
+      "id": "ai-per-seller",
+      "name": "AI level per seller",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "Choose how much AI each seller's calls get, from a quick read to the full report.",
+      "for": ["Business owners"],
+      "anchors": ["packages/python/ac_platform/call_ai"],
+      "fixture": "/review-fixture/call-ai",
+      "details": [
+        "Short calls under a minute get transcript and lead details only",
+        "Get full report on any call"
+      ]
+    },
+    {
+      "id": "seller-profile",
+      "name": "Salesperson profile",
+      "product": "sales-xray",
+      "category": "coaching",
+      "value": "Each seller's strengths, habits and focus, built from their real calls.",
+      "for": ["Sellers", "Sales managers"],
+      "anchors": ["sx:/review-fixture/seller-profile"],
+      "fixture": "/review-fixture/seller-profile"
+    },
+    {
+      "id": "word-document",
+      "name": "Document view and Word file",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "Read or download any Report as a clean document to share with the team.",
+      "for": ["Sales managers"],
+      "anchors": ["sx:/review-fixture/document"],
+      "fixture": "/review-fixture/document"
+    },
+    {
+      "id": "analyse-all",
+      "name": "Analyse all",
+      "product": "sales-xray",
+      "category": "analysis",
+      "value": "Analyse a whole batch of calls with one tap; it resumes by itself after a break.",
+      "for": ["Sales managers"],
+      "anchors": [
+        "apps/sales-xray-web/app/analyse-all.ts",
+        "apps/sales-xray-web/app/analyse-resume.ts"
+      ]
+    },
+    {
+      "id": "my-coaching",
+      "name": "My coaching",
+      "product": "sales-xray",
+      "category": "coaching",
+      "value": "One focus at a time, with clips from your own calls that show it working.",
+      "for": ["Sellers"],
+      "anchors": ["sx:/coaching"],
+      "fixture": "/review-fixture/coaching",
+      "details": [
+        "Lessons resume where you left them",
+        "Clips play and pause cleanly"
+      ]
+    },
+    {
+      "id": "team-coaching",
+      "name": "Team coaching",
+      "product": "sales-xray",
+      "category": "coaching",
+      "value": "Every rep's focus and record side by side, sorted by latest call or name.",
+      "for": ["Sales managers"],
+      "anchors": ["sx:/coaching"],
+      "fixture": "/review-fixture/report/coaching"
+    },
+    {
+      "id": "team-insights",
+      "name": "Organisation insights",
+      "product": "sales-xray",
+      "category": "coaching",
+      "value": "What is winning and losing deals across the team, from every analysed call.",
+      "for": ["Business owners", "Sales managers"],
+      "anchors": ["sx:/organisation/insights"],
+      "fixture": "/review-fixture/insights"
+    },
+    {
+      "id": "call-outcomes",
+      "name": "Call outcomes",
+      "product": "sales-xray",
+      "category": "coaching",
+      "value": "The complete outcome of each call, and the team's outcomes over time.",
+      "for": ["Sales managers"],
+      "anchors": ["sx:/review-fixture/report/outcomes"],
+      "fixture": "/review-fixture/report/outcomes"
+    },
+    {
+      "id": "chats-inbox",
+      "name": "Chats inbox",
+      "product": "sales-xray",
+      "category": "chats",
+      "value": "WhatsApp, Messenger and Instagram messages in one inbox, with read marks.",
+      "for": ["Sellers"],
+      "anchors": ["sx:/chats", "packages/python/ac_platform/lead_desk/chats"],
+      "fixture": "/review-fixture/chats"
+    },
+    {
+      "id": "whatsapp",
+      "name": "WhatsApp Business",
+      "product": "sales-xray",
+      "category": "chats",
+      "value": "Leads' WhatsApp conversations land on their lead and in the inbox.",
+      "for": ["Sellers", "Business owners"],
+      "anchors": ["packages/python/ac_platform/lead_desk/whatsapp"],
+      "switch": "Off until a workspace connects its number"
+    },
+    {
+      "id": "messenger-instagram",
+      "name": "Messenger and Instagram",
+      "product": "sales-xray",
+      "category": "chats",
+      "value": "Facebook and Instagram DMs become leads and chats automatically.",
+      "for": ["Sellers", "Business owners"],
+      "anchors": ["packages/python/ac_platform/lead_desk/social"],
+      "switch": "Off until a workspace connects its page"
+    },
+    {
+      "id": "ai-replies",
+      "name": "AI replies",
+      "product": "sales-xray",
+      "category": "chats",
+      "value": "Drafts the next reply to a lead in your voice; you approve before it goes.",
+      "for": ["Sellers"],
+      "anchors": ["packages/python/ac_platform/lead_desk/ai_replies"],
+      "switch": "Off; owners raise it per workspace"
+    },
+    {
+      "id": "meta-lead-ads",
+      "name": "Meta lead ads",
+      "product": "sales-xray",
+      "category": "ads",
+      "value": "Facebook and Instagram lead-form leads arrive in seconds, ready to call.",
+      "for": ["Business owners", "Sellers"],
+      "anchors": [
+        "packages/python/ac_platform/lead_desk/connectors",
+        "apps/sales-xray-web/app/leads/sources-view.tsx"
+      ],
+      "fixture": "/review-fixture/meta-connect",
+      "details": [
+        "Guided setup with Meta's review status",
+        "Lead pull for missed leads"
+      ]
+    },
+    {
+      "id": "meta-conversions",
+      "name": "Meta conversions and ad spend",
+      "product": "sales-xray",
+      "category": "ads",
+      "value": "Tells Meta which leads became sales, so ads find more buyers like them.",
+      "for": ["Business owners"],
+      "anchors": ["packages/python/ac_platform/lead_desk/journey"]
+    },
+    {
+      "id": "google-ads",
+      "name": "Google Ads leads",
+      "product": "sales-xray",
+      "category": "ads",
+      "value": "Google lead-form leads join the same queue with Continue with Google.",
+      "for": ["Business owners"],
+      "anchors": ["packages/python/ac_platform/lead_desk/connectors#google"],
+      "switch": "Off until its settings are added"
+    },
+    {
+      "id": "organisations",
+      "name": "Organisations and workspaces",
+      "product": "sales-xray",
+      "category": "team",
+      "value": "A personal space for every seller and an organisation for the team, switched in one tap.",
+      "for": ["Business owners", "Sellers"],
+      "anchors": ["sx:/organisation"],
+      "api": ["/v1/organisation", "/v1/me/sales-xray-workspaces"]
+    },
+    {
+      "id": "invites-domains",
+      "name": "Invites and verified domains",
+      "product": "sales-xray",
+      "category": "team",
+      "value": "Invite the team by email, or let anyone with your company email join.",
+      "for": ["Business owners"],
+      "anchors": ["sx:/organisation/invites"],
+      "api": ["/v1/organisation/domains"]
+    },
+    {
+      "id": "people-pages",
+      "name": "People pages",
+      "product": "sales-xray",
+      "category": "team",
+      "value": "Each member's calls, coaching and record on one page for their manager.",
+      "for": ["Sales managers", "Business owners"],
+      "anchors": ["sx:/organisation/people/[personId]"]
+    },
+    {
+      "id": "admin-calls",
+      "name": "Calls with the analysis map",
+      "product": "admin",
+      "category": "admin",
+      "value": "Every call's pipeline, objects, cost and time on one dense screen and a node map.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/calls", "admin:/calls/[recordingId]/map"],
+      "fixture": "admin:/review-fixture/call-map"
+    },
+    {
+      "id": "gold-set",
+      "name": "Gold set and blind review",
+      "product": "admin",
+      "category": "admin",
+      "value": "Expert-reviewed gold calls keep the AI honest; Brain 4.0 was blind-reviewed against them.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/gold"]
+    },
+    {
+      "id": "review-2",
+      "name": "Review 2.0",
+      "product": "admin",
+      "category": "admin",
+      "value": "Reviewers judge the AI's facts, moments and coaching, with every verdict audited.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/analysis-review", "admin:/settings/review-pipelines"]
+    },
+    {
+      "id": "phone-review",
+      "name": "Gold review on the phone",
+      "product": "sales-xray",
+      "category": "admin",
+      "value": "Reviewers review calls from their phone, with alerts for new work.",
+      "for": ["AC staff"],
+      "anchors": ["sx:/review", "admin:/reviewers"]
+    },
+    {
+      "id": "analysis-health",
+      "name": "Analysis health",
+      "product": "admin",
+      "category": "admin",
+      "value": "Live view of every analysis run, stuck job and failed step, with retry.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/health"]
+    },
+    {
+      "id": "cost-meter",
+      "name": "Cost meter and usage",
+      "product": "admin",
+      "category": "admin",
+      "value": "Rupees per audio minute, per stage and per environment, updated live.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/usage"],
+      "fixture": "admin:/review-fixture/meter"
+    },
+    {
+      "id": "ai-spend-guard",
+      "name": "AI spend caps and guard",
+      "product": "admin",
+      "category": "admin",
+      "value": "Hard caps and one-click raises so AI spend never runs away.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/ai-spend", "packages/python/ac_platform/ai_spend"]
+    },
+    {
+      "id": "company-insights",
+      "name": "Company insights",
+      "product": "admin",
+      "category": "admin",
+      "value": "Real objections, needs and skills across every customer's calls.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/company"]
+    },
+    {
+      "id": "deal-outcomes",
+      "name": "Deal outcomes",
+      "product": "admin",
+      "category": "admin",
+      "value": "Which calls became deals, to tie coaching to revenue.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/outcomes"]
+    },
+    {
+      "id": "all-settings",
+      "name": "All settings, one click",
+      "product": "admin",
+      "category": "admin",
+      "value": "Every switch and dial across the platform in one place, each a single click.",
+      "for": ["AC staff"],
+      "anchors": [
+        "admin:/settings",
+        "packages/python/ac_platform/admin_settings"
+      ]
+    },
+    {
+      "id": "providers-hub",
+      "name": "Providers hub and keys",
+      "product": "admin",
+      "category": "admin",
+      "value": "Every AI provider, model and key with its cost, tested and switchable from Admin.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/sales-xray/providers"],
+      "fixture": "admin:/review-fixture/providers"
+    },
+    {
+      "id": "engine-page",
+      "name": "Analysis engine",
+      "product": "admin",
+      "category": "admin",
+      "value": "See and steer the engine's recipes, stages and switches.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/sales-xray/engine"],
+      "fixture": "admin:/review-fixture/engine"
+    },
+    {
+      "id": "one-pass-compare",
+      "name": "One-pass compare and switch",
+      "product": "admin",
+      "category": "admin",
+      "value": "Compare one-pass and classic analysis on the same calls before switching.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/sales-xray/one-pass"],
+      "fixture": "admin:/review-fixture/one-pass"
+    },
+    {
+      "id": "report-settings",
+      "name": "Report settings",
+      "product": "admin",
+      "category": "admin",
+      "value": "Choose what each Report shows, versioned, per workspace.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/sales-xray/report-settings"]
+    },
+    {
+      "id": "minutes",
+      "name": "Minutes accounts",
+      "product": "admin",
+      "category": "admin",
+      "value": "Grant and track analysis minutes per workspace; minutes return when a report fails.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/sales-xray/minutes"]
+    },
+    {
+      "id": "synthetic",
+      "name": "Synthetic calls",
+      "product": "admin",
+      "category": "admin",
+      "value": "Fictional calls to test the whole pipeline without touching customer data.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/synthetic"]
+    },
+    {
+      "id": "staff-orgs",
+      "name": "Organisations for staff",
+      "product": "admin",
+      "category": "admin",
+      "value": "Every customer, company and personal workspace, sorted by kind.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/platform/organisations"],
+      "api": ["/v1/platform"]
+    },
+    {
+      "id": "environment-switch",
+      "name": "Environment switch",
+      "product": "admin",
+      "category": "admin",
+      "value": "Open the same Admin page in production, staging or development.",
+      "for": ["AC staff"],
+      "anchors": ["apps/admin-web/app/ui/environment-switch.tsx"]
+    },
+    {
+      "id": "releases",
+      "name": "Releases and status",
+      "product": "admin",
+      "category": "platform",
+      "value": "One release train: merge, build once, staging, then the same build to production.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/releases"]
+    },
+    {
+      "id": "product-updates",
+      "name": "What's new notes",
+      "product": "admin",
+      "category": "platform",
+      "value": "Every release tells users what changed, in their words.",
+      "for": ["AC staff", "Sellers"],
+      "anchors": [
+        "admin:/updates",
+        "packages/python/ac_platform/product_updates"
+      ]
+    },
+    {
+      "id": "safety",
+      "name": "Content safety",
+      "product": "admin",
+      "category": "platform",
+      "value": "Find and act on sensitive content across the platform.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/safety"]
+    },
+    {
+      "id": "feature-catalogue",
+      "name": "Feature catalogue and Offer Studio",
+      "product": "admin",
+      "category": "admin",
+      "value": "Everything AC does, from the code, and a studio to turn it into offers.",
+      "for": ["AC staff"],
+      "anchors": ["admin:/catalogue", "admin:/offers"]
+    },
+    {
+      "id": "api-keys",
+      "name": "API keys",
+      "product": "platform",
+      "category": "developer",
+      "value": "Workspaces create their own API keys to pull calls, leads and facts.",
+      "for": ["Developers", "Business owners"],
+      "anchors": ["sx:/developers"]
+    },
+    {
+      "id": "webhooks",
+      "name": "Webhooks",
+      "product": "platform",
+      "category": "developer",
+      "value": "Partners get a signed event the moment a lead, call or report changes.",
+      "for": ["Developers"],
+      "anchors": [
+        "sx:/developers",
+        "packages/python/ac_platform/partner_events"
+      ]
+    },
+    {
+      "id": "connect-mcp",
+      "name": "Connect and MCP server",
+      "product": "platform",
+      "category": "developer",
+      "value": "AI assistants like Claude sign in and read calls, facts and leads through MCP.",
+      "for": ["Developers", "Business owners"],
+      "anchors": ["sx:/connect"],
+      "details": [
+        "OAuth discovery for sign-in",
+        "Tools: list calls, get a call, call facts, list and get leads"
+      ]
+    },
+    {
+      "id": "connected-apps",
+      "name": "Connected apps",
+      "product": "platform",
+      "category": "developer",
+      "value": "Owners see and disconnect every app that can reach their workspace.",
+      "for": ["Business owners"],
+      "anchors": [
+        "admin:/integrations",
+        "packages/python/ac_platform/integrations"
+      ]
+    },
+    {
+      "id": "staff-keys",
+      "name": "Admin CLI, API and MCP",
+      "product": "admin",
+      "category": "developer",
+      "value": "Staff keys let AI agents read and set Admin settings safely, rate-limited and audited.",
+      "for": ["AC staff"],
+      "anchors": ["apps/admin-web/public/tools/ac-admin.py"]
+    },
+    {
+      "id": "android-app",
+      "name": "Android app",
+      "product": "android",
+      "category": "apps",
+      "value": "Sales X-Ray on the seller's own Android phone, with a download page, QR and checksum.",
+      "for": ["Sellers"],
+      "anchors": ["sx:/apps"]
+    },
+    {
+      "id": "app-sign-in",
+      "name": "Google sign-in on the phone",
+      "product": "android",
+      "category": "apps",
+      "value": "Sign in with Google inside the app; no passwords to remember.",
+      "for": ["Sellers"],
+      "anchors": ["sx:/login"],
+      "api": ["/v1/auth/google"]
+    },
+    {
+      "id": "app-updates",
+      "name": "In-app updates",
+      "product": "android",
+      "category": "apps",
+      "value": "The app tells sellers when a new version is ready.",
+      "for": ["Sellers"],
+      "anchors": ["packages/python/ac_platform/app_updates"],
+      "api": ["/v1/me/app-updates"]
+    },
+    {
+      "id": "phone-alerts",
+      "name": "Phone alerts",
+      "product": "android",
+      "category": "apps",
+      "value": "Alerts for new leads and new review work reach the phone.",
+      "for": ["Sellers", "AC staff"],
+      "anchors": [
+        "packages/python/ac_platform/lead_desk/push.py",
+        "packages/python/ac_platform/lead_desk/review_push.py"
+      ],
+      "api": ["/v1/native/devices"],
+      "switch": "Lead push alerts stay off for now"
+    },
+    {
+      "id": "add-sheet",
+      "name": "Add anything from +",
+      "product": "sales-xray",
+      "category": "apps",
+      "value": "The + button adds a lead or a call from any screen.",
+      "for": ["Sellers"],
+      "anchors": ["sx:/review-fixture/add-sheet"],
+      "fixture": "/review-fixture/add-sheet"
+    },
+    {
+      "id": "liquid-glass",
+      "name": "Liquid Glass design",
+      "product": "sales-xray",
+      "category": "apps",
+      "value": "An iPhone-grade look on every phone, with a lighter mode for low-memory phones.",
+      "for": ["Sellers", "Business owners"],
+      "anchors": ["apps/sales-xray-web/app/ui/sx-tokens.css#glass"],
+      "fixture": "/review-fixture/shell"
+    },
+    {
+      "id": "programs",
+      "name": "Programs and lessons",
+      "product": "academy",
+      "category": "academy",
+      "value": "Structured sales programs with modules, video and progress that resumes.",
+      "for": ["Learners"],
+      "anchors": ["learner:/learn/[programSlug]", "learner:/programs/[slug]"]
+    },
+    {
+      "id": "practice",
+      "name": "Practice arcade",
+      "product": "academy",
+      "category": "academy",
+      "value": "Practise real sales moments with characters before trying them on buyers.",
+      "for": ["Learners"],
+      "anchors": ["learner:/practice", "packages/python/ac_platform/practice"]
+    },
+    {
+      "id": "certificates",
+      "name": "Certificates",
+      "product": "academy",
+      "category": "academy",
+      "value": "Verifiable certificates when a learner completes a program.",
+      "for": ["Learners"],
+      "anchors": [
+        "learner:/certificates/[certificateId]",
+        "packages/python/ac_platform/certificates"
+      ]
+    },
+    {
+      "id": "leaderboard",
+      "name": "Leaderboard and progress",
+      "product": "academy",
+      "category": "academy",
+      "value": "Progress, streaks and a leaderboard that keep learners coming back.",
+      "for": ["Learners"],
+      "anchors": ["learner:/leaderboard", "learner:/progress"]
+    },
+    {
+      "id": "academy-calendar",
+      "name": "Calendar and notifications",
+      "product": "academy",
+      "category": "academy",
+      "value": "Sessions and reminders so learners never miss a class.",
+      "for": ["Learners"],
+      "anchors": ["learner:/calendar", "learner:/notifications"]
+    },
+    {
+      "id": "community",
+      "name": "Community",
+      "product": "academy",
+      "category": "academy",
+      "value": "Learners discuss, share wins and help each other.",
+      "for": ["Learners"],
+      "anchors": ["packages/python/ac_platform/community"],
+      "api": ["/v1/community"]
+    },
+    {
+      "id": "academy-sales-xray",
+      "name": "Sales X-Ray inside the Academy",
+      "product": "academy",
+      "category": "academy",
+      "value": "Learners upload real calls and get them reviewed inside their course.",
+      "for": ["Learners", "Coaches"],
+      "anchors": ["learner:/sales-xray", "learner:/sales-xray/recordings"]
+    },
+    {
+      "id": "coach-studio",
+      "name": "Coach Studio",
+      "product": "coach",
+      "category": "academy",
+      "value": "Coaches build programs, upload video and publish when ready.",
+      "for": ["Coaches"],
+      "anchors": ["coach:/studio/programs", "coach:/studio/publication"]
+    },
+    {
+      "id": "sign-in",
+      "name": "Sign-in and account linking",
+      "product": "platform",
+      "category": "platform",
+      "value": "Google or email sign-in, with safe linking when one person has both.",
+      "for": ["Sellers", "Learners"],
+      "anchors": ["sx:/login", "packages/python/ac_platform/identity"],
+      "api": ["/v1/auth", "/v1/me/sign-in-methods"]
+    },
+    {
+      "id": "privacy",
+      "name": "Privacy and data deletion",
+      "product": "platform",
+      "category": "platform",
+      "value": "Clear privacy terms, named AI providers and a self-serve data deletion page.",
+      "for": ["Business owners", "Sellers"],
+      "anchors": ["sx:/privacy", "sx:/data-deletion"]
+    },
+    {
+      "id": "plans",
+      "name": "Plans and checkout",
+      "product": "platform",
+      "category": "platform",
+      "value": "Plans, checkout and refunds, with access never tied directly to the payment provider.",
+      "for": ["Business owners"],
+      "anchors": ["sx:/plans", "packages/python/ac_platform/billing"],
+      "fixture": "/review-fixture/plans",
+      "switch": "Billing back end off by default"
+    },
+    {
+      "id": "backups",
+      "name": "Backups and restore drills",
+      "product": "platform",
+      "category": "platform",
+      "value": "Hourly production snapshots, copied off-site and restore-tested.",
+      "for": ["AC staff"],
+      "anchors": ["tests/infra/test_restore_drill.py"]
+    },
+    {
+      "id": "audit-trail",
+      "name": "Audit trail",
+      "product": "platform",
+      "category": "platform",
+      "value": "Every sensitive change is recorded and never overwritten.",
+      "for": ["AC staff", "Business owners"],
+      "anchors": ["packages/python/ac_platform/audit"]
+    },
+    {
+      "id": "chrome-extension",
+      "name": "Chrome extension",
+      "product": "sales-xray",
+      "category": "apps",
+      "value": "Sales X-Ray beside the seller's browser calls and CRM.",
+      "for": ["Sellers"],
+      "status": "planned",
+      "details": ["Owner order: Android first, then Chrome"]
+    },
+    {
+      "id": "play-store",
+      "name": "Google Play listing",
+      "product": "android",
+      "category": "apps",
+      "value": "Install Sales X-Ray from Google Play like any other app.",
+      "for": ["Sellers", "Business owners"],
+      "status": "planned"
+    },
+    {
+      "id": "adaptive-analysis",
+      "name": "Adaptive analysis",
+      "product": "platform",
+      "category": "analysis",
+      "value": "Each call gets just enough AI for its value, cutting cost per minute further.",
+      "for": ["AC staff", "Business owners"],
+      "status": "planned"
+    },
+    {
+      "id": "model-bench",
+      "name": "Model bench",
+      "product": "admin",
+      "category": "admin",
+      "value": "Test every model from every provider on the same calls before choosing.",
+      "for": ["AC staff"],
+      "status": "planned"
+    }
+  ]
+}

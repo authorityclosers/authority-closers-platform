@@ -3,7 +3,8 @@
 /**
  * Touch gestures that make the lead lists feel like an app (UX study, 17 Oct):
  * swipe a row right to call or left to message, hold it for more, and pull the
- * page down to refresh. Only fingers count; a mouse keeps plain clicks (and a
+ * page down to refresh (shell/pull-refresh.tsx, for every screen since 24 Oct
+ * 2026). Only fingers count; a mouse keeps plain clicks (and a
  * right-click opens the same menu as a long-press).
  *
  * Moves are written straight to the element's style, so a drag never re-renders
@@ -24,8 +25,6 @@ const SLOP = 10;
 const HOLD_MS = 480;
 const SWIPE_MIN = 84;
 const SWIPE_SHARE = 0.26;
-const PULL_TRIGGER = 64;
-const PULL_MAX = 96;
 
 /** Where a drag of `dx` ends up: free to the trigger, then a soft pull. */
 export function swipeOffset(dx: number, width: number): number {
@@ -42,12 +41,11 @@ export function swipeFires(dx: number, width: number): boolean {
   return Math.abs(dx) >= Math.max(SWIPE_MIN, width * SWIPE_SHARE);
 }
 
-/** The pull-to-refresh distance for a finger moved `dy` down (half speed, capped). */
-export function pullDistance(dy: number): number {
-  return dy <= 0 ? 0 : Math.min(PULL_MAX, dy * 0.5);
-}
-
-export const PULL_READY = PULL_TRIGGER;
+export {
+  PULL_READY,
+  pullDistance,
+  usePullToRefresh,
+} from "../shell/pull-refresh";
 
 type RowHandlers = {
   /** Swipe right: call. */
@@ -201,115 +199,4 @@ export function useRowGestures(handlers: RowHandlers) {
       },
     },
   };
-}
-
-/**
- * Pull the page down at its top to refresh. Returns a callback ref for the
- * area that listens (it can appear after a skeleton) and a ref for the round
- * indicator that drops in from the top.
- */
-export function usePullToRefresh(onRefresh: () => Promise<unknown> | void) {
-  const spinner = useRef<HTMLDivElement>(null);
-  const latest = useRef(onRefresh);
-  const detach = useRef<(() => void) | null>(null);
-  useEffect(() => {
-    latest.current = onRefresh;
-  });
-  useEffect(() => () => detach.current?.(), []);
-
-  const area = useCallback((host: HTMLDivElement | null) => {
-    detach.current?.();
-    detach.current = null;
-    if (!host) return;
-    let start: { x: number; y: number; scroller: Element | null } | null = null;
-    let pull = 0;
-    let busy = false;
-    let ready = false;
-
-    const show = (distance: number, mode: "pull" | "busy" | "idle") => {
-      const node = spinner.current;
-      if (!node) return;
-      node.dataset.mode = mode;
-      node.style.transition = mode === "pull" ? "none" : "";
-      node.style.transform = `translate3d(-50%, ${distance - 44}px, 0) rotate(${distance * 3}deg)`;
-      node.style.opacity =
-        mode === "idle" ? "0" : String(Math.min(1, distance / PULL_TRIGGER));
-    };
-
-    const scrollerOf = (target: EventTarget | null): Element | null => {
-      for (
-        let node = target as Element | null;
-        node && node !== document.body;
-        node = node.parentElement
-      ) {
-        const style = getComputedStyle(node);
-        if (
-          /(auto|scroll)/.test(style.overflowY) &&
-          node.scrollHeight > node.clientHeight
-        )
-          return node;
-      }
-      return document.scrollingElement;
-    };
-
-    const onStart = (event: TouchEvent) => {
-      if (busy || event.touches.length !== 1) return;
-      if ((event.target as Element | null)?.closest?.("dialog")) return;
-      const scroller = scrollerOf(event.target);
-      if (!scroller || scroller.scrollTop > 0) return;
-      const touch = event.touches[0];
-      start = { x: touch.clientX, y: touch.clientY, scroller };
-      pull = 0;
-      ready = false;
-    };
-    const onMove = (event: TouchEvent) => {
-      if (!start) return;
-      const touch = event.touches[0];
-      const dx = touch.clientX - start.x;
-      const dy = touch.clientY - start.y;
-      if (
-        (start.scroller?.scrollTop ?? 0) > 0 ||
-        (pull === 0 && Math.abs(dx) > Math.abs(dy))
-      ) {
-        start = null;
-        show(0, "idle");
-        return;
-      }
-      pull = pullDistance(dy);
-      if (pull > 0) show(pull, "pull");
-      const nowReady = pull >= PULL_TRIGGER;
-      if (nowReady !== ready) {
-        ready = nowReady;
-        if (ready) buzz("tick");
-      }
-    };
-    const onEnd = () => {
-      if (!start) return;
-      start = null;
-      if (!ready) {
-        show(0, "idle");
-        return;
-      }
-      busy = true;
-      show(PULL_TRIGGER, "busy");
-      void Promise.resolve(latest.current())
-        .catch(() => undefined)
-        .finally(() => {
-          busy = false;
-          show(0, "idle");
-        });
-    };
-    host.addEventListener("touchstart", onStart, { passive: true });
-    host.addEventListener("touchmove", onMove, { passive: true });
-    host.addEventListener("touchend", onEnd, { passive: true });
-    host.addEventListener("touchcancel", onEnd, { passive: true });
-    detach.current = () => {
-      host.removeEventListener("touchstart", onStart);
-      host.removeEventListener("touchmove", onMove);
-      host.removeEventListener("touchend", onEnd);
-      host.removeEventListener("touchcancel", onEnd);
-    };
-  }, []);
-
-  return { area, spinner };
 }

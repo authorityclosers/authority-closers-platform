@@ -59,7 +59,7 @@ export function prefetchPlace(router: Router, href: string, warm = false) {
   if (warm) startEarlyReads(href.split(/[?#]/)[0]);
 }
 
-function savingData() {
+export function savingData() {
   const connection = (
     navigator as Navigator & {
       connection?: { saveData?: boolean; effectiveType?: string };

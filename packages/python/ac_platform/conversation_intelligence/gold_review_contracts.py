@@ -35,13 +35,17 @@ MOMENT_PREFIX = "moment:"
 MAX_MOMENTS = 40
 # "-" for a dimension: it did not come up, or it cannot be judged from this call.
 DIMENSION_SKIPS = ("not_applicable", "not_sure", "audio_unclear")
+# Report review (owner, 23 Oct): one target per item of the call's Report (review_schema).
+ITEM_PREFIX = "item:"
 
 
-def target_kind(target: str) -> Literal["dimension", "moment", "line"]:
+def target_kind(target: str) -> Literal["dimension", "moment", "item", "line"]:
     if target.startswith(DIMENSION_PREFIX):
         return "dimension"
     if target.startswith(MOMENT_PREFIX):
         return "moment"
+    if target.startswith(ITEM_PREFIX):
+        return "item"
     return "line"
 
 
@@ -64,7 +68,8 @@ class GoldSave(BaseModel):
 
     review_id: UUID
     target: str = Field(min_length=1, max_length=96)
-    verdict: Literal["agree", "partly", "disagree"] | None = None
+    # "fix" (report review): the item is wrong and here is what it should say.
+    verdict: Literal["agree", "partly", "disagree", "fix"] | None = None
     score: int | None = Field(default=None, ge=0, le=100, strict=True)
     # Phone review (19 Oct): the note is optional; the Admin form still asks for one.
     opinion: str = Field(default="", max_length=4000)
@@ -77,11 +82,31 @@ class GoldSave(BaseModel):
     # Blind Brain 4.0 mode: a dimension's 1-5 rating, or a correction moment.
     rating: int | None = Field(default=None, ge=1, le=5, strict=True)
     moment: GoldMoment | None = None
+    # Report review: the item's right words, when the reviewer fixes it.
+    correction: str | None = Field(default=None, max_length=600)
 
     @model_validator(mode="after")
     def judgement(self) -> "GoldSave":
         kind = target_kind(self.target)
         judged = (self.verdict, self.score, self.status)
+        if kind == "item":
+            if self.score is not None or self.status is not None or self.reasons:
+                raise ValueError("A Report item takes agree, disagree or fix, and a note.")
+            if self.moment is not None:
+                raise ValueError("A Report item takes agree, disagree or fix, and a note.")
+            if self.skip is not None:
+                if self.verdict is not None or self.rating is not None or self.correction:
+                    raise ValueError("A skipped item carries no judgement.")
+                return self
+            if self.verdict not in ("agree", "disagree", "fix"):
+                raise ValueError("Choose agree, disagree or fix.")
+            if self.verdict == "fix" and self.rating is None and not self.correction:
+                raise ValueError("Say what it should be.")
+            if self.verdict == "agree" and (self.rating is not None or self.correction):
+                raise ValueError("Agreeing keeps the AI's answer.")
+            return self
+        if self.verdict == "fix" or self.correction is not None:
+            raise ValueError("Only a Report item can be fixed.")
         if kind == "dimension":
             if any(v is not None for v in judged) or self.reasons or self.moment is not None:
                 raise ValueError("Rate a dimension 1-5, or mark it as not rated.")

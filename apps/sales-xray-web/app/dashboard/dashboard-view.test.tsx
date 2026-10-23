@@ -146,14 +146,14 @@ it("aborts pending reads and removes the cards when the session signs out", asyn
   expect(fetchMock).toHaveBeenCalledTimes(4);
 });
 
-it("explains a workspace without Sales Xray access instead of failing each card", async () => {
+it("explains a workspace without Sales X-Ray access instead of failing each card", async () => {
   fetchMock.mockImplementation(
     async () =>
       new Response(JSON.stringify({ detail: "Forbidden" }), { status: 403 }),
   );
   await renderPage(true);
   expect(host.textContent).toContain(
-    "Sales Xray isn't on for this workspace yet",
+    "Sales X-Ray isn't on for this workspace yet",
   );
   expect(host.textContent).not.toContain("Couldn't load");
   expect(host.querySelector('[role="alert"]')).toBeNull();

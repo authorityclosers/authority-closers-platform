@@ -7,6 +7,7 @@
  */
 
 import { withDisplayNames } from "../display-name";
+import { earlyFetch } from "../early-reads";
 
 export const LEADS_PATH = "/leads";
 const API = "/v1/lead-desk";
@@ -104,7 +105,7 @@ export type Desk = {
   call_back?: LeadRow[];
 };
 
-export type Badge = { overdue: number; to_call: number };
+export type { Badge } from "./badge-client";
 
 export type LeadEvent = {
   kind:
@@ -268,6 +269,8 @@ export type ImportPreview = {
   mapping: Record<string, string>;
   with_phone: number;
   repeats_in_file: number;
+  /** Numbers in the file that are already leads: kept there, never added again. */
+  known_leads?: number;
 };
 
 export type ImportResult = {
@@ -276,6 +279,12 @@ export type ImportResult = {
   skipped: number;
   assigned: number;
   waiting: number;
+  /** Stage and owner columns: new leads given the stage or owner their row named. */
+  staged?: number;
+  owned?: number;
+  /** What matched no stage or teammate (the first ten). */
+  unmatched_stages?: string[];
+  unmatched_owners?: string[];
 };
 
 export type SourceView = {
@@ -358,10 +367,81 @@ const FALLBACK: Record<number, string> = {
   422: "Check the details and try again.",
 };
 
+/**
+ * Lead details read ahead (app speed, 23 Oct 2026): the leads a seller is
+ * most likely to open next are read once the desk loads, so their sheet opens
+ * on its details instead of an outline. An answer is kept AHEAD_MS for the
+ * identity that read it and taken once; any write drops them all, so a sheet
+ * never shows a lead as it was before a change.
+ */
+export const AHEAD_MS = 60_000;
+const AHEAD_MOST = 12;
+// A read ahead that failed: the opening reads for itself.
+const FAILED = Symbol("failed");
+const ahead = new Map<string, { at: number; p: Promise<unknown> }>();
+let aheadScope: string | null = null;
+
+/** Whose reads these are (person, session, workspace); a change drops them. */
+export function setAheadScope(scope: string | null) {
+  if (scope !== aheadScope) ahead.clear();
+  aheadScope = scope;
+}
+
+function readAhead(path: string) {
+  if (!aheadScope) return;
+  const known = ahead.get(path);
+  if (known && Date.now() - known.at <= AHEAD_MS) return;
+  while (ahead.size >= AHEAD_MOST) {
+    const oldest = ahead.keys().next().value;
+    if (oldest === undefined) break;
+    ahead.delete(oldest);
+  }
+  ahead.set(path, {
+    at: Date.now(),
+    p: request<unknown>(path).catch(() => FAILED),
+  });
+}
+
+/** What was read ahead for this path, taken once, or null (none, or too old). */
+function takeAhead<T>(path: string, signal?: AbortSignal): Promise<T> | null {
+  const known = ahead.get(path);
+  ahead.delete(path);
+  if (!known || Date.now() - known.at > AHEAD_MS) return null;
+  return known.p.then((value) => {
+    if (signal?.aborted)
+      throw new DOMException("The read was cancelled.", "AbortError");
+    return value === FAILED ? request<T>(path, { signal }) : (value as T);
+  });
+}
+
+const leadPath = (leadId: string) => `/leads/${encodeURIComponent(leadId)}`;
+
+function nextPath(skip?: string, pipeline?: string | null) {
+  const query = new URLSearchParams();
+  if (skip) query.set("skip", skip);
+  if (pipeline) query.set("pipeline", pipeline);
+  const asked = query.toString();
+  return asked ? `/next?${asked}` : "/next";
+}
+
+/** Start reading a lead's details now, for its sheet to take when it opens. */
+export function readLeadAhead(leadId: string) {
+  readAhead(leadPath(leadId));
+}
+
+/** Start reading Start calling's first lead now, in the pipeline To call shows. */
+export function readNextAhead(pipeline?: string | null) {
+  readAhead(nextPath(undefined, pipeline));
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // A write may change any lead: nothing read ahead is shown after it.
+  if ((init.method ?? "GET").toUpperCase() !== "GET") ahead.clear();
   let response: Response;
   try {
-    response = await fetch(`${API}${path}`, {
+    // A read the Leads tab press already started (early-reads.ts) is
+    // taken as it lands; anything else goes to the network.
+    response = await earlyFetch(`${API}${path}`, {
       credentials: "same-origin",
       cache: "no-store",
       redirect: "error",
@@ -371,7 +451,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError")
       throw error;
-    throw new LeadsError("Sales Xray isn't answering. Try again.", 0);
+    throw new LeadsError("Sales X-Ray isn't answering. Try again.", 0);
   }
   if (!response.ok) {
     let detail: string | undefined;
@@ -409,11 +489,17 @@ function json(method: string, body: unknown): RequestInit {
 export const commandId = () => crypto.randomUUID();
 
 /** Overdue, then call now, then later today: the due-now list in sections. */
-export function deskSections(queue: LeadRow[]): {
+export function deskSections(
+  all: LeadRow[],
+  /** Leads already listed under Call back: not again here. */
+  callBack: readonly LeadRow[] = [],
+): {
   key: "overdue" | "now" | "later";
   title: string;
   rows: LeadRow[];
 }[] {
+  const listed = new Set(callBack.map((row) => row.lead_id));
+  const queue = all.filter((row) => !listed.has(row.lead_id));
   const overdue = queue.filter((row) => row.overdue);
   const now = queue.filter(
     (row) =>
@@ -428,6 +514,24 @@ export function deskSections(queue: LeadRow[]): {
     { key: "now" as const, title: "Call now", rows: now },
     { key: "later" as const, title: "Later today", rows: later },
   ].filter((section) => section.rows.length);
+}
+
+/**
+ * The leads a seller is most likely to open next, in the desk's order: those
+ * waiting for a call back, then overdue, then due now (never Later today).
+ */
+export function likelyNext(
+  desk: Pick<Desk, "queue" | "call_back">,
+  count = 3,
+): string[] {
+  const callBack = desk.call_back ?? [];
+  const ids = [
+    ...callBack,
+    ...deskSections(desk.queue, callBack)
+      .filter((section) => section.key !== "later")
+      .flatMap((section) => section.rows),
+  ].map((row) => row.lead_id);
+  return [...new Set(ids)].slice(0, count);
 }
 
 function isDesk(value: unknown): value is Desk {
@@ -460,13 +564,11 @@ export function readNext(
   signal?: AbortSignal,
   pipeline?: string | null,
 ) {
-  const query = new URLSearchParams();
-  if (skip) query.set("skip", skip);
-  if (pipeline) query.set("pipeline", pipeline);
-  const asked = query.toString();
-  return request<LeadDetail | null>(asked ? `/next?${asked}` : "/next", {
-    signal,
-  });
+  const path = nextPath(skip, pipeline);
+  return (
+    takeAhead<LeadDetail | null>(path, signal) ??
+    request<LeadDetail | null>(path, { signal })
+  );
 }
 
 export function readLeads(
@@ -524,9 +626,11 @@ export function deleteLeads(leadIds: string[], command = commandId()) {
 }
 
 export function readLead(leadId: string, signal?: AbortSignal) {
-  return request<LeadDetail>(`/leads/${encodeURIComponent(leadId)}`, {
-    signal,
-  });
+  const path = leadPath(leadId);
+  // Read ahead: taken as it lands (or read now, if that read failed).
+  return (
+    takeAhead<LeadDetail>(path, signal) ?? request<LeadDetail>(path, { signal })
+  );
 }
 
 export type NewLead = {
@@ -685,17 +789,7 @@ export function logMessage(
   );
 }
 
-export async function readBadge(signal?: AbortSignal): Promise<Badge | null> {
-  try {
-    const badge = await request<Partial<Badge>>("/badge", { signal });
-    return typeof badge.overdue === "number" &&
-      typeof badge.to_call === "number"
-      ? { overdue: badge.overdue, to_call: badge.to_call }
-      : null;
-  } catch {
-    return null;
-  }
-}
+export { readBadge } from "./badge-client";
 
 export type PushConfig = {
   enabled: boolean;

@@ -1,4 +1,5 @@
-"""Sales X-Ray product telemetry: the taxonomy, its value checks, call references, admission."""
+"""Sales X-Ray product telemetry: the taxonomy, its value checks, call references, admission
+and the versioned usage-analytics notice."""
 
 from __future__ import annotations
 
@@ -18,6 +19,9 @@ from ac_platform.telemetry.ingest import (
 )
 from ac_platform.telemetry.sales_xray import (
     MAX_DWELL_MS,
+    NOTICE_EFFECTIVE_AT,
+    NOTICE_VERSION,
+    NOTICES,
     RETENTION_DAYS,
     RETENTION_POLICY_ID,
     SALES_XRAY_EVENTS,
@@ -33,7 +37,8 @@ _PII_KEY = re.compile(
     r"token|secret|password|ip|device.?id|cookie|prompt|answer|message|url)",
     re.IGNORECASE,
 )
-_CLIENT = Path(__file__).resolve().parents[3] / "apps" / "sales-xray-web" / "app" / "telemetry.ts"
+_APP = Path(__file__).resolve().parents[3] / "apps" / "sales-xray-web" / "app"
+_CLIENT = _APP / "telemetry.ts"
 
 
 def test_every_client_event_is_in_the_server_taxonomy_and_only_sales_xray_events_are() -> None:
@@ -54,11 +59,12 @@ def test_every_key_is_typed_and_none_could_carry_a_person() -> None:
             set(definition.values)
             | set(definition.numbers)
             | set(definition.tokens)
+            | set(definition.labels)
             | set(definition.flags)
         )
         assert set(definition.allowed_payload_keys) == typed, name
         assert definition.required <= typed, name
-        assert {"device", "app"} <= typed, name
+        assert {"device", "app", "tier", "net", "link", "app_version"} <= typed, name
         for key in typed:
             assert not _PII_KEY.search(key), (name, key)
     calls = {name for name, definition in SALES_XRAY_EVENTS.items() if definition.takes_call}
@@ -147,3 +153,62 @@ def test_admission_caps_each_workspace_per_minute() -> None:
     assert admission.admit(tenant_id=second, event_count=50, payload_bytes=1000)
     now[0] = 60.0
     assert admission.admit(tenant_id=first, event_count=50, payload_bytes=1000)
+
+
+def test_performance_events_take_bounded_codes_and_numbers_only() -> None:
+    timing = SALES_XRAY_EVENTS["sx.action_timing"]
+    check_payload_values(
+        timing,
+        {
+            "action": "lead_open",
+            "ms": 1840,
+            "result": "settled",
+            "paint_ms": 96,
+            "screen": "leads",
+            "tier": "low",
+            "net": "slow_2g",
+            "link": "cellular",
+            "app_version": "0.3.88",
+        },
+    )
+    for bad in (
+        {"action": "open_lead", "ms": 10, "result": "settled"},
+        {"action": "lead_open", "ms": 60_001, "result": "settled"},
+        {"action": "lead_open", "ms": 10, "result": "settled", "app_version": "Beta 2"},
+        {"action": "lead_open", "ms": 10, "result": "settled", "tier": "fast"},
+    ):
+        with pytest.raises(ValueError):
+            check_payload_values(timing, bad)
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.js_error"],
+        {"kind": "error", "error": "typeerror", "where": "e1a2b3c4", "screen": "report"},
+    )
+    with pytest.raises(ValueError):
+        check_payload_values(
+            SALES_XRAY_EVENTS["sx.js_error"],
+            {"kind": "error", "error": "typeerror", "where": "Cannot read 'x'"},
+        )
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.api_slow"],
+        {"endpoint": "v1_leads_id_calls", "status": "5xx", "ms": 4200},
+    )
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.screen_viewed"],
+        {"screen": "lead", "from": "none", "nav": "first"},
+    )
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.web_vital"], {"metric": "cls", "value": 120, "rating": "good"}
+    )
+
+
+def test_the_privacy_page_shows_the_notice_of_the_version_recorded() -> None:
+    page = (_APP / "policy-content.tsx").read_text(encoding="utf-8")
+    for paragraph in NOTICES[NOTICE_VERSION]:
+        assert f'"{paragraph}"' in page
+    assert NOTICE_VERSION in page
+    assert NOTICE_VERSION == "sx-product-analytics-2026-10-24-v1"
+    # In force from midnight India time, 24 Oct 2026.
+    assert NOTICE_EFFECTIVE_AT.isoformat() == "2026-10-23T18:30:00+00:00"
+    notice = " ".join(NOTICES[NOTICE_VERSION])
+    for never in ("call content", "lead names", "phone numbers", "180 days"):
+        assert never in notice

@@ -33,6 +33,7 @@ import {
   callRecorderStart,
   callRecorderStatus,
   inPhoneApp,
+  pickRecordingsFolder,
   recorderOpen,
   setupOpen,
   setupStatus,
@@ -41,7 +42,8 @@ import {
 } from "./native-phone";
 import {
   ALL_FILES_EXPLAINER,
-  EXPLAINERS,
+  FOLDER_EXPLAINER,
+  explainerFor,
   recorderSteps,
 } from "./phone-setup-words";
 import styles from "./phone-onboarding.module.css";
@@ -125,7 +127,7 @@ function screenFor(
         icon: Mic,
         title: "Record your calls (optional)",
         lines: [
-          "Sales Xray can record your work calls itself, on phones whose dialer doesn't.",
+          "Sales X-Ray can record your work calls itself, on phones whose dialer doesn't.",
           "Tell the other person the call is recorded. Recordings stay on this phone until you choose one to analyse.",
           "Android asks you to switch it on in Accessibility. If it says the setting is restricted, open App info, tap ⋮ and Allow restricted settings, then try again.",
         ],
@@ -136,7 +138,7 @@ function screenFor(
       icon: Mic,
       title: "Turn on call recording (optional)",
       lines: [
-        `${status.recorder?.dialerLabel ?? "Your Phone app"} can save every call. Sales Xray finds those recordings so a call can get its Report.`,
+        `${status.recorder?.dialerLabel ?? "Your Phone app"} can save every call. Sales X-Ray finds those recordings so a call can get its Report.`,
       ],
       steps: recorderSteps(status.family),
       allow: "Open Phone settings",
@@ -147,7 +149,9 @@ function screenFor(
   const words =
     step === "recordings" && hidesRecordings(status)
       ? ALL_FILES_EXPLAINER
-      : EXPLAINERS[step];
+      : step === "recordings" && picksRecordingsFolder(status)
+        ? FOLDER_EXPLAINER
+        : explainerFor(step, status.store);
   const icon =
     step === "calls" ? Phone : step === "notifications" ? Bell : FileAudio;
   return {
@@ -165,6 +169,15 @@ function hidesRecordings(status: SetupStatus): boolean {
   return status.needsAllFiles && status.allFilesSupported;
 }
 
+/** The Play build has no All files access: the seller picks the recordings folder (S8). */
+function picksRecordingsFolder(status: SetupStatus): boolean {
+  return (
+    status.needsAllFiles &&
+    !status.allFilesSupported &&
+    status.folderPickSupported
+  );
+}
+
 async function allow(
   step: OnboardingStep,
   status: SetupStatus,
@@ -174,6 +187,8 @@ async function allow(
   else if (step === "notifications") await askNotifications();
   else if (step === "recordings" && hidesRecordings(status))
     await setupOpen("allFiles");
+  else if (step === "recordings" && picksRecordingsFolder(status))
+    await pickRecordingsFolder();
   else if (step === "recordings") await askRecordingAccess();
   else if (recorder?.available) {
     await callRecorderStart();
@@ -284,7 +299,7 @@ export function PhoneOnboarding() {
         </div>
         <div className={styles.actions}>
           <Button variant="primary" onClick={finish}>
-            Open Sales Xray
+            Open Sales X-Ray
           </Button>
         </div>
       </div>

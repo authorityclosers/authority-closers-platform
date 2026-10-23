@@ -26,7 +26,7 @@
   border-radius: 10px;
 }
 
-/* ---------- The mark: a glass lens over a call, on an ink squircle ---------- */
+/* ---------- The mark: the Insight waveform on a deep-teal tile (the app icon) ---------- */
 .symbol {
   --size: var(--brand-mark-size, 30px);
   position: relative;
@@ -37,87 +37,63 @@
   height: var(--size);
   overflow: hidden;
   border-radius: calc(var(--size) * 0.28);
-  /* Theme-stable: the icon reads the same on light, dark and film. */
-  background:
-    radial-gradient(
-      120% 70% at 50% -10%,
-      color-mix(in srgb, var(--lx-film-text) 22%, transparent),
-      transparent 55%
-    ),
-    radial-gradient(
-      80% 80% at 50% 110%,
-      color-mix(in srgb, var(--lx-glow) 26%, transparent),
-      transparent 70%
-    ),
-    linear-gradient(165deg, var(--lx-film-2), var(--lx-film) 70%);
   box-shadow:
-    inset 0 1px 0 color-mix(in srgb, var(--lx-film-text) 22%, transparent),
-    inset 0 0 0 1px color-mix(in srgb, var(--lx-film-text) 9%, transparent),
-    0 1px 2px color-mix(in srgb, var(--lx-film) 30%, transparent),
-    0 8px 18px -10px color-mix(in srgb, var(--lx-film) 80%, transparent);
+    0 1px 2px color-mix(in srgb, var(--lx-ink) 16%, transparent),
+    0 8px 18px -10px color-mix(in srgb, var(--lx-ink) 55%, transparent);
   transition: transform var(--lx-dur-reveal) var(--lx-ease-pop);
   animation: tile-in var(--lx-dur-develop) var(--lx-ease-pop) backwards;
 }
 
+/* A glass rim over the tile: a lit top edge and a faint hairline. */
+.symbol::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    inset 0 1px 0 color-mix(in srgb, white 24%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, white 10%, transparent);
+  pointer-events: none;
+}
+
 .symbol svg {
+  display: block;
   width: 100%;
   height: 100%;
-  overflow: visible;
+}
+
+.bar,
+.stem,
+.dot {
+  transform-box: fill-box;
+  transform-origin: center;
 }
 
 .bar {
-  transform-box: fill-box;
-  transform-origin: center;
   animation:
     bar-in var(--lx-dur-reveal) var(--lx-ease-pop) backwards,
     talk 2.6s ease-in-out infinite;
   animation-delay: calc(80ms + var(--i) * 45ms), calc(0.7s + var(--i) * 170ms);
 }
 
-.trace {
-  fill: color-mix(in srgb, var(--lx-film-text) 34%, transparent);
+.stem {
+  animation: bar-in var(--lx-dur-reveal) var(--lx-ease-pop) 120ms backwards;
 }
 
-.revealStart {
-  stop-color: var(--lx-glow);
+/* The insight lands last, then its light breathes. */
+.dot {
+  animation: dot-in var(--lx-dur-reveal) var(--lx-ease-pop) 320ms backwards;
 }
 
-.revealEnd {
-  stop-color: color-mix(in srgb, var(--lx-glow) 30%, var(--lx-missed-on-film));
+.halo {
+  animation: breathe 3.2s ease-in-out 0.9s infinite;
 }
 
-/* The lens and its clip travel together: what it covers is x-rayed. */
-.lensTravel {
-  animation:
-    lens-in var(--lx-dur-reveal) var(--lx-ease-move) 300ms backwards,
-    lens-scan 5.2s var(--lx-ease-scan) 0.9s infinite alternate;
-}
-
-.lensGlass {
-  fill: color-mix(in srgb, var(--lx-film-text) 7%, transparent);
-  stroke: color-mix(in srgb, var(--lx-film-text) 88%, transparent);
-  stroke-width: 2.4;
-}
-
-.lensGlint {
-  fill: none;
-  stroke: var(--lx-film-text);
-  stroke-width: 2;
-  stroke-linecap: round;
-  opacity: 0.75;
-}
-
-/* Hover: the lens scans faster and the call gets livelier. */
+/* Hover: the call gets livelier. */
 .brand:hover .symbol,
 a:hover > .symbol,
 button:hover > .symbol {
   transform: scale(1.06);
-}
-
-.brand:hover .lensTravel,
-a:hover > .symbol .lensTravel,
-button:hover > .symbol .lensTravel {
-  animation-duration: var(--lx-dur-reveal), 1.6s;
 }
 
 .brand:hover .bar,
@@ -134,14 +110,16 @@ button:hover > .symbol .bar {
   line-height: 1.15;
 }
 
+/* The outlined wordmark: Hind Medium "Sales", Hind Bold "X-Ray", capsule hyphen. */
 .name {
-  display: flex;
-  align-items: center;
-  font-family: var(--lx-font-ui);
-  font-size: 17px;
-  font-weight: 750;
-  letter-spacing: -0.02em;
+  display: block;
+  width: 97px;
+  height: 18px;
   color: var(--lx-ink);
+}
+
+.hyphen {
+  fill: color-mix(in srgb, var(--lx-teal) 70%, var(--lx-glow));
 }
 
 .by {
@@ -181,25 +159,29 @@ button:hover > .symbol .bar {
   }
 }
 
-@keyframes lens-in {
+@keyframes dot-in {
   from {
     opacity: 0;
+    transform: translateY(-40%) scale(0.6);
   }
 }
 
-@keyframes lens-scan {
-  0% {
-    transform: translateX(-13px);
-  }
+@keyframes breathe {
+  0%,
   100% {
-    transform: translateX(13px);
+    opacity: 0.75;
+  }
+  50% {
+    opacity: 1;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .symbol,
   .bar,
-  .lensTravel {
+  .stem,
+  .dot,
+  .halo {
     animation: none;
   }
   .symbol {

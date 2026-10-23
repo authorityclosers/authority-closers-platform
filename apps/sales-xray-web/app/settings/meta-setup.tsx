@@ -450,7 +450,7 @@ export function MetaSetup({
         title: count ? `${leads(count)} came in` : "No new leads yet",
         message: count
           ? "They’re in Leads now."
-          : "Sales Xray also checks by itself every 10 minutes.",
+          : "Sales X-Ray also checks by itself every 10 minutes.",
         timeout: 6000,
       });
       changed();
@@ -477,7 +477,7 @@ export function MetaSetup({
         >
           <p>
             {pages.length
-              ? `${pages.length} Page${pages.length === 1 ? "" : "s"} shared with Sales Xray. Add more the same way.`
+              ? `${pages.length} Page${pages.length === 1 ? "" : "s"} shared with Sales X-Ray. Add more the same way.`
               : "Sign in with Facebook and tick every Page your lead ads run on."}
           </p>
           {app.connect ? (

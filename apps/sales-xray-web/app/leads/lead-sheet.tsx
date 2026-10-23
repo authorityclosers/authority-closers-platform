@@ -14,6 +14,7 @@ import {
   MessageCircle,
   MessageSquareText,
   Mic,
+  NotebookPen,
   Pencil,
   Link2,
   Phone,
@@ -23,7 +24,6 @@ import {
   Shuffle,
   Trash2,
   Workflow,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -84,6 +84,7 @@ import { sourceText, whyLine } from "./desk-view";
 import { firstCallWords, ownerNote } from "./owner-words";
 import { phoneCallText } from "./phone-call-text";
 import { several, usePipelines } from "./use-pipelines";
+import { afterCall } from "./after-call";
 import {
   MessageSetup,
   MessageSheet,
@@ -120,8 +121,9 @@ import {
   type SimulationStep,
 } from "./simulated-call";
 import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
-import { Sheet as KitSheet } from "../ui/sheet";
+import { askFeedback } from "../feedback/ask";
 import { DeleteLeadsSheet, type Doomed } from "./delete-leads";
+import { Sheet } from "./sheet-frame";
 import deleteStyles from "./delete-leads.module.css";
 import styles from "./leads.module.css";
 
@@ -133,48 +135,6 @@ const NO_RETRY = new Set([
   "incoming_not_available",
   "not_in_use",
 ]);
-
-/* ---------- Sheet ---------- */
-
-/**
- * Every Leads sheet is the kit Sheet (design system v2): phones swipe it away
- * from the top, computers get the floating panel on the right. The label
- * names the dialog; the content brings its own heading.
- */
-export function Sheet({
-  open,
-  label,
-  onClose,
-  children,
-}: {
-  open: boolean;
-  label: string;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <KitSheet
-      open={open}
-      onClose={onClose}
-      title={label}
-      hideTitle
-      closeButton={false}
-      className={styles.sheet}
-    >
-      <div className={styles.sheetBody}>
-        <button
-          type="button"
-          className={styles.sheetClose}
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <X size={18} aria-hidden="true" />
-        </button>
-        {children}
-      </div>
-    </KitSheet>
-  );
-}
 
 /* ---------- After the call ---------- */
 
@@ -452,6 +412,8 @@ export function CallOutcome({
       });
       buzz("done");
       after(saved);
+      // Reviews engine (owner, 23 Oct 2026): asks later, when nothing is in the way.
+      askFeedback("call_outcome");
     } catch (failure) {
       setError(
         failure instanceof LeadsError
@@ -751,6 +713,32 @@ export function CallOutcome({
   );
 }
 
+/* ---------- Log this ---------- */
+
+/**
+ * The light way in to the call's question (owner, 23 Oct 2026: "progressive
+ * rather than in your face"): after a WhatsApp, an email, a missed call or a
+ * call whose end the page couldn't see, and on any lead at any time.
+ */
+export function LogThis({
+  hint,
+  onOpen,
+}: {
+  /** What just happened, when something did: then the chip says "Log this". */
+  hint: string | null;
+  onOpen: () => void;
+}) {
+  return (
+    <div className={styles.logThis}>
+      <button type="button" className={styles.helperChip} onClick={onOpen}>
+        <NotebookPen size={15} aria-hidden="true" />
+        {hint ? "Log this" : "Log a call"}
+      </button>
+      {hint ? <span className={styles.logThisHint}>{hint}</span> : null}
+    </div>
+  );
+}
+
 /* ---------- Back from the dialer ---------- */
 
 /**
@@ -1034,18 +1022,33 @@ export function storyLines(
           }.`,
   ];
   const results = detail.events.filter((event) => event.kind === "result");
-  const talks = results.filter((event) => event.connected).length;
-  if (!lead.attempts) lines.push("Not called yet.");
+  // Calls the phone logged by itself (its dialler, incoming calls) count too: the
+  // question above the story may be about one (Redmi #12, 23 Oct 2026).
+  const phoneTalks = detail.events.filter(
+    (event) =>
+      event.kind === "call" && event.via === "phone" && event.connected,
+  );
+  const talks = Math.max(
+    results.filter((event) => event.connected).length,
+    phoneTalks.length,
+  );
+  const tries = Math.max(lead.attempts, lead.calls, phoneTalks.length);
+  if (!tries) lines.push("Not called yet.");
   else
     lines.push(
-      `Tried ${lead.attempts} time${lead.attempts === 1 ? "" : "s"}${
+      `Tried ${tries} time${tries === 1 ? "" : "s"}${
         talks
           ? `, talked ${talks === 1 ? "once" : `${talks} times`}`
           : ", not reached yet"
       }.`,
     );
   const last = results[0];
-  if (last)
+  const lastPhone = phoneTalks[0];
+  if (lastPhone && (!last || Date.parse(lastPhone.at) > Date.parse(last.at)))
+    lines.push(
+      `Last talk ${ago(lastPhone.at, now)}: ${talkTime(lastPhone.duration_seconds ?? 0)} on the phone.`,
+    );
+  else if (last)
     lines.push(
       last.connected
         ? `Last talk ${ago(last.at, now)}: ${last.stage_label ?? "talked"}.`
@@ -1552,7 +1555,7 @@ function RecordingUpload({
         <>
           <p className={styles.recordWarn}>
             Your phone hides its call recordings. Allow All files access so
-            Sales Xray can find this call&apos;s recording.
+            Sales X-Ray can find this call&apos;s recording.
           </p>
           <div className={styles.row}>
             <Button onClick={() => void setupOpen("allFiles")}>
@@ -1597,7 +1600,7 @@ function RecordingUpload({
             found ? "Pick a different recording" : "Add the recording",
             found
               ? "From your phone's recordings or files."
-              : "Pick the call your phone just recorded. Sales Xray analyses it and puts its Report here.",
+              : "Pick the call your phone just recorded. Sales X-Ray analyses it and puts its Report here.",
           )
         : null}
       {state === "reading" ? (
@@ -2110,7 +2113,7 @@ export function LeadCard({
       </div>
       {permits ? (
         <section className={styles.permits} aria-label="Allow calling">
-          <h3>Call from Sales Xray</h3>
+          <h3>Call from Sales X-Ray</h3>
           <p>Your phone asks you to allow three things, once:</p>
           <ul>
             <li>
@@ -2543,6 +2546,8 @@ export function LeadSheet({
   const [heard, setHeard] = useState<NativeCall | null>(null);
   const logged = useRef("");
   const [answered, setAnswered] = useState(0);
+  // "Log this" tapped: the question opens for that lead.
+  const [logging, setLogging] = useState<string | null>(null);
   // Owners and admins: Delete lead, confirmed in its own sheet (21 Oct 2026).
   const [removing, setRemoving] = useState<{
     round: number;
@@ -2556,6 +2561,18 @@ export function LeadSheet({
   // Only the open lead's own detail (or error) shows; anything else is stale.
   const detail = loaded?.lead.lead_id === leadId ? loaded : null;
   const error = failed?.leadId === leadId ? failed.message : null;
+  // "How did it go?" only after a real call (owner, 23 Oct 2026).
+  const after = detail
+    ? afterCall({
+        leadId: detail.lead.lead_id,
+        name: detail.lead.name.split(" ")[0],
+        phoneCall: asked,
+        back: backFrom === leadId,
+        events: detail.events,
+      })
+    : null;
+  const asking = after?.ask === true;
+  const questionOpen = asking || intent === "log" || logging === leadId;
 
   useEffect(() => {
     if (!leadId) return;
@@ -2635,32 +2652,38 @@ export function LeadSheet({
               phoneCall={phoneCall}
               intent={intent}
               afterCall={
-                backFrom === leadId || asked || intent === "log"
-                  ? { step: "outcome" }
-                  : null
+                asking || intent === "log" ? { step: "outcome" } : null
               }
               outcome={
-                <CallOutcome
-                  key={`${formKey}-${asked?.startedMs ?? 0}`}
-                  detail={detail}
-                  submitLabel="Save"
-                  heard={asked}
-                  attention={backFrom === leadId}
-                  ask={intent === "log"}
-                  beforeSave={() => logWaitingCall(detail)}
-                  onSaved={(next) => {
-                    setBackFrom(null);
-                    if (asked) setAnswered(asked.startedMs);
-                    update(next);
-                    if (onNext && leadId) {
-                      const after = leadId;
-                      readNext(after, undefined, pipeline).then(
-                        (lead) => setNextUp({ after, lead }),
-                        () => undefined,
-                      );
-                    }
-                  }}
-                />
+                questionOpen ? (
+                  <CallOutcome
+                    key={`${formKey}-${after?.heard?.startedMs ?? 0}`}
+                    detail={detail}
+                    submitLabel="Save"
+                    heard={after?.heard ?? null}
+                    attention={asking}
+                    ask={intent === "log" || logging === leadId}
+                    beforeSave={() => logWaitingCall(detail)}
+                    onSaved={(next) => {
+                      setBackFrom(null);
+                      setLogging(null);
+                      if (asked) setAnswered(asked.startedMs);
+                      update(next);
+                      if (onNext && leadId) {
+                        const saved = leadId;
+                        readNext(saved, undefined, pipeline).then(
+                          (lead) => setNextUp({ after: saved, lead }),
+                          () => undefined,
+                        );
+                      }
+                    }}
+                  />
+                ) : (
+                  <LogThis
+                    hint={after?.ask === false ? after.hint : null}
+                    onOpen={() => setLogging(leadId)}
+                  />
+                )
               }
             />
             {detail.can_assign ? (
@@ -2886,7 +2909,10 @@ export function CallingLoop({
                       : "Save and next lead"
               }
               heard={phoneCall}
-              attention={backFrom === detail.lead.lead_id}
+              attention={
+                backFrom === detail.lead.lead_id &&
+                phoneCall?.connected !== false
+              }
               beforeSave={() => logWaitingCall(detail)}
               upNext={
                 following ? (
@@ -2948,3 +2974,5 @@ function WhatsAppGlyph() {
     </svg>
   );
 }
+
+export { Sheet };

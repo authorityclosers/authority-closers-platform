@@ -38,6 +38,14 @@ from ac_platform.conversation_intelligence.review_invitations import (
     REVIEW_INVITATION_PATH,
     decrypt_invitation_token,
 )
+from ac_platform.identity.account_deletion import (
+    ACCOUNT_CLOSED_EVENT,
+    ACCOUNT_CLOSED_JOB,
+    ACCOUNT_CLOSED_ROUTE,
+    DELETION_REQUESTED_EVENT,
+    DELETION_REQUESTED_JOB,
+    DELETION_REQUESTED_ROUTE,
+)
 from ac_platform.identity.email_login import (
     EMAIL_LOGIN_REQUEST_EVENT,
     EMAIL_LOGIN_REQUEST_JOB,
@@ -140,6 +148,8 @@ OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
         PROVIDER_LINKED_EVENT: PROVIDER_LINKED_ROUTE,
         PROVIDER_REMOVED_EVENT: PROVIDER_REMOVED_ROUTE,
         PROVIDER_CONNECTED_EVENT: PROVIDER_CONNECTED_ROUTE,
+        ACCOUNT_CLOSED_EVENT: ACCOUNT_CLOSED_ROUTE,
+        DELETION_REQUESTED_EVENT: DELETION_REQUESTED_ROUTE,
         REVIEWER_AUTH_EVENT: OutboxJobRoute(
             job_kind=REVIEWER_AUTH_JOB,
             required_payload_keys=frozenset({"challenge_id"}),
@@ -542,6 +552,8 @@ def build_default_dispatcher(
             PROVIDER_LINKED_JOB: handler,
             PROVIDER_REMOVED_JOB: handler,
             PROVIDER_CONNECTED_JOB: handler,
+            ACCOUNT_CLOSED_JOB: handler,
+            DELETION_REQUESTED_JOB: handler,
             REVIEWER_AUTH_JOB: handler,
             REVIEW_INVITATION_JOB: handler,
             EMAIL_LOGIN_REQUEST_JOB: handler,
@@ -712,6 +724,8 @@ class DurableWorker:
                 PROVIDER_LINKED_JOB,
                 PROVIDER_REMOVED_JOB,
                 PROVIDER_CONNECTED_JOB,
+                ACCOUNT_CLOSED_JOB,
+                DELETION_REQUESTED_JOB,
                 REVIEWER_AUTH_JOB,
                 REVIEW_INVITATION_JOB,
                 EMAIL_LOGIN_REQUEST_JOB,
@@ -807,6 +821,14 @@ class DurableWorker:
             )
 
             return await resolve_provider_notice_message(
+                session, self._settings, job, provider_key=provider_key
+            )
+        if job.kind in {ACCOUNT_CLOSED_JOB, DELETION_REQUESTED_JOB}:
+            from ac_platform.identity.account_deletion import (
+                resolve_account_deletion_message,
+            )
+
+            return await resolve_account_deletion_message(
                 session, self._settings, job, provider_key=provider_key
             )
         if job.kind == STAFF_KEY_CREATED_JOB:

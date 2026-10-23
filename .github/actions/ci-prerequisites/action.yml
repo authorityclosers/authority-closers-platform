@@ -1,6 +1,9 @@
-name: Cached locked CI prerequisites
-description: Cache the complete Debian transaction and prove the locked tools and browser.
+name: Verified offline CI prerequisites
+description: Install an immutable GitHub-hosted bundle and prove the locked tools and browser offline.
 inputs:
+  bundle:
+    description: Exact artifact ID/digest and producer reference from the prerequisite producer job.
+    required: true
   components:
     description: Space-separated prerequisite components.
     required: true
@@ -13,45 +16,20 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Key the locked packages and runner image
-      id: key
+    - name: Make the Azure apt mirror unavailable on this disposable runner
+      shell: bash
+      run: |
+        test "$GITHUB_ACTIONS" = true
+        printf '\n127.0.0.1 azure.archive.ubuntu.com\n::1 azure.archive.ubuntu.com\n' | sudo --non-interactive tee -a /etc/hosts >/dev/null
+    - name: Verify the producer and prove prerequisites offline
       shell: bash
       env:
+        GH_TOKEN: ${{ github.token }}
+        PREREQ_BUNDLE: ${{ inputs.bundle }}
         PREREQ_COMPONENTS: ${{ inputs.components }}
         PREREQ_PYTHON: ${{ inputs.python }}
         PREREQ_NODE: ${{ inputs.node-browser }}
       run: |
         read -r -a components <<< "$PREREQ_COMPONENTS"
         options=(); [ "$PREREQ_NODE" != true ] || options+=(--node-browser)
-        "$PREREQ_PYTHON" scripts/ci/ci_prerequisites.py --cache-key "${options[@]}" "${components[@]}" >> "$GITHUB_OUTPUT"
-    - name: Restore the exact prerequisite transaction
-      id: restore
-      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-      with:
-        path: |
-          ${{ runner.temp }}/ci-prerequisites/*.deb
-          ${{ runner.temp }}/ci-prerequisites/manifest.json
-          ~/.cache/ms-playwright
-        key: ${{ steps.key.outputs.key }}
-    - name: Install and prove the locked prerequisites
-      shell: bash
-      env:
-        PREREQ_COMPONENTS: ${{ inputs.components }}
-        PREREQ_PYTHON: ${{ inputs.python }}
-        PREREQ_NODE: ${{ inputs.node-browser }}
-        PREREQ_CACHE_HIT: ${{ steps.restore.outputs.cache-hit }}
-      run: |
-        read -r -a components <<< "$PREREQ_COMPONENTS"
-        options=(--package-cache "$RUNNER_TEMP/ci-prerequisites")
-        [ "$PREREQ_NODE" != true ] || options+=(--node-browser)
-        [ "$PREREQ_CACHE_HIT" != true ] || options+=(--offline)
-        "$PREREQ_PYTHON" scripts/ci/ci_prerequisites.py "${options[@]}" "${components[@]}"
-    - name: Save proved prerequisites before tests
-      if: steps.restore.outputs.cache-hit != 'true'
-      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
-      with:
-        path: |
-          ${{ runner.temp }}/ci-prerequisites/*.deb
-          ${{ runner.temp }}/ci-prerequisites/manifest.json
-          ~/.cache/ms-playwright
-        key: ${{ steps.key.outputs.key }}
+        "$PREREQ_PYTHON" scripts/ci/ci_prerequisite_bundle.py consume --directory "$RUNNER_TEMP/ci-prerequisite-consumer" --components "${components[@]}" "${options[@]}"

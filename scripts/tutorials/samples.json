@@ -1,0 +1,17 @@
+{
+  "about": "One short passage per language, read by both cast voices, for the owner to pick a voice and a style before the full render. Same meaning in every language. 'say' is what the voice reads; 'caption' is the Roman-script caption line.",
+  "lines": {
+    "en": {
+      "say": "Hi! Welcome to Sales X-Ray. Let me show you how to call a lead, right from the app. Open Leads, tap the person you want to call, and hit Call. That's it! When the call ends, the recording is saved with that lead, automatically. And in a little while, Brain 4.0 turns it into a clear Report: your coaching score, and the one thing to do better on your next call.",
+      "caption": "Hi! Welcome to Sales X-Ray. Let me show you how to call a lead, right from the app. Open Leads, tap the person you want to call, and hit Call. That's it! When the call ends, the recording is saved with that lead, automatically. And in a little while, Brain 4.0 turns it into a clear Report: your coaching score, and the one thing to do better on your next call."
+    },
+    "hi": {
+      "say": "नमस्ते! Sales X-Ray में आपका welcome है. चलिए, देखते हैं app से direct lead को call कैसे करते हैं. Leads खोलिए, जिसको call करना है उसके नाम पे tap कीजिए, और Call दबाइए. बस, हो गया, बिलकुल simple! Call ख़त्म होते ही recording अपने आप उसी lead के साथ save हो जाती है. और थोड़ी देर में Brain 4.0 पूरा Report बना देता है: आपका coaching score, और next call में क्या better करना है, वो भी.",
+      "caption": "Namaste! Sales X-Ray mein aapka welcome hai. Chaliye, dekhte hain app se direct lead ko call kaise karte hain. Leads kholiye, jisko call karna hai uske naam pe tap kijiye, aur Call dabaiye. Bas, ho gaya, bilkul simple! Call khatam hote hi recording apne aap usi lead ke saath save ho jaati hai. Aur thodi der mein Brain 4.0 poora Report bana deta hai: aapka coaching score, aur next call mein kya better karna hai, woh bhi."
+    },
+    "mr": {
+      "say": "नमस्कार! Sales X-Ray मध्ये तुमचं स्वागत. चला, बघूया app मधून direct lead ला call कसा करायचा. Leads उघडा, ज्याला call करायचाय त्याच्या नावावर tap करा, आणि Call दाबा. बस, झालं, एकदम सोपं! Call संपला की recording आपोआप त्याच lead सोबत save होते. आणि थोड्या वेळात Brain 4.0 पूर्ण Report तयार करतो: तुमचा coaching score, आणि पुढच्या call मध्ये काय better करायचं, ते पण.",
+      "caption": "Namaskar! Sales X-Ray madhye tumcha swagat. Chala, baghuya app madhun direct lead la call kasa karaycha. Leads ughda, jyala call karaychay tyachya navavar tap kara, aani Call daba. Bas, jhala, ekdam sopa! Call sampla ki recording aapoaap tyach lead sobat save hote. Aani thodya velat Brain 4.0 poorna Report tayar karto: tumcha coaching score, aani pudhchya call madhye kay better karaycha, te pan."
+    }
+  }
+}

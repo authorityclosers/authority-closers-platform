@@ -32,9 +32,11 @@ const LABELS: Record<string, string> = {
   unavailable: "Unavailable",
 };
 const stateLabel = (item: ImportItem) =>
-  item.state === "already_imported" && item.runState
-    ? `${LABELS[item.state]} · ${LABELS[item.runState]}`
-    : LABELS[item.state];
+  item.memberSetupRequired
+    ? "Waiting for member setup"
+    : item.state === "already_imported" && item.runState
+      ? `${LABELS[item.state]} · ${LABELS[item.runState]}`
+      : LABELS[item.state];
 
 /** Additive island: the page owner supplies policy and any restored batch on the server. */
 export function BulkRecordingImport({
@@ -339,6 +341,13 @@ export function BulkRecordingImport({
                 ).length
               }{" "}
               done or already imported
+            </p>
+          ) : null}
+          {batch?.items.some((item) => item.memberSetupRequired) ? (
+            <p className={styles.hint}>
+              Some recordings wait for their member to add a name and phone
+              number in Sales X-Ray. Ask them to finish setup, then resume. An
+              import keeps its recordings for 7 days from when it started.
             </p>
           ) : null}
           {problem ? (

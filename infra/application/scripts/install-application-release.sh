@@ -1284,6 +1284,10 @@ install -d -m 0750 -o root -g acops "$backup_root"
 backup_file="$(mktemp "$backup_root/$(date -u +%Y%m%dT%H%M%SZ)-pre-${release_id}.XXXXXX.dump")"
 mutation_started=0
 database_mutation_started=0
+postgres_restart_started=0
+schema_mutation_started=0
+backup_sha256=''
+snapshot_record_file=''
 backup_ready=0
 release_committed=0
 write_exposure_started=0
@@ -1372,9 +1376,9 @@ check_route() {
 }
 
 set_database_writer_access() {
-  local access_mode="$1"
+  local access_mode="$1" database_release="${2:-$release_dir}"
   # shellcheck disable=SC2016  # PostgreSQL container variables expand inside `sh -euc`.
-  compose_for "$release_dir" exec -T postgres sh -euc '
+  compose_for "$database_release" exec -T postgres sh -euc '
     export PGPASSWORD="$POSTGRES_PASSWORD"
     [ "$POSTGRES_DB" = ac_platform ] || {
       printf "Unexpected application database identity.\n" >&2
@@ -1416,6 +1420,65 @@ SQL
   ' sh "$access_mode"
 }
 
+take_pre_restart_snapshot() {
+  local database_release="$1" snapshot_tmp snapshot_root
+  umask 077
+  # Credentials expand only inside the existing container, never on the host.
+  # shellcheck disable=SC2016
+  compose_for "$database_release" exec -T postgres sh -euc '
+    export PGPASSWORD="$AC_DB_BACKUP_PASSWORD"
+    pg_dump -h 127.0.0.1 -U ac_backup -d "$POSTGRES_DB" --format=custom --create
+  ' > "$backup_file" || return 1
+  [[ -s "$backup_file" && ! -L "$backup_file" ]] || return 1
+  compose_for "$database_release" exec -T postgres pg_restore --list < "$backup_file" >/dev/null || return 1
+  backup_sha256="$(sha256sum "$backup_file")" || return 1
+  backup_sha256="${backup_sha256%% *}"
+  [[ "$backup_sha256" =~ ^[0-9a-f]{64}$ ]] || return 1
+  # Persist a verified, private snapshot receipt BEFORE any existing PG restart.
+  # A failed receipt prevents the restart just like a failed dump/list proof.
+  snapshot_root="$application_root/deployments/$target_environment"
+  install -d -m 0750 -o root -g acops "$snapshot_root" || return 1
+  snapshot_tmp="$(mktemp "$snapshot_root/.snapshot-${release_id}.XXXXXX")" || return 1
+  snapshot_record_file="$snapshot_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}-pre-restart-${snapshot_tmp##*.}.env"
+  {
+    printf 'AC_STATUS=VERIFIED_PRE_RESTART_SNAPSHOT\n'
+    printf 'AC_ENVIRONMENT=%s\nAC_RELEASE_ID=%s\n' "$target_environment" "$release_id"
+    printf 'AC_DATABASE_SOURCE_RELEASE=%s\n' "${database_release##*/}"
+    printf 'AC_PRE_MIGRATION_BACKUP=%s\nAC_BACKUP_SHA256=%s\n' "$backup_file" "$backup_sha256"
+  } > "$snapshot_tmp" || { rm -f -- "$snapshot_tmp"; return 1; }
+  chmod 0600 "$backup_file" "$snapshot_tmp" || { rm -f -- "$snapshot_tmp"; return 1; }
+  chown root:root "$backup_file" "$snapshot_tmp" || { rm -f -- "$snapshot_tmp"; return 1; }
+  sync -f "$backup_file" || { rm -f -- "$snapshot_tmp"; return 1; }
+  mv --no-target-directory --no-clobber "$snapshot_tmp" "$snapshot_record_file" || {
+    rm -f -- "$snapshot_tmp"; return 1;
+  }
+  [[ ! -e "$snapshot_tmp" && -f "$snapshot_record_file" ]] || {
+    rm -f -- "$snapshot_tmp"; return 1;
+  }
+  # Once published, keep this verified backup even if directory sync fails.
+  # The failed call still prevents restart; audit history is never rewritten.
+  backup_ready=1
+  sync -f "$snapshot_root" || return 1
+}
+
+prepare_postgres_release() {
+  database_mutation_started=1
+  if [[ -n "$previous_release" ]]; then
+    set_database_writer_access fence "$previous_release" || return 1
+    take_pre_restart_snapshot "$previous_release" || return 1
+    postgres_restart_started=1
+    compose_for "$release_dir" up --detach --wait --wait-timeout 180 postgres || return 1
+    set_database_writer_access fence || return 1
+  else
+    # First install has no prior service/config to snapshot. Bootstrap only;
+    # take the same verified snapshot before the first schema mutation.
+    postgres_restart_started=1
+    compose_for "$release_dir" up --detach --wait --wait-timeout 180 postgres || return 1
+    set_database_writer_access fence || return 1
+    take_pre_restart_snapshot "$release_dir" || return 1
+  fi
+}
+
 restore_current_link() {
   local rollback_tmp current_target
   [[ "$current_switch_armed" == 1 ]] || return 0
@@ -1448,7 +1511,8 @@ restore_current_link() {
 }
 
 rollback_release() {
-  local rollback_failed=0 rollback_fenced=0
+  local rollback_failed=0 rollback_fenced=0 recovery_release="$release_dir"
+  [[ -z "$previous_release" ]] || recovery_release="$previous_release"
   [[ "$write_exposure_started" == 0 ]] || {
     printf 'FAIL  Destructive rollback is forbidden after write exposure.\n' >&2
     return 1
@@ -1474,9 +1538,15 @@ rollback_release() {
   else
     rollback_failed=1
   fi
+  # Recreate the PREVIOUS PostgreSQL configuration before any SQL, even if
+  # the candidate never became healthy. The held ingress/writers stay stopped.
+  if [[ "$rollback_failed" == 0 && "$postgres_restart_started" == 1 && -n "$previous_release" ]]; then
+    compose_for "$previous_release" up --detach --no-deps --wait --wait-timeout 180 postgres \
+      || rollback_failed=1
+  fi
   if [[ "$rollback_failed" == 0 ]]; then
     if [[ "$database_mutation_started" == 1 ]]; then
-      if set_database_writer_access fence; then
+      if set_database_writer_access fence "$recovery_release"; then
         rollback_fenced=1
       else
         rollback_failed=1
@@ -1485,9 +1555,13 @@ rollback_release() {
       rollback_fenced=1
     fi
   fi
-  if [[ "$rollback_failed" == 0 && "$backup_ready" == 1 && "$rollback_fenced" == 1 ]]; then
+  if [[ "$rollback_failed" == 0 && "$backup_ready" == 1 && "$rollback_fenced" == 1 && "$schema_mutation_started" == 1 ]]; then
+    if [[ "$(sha256sum "$backup_file" | cut -d ' ' -f 1)" != "$backup_sha256" ]]; then
+      printf 'FAIL  Recovery snapshot checksum changed.\n' >&2
+      return 1
+    fi
     # shellcheck disable=SC2016  # PostgreSQL container variables expand inside `sh -euc`.
-    if ! compose_for "$release_dir" exec -T postgres sh -euc '
+    if ! compose_for "$recovery_release" exec -T postgres sh -euc '
       export PGPASSWORD="$POSTGRES_PASSWORD"
       psql -h 127.0.0.1 -U "$POSTGRES_USER" -d postgres -v ON_ERROR_STOP=1 \
         -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '\''$POSTGRES_DB'\'' AND pid <> pg_backend_pid()"
@@ -1506,7 +1580,7 @@ rollback_release() {
   if [[ "$database_mutation_started" == 1 && "$rollback_fenced" == 1 && "$rollback_failed" == 0 ]]; then
     # Reopen only after the backup, application link and matching edge route
     # have all been restored while ingress remained on the release hold.
-    set_database_writer_access runtime || rollback_failed=1
+    set_database_writer_access runtime "$recovery_release" || rollback_failed=1
   fi
   if [[ "$rollback_failed" == 0 ]]; then
     if [[ -n "$previous_release" ]]; then
@@ -1680,18 +1754,8 @@ stop_application_services_with_hosted_drain "$writer_release" false || {
  printf 'Previous release hosted Sales Xray worker did not drain safely.\n' >&2
  exit 1
 }
-database_mutation_started=1
-compose_for "$release_dir" up --detach --wait --wait-timeout 180 postgres
-set_database_writer_access fence
-umask 077
-# shellcheck disable=SC2016  # Backup credentials and database name expand only in the container.
-compose_for "$release_dir" exec -T postgres sh -euc '
-  export PGPASSWORD="$AC_DB_BACKUP_PASSWORD"
-  pg_dump -h 127.0.0.1 -U ac_backup -d "$POSTGRES_DB" --format=custom --create
-' > "$backup_file"
-compose_for "$release_dir" exec -T postgres pg_restore --list < "$backup_file" >/dev/null
-backup_ready=1
-
+prepare_postgres_release
+schema_mutation_started=1
 set_database_writer_access migrator
 compose_for "$release_dir" --profile release run --rm migrate
 if ! compose_for "$release_dir" --profile release run --rm migrate \
@@ -1717,6 +1781,8 @@ attempt_file="$evidence_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}-prepared-$
   printf 'AC_PREVIOUS_RELEASE=%s\n' "${previous_release##*/}"
   printf 'AC_PREVIOUS_EDGE_ROUTE=%s\n' "$previous_edge_route_target"
   printf 'AC_TARGET_EDGE_ROUTE=%s\n' "$edge_route_source"
+  printf 'AC_PRE_RESTART_SNAPSHOT=%s\n' "$snapshot_record_file"
+  printf 'AC_BACKUP_SHA256=%s\n' "$backup_sha256"
   printf 'AC_PRE_MIGRATION_BACKUP=%s\n' "$backup_file"
 } > "$attempt_tmp"
 chmod 0640 "$attempt_tmp"
@@ -1769,6 +1835,8 @@ evidence_file="$evidence_root/$(date -u +%Y%m%dT%H%M%SZ)-${release_id}-${evidenc
   printf 'AC_MEDIA_FILESYSTEM_HOST_ROOT=%s\n' "$media_filesystem_host_root"
   printf 'AC_PREPARED_EVIDENCE=%s\n' "$attempt_file"
   printf 'AC_PREVIOUS_RELEASE=%s\n' "${previous_release##*/}"
+  printf 'AC_PRE_RESTART_SNAPSHOT=%s\n' "$snapshot_record_file"
+  printf 'AC_BACKUP_SHA256=%s\n' "$backup_sha256"
   printf 'AC_PRE_MIGRATION_BACKUP=%s\n' "$backup_file"
   printf 'AC_API_IMAGE=%s\n' "$AC_API_IMAGE"
   printf 'AC_API_REGISTRY_DIGEST=%s\n' "$AC_API_REGISTRY_DIGEST"

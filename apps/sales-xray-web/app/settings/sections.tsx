@@ -15,7 +15,10 @@ import {
   Smartphone,
 } from "lucide-react";
 
-import { AccountSettings } from "../account-settings";
+import {
+  AccountSettings,
+  type SettingsBillingProps,
+} from "../account-settings";
 import { ANDROID_APK_URL } from "../apps/release";
 import { CallAiSettingsSection } from "../call-ai/call-ai-settings";
 import { AlertsCard } from "../leads/alerts-card";
@@ -25,9 +28,11 @@ import {
   LeadStagesPane,
 } from "../leads/settings-panes";
 import { OrganisationView } from "../organisation/organisation-view";
+import { useApkLinksAllowed } from "../purchase-policy";
 import { Panel } from "../ui/kit";
 import { ConnectedApps } from "./connected-apps";
 import { DevelopersSection } from "./developers";
+import { PrivacySettings } from "./privacy";
 import { SellingSettings } from "./selling";
 import type { SettingsSectionId } from "./settings-sections";
 import styles from "./sections.module.css";
@@ -67,10 +72,10 @@ function Notifications() {
   return (
     <div className={styles.stack}>
       <AlertsCard />
-      <Panel title="Where you hear from Sales Xray">
+      <Panel title="Where you hear from Sales X-Ray">
         <Note icon={<BellRing size={18} />} title="Lead alerts on your phone">
           A new lead or a call that is due shows on your phone. Turn them on in
-          the Sales Xray phone app; your phone&rsquo;s settings can turn them
+          the Sales X-Ray phone app; your phone&rsquo;s settings can turn them
           off.
         </Note>
         <Note icon={<Megaphone size={18} />} title="What's new">
@@ -86,21 +91,36 @@ function Notifications() {
 }
 
 function Devices() {
+  // The Google Play app updates only through Play: no APK link there (Play policy).
+  const apkLinks = useApkLinksAllowed();
   return (
     <div className={styles.stack}>
-      <Panel title="Sales Xray on your phone">
-        <Note
-          icon={<Download size={18} />}
-          title="Android app"
-          href="/apps"
-          action="Get the app"
-        >
-          Calls, leads and alerts on your phone. It can also pick up your call
-          recordings for analysis.
-        </Note>
-        <a className={styles.download} href={ANDROID_APK_URL} rel="noopener">
-          Download for Android
-        </a>
+      <Panel title="Sales X-Ray on your phone">
+        {apkLinks ? (
+          <>
+            <Note
+              icon={<Download size={18} />}
+              title="Android app"
+              href="/apps"
+              action="Get the app"
+            >
+              Calls, leads and alerts on your phone. It can also pick up your
+              call recordings for analysis.
+            </Note>
+            <a
+              className={styles.download}
+              href={ANDROID_APK_URL}
+              rel="noopener"
+            >
+              Download for Android
+            </a>
+          </>
+        ) : (
+          <Note icon={<Smartphone size={18} />} title="Android app">
+            You&apos;re using Sales X-Ray from Google Play. Updates come from
+            Google Play.
+          </Note>
+        )}
       </Panel>
       <Panel title="Call recording">
         <Note
@@ -117,7 +137,17 @@ function Devices() {
   );
 }
 
-export function SettingsSectionView({ id }: { id: SettingsSectionId }) {
+export function SettingsSectionView({
+  id,
+  billing,
+  headless = false,
+}: {
+  id: SettingsSectionId;
+  /** Inside the organisation hub, which has the organisation's header. */
+  headless?: boolean;
+  /** Plan & usage's billing from elsewhere (review pages); else it reads its own. */
+  billing?: SettingsBillingProps;
+}) {
   switch (id) {
     case "profile":
       return <AccountSettings only={["profile", "general"]} />;
@@ -126,13 +156,19 @@ export function SettingsSectionView({ id }: { id: SettingsSectionId }) {
     case "security":
       return <AccountSettings only={["security"]} />;
     case "plan":
-      return <AccountSettings only={["usage", "billing"]} />;
+      return <AccountSettings only={["usage", "billing"]} billing={billing} />;
+    case "privacy":
+      return <PrivacySettings />;
     case "help":
       return <AccountSettings only={["help"]} />;
     case "organisation":
-      return <OrganisationView embedded sections={["company"]} />;
+      return (
+        <OrganisationView embedded headless={headless} sections={["company"]} />
+      );
     case "team":
-      return <OrganisationView embedded sections={["members"]} />;
+      return (
+        <OrganisationView embedded headless={headless} sections={["members"]} />
+      );
     case "lead-rules":
       return <LeadRulesPane />;
     case "stages":

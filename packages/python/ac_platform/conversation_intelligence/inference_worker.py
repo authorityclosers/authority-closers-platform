@@ -92,6 +92,7 @@ from ac_platform.conversation_intelligence.worker_account_gate import (
 )
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import JobRepository, RecoveryStateRepository
+from ac_platform.outbox.tenant_turns import TenantTurns
 
 if TYPE_CHECKING:
     from ac_platform.conversation_intelligence.authority import ConversationAuthority
@@ -317,6 +318,8 @@ class ConversationInferenceWorker:
     ) -> None:
         self.sessions, self.storage, self.broker, self.clock = sessions, storage, broker, clock
         self.authority = authority
+        # Shared by every provider consumer: organisations take turns.
+        self.tenant_turns = TenantTurns()
 
     async def _require_customer_profile(self, db: AsyncSession, scope: Scope) -> None:
         actor = actor_from_row(scope.task)
@@ -343,7 +346,9 @@ class ConversationInferenceWorker:
             ):
                 return None
             recovery = await RecoveryStateRepository(db).require_ready(lock=True, shared_lock=True)
-            jobs = await JobRepository(db).claim(kinds=(INFERENCE_JOB,), limit=1, lease_for=_LEASE)
+            jobs = await JobRepository(db).claim(
+                kinds=(INFERENCE_JOB,), limit=1, lease_for=_LEASE, turns=self.tenant_turns
+            )
             await self._recover_terminal_job(db, recovery.generation)
             if not jobs:
                 return None

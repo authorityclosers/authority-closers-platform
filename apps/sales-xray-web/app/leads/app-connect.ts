@@ -41,7 +41,7 @@ const HANDOFF = /^[A-Za-z0-9_-]{20,8192}$/;
 const WORD = /^[a-z_]{1,32}$/;
 
 export const UPDATE_APP =
-  "Update the Sales Xray app to connect from your phone, or connect from a computer.";
+  "Update the Sales X-Ray app to connect from your phone, or connect from a computer.";
 const TOO_LONG = "That took too long. Connect again.";
 
 function b64url(bytes: Uint8Array): string {
@@ -150,7 +150,7 @@ export async function startConnect(
     if (!(await openConnect(url)))
       return {
         result: "failed",
-        message: "Sales Xray couldn't open your browser. Try again.",
+        message: "Sales X-Ray couldn't open your browser. Try again.",
       };
     return null;
   } catch {

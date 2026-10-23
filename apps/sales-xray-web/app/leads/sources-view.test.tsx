@@ -152,7 +152,7 @@ const settle = () =>
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 
-it("in the Sales Xray app, Continue with Google opens in the phone's browser", async () => {
+it("in the Sales X-Ray app, Continue with Google opens in the phone's browser", async () => {
   const sent: string[] = [];
   fakePhone(sent);
   const plain = globalThis.fetch;

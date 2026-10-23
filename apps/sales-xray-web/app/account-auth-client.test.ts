@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  ACCOUNT_CLOSED,
   AUTH_COMPLETE_MESSAGE,
   emailCodeRequest,
   isAuthCompleteMessage,
@@ -24,6 +25,9 @@ import {
   takeSignInResult,
   connectOutcome,
   connectProvider,
+  parseNativeSignInStart,
+  startNativeSignIn,
+  submitNativeSignIn,
 } from "./account-auth-client";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -268,7 +272,47 @@ it("sends only a same-origin JSON auth request and never exposes provider error 
   expect(maskedEmail("fictional@example.test")).toBe("f•••@example.test");
 });
 
-it("requests current Sales Xray consent capability on the correct surface", async () => {
+// Settings -> Security -> Delete account closed the account: every way in says so.
+it("names a closed account on code, password and provider sign-in", async () => {
+  const closed = () =>
+    new Response(
+      JSON.stringify({
+        code: "account_closed",
+        title: "This account is closed",
+      }),
+      { status: 403 },
+    );
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation(async () => closed()),
+  );
+  await expect(
+    emailCodeRequest("verify", new AbortController().signal, {
+      email: "fictional@example.test",
+      code: "123456",
+    }),
+  ).rejects.toThrow(ACCOUNT_CLOSED);
+  await expect(
+    passwordLogin("fictional@example.test", "x", new AbortController().signal),
+  ).rejects.toThrow(ACCOUNT_CLOSED);
+  const flow = "8f7c4b1e-2d3a-4c5b-9e6f-0a1b2c3d4e5f";
+  expect(
+    parseAuthCompletionQuery({ flow, auth_result: "account_closed" }),
+  ).toEqual({ flow, result: "account_closed" });
+  // Any other 403 stays the plain "unavailable".
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(new Response("{}", { status: 403 })),
+  );
+  await expect(
+    emailCodeRequest("verify", new AbortController().signal, {
+      email: "fictional@example.test",
+      code: "123456",
+    }),
+  ).rejects.toThrow("sign-in-unavailable");
+});
+
+it("requests current Sales X-Ray consent capability on the correct surface", async () => {
   const fetcher = vi.fn().mockResolvedValue(Response.json(config));
   vi.stubGlobal("fetch", fetcher);
   await emailCodeRequest("config", new AbortController().signal);
@@ -412,9 +456,99 @@ it("reads the Connect results and says them plainly", () => {
     message: "Google is connected. You can now sign in with Google.",
   });
   expect(connectOutcome("already_linked", "facebook").message).toBe(
-    "That Facebook account is already used by another Sales Xray account.",
+    "That Facebook account is already used by another Sales X-Ray account.",
   );
   expect(connectOutcome("fresh_sign_in", "apple").message).toContain(
     "within 10 minutes",
   );
+});
+
+describe("the phone's own sign-in", () => {
+  it("keeps only a well-formed start answer", () => {
+    const state = "a".repeat(43);
+    expect(
+      parseNativeSignInStart({
+        state,
+        nonce: "n",
+        client_id: "web-client-id",
+        extra: "ignored",
+      }),
+    ).toEqual({
+      state,
+      nonce: "n",
+      clientId: "web-client-id",
+    });
+    expect(
+      parseNativeSignInStart({
+        state,
+        nonce: "n",
+        app_id: "1",
+        client_token: "t",
+      }),
+    ).toEqual({ state, nonce: "n", appId: "1", clientToken: "t" });
+    expect(parseNativeSignInStart({ state: "short", nonce: "n" })).toBeNull();
+    expect(parseNativeSignInStart({ state })).toBeNull();
+    expect(parseNativeSignInStart(null)).toBeNull();
+  });
+
+  it("starts by a same-origin JSON post and gives up quietly when the server can't", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({ state: "b".repeat(43), nonce: "n", client_id: "c" }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const started = await startNativeSignIn(
+      "google",
+      { consent_version: "terms-v1", return_path: "/auth/complete?flow=x" },
+      new AbortController().signal,
+    );
+    expect(started?.clientId).toBe("c");
+    const [url, init] = fetcher.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("/v1/auth/google/native/start");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("same-origin");
+    expect(JSON.parse(String(init.body))).toEqual({
+      action: "authenticate",
+      consent: true,
+      age_attested: true,
+      consent_version: "terms-v1",
+      return_path: "/auth/complete?flow=x",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 503 })),
+    );
+    expect(
+      await startNativeSignIn(
+        "facebook",
+        { consent_version: "v", return_path: "/auth/complete?flow=x" },
+        new AbortController().signal,
+      ),
+    ).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("finishes with a hidden same-origin form post of state and token", () => {
+    const posted: HTMLFormElement[] = [];
+    const submit = vi
+      .spyOn(HTMLFormElement.prototype, "submit")
+      .mockImplementation(function (this: HTMLFormElement) {
+        posted.push(this);
+      });
+    submitNativeSignIn("facebook", "c".repeat(43), "EAAG-token");
+    expect(posted).toHaveLength(1);
+    expect(posted[0].method.toLowerCase()).toBe("post");
+    expect(posted[0].hidden).toBe(true);
+    expect(new URL(posted[0].action).pathname).toBe(
+      "/v1/auth/facebook/native/finish",
+    );
+    expect(Object.fromEntries(new FormData(posted[0]))).toEqual({
+      state: "c".repeat(43),
+      token: "EAAG-token",
+    });
+    posted[0].remove();
+    submit.mockRestore();
+  });
 });

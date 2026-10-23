@@ -109,6 +109,38 @@ def test_the_ledger_reads_a_run_and_the_guard_applies_every_rule(
     assert _code(postgres_harness, "call_data_fast", "staging", "backfill") is None
 
 
+def test_brain4_reads_stop_only_at_their_own_cap(postgres_harness: Engine) -> None:
+    """Owner, 23 Oct 2026 (launch decision 2): Brain 4.0's read is the Report, so the
+    environment's totals and the background switch never stop it; its own cap does."""
+    caps = {"brain4_shadow": 300, "pointer_review": 200}
+    _save(
+        postgres_harness,
+        "production",
+        {"daily_cap_inr": 0, "monthly_cap_inr": 0, "feature_caps_inr": caps},
+    )
+    assert _code(postgres_harness, "pointer_review", "production") == "ai_spend_daily_cap"
+    assert _code(postgres_harness, "brain4_shadow", "production") is None
+    _save(
+        postgres_harness,
+        "production",
+        {"background_enabled": False, "feature_caps_inr": caps},
+    )
+    assert _code(postgres_harness, "pointer_review", "production") == "ai_spend_background_off"
+    assert _code(postgres_harness, "brain4_shadow", "production") is None
+    # A zero cap still turns it off, and the hard rules and the backfill cap still apply.
+    _save(postgres_harness, "production", {"feature_caps_inr": {"brain4_shadow": 0}})
+    assert _code(postgres_harness, "brain4_shadow", "production") == "ai_spend_feature_cap"
+    assert _code(postgres_harness, "brain4_shadow", "development", "backfill") == (
+        "ai_spend_no_backfill_on_development"
+    )
+    _save(postgres_harness, "production", {"feature_caps_inr": caps})
+    assert _code(postgres_harness, "brain4_shadow", "production", "backfill") == (
+        "ai_spend_backfill_cap"
+    )
+    with postgres_harness.connect() as connection, pytest.raises(ValueError):
+        guard.check(connection, "call_report", environment="production")
+
+
 def test_a_saved_document_that_no_longer_validates_falls_back_to_the_defaults(
     postgres_harness: Engine,
 ) -> None:

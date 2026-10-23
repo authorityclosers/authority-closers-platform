@@ -549,6 +549,16 @@
   color: var(--mint);
   font-size: 12px;
 }
+.moreMinutes {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 4px;
+  color: var(--lx-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .disabled {
   pointer-events: none;
   opacity: 0.5;

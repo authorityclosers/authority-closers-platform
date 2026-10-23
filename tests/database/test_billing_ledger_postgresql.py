@@ -49,6 +49,7 @@ from ac_platform.conversation_intelligence.application import (
     ConversationDenied,
 )
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount, MinuteGrant
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 from ac_platform.conversation_intelligence.minute_account_admin import MINUTE_GRANT_ACTION
 from ac_platform.conversation_intelligence.models import ConversationMinuteAccount
 from ac_platform.db.models import model_metadata
@@ -742,9 +743,11 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                 ] == 5_600
             async with sessions() as database, database.begin():
                 acquisition = sessions_for(database, learner, operations)
+                # Over the balance, but over the one call-length limit first (60 min
+                # today); the guests below show the balance refusal.
                 with pytest.raises(ConversationDenied) as denied:
                     await acquisition.reserve(source(5_601), actor=learner.actor)
-                assert str(denied.value) == TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE
+                assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
                 assert len((await legacy_rows(database, learner)).all()) == 1
                 assert (await acquisition.allowance(actor=learner.actor))[
                     "available_seconds"
@@ -764,7 +767,7 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                 assert (await acquisition.allowance(actor=learner.actor))[
                     "available_seconds"
                 ] == 4_400
-            # A plan in effect sets its own per-call limit through the same path.
+            # A plan in effect takes the one call-length limit through the same path.
             async with sessions() as database, database.begin():
                 acquisition = sessions_for(database, learner, operations)
                 projected = await acquisition.ledger.project_person(
@@ -785,9 +788,9 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                     "available_seconds"
                 ] == 2_000 + 90 * 60 * 3
                 with pytest.raises(ConversationDenied) as denied:
-                    await acquisition.reserve(source(90 * 60 + 1), actor=learner.actor)
+                    await acquisition.reserve(source(CALL_LIMIT_SECONDS + 1), actor=learner.actor)
                 assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
-                await acquisition.reserve(source(90 * 60), actor=learner.actor)
+                await acquisition.reserve(source(CALL_LIMIT_SECONDS), actor=learner.actor)
             # Guests take the same limits from the trial policy and write no ledger rows.
             async with sessions() as database, database.begin():
                 acquisition = sessions_for(
@@ -868,7 +871,7 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                 )
                 assert not projected.trial.valid_at(later)
                 assert projected.plan_key is None
-                assert projected.per_call_seconds == 6_000
+                assert projected.per_call_seconds == CALL_LIMIT_SECONDS
                 trial_position = projected.projection.position(TRIAL_LOT_ID)
                 assert trial_position is not None and trial_position.allocated == 120
                 assert due_expiries(projected.projection) == ()
@@ -895,7 +898,7 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                 assert before.trial.seconds == 3_600
                 assert before.trial.expires_at is None
                 assert before.trial.valid_from == first_use
-                assert before.per_call_seconds == 6_000
+                assert before.per_call_seconds == CALL_LIMIT_SECONDS
                 assert before.available_seconds == 3_600 + 600 - 120
                 after = await ledger.project_person(
                     tenant_id=learner.tenant_id,

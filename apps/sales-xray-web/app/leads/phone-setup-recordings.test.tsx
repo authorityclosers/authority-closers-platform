@@ -5,10 +5,18 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { resetBackCloseForTests } from "../ui/back-close";
 import { History } from "./lead-sheet";
 import type { LeadEvent } from "./leads-client";
-import { parseRecorder, parseSetup } from "./native-phone";
-import { lineTodo, PhoneSetupBar } from "./phone-setup";
+import { parseCallLog, parseRecorder, parseSetup } from "./native-phone";
+import {
+  lineTodo,
+  needsAllFiles,
+  needsFolderPick,
+  PhoneSetupBar,
+  setupLines,
+} from "./phone-setup";
 import {
   ALL_FILES_EXPLAINER,
+  CHECK_TODO,
+  FOLDER_TODO,
   HIDDEN_TODO,
   recorderGuide,
 } from "./phone-setup-words";
@@ -132,6 +140,50 @@ it("reads the new setup fields, and an older app sends none", () => {
     needsAllFiles: false,
   });
   expect(lineTodo("recordings", status)).toBe(HIDDEN_TODO);
+});
+
+it("asks the Play build to pick the recordings folder, which then clears it (S8)", () => {
+  const play = parseSetup({
+    ...HYPEROS,
+    allFilesSupported: false,
+    folderPickSupported: true,
+    store: "play",
+  })!;
+  expect(play).toMatchObject({
+    folderPickSupported: true,
+    folderPicked: false,
+  });
+  expect(needsAllFiles(play)).toBe(false);
+  expect(needsFolderPick(play)).toBe(true);
+  expect(lineTodo("recordings", play)).toBe(FOLDER_TODO);
+  const picked = parseSetup({
+    ...HYPEROS,
+    allFilesSupported: false,
+    folderPickSupported: true,
+    folderPicked: true,
+    needsAllFiles: false,
+  })!;
+  expect(needsFolderPick(picked)).toBe(false);
+  expect(lineTodo("recordings", picked)).toBe(CHECK_TODO.recordings);
+  // An older Play build without the picker says nothing it can't do.
+  const older = parseSetup({ ...HYPEROS, allFilesSupported: false })!;
+  expect(needsFolderPick(older)).toBe(false);
+});
+
+it("leaves out work-call logging in the Play build of the app", () => {
+  const play = parseSetup({
+    ...HYPEROS,
+    callLogSupported: false,
+    store: "play",
+  })!;
+  expect(play.store).toBe("play");
+  expect(setupLines(play)).not.toContain("callLog");
+  const direct = parseSetup(HYPEROS)!;
+  expect(direct.store).toBe("direct");
+  expect(setupLines(direct)).toContain("callLog");
+  // The Play build's call-log status says it's unsupported: no logging card.
+  expect(parseCallLog({ on: false, supported: false, sims: [] })).toBeNull();
+  expect(parseCallLog({ on: false, sims: [] })?.on).toBe(false);
 });
 
 it("says the recorder folder is hidden, not empty", () => {

@@ -1,0 +1,136 @@
+/* The preview bar sits above the real screens; ?chrome=0 hides it. */
+.frame *,
+.frame *::before,
+.frame *::after {
+  box-sizing: border-box;
+}
+
+.frame {
+  min-height: 100dvh;
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+}
+
+.bar {
+  position: relative;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+  font-size: 13px;
+}
+
+.badge {
+  padding: 3px 10px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+  font-weight: 700;
+}
+
+.picker select {
+  min-height: 36px;
+  max-width: 100%;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: 10px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+}
+
+.hint {
+  color: var(--sx-muted);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.stand {
+  display: grid;
+  min-height: calc(100dvh - 54px);
+  place-items: center;
+  padding: 24px 16px;
+}
+
+.card {
+  display: grid;
+  width: min(100%, 520px);
+  gap: 12px;
+  padding: 28px 24px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.card h1 {
+  margin: 0;
+  font-size: clamp(22px, 5.6vw, 28px);
+  font-weight: 760;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.card p {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.card .muted {
+  color: var(--sx-muted);
+}
+
+.card .eyebrow {
+  color: var(--sx-accent);
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.actions {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.primary,
+.secondary {
+  min-height: 52px;
+  padding: 0 20px;
+  border: 1px solid transparent;
+  border-radius: var(--sx-radius-pill);
+  font: inherit;
+  font-size: 16px;
+  font-weight: 750;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.secondary {
+  border-color: var(--sx-line);
+  background: transparent;
+  color: var(--sx-ink);
+}
+
+.primary:focus-visible,
+.secondary:focus-visible,
+.picker select:focus-visible {
+  outline: 2px solid transparent;
+  box-shadow: var(--sx-focus-ring);
+}

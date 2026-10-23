@@ -69,9 +69,11 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
-    pids_limit: 64
+    # provider_consumers (service.json) runs up to 8 provider stages at once;
+    # each starts one bounded provider child (launch capacity, 23 Oct 2026).
+    pids_limit: 192
     cpus: 1.0
-    mem_limit: 768m
+    mem_limit: 1536m
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m,uid=10001,gid=10001,mode=0700
     volumes:

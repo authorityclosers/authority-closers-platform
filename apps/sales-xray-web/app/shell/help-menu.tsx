@@ -3,6 +3,7 @@
 import { useRef, type KeyboardEvent } from "react";
 
 import styles from "./help-menu.module.css";
+import { CALL_LIMIT_MINUTES } from "../call-limit";
 
 /** The former "Need help?" card and footer links, behind one compact control. */
 export function HelpMenu() {
@@ -26,7 +27,9 @@ export function HelpMenu() {
       <div className={styles.popover}>
         <p className={styles.title}>Help</p>
         <ul className={styles.tips}>
-          <li>Choose a audio or video file up to 100 MB.</li>
+          <li>
+            {`Choose an audio or video file up to 100 MB and ${CALL_LIMIT_MINUTES} minutes long.`}
+          </li>
           <li>Review the language and privacy details before analysis.</li>
           <li>Open saved calls to revisit completed reports.</li>
         </ul>

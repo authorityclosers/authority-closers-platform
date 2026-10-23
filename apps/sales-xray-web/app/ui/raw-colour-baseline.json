@@ -1,11 +1,11 @@
 {
   "account-profile.module.css": 25,
-  "account-view.module.css": 4,
+  "account-view.module.css": 3,
   "acquisition-dashboard-panels.module.css": 71,
   "acquisition-studio.module.css": 110,
   "call-audio-dock.module.css": 1,
   "call-record.module.css": 32,
-  "plans/plans.module.css": 30,
+  "plans/plans.module.css": 29,
   "policy-pages.module.css": 20,
   "pricing-catalogue.module.css": 11,
   "prospects/prospects.module.css": 2,

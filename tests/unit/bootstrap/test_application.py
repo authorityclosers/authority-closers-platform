@@ -348,6 +348,11 @@ async def test_new_production_session_uses_sole_active_tenant() -> None:
         def __init__(self) -> None:
             self.session: StoredSession | None = None
 
+        async def find_open_deletion_request(self, person_id: UUID) -> None:
+            # No deletion asked for: the account is open (Delete account closes it).
+            assert person_id == PERSON_ID
+            return None
+
         async def get_sole_active_tenant_id(self, person_id: UUID) -> UUID:
             assert person_id == PERSON_ID
             return tenant_id
@@ -378,6 +383,11 @@ async def test_new_production_session_stays_unscoped_without_sole_active_tenant(
     class Repository:
         def __init__(self) -> None:
             self.session: StoredSession | None = None
+
+        async def find_open_deletion_request(self, person_id: UUID) -> None:
+            # No deletion asked for: the account is open (Delete account closes it).
+            assert person_id == PERSON_ID
+            return None
 
         async def get_sole_active_tenant_id(self, person_id: UUID) -> None:
             assert person_id == PERSON_ID

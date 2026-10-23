@@ -992,6 +992,7 @@ a.rowTitle:focus-visible::after {
 
 .inline {
   display: inline-flex;
+  box-sizing: border-box;
   align-items: center;
   gap: 6px;
   max-width: 100%;

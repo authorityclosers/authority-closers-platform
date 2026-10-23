@@ -186,7 +186,7 @@ export function MessageSheet({
         <p className={styles.hint}>
           It opens in your own{" "}
           {channel === "whatsapp" ? "WhatsApp" : "Messages"} app with the text
-          ready. Sales Xray notes that you sent it, not what it said.
+          ready. Sales X-Ray notes that you sent it, not what it said.
         </p>
       </div>
     </ActionSheet>

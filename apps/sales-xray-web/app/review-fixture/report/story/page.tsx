@@ -10,7 +10,8 @@ import { StoryShellPreview } from "./preview";
  * fictional Amit call through the real data mapping, and `?example=api` the
  * same call with a saved AI pointer review, exactly as the API sends it;
  * `?example=coach` adds a fictional Brain 4.0 read on Brain 4.0 beta settings
- * (the AI coaching score).
+ * (the AI coaching score). `&clean=1` hides the development labels for
+ * tutorial recordings; the call stays fictional.
  */
 export default async function Page({
   searchParams,
@@ -18,15 +19,19 @@ export default async function Page({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   if (process.env.NODE_ENV !== "development") notFound();
-  const { example } = await searchParams;
-  if (example === "api") return <StoryShellPreview key="api" apiStructure />;
+  const { example, clean } = await searchParams;
+  const plain = clean === "1";
+  if (example === "api")
+    return <StoryShellPreview key="api" apiStructure clean={plain} />;
   if (example === "coach")
-    return <StoryShellPreview key="coach" apiStructure coach />;
+    return <StoryShellPreview key="coach" apiStructure coach clean={plain} />;
   const kind =
     example === "none"
       ? null
       : EXAMPLE_KINDS.includes(example as OutcomeKind)
         ? (example as OutcomeKind)
         : "follow_up";
-  return <StoryShellPreview key={kind ?? "none"} example={kind} />;
+  return (
+    <StoryShellPreview key={kind ?? "none"} example={kind} clean={plain} />
+  );
 }

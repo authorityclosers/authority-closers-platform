@@ -84,6 +84,28 @@ describe("the story so far", () => {
     expect(lines.some((line) => line.startsWith("Last"))).toBe(false);
   });
 
+  it("counts a call the phone logged from its dialler, as the question above it does", () => {
+    const lines = storyLines(
+      detail(
+        [
+          {
+            kind: "call",
+            via: "phone",
+            direction: "outgoing",
+            connected: true,
+            duration_seconds: 82,
+            at: new Date(2026, 9, 22, 17, 58).toISOString(),
+          },
+        ],
+        0,
+      ),
+      NOW,
+    );
+    expect(lines).not.toContain("Not called yet.");
+    expect(lines[1]).toBe("Tried 1 time, talked once.");
+    expect(lines[2]).toMatch(/^Last talk .+: 1 min 22 s on the phone\.$/);
+  });
+
   it("names the history's days", () => {
     expect(dayLabel(new Date(2026, 9, 22, 9).toISOString(), NOW)).toBe("Today");
     expect(dayLabel(new Date(2026, 9, 21, 9).toISOString(), NOW)).toBe(

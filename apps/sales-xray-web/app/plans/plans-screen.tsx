@@ -27,6 +27,7 @@ import { CheckoutDrawer } from "./checkout-drawer";
 import type { Buyer } from "../billing/billing-api";
 import { AnimatedCountUp } from "./animated-count-up";
 import styles from "./plans.module.css";
+import { callLimitMinutes } from "../call-limit";
 
 export type PlanSelection = {
   planKey: string;
@@ -44,6 +45,9 @@ export type PurchaseQuote = {
 };
 
 export type TopUpPack = DisplayTopUpPack;
+
+const ENTERPRISE_CONTACT =
+  "mailto:admin@authorityclosers.com?subject=Sales%20X-Ray%20Enterprise";
 
 function minimumSeats(plan: Plan) {
   if (plan.key === "organisation") return Math.max(2, plan.seatMin ?? 2);
@@ -342,6 +346,8 @@ export function PlansScreen({
                   itemSubtotal === null ? null : itemSubtotal + (itemGst ?? 0);
                 const current = mePlan?.plan.key === item.key;
                 const available = onSale(item) && price !== null;
+                // Enterprise is "talk to us" until it is on sale (owner, 30 Sep 2026).
+                const talkToUs = isEnterprise && !available;
                 const isSelected = selectedPlanKey === item.key;
                 const isMobileActive = mobileTab === item.key;
 
@@ -405,17 +411,27 @@ export function PlansScreen({
 
                     <div className={styles.priceBlock}>
                       <p className={styles.price}>
-                        {price === null ? "Price unavailable" : money(price)}
+                        {talkToUs
+                          ? "Custom"
+                          : price === null
+                            ? "Price unavailable"
+                            : money(price)}
                       </p>
                       <span className={styles.priceSub}>
-                        {team ? "per seat / " : "/ "}
-                        {interval === "month" ? "month" : "year"} ·{" "}
-                        {team ? "+ 18% GST" : "GST included"}
+                        {talkToUs ? (
+                          "50+ seats · priced for your team"
+                        ) : (
+                          <>
+                            {team ? "per seat / " : "/ "}
+                            {interval === "month" ? "month" : "year"} ·{" "}
+                            {team ? "+ 18% GST" : "GST included"}
+                          </>
+                        )}
                       </span>
                     </div>
 
                     {/* Seat Stepper for Organisation & Enterprise */}
-                    {team ? (
+                    {team && !talkToUs ? (
                       <div className={styles.seatsArea}>
                         <div className={styles.seatsHeader}>
                           <span className={styles.seatsLabel}>
@@ -484,8 +500,9 @@ export function PlansScreen({
                             aria-hidden="true"
                           />
                           <span>
-                            {count(item.includedMinutes * (team ? number : 1))}{" "}
-                            {team ? "pooled " : ""}analysis minutes / mo
+                            {talkToUs
+                              ? `${count(item.includedMinutes)} pooled analysis minutes per seat / mo`
+                              : `${count(item.includedMinutes * (team ? number : 1))} ${team ? "pooled " : ""}analysis minutes / mo`}
                           </span>
                         </li>
                       ) : null}
@@ -498,7 +515,9 @@ export function PlansScreen({
                             aria-hidden="true"
                           />
                           <span>
-                            Calls up to {item.longestCallMinutes} minutes long
+                            {/* One text node: Android's accessibility tree drops a
+                                lone " ", and TalkBack read "up to60". */}
+                            {`Calls up to ${callLimitMinutes(item.longestCallMinutes)} minutes long`}
                           </span>
                         </li>
                       ) : null}
@@ -547,19 +566,29 @@ export function PlansScreen({
                       )}
                     </ul>
 
-                    <button
-                      type="button"
-                      className={styles.planActionBtn}
-                      data-primary={!current || undefined}
-                      disabled={busy || current || !available}
-                      onClick={() => choosePlan(item.key)}
-                    >
-                      {current
-                        ? "Current plan"
-                        : !available
-                          ? "Unavailable"
-                          : `Get ${item.name}`}
-                    </button>
+                    {talkToUs ? (
+                      <a
+                        className={styles.planActionBtn}
+                        data-primary
+                        href={ENTERPRISE_CONTACT}
+                      >
+                        Talk to us
+                      </a>
+                    ) : (
+                      <button
+                        type="button"
+                        className={styles.planActionBtn}
+                        data-primary={!current || undefined}
+                        disabled={busy || current || !available}
+                        onClick={() => choosePlan(item.key)}
+                      >
+                        {current
+                          ? "Current plan"
+                          : !available
+                            ? "Unavailable"
+                            : `Get ${item.name}`}
+                      </button>
+                    )}
                   </article>
                 );
               })}

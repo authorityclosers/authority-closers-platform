@@ -29,11 +29,11 @@ const TITLES: Record<PolicySlug, string> = {
 const UPDATED: Record<PolicySlug, [string, string]> = {
   pricing: ["2026-10-03", "3 October 2026"],
   terms: ["2026-10-03", "3 October 2026"],
-  privacy: ["2026-10-21", "21 October 2026"],
+  privacy: ["2026-10-24", "24 October 2026"],
   refunds: ["2026-10-16", "16 October 2026"],
   delivery: ["2026-10-03", "3 October 2026"],
   contact: ["2026-10-16", "16 October 2026"],
-  "data-deletion": ["2026-10-20", "20 October 2026"],
+  "data-deletion": ["2026-10-23", "23 October 2026"],
 };
 
 type Section = {
@@ -47,22 +47,29 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "How to ask",
       paragraphs: [
-        'Email admin@authorityclosers.com from the email address your data is linked to, with the subject "Delete my data". Say what you want deleted: your whole account, particular recordings or reports, or a lead.',
-        "If you have a Sales Xray account, you can also ask for a recording or report to be deleted from inside your account.",
+        "In Sales X-Ray, open Settings, then Security, then Delete account, and type DELETE to confirm. Your account closes at once, you are signed out on every device, and we email you to confirm.",
+        'Or email admin@authorityclosers.com from the email address your data is linked to, with the subject "Delete my data". Say what you want deleted: your whole account, particular recordings or reports, or a lead.',
+        "If you have a Sales X-Ray account, you can also ask for a recording or report to be deleted from inside your account.",
+      ],
+    },
+    {
+      title: "If you own an organisation",
+      paragraphs: [
+        "If your organisation has other members, make one of them the owner first (Organisation, then Members), so your team keeps its workspace. An organisation you are the only member of closes with your account.",
       ],
     },
     {
       title: "Leads from Facebook or Instagram forms",
       paragraphs: [
-        "Businesses that use Sales Xray can receive the answers you give in their Facebook or Instagram lead forms, such as your name, phone number and email address. That business decides how it uses your details, so you can also ask it directly.",
-        "To have such a lead deleted from Sales Xray, email us the phone number or email address you entered in the form. We delete the lead and tell the business that we have.",
+        "Businesses that use Sales X-Ray can receive the answers you give in their Facebook or Instagram lead forms, such as your name, phone number and email address. That business decides how it uses your details, so you can also ask it directly.",
+        "To have such a lead deleted from Sales X-Ray, email us the phone number or email address you entered in the form. We delete the lead and tell the business that we have.",
       ],
     },
     {
       title: "Businesses that connected a Facebook Page",
       paragraphs: [
-        "In Sales Xray, open Leads, then Sources, and disconnect the Page. New leads stop arriving at once.",
-        "To remove Sales Xray's access at Meta as well, open Facebook Settings, then Business integrations, and remove Sales Xray Leads.",
+        "In Sales X-Ray, open Leads, then Sources, and disconnect the Page. New leads stop arriving at once.",
+        "To remove Sales X-Ray's access at Meta as well, open Facebook Settings, then Business integrations, and remove Sales Xray Leads.",
         "To delete the leads already received, or the stored connection to your Page, email us.",
       ],
     },
@@ -70,7 +77,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
       title: "If you signed in with Facebook",
       paragraphs: [
         "We keep only your Facebook person id and the name and email Facebook shared, to sign you in. Ask for your account to be deleted as above and they go with it.",
-        "To remove Sales Xray at Facebook too, open Facebook Settings, then Apps and websites, and remove Sales Xray Sign-in.",
+        "To remove Sales X-Ray at Facebook too, open Facebook Settings, then Apps and websites, and remove Sales Xray Sign-in.",
       ],
     },
     {
@@ -85,7 +92,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "When",
       paragraphs: [
-        "We confirm that we received your request as soon as it arrives, and complete the deletion within 2 days.",
+        "We confirm that we received your request as soon as it arrives, and complete the deletion within 2 days. If you change your mind, write to us before then.",
       ],
     },
     {
@@ -105,9 +112,9 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "Online service",
       paragraphs: [
-        "Sales Xray is an online software service. Nothing is shipped.",
+        "Sales X-Ray is an online software service. Nothing is shipped.",
         "Your plan and analysis minutes are added to your account after our server receives payment confirmation from Razorpay.",
-        "You use the service in your browser at the Sales Xray website. Reports are delivered in your account, and you can download them where your plan allows.",
+        "You use the service in your browser at the Sales X-Ray website. Reports are delivered in your account, and you can download them where your plan allows.",
         "If your plan minutes do not appear after a successful payment, email us with your order number so we can investigate.",
       ],
     },
@@ -161,13 +168,13 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "1. Who we are",
       paragraphs: [
-        'Sales Xray is provided by Vikriya Solutions LLP, trading as Estate Autopilots, Pune, India ("we"). By creating an account or paying for a plan, you agree to these terms.',
+        'Sales X-Ray is provided by Vikriya Solutions LLP, trading as Estate Autopilots, Pune, India ("we"). By creating an account or paying for a plan, you agree to these terms.',
       ],
     },
     {
       title: "2. The service",
       paragraphs: [
-        "Sales Xray analyses sales-call recordings that you upload and produces written reports and coaching suggestions. Reports use automated analysis and may contain mistakes. Use them as guidance, not as the only basis for employment, legal or financial decisions.",
+        "Sales X-Ray analyses sales-call recordings that you upload and produces written reports and coaching suggestions. Reports use automated analysis and may contain mistakes. Use them as guidance, not as the only basis for employment, legal or financial decisions.",
       ],
     },
     {
@@ -192,10 +199,10 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
       title: "6. Plans and payment",
       bullets: [
         "Plan prices, billing intervals, and included details are shown in the current catalogue and at checkout. Review the amount shown before you confirm payment.",
-        "Monthly and yearly subscriptions continue under the payment authorization and provider rules for the selected plan. A later charge may require approval from your bank or payment method. We do not promise a separate Sales Xray reminder before each renewal.",
+        "Monthly and yearly subscriptions continue under the payment authorization and provider rules for the selected plan. A later charge may require approval from your bank or payment method. We do not promise a separate Sales X-Ray reminder before each renewal.",
         "You can cancel at any time to stop the next renewal. Your current paid period remains active until it ends.",
         "Usage is based on the duration processed for each analysed recording. Minutes expire or roll over as shown in the plan details.",
-        "Plan payments use Razorpay hosted checkout. Razorpay handles payment credentials entered there. Sales Xray receives payment status and transaction references needed to provide the service, not complete card credentials.",
+        "Plan payments use Razorpay hosted checkout. Razorpay handles payment credentials entered there. Sales X-Ray receives payment status and transaction references needed to provide the service, not complete card credentials.",
       ],
     },
     {
@@ -205,7 +212,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "8. Your content",
       paragraphs: [
-        "You own your recordings and reports. We use them to provide the service for the retention period shown in the applicable plan and processing notice. You may request deletion from your account. A deletion request queues removal from active Sales Xray stores. Audit records remain, and this process does not delete backups or provider-held copies; separate retention periods for those copies are not stated here.",
+        "You own your recordings and reports. We use them to provide the service for the retention period shown in the applicable plan and processing notice. You may request deletion from your account. A deletion request queues removal from active Sales X-Ray stores. Audit records remain, and this process does not delete backups or provider-held copies; separate retention periods for those copies are not stated here.",
       ],
     },
     {
@@ -243,7 +250,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "Who is responsible",
       paragraphs: [
-        "Sales Xray is a product of Authority Closers. Subscriptions are sold and invoiced by Vikriya Solutions LLP, trading as Estate Autopilots, Pune. Contact: admin@authorityclosers.com.",
+        "Sales X-Ray is a product of Authority Closers. Subscriptions are sold and invoiced by Vikriya Solutions LLP, trading as Estate Autopilots, Pune. Contact: admin@authorityclosers.com.",
       ],
     },
     {
@@ -253,8 +260,9 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "Your recordings, transcripts, and reports.",
         "Usage and billing records, including plan, minutes, and orders.",
         "If you use Google sign-in, the Google account identifier and basic profile information needed to authenticate or link your identity. We do not receive your Google password. We keep your first and last name, language setting, Google Workspace email domain when supplied, and a small copy of your Google profile photo.",
-        "Razorpay processes payment credentials entered in its hosted checkout. Sales Xray receives payment status and transaction references, not complete card credentials.",
-        "If a business connects its WhatsApp number, Facebook Page or Instagram account to Sales Xray: the messages people send that business there, and the business's replies.",
+        "Razorpay processes payment credentials entered in its hosted checkout. Sales X-Ray receives payment status and transaction references, not complete card credentials.",
+        "If a business connects its WhatsApp number, Facebook Page or Instagram account to Sales X-Ray: the messages people send that business there, and the business's replies.",
+        "How you use the app and how fast it responds: screens, taps, response times, errors, page speed, the app version and the type of device and network. See Usage analytics, below.",
       ],
     },
     {
@@ -263,16 +271,26 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "To provide analysis and reports.",
         "To run your account, plan, and billing.",
         "To keep the service secure.",
+        "To make Sales X-Ray faster, easier to use and cheaper to run (usage analytics).",
         "To meet legal and tax duties.",
       ],
     },
     {
       title: "Who we share with",
       bullets: [
-        "Hosting and analysis service providers needed to operate Sales Xray. Before an analysis starts, the processing plan shows the analysis provider and purpose and asks you to accept that processing.",
+        "Hosting and analysis service providers needed to operate Sales X-Ray. Before an analysis starts, the processing plan shows the analysis provider and purpose and asks you to accept that processing.",
         "Razorpay for payments made through its hosted checkout.",
         "Google (the Gemini API, provided by Google LLC), to draft replies to messages, only for a business that switches on AI replies. See AI replies to messages, below.",
-        "Sales Xray does not use your recordings or reports to target advertising.",
+        "Sales X-Ray does not use your recordings or reports to target advertising.",
+      ],
+    },
+    {
+      // The notice's words, version sx-product-analytics-2026-10-24-v1 (telemetry/sales_xray.py
+      // NOTICES; a test pins them). New words are a new version there.
+      title: "Usage analytics",
+      paragraphs: [
+        "Sales X-Ray records how its app is used and how fast it responds, to make it faster, easier to use and cheaper to run. It records the screens and report sections you open and for how long, taps and how quickly the app responds to them, errors, page speed, the app version and the type of device and network. It never records call content, transcripts, lead names, phone numbers or email addresses. Records are kept for 180 days and are never used to score you or to set your access, payments or plan.",
+        "This is on in every workspace unless it is turned off. You can turn it off for yourself at any time in Settings, Privacy; an owner or admin can turn it off for the whole workspace there. Sandbox workspaces never record it.",
       ],
     },
     {
@@ -280,7 +298,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
       bullets: [
         "ElevenLabs (its Scribe speech-to-text API): the call audio, to transcribe the call. ElevenLabs keeps the data under its published API terms.",
         "Google (the Gemini API, provided by Google LLC): the call transcript, to prepare and score your coaching report. Under Google's paid Gemini API terms, the data is not used to train Google's models.",
-        "OpenAI (the OpenAI API, provided by OpenAI, L.L.C., USA): the call transcript as text, never the audio, to prepare and score your coaching report. Data sent to the OpenAI API is not used to train OpenAI's models. Sales Xray asks OpenAI not to store its answers. OpenAI keeps API data in its abuse-monitoring logs for up to 30 days, or longer only where the law requires; once OpenAI grants zero data retention for Sales Xray, it keeps none there.",
+        "OpenAI (the OpenAI API, provided by OpenAI, L.L.C., USA): the call transcript as text, never the audio, to prepare and score your coaching report. Data sent to the OpenAI API is not used to train OpenAI's models. Sales X-Ray asks OpenAI not to store its answers. OpenAI keeps API data in its abuse-monitoring logs for up to 30 days, or longer only where the law requires; once OpenAI grants zero data retention for Sales X-Ray, it keeps none there.",
       ],
       paragraphs: [
         "Before an analysis starts, the upload terms for that call name which of these providers will process it, and you accept that processing. These providers may process the data outside India.",
@@ -289,15 +307,15 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
     {
       title: "AI replies to messages",
       paragraphs: [
-        "A business that uses Sales Xray can switch on AI replies for the messages people send it on WhatsApp, Messenger or Instagram. To draft a reply, Sales Xray then sends Google (the Gemini API, provided by Google LLC) the business's own description of itself and the words of up to the last 10 messages in that one conversation. If the person did not come from a Facebook or Instagram lead form, their first name is sent too.",
-        "Sales Xray does not send Google the answers given in Facebook or Instagram lead forms, or the phone number or email address saved with a lead.",
+        "A business that uses Sales X-Ray can switch on AI replies for the messages people send it on WhatsApp, Messenger or Instagram. To draft a reply, Sales X-Ray then sends Google (the Gemini API, provided by Google LLC) the business's own description of itself and the words of up to the last 10 messages in that one conversation. If the person did not come from a Facebook or Instagram lead form, their first name is sent too.",
+        "Sales X-Ray does not send Google the answers given in Facebook or Instagram lead forms, or the phone number or email address saved with a lead.",
         "The business chooses whether a person at the business reads each draft before it is sent, or whether replies are sent automatically. AI replies answer only about the business, hand the conversation to a person on complaints, on anything they cannot answer from the business's own description, or when you ask for a person, and stop when you reply STOP.",
       ],
     },
     {
       title: "How long we keep it",
       paragraphs: [
-        "The plan and accepted processing plan show the retention period for recordings and reports. You may request deletion from your account. A deletion request queues removal from active Sales Xray stores. Audit records remain. This deletion path does not delete backups or provider-held copies; their separate retention periods are not stated here. Transaction and audit records may remain after account closure.",
+        "The plan and accepted processing plan show the retention period for recordings and reports. You may request deletion from your account. A deletion request queues removal from active Sales X-Ray stores. Audit records remain. This deletion path does not delete backups or provider-held copies; their separate retention periods are not stated here. Transaction and audit records may remain after account closure.",
       ],
     },
     {
@@ -374,9 +392,9 @@ function ContactDetails() {
   return (
     <div className={styles.sections}>
       <section className={styles.section}>
-        <h2>Sales Xray and seller</h2>
+        <h2>Sales X-Ray and seller</h2>
         <p>
-          Sales Xray is a product of Authority Closers. Subscriptions are sold
+          Sales X-Ray is a product of Authority Closers. Subscriptions are sold
           and invoiced by Vikriya Solutions LLP, trading as Estate Autopilots.
         </p>
         <dl className={styles.details}>
@@ -425,11 +443,11 @@ export function PolicyPage({
     <main className={styles.page} data-policy-page={slug}>
       <header className={styles.top}>
         <Link className={styles.brand} href="/">
-          Sales Xray
+          Sales X-Ray
         </Link>
       </header>
       <article className={styles.content}>
-        <p className={styles.eyebrow}>Sales Xray</p>
+        <p className={styles.eyebrow}>Sales X-Ray</p>
         <h1>{TITLES[slug]}</h1>
         <p className={styles.updated}>
           Last updated{" "}

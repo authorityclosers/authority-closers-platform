@@ -126,7 +126,7 @@ export function AccountNavigation({ compact = false }: { compact?: boolean }) {
 
   if (access?.authenticated === true)
     return (
-      <nav className={className} aria-label="Sales Xray account navigation">
+      <nav className={className} aria-label="Sales X-Ray account navigation">
         <Link href="/analysis/calls" className="account-nav-link">
           Saved calls
         </Link>
@@ -149,7 +149,7 @@ export function AccountNavigation({ compact = false }: { compact?: boolean }) {
 
   if (access?.authenticated === false)
     return (
-      <nav className={className} aria-label="Sales Xray account navigation">
+      <nav className={className} aria-label="Sales X-Ray account navigation">
         <Link href="/login" className="account-nav-link">
           My AC account <ArrowRight size={15} aria-hidden="true" />
         </Link>

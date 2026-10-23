@@ -70,6 +70,12 @@ it("names each page's first reads, exactly as the page asks for them", () => {
     `/v1/organisation/members/${person.toLowerCase()}/activity?weeks=${PERSON_WEEKS}`,
   ]);
   expect(earlyReadsFor("/organisation/people/someone")).toEqual([]);
+  // Leads: the session, then To call's desk.
+  expect(earlyReadsFor("/leads")).toEqual([
+    "/v1/me/workspaces",
+    "/v1/me/sales-xray-workspaces",
+    "/v1/lead-desk",
+  ]);
   // Public pages and unknown addresses start nothing.
   expect(earlyReadsFor("/pricing")).toEqual([]);
   expect(earlyReadsFor("/analysis/calls/not-a-call")).toEqual([]);
@@ -125,7 +131,7 @@ it("keeps the server's headers on the answer it hands out", async () => {
   expect(await response.json()).toEqual({ ok: true });
 });
 
-it("starts only the session reads until this tab has seen Sales Xray on", () => {
+it("starts only the session reads until this tab has seen Sales X-Ray on", () => {
   boot("/dashboard", false);
   expect(network.mock.calls.map(([url]) => url)).toEqual([
     "/v1/me/workspaces",

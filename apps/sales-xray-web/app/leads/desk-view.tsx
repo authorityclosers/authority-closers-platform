@@ -67,6 +67,19 @@ export function dueNow(desk: Pick<Desk, "queue">): number {
   ).length;
 }
 
+/**
+ * Leads to call now, each once: those who called and weren't reached (Call back), and
+ * those due now. The To call tab and the app's badge say this one number (Redmi, 23 Oct
+ * 2026: the tab said 0 over a Call back row; the server's badge counts the same).
+ */
+export function toCallNow(desk: Pick<Desk, "queue" | "call_back">): number {
+  const leads = new Set((desk.call_back ?? []).map((row) => row.lead_id));
+  for (const row of desk.queue)
+    if (row.overdue || !["later", "open", "closed"].includes(row.why_kind))
+      leads.add(row.lead_id);
+  return leads.size;
+}
+
 /** Where the lead came from, as a seller would say it. */
 export function sourceText(
   row: Pick<LeadRow, "source" | "source_label">,
@@ -261,7 +274,7 @@ function Sections({
   onOpen: (leadId: string) => void;
   actions: RowActions;
 }) {
-  const sections = deskSections(desk.queue);
+  const sections = deskSections(desk.queue, desk.call_back ?? []);
   return (
     <div className={styles.sections}>
       {sections.map((section) => (

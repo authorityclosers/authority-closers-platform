@@ -23,6 +23,7 @@ import {
   withInterval,
   type Blind,
   type Checkpoint,
+  type ReportReview,
   type Sample,
 } from "./brain4-data";
 
@@ -162,7 +163,7 @@ function SamplePanel({ sample }: { sample: Sample }) {
   return (
     <Panel
       title={`Checkpoint ${sample.name} · ${sample.chosen} of ${sample.total} calls chosen`}
-      sub={`${sample.mode === "brain4_blind" ? "Blind Brain 4.0 rating" : "Line review"} · up to ${sample.daily} a day · ${sample.workspaces === "company" ? "our own workspaces" : "every workspace"}${sample.minutes ? ` · ${sample.minutes[0]}–${sample.minutes[1]} min` : ""} · ${sample.salespeople} salespeople so far`}
+      sub={`${sample.mode === "brain4_blind" ? "Blind Brain 4.0 rating" : sample.mode === "report" ? "Report review" : "Line review"} · up to ${sample.daily} a day · ${sample.workspaces === "company" ? "our own workspaces" : "every workspace"}${sample.minutes ? ` · ${sample.minutes[0]}–${sample.minutes[1]} min` : ""} · ${sample.salespeople} salespeople so far`}
     >
       <Table label="Checkpoint sample">
         <thead>
@@ -188,6 +189,87 @@ function SamplePanel({ sample }: { sample: Sample }) {
           ))}
         </tbody>
       </Table>
+    </Panel>
+  );
+}
+
+const REVIEW_HOW =
+  "In Report review the coaching lead checks every item of a call's Report: the AI " +
+  "coaching score's skills, the overview, the outcome, the buyer, and any section the " +
+  "Report adds later. Each is agreed, disagreed, or fixed with the right rating or words. " +
+  "Accepted: the share he agreed with; intervals resample whole calls. Rating moved: how " +
+  "far his fixed ratings sit from the AI's, on 1-5. Each review keeps the Report schema " +
+  "and the engine route that wrote the item.";
+
+function ReviewRows({
+  rows,
+  section,
+}: {
+  rows: ReportReview["by_module"];
+  section: boolean;
+}) {
+  return (
+    <Table
+      label={section ? "Report review by section" : "Report review by module"}
+    >
+      <thead>
+        <tr>
+          <th scope="col">{section ? "Section" : "Engine module"}</th>
+          {section ? <th scope="col">Engine module</th> : null}
+          <th scope="col" data-num="">
+            Calls · items
+          </th>
+          <th scope="col" data-num="">
+            Agree
+          </th>
+          <th scope="col" data-num="">
+            Disagree
+          </th>
+          <th scope="col" data-num="">
+            Fix
+          </th>
+          <th scope="col">Accepted</th>
+          <th scope="col" data-num="">
+            Rating moved
+          </th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.key.join("/")}>
+            <th scope="row">{row.names[0] ?? row.key[0]}</th>
+            {section ? <td>{row.names[1] ?? row.key[1]}</td> : null}
+            <td data-num="">
+              {row.calls} · {row.labels}
+            </td>
+            <td data-num="">{row.agree}</td>
+            <td data-num="">{row.disagree}</td>
+            <td data-num="">{row.fix}</td>
+            <td>{withInterval(row.agree_rate, row.agree_ci)}</td>
+            <td data-num="">{decimal(row.rating_moved)}</td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+}
+
+/** Report review: every Report item agreed, disagreed or fixed, per section and module. */
+function ReviewPanel({ review }: { review: ReportReview }) {
+  return (
+    <Panel
+      title="Report review"
+      sub={`${review.calls} calls · ${review.items} items judged · ${review.skipped} skipped`}
+      tools={<Why detail={REVIEW_HOW} />}
+    >
+      {review.items ? (
+        <>
+          <ReviewRows rows={review.by_module} section={false} />
+          <ReviewRows rows={review.by_section} section />
+        </>
+      ) : (
+        <p>No Report items reviewed yet.</p>
+      )}
     </Panel>
   );
 }
@@ -360,6 +442,7 @@ export default async function Brain4EvaluationPage() {
             </Panel>
           ) : null}
           {data.sample ? <SamplePanel sample={data.sample} /> : null}
+          <ReviewPanel review={data.review} />
           <BlindPanel blind={data.blind} />
           <Panel
             title="By dimension"

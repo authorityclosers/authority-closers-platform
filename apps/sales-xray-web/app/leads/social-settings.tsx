@@ -400,7 +400,7 @@ export function SocialSettings() {
         logo={LOGO}
         title={TITLE}
         status={<StatusPill>Coming soon</StatusPill>}
-        summary="Messages to your Facebook Page and Instagram will arrive in Chats. Sales Xray is finishing this with Meta."
+        summary="Messages to your Facebook Page and Instagram will arrive in Chats. Sales X-Ray is finishing this with Meta."
       />
     );
 

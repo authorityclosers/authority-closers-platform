@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+# Upload one day's tutorial outputs to the AC Google Drive (admin@ My Drive, not shared publicly) and print the
+# folder links. Needs a sudo-capable operator on ac: the rclone config holding the Drive token is root-only.
+# Usage: scripts/tutorials/upload-to-drive [YYYY-MM-DD]
+set -euo pipefail
+DAY="${1:-$(date +%F)}"
+SRC="${SXTUT_OUT:-/home/acdev/sx-tutorials}/$DAY"
+DEST="acdrive:Sales X-Ray Tutorials/$DAY"
+R=(sudo -n rclone --config /root/ac-drive/rclone.conf)
+for part in "A-narrated:A Narrated videos" "B-voiceover-kit:B Voice-over kit" "C-editor-pack:C Editor pack"; do
+  src="${part%%:*}" dst="${part#*:}"
+  sudo -n test -d "$SRC/$src" || continue  # outputs live under acdev, readable through sudo
+  nice -n 19 ionice -c3 "${R[@]}" copy "$SRC/$src" "$DEST/$dst" --transfers 2 --exclude "*.part" --exclude "*.key" 2>&1 | grep -v client_id || true
+done
+"${R[@]}" lsjson "$DEST" --dirs-only 2>/dev/null | python3 -c '
+import json, sys
+for f in json.load(sys.stdin):
+    print(f["Name"], "https://drive.google.com/drive/folders/" + f["ID"])'

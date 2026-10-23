@@ -1584,6 +1584,12 @@
   .panelSearch {
     height: auto;
   }
+
+  /* Icon only (below 1100 px) it is round like its neighbours (shell
+     sweep, 23 Oct 2026); with its words the label sets the width. */
+  .newAnalysisButton {
+    min-width: var(--lx-row-min-h, 44px);
+  }
 }
 @keyframes edge-in {
   from {
@@ -1765,10 +1771,15 @@
   gap: 3px;
 }
 
+/* A long organisation name stays on its line instead of pushing the title
+   down (shell sweep, 23 Oct 2026). */
 .mobileWorkspace small {
+  overflow: hidden;
   color: var(--lx-muted);
   font-size: 12px;
   font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .mobileWorkspace b {
@@ -2076,8 +2087,31 @@
     .panelHeader {
     order: 1;
     box-sizing: border-box;
+    gap: 2px;
     margin: 0;
     padding: 12px 12px 10px;
+  }
+
+  /* Drawn at 28 px so the name has the room; on a touch screen an unseen
+     edge makes the target 44 px. */
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .collapseBtn {
+    position: relative;
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+  }
+
+  @media (pointer: coarse) {
+    :global(html:not([data-sx-sidebar="collapsed"]))
+      .shell:not(.collapsed)
+      .collapseBtn::before {
+      position: absolute;
+      inset: -8px;
+      content: "";
+    }
   }
 
   :global(html:not([data-sx-sidebar="collapsed"]))
@@ -2133,6 +2167,7 @@
   :global(html:not([data-sx-sidebar="collapsed"]))
     .shell:not(.collapsed)
     .stripBtn {
+    box-sizing: border-box;
     width: 100%;
     height: 36px;
     justify-content: flex-start;
@@ -2239,8 +2274,8 @@
 }
 
 /* All leads under Leads (owner, 23 Oct 2026: "All leads one tap from
-   anywhere"): a second line in the open sidebar, its words lined up with the
-   places' names; the 64 px rail leaves it out. */
+   anywhere"): a second line in the open sidebar, its icon under Leads' name
+   like a tree; the 64 px rail leaves it out. */
 .stripSub {
   display: none;
 }
@@ -2251,6 +2286,7 @@
     .stripSub {
     display: flex;
     height: 32px;
+    gap: 8px;
     padding-inline-start: 40px;
     color: var(--sx-muted);
     font-size: var(--sx-text-sm);

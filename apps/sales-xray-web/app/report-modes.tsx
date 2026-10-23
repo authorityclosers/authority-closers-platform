@@ -73,6 +73,7 @@ import { ReportCallCoaching } from "./report-call-coaching";
 import type { ReportEvidence } from "./report-contract";
 import type { ContextualSourcePlayback } from "./source-playback-context";
 import { OperationalPanel } from "./ui/operational-panel";
+import { trackOnce } from "./telemetry";
 import { useWorkspaceAccess } from "./workspace-access";
 
 export type View =
@@ -899,6 +900,22 @@ export function ReportModes({
   useEffect(() => {
     onViewChange?.(view);
   }, [onViewChange, view]);
+  // Telemetry (23 Oct 2026; stored only once the owner picks consent): a
+  // call's report shown, once per call and view. Fixtures send nothing.
+  const reportShown = Boolean(documentData?.report);
+  useEffect(() => {
+    if (fixture || !boundCallId || !reportShown) return;
+    const shown =
+      view === "coaching"
+        ? "coaching"
+        : view === "document"
+          ? "document"
+          : "report";
+    trackOnce(`report:${boundCallId}:${shown}`, "sx.report_opened", {
+      call_id: boundCallId,
+      view: shown,
+    });
+  }, [fixture, boundCallId, reportShown, view]);
   const printView =
     view === "document" && new URLSearchParams(search).get("print") === "1";
   const currentSection = activePanels.some(

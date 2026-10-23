@@ -39,7 +39,7 @@ it("posts only a flow-bound signal to the exact opener origin", async () => {
     window.location.origin,
   );
   expect(JSON.stringify(opener.postMessage.mock.calls)).not.toContain("token");
-  expect(host.textContent).toContain("Return to the Sales Xray window");
+  expect(host.textContent).toContain("Return to the Sales X-Ray window");
   expect(fetcher).not.toHaveBeenCalled();
 });
 

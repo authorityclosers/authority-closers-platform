@@ -335,16 +335,16 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     before = len(mail_adapter.sent_messages)
                     await resend.click()
                     code = await deliver_email_code(message_start=before)
-                await target.get_by_label("Sign-in code").fill(code)
                 async with target.expect_response(
                     lambda response: (
                         response.url.endswith("/v1/auth/email-code/verify")
                         and response.request.method == "POST"
                     )
                 ) as verify_response:
-                    await target.get_by_role(
-                        "button", name="Verify and continue", exact=True
-                    ).click()
+                    # The sixth digit verifies by itself (owner, 23 Oct 2026: a
+                    # progressive sign-in); "Verify and continue" stays for a
+                    # code typed short.
+                    await target.get_by_label("Sign-in code").fill(code)
                 verified = await verify_response.value
                 assert verified.status == 200
                 verify_body = verified.request.post_data_json

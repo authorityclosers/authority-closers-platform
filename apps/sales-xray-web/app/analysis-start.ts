@@ -66,7 +66,7 @@ const COPY: Record<Exclude<AnalysisStartReason, "start_failed">, string> = {
   checks_pending:
     "Your recording is saved. Its file checks are still running, so analysis has not started. Open the call to check again.",
   unreachable:
-    "Your recording is saved, but Sales Xray couldn't be reached to start the analysis. It may be updating. Tap Retry analysis in a minute.",
+    "Your recording is saved, but Sales X-Ray couldn't be reached to start the analysis. It may be updating. Tap Retry analysis in a minute.",
   needs_attention:
     "Your recording is saved, but it needs attention before analysis can start. Open the call to review it.",
   language_mismatch:

@@ -1,0 +1,300 @@
+{
+  "id": "12-upload-recording",
+  "number": "12",
+  "title": "Upload a recording you already have",
+  "kicker": "Sales X-Ray tutorial",
+  "end_headline": "Any call, one Report.",
+  "next": "Sales X-Ray: the full tour",
+  "segments": [
+    {
+      "id": "card",
+      "device": "card",
+      "en": {
+        "say": ["Already have a call recording? Here's how to get its Report."]
+      },
+      "hi": {
+        "say": ["पहले से call की recording है? उसका Report ऐसे पाइए."],
+        "caption": ["Pehle se call ki recording hai? Uska Report aise paaiye."]
+      },
+      "mr": {
+        "say": ["आधीच call ची recording आहे? त्याचा Report असा मिळवा."],
+        "caption": ["Aadhich call chi recording aahe? Tyacha Report asa milva."]
+      }
+    },
+    {
+      "id": "s1-add-call",
+      "device": "phone",
+      "label": "Tap +, then Add a call",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/add-sheet?view=sheet"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 900
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "link",
+            "name": "Add a call"
+          },
+          "ms": 1800,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "add-a-call"
+        }
+      ],
+      "en": {
+        "say": ["Tap plus, then Add a call. On a computer, it's New analysis."]
+      },
+      "hi": {
+        "say": ["Plus दबाइए, फिर Add a call. Computer पे ये New analysis है."],
+        "caption": [
+          "Plus dabaiye, phir Add a call. Computer pe yeh New analysis hai."
+        ]
+      },
+      "mr": {
+        "say": ["Plus दाबा, मग Add a call. Computer वर हे New analysis आहे."],
+        "caption": [
+          "Plus daba, mag Add a call. Computer var he New analysis aahe."
+        ]
+      }
+    },
+    {
+      "id": "s2-pick",
+      "device": "desktop",
+      "label": "Choose the file",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/upload?step=picked",
+          "ms": 300
+        },
+        {
+          "do": "wait",
+          "ms": 4500
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Remaining analysis time",
+            "exact": false
+          },
+          "optional": true
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "min per call",
+            "exact": false
+          },
+          "optional": true
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 700
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "1 file added",
+            "exact": false
+          },
+          "ms": 1800,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "file-picked"
+        }
+      ],
+      "en": {
+        "say": [
+          "Choose the recording from your phone or computer.",
+          "Most formats work, even your phone recorder's own files."
+        ]
+      },
+      "hi": {
+        "say": [
+          "अपने phone या computer से recording चुनिए.",
+          "ज़्यादातर formats चलते हैं, phone recorder की files भी."
+        ],
+        "caption": [
+          "Apne phone ya computer se recording chuniye.",
+          "Zyaadatar formats chalte hain, phone recorder ki files bhi."
+        ]
+      },
+      "mr": {
+        "say": [
+          "तुमच्या phone किंवा computer मधून recording निवडा.",
+          "बहुतेक formats चालतात, phone recorder च्या files पण."
+        ],
+        "caption": [
+          "Tumchya phone kinva computer madhun recording nivda.",
+          "Bahutek formats chaltat, phone recorder chya files pan."
+        ]
+      }
+    },
+    {
+      "id": "s3-details",
+      "device": "desktop",
+      "label": "Analyse my call",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/upload?step=details",
+          "ms": 300
+        },
+        {
+          "do": "wait",
+          "ms": 4500
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Remaining analysis time",
+            "exact": false
+          },
+          "optional": true
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "min per call",
+            "exact": false
+          },
+          "optional": true
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 700
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Analyse my call"
+          },
+          "ms": 2000,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "details"
+        }
+      ],
+      "en": {
+        "say": [
+          "Pick the Report's language, agree to the terms once, and tap Analyse my call."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Report की language चुनिए, एक बार terms से agree कीजिए, और Analyse my call दबाइए."
+        ],
+        "caption": [
+          "Report ki language chuniye, ek baar terms se agree kijiye, aur Analyse my call dabaiye."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Report ची language निवडा, एकदा terms ला agree करा, आणि Analyse my call दाबा."
+        ],
+        "caption": [
+          "Report chi language nivda, ekda terms la agree kara, aani Analyse my call daba."
+        ]
+      }
+    },
+    {
+      "id": "s4-analysing",
+      "device": "desktop",
+      "label": "Analysing",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/upload?step=analysing",
+          "ms": 300
+        },
+        {
+          "do": "wait",
+          "ms": 3000
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Usually 2",
+            "exact": false
+          },
+          "optional": true
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 700
+        },
+        {
+          "do": "still",
+          "label": "analysing"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "You can leave this page",
+            "exact": false
+          },
+          "ms": 1800,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        }
+      ],
+      "en": {
+        "say": [
+          "Sales X-Ray listens to the call and prepares your Report.",
+          "You can leave the page. The Report waits for you in Calls."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Sales X-Ray call सुनता है और आपका Report तैयार करता है.",
+          "आप page छोड़ सकते हैं. Report Calls में आपका इंतज़ार करेगा."
+        ],
+        "caption": [
+          "Sales X-Ray call sunta hai aur aapka Report taiyaar karta hai.",
+          "Aap page chhod sakte hain. Report Calls mein aapka intezaar karega."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Sales X-Ray call ऐकतो आणि तुमचा Report तयार करतो.",
+          "तुम्ही page सोडू शकता. Report Calls मध्ये तुमची वाट बघेल."
+        ],
+        "caption": [
+          "Sales X-Ray call aikto aani tumcha Report tayar karto.",
+          "Tumhi page sodu shakta. Report Calls madhye tumchi vaat baghel."
+        ]
+      }
+    }
+  ]
+}

@@ -13,7 +13,9 @@ nothing is lost, the job simply asks again on its next pass. In order:
 5. the environment's daily cap (last 24 hours) and monthly cap (calendar month,
    India time), counting everything, customer call analysis included.
 
-Customer call analysis is never refused here; it has its own analysis budget.
+Customer call analysis is never refused here; it has its own analysis budget. Brain 4.0's
+read is the Report (owner, 23 Oct 2026), so it is analysis that keeps one rule here: rules
+1, 3 and 4 apply to it, the background switch (2) and the environment's caps (5) never do.
 """
 
 from __future__ import annotations
@@ -92,8 +94,9 @@ def check(
     now: datetime | None = None,
 ) -> Refusal | None:
     """None to go ahead, else why not. ``connection`` is synchronous."""
-    if feature not in policy.BACKGROUND:
-        raise ValueError(f"not a background feature: {feature}")
+    analysis = feature in policy.CAPPED_ANALYSIS
+    if feature not in policy.BACKGROUND and not analysis:
+        raise ValueError(f"not a feature this guard governs: {feature}")
     environment = policy.environment_name(environment)
     now = now or datetime.now(UTC)
     zero = Decimal(0)
@@ -104,7 +107,7 @@ def check(
     config, _ = read_settings(connection, environment)
     # Answering a person (an AI reply to a lead's message) is not a background job:
     # only the caps below apply to it.
-    if not config["background_enabled"] and trigger != "person":
+    if not config["background_enabled"] and trigger != "person" and not analysis:
         return Refusal("ai_spend_background_off", feature, zero, 0)
     day = ledger.totals(ledger.read(connection, now - timedelta(hours=24)))
     if trigger == "backfill" and day.backfill >= config["backfill_daily_cap_inr"]:
@@ -116,6 +119,9 @@ def check(
         spent = day.by_feature.get(feature, zero)
         if spent >= cap:
             return Refusal("ai_spend_feature_cap", feature, spent, cap)
+    if analysis:
+        # Its spend counts towards the totals below, so background jobs stop first.
+        return None
     if day.total >= config["daily_cap_inr"]:
         return Refusal("ai_spend_daily_cap", feature, day.total, config["daily_cap_inr"])
     month = ledger.totals(ledger.read(connection, ledger.month_start(now)))

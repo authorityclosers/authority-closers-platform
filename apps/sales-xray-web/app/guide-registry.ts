@@ -43,14 +43,14 @@ export const FIRST_CALL_GUIDE: GuideDefinition = {
   steps: [
     {
       id: "welcome",
-      title: "Welcome to Sales Xray",
+      title: "Welcome to Sales X-Ray",
       body: "Start with one conversation. We’ll show you where to look and how to take your next step.",
       visual: "welcome",
     },
     {
       id: "listen",
       title: "Bring a real conversation",
-      body: "Choose a recording you have permission to analyse. Sales Xray brings the conversation and its transcript into one place.",
+      body: "Choose a recording you have permission to analyse. Sales X-Ray brings the conversation and its transcript into one place.",
       visual: "listen",
     },
     {

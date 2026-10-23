@@ -56,7 +56,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("Connect from the Sales Xray app", () => {
+describe("Connect from the Sales X-Ray app", () => {
   it("answers the S256 challenge the server checks", async () => {
     // RFC 7636, appendix B.
     expect(

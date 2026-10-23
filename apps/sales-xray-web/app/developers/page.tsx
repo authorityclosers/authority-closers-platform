@@ -25,9 +25,9 @@ import {
 import styles from "./developers.module.css";
 
 export const metadata: Metadata = {
-  title: "Developers · Sales Xray",
+  title: "Developers · Sales X-Ray",
   description:
-    "Connect your apps to Sales Xray: quick start, API keys, Connect (OAuth) and apps that register themselves, every endpoint with examples, webhooks, a remote MCP server for AI assistants, limits and errors.",
+    "Connect your apps to Sales X-Ray: quick start, API keys, Connect (OAuth) and apps that register themselves, every endpoint with examples, webhooks, a remote MCP server for AI assistants, limits and errors.",
 };
 
 const TOC: {
@@ -86,7 +86,7 @@ export default function DevelopersPage() {
     <main className={styles.page}>
       <header className={styles.top}>
         <Link className={styles.brand} href="/">
-          Sales Xray
+          Sales X-Ray
         </Link>
         <span className={styles.crumb}>Developers</span>
         <Link className={styles.openApp} href="/settings/developers">
@@ -115,8 +115,8 @@ export default function DevelopersPage() {
         </nav>
         <article className={styles.doc}>
           <header className={styles.hero}>
-            <p className={styles.eyebrow}>Sales Xray for developers</p>
-            <h1>Connect your apps to Sales Xray</h1>
+            <p className={styles.eyebrow}>Sales X-Ray for developers</p>
+            <h1>Connect your apps to Sales X-Ray</h1>
             <p>
               Read calls and the facts found in them, read and add leads, hear
               about new reports and leads the moment they happen, and let AI
@@ -155,7 +155,7 @@ export default function DevelopersPage() {
           <Section id="start" title="Quick start">
             <ol className={styles.steps}>
               <li>
-                <strong>Make a key.</strong> In Sales Xray open{" "}
+                <strong>Make a key.</strong> In Sales X-Ray open{" "}
                 <Link href="/settings/developers">Settings → Developers</Link>,
                 choose <b>New key</b>, give it a name and only the permissions
                 it needs, and copy it. It is shown once.
@@ -187,7 +187,7 @@ export default function DevelopersPage() {
               Make one key per app so you can revoke it alone; choose an expiry
               (30, 90 or 365 days, or never). Production keys start{" "}
               <code>sxk_live_</code> and work only on production; keys made
-              anywhere else start <code>sxk_test_</code>. Sales Xray keeps only
+              anywhere else start <code>sxk_test_</code>. Sales X-Ray keeps only
               a fingerprint of the key and its first characters, so a lost key
               is replaced, not recovered.
             </p>
@@ -214,7 +214,7 @@ export default function DevelopersPage() {
 
           <Section id="connect" title="Connect (OAuth 2.0)">
             <p>
-              Connect signs people in with their Sales Xray account, with PKCE
+              Connect signs people in with their Sales X-Ray account, with PKCE
               (S256) on every request. There are two kinds of app:
             </p>
             <ul className={styles.facts}>
@@ -326,8 +326,8 @@ export default function DevelopersPage() {
           <Section id="webhooks" title="Webhooks">
             <p>
               In <b>Settings → Developers → Webhook</b>, add your app&apos;s
-              https address and pick events. Sales Xray shows the signing secret
-              (<code>whsec_…</code>) once. Each event is a JSON{" "}
+              https address and pick events. Sales X-Ray shows the signing
+              secret (<code>whsec_…</code>) once. Each event is a JSON{" "}
               <code>POST</code> with <code>X-SX-Event-Id</code>,{" "}
               <code>X-SX-Event-Type</code> and{" "}
               <code>X-SX-Signature: t=&lt;unix&gt;,v1=&lt;hex&gt;</code>, where
@@ -372,7 +372,7 @@ export default function DevelopersPage() {
             />
             <h3 className={styles.subhead}>Delivery and retries</h3>
             <p>
-              Any 2xx answer counts as delivered. Otherwise Sales Xray tries
+              Any 2xx answer counts as delivered. Otherwise Sales X-Ray tries
               again from 10 seconds, doubling up to an hour, 25 times; you can
               send a stopped event again from the delivery log.{" "}
               <b>Send test event</b> sends a signed, fictional{" "}
@@ -382,14 +382,14 @@ export default function DevelopersPage() {
 
           <Section id="mcp" title="AI assistants (MCP)">
             <p>
-              AI assistants and agents can use Sales Xray as a remote MCP server
-              at <code>{MCP_URL}</code> (Streamable HTTP). Add the address to
-              your assistant; it finds Connect by itself (RFC 9728), registers,
-              and asks the person to sign in. The assistant then reads as that
-              person, within the scopes they approved.
+              AI assistants and agents can use Sales X-Ray as a remote MCP
+              server at <code>{MCP_URL}</code> (Streamable HTTP). Add the
+              address to your assistant; it finds Connect by itself (RFC 9728),
+              registers, and asks the person to sign in. The assistant then
+              reads as that person, within the scopes they approved.
             </p>
             <CodeTabs
-              label="Add Sales Xray to your assistant"
+              label="Add Sales X-Ray to your assistant"
               samples={REMOTE_SETUPS.map((item) => ({
                 key: item.key,
                 label: item.label,
@@ -486,7 +486,7 @@ python3 sx.py add-lead --name "Asha Rao" --phone +919800000000 --external-id crm
 
           <Section id="handover" title="Hand-over">
             <p>
-              When a lead is won, Sales Xray can send the customer to your app:{" "}
+              When a lead is won, Sales X-Ray can send the customer to your app:{" "}
               <code>
                 POST &lt;your app&gt;/api/v1/service/customers/handover
               </code>{" "}

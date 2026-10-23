@@ -27,7 +27,7 @@ afterEach(() => {
   host.remove();
 });
 
-it("says, per platform, what leaves Sales Xray and why it helps", () => {
+it("says, per platform, what leaves Sales X-Ray and why it helps", () => {
   act(() => root.render(<HowItWorks />));
   const text = host.textContent ?? "";
   expect(host.querySelector("details")?.open).toBe(false);
@@ -42,7 +42,7 @@ it("says, per platform, what leaves Sales Xray and why it helps", () => {
     expect(text).toContain(name);
   }
   expect(text).toContain(
-    "Names, notes, calls and what was said never leave Sales Xray",
+    "Names, notes, calls and what was said never leave Sales X-Ray",
   );
   expect(text).toContain("Only stages you confirmed are sent");
 });

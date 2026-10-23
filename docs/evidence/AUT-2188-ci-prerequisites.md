@@ -1,5 +1,7 @@
 # AUT-2188 — CI prerequisite mirror resilience
 
+Latest status (22 Oct, 18:09 UTC wake): later v0.84/workbench failures supersede the earlier warm-run checkpoint as reliability evidence. The verified prerequisite-bundle correction and seven-day acceptance remain open. The storage follow-up below implements one-day workbench retention and summary-only green shard uploads.
+
 Source baseline: `5869a25ff2d0dc49b3788799308b52a356b43845`. Workbench implementation; no deployment or host/package changes performed.
 
 Latest validation: **full current-source CI is green** on workbench `4643dd63`, [run 39781371721 attempt 2](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39781371721/attempts/2). Exact Node cache reuse is proved by [attempt 3](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39781371721/attempts/3). Release inclusion and the seven-day observation remain open.
@@ -84,3 +86,38 @@ Root's full installed/source comparison found that the committed launcher omitte
 The reconciled launcher SHA-256 is `b591a73118ba3c7bdc5964b7e63db51bd6447f30d59fc74109ae3fc00a29aff2`, blob `e5052f75f94947a174581159791d39c778e9a48d`. **12 bounded local checks passed**: Bash syntax, absolute-path help without dispatch, parsed overlay paths, fictional remaining counts 0/399 → 75 and 400/5000/unavailable → 0, guard ordering before slots/push, watch interval, candidate hash and an installed comparison showing only the two overlay additions plus trailing whitespace. These checks made no network, host, branch or slot changes.
 
 [Root handoff AUT-2190](/AUT/issues/AUT-2190) remains the single installer. Its prior source-pin blocker is addressed by the reconciled commit; install approval still belongs to the existing review path. No installation, release or production change is claimed. The parent remains open for authorized release inclusion and seven days of release/workbench observation.
+
+## Workbench artifact storage follow-up (22 Oct 2026)
+
+Source baseline: `62be474e43b9a54dd76e42e105ea0def3e475ca2`. Implements the orchestrator's 18:09 UTC request after the reported v0.85 schema-publication storage failure. This is an artifact-growth change; it does not satisfy the outstanding prerequisite reliability acceptance.
+
+- All four workbench upload steps explicitly use `retention-days: 1`: green coverage summaries, failed/cancelled shard diagnostics, `wb-screens`, and `wb-e2e-*` reports. Future uploads receive this lifetime.
+- Green non-targeted Python shards upload only `manifest.json`, with missing summaries treated as an error. Successful targeted runs need no shard artifact. JUnit and the full shard directory upload only on failure/cancellation.
+- Artifact names, SHA/attempt identity, collection patterns and the final complete-coverage check are preserved. The manifest is required by that check, so retaining only this coverage summary avoids weakening test coverage.
+- Release and schema artifact policies are outside this diff. No artifact deletion, settings change, deployment or installed-tool change was performed.
+
+Verification: **5 focused tests passed in 0.30 s**. The policy checks cover every workbench upload, one-day expiry, green/failure payloads, preserved collector identity and missing-manifest failure. A fictional two-shard fixture uploads only manifests, excludes adjacent JUnit diagnostics, and passes the real complete-coverage verifier. The existing release-retention policy regression also passes. Ruff formatting/lint, YAML parsing, diff whitespace and the required `import ac_platform.http` pass. No new hosted full-run verdict is claimed for this workflow-only follow-up; the prerequisite-bundle correction requires its own cold/offline full/e2e proof.
+
+## Verified producer and offline consumers — implementation checkpoint
+
+The replacement uses a producer job before release/workbench matrix consumers. It obtains the complete declared Debian dependency closure using empty dpkg status and isolated, GPG-authenticated HTTPS `archive.ubuntu.com` / `security.ubuntu.com` indexes. It builds a local package repository, proves an empty-state offline solve and an actual compatible-runner installation, and proves both frozen Python and Node Chromium runtimes before publishing.
+
+Consumers receive a concrete GitHub artifact ID/digest, producer run/source, repository and locked-input identity. They verify the exact artifact/payload digests, safe archive paths, complete package-file hashes, Ubuntu24.04/amd64 policy and a real offline package solve before installation. They retain codec/filesystem and actual locked-browser launch proofs. Consumer sources are file-only; consumer package/browser downloads have no fallback. Both producer and consumer actions blackhole the failing Azure mirror on their disposable GitHub runner; no cache restore is used.
+
+A fresh, successful main producer with matching locked identity may be reused across sibling branches through its immutable artifact reference. Missing/expired/unavailable publication is rebuilt only in the bounded producer. Corruption and authentication failures fail closed. A baseline that no longer solves triggers a fresh producer build. Image version is retained in provenance; compatibility is checked by the complete local repository and solver rather than by a partial producer transaction. Bundle artifacts have a separate **two-day** lifetime, a 36-hour reuse age limit and a two-hour remaining-expiry margin. One-day diagnostic retention is preserved.
+
+Focused verification: **109 tests passed in 14.08 s**, including the prerequisite helper/workflow contracts, registration/recovery gates, bundle cold/warm/recovery/corruption/baseline cases and diagnostic-retention policy. The real isolated apt fixture acquires both fictional dependency archives through the local repository with downloads disabled and a recording dpkg stub; host status remains empty and no maintainer hooks run. Omitting the dependency fails the real solver. Ruff, targeted YAML formatting, required API import and Bash syntax pass.
+
+This is an implementation checkpoint pending a fresh source-matched hosted producer/full/e2e verdict and sensitive workflow review. Earlier warming runs are not reused as acceptance. No installed launcher, production image, deployment, real data or secret was changed.
+
+## Fresh cold full/e2e proof — 22 Oct 2026
+
+Implementation commit: `c2ade062061f09ffdd4c7269d8d5858072000e2a`. [Fresh run 39837257389, attempt 1](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39837257389/attempts/1) is **SUCCESS**, completing in 9m37s from push. Request `adfc31e64dd539f37f4a4af507b433e00ad82cc1` differs from that source only at `.wb-ci/request.json`; all families were explicitly selected. No prerequisite cache restore or historical warming replay was used.
+
+- Producer job `120028796583` passed in 172s with the Azure mirror blackholed. Authenticated non-Azure indexes completed in 6s, the complete empty-status Debian closure downloaded in 29s, and the offline runner install completed in 12s, all on first attempts. Both frozen Chromium runtimes launched (`145.0.7632.6`).
+- [Published artifact 12452071131](https://github.com/authorityclosers/authority-closers-platform/actions/runs/39837257389/artifacts/12452071131): **452,074,312 bytes**, ZIP SHA-256 `8f1e02fa0191f5e0e718e0ba88eda11959baf1a88fdb2d70ffbe38e0d43f463c`, locked-input identity `f2f6966933d5e6ec94e1a7feeb383042af56a49258bc6f1c23887ccb04b8e38c`. GitHub metadata binds it to producer run/source above; created `2026-10-22T19:09:58Z`, expires `2026-10-24T19:09:55Z`.
+- All **19 matrix consumers** (17 Python shards, visual and e2e) logged a successful complete local dependency solve and `consumer apt/browser downloads: 0`. Each blocked Azure before installation; none ran the producer's remote-index/download path. The three browser-bearing Python shards and both Node jobs launched Chromium from the verified bundle. Codec/filesystem proofs passed where required.
+- Lint/type checks, web, visual and e2e passed. Summary job `120033121797` verified attempt-1 manifests for all 3 family-a and 14 family-b shards: **91 + 898 = 989 test files**. The green uploads contain coverage summaries, preserving the reviewed one-day diagnostics policy. E2e's final browser suite reported 3 passed.
+- GitHub's job metadata for b13 (`120030256765`) still reported `in_progress` after the run concluded successfully. Its complete log records **825 passed, 3 skipped**, successful manifest upload and cleanup; the green summary selected its attempt-1 manifest. This API inconsistency does not substitute for the recorded test/coverage evidence.
+
+The local focused cold/warm/corrupt/incompatible/recovery tests and this cold hosted run are ready for SHA-bound CTO source review. Hosted reuse of a successful **main** publication, the integrated release workflow, sensitive release approval, production version and seven days without prerequisite failures remain open. The two-day prerequisite bundle is separate from one-day disposable diagnostics; future retention does not reclaim existing storage. No release, deployment, artifact deletion or installed-tool refresh is claimed.

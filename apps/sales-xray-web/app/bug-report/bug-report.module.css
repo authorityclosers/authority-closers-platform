@@ -1,0 +1,506 @@
+/* Report a problem (owner, 23 Oct 2026): tokens only. */
+
+.form {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding-bottom: 4px;
+}
+
+.about {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: var(--sx-radius-md);
+  background: var(--lx-warning-soft);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.about > svg {
+  flex: none;
+  color: var(--sx-warn);
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.label {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.words {
+  width: 100%;
+  min-height: 112px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  /* 16 px or more, so phones never zoom in on focus. */
+  font-size: max(16px, var(--sx-text-sm));
+  line-height: 1.45;
+  resize: vertical;
+  transition:
+    border-color var(--sx-dur-fast) var(--sx-ease-out),
+    box-shadow var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.words::placeholder {
+  color: var(--sx-muted);
+}
+
+.words:focus {
+  border-color: var(--sx-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--sx-accent-soft);
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  position: relative;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--sx-dur-base) var(--sx-spring),
+    border-color var(--sx-dur-fast) var(--sx-ease-out),
+    background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+/* A 44 px target around a 36 px chip. */
+.chip::after {
+  position: absolute;
+  inset: -4px 0;
+  content: "";
+}
+
+.chip > svg {
+  color: var(--lx-teal);
+}
+
+.chip:active {
+  transform: scale(var(--sx-press-scale));
+  transition-duration: var(--sx-dur-instant);
+}
+
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--sx-warn);
+  background: var(--lx-warning-soft);
+  color: var(--sx-ink);
+}
+
+.chip[aria-pressed="true"] > svg {
+  color: var(--sx-warn);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .chip:hover {
+    border-color: var(--lx-teal-edge);
+  }
+}
+
+.file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  opacity: 0;
+}
+
+.picture {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 84px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-sunken);
+}
+
+.thumb,
+.thumbLoading,
+.thumbEmpty {
+  display: block;
+  width: 64px;
+  height: 116px;
+  border-radius: var(--sx-radius-sm);
+}
+
+.thumb {
+  border: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+  object-fit: cover;
+  object-position: top center;
+}
+
+.thumbLoading {
+  background-color: var(--sx-line);
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in oklab, var(--sx-surface) 55%, transparent) 50%,
+    transparent 70%
+  );
+  background-repeat: no-repeat;
+  background-size: 200% 100%;
+  animation: report-sheen 1.6s var(--sx-ease-out) infinite;
+}
+
+.thumbEmpty {
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--sx-line-strong);
+  color: var(--sx-muted);
+}
+
+.pictureWords {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.pictureWords strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.pictureWords small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  overflow-wrap: anywhere;
+}
+
+.remove {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.remove:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .remove:hover {
+    background: var(--sx-surface);
+    color: var(--sx-ink);
+  }
+}
+
+.note {
+  color: var(--sx-bad);
+  font-size: var(--sx-text-xs);
+}
+
+.fine {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.45;
+}
+
+@keyframes report-sheen {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: -100% 0;
+  }
+}
+
+/* The picture opens the mark-up step; the thumbnail is its button. */
+.thumbButton {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.thumbButton:focus-visible,
+.inlineAction:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.inlineAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--lx-teal);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Voice note */
+.voice {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 8px;
+  align-items: center;
+  flex: 1 1 100%;
+  min-height: 44px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+}
+
+.voice[data-recording] {
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  border-color: var(--sx-bad);
+}
+
+.voicePlayer {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+}
+
+.voiceLength {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.voiceWords {
+  display: grid;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.voiceWords small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.recordingDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sx-bad);
+  animation: report-pulse 1.2s var(--sx-ease-out) infinite;
+}
+
+@keyframes report-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Mark up */
+.markup {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.markupTools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.markupHint {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.markupFrame {
+  display: grid;
+  place-items: center;
+  max-height: min(56dvh, 560px);
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+}
+
+.markupCanvas {
+  display: block;
+  max-width: 100%;
+  max-height: min(56dvh, 560px);
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.markupActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-bottom: max(4px, env(safe-area-inset-bottom, 0px));
+}
+
+/* Sent */
+.sent {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 18px 8px 8px;
+  text-align: center;
+}
+
+.sent strong {
+  color: var(--sx-ink);
+  font: var(--sx-text-panel);
+}
+
+.sent p {
+  max-width: 34ch;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.sentIcon {
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.sentIcon[data-outcome="queued"] {
+  background: var(--lx-warning-soft);
+  color: var(--sx-warn);
+}
+
+/* Your reports */
+.mine {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.mineRow {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.mineWords {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.mineMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.mineMeta small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.status {
+  padding: 2px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.status[data-status="fixed"],
+.status[data-status="verified"] {
+  background: var(--lx-teal-soft);
+  color: var(--lx-teal);
+}
+
+.status[data-status="triaged"],
+.status[data-status="in_progress"] {
+  background: var(--lx-warning-soft);
+  color: var(--sx-ink);
+}
+
+.mineSkeleton {
+  display: block;
+  height: 64px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thumbLoading,
+  .recordingDot {
+    animation: none;
+  }
+
+  .chip {
+    transition: none;
+  }
+}

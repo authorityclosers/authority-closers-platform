@@ -68,7 +68,7 @@ console.log(me.organisation.name, me.key.scopes);`,
     path: "/calls",
     scope: "calls:read",
     summary:
-      "Calls, newest first, 50 a page, each with its title and a link to it in Sales Xray.",
+      "Calls, newest first, 50 a page, each with its title and a link to it in Sales X-Ray.",
     params: [
       {
         name: "before",
@@ -422,7 +422,7 @@ export const REMOTE_SETUPS: {
     key: "claude-desktop",
     label: "Claude Desktop",
     where:
-      "Settings → Connectors → Add custom connector. Paste the address, then sign in to Sales Xray.",
+      "Settings → Connectors → Add custom connector. Paste the address, then sign in to Sales X-Ray.",
     code: MCP_URL,
   },
   {
@@ -552,7 +552,7 @@ export const ERRORS: [number, string, string][] = [
   ],
   [404, "call_missing", "That call isn't there, or isn't yours to read."],
   [404, "cursor_missing", "The before id is not in this list."],
-  [404, "not_here", "The API is served on the Sales Xray address only."],
+  [404, "not_here", "The API is served on the Sales X-Ray address only."],
   [422, "lead_empty", "A new lead needs at least a name, phone or email."],
   [422, "stage_unknown", "stage is not one of the stages listed above."],
   [

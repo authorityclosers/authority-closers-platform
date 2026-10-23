@@ -22,6 +22,7 @@ from ac_platform.billing import credit_models as billing_credit_models
 from ac_platform.billing import invoice_models as billing_invoice_models
 from ac_platform.billing import models as billing_models
 from ac_platform.billing import order_models as billing_order_models
+from ac_platform.bug_reports import models as bug_report_models
 from ac_platform.call_ai import models as call_ai_models
 from ac_platform.call_data import models as call_data_models
 from ac_platform.catalog import models as catalog_models
@@ -54,7 +55,9 @@ from ac_platform.conversation_intelligence import (
 )
 from ac_platform.conversation_intelligence import models as conversation_models
 from ac_platform.db.base import Base
+from ac_platform.economics import models as economics_models
 from ac_platform.enrollment import models as enrollment_models
+from ac_platform.feedback import models as feedback_models
 from ac_platform.fx import models as fx_models
 from ac_platform.identity import google_profile_models, sales_xray_profile_models
 from ac_platform.identity import models as identity_models
@@ -65,6 +68,7 @@ from ac_platform.lead_desk.chats import models as lead_desk_chat_models
 from ac_platform.learning import models as learning_models
 from ac_platform.learning import planning_models
 from ac_platform.media import models as media_models
+from ac_platform.offer_studio import models as offer_studio_models
 from ac_platform.one_pass import models as one_pass_models
 from ac_platform.outbox import models as outbox_models
 from ac_platform.partner_events import models as partner_event_models
@@ -115,6 +119,8 @@ MODEL_MODULES = (
     one_pass_models,
     brain4_models,
     call_ai_models,
+    bug_report_models,
+    feedback_models,
     fx_models,
     usage_people_models,
     integration_models,
@@ -137,6 +143,8 @@ MODEL_MODULES = (
     billing_credit_models,
     billing_invoice_models,
     billing_order_models,
+    offer_studio_models,
+    economics_models,
 )
 
 

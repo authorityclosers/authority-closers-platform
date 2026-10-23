@@ -205,21 +205,70 @@ export const inPipeline = (pipeline?: string) =>
     ? `?pipeline=${encodeURIComponent(pipeline)}`
     : "";
 
+/**
+ * The pipelines answer as pages use it. A body without a pipelines list (an error
+ * page, an older API, a fixture that doesn't answer) reads as none, so a screen shows
+ * its usual state instead of breaking (Redmi QA, 23 Oct 2026: Lead stages crashed on
+ * `pipelines.find`).
+ */
+export function pipelinesView(raw: unknown): PipelinesView {
+  const view = (
+    raw && typeof raw === "object" ? raw : {}
+  ) as Partial<PipelinesView>;
+  return {
+    ...view,
+    pipelines: Array.isArray(view.pipelines)
+      ? view.pipelines
+          .filter(
+            (item): item is PipelineView =>
+              !!item &&
+              typeof item.key === "string" &&
+              typeof item.name === "string",
+          )
+          .map((item) => ({
+            ...item,
+            sources: Array.isArray(item.sources) ? item.sources : [],
+          }))
+      : [],
+    sources:
+      view.sources && typeof view.sources === "object" ? view.sources : {},
+    canEdit: view.canEdit === true,
+  };
+}
+
+/** The ad platforms answer, its lists always lists (as pipelinesView). */
+export function adsView(raw: unknown): AdsView {
+  const view = (raw && typeof raw === "object" ? raw : {}) as Partial<AdsView>;
+  return {
+    ...view,
+    version: typeof view.version === "number" ? view.version : 0,
+    providers: Array.isArray(view.providers) ? view.providers : [],
+    recent: Array.isArray(view.recent) ? view.recent : [],
+    settling: typeof view.settling === "number" ? view.settling : 0,
+    sendsAt: typeof view.sendsAt === "string" ? view.sendsAt : null,
+  };
+}
+
+const callPipelines = (path: string, init?: RequestInit) =>
+  call<unknown>(path, init).then(pipelinesView);
+const callAds = (path: string, init?: RequestInit) =>
+  call<unknown>(path, init).then(adsView);
+
 export const readJourney = (pipeline?: string) =>
   call<JourneyView>(`/journey${inPipeline(pipeline)}`);
 export const readTemplates = () => call<TemplateView[]>("/journey/templates");
-export const readAds = () => call<AdsView>("/journey/ads");
+export const readAds = () => callAds("/journey/ads");
 export const readSuggestions = (pipeline?: string) =>
   call<Suggestion[]>(`/journey/suggestions${inPipeline(pipeline)}`);
 
-export const readPipelines = () => call<PipelinesView>("/pipelines");
+export const readPipelines = () => callPipelines("/pipelines");
 
 export const createPipeline = (pipeline: {
   name: string;
   template: string;
   sources: string[];
 }) =>
-  call<PipelinesView>("/pipelines", {
+  callPipelines("/pipelines", {
     method: "POST",
     body: JSON.stringify(pipeline),
   });
@@ -228,7 +277,7 @@ export const changePipeline = (
   key: string,
   change: { name?: string; sources?: string[] },
 ) =>
-  call<PipelinesView>(`/pipelines/${encodeURIComponent(key)}`, {
+  callPipelines(`/pipelines/${encodeURIComponent(key)}`, {
     method: "PATCH",
     body: JSON.stringify(change),
   });
@@ -279,7 +328,7 @@ export const saveDestination = (
     testCode?: string | null;
   },
 ) =>
-  call<AdsView>(`/journey/ads/${provider}`, {
+  callAds(`/journey/ads/${provider}`, {
     method: "PUT",
     body: JSON.stringify(body),
   });
@@ -289,7 +338,7 @@ export const confirmMatches = (
   expectedVersion: number,
   events: Record<string, string | null>,
 ) =>
-  call<AdsView>(`/journey/ads/${provider}/matches`, {
+  callAds(`/journey/ads/${provider}/matches`, {
     method: "PUT",
     body: JSON.stringify({ expectedVersion, events }),
   });
@@ -338,7 +387,7 @@ export function qualityLine(provider: string, quality: Quality): string {
 }
 
 export const retryEvent = (id: string) =>
-  call<AdsView>(`/journey/ads/events/${encodeURIComponent(id)}/retry`, {
+  callAds(`/journey/ads/events/${encodeURIComponent(id)}/retry`, {
     method: "POST",
   });
 

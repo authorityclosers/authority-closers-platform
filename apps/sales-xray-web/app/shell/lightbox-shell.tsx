@@ -6,7 +6,7 @@ import {
   Bell,
   Building2,
   ChevronDown,
-  FolderOpen,
+  Contact,
   GraduationCap,
   Layers,
   LayoutGrid,
@@ -27,6 +27,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import Form from "next/form";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -47,6 +48,8 @@ import {
 
 import { useBranding } from "./branding-store";
 import { AddSheet } from "./add-sheet";
+import { BugReportHost } from "../bug-report/bug-report-sheet";
+import { FeedbackHost } from "../feedback/feedback-prompt";
 import { useAppRouter } from "./app-router";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
@@ -122,8 +125,6 @@ import {
   type UpdateNotification,
 } from "./updates-client";
 import { ChatsTabIcon } from "../chats/chats-badge";
-import { AddLeadDialog } from "../leads/capture-dialogs";
-import { leadLink, readLeads } from "../leads/leads-client";
 import { CommandBar, type Command } from "../ui/command-bar";
 import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
@@ -233,6 +234,26 @@ const subscribeNothing = () => () => {};
 // the visible label floats above every layer on hover or focus (rail-tip.tsx).
 /** Every open lead (owner, 23 Oct 2026: "All leads one tap from anywhere"). */
 const ALL_LEADS_HREF = "/leads?tab=all&stage=open";
+/** The organisation hub's Team tab: members, invites and roles. */
+const TEAM_HREF = "/organisation?tab=team";
+/** Where each organisation setting lives in the hub (org-hub.tsx). */
+const HUB = {
+  rules: "/organisation?tab=leads&part=rules",
+  stages: "/organisation?tab=leads&part=stages",
+  apps: "/organisation?tab=connections&part=apps",
+  callAi: "/organisation?tab=call-ai",
+};
+
+/**
+ * Add lead (about 1,000 lines with the pipelines it reads) loads when it is
+ * first wanted, not with every page (launch readiness, 23 Oct 2026); opening
+ * + or choosing "Add a lead" fetches it first, so the form still opens at once.
+ */
+const loadCaptureDialogs = () => import("../leads/capture-dialogs");
+const AddLeadDialog = dynamic(
+  () => loadCaptureDialogs().then((module) => module.AddLeadDialog),
+  { ssr: false },
+);
 
 const RAIL_NAME_STYLE: CSSProperties = {
   position: "absolute",
@@ -795,7 +816,10 @@ function LightboxShellFrame({
       workspace.kind === "organisation" &&
       (workspace.role === "owner" || workspace.role === "admin"),
   );
-  const orgLabel = orgAdmin ? "Team & organisation" : "Organisation";
+  // One way into the organisation: its hub, every area a tab (owner, 23 Oct
+  // 2026: "if organisation is clicked there should be clearly visible all
+  // management options").
+  const orgHere = place === "organisation";
   const branding = useBranding(inOrganisation);
   // Confirmed signed out (not merely unknown yet): nothing personal to show.
   const guest = !authenticated && !sessionPending && !loading;
@@ -845,10 +869,14 @@ function LightboxShellFrame({
     },
     [router],
   );
-  const openLeadForm = useCallback(
-    () => setLeadForm((form) => ({ open: true, round: form.round + 1 })),
-    [],
-  );
+  const openLeadForm = useCallback(() => {
+    void loadCaptureDialogs();
+    setLeadForm((form) => ({ open: true, round: form.round + 1 }));
+  }, []);
+  // Add lead is one tap away while + is open: fetch the form then.
+  useEffect(() => {
+    if (addOpen) void loadCaptureDialogs();
+  }, [addOpen]);
   const commands = useMemo<Command[]>(() => {
     const place = (
       label: string,
@@ -878,9 +906,9 @@ function LightboxShellFrame({
     });
     return [
       place("Home", "/dashboard", <LayoutGrid size={17} />, "dashboard sales"),
-      place("Leads", "/leads", <PhoneCall size={17} />, "pipeline stages"),
+      place("Leads", "/leads", <Contact size={17} />, "pipeline stages"),
       place("Chats", "/chats", <MessagesSquare size={17} />, "whatsapp inbox"),
-      place("Calls", "/analysis/calls", <FolderOpen size={17} />, "reports"),
+      place("Calls", "/analysis/calls", <AudioLines size={17} />, "reports"),
       place("Coaching", "/coaching", <GraduationCap size={17} />),
       place("Prospects", "/prospects", <Users size={17} />),
       ...(inOrganisation
@@ -892,10 +920,16 @@ function LightboxShellFrame({
               "every open lead list",
             ),
             place(
-              orgAdmin ? "Team & organisation" : "Organisation",
-              "/organisation",
+              "Team",
+              TEAM_HREF,
               <UsersRound size={17} />,
-              "members invites roles company",
+              "members invites roles organisation",
+            ),
+            place(
+              "Organisation",
+              "/organisation",
+              <Building2 size={17} />,
+              "team analytics insights company settings",
             ),
           ]
         : []),
@@ -952,31 +986,31 @@ function LightboxShellFrame({
         ? [
             setting(
               "Team & roles",
-              "/settings/team",
+              TEAM_HREF,
               <Users size={17} />,
               "Members, invites and who can do what",
             ),
             setting(
               "Lead rules",
-              "/settings/lead-rules",
+              HUB.rules,
               <Users size={17} />,
               "Who gets new leads, limits and work hours",
             ),
             setting(
               "Lead stages",
-              "/settings/stages",
+              HUB.stages,
               <Layers size={17} />,
               "Stages and pipelines",
             ),
             setting(
               "Connected apps",
-              "/settings/apps",
+              HUB.apps,
               <Plug size={17} />,
               "Lead ads, WhatsApp, Messenger and Instagram",
             ),
             setting(
               "AI on calls",
-              "/settings/call-ai",
+              HUB.callAi,
               <AudioLines size={17} />,
               "How much AI reads each seller's calls",
             ),
@@ -1018,7 +1052,7 @@ function LightboxShellFrame({
           group: "Calls",
           label: call.name,
           hint: call.date,
-          icon: <FolderOpen size={17} />,
+          icon: <AudioLines size={17} />,
           run: () => go(callHref(call.id)),
         }));
       const everyCall: Command = {
@@ -1031,6 +1065,8 @@ function LightboxShellFrame({
       let leads: Command[] = [];
       if (inOrganisation && !leadsSearchedElsewhere)
         try {
+          // Loaded on the first search, not with every page.
+          const { leadLink, readLeads } = await import("../leads/leads-client");
           const page = await readLeads(
             { scope: orgAdmin ? "team" : "mine", search: text },
             signal,
@@ -1235,6 +1271,7 @@ function LightboxShellFrame({
                 className={`${styles.stripBtn} ${styles.stripSub}`}
                 href={ALL_LEADS_HREF}
               >
+                <Rows3 size={16} strokeWidth={1.75} aria-hidden="true" />
                 All leads
               </ScreenLink>
             ) : null}
@@ -1271,27 +1308,23 @@ function LightboxShellFrame({
               data-rail-tip="Calls"
               aria-current={place === "calls" ? "page" : undefined}
             >
-              <FolderOpen size={20} strokeWidth={1.75} aria-hidden="true" />
+              <AudioLines size={20} strokeWidth={1.75} aria-hidden="true" />
               <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Calls</span>
             </ScreenLink>
             {/* Owner, 23 Oct 2026: team and organisation were "too hidden";
-                owners and admins find them right after the daily places. */}
+                the hub sits right after the daily places. */}
             {inOrganisation || place === "organisation" ? (
               <ScreenLink
-                className={`${styles.stripBtn}${place === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
+                className={`${styles.stripBtn}${orgHere ? ` ${styles.stripBtnActive}` : ""}`}
                 href="/organisation"
-                aria-label={orgLabel}
-                data-rail-tip={orgLabel}
-                aria-current={place === "organisation" ? "page" : undefined}
+                aria-label="Organisation"
+                data-rail-tip="Organisation"
+                aria-current={orgHere ? "page" : undefined}
               >
-                {orgAdmin ? (
-                  <UsersRound size={20} strokeWidth={1.75} aria-hidden="true" />
-                ) : (
-                  <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
-                )}
+                <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
                 <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>{orgLabel}</span>
+                <span style={RAIL_NAME_STYLE}>Organisation</span>
               </ScreenLink>
             ) : null}
             <ScreenLink
@@ -1562,7 +1595,10 @@ function LightboxShellFrame({
                         key={profile?.email ?? ""}
                         photoUrl={profile?.photo_url}
                       >
-                        {accountInitials(profileName, profile?.email ?? null)}
+                        {accountInitials(
+                          profileName,
+                          profile?.email ?? null,
+                        ) || <UserRound size={16} />}
                       </AccountAvatarImage>
                     )}
                   </span>
@@ -1600,7 +1636,9 @@ function LightboxShellFrame({
                   {/* Two lines from the first paint: the workspace line is a
                       placeholder while it loads, so the title never drops. */}
                   <small className={styles.mobileContext}>
-                    {pageTitle ? (workspaceLabel ?? "Sales Xray") : "Workspace"}
+                    {pageTitle
+                      ? (workspaceLabel ?? "Sales X-Ray")
+                      : "Workspace"}
                   </small>
                   <b>{barTitle ?? workspaceLabel}</b>
                 </span>
@@ -1640,7 +1678,7 @@ function LightboxShellFrame({
                         : undefined
                     }
                   >
-                    {workspaceLabel ?? "Sales Xray"}
+                    {workspaceLabel ?? "Sales X-Ray"}
                   </span>
                   {heading ? (
                     <h1 key={heading.title} className={styles.titleText}>
@@ -1804,7 +1842,7 @@ function LightboxShellFrame({
             onClick={tapTab("calls")}
             aria-current={phoneTab === "calls" ? "page" : undefined}
           >
-            <FolderOpen size={20} aria-hidden="true" />
+            <AudioLines size={20} aria-hidden="true" />
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Calls</span>
           </ScreenLink>
@@ -1911,6 +1949,8 @@ function LightboxShellFrame({
           search={searchEverything}
         />
       )}
+      {guest ? null : <BugReportHost />}
+      {guest ? null : <FeedbackHost />}
       {guest ? null : (
         <AddSheet
           open={addOpen}

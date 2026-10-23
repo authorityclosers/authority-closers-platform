@@ -11,7 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 from collections.abc import Callable, Coroutine
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Annotated, Any, Literal
 from uuid import UUID
 
@@ -26,6 +26,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
 from ac_platform.billing.application import BillingApplication
+from ac_platform.billing.checkout import CheckoutService
 from ac_platform.billing.commands import BillingCommands, BuyerTaxDetails, Caller, CheckoutCommand
 from ac_platform.billing.credit_reads import CreditReads
 from ac_platform.billing.errors import (
@@ -265,6 +266,8 @@ class TaxDocumentResponse(BaseModel):
 
 class InvoiceResponse(TaxDocumentResponse):
     invoice_id: UUID = Field(validation_alias="id")
+    # Whether the payment behind it can be refunded now (C1 §4); null when it never can.
+    refund: RefundResponse | None = None
 
 
 class CreditNoteResponse(TaxDocumentResponse):
@@ -527,8 +530,18 @@ def install_billing_http(
             )
         )
         _no_store(response)
+        checkout = getattr(service, "service", None)
+        now = datetime.now(UTC)
+        invoices = []
+        for row in rows[:limit]:
+            item = InvoiceResponse.model_validate(row)
+            if isinstance(checkout, CheckoutService):
+                view = await checkout.invoice_refund_view(auth.database, row, now)
+                if view is not None:
+                    item = item.model_copy(update={"refund": RefundResponse.model_validate(view)})
+            invoices.append(item)
         return InvoicesResponse(
-            invoices=[InvoiceResponse.model_validate(row) for row in rows[:limit]],
+            invoices=invoices,
             next_before=rows[limit - 1].id if len(rows) > limit else None,
         )
 

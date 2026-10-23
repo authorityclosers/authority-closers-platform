@@ -14,6 +14,7 @@ from ac_platform.conversation_intelligence.analysis_engine import registry
 MEASURED = {"today-brain4-read": (0.845, 0.855), "v2": (0.82, 0.85)}
 # The rest, pinned: a fit that changes moves them on purpose (registry v1, 22 Oct).
 PINNED = {
+    "today-brain4-read-flex": 0.4260,
     "v2-report-on-demand": 0.6266,
     "v2-flex-report-on-demand": 0.3143,
     "v2-luna-flex-report-on-demand": 0.1530,
@@ -159,7 +160,7 @@ def test_the_digest_moves_with_any_edit(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_describe_carries_version_examples_and_reference_projections() -> None:
     body = registry.describe()
-    assert body["version"] == "analysis-engine-registry/1"
+    assert body["version"] == "analysis-engine-registry/2"
     assert body["digest"] == registry.digest()
     one_pass = next(row for row in body["modules"] if row["id"] == "c4.one-pass-v1")
     assert [row["minutes"] for row in one_pass["examples"]] == [2.0, 5.0, 15.0]

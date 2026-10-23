@@ -30,7 +30,7 @@ const OPEN_KINDS: Kind[] = ["new", "not_connected", "follow_up", "interested"];
 /** Plain words for a kind, when a business has several stages of it. */
 export const KIND_WORDS: Record<Kind, string> = {
   new: "New",
-  not_connected: "Not contacted",
+  not_connected: "Couldn't reach",
   follow_up: "Follow up",
   interested: "Interested",
   won: "Won",
@@ -60,7 +60,8 @@ export function stageTabs(
     ? OPEN_KINDS.reduce((sum, kind) => sum + (counts[kind] ?? 0), 0)
     : undefined;
   return [
-    { key: "open", label: "Open", count: open },
+    // Every open lead, in every stage (owner, 23 Oct 2026: "All leads").
+    { key: "open", label: "All leads", count: open },
     ...kinds.map((kind) => {
       const own = live.filter((stage) => stage.kind === kind);
       return {

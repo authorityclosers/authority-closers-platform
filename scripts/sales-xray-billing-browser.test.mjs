@@ -148,11 +148,9 @@ test("fictional plan purchase → server verification → balance → billing �
       await page.waitForURL("**/review-fixture/plans/pay?order=*", {
         waitUntil: "load",
       });
+      await page.getByText("Test payment page", { exact: true }).waitFor();
       await page
-        .getByRole("heading", { name: "Fictional payment page" })
-        .waitFor();
-      await page
-        .getByRole("button", { name: "Payment confirmed", exact: true })
+        .getByRole("button", { name: /^Pay ₹[\d,.]+ \(test\)$/ })
         .click();
       await page.waitForURL("**/review-fixture/plans/return?order=*", {
         waitUntil: "domcontentloaded",
@@ -238,11 +236,9 @@ test("fictional plan purchase → server verification → balance → billing �
       await page.waitForURL("**/review-fixture/plans/pay?order=*", {
         waitUntil: "load",
       });
+      await page.getByText("Test payment page", { exact: true }).waitFor();
       await page
-        .getByRole("heading", { name: "Fictional payment page" })
-        .waitFor();
-      await page
-        .getByRole("button", { name: "Payment confirmed", exact: true })
+        .getByRole("button", { name: /^Pay ₹[\d,.]+ \(test\)$/ })
         .click();
       await page.waitForURL("**/review-fixture/plans/return?order=*", {
         waitUntil: "domcontentloaded",

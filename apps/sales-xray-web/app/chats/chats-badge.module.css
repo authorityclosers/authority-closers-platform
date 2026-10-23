@@ -1,0 +1,35 @@
+/* The Chats tab badge (rail and phone tab bar), on every page: its own few
+   rules, so the tab bar doesn't load all of Chats' styles (route splitting,
+   23 Oct 2026). */
+
+.tabIcon {
+  position: relative;
+  display: inline-flex;
+}
+
+.tabBadge {
+  position: absolute;
+  top: -7px;
+  left: calc(100% - 9px);
+  box-sizing: border-box;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border: 2px solid var(--sx-surface);
+  border-radius: 999px;
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

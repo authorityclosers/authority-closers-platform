@@ -322,7 +322,7 @@ it("words every way back from a provider", () => {
   expect(connectReturnNotice("", null)).toBeNull();
   expect(connectReturnNotice("?connect_error=in_use", "google")).toMatchObject({
     tone: "error",
-    title: "That Google account is already used by another Sales Xray account",
+    title: "That Google account is already used by another Sales X-Ray account",
   });
   expect(
     connectReturnNotice("?connect_error=cancelled", "apple"),

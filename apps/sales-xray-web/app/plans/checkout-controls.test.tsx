@@ -18,6 +18,7 @@ import {
 } from "../review-fixture/plans/fixture-billing";
 import { WorkspaceAccessContext } from "../workspace-access";
 import { openHostedCheckout } from "./hosted-checkout";
+import { notify } from "../notice-center";
 import { PlansPurchase } from "./plans-purchase";
 
 const push = vi.fn();
@@ -220,7 +221,7 @@ it.each(["fake", "razorpay"] as const)(
 
 it("shell Back and Close leave plans; drawer Close only dismisses checkout", async () => {
   await render(<PlansPurchase client={fixtureBilling} />);
-  await click("Back to Sales Xray");
+  await click("Back to Sales X-Ray");
   await click("Close");
   expect(push.mock.calls).toEqual([["/"], ["/"]]);
   push.mockClear();
@@ -460,7 +461,13 @@ it("Settings keeps a paid subscription usable when only invoice reads fail", asy
   expect(button("Cancel renewal").disabled).toBe(false);
   expect(host.textContent).toContain("Personal");
   expect(host.textContent).toContain(
-    "Invoices and receipts could not be loaded",
+    "Invoices and receipts are currently unavailable.",
+  );
+  expect(vi.mocked(notify)).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "settings-read-error",
+      message: expect.stringMatching(/your invoices/i),
+    }),
   );
   expect(host.textContent).not.toContain("No invoices or receipts yet");
 });
@@ -476,9 +483,20 @@ it("renders authoritative renewal date and amount when quote exists on live Plan
   await render(<PlansPurchase client={fixtureBilling} quote={quote} />);
   await click("Get Personal");
   expect(host.textContent).toContain("4 Nov 2026 · ₹2,499");
-  expect(host.textContent).not.toContain(
-    "Date and amount confirmed at checkout",
+  expect(host.textContent).not.toContain("Confirmed after payment");
+});
+
+it("shows Enterprise as Talk to us while the plans load, never a price", async () => {
+  await render(
+    <PlansPurchase
+      client={{ ...fixtureBilling, readPlans: () => new Promise(() => {}) }}
+    />,
   );
+  const enterprise = host.querySelector('[data-plan="enterprise"]')!;
+  expect(enterprise.textContent).toContain("Talk to us");
+  expect(enterprise.textContent).not.toContain("₹");
+  expect(button("Get Enterprise")).toBeUndefined();
+  expect(button("Get Personal")).toBeDefined();
 });
 
 it("confirms renewal at checkout when no server quote exists", async () => {
@@ -487,9 +505,7 @@ it("confirms renewal at checkout when no server quote exists", async () => {
   const row = [...host.querySelectorAll("dt")].find(
     (node) => node.textContent === "Next renewal",
   )!.parentElement!;
-  expect(row.textContent).toBe(
-    "Next renewalDate and amount confirmed at checkout",
-  );
+  expect(row.textContent).toBe("Next renewalConfirmed after payment");
   expect(row.textContent).not.toContain("₹0");
 });
 
@@ -508,7 +524,9 @@ it("Settings treats subscription and invoice 404 as billing-off when canonical r
     />,
   );
   await click("Plan & billing");
-  expect(host.textContent).not.toContain("Billing details could not be loaded");
+  expect(host.textContent).not.toContain(
+    "We couldn't load your plan details right now.",
+  );
   expect(host.textContent).toContain("Choose a plan");
   expect(host.textContent).not.toContain("Cancel renewal");
 });
@@ -525,8 +543,16 @@ it("Settings retains error state when canonical plan or usage reads return 404",
     />,
   );
   await click("Plan & billing");
-  expect(host.textContent).toContain("Billing details could not be loaded");
-  expect(button("Try again")).toBeDefined();
+  expect(host.textContent).toContain(
+    "We couldn't load your plan details right now.",
+  );
+  expect(vi.mocked(notify)).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "settings-read-error",
+      message: expect.stringMatching(/your plan details/i),
+      action: expect.objectContaining({ label: "Try again" }),
+    }),
+  );
 });
 
 it("Settings retains error state on subscription 5xx server failure", async () => {
@@ -541,6 +567,14 @@ it("Settings retains error state on subscription 5xx server failure", async () =
     />,
   );
   await click("Plan & billing");
-  expect(host.textContent).toContain("Billing details could not be loaded");
-  expect(button("Try again")).toBeDefined();
+  expect(host.textContent).toContain(
+    "We couldn't load your plan details right now.",
+  );
+  expect(vi.mocked(notify)).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "settings-read-error",
+      message: expect.stringMatching(/your plan details/i),
+      action: expect.objectContaining({ label: "Try again" }),
+    }),
+  );
 });

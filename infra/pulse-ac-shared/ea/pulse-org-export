@@ -1,0 +1,5 @@
+#!/bin/bash
+# EA server: forced SSH command for an organisation's export key (pulsesync). The key's own authorized_keys line names
+# the organisation; whatever the client asks for is ignored. Owner approval 23 Oct 2026 (AUT-2207).
+set -euo pipefail
+exec sudo -n /usr/local/sbin/pulse-org-export-root "${1:?organisation}"

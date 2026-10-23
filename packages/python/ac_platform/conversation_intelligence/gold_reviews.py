@@ -12,7 +12,7 @@ from ac_platform.identity.models import Person
 from ac_platform.identity.services import normalize_email
 from ac_platform.kernel.authz import ActorContext
 
-from . import brain4
+from . import brain4, review_schema
 from .application import (
     ConversationConflict,
     ConversationDenied,
@@ -22,6 +22,7 @@ from .application import (
 from .checkpoints import content_hash
 from .gold_review_contracts import (
     DIMENSION_PREFIX,
+    ITEM_PREFIX,
     MAX_MOMENTS,
     MOMENT_PREFIX,
     GoldSave,
@@ -41,11 +42,40 @@ BLIND = "brain4_blind"
 DIMENSION_TARGETS = tuple(f"{DIMENSION_PREFIX}{d}" for d in brain4.DIMENSION_IDS)
 MOMENT_TARGETS = frozenset(f"{MOMENT_PREFIX}{n:02d}" for n in range(1, MAX_MOMENTS + 1))
 LINES = 29
+# Report review (owner, 23 Oct 2026): every item of the call's Report (review_schema),
+# agreed, disagreed or fixed. How many items a call has is kept on its assignment.
+REPORT = "report"
 
 
-def line_count(mode: str) -> int:
+def line_count(mode: str | None, items: int | None = None) -> int:
     """How many saves finish a call in this mode (moments are optional)."""
+    if mode == REPORT:
+        return items or 0
     return len(DIMENSION_TARGETS) if mode == BLIND else LINES
+
+
+def report_payload(
+    intent: GoldSave, item: dict[str, Any], schema: dict[str, Any], route: dict[str, Any]
+) -> dict[str, Any]:
+    """One item's judgement, bound to the Report schema and the engine route that wrote
+    the item; the AI's rating is kept for agreement, never its words."""
+    payload: dict[str, Any] = {
+        "mode": REPORT,
+        "section": item["section"],
+        "kind": item["kind"],
+        "schema": schema,
+        "route": route,
+        "module": review_schema.route_module(item["section"], route),
+    }
+    for key in ("verdict", "rating", "correction", "skip", "seconds"):
+        value = getattr(intent, key)
+        if value is not None and value != "":
+            payload[key] = value
+    if intent.opinion:
+        payload["opinion"] = intent.opinion
+    if item["kind"] == "rating":
+        payload["ai"] = {"rating": item.get("rating")}
+    return payload
 
 
 def current_heads(rows: Any) -> dict[str, GoldRow]:
@@ -259,8 +289,10 @@ async def gold_assignment_state(database: Any, assignment_id: UUID) -> str | Non
     )
     if link.mode == BLIND:
         q = q.where(GoldRow.target.in_(DIMENSION_TARGETS))
+    if link.mode == REPORT:
+        q = q.where(GoldRow.target.like(f"{ITEM_PREFIX}%"))
     count = int(await database.scalar(q) or 0)
-    if count >= line_count(link.mode):
+    if count >= max(1, line_count(link.mode, link.items)):
         return "submitted"
     return "in_progress" if count else "assigned"
 
@@ -412,6 +444,8 @@ class GoldReviews:
         superseded = {r.supersedes_id for r in history if r.supersedes_id}
         if link.mode == BLIND:
             return withhold(await self._blind_view(review, evidence, history, assignment_id), plan)
+        if link.mode == REPORT:
+            return withhold(await self._report_view(review, evidence, history, assignment_id), plan)
         return withhold(
             {
                 "review_id": str(review.id),
@@ -464,6 +498,58 @@ class GoldReviews:
             "brain4": reveal(await brain4_read(self.database, review)) if revealed else None,
         }
 
+    async def report_items(
+        self, evidence: Any, review: ConversationPointerReview
+    ) -> tuple[list[dict[str, Any]], dict[str, Any], dict[str, Any]]:
+        """The call's Report as the Report itself builds it (the saved draft's structure,
+        the AI review over it, Brain 4.0 from the review or its shadow read), as review
+        items, with the schema and the engine route behind them."""
+        from .brain4_shadow import MODEL_ID as SHADOW_MODEL
+        from .pointer_review import merge_into_structure
+        from .report_store import ConversationReports
+        from .report_structure import project_report_structure
+
+        report, _ = ConversationReports._validated(evidence.draft, evidence.recording)
+        payload = dict(review.payload or {})
+        if isinstance(payload.get("brain4"), dict):
+            source: str | None = f"review:{review.model_id}"
+        else:
+            shadow = await brain4_read(self.database, review)
+            source = f"shadow:{SHADOW_MODEL}" if shadow else None
+            if shadow:
+                payload["brain4"] = shadow
+        structure = merge_into_structure(project_report_structure(report), payload)
+        route = {"review": f"{review.created_by}:{review.model_id}", "brain4": source}
+        return review_schema.items(structure), review_schema.meta(structure), route
+
+    async def _report_view(
+        self, review: ConversationPointerReview, evidence: Any, history: Any, assignment_id: UUID
+    ) -> dict[str, Any]:
+        """Every item of the call's Report, by section, with his saves."""
+        found, schema, route = await self.report_items(evidence, review)
+        superseded = {r.supersedes_id for r in history if r.supersedes_id}
+        return {
+            "mode": REPORT,
+            "review_id": str(review.id),
+            "version": review.version,
+            "review_status": "report_review",
+            "call": {
+                "recording_id": str(review.recording_id),
+                "run_id": str(review.run_id),
+                "source_sha256": review.source_sha256,
+                "transcript_revision": review.transcript_revision,
+            },
+            "lines": [],
+            "sections": review_schema.sections(found),
+            "schema": schema,
+            "route": route,
+            "saved": [row_view(r) for r in history if r.id not in superseded],
+            "history_count": len(history),
+            "audio_source_url": f"/v1/reviewer/review-assignments/{assignment_id}/source",
+            "transcript": evidence.transcript,
+            "context": call_context(evidence),
+        }
+
     async def save(
         self, actor: ActorContext, assignment_id: UUID, intent: GoldSave, key: str
     ) -> dict[str, Any]:
@@ -482,7 +568,16 @@ class GoldReviews:
                 raise ConversationConflict("This save key belongs to different feedback.")
             return row_view(previous_request)
         kind = target_kind(intent.target)
-        if link.mode == BLIND:
+        report_item: dict[str, Any] | None = None
+        if link.mode == REPORT:
+            found, schema, route = await self.report_items(evidence, review)
+            by_target = {f"{ITEM_PREFIX}{item['id']}": item for item in found}
+            report_item = by_target.get(intent.target)
+            if kind != "item" or report_item is None:
+                raise ConversationError("Choose an item of this call's Report.")
+            if intent.rating is not None and report_item["kind"] != "rating":
+                raise ConversationError("This item has no rating to fix; say what it should say.")
+        elif link.mode == BLIND:
             if intent.target not in (*DIMENSION_TARGETS, *MOMENT_TARGETS):
                 raise ConversationError(
                     "This call is rated blind: choose a Brain 4.0 dimension or a moment."
@@ -520,6 +615,8 @@ class GoldReviews:
             if kind == "moment" and not revealed and intent.moment and intent.moment.caught:
                 raise ConversationError("Mark what Brain 4.0 caught after its read is shown.")
             payload = blind_payload(intent, revealed=revealed, head=head)
+        elif report_item is not None:
+            payload = report_payload(intent, report_item, schema, route)
         else:
             payload = gold_payload(intent, review.payload or {})
         row = GoldRow(

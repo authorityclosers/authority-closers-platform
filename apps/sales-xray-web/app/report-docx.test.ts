@@ -164,10 +164,10 @@ describe("report Word file helpers", () => {
 
   it("makes a safe file name", () => {
     expect(reportDocxFilename('A/B: "call"?')).toBe(
-      "A B   call – Sales Xray report.docx",
+      "A B   call – Sales X-Ray report.docx",
     );
     expect(reportDocxFilename("  ")).toBe(
-      "Sales Xray call – Sales Xray report.docx",
+      "Sales X-Ray call – Sales X-Ray report.docx",
     );
   });
 });

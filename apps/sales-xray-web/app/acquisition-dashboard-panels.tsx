@@ -14,6 +14,7 @@ import {
   Sparkles,
 } from "lucide-react";
 import styles from "./acquisition-dashboard-panels.module.css";
+import { CALL_LIMIT_MINUTES } from "./call-limit";
 
 export type AcquisitionStage = "empty" | "selected" | "processing" | "report";
 
@@ -286,7 +287,7 @@ export function AcquisitionGuideRail({
               <BookOpen size={34} strokeWidth={1.7} aria-hidden="true" />
               <div>
                 <h3>Need help?</h3>
-                <p>Get the most out of Sales Xray with a few quick tips.</p>
+                <p>Get the most out of Sales X-Ray with a few quick tips.</p>
               </div>
             </div>
             <details>
@@ -295,7 +296,9 @@ export function AcquisitionGuideRail({
                 <ArrowRight size={17} aria-hidden="true" />
               </summary>
               <ul className={styles.helpTips}>
-                <li>Choose a audio or video file up to 100 MB.</li>
+                <li>
+                  {`Choose an audio or video file up to 100 MB and ${CALL_LIMIT_MINUTES} minutes long.`}
+                </li>
                 <li>
                   Check the language and privacy details before you continue.
                 </li>

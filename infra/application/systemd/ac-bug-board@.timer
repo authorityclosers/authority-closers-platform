@@ -1,0 +1,10 @@
+[Unit]
+Description=Every minute: Sales Xray bug reports to the work board (%i)
+
+[Timer]
+OnBootSec=2min
+OnCalendar=minutely
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

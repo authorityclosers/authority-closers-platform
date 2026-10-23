@@ -1,0 +1,183 @@
+#!/usr/bin/env python3
+"""EA server: Authority Closers' task route into the shared Pulse (owner approval 23 Oct 2026, AUT-2207).
+
+AC's own tools (Align 3's record scripts, the gold-review bridge, the sample watcher on ac) used to write AC's Pulse
+with SQL. Since AC lives in the shared Pulse, they come here instead, over one restricted SSH key (pulsesync, forced
+command pulse-ac-tasks, from ac's address only). This program never runs SQL from the caller: it reads one JSON request
+on stdin, runs a fixed set of task operations inside Authority Closers' organisation only (pulse.org_id fixed below, as
+the schema owner, so Pulse's forced row-level security still confines every table to that organisation), with the
+caller's values passed as data, and prints one JSON answer. Writes go through Pulse's own functions (task_save,
+task_move, work_comment_add), as an AC person (default @suyash, the owner), so Pulse's audit records them with the
+caller's actor label.
+
+Request: {"as": "suyash", "actor": "align-3", "dry": false, "ops": [{"op": "find", ...}, ...]}  (one transaction;
+"dry": true rolls back). Operations:
+  people                                   AC's people: id, name, username, email, status
+  find {title|titleLike|marker|assigneeId|parentId|roots|open|limit}   tasks (id, title, status, parentId, ...)
+  get {id|title}                            one task with notes, proof items, comments and file names
+  save {id?, fields, guessCategoryFrom?}    pulse.task_save(id, fields) -> {"id": ...}
+  move {id, status, note?}                  pulse.task_move
+  comment {taskId, body}                    pulse.work_comment_add
+  file {id}                                 a task file's bytes, base64
+  ensure {marker, fields, parent?: {title, fields}}   create the task (under the open root task with that title and
+                                            assignee, made if missing) unless a task's notes already hold the marker
+  close {marker, status, note?}             move every open task whose notes hold the marker
+  state {markers: [...]}                    each marker's task: id, status, has a parent
+  project {id?, fields}                     pulse.work_project_save (e.g. {"type": "internal", "name": "…"})
+  check {taskId, key, label, done}          pulse.task_check_set: one checklist step on a task
+  chat {channelId, body, clientId?}         pulse.chat_send into an allowlisted AC channel only
+                                            (/etc/pulse-ac-tasks.chat-allow, one channel id per line; today the
+                                            Leadership chat, for Align 3's release cards); pass a clientId (uuid) so a retry
+                                            never posts twice (one is made when missing)
+"""
+from __future__ import annotations
+
+import json
+import re
+import secrets
+import subprocess
+import sys
+
+ORG = "350ce338-d796-4de2-b17b-07cbc337f27a"  # Authority Closers
+PSQL = ["docker", "exec", "-i", "-e", "PGAPPNAME=pulse-ac-tasks", "ea-postgres", "psql", "-U", "ea_admin", "-d", "pulse",
+        "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"]
+MAX_INPUT = 4 * 1024 * 1024
+CHAT_ALLOW = "/etc/pulse-ac-tasks.chat-allow"
+UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}")
+TASK_COLS = """json_build_object('id', t.id, 'title', t.title, 'status', t.status, 'parentId', t.parent_id,
+  'assigneeId', t.assignee_person_id, 'projectId', t.project_id, 'priority', t.priority, 'category', t.category,
+  'dueAt', t.due_at, 'doneAt', t.done_at, 'createdAt', t.created_at, 'updatedAt', t.updated_at, 'notes', t.notes)"""
+OPEN = "t.status not in ('done', 'cancelled')"
+
+# Each operation reads its arguments from the jsonb value p (the caller's object), never from text spliced into SQL.
+OPS = {
+    "people": """select coalesce(json_agg(json_build_object('id', pe.id, 'name', pe.display_name, 'username', pp.username,
+        'email', lower(pp.email), 'status', pe.status) order by pp.user_no), '[]')
+      from pulse.person pe left join pulse.people_profile pp on pp.person_id = pe.id""",
+    "find": f"""select coalesce(json_agg(x order by (x->>'createdAt')), '[]') from (select {TASK_COLS}::jsonb as x from pulse.task t
+      where t.deleted_at is null
+        and (p->>'title' is null or t.title = p->>'title')
+        and (p->>'titleLike' is null or t.title ilike '%' || (p->>'titleLike') || '%')
+        and (p->>'marker' is null or position(p->>'marker' in coalesce(t.notes, '')) > 0)
+        and (p->>'assigneeId' is null or t.assignee_person_id = (p->>'assigneeId')::uuid)
+        and (p->>'parentId' is null or t.parent_id = (p->>'parentId')::uuid)
+        and (coalesce((p->>'roots')::boolean, false) = false or t.parent_id is null)
+        and (coalesce((p->>'open')::boolean, false) = false or {OPEN})
+      order by t.created_at limit least(coalesce((p->>'limit')::int, 200), 1000)) s""",
+    "get": f"""select coalesce((select {TASK_COLS}::jsonb || jsonb_build_object(
+        'proof', coalesce((select jsonb_agg(jsonb_build_object('kind', pr.kind, 'label', pr.label, 'url', pr.url, 'file', wf.name) order by pr.added_at)
+                  from pulse.task_proof pr left join pulse_priv.work_file wf on wf.id = pr.file_id
+                  where pr.task_id = t.id and pr.removed_at is null), '[]'),
+        'comments', coalesce((select jsonb_agg(jsonb_build_object('at', c.created_at, 'by', pe.display_name, 'body', c.body) order by c.created_at)
+                  from pulse.work_comment c left join pulse.person pe on pe.id = c.author_id
+                  where c.task_id = t.id and (to_jsonb(c) ->> 'removed_at') is null), '[]'),
+        'files', coalesce((select jsonb_agg(jsonb_build_object('id', f.id, 'name', f.name, 'sha256', f.sha256) order by f.added_at)
+                  from pulse_priv.work_file f where f.task_id = t.id), '[]'))
+      from pulse.task t where t.deleted_at is null
+        and ((p->>'id' is not null and t.id = (p->>'id')::uuid) or (p->>'id' is null and t.title = p->>'title'))
+      order by t.created_at limit 1)::json, 'null'::json)""",
+    "save": """select json_build_object('id', pulse.task_save(nullif(p->>'id', '')::uuid,
+        case when p ? 'guessCategoryFrom' and not (p->'fields' ? 'category')
+             then (p->'fields') || jsonb_build_object('category', pulse.work_category_guess(p->>'guessCategoryFrom'))
+             else p->'fields' end))""",
+    "move": """select pulse.task_move((p->>'id')::uuid, p->>'status', p->>'note')::json""",
+    "comment": """select json_build_object('id', pulse.work_comment_add((p->>'taskId')::uuid, null, p->>'body', '{}'::uuid[]))""",
+    "file": """select coalesce((select json_build_object('id', f.id, 'name', f.name, 'base64', encode(f.bytes, 'base64'))
+      from pulse_priv.work_file f where f.id = (p->>'id')::uuid), 'null'::json)""",
+    "ensure": f"""select (with existing as (select t.id from pulse.task t where t.deleted_at is null
+                          and position(p->>'marker' in coalesce(t.notes, '')) > 0 order by t.created_at limit 1),
+        par as (select case when p->'parent' is null then null else coalesce(
+                   (select t.id from pulse.task t where t.deleted_at is null and t.parent_id is null and {OPEN}
+                      and t.title = p->'parent'->>'title'
+                      and t.assignee_person_id is not distinct from nullif(p->'parent'->'fields'->>'assigneeId', '')::uuid
+                    order by t.created_at limit 1),
+                   (select pulse.task_save(null, (p->'parent'->'fields') || jsonb_build_object('title', p->'parent'->>'title',
+                      'category', coalesce(p->'parent'->'fields'->>'category', pulse.work_category_guess(p->'parent'->>'title'))))
+                    where not exists (select 1 from existing))) end as id),
+        made as (select pulse.task_save(null, jsonb_strip_nulls((p->'fields') || jsonb_build_object(
+                    'parentId', (select id from par),
+                    'category', coalesce(p->'fields'->>'category', pulse.work_category_guess(p->'fields'->>'title'))))) as id
+                  where not exists (select 1 from existing))
+      select json_build_object('id', coalesce((select id from made), (select id from existing)),
+                               'created', exists (select 1 from made), 'parentId', (select id from par)))""",
+    "close": f"""select json_build_object('moved', count(pulse.task_move(t.id, p->>'status', p->>'note')))
+      from pulse.task t where t.deleted_at is null and {OPEN} and position(p->>'marker' in coalesce(t.notes, '')) > 0""",
+    "state": """select coalesce(json_agg(json_build_object('marker', m.marker, 'id', t.id, 'status', t.status,
+        'parent', t.parent_id is not null)), '[]')
+      from jsonb_array_elements_text(p->'markers') m(marker)
+      join pulse.task t on t.deleted_at is null and position(m.marker in coalesce(t.notes, '')) > 0""",
+    "project": """select to_json(pulse.work_project_save(nullif(p->>'id', '')::uuid, p->'fields'))""",
+    "check": """select to_json(pulse.task_check_set((p->>'taskId')::uuid, p->>'key', p->>'label',
+        coalesce((p->>'done')::boolean, false)))""",
+    "chat": """select json_build_object('id', pulse.chat_send((p->>'channelId')::uuid, p->>'body', null::uuid, '[]'::jsonb,
+        coalesce(nullif(p->>'clientId', '')::uuid, gen_random_uuid()), null::uuid))""",
+}
+
+
+def chat_allowed() -> set[str]:
+    try:
+        with open(CHAT_ALLOW, encoding="utf-8") as f:
+            return {line.split("#")[0].strip() for line in f if UUID.fullmatch(line.split("#")[0].strip())}
+    except OSError:
+        return set()
+
+
+def quote(text: str) -> str:
+    """A dollar-quoted literal whose tag cannot occur in the text."""
+    while True:
+        tag = "$q" + secrets.token_hex(6) + "$"
+        if tag not in text:
+            return tag + text + tag
+
+
+def answer(obj: object, code: int = 0) -> int:
+    sys.stdout.write(json.dumps(obj, ensure_ascii=False, default=str) + "\n")
+    return code
+
+
+def main() -> int:
+    raw = sys.stdin.buffer.read(MAX_INPUT + 1)
+    if len(raw) > MAX_INPUT:
+        return answer({"error": "request too large"}, 2)
+    try:
+        req = json.loads(raw.decode("utf-8"))
+        ops = req["ops"]
+        assert isinstance(ops, list) and 0 < len(ops) <= 200 and all(isinstance(o, dict) and o.get("op") in OPS for o in ops)
+    except Exception as e:  # noqa: BLE001 - the caller gets the reason, nothing runs
+        return answer({"error": f"bad request: {e}; ops must be a list of {sorted(OPS)}"}, 2)
+    allowed = chat_allowed()
+    for o in ops:
+        if o["op"] != "chat":
+            continue
+        if str(o.get("channelId", "")) not in allowed:
+            return answer({"error": "chat: that channel is not on this route's allowlist"}, 2)
+        if not (1 <= len(str(o.get("body", "")).strip()) <= 4000):
+            return answer({"error": "chat: body of 1 to 4000 characters"}, 2)
+        if o.get("clientId") and not UUID.fullmatch(str(o["clientId"])):
+            return answer({"error": "chat: clientId must be a uuid"}, 2)
+    who = str(req.get("as") or "suyash")
+    actor = re.sub(r"[^\w .,:()@/+-]", "", str(req.get("actor") or "ac-tool"))[:120]
+    if not re.fullmatch(r"[a-z0-9][a-z0-9._]{1,40}", who):
+        return answer({"error": "as: an AC username"}, 2)
+    lines = ["\\set ON_ERROR_STOP on", "begin;", "set local role pulse_owner;",
+             f"select set_config('pulse.org_id', '{ORG}', true) \\g /dev/null",
+             f"select set_config('pulse.actor_account', {quote('AC tasks route (AUT-2207) · ' + actor)}, true) \\g /dev/null",
+             f"select set_config('pulse.viewer_id', coalesce((select pp.person_id::text from pulse.people_profile pp join pulse.person pe on pe.id = pp.person_id"
+             f" where pp.org_id = '{ORG}' and pp.username = {quote(who)} and pe.status = 'active'), ''), true) \\g /dev/null",
+             "do $v$ begin if nullif(current_setting('pulse.viewer_id', true), '') is null then"
+             " raise exception 'no active Authority Closers person with that username'; end if; end $v$;"]
+    for i, o in enumerate(ops):
+        args = {k: v for k, v in o.items() if k != "op"}
+        lines.append(f"select json_build_object('i', {i}, 'op', '{o['op']}', 'r', (with a as (select {quote(json.dumps(args, ensure_ascii=False))}::jsonb as p)"
+                     f" select ({OPS[o['op']]}) from a))::text;")
+    lines.append("rollback;" if req.get("dry") else "commit;")
+    proc = subprocess.run(PSQL, input="\n".join(lines) + "\n", capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        err = [ln for ln in proc.stderr.strip().splitlines() if ln.startswith("ERROR:")] or proc.stderr.strip().splitlines()
+        return answer({"error": (err[0].removeprefix("ERROR:").strip() if err else "failed")[:500], "committed": False}, 1)
+    results = [json.loads(line) for line in proc.stdout.splitlines() if line.startswith("{")]
+    return answer({"results": results, "committed": not req.get("dry"), "as": who})
+
+
+if __name__ == "__main__":
+    sys.exit(main())

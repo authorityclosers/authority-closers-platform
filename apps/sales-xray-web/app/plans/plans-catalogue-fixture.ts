@@ -13,7 +13,7 @@ export type DisplayTopUpPack = {
 /** Owner-approved top-up display prices; purchase wiring belongs to AUT-880. */
 export const TOP_UP_PACKS: DisplayTopUpPack[] = [
   {
-    key: "personal_100",
+    key: "topup_100",
     planKey: "personal",
     title: "Personal Top-up",
     audience: "For individual closers",
@@ -22,7 +22,7 @@ export const TOP_UP_PACKS: DisplayTopUpPack[] = [
     gstInclusive: true,
   },
   {
-    key: "organisation_500",
+    key: "topup_500",
     planKey: "organisation",
     title: "Organisation Top-up",
     audience: "Shared pool for your sales team",

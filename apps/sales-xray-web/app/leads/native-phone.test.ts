@@ -5,8 +5,10 @@ import {
   missedReason,
   onPhoneCall,
   parseCall,
+  phoneStatus,
   readLastCall,
   readPhoneRecording,
+  signInOnPhone,
   startPhoneCall,
 } from "./native-phone";
 
@@ -163,5 +165,88 @@ describe("reading the phone's answer", () => {
     expect(missedReason("failed")).toBe("not_connected");
     expect(missedReason("no_network")).toBe("out_of_coverage");
     expect(missedReason("answered")).toBeNull();
+  });
+});
+
+describe("the phone's own sign-in (Google sheet, Facebook app)", () => {
+  function signInPhone(reply: {
+    ok: boolean;
+    result?: unknown;
+    error?: string;
+  }) {
+    const listeners: Listener[] = [];
+    const sent: { method: string; args: Record<string, unknown> }[] = [];
+    vi.stubGlobal("SXPhone", {
+      addEventListener: (_: string, listener: Listener) =>
+        listeners.push(listener),
+      postMessage: (data: string) => {
+        const message = JSON.parse(data) as {
+          id: string;
+          method: string;
+          args: Record<string, unknown>;
+        };
+        sent.push({ method: message.method, args: message.args });
+        const answer =
+          message.method === "status"
+            ? {
+                ok: true,
+                result: {
+                  signIn: true,
+                  nativeSignIn: ["google", "facebook", "apple", 7],
+                },
+              }
+            : reply;
+        queueMicrotask(() =>
+          listeners.forEach((listener) =>
+            listener({ data: JSON.stringify({ id: message.id, ...answer }) }),
+          ),
+        );
+      },
+    });
+    return sent;
+  }
+
+  it("reads which providers the app signs in with by itself", async () => {
+    signInPhone({ ok: true });
+    expect((await phoneStatus())?.nativeSignIn).toEqual(["google", "facebook"]);
+  });
+
+  it("asks the app with the server's nonce and client id and gets the token back", async () => {
+    const sent = signInPhone({ ok: true, result: { token: "id.token.value" } });
+    expect(
+      await signInOnPhone({
+        provider: "google",
+        nonce: "nonce-1",
+        clientId: "web-client-id",
+      }),
+    ).toEqual({ token: "id.token.value" });
+    expect(sent).toEqual([
+      {
+        method: "nativeSignIn",
+        args: {
+          provider: "google",
+          nonce: "nonce-1",
+          clientId: "web-client-id",
+        },
+      },
+    ]);
+  });
+
+  it.each([
+    ["cancelled", "cancelled"],
+    ["no_account", "no_account"],
+    ["unavailable", "unavailable"],
+    ["something_else", "failed"],
+  ])("maps the app's %s to %s", async (error, expected) => {
+    signInPhone({ ok: false, error });
+    expect(
+      await signInOnPhone({ provider: "facebook", nonce: "n", appId: "1" }),
+    ).toEqual({ error: expected });
+  });
+
+  it("is unavailable in a browser", async () => {
+    expect(await signInOnPhone({ provider: "google", nonce: "n" })).toEqual({
+      error: "unavailable",
+    });
   });
 });

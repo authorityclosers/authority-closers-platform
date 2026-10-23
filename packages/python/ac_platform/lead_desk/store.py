@@ -759,6 +759,26 @@ class LeadDesk:
 
     async def _call_back(self, in_pipeline: Any = None) -> tuple[LeadRow, ...]:
         """My leads who called in the last few days and weren't reached since, newest first."""
+        waiting = await self._waiting_call_back(in_pipeline)
+        if not waiting:
+            return ()
+        leads = (
+            await self.db.scalars(
+                select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id.in_(list(waiting)))
+            )
+        ).all()
+        found = {row.lead_id: row for row in await self._rows(leads)}
+        return tuple(
+            found[lead_id].model_copy(update={"missed_at": at, "missed_calls": count})
+            for lead_id, (at, count) in sorted(
+                waiting.items(), key=lambda item: item[1][0], reverse=True
+            )
+            if lead_id in found
+        )[:QUEUE_LIMIT]
+
+    async def _waiting_call_back(self, in_pipeline: Any = None) -> dict[UUID, tuple[datetime, int]]:
+        """My leads who called in the last few days and weren't reached since: when each
+        last called, and how many of their calls were missed."""
         rows = (
             await self.db.execute(
                 select(
@@ -792,42 +812,37 @@ class LeadDesk:
                 waiting[lead_id] = (at, waiting.get(lead_id, (at, 0))[1] + 1)
             elif reached(kind, data):
                 waiting.pop(lead_id, None)
-        if not waiting:
-            return ()
-        leads = (
-            await self.db.scalars(
-                select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id.in_(list(waiting)))
-            )
-        ).all()
-        found = {row.lead_id: row for row in await self._rows(leads)}
-        return tuple(
-            found[lead_id].model_copy(update={"missed_at": at, "missed_calls": count})
-            for lead_id, (at, count) in sorted(
-                waiting.items(), key=lambda item: item[1][0], reverse=True
-            )
-            if lead_id in found
-        )[:QUEUE_LIMIT]
+        return waiting
 
     async def badge(self) -> Badge:
-        """What is due for me now: the Leads tab's badge and the phone's icon count."""
+        """What is due for me now: the Leads tab's badge and the phone's icon count. A lead
+        who called and wasn't reached counts too, once (Redmi check, 23 Oct 2026: the badge,
+        the To call tab and its rows tell the same story)."""
+        mine = and_(
+            Lead.tenant_id == self.tenant_id,
+            Lead.owner_person_id == self.viewer.person_id,
+            Lead.stage.in_(OPEN_STAGES),
+        )
+        due = or_(
+            Lead.next_action_at <= self.now,
+            and_(Lead.stage == "new", Lead.next_action_at.is_(None)),
+        )
         row = (
             await self.db.execute(
                 select(
                     func.count().filter(overdue_filter(self.now)),
-                    func.count().filter(
-                        or_(
-                            Lead.next_action_at <= self.now,
-                            and_(Lead.stage == "new", Lead.next_action_at.is_(None)),
-                        )
-                    ),
-                ).where(
-                    Lead.tenant_id == self.tenant_id,
-                    Lead.owner_person_id == self.viewer.person_id,
-                    Lead.stage.in_(OPEN_STAGES),
-                )
+                    func.count().filter(due),
+                ).where(mine)
             )
         ).one()
-        return Badge(overdue=int(row[0]), to_call=int(row[1]), generated_at=self.now)
+        waiting = list(await self._waiting_call_back())
+        also = 0
+        if waiting:
+            counted = await self.db.scalar(
+                select(func.count()).where(mine, due, Lead.id.in_(waiting))
+            )
+            also = len(waiting) - int(counted or 0)
+        return Badge(overdue=int(row[0]), to_call=int(row[1]) + also, generated_at=self.now)
 
     async def next_lead(
         self, skip: UUID | None = None, pipeline: str | None = None

@@ -133,7 +133,7 @@ async def _assignments(database: Any, person_id: UUID, now: datetime) -> list[di
         }
     items = []
     for gold, assignment, recording in rows:
-        total = line_count(gold.mode)
+        total = line_count(gold.mode, gold.items)
         done = min(handled.get(gold.assignment_id, 0), total)
         items.append(
             {
@@ -248,11 +248,25 @@ async def metrics(
     heads = _heads(rows)
     labels = await _labels(database)
     today = _day(now)
+    # A report review call is done when every item its Report had is handled.
+    report_items = {
+        assignment_id: items or 0
+        for assignment_id, items in (
+            await database.execute(
+                select(GoldAssignment.assignment_id, GoldAssignment.items).where(
+                    GoldAssignment.mode == "report"
+                )
+            )
+        ).all()
+    }
 
     def judged(row: GoldRow) -> bool:
         return not (row.payload or {}).get("skip") and target_kind(row.target) != "moment"
 
-    def finished(targets: set[str]) -> bool:
+    def finished(assignment_id: UUID, targets: set[str]) -> bool:
+        if assignment_id in report_items:
+            items = {t for t in targets if target_kind(t) == "item"}
+            return len(items) >= max(1, report_items[assignment_id])
         lines = {t for t in targets if target_kind(t) == "line"}
         return len(lines) >= LINES or len(targets & set(DIMENSION_TARGETS)) >= len(
             DIMENSION_TARGETS
@@ -277,11 +291,14 @@ async def metrics(
             ),
             "moments": sum(1 for r in selected if target_kind(r.target) == "moment"),
             "today": sum(1 for r in selected if _day(r.created_at) == today),
-            "calls_done": sum(1 for targets in calls.values() if finished(targets)),
+            "calls_done": sum(1 for a, targets in calls.items() if finished(a, targets)),
             "calls_started": len(calls),
             "median_seconds": _median(seconds),
-            "agreement": _rate(verdicts["agree"], verdicts["partly"], verdicts["disagree"]),
-            "verdicts": {k: verdicts[k] for k in ("agree", "partly", "disagree")},
+            # A fixed Report item is one the AI got wrong.
+            "agreement": _rate(
+                verdicts["agree"], verdicts["partly"], verdicts["disagree"] + verdicts["fix"]
+            ),
+            "verdicts": {k: verdicts[k] for k in ("agree", "partly", "disagree", "fix")},
         }
 
     mine = [r for r in heads if r.reviewer_id == person_id]

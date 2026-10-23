@@ -196,6 +196,8 @@ describe("Lightbox token derivative", () => {
       // One teal accent (owner, 11 Oct 2026): info is slate, not blue.
       ["info", "#56637a"],
       ["info-soft", "#eceff4"],
+      // The brand's Mint on film (brand B "Insight", owner, 23 Oct 2026).
+      ["glow", "#3debb0"],
     ]);
     const addedLight = new Set([
       "elevated",
@@ -401,7 +403,7 @@ describe("Lightbox token derivative", () => {
     expect(offenders).toEqual([]);
   });
 
-  describe("Scoped Pulse-role to Sales Xray teal adapter (AUT-1451 card 2)", () => {
+  describe("Scoped Pulse-role to Sales X-Ray teal adapter (AUT-1451 card 2)", () => {
     const pulseTokensPath = join(appDir, "ui", "pulse-tokens.css");
     const pulseTokensCss = readFileSync(pulseTokensPath, "utf8");
 
@@ -436,7 +438,7 @@ describe("Lightbox token derivative", () => {
       expect(pulseRoles).toHaveLength(20);
     });
 
-    it("maps Pulse roles strictly to Sales Xray teal/neutral tokens without iris or circular aliases", () => {
+    it("maps Pulse roles strictly to Sales X-Ray teal/neutral tokens without iris or circular aliases", () => {
       const clean = withoutComments(pulseTokensCss);
 
       // No Iris action or brand colors

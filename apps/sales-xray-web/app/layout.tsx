@@ -24,8 +24,10 @@ import { InitialSessionProvider } from "./initial-session";
 import { DisplayDatesProvider } from "./display-clock";
 import { serverDisplayDates, serverSession } from "./server-reads";
 import { NoticeCenter } from "./notice-center";
+import { TelemetryAuto } from "./telemetry-auto";
+import { PressFeedback } from "./press-feedback";
 export const metadata: Metadata = {
-  title: "Sales Xray · Authority Closers",
+  title: "Sales X-Ray · Authority Closers",
   description:
     "Review the conversation. Understand the evidence. Practice with purpose.",
   robots: { index: false, follow: false },
@@ -117,6 +119,9 @@ export default async function Layout({
             </InitialSessionProvider>
             <UploadIndicator />
             <NoticeCenter />
+            {/* Usage and performance telemetry, sent only for people it is on for. */}
+            <TelemetryAuto />
+            <PressFeedback />
           </UploadSessionProvider>
         </ThemeProvider>
       </body>

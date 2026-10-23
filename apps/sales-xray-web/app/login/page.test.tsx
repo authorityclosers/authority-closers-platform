@@ -130,14 +130,19 @@ it("opens the versioned code-first flow without initiating sign-in before consen
     host.querySelector('a[aria-label="Sales Xray home"]')?.getAttribute("href"),
   ).toBe("/");
   expect(host.querySelector<HTMLInputElement>("#account-email")).not.toBeNull();
+  // Never greyed out (owner, 23 Oct 2026): before the box is ticked a press
+  // points at the box and starts nothing.
+  const google = Array.from(host.querySelectorAll("button")).find((item) =>
+    item.textContent?.includes("Continue with Google"),
+  )!;
   expect(
     host.querySelector<HTMLButtonElement>("button[type=submit]")?.disabled,
-  ).toBe(true);
-  expect(
-    Array.from(host.querySelectorAll("button")).find((item) =>
-      item.textContent?.includes("Continue with Google"),
-    )?.disabled,
-  ).toBe(true);
+  ).toBe(false);
+  expect(google.disabled).toBe(false);
+  await act(async () => google.click());
+  expect(host.querySelector("#account-consent-nudge")?.textContent).toBe(
+    "Tick this box to continue.",
+  );
   expect(fetcher.mock.calls.map((call) => call[0])).toEqual([
     "/v1/auth/email-code/config?surface=sales_xray",
   ]);

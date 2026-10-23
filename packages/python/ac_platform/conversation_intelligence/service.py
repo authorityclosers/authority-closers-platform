@@ -132,7 +132,9 @@ async def run_service(
         database_url,
         echo=False,
         hide_parameters=True,
-        pool_size=2,
+        # One connection per provider consumer (held across its provider
+        # call), plus one the local consumer and the gold reader share.
+        pool_size=config.provider_consumers + 1,
         max_overflow=0,
         pool_timeout=10,
         pool_pre_ping=True,
@@ -163,6 +165,7 @@ async def run_service(
                     reporting.plans,
                     reporting.inference,
                     wakeups=wakeups,
+                    provider_consumers=config.provider_consumers,
                 )
                 return await runner.run(stop)
         finally:

@@ -89,6 +89,8 @@ export type Invoice = {
   igstMinor: number;
   totalMinor: number;
   placeOfSupply: string | null;
+  /** Whether this payment can be refunded now (C1 §4); null when it never can. */
+  refund: Refund | null;
 };
 
 export function parseInvoices(value: unknown): {
@@ -110,6 +112,7 @@ export function parseInvoices(value: unknown): {
         "igst_minor",
         "total_minor",
         "place_of_supply",
+        "refund",
       ]);
       return {
         invoiceId: text(invoice, "invoice_id", path),
@@ -125,6 +128,7 @@ export function parseInvoices(value: unknown): {
           invoice.place_of_supply === null
             ? null
             : text(invoice, "place_of_supply", path),
+        refund: parseRefund(invoice.refund, `${path}.refund`),
       };
     }),
     nextBefore:
@@ -514,6 +518,15 @@ export function parseRefund(value: unknown, path = "refund"): Refund | null {
     ]),
     reasonCode: (reason ?? null) as Refund["reasonCode"],
   };
+}
+
+/** POST /v1/payments/{id}/refund answers {"refund": …}. */
+export function parseRefundResult(value: unknown): Refund {
+  const raw = object(value, "refund_result", ["refund"]);
+  const refund = parseRefund(raw.refund, "refund_result.refund");
+  if (!refund)
+    throw new ContractError("refund_result.refund", "expected a refund");
+  return refund;
 }
 
 export function parseOrder(value: unknown, path = "order"): Order {

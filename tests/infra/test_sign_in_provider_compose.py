@@ -8,6 +8,7 @@ SIGN_IN_PROVIDER_SETTINGS = {
     "AC_FACEBOOK_LOGIN_APP_ID": "1234567890",
     "AC_FACEBOOK_LOGIN_APP_SECRET": "fixture-facebook-login-secret",
     "AC_FACEBOOK_LOGIN_GRAPH_VERSION": "v23.0",
+    "AC_FACEBOOK_LOGIN_CLIENT_TOKEN": "fixture-facebook-client-token",
     "AC_APPLE_SIGN_IN_SERVICE_ID": "com.example.salesxray.web",
     "AC_APPLE_SIGN_IN_TEAM_ID": "ABCDE12345",
     "AC_APPLE_SIGN_IN_KEY_ID": "KEY1234567",

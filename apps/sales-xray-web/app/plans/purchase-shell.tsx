@@ -40,7 +40,7 @@ export function PurchaseShell({
             type="button"
             className={styles.shellBackBtn}
             onClick={handleClose}
-            aria-label="Back to Sales Xray"
+            aria-label="Back to Sales X-Ray"
           >
             <ArrowLeft size={16} aria-hidden="true" />
             <span>Back</span>
@@ -52,11 +52,18 @@ export function PurchaseShell({
             className={styles.shellSparkle}
             aria-hidden="true"
           />
-          <span className={styles.shellBrandName}>Sales Xray</span>
+          <span className={styles.shellBrandName}>Sales X-Ray</span>
         </div>
         <div className={styles.shellHeaderRight}>
-          <Link className={styles.shellReceiptLink} href="/account#billing">
-            Billing &amp; receipts
+          <Link
+            className={styles.shellReceiptLink}
+            href="/account#billing"
+            aria-label="Billing & receipts"
+          >
+            <span className={styles.receiptLong}>Billing &amp; receipts</span>
+            <span className={styles.receiptShort} aria-hidden="true">
+              Receipts
+            </span>
           </Link>
           <button
             type="button"

@@ -487,7 +487,8 @@
   overflow-wrap: anywhere;
 }
 
-/* Consent comes first: it unlocks Google and email together. */
+/* Consent comes first. The buttons below never grey out: pressing one before
+   the box is ticked points at the box (data-nudge) and says why. */
 .consent {
   position: relative;
   display: flex;
@@ -569,6 +570,20 @@
 }
 .consent a:hover {
   text-decoration-color: var(--lx-teal);
+}
+.consent[data-nudge="true"] {
+  border-color: var(--lx-danger);
+  box-shadow: 0 0 0 3px var(--lx-danger-soft);
+  animation: consent-nudge 360ms var(--lx-ease-quick);
+}
+.consent[data-nudge="true"] .check {
+  border-color: var(--lx-danger);
+}
+.consentNudge {
+  margin: -6px 0 12px;
+  color: var(--lx-danger);
+  font-size: 12.5px;
+  font-weight: 650;
 }
 .consentHint {
   margin: 8px 0 0;
@@ -1062,6 +1077,18 @@
 }
 
 /* ---------- Motion ---------- */
+@keyframes consent-nudge {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-4px);
+  }
+  75% {
+    transform: translateX(4px);
+  }
+}
 @keyframes account-spin {
   to {
     transform: rotate(360deg);
@@ -1274,6 +1301,26 @@
     top: 28px;
   }
 }
+/* Phones: the brand stays, the film goes, so every way to sign in is on the
+   first screen (owner, 23 Oct 2026). */
+@media (max-width: 600px) {
+  .stage {
+    padding: 16px 18px;
+  }
+  .storyCopy {
+    margin-top: 12px;
+  }
+  .storyCopy h2 {
+    font-size: 22px;
+    line-height: 1.2;
+  }
+  .xray {
+    display: none;
+  }
+  .card {
+    margin-top: 4px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .stage,
   .stage::after,
@@ -1282,6 +1329,7 @@
   .xray,
   .features,
   .card > *,
+  .consent[data-nudge="true"],
   .accent,
   .eyebrow::before,
   .confirmedMark,

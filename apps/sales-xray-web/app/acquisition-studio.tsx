@@ -143,6 +143,9 @@ import {
   type ContextualSourcePlayback,
   type SourcePlaybackRange,
 } from "./source-playback-context";
+import { track } from "./telemetry";
+import { dismissNotice, notify } from "./notice-center";
+import { usePurchasesAllowed } from "./purchase-policy";
 import styles from "./acquisition-studio.module.css";
 import { formatAnalysisTime } from "./analysis-time";
 
@@ -199,6 +202,25 @@ const message = (error: unknown) =>
     ? error
     : "This result could not be verified. Try again; your completed work stays saved.";
 
+/** A signed-in seller with no minutes left (or too few for this recording) is sent to Plans. */
+export function analysisMinutesOut(
+  authenticated: boolean,
+  allowance: Allowance | null,
+  error: string | AcquisitionError,
+): boolean {
+  if (!authenticated) return false;
+  if (
+    error instanceof AcquisitionError &&
+    error.reason === "trial_allowance_insufficient"
+  )
+    return true;
+  return (
+    allowance !== null &&
+    !allowance.unlimited &&
+    allowance.available_seconds === 0
+  );
+}
+
 export function remainingAllowanceLabel(
   allowance: Allowance | null,
   advertisedSeconds: number | null,
@@ -236,6 +258,7 @@ export function AcquisitionStudio({
   const embedded = variant === "embedded";
   // The standalone shell owns the page landmark; embedded mounts inherit one.
   const access = useWorkspaceAccess();
+  const purchasesAllowed = usePurchasesAllowed();
   const resolvedTheme = useTheme()?.resolved ?? "light";
   const accessStatus = access?.status ?? null;
   const accessAuthenticated = access?.authenticated ?? null;
@@ -458,6 +481,39 @@ export function AcquisitionStudio({
   // the misses in a row for the call on screen.
   const [statusCard, setStatusCard] = useState(false);
   const statusMissRef = useRef({ id: "", count: 0 });
+  // Out of minutes: point a signed-in seller at Plans (a plan or a top-up) instead of a dead end.
+  const minutesOut = analysisMinutesOut(
+    access?.authenticated === true,
+    allowance,
+    error,
+  );
+  useEffect(() => {
+    if (!minutesOut) return;
+    const id = "analysis-minutes-out";
+    // The Google Play app never sends a seller to plans (purchase-policy.tsx).
+    notify(
+      purchasesAllowed
+        ? {
+            id,
+            tone: "info",
+            title: "Get more analysis minutes",
+            message:
+              "Choose a plan or a top-up to analyse more calls. Your recordings stay private.",
+            action: { label: "See plans", run: () => router.push("/plans") },
+            // Stays until the seller closes it (info cards otherwise leave after 5 s).
+            timeout: 0,
+          }
+        : {
+            id,
+            tone: "info",
+            title: "Analysis minutes used up",
+            message:
+              "Ask your workspace owner for more minutes. Your recordings stay private.",
+            timeout: 0,
+          },
+    );
+    return () => dismissNotice(id);
+  }, [minutesOut, purchasesAllowed, router]);
   const [moment, setMoment] = useState<SourcePlaybackRange | null>(null);
   const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
   const [playbackMessage, setPlaybackMessage] = useState("");
@@ -966,7 +1022,7 @@ export function AcquisitionStudio({
             });
         } else if (timedOut) {
           setError(
-            "Sales Xray is taking longer than expected to load. Check again to continue your call.",
+            "Sales X-Ray is taking longer than expected to load. Check again to continue your call.",
           );
           if (requested)
             setExistingCallEntry({
@@ -2317,7 +2373,7 @@ export function AcquisitionStudio({
             ? entryError.message
             : typeof entryError === "string" && entryError
               ? entryError
-              : "Sales Xray could not verify this saved call. Try again; your saved work has not been changed.";
+              : "Sales X-Ray could not verify this saved call. Try again; your saved work has not been changed.";
       const entryView = (
         <div
           className={`xray-app simple-app ${styles.app}`}
@@ -2577,7 +2633,13 @@ export function AcquisitionStudio({
               <button
                 className="primary-button"
                 type="button"
-                onClick={() => chooseEarlierReport("analyse")}
+                onClick={() => {
+                  track("sx.reanalyse_requested", {
+                    call_id: earlierReportSubmissionId,
+                    surface: "report",
+                  });
+                  chooseEarlierReport("analyse");
+                }}
               >
                 Analyse again
               </button>
@@ -2707,7 +2769,7 @@ export function AcquisitionStudio({
                 ) : null}
               </div>
               {statusIssue && !error && !isFinalStatusAnswer(statusIssue) && (
-                <p>Your call is saved. Sales Xray keeps checking by itself.</p>
+                <p>Your call is saved. Sales X-Ray keeps checking by itself.</p>
               )}
               <ErrorMessage
                 message={
@@ -3134,6 +3196,11 @@ export function AcquisitionStudio({
                         allowanceUnknown,
                       )}
                     </span>
+                    {minutesOut && purchasesAllowed ? (
+                      <Link className={styles.moreMinutes} href="/plans">
+                        Get more minutes
+                      </Link>
+                    ) : null}
                   </div>
                 )}
                 {displayFileSelected &&
@@ -3599,6 +3666,9 @@ export function AcquisitionStudio({
                     advertisedTrial,
                     allowanceUnknown,
                   )}
+                  moreMinutesHref={
+                    minutesOut && purchasesAllowed ? "/plans" : undefined
+                  }
                 />
               ) : null}
               {embedded && !submission && !report && !deletionOnlyId && (
@@ -3747,7 +3817,7 @@ export function AcquisitionStudio({
                     callRecord: result.callRecord,
                     title: callTitle(
                       result.label,
-                      file?.name ?? "Sales Xray call report",
+                      file?.name ?? "Sales X-Ray call report",
                     ),
                     callType: result.callRecord?.call_type ?? undefined,
                     callLength: formatClock(result.transcript.duration_ms),
@@ -3899,7 +3969,7 @@ export function AcquisitionStudio({
                   callId={submission?.id ?? null}
                   callTitle={callTitle(
                     result.label,
-                    file?.name ?? "Sales Xray call report",
+                    file?.name ?? "Sales X-Ray call report",
                   )}
                   onSeek={playFrom}
                   audioAvailable={Boolean(audio.current)}

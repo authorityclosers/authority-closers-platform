@@ -16,12 +16,15 @@ from contextlib import suppress
 from dataclasses import dataclass
 from datetime import timedelta
 from threading import Lock
-from typing import Protocol
+from typing import Any, Protocol
 
 from ac_platform.outbox.policy import ReconciliationRequiredError
 
 _MIN_DELAY = timedelta(milliseconds=10)
 _MAX_DELAY = timedelta(minutes=15)
+# Each provider consumer holds one database connection across its provider
+# call and starts one bounded provider child; keep the ceiling small.
+MAX_PROVIDER_CONSUMERS = 8
 
 
 class ConversationRetentionStep(Protocol):
@@ -207,12 +210,26 @@ class ConversationWorkerRunner:
 
 
 class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
-    """One local worker and one provider worker, with committed-work handoffs.
+    """One local worker and N provider workers, with committed-work handoffs.
 
-    Local decoding cannot occupy the provider consumer. Each consumer stays
-    serial, so this does not multiply provider sends or native CPU work. The
-    existing workers still own their claims, transactions and dispatch fences.
+    Local decoding cannot occupy a provider consumer. Each consumer stays
+    serial; ``provider_consumers`` (default 1) runs that many provider
+    consumers side by side, so N provider stages wait on their providers at
+    once while native CPU work stays single. Claims are ``SKIP LOCKED`` leases,
+    so two consumers never take the same job, and the existing workers still
+    own their claims, transactions and dispatch fences.
     """
+
+    def __init__(self, *args: Any, provider_consumers: int = 1, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        if (
+            type(provider_consumers) is not int
+            or not 1 <= provider_consumers <= MAX_PROVIDER_CONSUMERS
+        ):
+            raise ValueError(
+                f"Conversation provider consumers must be 1 to {MAX_PROVIDER_CONSUMERS}"
+            )
+        self.provider_consumers = provider_consumers
 
     async def run(self, stop: asyncio.Event) -> ConversationWorkerRunnerSummary:
         if not isinstance(stop, asyncio.Event):
@@ -287,7 +304,10 @@ class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
             if stop.is_set():
                 return summary
             async with asyncio.TaskGroup() as group:
-                group.create_task(consume(local=False), name="conversation-provider-consumer")
+                for index in range(self.provider_consumers):
+                    group.create_task(
+                        consume(local=False), name=f"conversation-provider-consumer-{index}"
+                    )
                 group.create_task(consume(local=True), name="conversation-local-consumer")
             return summary
         finally:
@@ -312,6 +332,7 @@ class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
 
 
 __all__ = [
+    "MAX_PROVIDER_CONSUMERS",
     "ConversationInferenceRunOnce",
     "ConversationOfflineRunOnce",
     "ConversationPlanStep",

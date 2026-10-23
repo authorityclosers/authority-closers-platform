@@ -13,6 +13,7 @@ import {
   Activity,
   BadgeIndianRupee,
   BarChart3,
+  Bug,
   ChartNoAxesCombined,
   BookOpenCheck,
   ClipboardCheck,
@@ -24,8 +25,10 @@ import {
   GraduationCap,
   Handshake,
   Home,
+  LayoutGrid,
   LogOut,
   Megaphone,
+  MessageSquareHeart,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -34,6 +37,7 @@ import {
   Settings,
   ShieldCheck,
   SlidersHorizontal,
+  Sparkles,
   Star,
   Timer,
   UserCheck,
@@ -86,6 +90,10 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   releases: Rocket,
   updates: Megaphone,
   safety: ShieldCheck,
+  catalogue: LayoutGrid,
+  offers: Sparkles,
+  bugs: Bug,
+  feedback: MessageSquareHeart,
 };
 
 export function AcMark({ size = 20 }: { size?: number }) {

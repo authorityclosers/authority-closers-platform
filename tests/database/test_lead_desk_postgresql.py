@@ -11,7 +11,7 @@ import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import httpx
 import pytest
@@ -371,6 +371,54 @@ def test_website_form_and_file_capture(postgres_harness: Any, tmp_path: Path) ->
                 assert won["total"] == 0 and won["stage_counts"] == {"new": 3}
                 none = (await client.get(f"{BASE}/leads?scope=team&search=zzzz")).json()
                 assert none["stage_counts"] == {}
+
+                # Stage and owner columns (paste import, 23 Oct 2026): a row names its
+                # lead's stage and owner; a number already a lead keeps its own.
+                me = next(
+                    rep
+                    for rep in (await client.get(f"{BASE}/team")).json()["reps"]
+                    if rep["person_id"] == str(setup.state.person_id)
+                )
+                sheet = (
+                    "Name,Phone,Status,Assigned to\n"
+                    f"Meera,9800000010,interested,{me['name'].upper()}\n"
+                    "Karan,9800000011,Hot lead,Nobody Known\n"
+                    "Asha,98000 00003,Won,\n"
+                ).encode()
+                looked = await client.post(
+                    f"{BASE}/imports/preview",
+                    content=sheet,
+                    headers={"Origin": ORIGIN, "Content-Type": "text/csv", "X-File-Name": "b.csv"},
+                )
+                assert looked.status_code == 200, looked.text
+                seen = looked.json()
+                assert seen["mapping"]["stage"] == "Status"
+                assert seen["mapping"]["owner"] == "Assigned to"
+                assert seen["known_leads"] == 1
+                added = await client.post(
+                    f"{BASE}/imports",
+                    json={
+                        "command_id": str(uuid4()),
+                        "file_name": "b.csv",
+                        "mapping": seen["mapping"],
+                        "rows": seen["rows"],
+                    },
+                    headers=WRITE,
+                )
+                assert added.status_code == 200, added.text
+                result = added.json()
+                assert (result["created"], result["repeats"]) == (2, 1)
+                assert (result["staged"], result["owned"]) == (1, 1)
+                assert result["unmatched_stages"] == ["Hot lead"]
+                assert result["unmatched_owners"] == ["Nobody Known"]
+                rows = {
+                    row["name"]: row
+                    for row in (await client.get(f"{BASE}/leads?scope=team")).json()["leads"]
+                }
+                assert rows["Meera"]["stage"] == "interested"
+                assert rows["Meera"]["owner_person_id"] == str(setup.state.person_id)
+                assert rows["Karan"]["stage"] == "new"
+                assert rows["Asha"]["stage"] == "new"
         finally:
             await setup.engine.dispose()
 
@@ -1207,10 +1255,21 @@ def test_a_missed_call_from_a_lead_waits_on_the_desk_until_called_back(
                 [row] = desk["call_back"]
                 assert row["lead_id"] == lead_id and row["missed_calls"] == 2
                 assert datetime.fromisoformat(row["missed_at"]) < now - timedelta(minutes=2)
+                # The badge counts them once: a new lead is due, and waits for a call back.
+                assert (await client.get(f"{BASE}/badge")).json()["to_call"] == 1
+                # Booked for later today, they still wait for a call back: still counted.
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(
+                        update(Lead)
+                        .where(Lead.id == UUID(lead_id))
+                        .values(stage="follow_up", next_action_at=now + timedelta(hours=3))
+                    )
+                assert (await client.get(f"{BASE}/badge")).json()["to_call"] == 1
                 # The seller calls them back from the phone dialer: the row clears.
                 await phone("3", 1, "outgoing", 45)
                 desk = (await client.get(BASE)).json()
                 assert desk["counts"]["call_back"] == 0 and desk["call_back"] == []
+                assert (await client.get(f"{BASE}/badge")).json()["to_call"] == 0
         finally:
             await setup.engine.dispose()
 

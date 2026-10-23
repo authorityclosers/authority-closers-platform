@@ -10,7 +10,7 @@
   const BRANDS = {
     ac: {
       name: "Authority Closers",
-      product: "Sales Xray",
+      product: "Sales X-Ray",
       color: "#152638",
       accent: "#19665C",
       status: "proposal",
@@ -183,7 +183,7 @@
         : ready
           ? "Your workspace is ready."
           : {
-              ac: "Getting Sales Xray ready.",
+              ac: "Getting Sales X-Ray ready.",
               ca: "Your next chapter starts here.",
               cohorva: "Opening your learning space.",
             }[brand];

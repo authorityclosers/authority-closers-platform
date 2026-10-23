@@ -55,6 +55,7 @@ import styles from "./chats.module.css";
 import { MessageMedia } from "./message-media";
 import { OptInBox, TemplateComposer } from "./template-composer";
 import { Ticks } from "./ticks";
+import { askFeedback } from "../feedback/ask";
 
 // The open chat reads again every 10 s while in view (a shared server).
 const POLL_MS = 10 * 1000;
@@ -210,6 +211,7 @@ async function deliver(
   try {
     const next = await sendText(leadId, detail, words);
     onSent(next);
+    askFeedback("chats_used");
     return next;
   } catch (reason) {
     onPending(null);

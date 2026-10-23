@@ -1,0 +1,39 @@
+/* The Leads tab badge (rail and phone tab bar): every page shows it, so it
+   has its own small stylesheet (route splitting, 23 Oct 2026). */
+.tabIcon {
+  position: relative;
+  display: inline-flex;
+}
+
+.tabBadge {
+  position: absolute;
+  top: -7px;
+  left: calc(100% - 9px);
+  box-sizing: border-box;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border: 2px solid var(--sx-surface);
+  border-radius: 999px;
+  background: var(--lx-danger);
+  color: var(--lx-surface);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 15px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabBadge[data-tone="accent"] {
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

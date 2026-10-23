@@ -1,0 +1,634 @@
+{
+  "id": "00-overview",
+  "number": "00",
+  "title": "Sales X-Ray: the full tour",
+  "kicker": "Start here",
+  "end_headline": "Welcome to Sales X-Ray.",
+  "next": "Install the Android app",
+  "segments": [
+    {
+      "id": "card",
+      "device": "card",
+      "en": {
+        "say": [
+          "Welcome to Sales X-Ray.",
+          "It's the sales CRM that records your calls, reads them like a top sales coach, and tells you what to do next.",
+          "Here's the full tour."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Sales X-Ray में आपका welcome है.",
+          "ये एक sales CRM है, जो आपके calls record करता है, उन्हें एक top sales coach की तरह समझता है, और बताता है कि आगे क्या करना है.",
+          "चलिए, पूरा tour करते हैं."
+        ],
+        "caption": [
+          "Sales X-Ray mein aapka welcome hai.",
+          "Yeh ek sales CRM hai, jo aapke calls record karta hai, unhe ek top sales coach ki tarah samajhta hai, aur batata hai ki aage kya karna hai.",
+          "Chaliye, poora tour karte hain."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Sales X-Ray मध्ये तुमचं स्वागत.",
+          "हा एक sales CRM आहे, जो तुमचे calls record करतो, ते एका top sales coach सारखे समजून घेतो, आणि पुढे काय करायचं ते सांगतो.",
+          "चला, पूर्ण tour करूया."
+        ],
+        "caption": [
+          "Sales X-Ray madhye tumcha swagat.",
+          "Ha ek sales CRM aahe, jo tumche calls record karto, te eka top sales coach sarkhe samjun gheto, aani pudhe kay karaycha te sangto.",
+          "Chala, poorna tour karuya."
+        ]
+      }
+    },
+    {
+      "id": "s1-home",
+      "device": "phone",
+      "label": "Home",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/home"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 800
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "How sales are going"
+          },
+          "ms": 1600
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "scroll",
+          "dy": 520,
+          "ms": 900
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "Needs you",
+            "exact": true
+          },
+          "ms": 1600,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "home"
+        }
+      ],
+      "en": {
+        "say": [
+          "Home starts with sales.",
+          "How sales are going this week, and who needs you right now."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Home पे सबसे पहले sales.",
+          "इस हफ़्ते sales कैसी चल रही है, और अभी किसको आपकी ज़रूरत है."
+        ],
+        "caption": [
+          "Home pe sabse pehle sales.",
+          "Is hafte sales kaisi chal rahi hai, aur abhi kisko aapki zaroorat hai."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Home वर सगळ्यात आधी sales.",
+          "या आठवड्यात sales कसा चाललाय, आणि आत्ता कोणाला तुमची गरज आहे."
+        ],
+        "caption": [
+          "Home var saglyat aadhi sales.",
+          "Ya aathvadyat sales kasa chalalay, aani aatta konala tumchi garaj aahe."
+        ]
+      }
+    },
+    {
+      "id": "s2-leads",
+      "device": "phone",
+      "label": "Leads",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Got it"
+          },
+          "ms": 400,
+          "optional": true
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 600
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "tab",
+            "name": "To call"
+          },
+          "ms": 1400
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Open Ravi Sample"
+          },
+          "ms": 1400
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "leads"
+        }
+      ],
+      "en": {
+        "say": [
+          "Leads is your list for the day.",
+          "Stage tabs on top, and everyone to call today, late ones first."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Leads आपकी आज की list है.",
+          "ऊपर stage tabs, और नीचे आज जिनको call करना है, late वाले सबसे पहले."
+        ],
+        "caption": [
+          "Leads aapki aaj ki list hai.",
+          "Upar stage tabs, aur neeche aaj jinko call karna hai, late waale sabse pehle."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Leads म्हणजे तुमची आजची list.",
+          "वर stage tabs, आणि खाली आज ज्यांना call करायचाय, late वाले सगळ्यात आधी."
+        ],
+        "caption": [
+          "Leads mhanje tumchi aajchi list.",
+          "Var stage tabs, aani khali aaj jyanna call karaychay, late wale saglyat aadhi."
+        ]
+      }
+    },
+    {
+      "id": "s3-add",
+      "device": "phone",
+      "label": "Add from +",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/add-sheet"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 800
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Add lead"
+          },
+          "ms": 1500
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "link",
+            "name": "Add a call"
+          },
+          "ms": 1500
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "add-sheet"
+        }
+      ],
+      "en": {
+        "say": [
+          "The plus button adds a lead or a call, from any screen.",
+          "For a lead, a name and a number is enough."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Plus button से किसी भी screen से lead या call add कीजिए.",
+          "Lead के लिए बस नाम और number काफ़ी है."
+        ],
+        "caption": [
+          "Plus button se kisi bhi screen se lead ya call add kijiye.",
+          "Lead ke liye bas naam aur number kaafi hai."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Plus button ने कुठल्याही screen वरून lead किंवा call add करा.",
+          "Lead साठी फक्त नाव आणि number पुरेसा आहे."
+        ],
+        "caption": [
+          "Plus button ne kuthlyahi screen varun lead kinva call add kara.",
+          "Lead sathi fakt naav aani number puresa aahe."
+        ]
+      }
+    },
+    {
+      "id": "s4-lead",
+      "device": "phone",
+      "label": "One page per lead",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Got it"
+          },
+          "ms": 400,
+          "optional": true
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 400
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Open Asha Fictional"
+          },
+          "ms": 1500
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "css": "a[href^='tel:']"
+          },
+          "ms": 1300
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "Log a call"
+          },
+          "ms": 1300
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "lead-sheet"
+        }
+      ],
+      "en": {
+        "say": [
+          "Tap a lead, and everything about them is on one page.",
+          "Call, WhatsApp or SMS in one tap, then log how it went."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Lead पे tap कीजिए, उसके बारे में सब कुछ एक ही page पे.",
+          "Call, WhatsApp या SMS एक tap में, फिर log कीजिए call कैसा रहा."
+        ],
+        "caption": [
+          "Lead pe tap kijiye, uske baare mein sab kuch ek hi page pe.",
+          "Call, WhatsApp ya SMS ek tap mein, phir log kijiye call kaisa raha."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Lead वर tap करा, त्याच्याबद्दल सगळं एकाच page वर.",
+          "Call, WhatsApp किंवा SMS एका tap मध्ये, मग log करा call कसा झाला."
+        ],
+        "caption": [
+          "Lead var tap kara, tyachyabaddal sagla ekach page var.",
+          "Call, WhatsApp kinva SMS eka tap madhye, mag log kara call kasa jhala."
+        ]
+      }
+    },
+    {
+      "id": "s5-desk",
+      "device": "phone",
+      "label": "Start calling",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/cold-calling"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 700
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "If they say"
+          },
+          "ms": 1500
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Call Priya"
+          },
+          "ms": 1300
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "calling-desk"
+        }
+      ],
+      "en": {
+        "say": [
+          "Start calling walks you through your list, one lead at a time, with your opener and replies ready."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Start calling आपको list में एक-एक lead करके आगे ले जाता है, opener और जवाब ready के साथ."
+        ],
+        "caption": [
+          "Start calling aapko list mein ek-ek lead karke aage le jaata hai, opener aur jawaab ready ke saath."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Start calling तुम्हाला list मधून एक-एक lead करत पुढे नेतो, opener आणि उत्तरं ready सकट."
+        ],
+        "caption": [
+          "Start calling tumhala list madhun ek-ek lead karat pudhe neto, opener aani uttara ready sakat."
+        ]
+      }
+    },
+    {
+      "id": "s6-calls",
+      "device": "phone",
+      "label": "Calls and Reports",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/calls"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 800
+        },
+        {
+          "do": "scroll",
+          "dy": 300,
+          "ms": 700
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Report ready"
+          },
+          "ms": 1500,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "calls"
+        }
+      ],
+      "en": {
+        "say": [
+          "Every call lands in Calls, with its lead and stage.",
+          "When the Report is ready, it says so right here."
+        ]
+      },
+      "hi": {
+        "say": [
+          "हर call Calls में आता है, उसके lead और stage के साथ.",
+          "Report ready होते ही, यहीं दिख जाता है."
+        ],
+        "caption": [
+          "Har call Calls mein aata hai, uske lead aur stage ke saath.",
+          "Report ready hote hi, yahin dikh jaata hai."
+        ]
+      },
+      "mr": {
+        "say": [
+          "प्रत्येक call Calls मध्ये येतो, त्याच्या lead आणि stage सकट.",
+          "Report ready झाला की, इथेच दिसतो."
+        ],
+        "caption": [
+          "Pratyek call Calls madhye yeto, tyachya lead aani stage sakat.",
+          "Report ready jhala ki, ithech disto."
+        ]
+      }
+    },
+    {
+      "id": "s7-chats",
+      "device": "phone",
+      "label": "Chats",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/chats"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 800
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Waiting"
+          },
+          "ms": 1400
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "chats"
+        }
+      ],
+      "en": {
+        "say": [
+          "Chats brings WhatsApp, Messenger and Instagram into one inbox, so no lead waits for a reply."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Chats में WhatsApp, Messenger और Instagram, सब एक inbox में, ताकि कोई lead reply का wait न करे."
+        ],
+        "caption": [
+          "Chats mein WhatsApp, Messenger aur Instagram, sab ek inbox mein, taaki koi lead reply ka wait na kare."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Chats मध्ये WhatsApp, Messenger आणि Instagram, सगळं एका inbox मध्ये, म्हणजे कुठलाही lead reply ची वाट बघत राहत नाही."
+        ],
+        "caption": [
+          "Chats madhye WhatsApp, Messenger aani Instagram, sagla eka inbox madhye, mhanje kuthlahi lead reply chi vaat baghat rahat nahi."
+        ]
+      }
+    },
+    {
+      "id": "s8-team",
+      "device": "desktop",
+      "label": "Your team",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/home"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 900
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "How sales are going"
+          },
+          "ms": 1400
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "scroll",
+          "dy": 600,
+          "ms": 900
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "Sellers",
+            "exact": true
+          },
+          "ms": 1600,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "home-desktop"
+        }
+      ],
+      "en": {
+        "say": [
+          "On a computer, owners and managers see the whole team:",
+          "who's calling, who's running late, and how leads are moving through the stages."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Computer पे owners और managers को पूरी team दिखती है:",
+          "कौन call कर रहा है, कौन late चल रहा है, और leads stages में कैसे आगे बढ़ रहे हैं."
+        ],
+        "caption": [
+          "Computer pe owners aur managers ko poori team dikhti hai:",
+          "kaun call kar raha hai, kaun late chal raha hai, aur leads stages mein kaise aage badh rahe hain."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Computer वर owners आणि managers ना पूर्ण team दिसते:",
+          "कोण call करतोय, कोण late आहे, आणि leads stages मध्ये कसे पुढे जातायत."
+        ],
+        "caption": [
+          "Computer var owners aani managers na poorna team diste:",
+          "kon call kartoy, kon late aahe, aani leads stages madhye kase pudhe jaatayat."
+        ]
+      }
+    },
+    {
+      "id": "end",
+      "device": "end",
+      "en": {
+        "say": [
+          "That's Sales X-Ray.",
+          "Watch the short tutorials for each step. Happy selling!"
+        ]
+      },
+      "hi": {
+        "say": [
+          "तो ये है Sales X-Ray.",
+          "हर step के लिए छोटे tutorials देखिए. Happy selling!"
+        ],
+        "caption": [
+          "Toh yeh hai Sales X-Ray.",
+          "Har step ke liye chhote tutorials dekhiye. Happy selling!"
+        ]
+      },
+      "mr": {
+        "say": [
+          "तर हा आहे Sales X-Ray.",
+          "प्रत्येक step साठी छोटे tutorials बघा. Happy selling!"
+        ],
+        "caption": [
+          "Tar ha aahe Sales X-Ray.",
+          "Pratyek step sathi chhote tutorials bagha. Happy selling!"
+        ]
+      }
+    }
+  ]
+}

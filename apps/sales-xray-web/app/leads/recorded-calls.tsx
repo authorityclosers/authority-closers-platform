@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { UploadPolicy } from "../acquisition-client";
 import { displayName } from "../display-name";
 import { Badge, Button } from "../ui/kit";
-import { Sheet } from "./lead-sheet";
+import { Sheet } from "./sheet-frame";
 import {
   LeadsError,
   readLead,
@@ -137,7 +137,7 @@ export function RecordedCallsCard({ me }: { me: Desk["me"] }) {
         <span>
           <strong>Your phone hides its call recordings</strong>
           <small>
-            Allow All files access so Sales Xray can find your lead calls&apos;
+            Allow All files access so Sales X-Ray can find your lead calls&apos;
             recordings.
           </small>
         </span>

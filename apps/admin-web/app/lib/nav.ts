@@ -58,7 +58,11 @@ export type NavIcon =
   | "studio"
   | "releases"
   | "updates"
-  | "safety";
+  | "safety"
+  | "catalogue"
+  | "offers"
+  | "bugs"
+  | "feedback";
 
 type Need =
   | { kind: "console" }
@@ -92,6 +96,20 @@ export const NAVIGATION: readonly NavGroup[] = [
         icon: "home",
         need: { kind: "console" },
         phone: true,
+      },
+      // Bug reports from Sales X-Ray testers (owner, 23 Oct 2026).
+      {
+        href: "/bugs",
+        label: "Bugs",
+        icon: "bugs",
+        need: { kind: "salesXray" },
+      },
+      // What people say after key moments and updates (owner, 23 Oct 2026).
+      {
+        href: "/feedback",
+        label: "Feedback",
+        icon: "feedback",
+        need: { kind: "salesXray" },
       },
     ],
   },
@@ -147,6 +165,19 @@ export const NAVIGATION: readonly NavGroup[] = [
       {
         href: "/usage",
         label: "Usage & cost",
+        icon: "usage",
+        need: { kind: "salesXray" },
+      },
+      {
+        href: "/economics",
+        label: "Economics",
+        icon: "billing",
+        need: { kind: "salesXray" },
+      },
+      {
+        // Owner, 24 Oct 2026: performance and usage telemetry.
+        href: "/telemetry",
+        label: "Product telemetry",
         icon: "usage",
         need: { kind: "salesXray" },
       },
@@ -219,6 +250,25 @@ export const NAVIGATION: readonly NavGroup[] = [
         href: "/synthetic",
         label: "Synthetic data",
         icon: "synthetic",
+        need: { kind: "salesXray" },
+      },
+    ],
+  },
+  {
+    // The platform's feature catalogue and the Offer Studio built on it (owner, 23 Oct
+    // 2026); control accounts only.
+    label: "Offers",
+    items: [
+      {
+        href: "/catalogue",
+        label: "Feature catalogue",
+        icon: "catalogue",
+        need: { kind: "salesXray" },
+      },
+      {
+        href: "/offers",
+        label: "Offer Studio",
+        icon: "offers",
         need: { kind: "salesXray" },
       },
     ],

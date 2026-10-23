@@ -22,6 +22,7 @@ import {
   PhoneCall,
   Trophy,
   UserPlus,
+  UsersRound,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -52,7 +53,7 @@ import {
 } from "../leads/journey/journey-client";
 import { KIND_WORDS } from "../leads/stage-tabs";
 import { several, usePipelines } from "../leads/use-pipelines";
-import { Avatar, Delta, Segmented } from "../ui/kit";
+import { ActionList, ActionRow, Avatar, Delta, Segmented } from "../ui/kit";
 import { NeedsYou } from "./needs-you";
 import {
   FunnelSkeleton,
@@ -340,6 +341,16 @@ function TeamHome({ desk }: { desk: Desk | null }) {
         ) : (
           <RowsSkeleton rows={3} kind="seller" />
         )}
+        {/* Owner, 23 Oct 2026: team and organisation were "too hidden". */}
+        <ActionList label="Team">
+          <ActionRow
+            icon={<UsersRound size={20} />}
+            tone="neutral"
+            title="Organisation"
+            note="Team, analytics, insights and settings"
+            href="/organisation"
+          />
+        </ActionList>
       </section>
 
       <section className={styles.block} aria-labelledby="pipeline-title">
@@ -429,7 +440,9 @@ function Funnel({
               <span className={styles.funnelTrack} aria-hidden="true">
                 <span
                   className={styles.funnelBar}
-                  style={{ width: `${Math.max(2, (count / most) * 100)}%` }}
+                  style={{
+                    width: count ? `${Math.max(2, (count / most) * 100)}%` : 0,
+                  }}
                 />
               </span>
               <strong className={styles.funnelCount}>{count}</strong>

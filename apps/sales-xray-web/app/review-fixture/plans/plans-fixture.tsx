@@ -1,8 +1,16 @@
 "use client";
 
+import { LockKeyhole } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useState } from "react";
+import {
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 import { BillingView } from "../../billing/billing-view";
+import type { Order } from "../../billing/contract";
+import { count, formatMoney } from "../../billing/money";
 import { useBillingAccount } from "../../billing/use-billing-account";
 
 import { OrderReturn } from "../../plans/order-return";
@@ -14,12 +22,13 @@ import {
   fixtureBilling,
   fixtureAccount,
   fixtureProviderReports,
+  fixtureRecording,
   resetFixtureBilling,
 } from "./fixture-billing";
 import styles from "../shell/full-shell-preview.module.css";
 
 /** Fictional identity: never a real person, session or workspace. */
-const FIXTURE_ACCESS = {
+export const FIXTURE_ACCESS = {
   status: "ready" as const,
   authenticated: true,
   context: {
@@ -30,8 +39,17 @@ const FIXTURE_ACCESS = {
   retry: () => {},
 };
 
+const noSubscription = () => () => {};
+
 function Banner() {
   const router = useRouter();
+  // Hidden while a tutorial is recorded (set on the billing journey page).
+  const recording = useSyncExternalStore(
+    noSubscription,
+    fixtureRecording,
+    () => false,
+  );
+  if (recording) return null;
   return (
     <p className={styles.banner} role="note">
       Development fixture · fictional plans, orders and payment · nothing here
@@ -59,9 +77,8 @@ function Banner() {
   );
 }
 
-/** The plans screens on the fictional billing server. */
-export function PlansFixture() {
-  const params = useSearchParams();
+/** The fictional workspace, as the plans and billing screens see it. */
+export function FixtureWorkspace({ children }: { children: ReactNode }) {
   return (
     <WorkspaceAccessProvider
       value={{
@@ -77,17 +94,27 @@ export function PlansFixture() {
         ],
       }}
     >
+      {children}
+    </WorkspaceAccessProvider>
+  );
+}
+
+/** The plans screens on the fictional billing server. */
+export function PlansFixture() {
+  const params = useSearchParams();
+  return (
+    <FixtureWorkspace>
       <Banner />
       {params.get("view") === "billing" ? (
         <FixtureBilling />
       ) : (
         <PlansPurchase client={fixtureBilling} />
       )}
-    </WorkspaceAccessProvider>
+    </FixtureWorkspace>
   );
 }
 
-function FixtureBilling() {
+export function FixtureBilling() {
   const billing = useBillingAccount(true, fixtureBilling);
   return <BillingView {...billing} />;
 }
@@ -95,31 +122,75 @@ function FixtureBilling() {
 /** A stand-in for the payment partner's page: it only reports an outcome. */
 export function PayFixture() {
   const params = useSearchParams();
+  return <PayPage orderId={params.get("order") ?? ""} />;
+}
+
+export function PayPage({ orderId }: { orderId: string }) {
   const router = useRouter();
-  const orderId = params.get("order") ?? "";
   const [busy, setBusy] = useState(false);
+  const [order, setOrder] = useState<Order | null>(null);
+  useEffect(() => {
+    if (!orderId) return;
+    let live = true;
+    fixtureBilling
+      .readOrder(orderId)
+      .then((value) => {
+        if (live) setOrder(value);
+      })
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [orderId]);
   const report = (outcome: "paid" | "failed") => {
     setBusy(true);
     fixtureProviderReports(orderId, outcome);
     router.push(`${FIXTURE_RETURN_PATH}?order=${encodeURIComponent(orderId)}`);
   };
+  const amount = order ? formatMoney(order.amount) : null;
   return (
-    <div className={plansStyles.page} style={{ padding: 16 }}>
+    <div className={`${plansStyles.page} ${plansStyles.testPayPage}`}>
       <Banner />
       <div className={`${plansStyles.panel} ${plansStyles.result}`}>
-        <h2>Fictional payment page</h2>
+        <span className={plansStyles.testPayTag}>
+          <LockKeyhole size={14} aria-hidden="true" />
+          Test payment page
+        </span>
+        <h2>{amount ? `Pay ${amount}` : "Test payment"}</h2>
         <p className={plansStyles.hint}>
-          In the app this is the payment partner&apos;s secure page. Pick what
-          the partner reports back to our server for order {orderId || "?"}.
+          In the app this step is the payment partner&apos;s secure page. Here
+          no money moves: choose what the partner reports back.
         </p>
-        <div className={plansStyles.actions}>
+        {order ? (
+          <dl className={`${plansStyles.rows} ${plansStyles.receipt}`}>
+            <div>
+              <dt>{order.kind === "top_up" ? "Top-up" : "Plan"}</dt>
+              <dd>
+                {order.kind === "top_up"
+                  ? `${count(order.minutes)} minutes`
+                  : `${order.planName}${order.interval ? `, ${order.interval === "month" ? "monthly" : "yearly"}` : ""}`}
+              </dd>
+            </div>
+            {order.account === "organisation" ? (
+              <div>
+                <dt>Seats</dt>
+                <dd>{order.seats}</dd>
+              </div>
+            ) : null}
+            <div className={plansStyles.total}>
+              <dt>Total</dt>
+              <dd>{amount}</dd>
+            </div>
+          </dl>
+        ) : null}
+        <div className={plansStyles.resultActions}>
           <button
             type="button"
-            className={plansStyles.primary}
+            className={plansStyles.pay}
             disabled={busy || !orderId}
             onClick={() => report("paid")}
           >
-            Payment confirmed
+            {amount ? `Pay ${amount} (test)` : "Pay (test)"}
           </button>
           <button
             type="button"
@@ -127,7 +198,7 @@ export function PayFixture() {
             disabled={busy || !orderId}
             onClick={() => report("failed")}
           >
-            Payment failed
+            Simulate a failed payment
           </button>
         </div>
       </div>
@@ -138,13 +209,18 @@ export function PayFixture() {
 /** The return page on the fictional server. */
 export function ReturnFixture() {
   const params = useSearchParams();
+  return <ReturnPage orderId={params.get("order")} />;
+}
+
+export function ReturnPage({ orderId }: { orderId: string | null }) {
   return (
     <WorkspaceAccessProvider value={FIXTURE_ACCESS}>
       <Banner />
       <OrderReturn
-        orderId={params.get("order")}
+        orderId={orderId}
         client={fixtureBilling}
         plansHref="/review-fixture/plans"
+        billingHref="/review-fixture/plans?view=billing"
       />
     </WorkspaceAccessProvider>
   );

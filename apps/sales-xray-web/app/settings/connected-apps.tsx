@@ -178,12 +178,12 @@ const GIVES: Record<AppKey, string> = {
   meta_leads:
     "New leads from your Facebook and Instagram forms arrive in Leads by themselves.",
   whatsapp: "Message leads on WhatsApp and answer their replies in Chats.",
-  messenger: "Answer Messenger chats from Sales Xray.",
-  instagram: "Answer Instagram DMs and comments from Sales Xray.",
+  messenger: "Answer Messenger chats from Sales X-Ray.",
+  instagram: "Answer Instagram DMs and comments from Sales X-Ray.",
   google_ads:
     "Leads from your Google Ads lead forms arrive in Leads every few minutes.",
   phone_calls:
-    "Your team's calls from the Sales Xray phone app are logged on their leads.",
+    "Your team's calls from the Sales X-Ray phone app are logged on their leads.",
   webhook_sources: "Bring leads in from your website, sheets and other apps.",
   ai_replies: "Draft or send first replies to new lead messages.",
   lead_stages:
@@ -399,8 +399,8 @@ function SignInCard({ option }: { option: ConnectOption }) {
       </div>
       <p className={styles.words}>
         {option.connected
-          ? `You can sign in to Sales Xray with ${option.label}.`
-          : `Sign in to Sales Xray with your ${option.label} account too.`}
+          ? `You can sign in to Sales X-Ray with ${option.label}.`
+          : `Sign in to Sales X-Ray with your ${option.label} account too.`}
       </p>
       <div className={styles.actions}>
         <Link
@@ -710,7 +710,7 @@ function ManageSheet({
         id: `connected-app-${app.app}`,
         tone: "success",
         title: `${item.label} disconnected`,
-        message: `${app.name} no longer reaches Sales Xray from it.`,
+        message: `${app.name} no longer reaches Sales X-Ray from it.`,
         timeout: 6000,
       });
       onChanged();

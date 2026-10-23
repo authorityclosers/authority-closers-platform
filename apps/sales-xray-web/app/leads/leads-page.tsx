@@ -7,7 +7,7 @@
  * one lead at a time, and every call ends on "Was the call connected?".
  *
  * Owner, 22 Oct 2026 ("pathetic", "a design flaw"): one page, one strip of
- * stage tabs. To call is the desk; Open, New, Not contacted, Follow up,
+ * stage tabs. To call is the desk; Open, New, Couldn't reach, Follow up,
  * Interested, Won and Lost come from the organisation's own stages, with
  * real counts, and switch in place (the address follows without a page
  * move). Owners and admins pick whose leads in one small chip. The switches
@@ -20,6 +20,7 @@
  * /leads#lead=<id> (ids only, after "#"); pull down to refresh.
  */
 
+import dynamic from "next/dynamic";
 import {
   ArrowLeft,
   Building2,
@@ -46,16 +47,12 @@ import { DeskChats } from "../chats/desk-chats";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import { settingsPath } from "../settings/settings-sections";
 import { leavingOverlay } from "../ui/back-close";
-import { Badge, Button, Empty, PageHeader } from "../ui/kit";
+import { Badge, Button, Empty, PageHeader, SkeletonRow } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { requestWorkspace } from "../call-ownership";
-import {
-  AddLeadDialog,
-  AddLeadsMenu,
-  ContactsDialog,
-  ImportDialog,
-  type AddWay,
-} from "./capture-dialogs";
+import { identityOf } from "../calls-cache";
+import { savingData } from "../shell/route-prefetch";
+import type { AddWay } from "./capture-dialogs";
 import { AlertsCard } from "./alerts-card";
 import { PhoneLogCard } from "./phone-log-card";
 import { PhoneSetupBar } from "./phone-setup";
@@ -64,8 +61,9 @@ import { RecordedCallsCard } from "./recorded-calls";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
-import { DeskView, dueNow, whyLine, type RowActions } from "./desk-view";
-import { usePullToRefresh } from "./gestures";
+import { cachedDesk, rememberDesk } from "./desk-cache";
+import { DeskView, toCallNow, whyLine, type RowActions } from "./desk-view";
+import { PullMark, usePullToRefresh } from "../shell/pull-refresh";
 import {
   MAIN_PIPELINE,
   readJourney,
@@ -77,7 +75,7 @@ import {
   takeHandedLead,
   type HandedLead,
 } from "./lead-handoff";
-import { CallingLoop, LeadSheet, type LeadIntent } from "./lead-sheet";
+import type { LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
 import {
@@ -91,17 +89,18 @@ import {
   type Desk,
   type LeadRow,
   type PickedContact,
+  likelyNext,
+  readLeadAhead,
+  readNextAhead,
+  setAheadScope,
 } from "./leads-client";
 import { MessageSetup } from "./message-sheet";
 import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { LeadsSkeleton } from "./leads-skeleton";
-import { JourneyTab } from "./journey/journey-view";
 import { ListView, TEST, type Scope } from "./list-view";
 import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
-import { SourcesView } from "./sources-view";
 import { TakingSwitch } from "./taking-switch";
-import { TeamView } from "./team-view";
 import { several, usePipelines } from "./use-pipelines";
 
 /** To call's pipeline, remembered per seller and workspace on this device. */
@@ -178,6 +177,62 @@ function viewHref(
 
 export { LeadsSkeleton };
 
+// Route splitting (launch readiness, 23 Oct 2026: /leads was 467 KB of
+// script before its first paint on a mid-range phone): the lead sheet and
+// Start calling, and the Team, Stages and Sources views, load after the list.
+const loadLeadSheet = () => import("./lead-sheet");
+const LeadSheet = dynamic(
+  () => loadLeadSheet().then((module) => module.LeadSheet),
+  { ssr: false },
+);
+const CallingLoop = dynamic(
+  () => loadLeadSheet().then((module) => module.CallingLoop),
+  { ssr: false },
+);
+const TeamView = dynamic(
+  () => import("./team-view").then((module) => module.TeamView),
+  { ssr: false, loading: ViewLoading },
+);
+const JourneyTab = dynamic(
+  () => import("./journey/journey-view").then((module) => module.JourneyTab),
+  { ssr: false, loading: ViewLoading },
+);
+const SourcesView = dynamic(
+  () => import("./sources-view").then((module) => module.SourcesView),
+  { ssr: false, loading: ViewLoading },
+);
+
+// The Add leads menu and its dialogs (type one in, contacts, import) open on a
+// tap; the shell loads its own Add lead the same way (3030e47d).
+const loadCapture = () => import("./capture-dialogs");
+const AddLeadsMenu = dynamic(
+  () => loadCapture().then((module) => module.AddLeadsMenu),
+  { ssr: false },
+);
+const AddLeadDialog = dynamic(
+  () => loadCapture().then((module) => module.AddLeadDialog),
+  { ssr: false },
+);
+const ContactsDialog = dynamic(
+  () => loadCapture().then((module) => module.ContactsDialog),
+  { ssr: false },
+);
+const ImportDialog = dynamic(
+  () => loadCapture().then((module) => module.ImportDialog),
+  { ssr: false },
+);
+
+/** A view still loading: its rows' outline, where they will be. */
+function ViewLoading() {
+  return (
+    <div className={styles.leadRowsSkeleton} aria-busy="true">
+      {[0, 1, 2, 3].map((key) => (
+        <SkeletonRow key={key} avatar={40} lines={2} />
+      ))}
+    </div>
+  );
+}
+
 export function LeadsRoute() {
   const access = useWorkspaceAccess();
   const params = useSearchParams();
@@ -211,8 +266,19 @@ export function LeadsRoute() {
     !!access.context;
   const contextKey = `${access?.context?.personId}:${access?.context?.tenantId}`;
 
-  const [desk, setDesk] = useState<Desk | null>(null);
-  const [deskKey, setDeskKey] = useState<string | null>(null);
+  // What this identity's To call showed last (desk-cache.ts): a return to
+  // Leads paints it at once and reads again quietly. Not under test, where
+  // every case starts from nothing.
+  const identity = identityOf(access?.context);
+  const [seed] = useState(() =>
+    process.env.NODE_ENV === "test"
+      ? null
+      : cachedDesk(identity, storedToCall(contextKey)),
+  );
+  const [desk, setDesk] = useState<Desk | null>(seed);
+  const [deskKey, setDeskKey] = useState<string | null>(
+    seed ? contextKey : null,
+  );
   const [error, setError] = useState<LeadsError | null>(null);
   const [version, setVersion] = useState(0);
   const [openLead, setOpenLead] = useState<string | null>(null);
@@ -222,6 +288,7 @@ export function LeadsRoute() {
   // never ring a lead (Redmi audit #13, 22 Oct 2026).
   const [dialling, setDialling] = useState<LeadRow | null>(null);
   const waiters = useRef<(() => void)[]>([]);
+  const readAhead = useRef(false);
   const lastRead = useRef(0);
   const [calling, setCalling] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -229,6 +296,8 @@ export function LeadsRoute() {
   const [importing, setImporting] = useState(
     () => params.get("import") === "file",
   );
+  // Rows pasted into quick add, for the import to read (owner P0, 23 Oct 2026).
+  const [pastedRows, setPastedRows] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // A settings page opened from the menu is a step of its own: Leads goes back.
@@ -328,6 +397,14 @@ export function LeadsRoute() {
   // (orchestrator, 23 Oct 2026: cold partner outreach apart from enquiries). The
   // choice is used before the pipelines are read, so the desk doesn't load twice.
   const pipes = usePipelines(authenticated);
+  // Several pipelines: their names, for the table's Pipeline column.
+  const pipelineNames = useMemo(
+    () =>
+      several(pipes)
+        ? new Map(pipes.pipelines.map((item) => [item.key, item.name]))
+        : null,
+    [pipes],
+  );
   const [pipelineChoice, setPipelineChoice] = useState(() => ({
     at: contextKey,
     value: storedToCall(contextKey),
@@ -366,12 +443,21 @@ export function LeadsRoute() {
       .then((next) => {
         setDesk(next);
         setDeskKey(contextKey);
+        rememberDesk(identity, toCallPipeline, next);
+        // Once a visit: the next few leads' details and Start calling's
+        // first lead, so they open on them (leads-client.ts readAhead).
+        if (!readAhead.current && !savingData()) {
+          readAhead.current = true;
+          setAheadScope(identity);
+          likelyNext(next).forEach(readLeadAhead);
+          readNextAhead(toCallPipeline);
+        }
         setError(null);
         // The app's badge counts the whole day, never one pipeline's.
         if (!toCallPipeline)
           publishBadge({
             overdue: next.counts.overdue ?? 0,
-            to_call: dueNow(next),
+            to_call: toCallNow(next),
           });
         settle();
       })
@@ -395,7 +481,14 @@ export function LeadsRoute() {
         settle();
       });
     return () => controller.abort();
-  }, [authenticated, contextKey, version, toCallPipeline, chooseToCall]);
+  }, [
+    authenticated,
+    contextKey,
+    identity,
+    version,
+    toCallPipeline,
+    chooseToCall,
+  ]);
 
   // Back in the app or the tab, an alert while open, or a minute gone: read again.
   useEffect(() => {
@@ -718,7 +811,7 @@ export function LeadsRoute() {
     access?.workspaces?.find(
       (workspace) => workspace.tenant_id === access.context?.tenantId,
     )?.name ?? "";
-  const toCall = dueNow(desk);
+  const toCall = toCallNow(desk);
 
   // Tabs and filters change the address in place, so Back never steps
   // through them; a settings page is a step of its own, so Back returns.
@@ -756,7 +849,7 @@ export function LeadsRoute() {
   ];
   const stageLabel =
     tabs.find((tab) => tab.key === view)?.label ??
-    (view === "open" ? "Open" : "this stage");
+    (view === "open" ? "All leads" : "this stage");
 
   // Leads → Filter (stage lists only): whose leads, the pipeline, a name or number.
   const filterable = stageView && view !== TEST;
@@ -768,7 +861,7 @@ export function LeadsRoute() {
   const describeView = (spec: ViewSpec) =>
     [
       tabs.find((tab) => tab.key === spec.stage)?.label ??
-        (spec.stage === "open" ? "Open" : "A stage"),
+        (spec.stage === "open" ? "All leads" : "A stage"),
       spec.pipeline
         ? (pipes?.pipelines.find((item) => item.key === spec.pipeline)?.name ??
           null)
@@ -877,11 +970,7 @@ export function LeadsRoute() {
           data-tab={manage ?? (stageView ? "all" : "desk")}
           data-call-bar={view === "desk" && toCall > 0 ? "" : undefined}
         >
-          <div
-            ref={spinner}
-            className={styles.pullSpinner}
-            aria-hidden="true"
-          />
+          <PullMark mark={spinner} />
           <PhoneSetupBar />
           <div className={styles.wideOnly}>
             <PageHeader
@@ -1026,6 +1115,13 @@ export function LeadsRoute() {
               onClearFilters={clearFilters}
               onAdd={() => begin("adding", setAdding)}
               onShowOpen={() => go("open")}
+              layoutOwner={contextKey}
+              pipelineNames={pipelineNames}
+              me={current && desk ? desk.me.person_id : null}
+              onPasteRows={(text) => {
+                setPastedRows(text);
+                begin("importing", setImporting);
+              }}
               tools={
                 view === TEST ? null : (
                   <ViewsChip
@@ -1233,8 +1329,10 @@ export function LeadsRoute() {
           key={`importing-${rounds.importing}`}
           open={importing}
           canManage={can}
+          pasted={pastedRows}
           onClose={() => {
             setImporting(false);
+            setPastedRows(null);
             // Arrived from Settings: Import doesn't open again on a refresh.
             if (new URLSearchParams(window.location.search).has("import")) {
               const next = new URLSearchParams(window.location.search);

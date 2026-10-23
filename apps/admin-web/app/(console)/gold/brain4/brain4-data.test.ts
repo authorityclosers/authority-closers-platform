@@ -147,4 +147,39 @@ describe("Blind ratings and the checkpoint sample", () => {
     expect(old.blind.dimensions).toEqual([]);
     expect(old.sample).toBeNull();
   });
+
+  it("reads the Report review per section and engine module", () => {
+    const data = normalizeBrain4({
+      review: {
+        items: 40,
+        skipped: 2,
+        calls: 2,
+        by_module: [
+          {
+            key: ["b4.shadow"],
+            names: ["Brain 4.0 · separate read"],
+            labels: 36,
+            calls: 2,
+            agree: 30,
+            disagree: 2,
+            fix: 4,
+            agree_rate: 0.8333,
+            agree_ci: [0.7, 0.95],
+            rating_moved: 1.25,
+          },
+          { key: ["x.new"], agree: "broken" },
+        ],
+        by_section: "broken",
+      },
+    });
+    expect(data.review.items).toBe(40);
+    expect(data.review.by_module[0].names).toEqual([
+      "Brain 4.0 · separate read",
+    ]);
+    expect(data.review.by_module[0].agree_ci).toEqual([0.7, 0.95]);
+    expect(data.review.by_module[1].agree).toBe(0);
+    expect(data.review.by_module[1].names).toEqual([]);
+    expect(data.review.by_section).toEqual([]);
+    expect(normalizeBrain4({}).review.calls).toBe(0);
+  });
 });
