@@ -19,6 +19,7 @@ import shutil
 import subprocess
 import sys
 import tarfile
+import time
 import zipfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -142,7 +143,22 @@ def validate_reference(value: dict, key: str, repository: str) -> None:
     normalized_digest(value.get("digest", ""))
 
 
+GITHUB_RETRY_DELAYS = (2, 5, 10)
+
+
 def github(path: str, *, output: Path | None = None) -> dict | None:
+    # 23 Oct: with about 17 shards reading the pinned bundle at once, a few GitHub API calls
+    # answered 404/5xx within a second and failed whole shards. Retry those transient refusals
+    # before failing closed; any other failure still raises at once.
+    for delay in GITHUB_RETRY_DELAYS:
+        try:
+            return _github_once(path, output=output)
+        except PublisherUnavailable:
+            time.sleep(delay)
+    return _github_once(path, output=output)
+
+
+def _github_once(path: str, *, output: Path | None = None) -> dict | None:
     # gh handles authenticated GitHub redirects; credentials never enter argv.
     command = ["gh", "api", "--allow-escape-sequences", path]
     try:
