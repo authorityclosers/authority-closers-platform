@@ -44,7 +44,8 @@ function NetLine({ offer }: { offer: Offer }) {
   return (
     <small className={styles.muted}>
       {rupees(offer.gross)} charged ·{" "}
-      {offer.channel === "play" ? "Play" : "Razorpay"} {rupees(offer.fee)}
+      {offer.channel === "play" ? "Play" : "Razorpay"} {rupees(offer.fee)} ·{" "}
+      {rate(offer.netPerMinute)} a minute
     </small>
   );
 }
@@ -322,8 +323,13 @@ export function EconomicsView({ economics }: { economics: Economics }) {
         <div className={styles.warnings} role="status">
           {economics.warnings.map((item) => (
             <p key={`${item.offer}-${item.route}-${item.kind}`}>
-              {offerLabel(item.offer)} on {routeName(item.route)}{" "}
-              {WARNING_WORDS[item.kind] ?? item.kind}.
+              {offerLabel(item.offer)}
+              {item.route ? ` on ${routeName(item.route)}` : ""}{" "}
+              {WARNING_WORDS[item.kind] ?? item.kind}
+              {item.kind === "below_price_floor"
+                ? ` (${rate(economics.priceFloor)})`
+                : ""}
+              .
             </p>
           ))}
         </div>
@@ -357,7 +363,7 @@ export function EconomicsView({ economics }: { economics: Economics }) {
       </Tiles>
       <Panel
         title="Margin a month per plan"
-        sub={`After GST and the payment fee, at 25%, 50% and 100% of the plan's minutes on ${routeName(economics.breakEvenRoute).toLowerCase()}'s route`}
+        sub={`After GST and the payment fee, at 25%, 50% and 100% of the plan's minutes on ${routeName(economics.breakEvenRoute).toLowerCase()}'s route · never below ${rate(economics.priceFloor)} a minute sold`}
         tools={
           <Why
             detail={`Prices are the plans table's, as sold. GST is passed through: a GST-inclusive price is divided by 1 + the GST rate. Razorpay takes its rate of the charge plus GST on its fee; Play Billing takes its rate of the price without tax. A yearly price is shown a month. Minutes cost the route's rupees an audio minute times the audio-to-billed ratio of charged calls (plans count billed minutes). Green is at or above the ${share(economics.targetMargin)} target margin, amber below it, red a loss. List-price estimates, never a bill.`}

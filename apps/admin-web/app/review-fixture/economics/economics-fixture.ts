@@ -52,6 +52,7 @@ export function economicsFixture() {
         ex_gst: 2117.8,
         fee: 58.98,
         net: 2058.82,
+        net_per_minute: 2.574,
         margins: {
           measured: [
             {
@@ -162,6 +163,7 @@ export function economicsFixture() {
         ex_gst: 2117.8,
         fee: 317.67,
         net: 1800.13,
+        net_per_minute: 2.25,
         margins: {
           measured: [
             {
@@ -272,6 +274,7 @@ export function economicsFixture() {
         ex_gst: 1906.08,
         fee: 53.08,
         net: 1853.0,
+        net_per_minute: 2.316,
         margins: {
           measured: [
             {
@@ -382,6 +385,7 @@ export function economicsFixture() {
         ex_gst: 1906.08,
         fee: 285.91,
         net: 1620.16,
+        net_per_minute: 2.025,
         margins: {
           measured: [
             {
@@ -492,6 +496,7 @@ export function economicsFixture() {
         ex_gst: 10000.0,
         fee: 278.48,
         net: 9721.52,
+        net_per_minute: 9.722,
         margins: {
           measured: [
             {
@@ -602,6 +607,7 @@ export function economicsFixture() {
         ex_gst: 9000.0,
         fee: 250.63,
         net: 8749.37,
+        net_per_minute: 8.749,
         margins: {
           measured: [
             {
@@ -817,6 +823,7 @@ export function economicsFixture() {
     },
     break_even_route: "today-brain4-read",
     target_margin: 0.5,
+    price_floor_per_minute: 0.71,
     trial: {
       minutes: 60,
       cost: 51.27,
@@ -948,6 +955,7 @@ export function economicsFixture() {
         trial_minutes: 60,
         trial_conversion: 0.1,
         target_margin: 0.5,
+        price_floor_per_minute: 0.71,
       },
     },
     problems: [],

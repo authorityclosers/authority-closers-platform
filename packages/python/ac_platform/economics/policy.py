@@ -115,6 +115,9 @@ DEFAULTS: dict[str, Any] = {
     "trial_minutes": 60,
     "trial_conversion": 0.10,
     "target_margin": 0.5,
+    # The least net revenue a sold minute may bring (owner, 23 Oct 2026, launch decision 7:
+    # "never sell below ₹0.71/min").
+    "price_floor_per_minute": 0.71,
 }
 
 
@@ -222,4 +225,7 @@ def validate(config: Mapping[str, Any]) -> dict[str, Any]:
         "trial_minutes": int(_number(merged["trial_minutes"], "trial_minutes", 0, 1000)),
         "trial_conversion": _number(merged["trial_conversion"], "trial_conversion", 0.01, 1),
         "target_margin": _number(merged["target_margin"], "target_margin", 0, 0.95),
+        "price_floor_per_minute": _number(
+            merged["price_floor_per_minute"], "price_floor_per_minute", 0, 100
+        ),
     }

@@ -111,6 +111,18 @@ def test_break_even_trial_and_top_ups() -> None:
     assert body["warnings"] == []
 
 
+def test_an_offer_or_top_up_under_the_price_floor_is_flagged() -> None:
+    # Personal brings ₹2.57 a sold minute, its top-up ₹2.46, an Organisation seat ₹9.72.
+    assert not [row for row in _run(price_floor_per_minute=0.71)["warnings"]]
+    body = _run(price_floor_per_minute=3.0)
+    flagged = {row["offer"] for row in body["warnings"] if row["kind"] == "below_price_floor"}
+    assert "personal.monthly.web" in flagged and "personal.topup_100" in flagged
+    assert "organisation.monthly.web" not in flagged
+    assert _offer(body, "personal.monthly.web")["net_per_minute"] == pytest.approx(2.574, abs=0.001)
+    assert body["price_floor_per_minute"] == 3.0
+    assert policy.validate({})["price_floor_per_minute"] == 0.71
+
+
 def test_a_route_that_loses_money_is_flagged() -> None:
     dear = Route(id="dear", label="dear", source="projection", per_audio_minute=3.0)
     body = economics(

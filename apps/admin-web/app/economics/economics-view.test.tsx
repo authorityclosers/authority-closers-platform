@@ -89,6 +89,22 @@ it("shows margins per plan, routes, break-even, fixed costs, top-ups and the tri
   expect(text).toContain("Free trial · 60 min");
 });
 
+it("names an offer under the price floor and shows each offer's net a minute", () => {
+  const raw = economicsFixture();
+  const text = render({
+    ...raw,
+    price_floor_per_minute: 0.71,
+    warnings: [
+      { offer: "personal.monthly.play", route: "", kind: "below_price_floor" },
+    ],
+  });
+  expect(text).toContain(
+    "Personal, monthly, Play Store brings less than the price floor for each minute sold (₹0.71).",
+  );
+  expect(text).toContain("never below ₹0.71 a minute sold");
+  expect(text).toMatch(/₹2\.\d\d a minute/);
+});
+
 it("names a plan that loses money", () => {
   const raw = economicsFixture();
   const text = render({

@@ -129,9 +129,12 @@ def economics(
     trial_minutes: int,
     trial_conversion: float,
     target_margin: float,
+    price_floor_per_minute: float = 0.0,
 ) -> dict[str, Any]:
     """The whole picture for Admin. ``audio_per_billed`` turns ₹ per audio minute into ₹ per
-    plan minute (plans count billed minutes); ``fixed`` items are {key, label, rupees, kind}."""
+    plan minute (plans count billed minutes); ``fixed`` items are {key, label, rupees, kind}.
+    ``price_floor_per_minute`` is the least net revenue a sold minute may bring (owner,
+    23 Oct 2026: "never sell below ₹0.71/min"); an offer or top-up under it is flagged."""
     per_plan_minute = {route.id: route.per_audio_minute * audio_per_billed for route in routes}
     route_rows = [
         {
@@ -154,6 +157,9 @@ def economics(
         gross = _gross(offer["price_paise_per_month"], offer["prices_include_gst"], fees.gst_rate)
         ex_gst, fee, net = fees.charge(gross, offer["channel"])
         minutes = offer["minutes"]
+        net_per_minute = net / minutes
+        if net_per_minute < price_floor_per_minute:
+            warnings.append({"offer": offer["id"], "route": "", "kind": "below_price_floor"})
         margins = {}
         for route in routes:
             cost_minute = per_plan_minute[route.id]
@@ -196,6 +202,7 @@ def economics(
                 "ex_gst": _round(ex_gst),
                 "fee": _round(fee),
                 "net": _round(net),
+                "net_per_minute": round(net_per_minute, 3),
                 "margins": margins,
                 "break_even": break_even,
                 # The cost per plan minute at which full use still leaves the target margin.
@@ -209,6 +216,10 @@ def economics(
             gross = _gross(pack.price_paise, plan.prices_include_gst, fees.gst_rate)
             ex_gst, fee, net = fees.charge(gross, "web")
             per_minute = net / pack.minutes
+            if per_minute < price_floor_per_minute:
+                warnings.append(
+                    {"offer": f"{plan.key}.{pack.key}", "route": "", "kind": "below_price_floor"}
+                )
             top_ups.append(
                 {
                     "plan": plan.key,
@@ -241,6 +252,7 @@ def economics(
         },
         "break_even_route": break_even_route,
         "target_margin": target_margin,
+        "price_floor_per_minute": price_floor_per_minute,
         "trial": {
             "minutes": trial_minutes,
             "cost": None if trial_cost is None else _round(trial_cost),

@@ -188,6 +188,7 @@ def build(
         trial_minutes=config["trial_minutes"],
         trial_conversion=config["trial_conversion"],
         target_margin=config["target_margin"],
+        price_floor_per_minute=config["price_floor_per_minute"],
     )
     return {
         **body,

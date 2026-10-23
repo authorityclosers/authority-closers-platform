@@ -42,6 +42,7 @@ export type Offer = {
   margins: Record<string, MarginCell[]>;
   breakEven: Record<string, BreakEven>;
   ceiling: number;
+  netPerMinute: number;
 };
 
 export type TopUpRow = {
@@ -76,6 +77,7 @@ export type Economics = {
   };
   breakEvenRoute: string;
   targetMargin: number;
+  priceFloor: number;
   trial: {
     minutes: number;
     cost: number | null;
@@ -162,6 +164,7 @@ export function normalizeEconomics(raw: unknown): Economics {
           };
         }),
         ceiling: read.number(row.ceiling_per_plan_minute),
+        netPerMinute: read.number(row.net_per_minute),
       };
     }),
     topUps: read.array(body.top_ups).map((item) => {
@@ -195,6 +198,7 @@ export function normalizeEconomics(raw: unknown): Economics {
     },
     breakEvenRoute: read.string(body.break_even_route),
     targetMargin: read.number(body.target_margin, 0.5),
+    priceFloor: read.number(body.price_floor_per_minute, 0.71),
     trial: {
       minutes: read.number(trial.minutes),
       cost: read.optionalNumber(trial.cost),
@@ -297,4 +301,5 @@ export const routeName = (id: string) => ROUTE_SHORT[id] ?? id;
 export const WARNING_WORDS: Record<string, string> = {
   loss_at_full_use: "loses money at full use",
   below_target_margin: "is below the target margin at full use",
+  below_price_floor: "brings less than the price floor for each minute sold",
 };
