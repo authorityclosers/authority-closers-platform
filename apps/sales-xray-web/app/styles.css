@@ -3396,3 +3396,9 @@ nextjs-portal {
 html[data-sx-app] .sx-web-only {
   display: none !important;
 }
+
+/* Press feedback (press-feedback.tsx; owner, 24 Oct 2026: taps felt slow):
+   whatever is pressed dims at once, before its work is done. */
+[data-sx-pressed] {
+  opacity: 0.68;
+}

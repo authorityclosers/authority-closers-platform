@@ -24,6 +24,7 @@ import { InitialSessionProvider } from "./initial-session";
 import { DisplayDatesProvider } from "./display-clock";
 import { serverDisplayDates, serverSession } from "./server-reads";
 import { NoticeCenter } from "./notice-center";
+import { PressFeedback } from "./press-feedback";
 export const metadata: Metadata = {
   title: "Sales X-Ray · Authority Closers",
   description:
@@ -117,6 +118,7 @@ export default async function Layout({
             </InitialSessionProvider>
             <UploadIndicator />
             <NoticeCenter />
+            <PressFeedback />
           </UploadSessionProvider>
         </ThemeProvider>
       </body>
