@@ -124,7 +124,6 @@ function DeleteAccountFlow({
 
   useEffect(() => {
     const controller = new AbortController();
-    setStep({ state: "loading" });
     void fetch(PATH, {
       credentials: "same-origin",
       cache: "no-store",
@@ -144,7 +143,10 @@ function DeleteAccountFlow({
     return () => controller.abort();
   }, [attempt]);
 
-  const recheck = useCallback(() => setAttempt((value) => value + 1), []);
+  const recheck = useCallback(() => {
+    setStep({ state: "loading" });
+    setAttempt((value) => value + 1);
+  }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
