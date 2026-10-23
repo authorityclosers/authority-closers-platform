@@ -1,7 +1,9 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
+import { createPortal } from "react-dom";
 
+import { Button } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
 import { BillingError, idempotencyKey } from "./billing-api";
 import type { Refund } from "./contract";
@@ -15,6 +17,15 @@ export type RequestRefund = (
 ) => Promise<Refund>;
 
 const DEFAULT_REASON = "Asked for a refund in the app";
+
+const noSubscription = () => () => {};
+/** True once in the browser; the server render has no body to portal into. */
+const useInBrowser = () =>
+  useSyncExternalStore(
+    noSubscription,
+    () => true,
+    () => false,
+  );
 
 /**
  * C1 §4: a full refund within 7 days when none of that payment's minutes were used.
@@ -41,6 +52,7 @@ export function RefundRequest({
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<Refund | null>(null);
   const key = useRef<string | null>(null);
+  const inBrowser = useInBrowser();
 
   if (result?.state === "refunded" || result?.state === "pending")
     return (
@@ -84,49 +96,38 @@ export function RefundRequest({
     }
   };
 
-  return (
-    <>
-      <button
-        type="button"
-        className={className}
-        onClick={() => {
-          setError(null);
-          setOpen(true);
-        }}
-      >
-        {label}
-      </button>
-      <Sheet
-        open={open}
-        onClose={() => (busy ? undefined : setOpen(false))}
-        title="Request a refund"
-        description={
-          refund.refundableUntil
-            ? `Available until ${day(refund.refundableUntil)}.`
-            : undefined
-        }
-        footer={
-          <div className={styles.footer}>
-            <button
-              type="button"
-              className={className}
-              data-primary="true"
-              disabled={busy}
-              onClick={() => void submit()}
-            >
-              {busy ? "Requesting…" : `Refund ${amount}`}
-            </button>
-            <button
-              type="button"
-              className={className}
-              disabled={busy}
-              onClick={() => setOpen(false)}
-            >
-              Keep it
-            </button>
-          </div>
-        }
-      >
+  // Drawn on the page body, so a table cell's right alignment and type never
+  // reach it (QA, 23 Oct 2026).
+  const sheet = (
+    <Sheet
+      open={open}
+      onClose={() => (busy ? undefined : setOpen(false))}
+      title="Request a refund"
+      description={
+        refund.refundableUntil
+          ? `Available until ${day(refund.refundableUntil)}.`
+          : undefined
+      }
+      footer={
+        <div className={styles.footer}>
+          <Button
+            variant="ghost"
+            disabled={busy}
+            onClick={() => setOpen(false)}
+          >
+            Keep it
+          </Button>
+          <Button
+            variant="primary"
+            disabled={busy}
+            onClick={() => void submit()}
+          >
+            {busy ? "Requesting…" : `Refund ${amount}`}
+          </Button>
+        </div>
+      }
+    >
+      <div className={styles.body}>
         <p>
           You get back the full {amount} because none of this payment&apos;s
           minutes were used. Its minutes leave your balance, and the money goes
@@ -146,7 +147,23 @@ export function RefundRequest({
             {error}
           </p>
         ) : null}
-      </Sheet>
+      </div>
+    </Sheet>
+  );
+
+  return (
+    <>
+      <button
+        type="button"
+        className={className}
+        onClick={() => {
+          setError(null);
+          setOpen(true);
+        }}
+      >
+        {label}
+      </button>
+      {inBrowser ? createPortal(sheet, document.body) : null}
     </>
   );
 }

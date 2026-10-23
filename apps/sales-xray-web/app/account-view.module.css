@@ -958,8 +958,3 @@
     text-align: left;
   }
 }
-
-/* Above the phone tab bar when it opens (QA, 23 Oct 2026). */
-.confirmCancelBox {
-  scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
-}

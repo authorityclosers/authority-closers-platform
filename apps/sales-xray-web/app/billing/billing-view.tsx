@@ -1,6 +1,8 @@
 "use client";
 
+import { documentStatus } from "./document-status";
 import { RefundRequest, type RequestRefund } from "./refund-request";
+import { revealAboveTabBar } from "./reveal";
 import type { Refund } from "./contract";
 import { usePurchasesAllowed } from "../purchase-policy";
 import {
@@ -13,7 +15,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import type {
@@ -74,9 +76,17 @@ export function BillingView({
   );
   const authenticated = access?.authenticated === true;
   const [cancelAsk, setCancelAsk] = useState(false);
+  // The confirm opens below the fold on phones: bring it up, clear of the tab
+  // bar (QA, 23 Oct 2026).
+  const revealConfirm = useCallback((box: HTMLDivElement | null) => {
+    if (box) requestAnimationFrame(() => revealAboveTabBar(box));
+  }, []);
   const purchasesAllowed = usePurchasesAllowed();
   const loading = status === "loading";
   const current = subs?.current;
+  // The refund promise is about a payment; a trial has none.
+  const paid =
+    Boolean(current) || Boolean(documents?.some((document) => document.refund));
   const isPaidActive = current?.status === "active";
   const isCancelled = current?.cancelAtPeriodEnd === true;
   const allowance = usage?.allowance ?? mePlan?.allowance;
@@ -157,10 +167,12 @@ export function BillingView({
               </span>
             </div>
 
-            <p className={styles.planPrice}>
-              {current ? formatMoney(current.amount) : "—"}
-              <small>{current ? ` / ${current.interval}` : ""}</small>
-            </p>
+            {current ? (
+              <p className={styles.planPrice}>
+                {formatMoney(current.amount)}
+                <small>{` / ${current.interval}`}</small>
+              </p>
+            ) : null}
 
             <ul className={styles.facts}>
               <li>
@@ -177,11 +189,13 @@ export function BillingView({
                   minutes
                 </li>
               ) : null}
-              <li>
-                <ShieldCheck size={14} />
-                Full refund within 7 days if none of this payment&apos;s minutes
-                were used.
-              </li>
+              {paid ? (
+                <li>
+                  <ShieldCheck size={14} />
+                  Full refund within 7 days if none of this payment&apos;s
+                  minutes were used.
+                </li>
+              ) : null}
             </ul>
 
             {current?.renewalNeedsCustomerApproval ? (
@@ -201,7 +215,7 @@ export function BillingView({
               !isCancelled &&
               ["active", "past_due", "halted"].includes(current.status) ? (
                 cancelAsk ? (
-                  <div className={styles.confirmBox}>
+                  <div className={styles.confirmBox} ref={revealConfirm}>
                     <p>
                       Renewal stops; access continues to the end of the period.
                     </p>
@@ -305,10 +319,12 @@ export function BillingView({
                     ? "No renewal scheduled"
                     : "Unavailable"}
               </li>
-              <li>
-                <b>Refund rule:</b> Full refund within 7 days if none of this
-                payment&apos;s minutes were used.
-              </li>
+              {paid ? (
+                <li>
+                  <b>Refund rule:</b> Full refund within 7 days if none of this
+                  payment&apos;s minutes were used.
+                </li>
+              ) : null}
             </ul>
 
             <div className={styles.actions}>
@@ -364,10 +380,13 @@ export function BillingView({
                           <td data-label="Amount">
                             {formatMoney(document.amount)}
                           </td>
-                          <td data-label="Status">{document.status}</td>
+                          <td data-label="Status">
+                            {documentStatus(document)}
+                          </td>
                           <td data-label="Documents">
                             {document.invoiceHref ? (
                               <a
+                                className={styles.docLink}
                                 href={document.invoiceHref}
                                 download
                                 aria-label={`Invoice for ${document.description}`}
@@ -380,13 +399,16 @@ export function BillingView({
                               : ""}
                             {document.receiptHref ? (
                               <a
+                                className={styles.docLink}
                                 href={document.receiptHref}
                                 aria-label={`Receipt for ${document.description}`}
                               >
                                 Receipt
                               </a>
                             ) : null}
-                            {onRefund && document.refund ? (
+                            {/* The offer only; once asked, Status says where it stands. */}
+                            {onRefund &&
+                            document.refund?.state === "available" ? (
                               <>
                                 {" · "}
                                 <RefundRequest

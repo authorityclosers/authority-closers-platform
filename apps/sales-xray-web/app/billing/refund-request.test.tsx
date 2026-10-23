@@ -96,6 +96,17 @@ it("asks once, then shows the refund as requested", async () => {
   expect(host.textContent).toBe("Refund requested");
 });
 
+it("opens on the page body, with the refund as the main action", async () => {
+  await show(available);
+  await act(async () => button("Request refund")!.click());
+  const dialog = document.body.querySelector("dialog");
+  expect(dialog).not.toBeNull();
+  // Not inside the trigger's table cell, whose alignment it would take on.
+  expect(host.contains(dialog)).toBe(false);
+  expect(button("Refund ₹2,499")!.dataset.variant).toBe("primary");
+  expect(button("Keep it")!.dataset.variant).toBe("ghost");
+});
+
 it("shows the server's reason when it refuses", async () => {
   const onRequest = vi.fn(async () => {
     throw new BillingError(

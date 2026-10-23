@@ -36,6 +36,8 @@ import {
 } from "./acquisition-client";
 import { useSalesXraySignOut } from "./account-navigation";
 import type { BillingViewProps } from "./billing/billing-view";
+import { documentStatus } from "./billing/document-status";
+import { revealAboveTabBar } from "./billing/reveal";
 import { RefundRequest } from "./billing/refund-request";
 import { PLANS_ON_WEB, usePurchasesAllowed } from "./purchase-policy";
 import { useWorkspaceAccess } from "./workspace-access";
@@ -1275,6 +1277,11 @@ export function PlanAndBillingPane({
   onRetry: () => void;
 }) {
   const [cancelAsk, setCancelAsk] = useState(false);
+  // The confirm opens below the fold on phones: bring it up, clear of the tab
+  // bar (QA, 23 Oct 2026).
+  const revealConfirm = useCallback((box: HTMLDivElement | null) => {
+    if (box) requestAnimationFrame(() => revealAboveTabBar(box));
+  }, []);
   const purchasesAllowed = usePurchasesAllowed();
   const refundable = documents?.find(
     (document) => document.refund?.state === "available",
@@ -1443,12 +1450,7 @@ export function PlanAndBillingPane({
           {current &&
             !isCancelled &&
             (cancelAsk ? (
-              <div
-                className={styles.confirmCancelBox}
-                ref={(box) =>
-                  box?.scrollIntoView({ block: "nearest", behavior: "smooth" })
-                }
-              >
+              <div className={styles.confirmCancelBox} ref={revealConfirm}>
                 <p className={styles.muted}>
                   Renewal stops; access continues to the end of the period.
                 </p>
@@ -1605,7 +1607,7 @@ export function PlanAndBillingPane({
                       <td data-label="Amount">
                         {formatMoney(document.amount)}
                       </td>
-                      <td data-label="Status">{document.status}</td>
+                      <td data-label="Status">{documentStatus(document)}</td>
                       <td data-label="Documents">
                         {document.invoiceHref ? (
                           <a
@@ -1629,7 +1631,7 @@ export function PlanAndBillingPane({
                         {!document.invoiceHref && !document.receiptHref
                           ? "—"
                           : null}
-                        {onRefund && document.refund ? (
+                        {onRefund && document.refund?.state === "available" ? (
                           <>
                             {" · "}
                             <RefundRequest

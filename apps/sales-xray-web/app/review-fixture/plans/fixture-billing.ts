@@ -40,7 +40,9 @@ export const FIXTURE_PLANS = {
     key: plan.key,
     name: plan.name,
     audience: plan.audience,
-    status: plan.status,
+    // Enterprise is "Talk to us" until it is on sale (owner, 30 Sep 2026), as
+    // on dev; the review page shows what buyers see (QA, 23 Oct 2026).
+    status: plan.key === "enterprise" ? "coming_soon" : plan.status,
     prices: plan.prices
       ? {
           monthly_paise: plan.prices.monthlyPaise!,

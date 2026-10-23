@@ -338,6 +338,16 @@
   font: 500 13px/1.4 var(--lx-font-ui);
 }
 
+.docLink {
+  color: var(--lx-teal);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.docLink:hover {
+  text-decoration: underline;
+}
+
 .empty {
   display: flex;
   flex-direction: column;

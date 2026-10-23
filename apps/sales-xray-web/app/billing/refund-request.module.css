@@ -1,6 +1,20 @@
 .footer {
-  display: grid;
+  display: flex;
+  flex: 1 1 auto;
+  justify-content: flex-end;
   gap: 8px;
+}
+
+.body {
+  display: grid;
+  gap: 14px;
+  color: var(--lx-ink-2);
+  font: 500 15px/1.45 var(--lx-font-ui);
+  text-align: start;
+}
+
+.body p {
+  margin: 0;
 }
 
 .reason {
@@ -26,4 +40,12 @@
   margin: 0;
   color: var(--lx-objection);
   font: 500 13px/1.4 var(--lx-font-ui);
+}
+
+/* Phones: two even, thumb-sized buttons, as the other sheets have. */
+@media (max-width: 640px) {
+  .footer > button {
+    flex: 1 1 0;
+    min-height: 44px;
+  }
 }
