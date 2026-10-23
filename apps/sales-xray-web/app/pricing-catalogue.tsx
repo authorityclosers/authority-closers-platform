@@ -6,7 +6,7 @@ import { liveBilling } from "./billing/billing-api";
 import { count, money } from "./billing/money";
 import { onSale, type Plan } from "./billing/contract";
 import styles from "./pricing-catalogue.module.css";
-import { CALL_LIMIT_MINUTES } from "./call-limit";
+import { callLimitMinutes } from "./call-limit";
 
 const PUBLIC_PLAN_KEYS = new Set(["personal", "organisation", "enterprise"]);
 
@@ -150,7 +150,8 @@ export function PricingCatalogue({ initialPlans }: { initialPlans?: Plan[] }) {
                 Longest call:{" "}
                 {plan.longestCallMinutes === null
                   ? "not listed in the catalogue"
-                  : count(CALL_LIMIT_MINUTES) + " minutes"}
+                  : count(callLimitMinutes(plan.longestCallMinutes)) +
+                    " minutes"}
               </li>
               <li>
                 Recording and report retention:{" "}

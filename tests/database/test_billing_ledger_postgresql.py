@@ -40,14 +40,13 @@ from ac_platform.conversation_intelligence.acquisition_sessions import (
 )
 from ac_platform.conversation_intelligence.acquisition_usage import (
     ALLOWANCE_SECONDS,
-    RECEIPT_CEILING_SECONDS,
+    LONGEST_CALL_EXCEEDED_MESSAGE,
     TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE,
     shared_account_committed_seconds,
 )
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
     ConversationDenied,
-    ConversationError,
 )
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount, MinuteGrant
 from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
@@ -744,17 +743,16 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                 ] == 5_600
             async with sessions() as database, database.begin():
                 acquisition = sessions_for(database, learner, operations)
-                # The one call-length limit (120 minutes) is the receipt ceiling too: no
-                # measured source is longer, so nothing over it reaches admission. The
-                # guests below show the balance refusal.
-                assert CALL_LIMIT_SECONDS <= RECEIPT_CEILING_SECONDS
-                with pytest.raises(ConversationError, match="bounded measured source"):
-                    source(RECEIPT_CEILING_SECONDS + 1)
+                # Over the balance, but over the one call-length limit first (60 min
+                # today); the guests below show the balance refusal.
+                with pytest.raises(ConversationDenied) as denied:
+                    await acquisition.reserve(source(5_601), actor=learner.actor)
+                assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
                 assert len((await legacy_rows(database, learner)).all()) == 1
                 assert (await acquisition.allowance(actor=learner.actor))[
                     "available_seconds"
                 ] == 5_600
-            # Under trial v2 the per-call limit is the one limit while the trial has capacity.
+            # Under trial v2 the per-call limit is 3600 s while the trial has capacity.
             async with sessions() as database, database.begin():
                 acquisition = sessions_for(
                     database, learner, operations, trial_policy=TrialPolicy("v2")
@@ -762,6 +760,9 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                 assert (await acquisition.allowance(actor=learner.actor))[
                     "available_seconds"
                 ] == 8_000
+                with pytest.raises(ConversationDenied) as denied:
+                    await acquisition.reserve(source(3_601), actor=learner.actor)
+                assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
                 await acquisition.reserve(source(3_600), actor=learner.actor)
                 assert (await acquisition.allowance(actor=learner.actor))[
                     "available_seconds"
@@ -786,6 +787,9 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                 assert (await acquisition.allowance(actor=learner.actor))[
                     "available_seconds"
                 ] == 2_000 + 90 * 60 * 3
+                with pytest.raises(ConversationDenied) as denied:
+                    await acquisition.reserve(source(CALL_LIMIT_SECONDS + 1), actor=learner.actor)
+                assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
                 await acquisition.reserve(source(CALL_LIMIT_SECONDS), actor=learner.actor)
             # Guests take the same limits from the trial policy and write no ledger rows.
             async with sessions() as database, database.begin():
@@ -793,6 +797,9 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                     database, learner, operations, trial_policy=TrialPolicy("v2")
                 )
                 guest = await acquisition.issue()
+                with pytest.raises(ConversationDenied) as denied:
+                    await acquisition.reserve(source(3_601), token=guest.token)
+                assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
                 await acquisition.reserve(source(3_600), token=guest.token)
                 with pytest.raises(ConversationDenied) as denied:
                     await acquisition.reserve(source(2_401), token=guest.token)
@@ -841,7 +848,7 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                 assert projected.trial.valid_from == first_use
                 assert projected.trial.expires_at == first_use + timedelta(days=14)
                 assert projected.plan_key == TRIAL_LOT_ID
-                assert projected.per_call_seconds == CALL_LIMIT_SECONDS
+                assert projected.per_call_seconds == 3_600
                 # Keep the learner's session current for the projection 15 days on.
                 await database.execute(
                     update(IdentitySession)
@@ -901,7 +908,7 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                 assert after.trial.seconds == 6_000
                 assert after.trial.valid_from == switch_at
                 assert after.trial.expires_at == switch_at + timedelta(days=14)
-                assert after.per_call_seconds == CALL_LIMIT_SECONDS
+                assert after.per_call_seconds == 3_600
                 # The settled use predates the switched window, so it falls to the grant.
                 assert after.available_seconds == 6_000 + 600 - 120
                 grant_position = next(

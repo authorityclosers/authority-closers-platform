@@ -760,7 +760,7 @@ async def test_project_person_under_v2_uses_the_v2_trial(state: SimpleNamespace)
     projected = await ledger.project_person(tenant_id=state.tenant, person_id=state.person, now=T0)
     assert projected.available_seconds == 6000
     assert projected.trial.expires_at == T0 + timedelta(days=14)
-    assert projected.per_call_seconds == CALL_LIMIT_SECONDS
+    assert projected.per_call_seconds == 3600
 
 
 @pytest.mark.parametrize(

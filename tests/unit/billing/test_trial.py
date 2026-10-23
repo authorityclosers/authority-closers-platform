@@ -40,7 +40,7 @@ def test_v2_is_6000_seconds_or_14_days_from_first_use() -> None:
     policy = TrialPolicy("v2")
     assert policy.active_version(T0) == "v2"
     assert policy.seconds(T0) == 6000
-    assert policy.per_call_seconds(T0) == CALL_LIMIT_SECONDS
+    assert policy.per_call_seconds(T0) == 3600
 
     lot = policy.lot(first_use_at=hours(-1), now=T0)
     assert lot.seconds == 6000
