@@ -65,7 +65,7 @@ domain worker must validate and persist them before that mount is torn down.
 
 Host cgroupv2 memory/CPU/pids enforcement, the default Docker seccomp profile,
 user-namespace/rootless configuration and current patched runtime must be verified.
-The1CPU/1 GiB envelope below is a candidate safety cap, not KVM4 capacity proof.
+The1CPU/2 GiB envelope below is a candidate safety cap, not KVM4 capacity proof.
 The16kHz profile is fixed here. A48kHz profile requires a separate measured resource
 envelope; it must not silently expand these limits.
 
@@ -83,7 +83,7 @@ set -eu
 : "${AC_OUTPUT_DIR:?private quota-limited empty output filesystem required}"
 : "${AC_CONTAINER_NAME:?canonical server job container name required}"
 trap 'docker rm --force "$AC_CONTAINER_NAME" >/dev/null 2>&1 || true' EXIT HUP INT TERM
-timeout --signal=TERM --kill-after=5s 750s docker run --rm --init \
+timeout --signal=TERM --kill-after=5s 1500s docker run --rm --init \
   --name "$AC_CONTAINER_NAME" \
   --pull=never \
   --network=none \
@@ -92,15 +92,15 @@ timeout --signal=TERM --kill-after=5s 750s docker run --rm --init \
   --cap-drop=ALL \
   --security-opt=no-new-privileges:true \
   --pids-limit=32 \
-  --memory=1g \
-  --memory-swap=1g \
+  --memory=2g \
+  --memory-swap=2g \
   --cpus=1 \
   --ulimit=nofile=64:64 \
   --ulimit=core=0:0 \
-  --ulimit=fsize=536870912:536870912 \
+  --ulimit=fsize=1073741824:1073741824 \
   --log-driver=none \
   --tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777 \
-  --tmpfs=/work:rw,noexec,nosuid,nodev,size=768m,uid=10001,gid=10001,mode=0700 \
+  --tmpfs=/work:rw,noexec,nosuid,nodev,size=1536m,uid=10001,gid=10001,mode=0700 \
   --mount "type=bind,source=$AC_SOURCE_FILE,target=/input/source.media,readonly,bind-propagation=rprivate" \
   --mount "type=bind,source=$AC_OUTPUT_DIR,target=/output,bind-propagation=rprivate" \
   --entrypoint=python \
@@ -120,7 +120,7 @@ assert all(int(status[name].strip(), 16) == 0 for name in ("CapEff", "CapPrm", "
 assert status["NoNewPrivs"].strip() == "1" and status["Seccomp"].strip() == "2"
 assert set(os.listdir("/sys/class/net")) == {"lo"}
 cgroup = Path("/sys/fs/cgroup")
-assert 0 < int((cgroup / "memory.max").read_text()) <= 1073741824
+assert 0 < int((cgroup / "memory.max").read_text()) <= 2147483648
 assert int((cgroup / "memory.swap.max").read_text()) == 0
 assert 0 < int((cgroup / "pids.max").read_text()) <= 32
 quota, period = (cgroup / "cpu.max").read_text().split()
@@ -130,17 +130,17 @@ for line in Path("/proc/self/mountinfo").read_text().splitlines():
     fields = line.split()
     mounts[fields[4]] = (set(fields[5].split(",")), fields[fields.index("-") + 1])
 assert "ro" in mounts["/"][0] and "ro" in mounts["/input/source.media"][0]
-for mount, size in (("/work", 805306368), ("/tmp", 16777216)):
+for mount, size in (("/work", 1610612736), ("/tmp", 16777216)):
     assert mounts[mount][1] == "tmpfs"
     assert {"rw", "nosuid", "nodev", "noexec"} <= mounts[mount][0]
     filesystem = os.statvfs(mount)
     assert filesystem.f_frsize * filesystem.f_blocks <= size
 filesystem = os.statvfs("/output")
-assert filesystem.f_frsize * filesystem.f_blocks <= 67108864
+assert filesystem.f_frsize * filesystem.f_blocks <= 134217728
 assert stat.S_IMODE(os.stat("/output").st_mode) == 0o700
 subprocess.run([sys.executable, "-m", "ac_platform.conversation_intelligence", "inspect",
                 "/input/source.media", "--out", "/work/checkpoint", "--rate", "16000"],
-               check=True, timeout=720)
+               check=True, timeout=1440)
 published = Path("/output/checkpoint")
 published.mkdir(mode=0o700)
 for name in ("features.aaf", "checkpoint.json"):
@@ -163,12 +163,17 @@ the named container even if the CLI or decoder stops responding. The default
 Docker seccomp policy stays enabled; never use privileged mode, host namespaces,
 added capabilities, Docker socket mounts or `seccomp=unconfined`.
 
-The exact simultaneous-byte estimate for a 3,600-second 16 kHz run includes the
-provisional one-second PCM decode, the native f64 rows, the packed feature file,
-and the source snapshot. It is 339,618,472 bytes for mono and 746,345,768 bytes
-for stereo at the 128 MiB source ceiling. The old 512 MiB work limit admitted the
-mono case but rejected stereo; the 768 MiB work limit admits both with the same
-one-hour/channel contract.
+The exact simultaneous-byte estimate for a 7,200-second 16 kHz run (120-minute
+calls, owner, 23 Oct 2026) includes the provisional one-second PCM decode, the
+native f64 rows, the packed feature file, and the source snapshot. It is
+746,281,760 bytes for mono and 1,358,345,760 bytes for stereo at the 128 MiB
+source ceiling. The one-hour 768 MiB work limit admits the mono case but rejects
+stereo; the 1,536 MiB work limit admits both with the same two-hour/channel
+contract. The decoded stereo PCM (921,728,000 bytes) is the largest file, under
+the 1 GiB file bound. Measured on the 4-core host (23 Oct 2026, a 7,195 s
+fictional MP3, one CPU): the whole inspection took 124 s mono and 248 s stereo,
+with a cgroup memory peak of 737 MB and 1,380 MB and a /work peak of 669 MB and
+1,309 MB; the timeouts above were doubled with the window.
 
 Network isolation, resource limits and tmpfs semantics are documented by
 [Docker's run reference](https://docs.docker.com/engine/containers/run/),

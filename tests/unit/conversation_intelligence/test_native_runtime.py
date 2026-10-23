@@ -204,10 +204,10 @@ def test_docker_adapter_uses_fixed_isolated_command_and_promotes_verified_output
         "--cap-drop=ALL",
         "--security-opt=no-new-privileges:true",
         "--pids-limit=32",
-        "--memory=1g",
-        "--memory-swap=1g",
+        "--memory=2g",
+        "--memory-swap=2g",
         "--ulimit",
-        "fsize=536870912:536870912",
+        "fsize=1073741824:1073741824",
         "--cpus=1",
         "--log-driver=none",
         "target=/input/source.media,readonly,bind-propagation=rprivate",
@@ -221,17 +221,30 @@ def test_docker_adapter_uses_fixed_isolated_command_and_promotes_verified_output
     assert "provider" not in program.lower()
 
 
-def test_hour_stereo_workspace_bound_requires_the_new_768m_tmpfs(tmp_path: Path) -> None:
-    source_bytes = 32 * 1024 * 1024
-    mono = native_runtime.estimate_workspace_bytes(3600, 1, source_bytes)
-    stereo = native_runtime.estimate_workspace_bytes(3600, 2, source_bytes)
-    old_work = 512 * 1024 * 1024
+def test_two_hour_stereo_workspace_bound_requires_the_1536m_tmpfs(tmp_path: Path) -> None:
+    # 120-minute calls (owner, 23 Oct 2026). The one-hour 768 MiB /work admits a
+    # two-hour mono call but not stereo; every bound below holds at the 128 MiB
+    # source ceiling, where the copied source, decoded PCM, native rows and packed
+    # features coexist.
+    source_bytes = native_runtime.MAX_SOURCE_BYTES
+    mono = native_runtime.estimate_workspace_bytes(7200, 1, source_bytes)
+    stereo = native_runtime.estimate_workspace_bytes(7200, 2, source_bytes)
+    old_work = 768 * 1024 * 1024
 
     assert mono <= old_work
     assert stereo > old_work
     assert stereo <= native_runtime.HOSTED_NATIVE_WORK_BYTES
-    assert native_runtime.HOSTED_NATIVE_MEMORY_BYTES == 1024 * 1024 * 1024
-    assert native_runtime.HOSTED_NATIVE_FSIZE_BYTES == 512 * 1024 * 1024
+    assert native_runtime.HOSTED_NATIVE_WORK_BYTES == 1536 * 1024 * 1024
+    assert native_runtime.HOSTED_NATIVE_MEMORY_BYTES == 2 * 1024 * 1024 * 1024
+    # The decoded stereo PCM is the largest single file the container writes.
+    decoded_stereo = (7200 + 1) * 16000 * 2 * 4
+    assert decoded_stereo < native_runtime.HOSTED_NATIVE_FSIZE_BYTES == 1024 * 1024 * 1024
+    # The packed stereo features plus the checkpoint fit the output quota.
+    features = native_runtime._HEADER.size + 7200 * 100 * 2 * native_runtime._ROW.size
+    assert features + native_runtime.MAX_CHECKPOINT_BYTES <= native_runtime.MAX_OUTPUT_BYTES
+    assert native_runtime.MAX_OUTPUT_BYTES == 128 * 1024 * 1024
+    with pytest.raises(ValueError, match="native_workspace_bound_invalid"):
+        native_runtime.estimate_workspace_bytes(7201, 1, source_bytes)
 
     runtime = native_runtime.DockerNativeRuntime(
         IMAGE, workspace_root=tmp_path, runner=lambda *_: None
@@ -244,10 +257,16 @@ def test_hour_stereo_workspace_bound_requires_the_new_768m_tmpfs(tmp_path: Path)
         "ac-native-resource-bound",
         operation="inspect",
     )
-    assert "--memory=1g" in command
-    assert "--memory-swap=1g" in command
-    assert "fsize=536870912:536870912" in command
-    assert "--tmpfs=/work:rw,noexec,nosuid,nodev,size=768m,uid=10001,gid=10001,mode=0700" in command
+    assert "--memory=2g" in command
+    assert "--memory-swap=2g" in command
+    assert "fsize=1073741824:1073741824" in command
+    assert "--tmpfs=/work:rw,noexec,nosuid,nodev,size=1536m,uid=10001,gid=10001,mode=0700" in command
+    program = command[-1]
+    assert '(cgroup / "memory.max").read_text()) <= 2147483648' in program
+    assert '("/work", 1610612736)' in program
+    assert "f_blocks <= 134217728" in program
+    assert "timeout=1440)" in program
+    assert native_runtime.MAX_RUNTIME_SECONDS == 1500.0
 
 
 def test_docker_adapter_stages_on_helper_quota_root_and_publishes_to_worker_root(

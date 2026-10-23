@@ -106,11 +106,14 @@ until an independently validated conversion is supplied upstream.
 
 ## Limits and release boundary
 
-Input <=128 MiB, duration <=3600s, <=2 physical channels, <=360,000 feature rows.
-The hosted 16 kHz profile therefore supports one hour; the offline 48 kHz
-profile remains bounded by the same row ceiling and may reject longer sources.
-FFprobe has a 20s timeout; decoding has 90s and its own duration/byte/thread caps;
-native extraction has 600s and exact expected output size. The subprocess wrapper
+Input <=128 MiB, duration <=7200s, <=2 physical channels, <=720,000 feature rows
+per channel. The hosted 16 kHz profile therefore supports two hours (owner, 23 Oct
+2026: 120-minute calls); the offline 48 kHz profile remains bounded by the same row
+ceiling and may reject longer sources. FFprobe has a 20s timeout; decoding has 90s
+and its own duration/byte/thread caps; native extraction has 1200s and exact
+expected output size. Measured on the 4-core host at 16 kHz with one CPU (23 Oct
+2026, a 7,195 s fictional MP3): decode 6-11s, native extraction 110s mono and 222s
+stereo, 124s and 248s for the whole inspection. The subprocess wrapper
 caps stdout, discards stderr, kills/reaps timed-out children, and passes only a
 small tool/build environment allowlist. Protocol and demuxer allowlists exclude
 network and playlist demuxers. Decoder/native errors are stable sanitized codes.

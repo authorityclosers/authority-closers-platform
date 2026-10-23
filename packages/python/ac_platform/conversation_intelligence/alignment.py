@@ -24,7 +24,8 @@ _AUDIOATLAS_PROFILE = "audioatlas-native-0.1-40ms-10ms"
 _AUDIOATLAS_SUPPORT = "[start_sample, start_sample + valid_samples); attribution needs full windows"
 _MAX_SOURCE_BYTES = 128 * 1024 * 1024
 _MAX_DURATION_MS = 7_200_000
-_MAX_SEGMENTS = 2_000
+# 2,000 segments per hour of the two-hour window (signals.MAX_SECONDS).
+_MAX_SEGMENTS = 4_000
 _PLAYBACK_TAIL_TOLERANCE_MS = 1_000
 _NATIVE_TRANSCRIPT_TIMEBASES = frozenset(
     {"elevenlabs-scribe-native-seconds", "deepgram-native-seconds", "gemini-audio-mmss-v1"}

@@ -400,20 +400,40 @@ def test_decoded_audio_over_one_hour_style_limit_is_rejected_after_padding_probe
     assert list(tmp_path.iterdir()) == [source]
 
 
-def test_hour_stereo_layout_reaches_the_new_total_row_bound() -> None:
-    _, _, mono_rows = signals._layout(16000, 1, 16000 * 3600)
-    _, _, stereo_rows = signals._layout(16000, 2, 16000 * 3600)
+def test_the_window_is_two_hours() -> None:
+    # Owner, 23 Oct 2026: "Call length limit: 120 minutes everywhere".
+    assert signals.MAX_SECONDS == 7200
+    assert signals.MAX_ROWS_PER_CHANNEL == 720_000
+    assert signals.MAX_ROWS == 1_440_000
+
+
+def test_two_hour_stereo_layout_reaches_the_total_row_bound() -> None:
+    _, _, mono_rows = signals._layout(16000, 1, 16000 * 7200)
+    _, _, stereo_rows = signals._layout(16000, 2, 16000 * 7200)
     assert mono_rows == signals.MAX_ROWS_PER_CHANNEL
     assert stereo_rows == signals.MAX_ROWS
     with pytest.raises(signals.SignalError, match="signal_unsupported_layout"):
-        signals._layout(16000, 2, 16000 * 3600 + 1)
+        signals._layout(16000, 2, 16000 * 7200 + 1)
+    with pytest.raises(signals.SignalError, match="signal_unsupported_layout"):
+        signals._layout(16000, 1, 16000 * 7200 + 1)
 
 
-def test_exact_hour_probe_padding_and_decoded_plus_010_seconds_bound() -> None:
-    assert signals._probe_duration_allowed(3600.072, 3600)
-    assert not signals._probe_duration_allowed(3601.01, 3600)
-    assert signals._decoded_samples_allowed(16000 * 3600, 16000, 3600)
-    assert not signals._decoded_samples_allowed(16000 * 3600 + 160, 16000, 3600)
+def test_exact_two_hour_probe_padding_and_decoded_plus_010_seconds_bound() -> None:
+    assert signals._probe_duration_allowed(7200.072, 7200)
+    assert not signals._probe_duration_allowed(7201.01, 7200)
+    assert signals._decoded_samples_allowed(16000 * 7200, 16000, 7200)
+    assert not signals._decoded_samples_allowed(16000 * 7200 + 160, 16000, 7200)
+
+
+@pytest.mark.parametrize("function", [signals.inspect_media, signals.validate_media])
+def test_duration_limit_above_the_two_hour_window_is_refused(
+    tmp_path: Path, function: Any
+) -> None:
+    source = tmp_path / "source.media"
+    source.write_bytes(b"synthetic source")
+    with pytest.raises(signals.SignalError, match="^signal_invalid_duration_limit$"):
+        function(source, tmp_path / "checkpoint", max_seconds=7201)
+    assert list(tmp_path.iterdir()) == [source]
 
 
 @pytest.mark.parametrize("failure_stage", ["probe", "decode", "native", "pack", "summary"])

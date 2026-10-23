@@ -31,10 +31,10 @@ RECIPE_SHA256 = "f35dc9842adff174efce5f26ee5e323e9a0d2169221f9708ea445d1f110c665
 # these recipes too: a changed import closure needs a new explicit review.
 HELPER_RECIPES = {
     "packages/python/ac_platform/conversation_intelligence/native_runtime.py": (
-        "c683c009cbf939021f2ca2abca370d269907d2a190c7432327fa1a5e4c55839a"
+        "09c4aad6ff968fad3c0a993c97235aa31ee4e50344109b171b2326b2e9af9a9d"
     ),
     "scripts/native_runtime_helper.py": (
-        "96e4b198c19f3d34e18df234f206dc6848c0e7d49965ce46324ffdcd5982bd15"
+        "4cda37691bfdf584d838fbf22e83e980cd79a8df5d344d245c963d87f5d38883"
     ),
     "scripts/test_hosted_native_linux.py": (
         "fd9bf391e5a1a98b90f2d00ea38130a9c4d9ee4ac243bfe722c5face3302cd1d"

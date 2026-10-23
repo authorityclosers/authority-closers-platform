@@ -27,12 +27,13 @@ from typing import Any, BinaryIO
 NATIVE_SOURCE_SHA256 = "40b8b05256986da5eb5d49c3b3cb48c52d511117ecf2e59d56849457cb12fae3"
 NATIVE_ROOT = Path(__file__).resolve().parents[4] / "native" / "audioatlas"
 MAX_SOURCE_BYTES = 128 * 1024 * 1024
-# Hosted AudioAtlas runs at 16 kHz and supports a one-hour source window.  The
-# 360,000-frame-per-channel bound below keeps the derived feature artifact
+# Hosted AudioAtlas runs at 16 kHz and supports a two-hour source window (owner,
+# 23 Oct 2026: "Call length limit: 120 minutes everywhere").  The
+# 720,000-frame-per-channel bound below keeps the derived feature artifact
 # bounded at that profile. Rows are stored for every physical channel, so the
 # total row cap is doubled for the supported stereo layout.
-MAX_SECONDS = 3600
-MAX_ROWS_PER_CHANNEL = 360_000
+MAX_SECONDS = 7200
+MAX_ROWS_PER_CHANNEL = 720_000
 MAX_ROWS = MAX_ROWS_PER_CHANNEL * 2
 PROBE_PADDING_SECONDS = 1
 FLOAT_COLUMNS = (
@@ -339,7 +340,7 @@ def raw_extract(
                 str(channels),
                 mode,
             ],
-            timeout=600,
+            timeout=1200,
             watched_outputs={output: rows * _RAW_ROW.size},
         )
         if output.stat().st_size != rows * _RAW_ROW.size:
@@ -969,7 +970,7 @@ def fuse_segments(
     if transcript.get("clock") != "decoded_audio_track":
         raise SignalError("signal_transcript_clock_unmapped")
     segments = transcript.get("segments")
-    if not isinstance(segments, list) or not 0 <= len(segments) <= 2000:
+    if not isinstance(segments, list) or not 0 <= len(segments) <= 4000:
         raise SignalError("signal_segment_limit")
     channels, rate = meta["channels"], meta["rate"]
     mapping = dict(mapping or {})

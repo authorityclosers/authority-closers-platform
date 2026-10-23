@@ -172,7 +172,7 @@ def _parse() -> argparse.Namespace:
     parser.add_argument("--image-ref", required=True)
     parser.add_argument("--peer-uid", type=int, required=True)
     parser.add_argument("--peer-gid", type=int, required=True)
-    parser.add_argument("--timeout-seconds", type=float, default=750.0)
+    parser.add_argument("--timeout-seconds", type=float, default=1500.0)
     args = parser.parse_args()
     if (
         not args.socket.is_absolute()

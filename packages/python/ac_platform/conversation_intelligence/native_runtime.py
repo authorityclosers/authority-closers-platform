@@ -37,12 +37,12 @@ from ac_platform.conversation_intelligence.signals import (
 
 HOSTED_C1_RATE: Literal[16000] = 16000
 MAX_SOURCE_BYTES = 128 * 1024 * 1024
-MAX_OUTPUT_BYTES = 64 * 1024 * 1024
+MAX_OUTPUT_BYTES = 128 * 1024 * 1024
 MAX_CHECKPOINT_BYTES = 2 * 1024 * 1024
-MAX_RUNTIME_SECONDS = 750.0
-HOSTED_NATIVE_MEMORY_BYTES = 1024 * 1024 * 1024
-HOSTED_NATIVE_WORK_BYTES = 768 * 1024 * 1024
-HOSTED_NATIVE_FSIZE_BYTES = 512 * 1024 * 1024
+MAX_RUNTIME_SECONDS = 1500.0
+HOSTED_NATIVE_MEMORY_BYTES = 2 * 1024 * 1024 * 1024
+HOSTED_NATIVE_WORK_BYTES = 1536 * 1024 * 1024
+HOSTED_NATIVE_FSIZE_BYTES = 1024 * 1024 * 1024
 NATIVE_RUNTIME_SCHEMA = "ac.sales-xray.native-runtime/1"
 MAX_REQUEST_BYTES = 16 * 1024
 MAX_RESPONSE_BYTES = 4 * 1024
@@ -125,7 +125,7 @@ assert all(int(status[name].strip(), 16) == 0 for name in ("CapEff", "CapPrm", "
 assert status["NoNewPrivs"].strip() == "1" and status["Seccomp"].strip() == "2"
 assert set(os.listdir("/sys/class/net")) == {"lo"}
 cgroup = Path("/sys/fs/cgroup")
-assert 0 < int((cgroup / "memory.max").read_text()) <= 1073741824
+assert 0 < int((cgroup / "memory.max").read_text()) <= 2147483648
 assert int((cgroup / "memory.swap.max").read_text()) == 0
 assert 0 < int((cgroup / "pids.max").read_text()) <= 32
 quota, period = (cgroup / "cpu.max").read_text().split()
@@ -135,20 +135,20 @@ for line in Path("/proc/self/mountinfo").read_text().splitlines():
     fields = line.split()
     mounts[fields[4]] = (set(fields[5].split(",")), fields[fields.index("-") + 1])
 assert "ro" in mounts["/"][0] and "ro" in mounts["/input/source.media"][0]
-for mount, size in (("/work", 805306368), ("/tmp", 16777216)):
+for mount, size in (("/work", 1610612736), ("/tmp", 16777216)):
     assert mounts[mount][1] == "tmpfs"
     assert {"rw", "nosuid", "nodev", "noexec"} <= mounts[mount][0]
     filesystem = os.statvfs(mount)
     assert filesystem.f_frsize * filesystem.f_blocks <= size
 filesystem = os.statvfs("/output")
-assert filesystem.f_frsize * filesystem.f_blocks <= 67108864
+assert filesystem.f_frsize * filesystem.f_blocks <= 134217728
 assert stat.S_IMODE(os.stat("/output").st_mode) == 0o700
 operation = "__NATIVE_OPERATION__"
 if operation not in {"inspect", "validate"}:
     raise RuntimeError("unsupported native operation")
 subprocess.run([sys.executable, "-m", "ac_platform.conversation_intelligence", operation,
                 "/input/source.media", "--out", "/work/checkpoint", "--rate", "16000"],
-               check=True, timeout=720)
+               check=True, timeout=1440)
 published = Path("/output/checkpoint")
 published.mkdir(mode=0o700)
 names = ("features.aaf", "checkpoint.json") if operation == "inspect" else ("checkpoint.json",)
@@ -732,18 +732,18 @@ class DockerNativeRuntime:
             "--cap-drop=ALL",
             "--security-opt=no-new-privileges:true",
             "--pids-limit=32",
-            "--memory=1g",
-            "--memory-swap=1g",
+            "--memory=2g",
+            "--memory-swap=2g",
             "--cpus=1",
             "--ulimit",
             "nofile=64:64",
             "--ulimit",
             "core=0:0",
             "--ulimit",
-            "fsize=536870912:536870912",
+            "fsize=1073741824:1073741824",
             "--log-driver=none",
             "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=16m,mode=1777",
-            "--tmpfs=/work:rw,noexec,nosuid,nodev,size=768m,uid=10001,gid=10001,mode=0700",
+            "--tmpfs=/work:rw,noexec,nosuid,nodev,size=1536m,uid=10001,gid=10001,mode=0700",
             "--mount",
             f"type=bind,source={source},target=/input/source.media,readonly,bind-propagation=rprivate",
             "--mount",
