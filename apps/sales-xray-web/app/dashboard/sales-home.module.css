@@ -115,20 +115,6 @@
   font-size: var(--sx-text-xs);
 }
 
-.bar,
-.barBig {
-  display: inline-block;
-  width: 60%;
-  height: 10px;
-  border-radius: var(--sx-radius-sm);
-  background: var(--sx-fill-strong);
-}
-
-.barBig {
-  width: 40%;
-  height: 24px;
-}
-
 .chips {
   display: flex;
   flex-wrap: wrap;
@@ -244,18 +230,6 @@
   font-weight: 700;
 }
 
-.listSkeleton {
-  display: grid;
-  gap: 8px;
-}
-
-.listSkeleton > i {
-  display: block;
-  height: 56px;
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-fill-soft);
-}
-
 /* Open leads by stage: one bar per stage, on one scale. */
 .funnel {
   display: grid;
@@ -268,7 +242,8 @@
   list-style: none;
 }
 
-.funnel a {
+.funnel a,
+.funnelLine {
   display: grid;
   grid-template-columns: minmax(84px, 30%) minmax(0, 1fr) 3ch;
   align-items: center;
@@ -291,7 +266,8 @@
 /* Phones: the stage's own name above its bar, whole, with the count beside it
    (Redmi at 360 px, 22 Oct 2026: the organisation's names were cut). */
 @media (max-width: 899.98px) {
-  .funnel a {
+  .funnel a,
+  .funnelLine {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
       "label count"
@@ -441,5 +417,118 @@
   .row:hover,
   .funnel a:hover {
     background: var(--sx-fill-soft);
+  }
+}
+
+/* The period, a compact chip menu beside "How sales are going" (one view
+   switcher per screen: Team | My day sits at the top). */
+.periodChip {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 36px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.periodChip select {
+  min-height: 36px;
+  padding: 0 30px 0 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  appearance: none;
+  cursor: pointer;
+}
+
+.periodChip > svg {
+  position: absolute;
+  right: 10px;
+  pointer-events: none;
+}
+
+.periodChip:focus-within {
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* ---------- Loading outlines (Liquid Glass, 22 Oct 2026) ----------
+   Each block's own card, lines and row height, so only the words fill in. */
+
+/* A placeholder inside a line of text: the line keeps its own height. */
+.line {
+  display: flex;
+  align-items: center;
+  min-height: 1lh;
+}
+
+.funnelCount.line {
+  justify-content: flex-end;
+}
+
+.outcome[data-skeleton] .outcomeIcon {
+  overflow: hidden;
+  background: none;
+}
+
+/* Phones: the number and its trend take the tile's whole width, so a wide
+   value ("100%") never pushes the trend onto a line of its own, and two lines
+   are kept for every note: a tile's height never depends on its words, and
+   the outline lands on the same lines. */
+@media (max-width: 899.98px) {
+  .outcomeIcon {
+    grid-row: auto;
+  }
+
+  .outcome dt {
+    align-self: center;
+  }
+
+  .outcome dd {
+    grid-column: 1 / -1;
+  }
+
+  .outcomeNote {
+    min-height: 2lh;
+  }
+
+  .outcome[data-skeleton] .outcomeNote {
+    align-items: flex-start;
+  }
+}
+
+.rowsSkeleton {
+  display: grid;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+/* A row's own box: .row keeps 60 px of content inside its 10 px padding,
+   and each row after the first carries a 1 px line. */
+.rowsSkeleton > * {
+  min-height: 80px;
+  padding: 10px 14px;
+}
+
+.rowsSkeleton > * + * {
+  min-height: 81px;
+  border-top: 1px solid var(--sx-line);
+}
+
+/* Needs you: a summary row's note runs to two lines on a phone. */
+.twoLines {
+  align-items: flex-start;
+}
+
+@media (max-width: 899.98px) {
+  .twoLines {
+    min-height: 2lh;
   }
 }

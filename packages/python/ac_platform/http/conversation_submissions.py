@@ -44,6 +44,7 @@ from ac_platform.conversation_intelligence.acquisition_c5_benchmark import (
 from ac_platform.conversation_intelligence.acquisition_library import (
     account_library,
     account_library_summary,
+    call_leads,
     earlier_report_submission_id,
 )
 from ac_platform.conversation_intelligence.acquisition_processing import (
@@ -238,7 +239,12 @@ def install_submission_http(
         return HTTPException(status, message, headers=_PRIVATE)
 
     def guard(
-        request: Request, response: Response, *, write: bool = False, library: bool = False
+        request: Request,
+        response: Response,
+        *,
+        write: bool = False,
+        library: bool = False,
+        allowed: frozenset[str] = frozenset(),
     ) -> str:
         response.headers.update(_PRIVATE)
         if request.url.hostname == hostname:
@@ -248,13 +254,15 @@ def install_submission_http(
         else:
             raise fail(404, "Upload entry not found.")
         queries = request.query_params.multi_items()
+        keys = (
+            {"before", "include_owners", "order", "include_summary", "include_leads"}
+            if library
+            else allowed
+        )
         if queries and not (
-            library
+            keys
             and len({key for key, _ in queries}) == len(queries)
-            and all(
-                key in {"before", "include_owners", "order", "include_summary"}
-                for key, _ in queries
-            )
+            and all(key in keys for key, _ in queries)
         ):
             raise fail(422, "Upload access comes from your current session.")
         if write:
@@ -423,7 +431,9 @@ def install_submission_http(
             ) from None
 
     async def read_account_or_guest_owner(request: Request) -> AsyncIterator[_Owner]:
-        host = guard(request, Response(), write=False)
+        # Every read route also runs its own guard: that one decides which of these
+        # keys it takes (only one call's own read takes include_lead, slice 7).
+        host = guard(request, Response(), write=False, allowed=frozenset({"include_lead"}))
         if host == "learner":
             try:
                 async with learner_read_account(request) as auth:
@@ -539,6 +549,7 @@ def install_submission_http(
         include_owners: bool = False,
         order: Literal["newest", "reports_first"] = "newest",
         include_summary: bool = False,
+        include_leads: bool = False,
     ) -> dict[str, Any]:
         host = guard(request, response, library=True)
         try:
@@ -558,6 +569,7 @@ def install_submission_http(
                     include_owners=include_owners,
                     order=order,
                     include_summary=include_summary,
+                    include_leads=include_leads,
                 )
         except ConversationError as error:
             raise fail(error.status, str(error)) from None
@@ -820,15 +832,28 @@ def install_submission_http(
 
     @router.get("/submissions/{submission_id}")
     async def progress(
-        submission_id: UUID, request: Request, response: Response, owner: _Owner = read_dependency
+        submission_id: UUID,
+        request: Request,
+        response: Response,
+        owner: _Owner = read_dependency,
+        include_lead: bool = False,
     ) -> dict[str, Any]:
-        guard(request, response)
+        guard(request, response, allowed=frozenset({"include_lead"}))
         result, label = await progress_with_deadlock_retry(submission_id, owner)
-        return {
+        body = {
             **result,
             "display_name": label.display_name,
             "display_name_revision": label.revision,
         }
+        # The lead this call belongs to, as the Calls list names it (slice 7): the
+        # Report links to it. Asked for, so readers that check the shape are unchanged.
+        if include_lead and owner.actor is not None:
+            lead = (
+                await call_leads(owner.ownership.database, owner.actor.tenant_id, [submission_id])
+            ).get(submission_id)
+            if lead is not None:
+                body["lead"] = lead
+        return body
 
     @router.get("/submissions/{submission_id}/report")
     async def report(

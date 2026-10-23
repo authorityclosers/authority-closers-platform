@@ -212,8 +212,14 @@ function rows(now: number) {
 }
 
 function answers(now: number, path: string): unknown {
-  const all = rows(now);
-  if (path === "/v1/lead-desk")
+  // To call's ?pipeline=: that pipeline's leads only, as the server answers.
+  const [bare, query = ""] = path.split("?");
+  const asked =
+    bare === "/v1/lead-desk" || bare === "/v1/lead-desk/next"
+      ? new URLSearchParams(query).get("pipeline")
+      : null;
+  const all = rows(now).filter((row) => !asked || row.pipeline === asked);
+  if (bare === "/v1/lead-desk")
     return {
       me: {
         person_id: OWNER,

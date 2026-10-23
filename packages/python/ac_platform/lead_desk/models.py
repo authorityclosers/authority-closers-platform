@@ -141,6 +141,13 @@ class LeadEvent(Base):
         ),
         Index("ix_lead_desk_event_lead", "tenant_id", "lead_id", "created_at"),
         Index("ix_lead_desk_event_actor", "tenant_id", "actor_person_id", "created_at"),
+        # A call's lead, by the call it recorded (migration 0122): the Calls list names it.
+        Index(
+            "ix_lead_desk_event_call_submission",
+            "tenant_id",
+            text("(data ->> 'submission_id')"),
+            postgresql_where=text("kind = 'call'"),
+        ),
         Index(
             "uq_lead_desk_event_command",
             "tenant_id",

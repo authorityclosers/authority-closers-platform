@@ -1107,19 +1107,19 @@
 }
 
 /* The loading outline uses the loaded strip and toolbar themselves, so every
-   tile, control and row keeps its box; only the words wait. */
-.skeleton i.phValue {
-  width: 48px;
-  height: 28px;
+   tile, control and row keeps its box; only the words wait. A placeholder
+   inside a line of text (the number's <b>, the line under it) sits on that
+   line, so the line keeps its own height (Liquid Glass, 22 Oct 2026). */
+.skeleton .phValue > span,
+.skeleton .kpiContext > span,
+.skeleton .group > span {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: -0.05em;
 }
 
-/* A word-shaped bar inside a line of text: the line keeps its height. */
-.skeleton i.phText {
-  display: inline-block;
-  width: var(--w, 8em);
-  max-width: 100%;
-  height: 0.8em;
-  vertical-align: -0.05em;
+.skeleton .phWord {
+  visibility: hidden;
 }
 
 .skeleton .phControl {
@@ -1128,11 +1128,10 @@
   animation: pulse 1.4s ease-in-out infinite;
 }
 
-.skeleton .phChip {
+.skeleton .filters > span {
   display: inline-block;
-  width: 72px;
+  flex: none;
   min-height: var(--lx-control-compact-h, 32px);
-  border-radius: var(--lx-radius-pill);
 }
 
 .skeletonRow {
@@ -1145,16 +1144,6 @@
 
 .skeletonRow + .skeletonRow {
   border-top: 1px solid var(--lx-line-soft);
-}
-
-.skeletonRow i[data-w="title"] {
-  width: min(360px, 60%);
-  height: 12px;
-}
-
-.skeletonRow i[data-w="meta"] {
-  width: min(220px, 40%);
-  height: 10px;
 }
 
 @keyframes pulse {
@@ -1305,8 +1294,8 @@
 
   /* The first two are counts: their loading bar is the width of a short
      number, so a narrow phone keeps name and number on one line. */
-  .skeleton .kpi:nth-child(-n + 2) i.phValue {
-    width: 24px;
+  .skeleton .kpi:nth-child(-n + 2) .phValue > span {
+    width: 24px !important;
   }
 
   .spark {
@@ -1523,7 +1512,7 @@
 }
 
 @media (pointer: coarse) {
-  .skeleton .phChip {
+  .skeleton .filters > span {
     min-height: var(--lx-row-min-h, 44px);
   }
 
@@ -1600,5 +1589,48 @@
   .secondary:active:not(:disabled),
   .filters button:active {
     transform: none;
+  }
+}
+
+/* The lead a call belongs to (approved map, slice 7, 22 Oct 2026): a line under
+   the name on wider screens, a part of the quiet line on phones. */
+.leadLine,
+.metaLead {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--lx-ink-3);
+}
+
+.leadLine {
+  overflow: hidden;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The quiet line's own muted colour: teal stays for Ready and the primary
+   action (Liquid Glass, 22 Oct 2026). */
+.leadLine > svg,
+.metaLead > svg {
+  flex: none;
+}
+
+@container calls-page (max-width: 760px) {
+  .leadLine {
+    display: none;
+  }
+
+  /* A call with a lead keeps its quiet line to one line: the length gives way
+     (it is in the Report and the wide screen's column). */
+  .meta[data-lead] .metaLength {
+    display: none;
+  }
+
+  /* When the lead's own name is on the line, the seller gives way too (the
+     reps filter still finds their calls). */
+  .meta[data-lead-named] .metaRep {
+    display: none;
   }
 }

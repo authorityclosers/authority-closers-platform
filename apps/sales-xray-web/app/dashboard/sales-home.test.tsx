@@ -160,7 +160,7 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
   expect(host.textContent).toContain("13% of 16 leads called");
   expect(host.textContent).toContain("Swamini Fictional");
   expect(host.textContent).toContain("2 won · 3 interested · 12 calls");
-  expect(host.textContent).toContain("1 follow-up is late");
+  expect(host.textContent).toContain("Late follow-ups");
   expect(host.textContent).toContain("6 open now");
   const seller = host.querySelector<HTMLAnchorElement>(
     'a[href="/organisation/people/s1"]',
@@ -229,12 +229,10 @@ it("tells an owner what needs them, each row opening the work", async () => {
   });
   await mount(true);
   const needs = host.querySelector('[aria-label="Needs you"]');
-  expect(needs?.textContent).toContain(
-    "1 lead is waiting for a first response",
-  );
+  expect(needs?.textContent).toContain("Waiting for a first response");
   expect(needs?.textContent).toContain("Meera Fictional");
   expect(needs?.textContent).toContain("Waiting 25 min · Rahul Example");
-  expect(needs?.textContent).toContain("2 new leads have no owner");
+  expect(needs?.textContent).toContain("New leads with no owner");
   const links = Array.from(needs?.querySelectorAll("a") ?? [], (a) =>
     a.getAttribute("href"),
   );

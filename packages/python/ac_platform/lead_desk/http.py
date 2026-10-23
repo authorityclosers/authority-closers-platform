@@ -189,19 +189,25 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         if any(name not in allowed for name in request.query_params):
             raise HTTPException(422, "Remove the extra address options.", headers=PRIVATE)
 
+    def pipeline_key(pipeline: str | None) -> str | None:
+        if pipeline is not None and not 0 < len(pipeline) <= 40:
+            raise HTTPException(422, "Choose a pipeline.", headers=PRIVATE)
+        return pipeline
+
     @router.get("", response_model=Desk, response_model_by_alias=True)
-    async def desk(request: Request, response: Response) -> Desk:
-        no_query(request)
+    async def desk(request: Request, response: Response, pipeline: str | None = None) -> Desk:
+        # ?pipeline=: one pipeline's day, so Start calling works one at a time.
+        no_query(request, frozenset({"pipeline"}))
         async with desk_for(request, response) as lead_desk:
-            return await lead_desk.desk()
+            return await lead_desk.desk(pipeline_key(pipeline))
 
     @router.get("/next", response_model=LeadDetail | None, response_model_by_alias=True)
     async def next_lead(
-        request: Request, response: Response, skip: UUID | None = None
+        request: Request, response: Response, skip: UUID | None = None, pipeline: str | None = None
     ) -> LeadDetail | None:
-        no_query(request, frozenset({"skip"}))
+        no_query(request, frozenset({"skip", "pipeline"}))
         async with desk_for(request, response) as lead_desk:
-            return await lead_desk.next_lead(skip)
+            return await lead_desk.next_lead(skip, pipeline_key(pipeline))
 
     @router.get("/leads", response_model=LeadPage, response_model_by_alias=True)
     async def leads(

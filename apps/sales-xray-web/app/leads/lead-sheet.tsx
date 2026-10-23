@@ -2511,6 +2511,7 @@ export function LeadSheet({
   onChanged,
   intent = null,
   onNext,
+  pipeline = null,
 }: {
   leadId: string | null;
   me: Me | null;
@@ -2520,6 +2521,8 @@ export function LeadSheet({
   intent?: LeadIntent | null;
   /** After an outcome is saved: call the next lead on the desk. */
   onNext?: (leadId: string) => void;
+  /** The pipeline To call shows: the next lead comes from it. */
+  pipeline?: string | null;
 }) {
   // Saved here: who is next on the desk, so one tap calls them (the
   // ease-of-use wave, 22 Oct 2026: "Call next" everywhere, not only in
@@ -2651,7 +2654,7 @@ export function LeadSheet({
                     update(next);
                     if (onNext && leadId) {
                       const after = leadId;
-                      readNext(after).then(
+                      readNext(after, undefined, pipeline).then(
                         (lead) => setNextUp({ after, lead }),
                         () => undefined,
                       );
@@ -2715,11 +2718,14 @@ export function LeadSheet({
 export function CallingLoop({
   open,
   me,
+  pipeline = null,
   onClose,
   onChanged,
 }: {
   open: boolean;
   me: Me | null;
+  /** The pipeline To call shows: Start calling stays in it. */
+  pipeline?: string | null;
   onClose: () => void;
   onChanged: () => void;
 }) {
@@ -2743,9 +2749,11 @@ export function CallingLoop({
   // The lead "Save and call <name>" opened: its card places the call once.
   const [dialing, setDialing] = useState<string | null>(null);
 
-  // The page gives each opening a new key, so a round starts at zero, loading.
+  // The page gives each opening a new key, so a round starts at zero, loading,
+  // and keeps the pipeline it opened with.
+  const inPipeline = useRef(pipeline);
   const load = (signal?: AbortSignal) => {
-    readNext(undefined, signal)
+    readNext(undefined, signal, inPipeline.current)
       .then((next) => {
         setDetail(next);
         setState(next ? "ready" : "done");
@@ -2779,7 +2787,7 @@ export function CallingLoop({
   useEffect(() => {
     if (!current) return;
     const controller = new AbortController();
-    readNext(current, controller.signal)
+    readNext(current, controller.signal, inPipeline.current)
       .then((lead) => setUpNext({ after: current, lead }))
       .catch(() => undefined);
     return () => controller.abort();

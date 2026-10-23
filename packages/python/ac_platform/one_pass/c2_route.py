@@ -492,6 +492,7 @@ def _with_profile(
     luna: Any = None,
     luna_report: bool = True,
     recipe: str = markers.RECIPE,
+    retire: tuple[str, ...] = (),
 ) -> AcquisitionProviderPolicy:
     profile = _profile(
         policy,
@@ -503,7 +504,16 @@ def _with_profile(
         luna_report=luna_report,
         recipe=recipe,
     )
-    kept = tuple(item for item in policy.profiles if item.profile_id != profile.profile_id)
+    present = {item.profile_id for item in policy.profiles}
+    if profile.profile_id in retire:
+        raise SealError("cannot_retire_the_profile_being_sealed")
+    if any(profile_id not in present for profile_id in retire):
+        raise SealError("retired_profile_not_in_policy")
+    kept = tuple(
+        item
+        for item in policy.profiles
+        if item.profile_id != profile.profile_id and item.profile_id not in retire
+    )
     updated = policy.model_copy(update={"profiles": (*kept, profile)})
     # Strict models: revalidate through JSON, as the host loads the file.
     return AcquisitionProviderPolicy.model_validate_json(updated.model_dump_json(by_alias=True))
@@ -519,9 +529,14 @@ def seal(
     luna: Any = None,
     luna_report: bool = True,
     recipe: str = markers.RECIPE,
+    retire: tuple[str, ...] = (),
 ) -> HostedApprovalBundle:
     """The bundle with every classic route kept and the Flash-Lite (or one-pass) profile
-    added to each acquisition policy. Revalidated as a whole, exactly as the host loads it."""
+    added to each acquisition policy. Revalidated as a whole, exactly as the host loads it.
+
+    ``retire`` names profiles to take out of every policy in the same seal (a policy holds
+    at most 8; owner and Root choose which, 23 Oct 2026). Each must be in every policy and
+    is never the one being sealed; classic stages are never touched."""
     if bundle.acquisition_policy is None and not bundle.organisation_acquisition_policies:
         raise SealError("bundle_has_no_acquisition_policy")
     if recipe not in markers.RECIPES or (recipe != markers.RECIPE and not one_pass):
@@ -532,6 +547,7 @@ def seal(
         "luna": luna,
         "luna_report": luna_report,
         "recipe": recipe,
+        "retire": tuple(retire),
     }
     update: dict[str, Any] = {
         "organisation_acquisition_policies": tuple(

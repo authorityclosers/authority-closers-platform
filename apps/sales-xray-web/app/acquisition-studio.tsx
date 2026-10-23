@@ -76,8 +76,10 @@ import {
   requestedSubmissionId,
   savedSubmissionId,
   STANDARD_RETENTION_DAYS,
+  readCallLead,
   submissionPath,
   type Allowance,
+  type CallLead,
   type Entry,
   type Progress,
   type Submission,
@@ -415,6 +417,26 @@ export function AcquisitionStudio({
     return () => clearTimeout(timer);
   }, [revealHeld]);
   const revealing = revealHeld !== null && revealHeld === submission?.id;
+  // The call's lead for the Report header (slice 7): one opt-in read once a
+  // signed-in call's report is here, kept with the call it was read for.
+  const [callLead, setCallLead] = useState<{
+    id: string;
+    lead: CallLead | null;
+  } | null>(null);
+  const leadCallId = submission?.id ?? null;
+  const leadReady = Boolean(result?.report && result.claimed);
+  useEffect(() => {
+    if (!leadCallId || !leadReady) return;
+    const controller = new AbortController();
+    readCallLead(leadCallId, controller.signal).then(
+      (lead) => setCallLead({ id: leadCallId, lead }),
+      // An older server or a failed read leaves the header without a lead.
+      () => undefined,
+    );
+    return () => controller.abort();
+  }, [leadCallId, leadReady]);
+  const shownLead =
+    callLead && callLead.id === leadCallId ? callLead.lead : null;
   // A new call or a finished report shows up in Recents straight away.
   const recentsCallId = submission?.id ?? null;
   const recentsRunId = result?.runId ?? null;
@@ -3616,6 +3638,7 @@ export function AcquisitionStudio({
                 <ReportHeader
                   key={submission?.id ?? "unbound"}
                   label={result.label ?? null}
+                  lead={shownLead}
                   fallbackTitle={computedTitle ?? undefined}
                   rename={
                     submission

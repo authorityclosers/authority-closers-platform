@@ -88,7 +88,7 @@ it("warms the list once, quietly, and never over a list already read", async () 
   await Promise.all([warmCallsList(one), warmCallsList(one)]);
   expect(fetcher).toHaveBeenCalledOnce();
   expect(String(fetcher.mock.calls[0][0])).toContain(
-    "/submissions?include_owners=true&order=reports_first&include_summary=true",
+    "/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true",
   );
   expect(cachedCallsPage(one)?.submissions[0].id).toBe(WARM_ID);
   await warmCallsList(one);

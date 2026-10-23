@@ -10,7 +10,7 @@ import { MessagesSquare } from "lucide-react";
 import type { ReactNode } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
-import { Skeleton } from "../ui/kit";
+import { Skeleton, SkeletonRow } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import styles from "./chats.module.css";
 
@@ -77,29 +77,16 @@ export function useManagesChats(): boolean | null {
   return role === "owner" || role === "admin";
 }
 
-const SCOPE_LABELS = ["Mine", "Unassigned", "All"];
-
-/** The Mine / Unassigned / All row as it will stand, before the list. */
-export function ScopesOutline() {
-  return (
-    <div className={styles.scopes} aria-hidden="true">
-      {SCOPE_LABELS.map((label) => (
-        <button key={label} type="button" tabIndex={-1} disabled>
-          {label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
+/** The filter row as it stands (Liquid Glass polish, 22 Oct 2026): Name, whose
+ * chats (managers), Waiting, and the channel, at their own sizes at 390 px. */
 export function FiltersSkeleton({ scopes = false }: { scopes?: boolean }) {
   return (
     <div className={styles.filters} aria-hidden="true">
-      <span className={styles.search} data-placeholder />
-      {scopes ? <ScopesOutline /> : null}
-      <div className={styles.chips}>
-        <Skeleton width={84} height={28} />
-        <Skeleton width={96} height={28} />
+      <div className={styles.filterRow}>
+        <Skeleton width={81} height={36} radius="pill" />
+        {scopes ? <Skeleton width={143} height={34} radius="pill" /> : null}
+        <Skeleton width={102} height={36} radius="pill" />
+        <Skeleton width={125} height={34} radius="pill" />
       </div>
     </div>
   );
@@ -111,12 +98,7 @@ export function ThreadListSkeleton({ rows = 8 }: { rows?: number }) {
     <div className={styles.listBody} aria-hidden="true">
       {Array.from({ length: rows }, (_, index) => (
         <div key={index} className={styles.rowSkeleton}>
-          <Skeleton width={40} height={40} />
-          <span>
-            <Skeleton width="58%" height={13} />
-            <Skeleton width="86%" height={12} />
-            <Skeleton width="40%" height={10} />
-          </span>
+          <SkeletonRow avatar={40} lines={3} />
         </div>
       ))}
     </div>

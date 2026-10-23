@@ -21,7 +21,7 @@ import {
 
 /** The Calls list's first read (and Home's, with owners). */
 export const CALLS_LIST_READ =
-  "/submissions?include_owners=true&order=reports_first&include_summary=true";
+  "/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true";
 
 const MAX_IDENTITIES = 4;
 

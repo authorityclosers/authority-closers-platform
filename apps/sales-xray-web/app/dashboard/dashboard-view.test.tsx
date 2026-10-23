@@ -115,7 +115,7 @@ it("starts the four account reads after sign-in and preserves missing-route erro
       "/activity",
       "/session",
       // Owners and admins get each call's owner; others' lists are unchanged.
-      "/submissions?include_owners=true&order=reports_first&include_summary=true",
+      "/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true",
     ]
       .map((path) => base + path)
       .sort(),
@@ -220,7 +220,7 @@ it("shows one Get started panel for a brand-new account instead of zero figures"
         completed: 0,
         needs_attention: 0,
       }),
-    "/submissions?include_owners=true&order=reports_first&include_summary=true":
+    "/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true":
       () => Response.json({ submissions: [], next_cursor: null }),
     "/session": () =>
       Response.json({
@@ -247,7 +247,7 @@ it("says a failed read did not load instead of keeping a skeleton forever", asyn
   routeReads({
     "/submissions/summary": () =>
       new Response(JSON.stringify({ detail: "Unavailable" }), { status: 503 }),
-    "/submissions?include_owners=true&order=reports_first&include_summary=true":
+    "/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true":
       () => Response.json({ submissions: [], next_cursor: null }),
   });
   await renderPage(true);
@@ -270,7 +270,7 @@ it("never paints Not loaded for reads cancelled by a re-run of the page effect",
       completed: 0,
       needs_attention: 0,
     },
-    "/submissions?include_owners=true&order=reports_first&include_summary=true":
+    "/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true":
       {
         submissions: [],
         next_cursor: null,
@@ -340,7 +340,7 @@ it("says which figures are the owner's own and which are the team's", async () =
         completed: 7,
         needs_attention: 1,
       }),
-    "/submissions?include_owners=true&order=reports_first&include_summary=true":
+    "/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true":
       () => Response.json({ submissions: [], next_cursor: null }),
   });
   await act(async () => {
@@ -395,7 +395,7 @@ it("shows a rename made elsewhere in Recent calls at once", async () => {
         completed: 1,
         needs_attention: 0,
       }),
-    "/submissions?include_owners=true&order=reports_first&include_summary=true":
+    "/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true":
       () =>
         Response.json({
           submissions: [

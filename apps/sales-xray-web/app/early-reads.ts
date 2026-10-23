@@ -58,11 +58,11 @@ export const EARLY_READS: Readonly<Record<string, readonly string[]>> = {
     `${ACQUISITION}/submissions/summary`,
     `${ACQUISITION}/activity`,
     `${ACQUISITION}/session`,
-    `${ACQUISITION}/submissions?include_owners=true&order=reports_first&include_summary=true`,
+    `${ACQUISITION}/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true`,
   ],
   "/analysis/calls": [
     ...SESSION,
-    `${ACQUISITION}/submissions?include_owners=true&order=reports_first&include_summary=true`,
+    `${ACQUISITION}/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true`,
   ],
   "/analysis/new": [...SESSION, ...STUDIO],
   "/organisation": [

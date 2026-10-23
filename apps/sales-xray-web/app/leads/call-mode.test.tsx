@@ -186,3 +186,41 @@ it("keeps the other reasons folded after No answer, and opens them on request", 
   expect(document.body.textContent).toContain("What happened?");
   expect(button("Busy")).toBeDefined();
 });
+
+// Start calling one pipeline at a time (23 Oct 2026): the loop stays in the
+// pipeline To call shows, for the lead now and the one after.
+it("reads the next leads from the pipeline To call shows", async () => {
+  const asked: string[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      asked.push(url);
+      if (url.endsWith(`/next?skip=${ONE}&pipeline=partner_outreach`))
+        return Response.json(null);
+      if (url.endsWith("/next?pipeline=partner_outreach"))
+        return Response.json(detail(ONE, "Ravi Kulkarni", "+919876500001"));
+      return Response.json({ detail: "Not Found" }, { status: 404 });
+    }),
+  );
+  await act(async () =>
+    root.render(
+      <CallingLoop
+        open
+        me={null}
+        pipeline="partner_outreach"
+        onClose={() => undefined}
+        onChanged={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  expect(
+    asked.some((url) => url.endsWith("/next?pipeline=partner_outreach")),
+  ).toBe(true);
+  expect(
+    asked.some((url) =>
+      url.endsWith(`/next?skip=${ONE}&pipeline=partner_outreach`),
+    ),
+  ).toBe(true);
+  expect(asked.some((url) => url.endsWith("/next"))).toBe(false);
+});

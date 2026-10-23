@@ -366,9 +366,9 @@ it("lists the pages that are not phone tabs, organisation pages only in one", as
   await act(async () => root.unmount());
   host.remove();
   expect(await pages(true)).toEqual([
+    "/leads?tab=all&stage=open",
     "/prospects",
     "/coaching",
-    "/organisation",
     "/organisation/insights",
   ]);
   // The website has no phone calls to offer.
@@ -456,7 +456,7 @@ it("puts your settings, and an organisation's for its managers, in You", async (
     "/settings/notifications",
   ]);
   expect(manager.theirs).toEqual([
-    "/settings/team",
+    "/organisation",
     "/settings/lead-rules",
     "/settings/stages",
     "/settings/apps",

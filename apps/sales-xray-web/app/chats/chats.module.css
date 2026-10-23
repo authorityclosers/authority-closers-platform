@@ -341,24 +341,10 @@
   color: var(--sx-bad);
 }
 
-.rowSkeleton {
-  display: grid;
-  grid-template-columns: 40px minmax(0, 1fr);
-  box-sizing: border-box;
-  gap: 12px;
-  min-height: 72px;
-  padding: 10px;
-}
-
-.rowSkeleton > span:first-child {
-  border-radius: 50%;
-}
-
-.rowSkeleton > span:last-child {
-  display: grid;
-  align-content: start;
-  gap: 7px;
-  padding-top: 3px;
+/* A chat row's outline at the row's own height (97 px at 390 with the phone
+   type scale: name and time, the last message, the app and owner). */
+.rowSkeleton > * {
+  min-height: 97px;
 }
 
 /* ---------- Channel marks and avatars ---------- */

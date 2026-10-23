@@ -1,7 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
-
+import { Skeleton } from "./ui/kit";
 import styles from "./calls-library.module.css";
 
 /** The loaded strip's labels, with a placeholder as long as its usual line. */
@@ -30,14 +29,15 @@ export function CallsBodySkeleton({
           {FIGURES.map(([label, width]) => (
             <div className={styles.kpi} key={label}>
               <dt>{label}</dt>
+              {/* The number's own line (its <b>), so the tile keeps the
+                  loaded height and the name stays beside it. */}
               <dd>
-                <i className={styles.phValue} />
+                <b className={styles.phValue}>
+                  <Skeleton width={48} height={16} />
+                </b>
               </dd>
               <dd className={styles.kpiContext}>
-                <i
-                  className={styles.phText}
-                  style={{ "--w": width } as CSSProperties}
-                />
+                <Skeleton width={width} height={10} />
               </dd>
             </div>
           ))}
@@ -51,20 +51,27 @@ export function CallsBodySkeleton({
           <span className={`${styles.search} ${styles.phControl}`} />
           <span className={styles.filters}>
             {[0, 1, 2].map((chip) => (
-              <i key={chip} className={styles.phChip} />
+              <Skeleton key={chip} width={72} radius="pill" />
             ))}
           </span>
           <span className={`${styles.sort} ${styles.phControl}`} />
           <span
             className={`${styles.tool} ${styles.selectToggle} ${styles.phControl}`}
-          />
+          >
+            {/* The word keeps the button's own width; the outline hides it. */}
+            <span className={styles.phWord}>Select</span>
+          </span>
         </div>
         <div className={styles.table}>
           <div className={styles.head} aria-hidden="true" />
+          {/* The first day's heading (Today), as the loaded list opens. */}
+          <div className={styles.group} aria-hidden="true">
+            <Skeleton width={44} height={10} />
+          </div>
           {Array.from({ length: 8 }, (_, row) => (
             <div className={styles.skeletonRow} key={row}>
-              <i data-w="title" />
-              <i data-w="meta" />
+              <Skeleton width="min(360px, 60%)" height={12} />
+              <Skeleton width="min(220px, 40%)" height={10} />
             </div>
           ))}
         </div>

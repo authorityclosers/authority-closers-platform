@@ -16,6 +16,7 @@
  */
 
 import {
+  ChevronDown,
   ChevronRight,
   Flame,
   PhoneCall,
@@ -53,6 +54,12 @@ import { KIND_WORDS } from "../leads/stage-tabs";
 import { several, usePipelines } from "../leads/use-pipelines";
 import { Avatar, Delta, Segmented } from "../ui/kit";
 import { NeedsYou } from "./needs-you";
+import {
+  FunnelSkeleton,
+  OutcomesSkeleton,
+  RowsSkeleton,
+  TodaySkeleton,
+} from "./sales-home-skeleton";
 import styles from "./sales-home.module.css";
 
 const PERIODS: { key: string; label: string }[] = [
@@ -152,27 +159,6 @@ function Outcome({
   );
 }
 
-function OutcomesSkeleton() {
-  return (
-    <dl className={styles.outcomes} aria-busy="true">
-      {[0, 1, 2, 3].map((index) => (
-        <div key={index} className={styles.outcome} data-skeleton="">
-          <span className={styles.outcomeIcon} />
-          <dt>
-            <i className={styles.bar} />
-          </dt>
-          <dd>
-            <i className={styles.barBig} />
-          </dd>
-          <dd className={styles.outcomeNote}>
-            <i className={styles.bar} />
-          </dd>
-        </div>
-      ))}
-    </dl>
-  );
-}
-
 function TeamHome({ desk }: { desk: Desk | null }) {
   const [period, setPeriod] = usePeriod();
   const [report, setReport] = useState<{
@@ -217,12 +203,23 @@ function TeamHome({ desk }: { desk: Desk | null }) {
       <section className={styles.block} aria-labelledby="sales-title">
         <div className={styles.head}>
           <h2 id="sales-title">How sales are going</h2>
-          <Segmented
-            label="Period"
-            value={String(period)}
-            onChange={(key) => setPeriod(Number(key) as Period)}
-            items={PERIODS}
-          />
+          {/* Team | My day is the screen's one switch; the period is a chip. */}
+          <label className={styles.periodChip}>
+            <select
+              aria-label="Period"
+              value={String(period)}
+              onChange={(event) =>
+                setPeriod(Number(event.target.value) as Period)
+              }
+            >
+              {PERIODS.map((item) => (
+                <option key={item.key} value={item.key}>
+                  {item.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={14} aria-hidden="true" />
+          </label>
         </div>
         {now && before ? (
           <dl className={styles.outcomes}>
@@ -341,11 +338,7 @@ function TeamHome({ desk }: { desk: Desk | null }) {
             </div>
           )
         ) : (
-          <div className={styles.listSkeleton} aria-busy="true">
-            {[0, 1, 2].map((index) => (
-              <i key={index} />
-            ))}
-          </div>
+          <RowsSkeleton rows={3} kind="seller" />
         )}
       </section>
 
@@ -372,11 +365,7 @@ function TeamHome({ desk }: { desk: Desk | null }) {
         {open ? (
           <Funnel pipeline={open} inPipeline={inPipeline} />
         ) : (
-          <div className={styles.listSkeleton} aria-busy="true">
-            {[0, 1, 2, 3].map((index) => (
-              <i key={index} />
-            ))}
-          </div>
+          <FunnelSkeleton />
         )}
       </section>
     </>
@@ -474,19 +463,7 @@ function LeadLink({ row }: { row: LeadRow }) {
 }
 
 function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
-  if (state.status === "loading")
-    return (
-      <section className={styles.block} aria-busy="true">
-        <div className={styles.head}>
-          <h2>Today</h2>
-        </div>
-        <div className={styles.listSkeleton}>
-          {[0, 1, 2].map((index) => (
-            <i key={index} />
-          ))}
-        </div>
-      </section>
-    );
+  if (state.status === "loading") return <TodaySkeleton />;
   if (state.status === "error")
     return (
       <section className={styles.block}>

@@ -1,9 +1,10 @@
-"""Server-owned contracts for the bounded learner product-analytics intake.
+"""Server-owned contracts for the bounded product-analytics intake.
 
 This module is deliberately narrower than the canonical learning-event
-envelope.  It accepts only the bounded proposal analytics names currently
-defined for the learner planning surface and stores observations in the
-disposable ``analytics_events`` table.  The intake cannot create progress, completion,
+envelope.  It accepts only the bounded analytics names of one composed surface
+(the learner planning proposal, or Sales X-Ray's product events in
+``telemetry/sales_xray.py``) and stores observations in the disposable
+``analytics_events`` table.  The intake cannot create progress, completion,
 entitlement, payment, access, audit, or scoring facts.
 
 The HTTP adapter supplies the authenticated actor and a server-owned consent
@@ -17,7 +18,7 @@ import json
 import math
 import re
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from types import MappingProxyType
@@ -55,24 +56,106 @@ LEARNER_ROUTE_TEMPLATES: tuple[str, ...] = (
     "/learning/up-next",
     "/learning/insights",
 )
-_ALLOWED_ROUTE_TEMPLATES = frozenset(LEARNER_ROUTE_TEMPLATES)
+# Sales X-Ray's signed-in pages, with each id segment as its name in brackets
+# (the app's own folder names), so no call, person or prospect id is stored.
+SALES_XRAY_ROUTE_TEMPLATES: tuple[str, ...] = (
+    "/",
+    "/dashboard",
+    "/analysis",
+    "/analysis/new",
+    "/analysis/calls",
+    "/analysis/calls/[callId]",
+    "/calls",
+    "/leads",
+    "/chats",
+    "/coaching",
+    "/prospects",
+    "/prospects/[prospectId]",
+    "/organisation",
+    "/organisation/insights",
+    "/organisation/invites",
+    "/organisation/people/[personId]",
+    "/settings",
+    "/settings/[section]",
+    "/account",
+    "/account/billing",
+    "/billing",
+    "/plans",
+    "/apps",
+    "/developers",
+    "/review",
+)
+_ALLOWED_ROUTE_TEMPLATES = frozenset(LEARNER_ROUTE_TEMPLATES + SALES_XRAY_ROUTE_TEMPLATES)
+
+# A short code a screen chose (a surface or error code), never free text.
+_TOKEN_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
+
+
+def _no_values() -> Mapping[str, frozenset[str]]:
+    return MappingProxyType({})
+
+
+def _no_numbers() -> Mapping[str, float]:
+    return MappingProxyType({})
 
 
 @dataclass(frozen=True, slots=True)
-class LearnerAnalyticsEventDefinition:
-    """Immutable server-owned schema entry for one analytics event."""
+class TelemetryEventDefinition:
+    """Immutable server-owned schema entry for one analytics event.
+
+    Learner events list their payload keys only.  Sales X-Ray events also type
+    every key: one of a fixed set of values, a short code token, a number from 0
+    to a cap, or a flag; ``required`` keys must be present, and ``takes_call``
+    events may name the call they are about (``call_id``), which the server
+    stores only as a keyed hash.
+    """
 
     event_version: str
     allowed_payload_keys: tuple[str, ...]
-    requires_period: bool
+    requires_period: bool = False
+    values: Mapping[str, frozenset[str]] = field(default_factory=_no_values)
+    numbers: Mapping[str, float] = field(default_factory=_no_numbers)
+    tokens: frozenset[str] = frozenset()
+    flags: frozenset[str] = frozenset()
+    required: frozenset[str] = frozenset()
+    takes_call: bool = False
+
+
+# The learner registry's name for the same schema entry.
+LearnerAnalyticsEventDefinition = TelemetryEventDefinition
+
+
+def check_payload_values(definition: TelemetryEventDefinition, payload: Mapping[str, Any]) -> None:
+    """Raise ValueError unless every typed key holds a value of its type."""
+
+    missing = definition.required - set(payload)
+    if missing:
+        raise ValueError("payload is missing a required key")
+    for key, value in payload.items():
+        if key in definition.values:
+            if not isinstance(value, str) or value not in definition.values[key]:
+                raise ValueError("payload value is not one of the event's values")
+        elif key in definition.numbers:
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, int | float)
+                or not math.isfinite(value)
+                or not 0 <= value <= definition.numbers[key]
+            ):
+                raise ValueError("payload number is outside the event's range")
+        elif key in definition.tokens:
+            if not isinstance(value, str) or not _TOKEN_PATTERN.fullmatch(value):
+                raise ValueError("payload code is not a short lower-case token")
+        elif key in definition.flags and not isinstance(value, bool):
+            raise ValueError("payload flag is not true or false")
 
 
 # Copy the controlled planning proposal into frozen values so callers cannot
 # mutate the registry through this intake module.  New event names require a
 # controlled taxonomy change; arbitrary client event names are never accepted.
-LEARNER_PRODUCT_ANALYTICS_EVENTS: Mapping[str, LearnerAnalyticsEventDefinition] = MappingProxyType(
+LEARNER_PRODUCT_ANALYTICS_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
     {
-        name: LearnerAnalyticsEventDefinition(
+        name: TelemetryEventDefinition(
             event_version=str(definition["event_version"]),
             allowed_payload_keys=tuple(definition["allowed_payload_keys"]),
             requires_period=bool(definition["requires_period"]),
@@ -153,12 +236,15 @@ class LearnerTelemetryEvent(BaseModel):
     session_id: UUID
     route: str | None = Field(default=None, max_length=180)
     payload: dict[str, Any] = Field(default_factory=dict)
+    # The call a Sales X-Ray event is about (its report's id).  Only events
+    # whose definition takes a call accept it; it is never stored as sent.
+    call_id: UUID | None = None
 
-    @field_validator("event_id")
+    @field_validator("event_id", "call_id")
     @classmethod
-    def validate_event_id(cls, value: UUID) -> UUID:
-        if value.int == 0:
-            raise ValueError("event_id must not be the nil UUID")
+    def validate_event_id(cls, value: UUID | None) -> UUID | None:
+        if value is not None and value.int == 0:
+            raise ValueError("ids must not be the nil UUID")
         return value
 
     @field_validator("event_name")
@@ -195,7 +281,7 @@ class LearnerTelemetryEvent(BaseModel):
     @classmethod
     def validate_route(cls, value: str | None) -> str | None:
         if value is not None and value not in _ALLOWED_ROUTE_TEMPLATES:
-            raise ValueError("route must be a server-owned learner route template")
+            raise ValueError("route must be a server-owned route template")
         return value
 
     @field_validator("payload")
@@ -270,6 +356,38 @@ TelemetryConsentResolver = Callable[
     [object, ActorContext], TelemetryConsent | None | Awaitable[TelemetryConsent | None]
 ]
 
+# Names the calls a batch is about: (the active sync session, the tenant, the
+# call ids sent, now) -> a reference for each call found in that tenant.  Ids
+# not found there get no reference; the id itself is never stored.
+CallRefResolver = Callable[[Any, UUID, frozenset[UUID], datetime], Mapping[UUID, str]]
+
+
+@dataclass(frozen=True, slots=True)
+class TelemetrySurface:
+    """One product's intake: the events and routes it takes, its labels and limits."""
+
+    events: Mapping[str, TelemetryEventDefinition]
+    routes: frozenset[str]
+    provenance_source: str
+    provenance_version: str
+    disclaimer: str
+    call_refs: CallRefResolver | None = None
+    # Events one person may store in any 24 hours (counted in the database).
+    person_daily_cap: int | None = None
+
+
+LEARNER_SURFACE = TelemetrySurface(
+    events=LEARNER_PRODUCT_ANALYTICS_EVENTS,
+    routes=frozenset(LEARNER_ROUTE_TEMPLATES),
+    provenance_source=TELEMETRY_PROVENANCE_SOURCE,
+    provenance_version=TELEMETRY_PROVENANCE_VERSION,
+    disclaimer=(
+        "Learner product telemetry is consented, disposable analytics only; it never "
+        "creates canonical progress, completion, payment, entitlement, access, audit, "
+        "or scoring state."
+    ),
+)
+
 
 def _safe_scalar(value: Any) -> bool:
     if value is None or isinstance(value, bool | int):
@@ -307,6 +425,12 @@ def validate_event_timestamp(*, occurred_at: datetime, now: datetime) -> datetim
 __all__ = [
     "LEARNER_PRODUCT_ANALYTICS_EVENTS",
     "LEARNER_ROUTE_TEMPLATES",
+    "LEARNER_SURFACE",
+    "SALES_XRAY_ROUTE_TEMPLATES",
+    "CallRefResolver",
+    "TelemetryEventDefinition",
+    "TelemetrySurface",
+    "check_payload_values",
     "MAX_BATCH_BYTES",
     "MAX_BATCH_EVENTS",
     "MAX_EVENT_AGE",

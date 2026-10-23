@@ -1,4 +1,4 @@
-"""Authenticated, fail-closed learner product-analytics intake routes."""
+"""Authenticated, fail-closed product-analytics intake routes (learner or Sales X-Ray)."""
 
 from __future__ import annotations
 
@@ -6,10 +6,12 @@ import inspect
 import json
 import re
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from sqlalchemy import func, select
 
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
@@ -21,9 +23,10 @@ from ac_platform.learning.planning_repository import (
     PlanningRepository,
 )
 from ac_platform.telemetry.ingest import (
-    LEARNER_PRODUCT_ANALYTICS_EVENTS,
+    LEARNER_SURFACE,
     MAX_BATCH_BYTES,
     MAX_BATCH_EVENTS,
+    MAX_EVENT_AGE,
     MAX_FUTURE_SKEW,
     MAX_RETENTION_DAYS,
     TELEMETRY_PROVENANCE_SOURCE,
@@ -34,6 +37,8 @@ from ac_platform.telemetry.ingest import (
     TelemetryConsent,
     TelemetryConsentResolver,
     TelemetryConsentStatus,
+    TelemetrySurface,
+    check_payload_values,
     ensure_utc,
     validate_batch_size,
     validate_event_timestamp,
@@ -116,6 +121,7 @@ class TelemetryTaxonomyItem(BaseModel):
     event_name: str
     event_version: str
     allowed_payload_keys: list[str] = Field(default_factory=list)
+    takes_call: bool = False
     consent_required: bool = True
     canonical_state: bool = False
 
@@ -199,22 +205,48 @@ async def _parse_batch(request: Request) -> LearnerTelemetryBatch:
     return batch
 
 
-def _validate_event_schema(batch: LearnerTelemetryBatch) -> None:
+def _validate_event_schema(batch: LearnerTelemetryBatch, surface: TelemetrySurface) -> None:
     for event in batch.events:
-        definition = LEARNER_PRODUCT_ANALYTICS_EVENTS.get(event.event_name)
+        definition = surface.events.get(event.event_name)
         if definition is None:
             raise TelemetryEventInvalid("The telemetry event is not in the server allowlist.")
         if event.event_version != definition.event_version:
             raise TelemetryEventInvalid("The telemetry event version is not supported.")
+        if event.route is not None and event.route not in surface.routes:
+            raise TelemetryEventInvalid("The telemetry route is not one of this app's templates.")
+        if event.call_id is not None and not definition.takes_call:
+            raise TelemetryEventInvalid("This telemetry event does not name a call.")
         allowed_payload_keys = set(definition.allowed_payload_keys)
         if set(event.payload) - allowed_payload_keys:
             raise TelemetryEventInvalid("The telemetry payload contains a non-allowlisted key.")
+        try:
+            check_payload_values(definition, event.payload)
+        except ValueError as exc:
+            raise TelemetryEventInvalid(
+                "The telemetry payload does not match the event's values."
+            ) from exc
         if definition.requires_period:
             period = event.payload.get("period")
             if period not in {"today", "week", "month"}:
                 raise TelemetryEventInvalid("This telemetry event requires a valid period label.")
         elif "period" in event.payload:
             raise TelemetryEventInvalid("This telemetry event does not accept a period label.")
+
+
+def _stored_today(database: Any, *, tenant_id: UUID, person_id: UUID, now: datetime) -> int:
+    """Events this person stored in the last 24 hours (read along the person index)."""
+    return int(
+        database.execute(
+            select(func.count())
+            .select_from(AnalyticsEvent)
+            .where(
+                AnalyticsEvent.tenant_id == tenant_id,
+                AnalyticsEvent.subject_person_id == person_id,
+                AnalyticsEvent.occurred_at >= now - MAX_EVENT_AGE - MAX_FUTURE_SKEW,
+                AnalyticsEvent.created_at >= now - timedelta(days=1),
+            )
+        ).scalar_one()
+    )
 
 
 def _validate_timestamps(
@@ -241,14 +273,18 @@ def install_telemetry_http(
     retention_days: int | None = None,
     retention_policy_id: str | None = None,
     admission: TelemetryAdmission | None = None,
+    surface: TelemetrySurface = LEARNER_SURFACE,
 ) -> None:
-    """Install the authenticated learner telemetry boundary.
+    """Install the authenticated telemetry boundary for one product surface.
 
     ``consent_resolver`` and retention settings are intentionally explicit
     composition seams.  Leaving either unset means the route rejects writes
     before persistence; no client-provided consent is accepted as authority.
     The resolver receives the active transaction and actor, and must resolve
     the authoritative identity-bound grant with a write lock on each call.
+    ``surface`` names the events and routes taken (the learner proposal by
+    default), how stored rows are labelled, and the surface's call references
+    and per-person daily cap.
     """
 
     configured_retention_days = (
@@ -263,6 +299,15 @@ def install_telemetry_http(
         else None
     )
 
+    # Until every write seam is composed nothing can be stored, so the
+    # taxonomy lists no events and clients send none (rather than one refused
+    # batch per page).
+    storing = (
+        consent_resolver is not None
+        and configured_retention_days is not None
+        and configured_policy_id is not None
+        and admission is not None
+    )
     router = APIRouter(prefix="/v1", tags=["telemetry"])
     actor_dependency = Depends(require_actor)
     repository = PlanningRepository()
@@ -280,9 +325,12 @@ def install_telemetry_http(
                     event_name=name,
                     event_version=definition.event_version,
                     allowed_payload_keys=list(definition.allowed_payload_keys),
+                    takes_call=definition.takes_call,
                 )
-                for name, definition in LEARNER_PRODUCT_ANALYTICS_EVENTS.items()
-            ]
+                for name, definition in surface.events.items()
+                if storing
+            ],
+            disclaimer=surface.disclaimer,
         )
 
     @router.post(
@@ -310,7 +358,7 @@ def install_telemetry_http(
         require_safe_origin(request, settings)
         response.headers["cache-control"] = "no-store"
         batch = await _parse_batch(request)
-        _validate_event_schema(batch)
+        _validate_event_schema(batch, surface)
         actor = auth.resolved.actor
         tenant_id = _tenant(actor)
         # A request header is an untrusted correlation hint.  It is never
@@ -359,6 +407,8 @@ def install_telemetry_http(
                 dropped=len(batch.events),
                 reason="consent_required",
                 trace_id=trace_id,
+                provenance_source=surface.provenance_source,
+                provenance_version=surface.provenance_version,
             )
         consent_purpose = getattr(
             authoritative_consent.purpose, "value", authoritative_consent.purpose
@@ -369,6 +419,8 @@ def install_telemetry_http(
                 dropped=len(batch.events),
                 reason="consent_scope_not_authorized",
                 trace_id=trace_id,
+                provenance_source=surface.provenance_source,
+                provenance_version=surface.provenance_version,
             )
         try:
             batch_bytes = validate_batch_size(batch)
@@ -424,6 +476,8 @@ def install_telemetry_http(
                 dropped=len(batch.events),
                 reason="consent_required",
                 trace_id=trace_id,
+                provenance_source=surface.provenance_source,
+                provenance_version=surface.provenance_version,
             )
         consent_purpose = getattr(
             authoritative_consent.purpose, "value", authoritative_consent.purpose
@@ -434,6 +488,8 @@ def install_telemetry_http(
                 dropped=len(batch.events),
                 reason="consent_scope_not_authorized",
                 trace_id=trace_id,
+                provenance_source=surface.provenance_source,
+                provenance_version=surface.provenance_version,
             )
         try:
             _validate_timestamps(batch, consent=authoritative_consent, now=now)
@@ -469,11 +525,29 @@ def install_telemetry_http(
             )
             for event in batch.events
         ]
+        named_calls = frozenset(event.call_id for event in batch.events if event.call_id)
         try:
             # Re-check the immutable identity-bound grant immediately before
             # the repository write, inside the caller-owned transaction.
             def write(database):  # type: ignore[no-untyped-def]
                 _validate_consent_binding(authoritative_consent, actor)
+                cap = surface.person_daily_cap
+                if cap is not None and (
+                    _stored_today(database, tenant_id=tenant_id, person_id=actor.person_id, now=now)
+                    + len(events)
+                    > cap
+                ):
+                    raise TelemetryBackpressure(
+                        "This person's telemetry for the last 24 hours is full; retry later."
+                    )
+                if named_calls and surface.call_refs is not None:
+                    # The call's reference replaces its id; a call this
+                    # workspace does not hold is left unnamed.
+                    refs = surface.call_refs(database, tenant_id, named_calls, now)
+                    for row, event in zip(events, batch.events, strict=True):
+                        ref = refs.get(event.call_id) if event.call_id else None
+                        if ref is not None:
+                            row.payload = {**row.payload, "call_ref": ref}
                 return repository.add_analytics_events(database, events)
 
             stored, duplicates, stored_event_ids = await auth.database.run_sync(write)
@@ -488,6 +562,8 @@ def install_telemetry_http(
             reason="duplicate_only" if stored == 0 and duplicates else None,
             trace_id=trace_id,
             retention_expires_at=retention_expires_at if stored else None,
+            provenance_source=surface.provenance_source,
+            provenance_version=surface.provenance_version,
         )
 
     application.include_router(router)
