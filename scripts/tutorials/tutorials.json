@@ -142,9 +142,14 @@
       "title": "Your team and organisation: invite, roles, workspaces",
       "for": ["Business owners"],
       "seconds": [50, 75],
-      "devices": ["desktop"],
+      "devices": ["phone", "desktop"],
       "features": ["organisations", "invites-domains", "people-pages"],
-      "screens": ["/review-fixture/settings"],
+      "screens": [
+        "/review-fixture/settings?section=team",
+        "/review-fixture/settings?section=team&invite=1",
+        "/review-fixture/settings?section=organisation",
+        "/review-fixture/settings?section=team&switcher=open"
+      ],
       "native": false,
       "batch": 2
     },
@@ -175,9 +180,14 @@
       "title": "Upload a recording you already have",
       "for": ["Sellers", "Sales managers"],
       "seconds": [35, 50],
-      "devices": ["desktop"],
+      "devices": ["phone", "desktop"],
       "features": ["upload-any-recording", "add-sheet"],
-      "screens": ["/review-fixture/add-sheet"],
+      "screens": [
+        "/review-fixture/add-sheet?view=sheet",
+        "/review-fixture/upload?step=picked",
+        "/review-fixture/upload?step=details",
+        "/review-fixture/upload?step=analysing"
+      ],
       "native": false,
       "batch": 2
     }

@@ -1,0 +1,228 @@
+{
+  "id": "09-team-organisation",
+  "number": "09",
+  "title": "Your team and organisation: invite, roles, workspaces",
+  "kicker": "Sales X-Ray tutorial",
+  "end_headline": "Your whole team, one place.",
+  "next": "The Taking leads switch",
+  "segments": [
+    {
+      "id": "card",
+      "device": "card",
+      "en": { "say": ["Bring your whole team into Sales X-Ray."] },
+      "hi": {
+        "say": ["अपनी पूरी team को Sales X-Ray में लाइए."],
+        "caption": ["Apni poori team ko Sales X-Ray mein laaiye."]
+      },
+      "mr": {
+        "say": ["तुमची पूर्ण team Sales X-Ray मध्ये आणा."],
+        "caption": ["Tumchi poorna team Sales X-Ray madhye aana."]
+      }
+    },
+    {
+      "id": "s1-team",
+      "device": "phone",
+      "label": "Your team",
+      "setup": [
+        { "do": "goto", "url": "/review-fixture/settings?section=team" }
+      ],
+      "actions": [
+        { "do": "wait", "ms": 900 },
+        {
+          "do": "highlight",
+          "target": { "text": "Vikram Example" },
+          "ms": 1300,
+          "optional": true
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "combobox",
+            "name": "Role for Swamini Fictional"
+          },
+          "ms": 1500,
+          "optional": true
+        },
+        { "do": "unhighlight" },
+        { "do": "still", "label": "team" }
+      ],
+      "en": {
+        "say": [
+          "Open Settings, then Team.",
+          "Everyone in your organisation is here, with their role: owner, admin or member."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Settings खोलिए, फिर Team.",
+          "आपकी organisation के सारे लोग यहाँ हैं, उनके role के साथ: owner, admin या member."
+        ],
+        "caption": [
+          "Settings kholiye, phir Team.",
+          "Aapki organisation ke saare log yahan hain, unke role ke saath: owner, admin ya member."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Settings उघडा, मग Team.",
+          "तुमच्या organisation मधले सगळे लोक इथे आहेत, त्यांच्या role सकट: owner, admin किंवा member."
+        ],
+        "caption": [
+          "Settings ughda, mag Team.",
+          "Tumchya organisation madhle sagle lok ithe aahet, tyanchya role sakat: owner, admin kinva member."
+        ]
+      }
+    },
+    {
+      "id": "s2-invite",
+      "device": "phone",
+      "label": "Invite by email",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/settings?section=team&invite=1",
+          "ms": 300
+        }
+      ],
+      "actions": [
+        { "do": "wait", "ms": 2200 },
+        { "do": "still", "label": "invite" },
+        {
+          "do": "highlight",
+          "target": { "role": "button", "name": "Invite", "exact": true },
+          "ms": 1600,
+          "optional": true
+        },
+        { "do": "unhighlight" },
+        { "do": "wait", "ms": 600 }
+      ],
+      "en": {
+        "say": [
+          "To add someone, type their email, pick a role, and tap Invite.",
+          "They get an invite to join your organisation."
+        ]
+      },
+      "hi": {
+        "say": [
+          "किसी को add करना है? उनका email डालिए, role चुनिए, और Invite दबाइए.",
+          "उन्हें आपकी organisation join करने का invite मिल जाता है."
+        ],
+        "caption": [
+          "Kisi ko add karna hai? Unka email daaliye, role chuniye, aur Invite dabaiye.",
+          "Unhe aapki organisation join karne ka invite mil jaata hai."
+        ]
+      },
+      "mr": {
+        "say": [
+          "कोणाला add करायचंय? त्यांचा email टाका, role निवडा, आणि Invite दाबा.",
+          "त्यांना तुमची organisation join करायचं invite मिळतं."
+        ],
+        "caption": [
+          "Konala add karaychay? Tyancha email taka, role nivda, aani Invite daba.",
+          "Tyanna tumchi organisation join karaycha invite milta."
+        ]
+      }
+    },
+    {
+      "id": "s3-domain",
+      "device": "desktop",
+      "label": "Company and email domain",
+      "setup": [
+        { "do": "goto", "url": "/review-fixture/settings?section=organisation" }
+      ],
+      "actions": [
+        { "do": "wait", "ms": 900 },
+        {
+          "do": "highlight",
+          "target": { "text": "Company details", "exact": true },
+          "ms": 1400,
+          "optional": true
+        },
+        { "do": "unhighlight" },
+        {
+          "do": "scrollto",
+          "target": { "text": "Email domains", "exact": true },
+          "offset": 220,
+          "ms": 800
+        },
+        {
+          "do": "highlight",
+          "target": { "text": "Join automatically", "exact": true },
+          "ms": 1800,
+          "optional": true
+        },
+        { "do": "unhighlight" },
+        { "do": "still", "label": "email-domains" }
+      ],
+      "en": {
+        "say": [
+          "On a computer, Organisation holds your company details.",
+          "Add your company's email domain and turn on Join automatically, so your sellers can join without an invite."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Computer पे, Organisation में आपकी company की details हैं.",
+          "अपनी company का email domain add कीजिए और Join automatically on कीजिए, ताकि आपके sellers बिना invite के join कर सकें."
+        ],
+        "caption": [
+          "Computer pe, Organisation mein aapki company ki details hain.",
+          "Apni company ka email domain add kijiye aur Join automatically on kijiye, taaki aapke sellers bina invite ke join kar sakein."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Computer वर, Organisation मध्ये तुमच्या company ची details आहेत.",
+          "तुमच्या company चा email domain add करा आणि Join automatically on करा, म्हणजे तुमचे sellers invite शिवाय join करू शकतात."
+        ],
+        "caption": [
+          "Computer var, Organisation madhye tumchya company chi details aahet.",
+          "Tumchya company cha email domain add kara aani Join automatically on kara, mhanje tumche sellers invite shivay join karu shaktat."
+        ]
+      }
+    },
+    {
+      "id": "s4-switcher",
+      "device": "phone",
+      "label": "Switch workspaces",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/settings?section=team&switcher=open",
+          "ms": 300
+        }
+      ],
+      "actions": [
+        { "do": "wait", "ms": 2000 },
+        { "do": "still", "label": "workspace-switcher" },
+        { "do": "wait", "ms": 1500 }
+      ],
+      "en": {
+        "say": [
+          "Every seller also has a personal workspace.",
+          "Tap the name at the top to switch between your organisation and your personal space."
+        ]
+      },
+      "hi": {
+        "say": [
+          "हर seller का एक personal workspace भी होता है.",
+          "ऊपर नाम पे tap कीजिए, और organisation और personal space के बीच switch कीजिए."
+        ],
+        "caption": [
+          "Har seller ka ek personal workspace bhi hota hai.",
+          "Upar naam pe tap kijiye, aur organisation aur personal space ke beech switch kijiye."
+        ]
+      },
+      "mr": {
+        "say": [
+          "प्रत्येक seller चा एक personal workspace पण असतो.",
+          "वर नावावर tap करा, आणि organisation आणि personal space मध्ये switch करा."
+        ],
+        "caption": [
+          "Pratyek seller cha ek personal workspace pan asto.",
+          "Var navavar tap kara, aani organisation aani personal space madhye switch kara."
+        ]
+      }
+    }
+  ]
+}

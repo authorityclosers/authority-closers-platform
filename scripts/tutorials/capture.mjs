@@ -145,7 +145,7 @@ async function highlight(page, loc, on) {
 }
 
 async function act(page, a, device, stills) {
-  if (a.optional) {
+  if (a.optional && a.do !== "hide") {
     // Things that may or may not be on screen (a one-time tip): try briefly, carry on without.
     try {
       await locate(page, a.target).waitFor({ state: "visible", timeout: 2500 });
@@ -180,10 +180,35 @@ async function act(page, a, device, stills) {
       await page.waitForTimeout(a.ms ?? 600);
       break;
     case "hide":
-      // Only for messages the dev fixtures add ("Sample data only."); never for product UI.
-      await loc.evaluate((el) => {
-        el.style.visibility = "hidden";
-      });
+      // Fixture-only messages ("Sample data only.") and the usage lines the owner keeps out of
+      // tutorials (analysis minutes left, minutes per call). Hides the smallest wrapper around
+      // just that text, icon included, and keeps it hidden when the page redraws.
+      await page.evaluate((needle) => {
+        const apply = () => {
+          const walker = document.createTreeWalker(
+            document.body,
+            NodeFilter.SHOW_TEXT,
+          );
+          for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+            if (!t.nodeValue || !t.nodeValue.includes(needle)) continue;
+            let node = t.parentElement;
+            while (
+              node.parentElement &&
+              node.parentElement !== document.body &&
+              node.parentElement.textContent.trim() === node.textContent.trim()
+            )
+              node = node.parentElement;
+            node.style.visibility = "hidden";
+          }
+        };
+        apply();
+        new MutationObserver(apply).observe(document.body, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        });
+      }, a.target.text);
+      await page.waitForTimeout(a.ms ?? 200);
       break;
     case "scrollto":
       // Brings a heading to the top of the screen, leaving room above it (sticky bars included);
