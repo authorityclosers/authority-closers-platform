@@ -46,6 +46,20 @@ def test_validate_fills_defaults_and_refuses_unknown_or_out_of_range() -> None:
         policy.environment_name("qa")
 
 
+def test_brain4_reads_are_governed_with_analysis() -> None:
+    """Owner, 23 Oct 2026 (launch decision 2): the Report must not be throttled."""
+    assert "brain4_shadow" in policy.ANALYSIS
+    assert "brain4_shadow" not in policy.BACKGROUND
+    assert frozenset({"brain4_shadow"}) == policy.CAPPED_ANALYSIS
+    # Its own daily cap stays a one-click dial in Admin.
+    assert "brain4_shadow" in policy.CAPPED_HERE and "brain4_shadow" in policy.RAISABLE
+    assert {
+        "call_transcription",
+        "call_facts",
+        "call_report",
+    } == policy.ANALYSIS - policy.CAPPED_ANALYSIS
+
+
 def test_one_click_raises_and_targets() -> None:
     assert policy.raise_to(50) == 100
     assert policy.raise_to(1000) == 1250

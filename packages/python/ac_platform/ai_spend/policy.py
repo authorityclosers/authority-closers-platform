@@ -20,6 +20,9 @@ So the defaults:
 Customer call analysis (C2/C4/C5) is never stopped by these caps: it has its own
 analysis budget, which waits instead of failing. Its spend still counts towards the
 environment's total, so background jobs stop first when the environment is busy.
+Brain 4.0's read is the Report's AI coaching score in every workspace, so it is governed
+the same way (owner, 23 Oct 2026: the Report must not be throttled); it keeps only its
+own daily cap here, against a runaway loop.
 """
 
 from __future__ import annotations
@@ -42,10 +45,16 @@ FEATURES: Final[dict[str, str]] = {
     "lead_desk_ai": "AI replies to leads",
     "partner_quote_facts": "Partner quote facts",
     "one_pass": "One pass (Google): deep call data and pointer review in one read",
-    "brain4_shadow": "Brain 4.0 shadow reads (beta): gold calls and Brain 4.0 beta workspaces",
+    "brain4_shadow": "Brain 4.0 read: the AI coaching score in every Report",
 }
 # Customer call analysis has its own budget (Execution & budget); never capped here.
-ANALYSIS: Final[frozenset[str]] = frozenset({"call_transcription", "call_facts", "call_report"})
+# Brain 4.0's read is the Report (owner, 23 Oct 2026), so it is analysis too.
+ANALYSIS: Final[frozenset[str]] = frozenset(
+    {"call_transcription", "call_facts", "call_report", "brain4_shadow"}
+)
+# Analysis that still keeps its own daily cap here: the background switch and the
+# environment's daily and monthly totals never stop it, only this cap does.
+CAPPED_ANALYSIS: Final[frozenset[str]] = frozenset({"brain4_shadow"})
 # Background jobs: nobody is waiting on them, so the environment's caps stop them.
 BACKGROUND: Final[frozenset[str]] = frozenset(FEATURES) - ANALYSIS
 # Features whose own cap lives here (the call data engine and AI replies keep theirs).
