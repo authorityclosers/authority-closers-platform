@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -92,13 +92,14 @@ async def prove_revenue(url: str, operations_tenant_id: UUID) -> None:
             )
             await database.flush()
             provider = FakePaymentProvider(signing_key=SIGNING_KEY)
+            now = [T0]
             service = CheckoutService(
                 catalogue=PlansTableCatalogue(),
                 providers=PaymentProviderRegistry([provider]),
                 public_learner_tenant_id=learner.tenant_id,
                 operations_tenant_id=operations_tenant_id,
                 return_url_base="https://salesxray.example.test",
-                clock=lambda: T0,
+                clock=lambda: now[0],
             )
             paid = []
             for caller, body in (
@@ -126,9 +127,11 @@ async def prove_revenue(url: str, operations_tenant_id: UUID) -> None:
                 view = await service.checkout(database, caller, command(str(uuid4()), **body))
                 order = await database.get(BillingOrder, UUID(view.order.order_id))
                 assert order is not None
+                now[0] += timedelta(seconds=5)  # paid a moment after checkout, as in life
                 await FakeCheckout(service).submit(
                     database, order.id, provider.checkout_token(order.order_ref), "pay"
                 )
+                now[0] += timedelta(seconds=5)
                 paid.append(order)
             invoices = list(
                 await database.scalars(
@@ -138,8 +141,8 @@ async def prove_revenue(url: str, operations_tenant_id: UUID) -> None:
                 )
             )
             assert len(invoices) == 2
-            test = await billing_revenue(database, mode="test", now=T0)
-            live = await billing_revenue(database, mode="live", now=T0)
+            test = await billing_revenue(database, mode="test", now=now[0])
+            live = await billing_revenue(database, mode="live", now=now[0])
             all_time = next(window for window in test.windows if window.key == "all_time")
             # The shared harness may hold other proofs' payments; ours are always included.
             assert all_time.collected_minor >= sum(i.total_minor for i in invoices)
