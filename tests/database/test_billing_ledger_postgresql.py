@@ -743,16 +743,16 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                 ] == 5_600
             async with sessions() as database, database.begin():
                 acquisition = sessions_for(database, learner, operations)
-                # Over the balance, but over the one call-length limit first (60 min
-                # today); the guests below show the balance refusal.
+                # Over the balance, but over the one call-length limit first (120
+                # minutes); the guests below show the balance refusal.
                 with pytest.raises(ConversationDenied) as denied:
-                    await acquisition.reserve(source(5_601), actor=learner.actor)
+                    await acquisition.reserve(source(CALL_LIMIT_SECONDS + 1), actor=learner.actor)
                 assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
                 assert len((await legacy_rows(database, learner)).all()) == 1
                 assert (await acquisition.allowance(actor=learner.actor))[
                     "available_seconds"
                 ] == 5_600
-            # Under trial v2 the per-call limit is 3600 s while the trial has capacity.
+            # Under trial v2 the per-call limit is the one limit while the trial has capacity.
             async with sessions() as database, database.begin():
                 acquisition = sessions_for(
                     database, learner, operations, trial_policy=TrialPolicy("v2")
@@ -761,7 +761,7 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                     "available_seconds"
                 ] == 8_000
                 with pytest.raises(ConversationDenied) as denied:
-                    await acquisition.reserve(source(3_601), actor=learner.actor)
+                    await acquisition.reserve(source(CALL_LIMIT_SECONDS + 1), actor=learner.actor)
                 assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
                 await acquisition.reserve(source(3_600), actor=learner.actor)
                 assert (await acquisition.allowance(actor=learner.actor))[
@@ -798,7 +798,7 @@ def test_reserve_mirrors_legacy_grants_once_and_refuses_over_balance_and_over_li
                 )
                 guest = await acquisition.issue()
                 with pytest.raises(ConversationDenied) as denied:
-                    await acquisition.reserve(source(3_601), token=guest.token)
+                    await acquisition.reserve(source(CALL_LIMIT_SECONDS + 1), token=guest.token)
                 assert str(denied.value) == LONGEST_CALL_EXCEEDED_MESSAGE
                 await acquisition.reserve(source(3_600), token=guest.token)
                 with pytest.raises(ConversationDenied) as denied:
@@ -848,7 +848,7 @@ def test_trial_v2_vectors_window_end_and_switch_instant(postgres_harness, fixtur
                 assert projected.trial.valid_from == first_use
                 assert projected.trial.expires_at == first_use + timedelta(days=14)
                 assert projected.plan_key == TRIAL_LOT_ID
-                assert projected.per_call_seconds == 3_600
+                assert projected.per_call_seconds == CALL_LIMIT_SECONDS
                 # Keep the learner's session current for the projection 15 days on.
                 await database.execute(
                     update(IdentitySession)

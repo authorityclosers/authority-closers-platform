@@ -256,8 +256,8 @@ def test_org_plan_cap_expiry_closings_and_other_tenant_isolation(postgres_harnes
                 )
                 assert projected.trial is None and projected.plan_key == "organisation"
                 assert projected.available_seconds == 14_400
-                # The one call-length limit (owner, 23 Oct 2026; 60 min for now).
-                assert projected.per_call_seconds == 3_600
+                # The one call-length limit (owner, 23 Oct 2026: 120 minutes).
+                assert projected.per_call_seconds == 7_200
                 app = acquisition(db, second, operations)
                 await app.reserve(source(3_600), actor=second.actor)
                 assert (await app.allowance(actor=second.actor))["available_seconds"] == 10_800

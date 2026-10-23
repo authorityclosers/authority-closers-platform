@@ -27,7 +27,7 @@ import { CheckoutDrawer } from "./checkout-drawer";
 import type { Buyer } from "../billing/billing-api";
 import { AnimatedCountUp } from "./animated-count-up";
 import styles from "./plans.module.css";
-import { callLimitMinutes } from "../call-limit";
+import { CALL_LIMIT_MINUTES } from "../call-limit";
 
 export type PlanSelection = {
   planKey: string;
@@ -515,9 +515,7 @@ export function PlansScreen({
                             aria-hidden="true"
                           />
                           <span>
-                            Calls up to{" "}
-                            {callLimitMinutes(item.longestCallMinutes)} minutes
-                            long
+                            Calls up to {CALL_LIMIT_MINUTES} minutes long
                           </span>
                         </li>
                       ) : null}

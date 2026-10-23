@@ -10,6 +10,7 @@
 import dynamic from "next/dynamic";
 import { useEffect } from "react";
 
+import { CALL_LIMIT_SECONDS } from "../../call-limit";
 import { UploadSessionProvider } from "../../hooks/upload-session";
 import { WorkspaceAccessProvider } from "../../workspace-access";
 
@@ -67,7 +68,7 @@ const POLICY = {
     "transcript and report privately for up to 30 days, then deletes them. You " +
     "can request deletion from Privacy & support.",
   maximum_file_bytes: 100_000_000,
-  maximum_call_seconds: 3_600,
+  maximum_call_seconds: CALL_LIMIT_SECONDS,
   retention_days: 30,
   max_cost_paise: 0,
 };
