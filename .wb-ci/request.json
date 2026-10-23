@@ -1,0 +1,16 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "4f1f9c0ab4322b3402d91bf780192e1899a13aa3",
+  "full": false,
+  "checks": [],
+  "changed_files": [
+    "tests/database/test_lead_desk_call_submission_index_migration_postgresql.py"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [
+    "tests/database/test_lead_desk_call_submission_index_migration_postgresql.py"
+  ],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
