@@ -30,17 +30,12 @@ route = load("pulse_ac_tasks_root", HERE / "ea" / "pulse-ac-tasks-root")
 redirect = load("ac_pulse_redirect", HERE / "ac" / "ac-pulse-redirect")
 
 
-def run(
-    monkeypatch: pytest.MonkeyPatch, request: object
-) -> tuple[int, dict, list[str]]:
+def run(monkeypatch: pytest.MonkeyPatch, request: object) -> tuple[int, dict, list[str]]:
     sent: list[str] = []
 
     def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
         sent.append(str(kwargs["input"]))
-        rows = [
-            json.dumps({"i": i, "op": "x", "r": None})
-            for i in range(len(request["ops"]))
-        ]  # type: ignore[index]
+        rows = [json.dumps({"i": i, "op": "x", "r": None}) for i in range(len(request["ops"]))]  # type: ignore[index]
         return subprocess.CompletedProcess(argv, 0, "\n".join(rows) + "\n", "")
 
     monkeypatch.setattr(route.subprocess, "run", fake_run)
@@ -85,24 +80,16 @@ def test_values_travel_only_inside_dollar_quotes_in_one_fixed_organisation(
     script = sent[0]
     assert f"set_config('pulse.org_id', '{route.ORG}', true)" in script
     assert script.count("set_config('pulse.org_id'") == 1
-    assert "set local role pulse_owner;" in script and script.rstrip().endswith(
-        "commit;"
-    )
+    assert "set local role pulse_owner;" in script and script.rstrip().endswith("commit;")
     for line in script.splitlines():
         if evil.replace("'", "") in line.replace("'", ""):
             tag = line[line.index("$q") : line.index("$", line.index("$q") + 1) + 1]
-            assert line.count(tag) == 2, (
-                "the value sits between one pair of its own dollar quotes"
-            )
+            assert line.count(tag) == 2, "the value sits between one pair of its own dollar quotes"
 
 
 def test_a_dry_request_rolls_back(monkeypatch: pytest.MonkeyPatch) -> None:
     code, answer, sent = run(monkeypatch, {"dry": True, "ops": [{"op": "people"}]})
-    assert (
-        code == 0
-        and answer["committed"] is False
-        and sent[0].rstrip().endswith("rollback;")
-    )
+    assert code == 0 and answer["committed"] is False and sent[0].rstrip().endswith("rollback;")
 
 
 def test_quote_never_uses_a_tag_found_in_the_text() -> None:
@@ -158,8 +145,4 @@ def test_chat_posts_only_to_allowlisted_channels(
             "ops": [{"op": "chat", "channelId": LEADERSHIP, "body": "v0.85 is live"}],
         },
     )
-    assert (
-        code == 0
-        and "pulse.chat_send(" in sent[0]
-        and sent[0].rstrip().endswith("rollback;")
-    )
+    assert code == 0 and "pulse.chat_send(" in sent[0] and sent[0].rstrip().endswith("rollback;")
