@@ -33,7 +33,7 @@ import { SettingsSectionView } from "../settings/sections";
 import type { SettingsSectionId } from "../settings/settings-sections";
 import { ActionList, ActionRow, Segmented } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
-import type { ServerOrganisation } from "./organisation-server";
+import type { ServerOrganisation } from "./organisation-seed";
 import { OrganisationView } from "./organisation-view";
 import styles from "./org-hub.module.css";
 
