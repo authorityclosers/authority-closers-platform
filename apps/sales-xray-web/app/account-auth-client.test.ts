@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AUTH_COMPLETE_MESSAGE,
   emailCodeRequest,
@@ -24,6 +24,9 @@ import {
   takeSignInResult,
   connectOutcome,
   connectProvider,
+  parseNativeSignInStart,
+  startNativeSignIn,
+  submitNativeSignIn,
 } from "./account-auth-client";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -417,4 +420,94 @@ it("reads the Connect results and says them plainly", () => {
   expect(connectOutcome("fresh_sign_in", "apple").message).toContain(
     "within 10 minutes",
   );
+});
+
+describe("the phone's own sign-in", () => {
+  it("keeps only a well-formed start answer", () => {
+    const state = "a".repeat(43);
+    expect(
+      parseNativeSignInStart({
+        state,
+        nonce: "n",
+        client_id: "web-client-id",
+        extra: "ignored",
+      }),
+    ).toEqual({
+      state,
+      nonce: "n",
+      clientId: "web-client-id",
+    });
+    expect(
+      parseNativeSignInStart({
+        state,
+        nonce: "n",
+        app_id: "1",
+        client_token: "t",
+      }),
+    ).toEqual({ state, nonce: "n", appId: "1", clientToken: "t" });
+    expect(parseNativeSignInStart({ state: "short", nonce: "n" })).toBeNull();
+    expect(parseNativeSignInStart({ state })).toBeNull();
+    expect(parseNativeSignInStart(null)).toBeNull();
+  });
+
+  it("starts by a same-origin JSON post and gives up quietly when the server can't", async () => {
+    const fetcher = vi.fn(async () =>
+      Response.json({ state: "b".repeat(43), nonce: "n", client_id: "c" }),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    const started = await startNativeSignIn(
+      "google",
+      { consent_version: "terms-v1", return_path: "/auth/complete?flow=x" },
+      new AbortController().signal,
+    );
+    expect(started?.clientId).toBe("c");
+    const [url, init] = fetcher.mock.calls[0] as unknown as [
+      string,
+      RequestInit,
+    ];
+    expect(url).toBe("/v1/auth/google/native/start");
+    expect(init.method).toBe("POST");
+    expect(init.credentials).toBe("same-origin");
+    expect(JSON.parse(String(init.body))).toEqual({
+      action: "authenticate",
+      consent: true,
+      age_attested: true,
+      consent_version: "terms-v1",
+      return_path: "/auth/complete?flow=x",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(null, { status: 503 })),
+    );
+    expect(
+      await startNativeSignIn(
+        "facebook",
+        { consent_version: "v", return_path: "/auth/complete?flow=x" },
+        new AbortController().signal,
+      ),
+    ).toBeNull();
+    vi.unstubAllGlobals();
+  });
+
+  it("finishes with a hidden same-origin form post of state and token", () => {
+    const posted: HTMLFormElement[] = [];
+    const submit = vi
+      .spyOn(HTMLFormElement.prototype, "submit")
+      .mockImplementation(function (this: HTMLFormElement) {
+        posted.push(this);
+      });
+    submitNativeSignIn("facebook", "c".repeat(43), "EAAG-token");
+    expect(posted).toHaveLength(1);
+    expect(posted[0].method.toLowerCase()).toBe("post");
+    expect(posted[0].hidden).toBe(true);
+    expect(new URL(posted[0].action).pathname).toBe(
+      "/v1/auth/facebook/native/finish",
+    );
+    expect(Object.fromEntries(new FormData(posted[0]))).toEqual({
+      state: "c".repeat(43),
+      token: "EAAG-token",
+    });
+    posted[0].remove();
+    submit.mockRestore();
+  });
 });

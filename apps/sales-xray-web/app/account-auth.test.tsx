@@ -1046,3 +1046,218 @@ it("keeps a full-page sign-in result through React's double effect run in develo
   );
   expect(window.sessionStorage.getItem("sx.signIn.result")).toBeNull();
 });
+
+describe("inside the Sales X-Ray phone app", () => {
+  type PhoneMessage = {
+    id: string;
+    method: string;
+    args: Record<string, unknown>;
+  };
+
+  function phoneApp(
+    signIn: (args: Record<string, unknown>) => {
+      ok: boolean;
+      result?: unknown;
+      error?: string;
+    },
+  ) {
+    const listeners: ((event: { data: unknown }) => void)[] = [];
+    const asked: PhoneMessage[] = [];
+    vi.stubGlobal("SXPhone", {
+      addEventListener: (
+        _: string,
+        listener: (event: { data: unknown }) => void,
+      ) => listeners.push(listener),
+      postMessage: (data: string) => {
+        const message = JSON.parse(data) as PhoneMessage;
+        asked.push(message);
+        const answer =
+          message.method === "status"
+            ? {
+                ok: true,
+                result: { signIn: true, nativeSignIn: ["google", "facebook"] },
+              }
+            : signIn(message.args);
+        queueMicrotask(() =>
+          listeners.forEach((listener) =>
+            listener({ data: JSON.stringify({ id: message.id, ...answer }) }),
+          ),
+        );
+      },
+    });
+    return asked;
+  }
+
+  const STATE = "s".repeat(43);
+
+  function server(start: Response | (() => Response)) {
+    const fetcher = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes("/config"))
+        return Response.json({ ...config, facebook_enabled: true });
+      if (url.includes("/native/start"))
+        return typeof start === "function" ? start() : start.clone();
+      throw new Error(`Unexpected ${url} ${init?.method}`);
+    });
+    vi.stubGlobal("fetch", fetcher);
+    return fetcher;
+  }
+
+  async function signIn(provider: "Google" | "Facebook") {
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={vi.fn()} />),
+    );
+    await flush();
+    await act(async () =>
+      host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+    );
+    await click(`Continue with ${provider}`);
+    await flush();
+  }
+
+  it("signs in with the phone's own Google sheet and posts its token, never a browser", async () => {
+    const fetcher = server(
+      Response.json({
+        state: STATE,
+        nonce: "nonce-1",
+        client_id: "web-client-id",
+      }),
+    );
+    const asked = phoneApp(() => ({
+      ok: true,
+      result: { token: "id.token.value" },
+    }));
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+    const navigate = vi
+      .spyOn(window.location, "assign")
+      .mockImplementation(() => {});
+    const posted: HTMLFormElement[] = [];
+    vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(function (
+      this: HTMLFormElement,
+    ) {
+      posted.push(this);
+    });
+    window.history.replaceState(null, "", "/login?next=/leads");
+
+    await signIn("Google");
+
+    expect(open).not.toHaveBeenCalled();
+    expect(navigate).not.toHaveBeenCalled();
+    const [url, init] = fetcher.mock.calls.find(([called]) =>
+      called.includes("/native/start"),
+    )!;
+    expect(url).toBe("/v1/auth/google/native/start");
+    const body = JSON.parse(String(init?.body));
+    expect(body).toMatchObject({
+      action: "authenticate",
+      consent: true,
+      age_attested: true,
+      consent_version: "terms-v1",
+    });
+    const flow = new URLSearchParams(body.return_path.split("?")[1]).get(
+      "flow",
+    );
+    expect(
+      asked.find((message) => message.method === "nativeSignIn")?.args,
+    ).toEqual({
+      provider: "google",
+      nonce: "nonce-1",
+      clientId: "web-client-id",
+    });
+    expect(posted).toHaveLength(1);
+    expect(posted[0].method.toLowerCase()).toBe("post");
+    expect(new URL(posted[0].action).pathname).toBe(
+      "/v1/auth/google/native/finish",
+    );
+    expect(Object.fromEntries(new FormData(posted[0]))).toEqual({
+      state: STATE,
+      token: "id.token.value",
+    });
+    expect(
+      JSON.parse(window.sessionStorage.getItem("sx.signIn.redirect")!),
+    ).toMatchObject({
+      flow,
+      provider: "google",
+      returnTo: "/login?next=/leads",
+    });
+  });
+
+  it("starts the Facebook SDK with this environment's app id and client token", async () => {
+    server(
+      Response.json({
+        state: STATE,
+        nonce: "nonce-2",
+        app_id: "1514054053884522",
+        client_token: "client-token",
+      }),
+    );
+    const asked = phoneApp(() => ({
+      ok: true,
+      result: { token: "EAAG-token" },
+    }));
+    const posted: HTMLFormElement[] = [];
+    vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(function (
+      this: HTMLFormElement,
+    ) {
+      posted.push(this);
+    });
+
+    await signIn("Facebook");
+
+    expect(
+      asked.find((message) => message.method === "nativeSignIn")?.args,
+    ).toEqual({
+      provider: "facebook",
+      nonce: "nonce-2",
+      appId: "1514054053884522",
+      clientToken: "client-token",
+    });
+    expect(new URL(posted[0].action).pathname).toBe(
+      "/v1/auth/facebook/native/finish",
+    );
+  });
+
+  it("a closed sheet just lets the person choose again, with no message", async () => {
+    server(Response.json({ state: STATE, nonce: "n", client_id: "c" }));
+    phoneApp(() => ({ ok: false, error: "cancelled" }));
+    const submit = vi
+      .spyOn(HTMLFormElement.prototype, "submit")
+      .mockImplementation(() => {});
+
+    await signIn("Google");
+
+    expect(submit).not.toHaveBeenCalled();
+    expect(host.querySelector('[role="alert"]')?.textContent ?? "").toBe("");
+    const google = Array.from(host.querySelectorAll("button")).find((button) =>
+      button.textContent?.includes("Continue with Google"),
+    )!;
+    expect(google.disabled).toBe(false);
+  });
+
+  it("says what to do when the phone has no Google account", async () => {
+    server(Response.json({ state: STATE, nonce: "n", client_id: "c" }));
+    phoneApp(() => ({ ok: false, error: "no_account" }));
+    vi.spyOn(HTMLFormElement.prototype, "submit").mockImplementation(() => {});
+
+    await signIn("Google");
+
+    expect(host.textContent).toContain("Add a Google account to this phone");
+  });
+
+  it("uses the phone's browser as before where this environment can't sign in on the phone", async () => {
+    server(() => new Response(null, { status: 503 }));
+    const asked = phoneApp(() => ({ ok: true, result: { token: "unused" } }));
+    const navigate = vi
+      .spyOn(window.location, "assign")
+      .mockImplementation(() => {});
+
+    await signIn("Google");
+
+    expect(asked.some((message) => message.method === "nativeSignIn")).toBe(
+      false,
+    );
+    expect(new URL(navigate.mock.calls[0][0] as string).pathname).toBe(
+      "/v1/auth/google/start",
+    );
+  });
+});

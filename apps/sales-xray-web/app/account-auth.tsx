@@ -43,12 +43,19 @@ import {
   forgetSignInResult,
   readSignInResult,
   rememberRedirectSignIn,
+  startNativeSignIn,
+  submitNativeSignIn,
   type AuthCompletionResult,
   type EmailCodeConfig,
   type SignInProvider,
 } from "./account-auth-client";
 import styles from "./account-auth.module.css";
-import { inPhoneApp, phoneStatus } from "./leads/native-phone";
+import {
+  inPhoneApp,
+  phoneStatus,
+  signInOnPhone,
+  type NativeSignInProvider,
+} from "./leads/native-phone";
 
 export type AccountAuthPreviewState = "auth.email" | "auth.code" | "auth.error";
 
@@ -304,6 +311,8 @@ export function AccountAuth({
   const popupMessage = useRef<((event: MessageEvent) => void) | null>(null);
   const popupOutcome = useRef<AuthCompletionResult | null>(null);
   const popupProvider = useRef<SignInProvider>("google");
+  // Inside the phone app: providers it signs in with by itself (no browser).
+  const nativeProviders = useRef<NativeSignInProvider[]>([]);
   const confirmingPopup = useRef(false);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
@@ -342,6 +351,16 @@ export function AccountAuth({
       });
     return () => request.abort();
   }, [loadAttempt, preview]);
+  useEffect(() => {
+    if (preview || !inPhoneApp()) return;
+    let live = true;
+    void phoneStatus().then((status) => {
+      if (live) nativeProviders.current = status?.nativeSignIn ?? [];
+    });
+    return () => {
+      live = false;
+    };
+  }, [preview]);
   const finish = useRef<() => void>(() => {});
   useEffect(() => {
     finish.current = complete;
@@ -741,16 +760,21 @@ export function AccountAuth({
     )
       return;
     const label = providerLabel(provider);
-    // In the phone app only Google has the app's own sign-in window; Apple and
-    // Facebook go through this page, which the app opens in the phone's browser.
-    const appBrowser = provider !== "google" && inPhoneApp();
+    // The phone app signs in with Google and Facebook by itself (owner, 23 Oct
+    // 2026: never a jump to Chrome). Older apps: only Google has the app's own
+    // sign-in window; Apple and Facebook go through this page, which the app
+    // opens in the phone's browser.
+    const native = (nativeProviders.current as string[]).includes(provider)
+      ? (provider as NativeSignInProvider)
+      : null;
+    const appBrowser = !native && provider !== "google" && inPhoneApp();
     // Open a blank same-origin popup synchronously. Fresh policy is checked
     // before navigating it to Google, while the File stays in this document.
     // Where the window is blocked (the Claude desktop pane) or breaks (in-app
     // browsers), the same click signs in on this page instead.
     const flow = crypto.randomUUID();
     const opened =
-      appBrowser || popupHostileBrowser(navigator.userAgent)
+      native || appBrowser || popupHostileBrowser(navigator.userAgent)
         ? null
         : window.open(
             "about:blank",
@@ -819,6 +843,16 @@ export function AccountAuth({
           child.location.assign(start);
           return;
         }
+        if (native) {
+          const signedIn = await signInHere(
+            native,
+            current.consent_version,
+            flow,
+            request.signal,
+          );
+          // Otherwise this environment or app can't: the phone's browser, as before.
+          if (signedIn !== "fallback") return;
+        }
         if (appBrowser && !(await phoneStatus())?.signIn) {
           inFlight.current = false;
           setPending(false);
@@ -844,6 +878,56 @@ export function AccountAuth({
         setPending(false);
         setError("Sign-in settings could not be checked. Please try again.");
       });
+  }
+
+  /** The phone's own sign-in: Android's Google sheet or the Facebook app. */
+  async function signInHere(
+    provider: NativeSignInProvider,
+    consentVersion: string,
+    flow: string,
+    signal: AbortSignal,
+  ): Promise<"finishing" | "stopped" | "fallback"> {
+    const label = providerLabel(provider);
+    const started = await startNativeSignIn(
+      provider,
+      {
+        consent_version: consentVersion,
+        return_path: `/auth/complete?flow=${flow}`,
+      },
+      signal,
+    );
+    if (signal.aborted) return "stopped";
+    if (!started) return "fallback";
+    const outcome = await signInOnPhone({
+      provider,
+      nonce: started.nonce,
+      ...(started.clientId ? { clientId: started.clientId } : {}),
+      ...(started.appId ? { appId: started.appId } : {}),
+      ...(started.clientToken ? { clientToken: started.clientToken } : {}),
+    });
+    if (signal.aborted) return "stopped";
+    if ("token" in outcome) {
+      rememberRedirectSignIn(
+        flow,
+        provider,
+        window.location.pathname + window.location.search,
+      );
+      setRedirecting(provider);
+      submitNativeSignIn(provider, started.state, outcome.token);
+      return "finishing";
+    }
+    if (outcome.error === "unavailable") return "fallback";
+    inFlight.current = false;
+    setPending(false);
+    if (outcome.error === "no_account")
+      setError(
+        "Add a Google account to this phone in its Settings, or use an email code.",
+      );
+    else if (outcome.error !== "cancelled")
+      setError(
+        `${label} sign-in didn’t finish. Try again or use an email code.`,
+      );
+    return "stopped";
   }
 
   const seconds = Math.max(0, Math.ceil((retryAt - now) / 1000));

@@ -69,9 +69,21 @@ export type NativeStatus = {
   connect: boolean;
   /** The app signs in with Apple and Facebook through the phone's browser too. */
   signIn: boolean;
+  /**
+   * Providers the app signs in with by itself, never the phone's browser: Android's
+   * Google account sheet and the Facebook app (app builds from 23 Oct 2026).
+   */
+  nativeSignIn: NativeSignInProvider[];
   /** "direct" (download link) or "play" (Google Play), from app builds of 23 Oct 2026. */
   store?: "direct" | "play";
 };
+
+export type NativeSignInProvider = "google" | "facebook";
+
+/** What the phone's own sign-in gave back: a token for the server, or why not. */
+export type NativeSignInOutcome =
+  | { token: string }
+  | { error: "cancelled" | "no_account" | "unavailable" | "failed" };
 
 type Channel = {
   postMessage: (data: string) => void;
@@ -253,12 +265,47 @@ export async function phoneStatus(): Promise<NativeStatus | null> {
       audio: raw.audio === true,
       connect: raw.connect === true,
       signIn: raw.signIn === true,
+      nativeSignIn: Array.isArray(raw.nativeSignIn)
+        ? raw.nativeSignIn.filter(
+            (provider): provider is NativeSignInProvider =>
+              provider === "google" || provider === "facebook",
+          )
+        : [],
       ...(raw.store === "play" || raw.store === "direct"
         ? { store: raw.store }
         : {}),
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Signs in with the phone's own Google account sheet or the Facebook app. The
+ * values come from POST /v1/auth/{provider}/native/start; the token goes back to
+ * the server once, by the page's form post. Picking an account can take a while.
+ */
+export async function signInOnPhone(request: {
+  provider: NativeSignInProvider;
+  nonce: string;
+  clientId?: string;
+  appId?: string;
+  clientToken?: string;
+}): Promise<NativeSignInOutcome> {
+  try {
+    const raw = await ask<Record<string, unknown>>(
+      "nativeSignIn",
+      request,
+      5 * 60_000,
+    );
+    const token = typeof raw?.token === "string" ? raw.token : "";
+    return token ? { token } : { error: "failed" };
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    if (code === "cancelled" || code === "no_account") return { error: code };
+    if (code === "unavailable" || code === "no_phone_app")
+      return { error: "unavailable" };
+    return { error: "failed" };
   }
 }
 
