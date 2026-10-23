@@ -920,3 +920,46 @@
 .billingCard .error p {
   color: var(--lx-ink-3);
 }
+
+/* Phones: each invoice is a stacked card; nothing scrolls sideways (QA, 23 Oct 2026). */
+@media (max-width: 560px) {
+  .invoiceTable thead {
+    display: none;
+  }
+
+  .invoiceTable,
+  .invoiceTable tbody,
+  .invoiceTable tr,
+  .invoiceTable td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .invoiceTable tr {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--lx-line);
+  }
+
+  .invoiceTable td,
+  .invoiceTable tr:last-child td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0;
+    border-bottom: 0;
+    text-align: right;
+  }
+
+  .invoiceTable td::before {
+    content: attr(data-label);
+    color: var(--lx-muted);
+    font-weight: 600;
+    text-align: left;
+  }
+}
+
+/* Above the phone tab bar when it opens (QA, 23 Oct 2026). */
+.confirmCancelBox {
+  scroll-margin-bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+}

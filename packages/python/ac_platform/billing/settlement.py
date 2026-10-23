@@ -942,6 +942,44 @@ class Settlement:
             .limit(1),
         )
 
+    async def payment_unused(
+        self,
+        database: AsyncSession,
+        order: BillingOrder,
+        payment: BillingPaymentEvent,
+        account: BillingAccount,
+        now: datetime,
+    ) -> bool:
+        """Read only: none of this payment's minutes are used yet (C1 §4). Same lots and
+        rule as the refund command, projected without mirroring legacy grants."""
+
+        ledger = self.service.ledger(database, tenant_id=account.tenant_id)
+        entries = await ledger.entries(account.id)
+        sources = await self._sources(database, order, payment)
+        payment_lots = [
+            entry
+            for entry in entries
+            if entry.kind in ("period_grant", "purchase") and entry.source_ref in sources
+        ]
+        if not payment_lots:
+            return False
+        if account.kind == "personal":
+            assert account.person_id is not None
+            projection = (
+                await ledger.project_person(
+                    tenant_id=account.tenant_id, person_id=account.person_id, now=now
+                )
+            ).projection
+        else:
+            projection = (
+                await ledger.project_organisation(tenant_id=account.tenant_id, now=now)
+            ).projection
+        lots_by_id = {lot.lot_id: lot for lot in ledger.lots_from_entries(entries)}
+        lots = [lots_by_id[str(entry.id)] for entry in payment_lots if str(entry.id) in lots_by_id]
+        return bool(lots) and payment_refundable(
+            projection, lots, verified_at=_utc(payment.verified_at)
+        )
+
     async def _projection(
         self, database: AsyncSession, ledger: BillingLedger, account: BillingAccount, now: datetime
     ) -> Projection:

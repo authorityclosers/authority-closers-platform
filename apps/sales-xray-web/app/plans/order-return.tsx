@@ -1,5 +1,6 @@
 "use client";
 
+import { RefundRequest } from "../billing/refund-request";
 import { CircleCheck, CircleX, Clock3, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
@@ -277,6 +278,16 @@ function OrderReturnState({
               {day(order.refund.refundableUntil)} if you have not used any
               minutes.
             </p>
+          ) : null}
+          {order.refund && client.requestRefund ? (
+            <div className={styles.actions}>
+              <RefundRequest
+                refund={order.refund}
+                amount={formatMoney(order.amount)}
+                onRequest={client.requestRefund.bind(client)}
+                className={styles.ghost}
+              />
+            </div>
           ) : null}
         </>
       );

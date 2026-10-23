@@ -130,6 +130,14 @@ export function useBillingAccount(
       : null;
   const error = failure?.key === key ? failure.message : null;
   const onRefresh = () => setAttempt((value) => value + 1);
+  const request = client.requestRefund?.bind(client);
+  const onRefund = request
+    ? async (paymentId: string, reason: string, key: string) => {
+        const refund = await request(paymentId, reason, key);
+        onRefresh();
+        return refund;
+      }
+    : undefined;
   const onCancel = async (id: string) => {
     if (
       inFlight.current ||
@@ -192,6 +200,7 @@ export function useBillingAccount(
         invoice.invoiceId,
       ),
       receiptHref: null,
+      refund: invoice.refund,
     })),
     status: current
       ? ("ready" as const)
@@ -202,5 +211,6 @@ export function useBillingAccount(
     busy,
     onRefresh,
     onCancel,
+    onRefund,
   };
 }

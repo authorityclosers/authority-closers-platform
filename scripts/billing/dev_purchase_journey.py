@@ -173,6 +173,13 @@ def pay(client: Client, checkout: dict[str, Any], action: str = "pay") -> dict[s
     return dict(order.get("order", order))
 
 
+def available_minutes(client: Client) -> int:
+    status, _, data = client.call("GET", "/v1/me/plan")
+    if status != 200:
+        raise Failed(f"/v1/me/plan {status} {data}")
+    return int((data.get("allowance") or {}).get("available_seconds", 0)) // 60
+
+
 def minutes(client: Client, account: str) -> str:
     """What the app shows as the buyer's analysis minutes (the admission projection)."""
     path = "/v1/me/plan" if account == "personal" else "/v1/organisation/usage"
@@ -263,6 +270,14 @@ def personal_journey(client: Client, interval: str) -> None:
         )
     if topup and topup.get("refund") and topup["refund"].get("payment_id"):
         payment_id = topup["refund"]["payment_id"]
+        check(
+            "personal: the paid top-up offers a refund",
+            topup["refund"].get("state") == "available",
+            f"state={topup['refund'].get('state')}",
+        )
+        offered = [row for row in rows if (row.get("refund") or {}).get("state") == "available"]
+        check("personal: invoice rows offer the refund", len(offered) >= 1, f"{len(offered)}")
+        before = available_minutes(client)
         status, _, refund = client.call(
             "POST",
             f"/v1/payments/{payment_id}/refund",
@@ -273,6 +288,17 @@ def personal_journey(client: Client, interval: str) -> None:
             "personal: unused top-up refunded",
             status in (200, 202),
             f"{status} {json.dumps(refund)[:200]}",
+        )
+        after = available_minutes(client)
+        check(
+            "personal: refunded minutes leave the balance",
+            before - after == 100,
+            f"{before} -> {after} min",
+        )
+        status, _, order = client.call("GET", f"/v1/orders/{topup['order_id']}")
+        state = ((order or {}).get("refund") or {}).get("state")
+        check(
+            "personal: the order no longer offers a refund", state in ("pending", "refunded"), state
         )
         status, _, notes = client.call("GET", "/v1/credit-notes?account=personal")
         check(

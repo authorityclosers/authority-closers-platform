@@ -38,7 +38,7 @@ from ac_platform.billing.errors import (
     SubscriptionNotFound,
     TopUpNeedsPeriod,
 )
-from ac_platform.billing.invoice_models import BillingBuyerTaxDetails
+from ac_platform.billing.invoice_models import BillingBuyerTaxDetails, BillingInvoice
 from ac_platform.billing.ledger import BillingLedger
 from ac_platform.billing.models import BillingAccount
 from ac_platform.billing.order_models import (
@@ -900,17 +900,10 @@ class CheckoutService:
     async def refund_view(
         self, database: AsyncSession, order: BillingOrder, paid_at: datetime | None, now: datetime
     ) -> RefundView | None:
-        """C1 §4: the refund state carried on a paid order. Use is checked by the command."""
+        """C1 §4: the refund state carried on a paid order."""
 
         if paid_at is None:
             return None
-        events = list(
-            await database.scalars(
-                select(BillingRefundEvent)
-                .where(BillingRefundEvent.order_id == order.id)
-                .order_by(BillingRefundEvent.created_at.desc(), BillingRefundEvent.id.desc())
-            )
-        )
         paid_event = await database.scalar(
             select(BillingPaymentEvent)
             .where(
@@ -920,12 +913,41 @@ class CheckoutService:
             .order_by(BillingPaymentEvent.verified_at)
             .limit(1)
         )
+        account = await database.get(BillingAccount, order.account_id)
+        return await self.payment_refund_view(
+            database, order, paid_event, account, now, paid_at=paid_at
+        )
+
+    async def payment_refund_view(
+        self,
+        database: AsyncSession,
+        order: BillingOrder,
+        payment: BillingPaymentEvent | None,
+        account: BillingAccount | None,
+        now: datetime,
+        *,
+        paid_at: datetime | None = None,
+    ) -> RefundView:
+        """A refund already asked for, then the 7-day window, then whether any of the
+        payment's minutes were used: the refund command's own rules, so the app offers a
+        refund only while asking for one would succeed (QA, 23 Oct 2026)."""
+
+        refunds = select(BillingRefundEvent).where(BillingRefundEvent.order_id == order.id)
+        if payment is not None and payment.payment_ref:
+            refunds = refunds.where(BillingRefundEvent.payment_ref == payment.payment_ref)
+        events = list(
+            await database.scalars(
+                refunds.order_by(BillingRefundEvent.created_at.desc(), BillingRefundEvent.id.desc())
+            )
+        )
         payment_id = (
             events[0].payment_ref
             if events
-            else (paid_event.payment_ref if paid_event is not None else None) or order.order_ref
+            else (payment.payment_ref if payment is not None else None) or order.order_ref
         )
-        until = paid_at + REFUND_WINDOW
+        start = paid_at if paid_at is not None else payment.verified_at if payment else None
+        assert start is not None  # a paid order or a verified payment
+        until = _utc(start) + REFUND_WINDOW
         if events:
             state = events[0].state
             return RefundView(
@@ -944,7 +966,32 @@ class CheckoutService:
                 refundable_until=until,
                 reason_code="window_closed",
             )
+        if payment is not None and account is not None:
+            # Settlement imports this module.
+            from ac_platform.billing.settlement import Settlement
+
+            if not await Settlement(self).payment_unused(database, order, payment, account, now):
+                return RefundView(
+                    payment_id=payment_id,
+                    state="unavailable",
+                    refundable_until=until,
+                    reason_code="used",
+                )
         return RefundView(payment_id=payment_id, state="available", refundable_until=until)
+
+    async def invoice_refund_view(
+        self, database: AsyncSession, invoice: BillingInvoice, now: datetime
+    ) -> RefundView | None:
+        """The refund state of the payment behind one tax invoice (Settings, invoice rows)."""
+
+        if invoice.order_id is None:
+            return None
+        order = await database.get(BillingOrder, invoice.order_id)
+        payment = await database.get(BillingPaymentEvent, invoice.payment_event_id)
+        if order is None or payment is None or payment.order_id is None:
+            return None  # the refund command needs the payment's own order
+        account = await database.get(BillingAccount, invoice.account_id)
+        return await self.payment_refund_view(database, order, payment, account, now)
 
     async def order_view(
         self, database: AsyncSession, order: BillingOrder, account: AccountName, now: datetime

@@ -36,6 +36,7 @@ import {
 } from "./acquisition-client";
 import { useSalesXraySignOut } from "./account-navigation";
 import type { BillingViewProps } from "./billing/billing-view";
+import { RefundRequest } from "./billing/refund-request";
 import { PLANS_ON_WEB, usePurchasesAllowed } from "./purchase-policy";
 import { useWorkspaceAccess } from "./workspace-access";
 import { useBillingAccount } from "./billing/use-billing-account";
@@ -1264,6 +1265,7 @@ export function PlanAndBillingPane({
   error,
   onRefresh,
   onCancel,
+  onRefund,
   onBuyTopUp,
   topUpPacks = TOP_UP_PACKS,
 }: SettingsBillingProps & {
@@ -1274,6 +1276,9 @@ export function PlanAndBillingPane({
 }) {
   const [cancelAsk, setCancelAsk] = useState(false);
   const purchasesAllowed = usePurchasesAllowed();
+  const refundable = documents?.find(
+    (document) => document.refund?.state === "available",
+  );
   // Offer only the top-up the selected workspace can buy: Personal in a personal
   // workspace, Organisation in an organisation (unknown: both).
   const access = useWorkspaceAccess();
@@ -1438,7 +1443,12 @@ export function PlanAndBillingPane({
           {current &&
             !isCancelled &&
             (cancelAsk ? (
-              <div className={styles.confirmCancelBox}>
+              <div
+                className={styles.confirmCancelBox}
+                ref={(box) =>
+                  box?.scrollIntoView({ block: "nearest", behavior: "smooth" })
+                }
+              >
                 <p className={styles.muted}>
                   Renewal stops; access continues to the end of the period.
                 </p>
@@ -1471,6 +1481,14 @@ export function PlanAndBillingPane({
                 Cancel renewal
               </button>
             ))}
+          {purchasesAllowed && onRefund && refundable ? (
+            <RefundRequest
+              refund={refundable.refund}
+              amount={formatMoney(refundable.amount)}
+              onRequest={onRefund}
+              className={styles.secondary}
+            />
+          ) : null}
         </div>
         {purchasesAllowed && current?.renewalNeedsCustomerApproval ? (
           <p className={styles.muted}>
@@ -1582,11 +1600,13 @@ export function PlanAndBillingPane({
                 <tbody>
                   {documents.map((document) => (
                     <tr key={document.id}>
-                      <td>{day(document.createdAt)}</td>
-                      <td>{document.description}</td>
-                      <td>{formatMoney(document.amount)}</td>
-                      <td>{document.status}</td>
-                      <td>
+                      <td data-label="Date">{day(document.createdAt)}</td>
+                      <td data-label="Description">{document.description}</td>
+                      <td data-label="Amount">
+                        {formatMoney(document.amount)}
+                      </td>
+                      <td data-label="Status">{document.status}</td>
+                      <td data-label="Documents">
                         {document.invoiceHref ? (
                           <a
                             href={document.invoiceHref}
@@ -1609,6 +1629,17 @@ export function PlanAndBillingPane({
                         {!document.invoiceHref && !document.receiptHref
                           ? "—"
                           : null}
+                        {onRefund && document.refund ? (
+                          <>
+                            {" · "}
+                            <RefundRequest
+                              refund={document.refund}
+                              amount={formatMoney(document.amount)}
+                              onRequest={onRefund}
+                              className={styles.secondary}
+                            />
+                          </>
+                        ) : null}
                       </td>
                     </tr>
                   ))}

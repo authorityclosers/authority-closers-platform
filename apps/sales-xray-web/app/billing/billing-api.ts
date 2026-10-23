@@ -12,6 +12,7 @@ import {
   parseOrder,
   parsePlans,
   parseProblem,
+  parseRefundResult,
   parseSubscription,
   parseSubscriptions,
   parseUsage,
@@ -23,6 +24,7 @@ import {
   type OfflinePayment,
   type Order,
   type Plan,
+  type Refund,
   type Subscription,
   type Subscriptions,
   type Usage,
@@ -90,6 +92,12 @@ export interface BillingClient {
     reason: string | null,
     idempotencyKey: string,
   ): Promise<Subscription>;
+  /** C1 §4: a full refund while the payment qualifies; the server decides. */
+  requestRefund?(
+    paymentId: string,
+    reason: string,
+    idempotencyKey: string,
+  ): Promise<Refund>;
 }
 
 /** One key per attempt at one action; a retry of the same action reuses it. */
@@ -229,6 +237,14 @@ export const liveBilling: BillingClient = {
           body: JSON.stringify({ reason }),
         },
       ),
+    ),
+  requestRefund: async (paymentId, reason, key) =>
+    parseRefundResult(
+      await call(`/v1/payments/${encodeURIComponent(paymentId)}/refund`, {
+        method: "POST",
+        idempotencyKey: key,
+        body: JSON.stringify({ reason }),
+      }),
     ),
 };
 

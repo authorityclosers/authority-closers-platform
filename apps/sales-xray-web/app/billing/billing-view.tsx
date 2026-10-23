@@ -1,5 +1,7 @@
 "use client";
 
+import { RefundRequest, type RequestRefund } from "./refund-request";
+import type { Refund } from "./contract";
 import { usePurchasesAllowed } from "../purchase-policy";
 import {
   Check,
@@ -33,6 +35,8 @@ export type BillingDocument = {
   status: string;
   invoiceHref: string | null;
   receiptHref: string | null;
+  /** The refund state of the payment behind this document, when it has one. */
+  refund?: Refund | null;
 };
 
 export type BillingViewProps = {
@@ -40,6 +44,8 @@ export type BillingViewProps = {
   usage?: Usage | null;
   subs?: Subscriptions | null;
   documents?: BillingDocument[];
+  /** Asks for a refund of one payment (C1 §4); absent where refunds can't be asked. */
+  onRefund?: RequestRefund;
   invoicesStatus?: "loading" | "ready" | "error";
   status?: "loading" | "ready" | "error";
   busy?: boolean;
@@ -60,8 +66,12 @@ export function BillingView({
   error,
   onRefresh,
   onCancel,
+  onRefund,
 }: BillingViewProps = {}) {
   const access = useWorkspaceAccess();
+  const refundable = documents?.find(
+    (document) => document.refund?.state === "available",
+  );
   const authenticated = access?.authenticated === true;
   const [cancelAsk, setCancelAsk] = useState(false);
   const purchasesAllowed = usePurchasesAllowed();
@@ -223,6 +233,14 @@ export function BillingView({
                   </button>
                 )
               ) : null}
+              {onRefund && refundable ? (
+                <RefundRequest
+                  refund={refundable.refund}
+                  amount={formatMoney(refundable.amount)}
+                  onRequest={onRefund}
+                  className={styles.ghost}
+                />
+              ) : null}
             </div>
           </section>
 
@@ -256,7 +274,7 @@ export function BillingView({
                     ? `${count(minutes(allowance.committedSeconds))} min used or reserved by analyses.`
                     : allowance
                       ? allowance.allowanceSeconds > 0
-                        ? `of ${count(minutes(allowance.allowanceSeconds))} monthly allowance`
+                        ? `of ${count(minutes(allowance.allowanceSeconds))} min in total (plan, trial and top-ups)`
                         : "available analysis time"
                       : ""}
                 </span>
@@ -339,11 +357,15 @@ export function BillingView({
                     <tbody>
                       {documents.map((document) => (
                         <tr key={document.id}>
-                          <td>{day(document.createdAt)}</td>
-                          <td>{document.description}</td>
-                          <td>{formatMoney(document.amount)}</td>
-                          <td>{document.status}</td>
-                          <td>
+                          <td data-label="Date">{day(document.createdAt)}</td>
+                          <td data-label="Description">
+                            {document.description}
+                          </td>
+                          <td data-label="Amount">
+                            {formatMoney(document.amount)}
+                          </td>
+                          <td data-label="Status">{document.status}</td>
+                          <td data-label="Documents">
                             {document.invoiceHref ? (
                               <a
                                 href={document.invoiceHref}
@@ -363,6 +385,17 @@ export function BillingView({
                               >
                                 Receipt
                               </a>
+                            ) : null}
+                            {onRefund && document.refund ? (
+                              <>
+                                {" · "}
+                                <RefundRequest
+                                  refund={document.refund}
+                                  amount={formatMoney(document.amount)}
+                                  onRequest={onRefund}
+                                  className={styles.ghost}
+                                />
+                              </>
                             ) : null}
                           </td>
                         </tr>

@@ -17,9 +17,11 @@ import {
   parseOfflinePayment,
   parseOrder,
   parsePlans,
+  parseRefund,
   parseSubscriptions,
   parseUsage,
   type Order,
+  type Refund,
   type Subscription,
 } from "../../billing/contract";
 
@@ -131,7 +133,16 @@ export function fixtureProviderReports(
       gst_minor: number;
       total_minor: number;
     };
+    const refund = {
+      payment_id: `pay_${orderId}`,
+      refundable_until: new Date(
+        Date.now() + 7 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+      state: "available",
+      reason_code: null,
+    };
     (store.invoices ??= []).unshift({
+      refund: { ...refund },
       invoice_id: orderId,
       number: `FIXTURE-${(store.invoices?.length ?? 0) + 1}`,
       created_at: order.paid_at,
@@ -143,14 +154,7 @@ export function fixtureProviderReports(
       total_minor: tax.total_minor,
       place_of_supply: store.buyers?.[orderId]?.gstin?.slice(0, 2) ?? null,
     });
-    order.refund = {
-      payment_id: `pay_${orderId}`,
-      refundable_until: new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000,
-      ).toISOString(),
-      state: "available",
-      reason_code: null,
-    };
+    order.refund = { ...refund };
     const minutes = Number(order.minutes);
     store.minutesLeft += minutes;
     store.minutesTotal += minutes;
@@ -462,5 +466,47 @@ export const fixtureBilling: BillingClient = {
     item.cancel_state = "confirmed";
     write(store);
     return parseSubscriptions({ current: item, past: [] }).current!;
+  },
+  async requestRefund(paymentId): Promise<Refund> {
+    await wait();
+    const store = read();
+    const order = Object.values(store.orders).find(
+      (entry) =>
+        (entry.refund as { payment_id?: string } | null)?.payment_id ===
+        paymentId,
+    );
+    if (!order)
+      throw new BillingError(
+        404,
+        "payment_not_found",
+        "That payment does not exist.",
+      );
+    const refund = order.refund as Record<string, unknown>;
+    if (refund.state !== "available")
+      throw new BillingError(
+        409,
+        "refund_unavailable",
+        "This payment can no longer be refunded.",
+      );
+    const minutes = Number(order.minutes);
+    if (store.minutesLeft < minutes)
+      throw new BillingError(
+        409,
+        "payment_used",
+        "Minutes from this payment were already used, so it cannot be refunded.",
+      );
+    refund.state = "refunded";
+    store.minutesLeft -= minutes;
+    store.minutesTotal -= minutes;
+    for (const invoice of store.invoices ?? [])
+      if (invoice.invoice_id === order.order_id) invoice.refund = { ...refund };
+    if (order.kind === "subscription")
+      store.subscriptions = store.subscriptions.map((item) =>
+        item.subscription_id === String(order.subscription_id)
+          ? { ...item, status: "ended" }
+          : item,
+      );
+    write(store);
+    return parseRefund(refund)!;
   },
 };
