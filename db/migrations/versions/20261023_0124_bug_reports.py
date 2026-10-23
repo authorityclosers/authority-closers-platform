@@ -10,7 +10,9 @@
   (new, triaged, in progress, fixed, verified, closed), severity, area, team notes and the
   work-board card it raised. A report's state now is the newest value of each.
 
-Rollback: forward-only (the restore-drill policy); reports are history.
+Rollback: like 0123 and 0125, only while there are no reports (the schema gate rehearses
+upgrade, downgrade and re-upgrade on an empty database); once any report exists, reports
+are history and recovery is forward.
 
 Chain: after 20261023_0123 (gold assignment modes).
 """
@@ -134,4 +136,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError("Bug reports are forward-only: a later migration changes them.")
+    # Fence inserts before the history check, then remove only empty tables.
+    op.execute(sa.text("LOCK TABLE bug_reports, bug_report_events IN ACCESS EXCLUSIVE MODE"))
+    reports = sa.table("bug_reports", sa.column("id"))
+    if op.get_bind().scalar(sa.select(sa.exists().where(reports.c.id.is_not(None)))):
+        raise RuntimeError("Bug report history requires forward recovery.")
+    op.drop_table("bug_report_events")
+    op.drop_table("bug_reports")

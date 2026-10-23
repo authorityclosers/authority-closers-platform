@@ -1,6 +1,6 @@
 """Bug reports on PostgreSQL (owner, 23 Oct 2026: "bug catcher for everyone").
 
-Migration 0124 passes the schema gate and is forward-only; a tester's report arrives
+Migration 0124 passes the schema gate and rolls back only without reports; a tester's report arrives
 scrubbed with its picture re-encoded; a retry finds the first report; the team lists,
 filters, opens and moves reports through an append-only history, audited; the work-board
 module lists reports without a card and records exactly one card each. Disposable loopback
@@ -13,6 +13,7 @@ import base64
 import importlib.util
 import io
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 from uuid import uuid4
 
@@ -61,7 +62,7 @@ def migration() -> Any:
     return module
 
 
-def test_migration_chain_schema_gate_and_forward_only() -> None:
+def test_migration_chain_schema_gate_and_forward_recovery_with_history() -> None:
     from scripts.ci.migration_schema_gate import check_operations
     from scripts.ops.migration_safety import classify_source
 
@@ -69,7 +70,11 @@ def test_migration_chain_schema_gate_and_forward_only() -> None:
     assert (module.revision, module.down_revision) == (REVISION, DOWN)
     path = Path(module.__file__)
     check_operations([classify_source(path.read_text(), str(path))], set())
-    with pytest.raises(RuntimeError, match="forward-only"):
+    module.op = SimpleNamespace(
+        execute=lambda statement: None,
+        get_bind=lambda: SimpleNamespace(scalar=lambda statement: True),
+    )
+    with pytest.raises(RuntimeError, match="history requires forward recovery"):
         module.downgrade()
 
 
