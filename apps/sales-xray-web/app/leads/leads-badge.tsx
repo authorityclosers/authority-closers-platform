@@ -14,8 +14,8 @@ import { PhoneCall } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
 import { useUnreadChats } from "../chats/chats-badge";
-import { readBadge, type Badge } from "./leads-client";
-import styles from "./leads.module.css";
+import { readBadge, type Badge } from "./badge-client";
+import styles from "./leads-badge.module.css";
 
 const EVERY_MS = 2 * 60 * 1000;
 const AGAIN_MS = 20 * 1000;

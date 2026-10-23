@@ -104,7 +104,7 @@ export type Desk = {
   call_back?: LeadRow[];
 };
 
-export type Badge = { overdue: number; to_call: number };
+export type { Badge } from "./badge-client";
 
 export type LeadEvent = {
   kind:
@@ -693,17 +693,7 @@ export function logMessage(
   );
 }
 
-export async function readBadge(signal?: AbortSignal): Promise<Badge | null> {
-  try {
-    const badge = await request<Partial<Badge>>("/badge", { signal });
-    return typeof badge.overdue === "number" &&
-      typeof badge.to_call === "number"
-      ? { overdue: badge.overdue, to_call: badge.to_call }
-      : null;
-  } catch {
-    return null;
-  }
-}
+export { readBadge } from "./badge-client";
 
 export type PushConfig = {
   enabled: boolean;

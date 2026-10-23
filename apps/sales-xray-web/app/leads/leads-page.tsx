@@ -50,13 +50,7 @@ import { leavingOverlay } from "../ui/back-close";
 import { Badge, Button, Empty, PageHeader, SkeletonRow } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { requestWorkspace } from "../call-ownership";
-import {
-  AddLeadDialog,
-  AddLeadsMenu,
-  ContactsDialog,
-  ImportDialog,
-  type AddWay,
-} from "./capture-dialogs";
+import type { AddWay } from "./capture-dialogs";
 import { AlertsCard } from "./alerts-card";
 import { PhoneLogCard } from "./phone-log-card";
 import { PhoneSetupBar } from "./phone-setup";
@@ -199,6 +193,26 @@ const JourneyTab = dynamic(
 const SourcesView = dynamic(
   () => import("./sources-view").then((module) => module.SourcesView),
   { ssr: false, loading: ViewLoading },
+);
+
+// The Add leads menu and its dialogs (type one in, contacts, import) open on a
+// tap; the shell loads its own Add lead the same way (3030e47d).
+const loadCapture = () => import("./capture-dialogs");
+const AddLeadsMenu = dynamic(
+  () => loadCapture().then((module) => module.AddLeadsMenu),
+  { ssr: false },
+);
+const AddLeadDialog = dynamic(
+  () => loadCapture().then((module) => module.AddLeadDialog),
+  { ssr: false },
+);
+const ContactsDialog = dynamic(
+  () => loadCapture().then((module) => module.ContactsDialog),
+  { ssr: false },
+);
+const ImportDialog = dynamic(
+  () => loadCapture().then((module) => module.ImportDialog),
+  { ssr: false },
 );
 
 /** A view still loading: its rows' outline, where they will be. */
