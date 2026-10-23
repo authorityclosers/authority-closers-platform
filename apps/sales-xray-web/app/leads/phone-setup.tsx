@@ -294,8 +294,7 @@ export function PhoneSetupSheet({
         return run(key, () => askCallAccess().catch(() => false));
       case "recordings":
         // Android's All files access screen opens; the line ticks when the seller comes back.
-        if (needsAllFiles(status))
-          return run(key, () => setupOpen("allFiles"));
+        if (needsAllFiles(status)) return run(key, () => setupOpen("allFiles"));
         // Android's folder picker opens at the recordings; the line ticks once it's picked.
         if (needsFolderPick(status)) return run(key, pickRecordingsFolder);
         return run(key, askRecordingAccess);

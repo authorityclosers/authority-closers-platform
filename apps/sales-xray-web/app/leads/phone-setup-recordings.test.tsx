@@ -149,7 +149,10 @@ it("asks the Play build to pick the recordings folder, which then clears it (S8)
     folderPickSupported: true,
     store: "play",
   })!;
-  expect(play).toMatchObject({ folderPickSupported: true, folderPicked: false });
+  expect(play).toMatchObject({
+    folderPickSupported: true,
+    folderPicked: false,
+  });
   expect(needsAllFiles(play)).toBe(false);
   expect(needsFolderPick(play)).toBe(true);
   expect(lineTodo("recordings", play)).toBe(FOLDER_TODO);
