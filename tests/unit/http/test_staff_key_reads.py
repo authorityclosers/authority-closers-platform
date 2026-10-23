@@ -16,6 +16,8 @@ def test_admin_read_reaches_only_the_content_free_reads() -> None:
         f"/v1/admin/call-data/calls/{CALL}/map",
         "/v1/admin/conversation/review/queue",
         "/v1/admin/conversation/health",
+        "/v1/admin/telemetry/overview",
+        "/v1/admin/telemetry/daily",
     ):
         assert route_scope(routes, "GET", path) == READ_SCOPE
         assert route_scope(routes, "POST", path) is None
@@ -33,6 +35,7 @@ def test_call_content_and_browser_only_areas_stay_out_of_reach() -> None:
         "/v1/admin/call-data/calls/not-an-id/map",
         "/v1/admin/staff-keys",
         "/v1/admin/billing/plans",
+        "/v1/admin/telemetry/daily/extra",
     ):
         assert route_scope(routes, "GET", path) is None, path
     # Settings keep their own scopes.

@@ -175,6 +175,13 @@ export const NAVIGATION: readonly NavGroup[] = [
         need: { kind: "salesXray" },
       },
       {
+        // Owner, 24 Oct 2026: performance and usage telemetry.
+        href: "/telemetry",
+        label: "Product telemetry",
+        icon: "usage",
+        need: { kind: "salesXray" },
+      },
+      {
         href: "/ai-spend",
         label: "AI spend",
         icon: "providers",

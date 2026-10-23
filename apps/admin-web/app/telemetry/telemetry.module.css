@@ -1,0 +1,223 @@
+/* Product telemetry: dense tables on computers, cards and stacked rows on phones. */
+.muted,
+.line,
+.label {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.line {
+  margin: 10px 0 0;
+}
+
+.heading {
+  margin: 16px 0 6px;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.slow {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.slow[data-tone="good"],
+.vital strong[data-tone="good"] {
+  color: var(--sx-good);
+}
+
+.slow[data-tone="warn"],
+.vital strong[data-tone="warn"] {
+  color: var(--sx-warn);
+}
+
+.slow[data-tone="bad"],
+.vital strong[data-tone="bad"] {
+  color: var(--sx-bad);
+}
+
+.vitals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+}
+
+.vital {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 12px;
+  min-width: 0;
+}
+
+.vital strong {
+  font-size: var(--sx-text-kpi, 28px);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+/* The heatmap scrolls sideways on its own; the page never does. */
+.heatWrap {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.heat {
+  border-collapse: separate;
+  border-spacing: 2px;
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.heat th,
+.heat td {
+  padding: 4px 6px;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.heat th[scope="row"] {
+  position: sticky;
+  left: 0;
+  background: var(--sx-surface);
+  font-weight: 500;
+}
+
+.heat [data-num] {
+  text-align: right;
+}
+
+.bucket {
+  color: var(--sx-muted);
+  font-weight: 400;
+  min-width: 18px;
+}
+
+.cell {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 4px;
+  background: var(--sx-sunken);
+}
+
+.cell[data-level="1"] {
+  background: color-mix(in srgb, var(--sx-accent) 22%, var(--sx-sunken));
+}
+
+.cell[data-level="2"] {
+  background: color-mix(in srgb, var(--sx-accent) 45%, var(--sx-sunken));
+}
+
+.cell[data-level="3"] {
+  background: color-mix(in srgb, var(--sx-accent) 70%, var(--sx-sunken));
+}
+
+.cell[data-level="4"] {
+  background: var(--sx-accent);
+}
+
+.visuallyHidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.flows {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--sx-text-sm);
+}
+
+.funnels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 16px;
+}
+
+.funnel ol,
+.bars {
+  display: grid;
+  gap: 8px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.funnel li,
+.bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(60px, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  font-size: var(--sx-text-sm);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.num small {
+  color: var(--sx-muted);
+}
+
+.plain {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.mix {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+}
+
+.mix div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.mix dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.mix dd {
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 599px) {
+  .funnel li,
+  .bars li {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .funnel li > :nth-child(2),
+  .bars li > :nth-child(2) {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+
+  .mix div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+}
