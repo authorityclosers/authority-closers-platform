@@ -367,7 +367,45 @@ const FALLBACK: Record<number, string> = {
   422: "Check the details and try again.",
 };
 
+/**
+ * Lead details read ahead (app speed, 23 Oct 2026): the leads a seller is
+ * most likely to open next are read once the desk loads, so their sheet opens
+ * on its details instead of an outline. An answer is kept AHEAD_MS for the
+ * identity that read it and taken once; any write drops them all, so a sheet
+ * never shows a lead as it was before a change.
+ */
+export const AHEAD_MS = 60_000;
+const AHEAD_MOST = 12;
+const ahead = new Map<string, { at: number; p: Promise<LeadDetail | null> }>();
+let aheadScope: string | null = null;
+
+/** Whose reads these are (person, session, workspace); a change drops them. */
+export function setAheadScope(scope: string | null) {
+  if (scope !== aheadScope) ahead.clear();
+  aheadScope = scope;
+}
+
+/** Start reading a lead's details now, for its sheet to take when it opens. */
+export function readLeadAhead(leadId: string) {
+  if (!aheadScope) return;
+  const known = ahead.get(leadId);
+  if (known && Date.now() - known.at <= AHEAD_MS) return;
+  while (ahead.size >= AHEAD_MOST) {
+    const oldest = ahead.keys().next().value;
+    if (oldest === undefined) break;
+    ahead.delete(oldest);
+  }
+  ahead.set(leadId, {
+    at: Date.now(),
+    p: request<LeadDetail>(`/leads/${encodeURIComponent(leadId)}`).catch(
+      () => null,
+    ),
+  });
+}
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // A write may change any lead: nothing read ahead is shown after it.
+  if ((init.method ?? "GET").toUpperCase() !== "GET") ahead.clear();
   let response: Response;
   try {
     // A read the Leads tab press already started (early-reads.ts) is
@@ -445,6 +483,24 @@ export function deskSections(
     { key: "now" as const, title: "Call now", rows: now },
     { key: "later" as const, title: "Later today", rows: later },
   ].filter((section) => section.rows.length);
+}
+
+/**
+ * The leads a seller is most likely to open next, in the desk's order: those
+ * waiting for a call back, then overdue, then due now (never Later today).
+ */
+export function likelyNext(
+  desk: Pick<Desk, "queue" | "call_back">,
+  count = 3,
+): string[] {
+  const callBack = desk.call_back ?? [];
+  const ids = [
+    ...callBack,
+    ...deskSections(desk.queue, callBack)
+      .filter((section) => section.key !== "later")
+      .flatMap((section) => section.rows),
+  ].map((row) => row.lead_id);
+  return [...new Set(ids)].slice(0, count);
 }
 
 function isDesk(value: unknown): value is Desk {
@@ -541,8 +597,16 @@ export function deleteLeads(leadIds: string[], command = commandId()) {
 }
 
 export function readLead(leadId: string, signal?: AbortSignal) {
-  return request<LeadDetail>(`/leads/${encodeURIComponent(leadId)}`, {
-    signal,
+  const path = `/leads/${encodeURIComponent(leadId)}`;
+  const known = ahead.get(leadId);
+  ahead.delete(leadId);
+  if (!known || Date.now() - known.at > AHEAD_MS)
+    return request<LeadDetail>(path, { signal });
+  // Read ahead: taken as it lands (or read now, if that read failed).
+  return known.p.then((detail) => {
+    if (signal?.aborted)
+      throw new DOMException("The read was cancelled.", "AbortError");
+    return detail ?? request<LeadDetail>(path, { signal });
   });
 }
 

@@ -51,6 +51,7 @@ import { Badge, Button, Empty, PageHeader, SkeletonRow } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { requestWorkspace } from "../call-ownership";
 import { identityOf } from "../calls-cache";
+import { savingData } from "../shell/route-prefetch";
 import type { AddWay } from "./capture-dialogs";
 import { AlertsCard } from "./alerts-card";
 import { PhoneLogCard } from "./phone-log-card";
@@ -88,6 +89,9 @@ import {
   type Desk,
   type LeadRow,
   type PickedContact,
+  likelyNext,
+  readLeadAhead,
+  setAheadScope,
 } from "./leads-client";
 import { MessageSetup } from "./message-sheet";
 import { forgetUnknown, onPhoneSignal } from "./native-phone";
@@ -283,6 +287,7 @@ export function LeadsRoute() {
   // never ring a lead (Redmi audit #13, 22 Oct 2026).
   const [dialling, setDialling] = useState<LeadRow | null>(null);
   const waiters = useRef<(() => void)[]>([]);
+  const readAhead = useRef(false);
   const lastRead = useRef(0);
   const [calling, setCalling] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -438,6 +443,13 @@ export function LeadsRoute() {
         setDesk(next);
         setDeskKey(contextKey);
         rememberDesk(identity, toCallPipeline, next);
+        // Once a visit: the next few leads' details, so their sheet opens
+        // on them (leads-client.ts readLeadAhead).
+        if (!readAhead.current && !savingData()) {
+          readAhead.current = true;
+          setAheadScope(identity);
+          likelyNext(next).forEach(readLeadAhead);
+        }
         setError(null);
         // The app's badge counts the whole day, never one pipeline's.
         if (!toCallPipeline)
