@@ -62,9 +62,51 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
-  document.querySelectorAll("dialog").forEach((dialog) => dialog.remove());
+  document
+    .querySelectorAll("dialog, main")
+    .forEach((element) => element.remove());
   vi.unstubAllGlobals();
+  vi.useRealTimers();
+  window.history.replaceState(null, "", "/");
 });
+
+/** Each test with a fake clock starts a day after the last, so no earlier touch counts. */
+let clock = Date.UTC(2026, 9, 24, 10);
+function fakeClock() {
+  clock += 86_400_000;
+  vi.useFakeTimers({ now: clock });
+}
+
+/** Fake time passing (the host waits in steps of half a second). */
+const advance = (ms: number) =>
+  act(async () => {
+    await vi.advanceTimersByTimeAsync(ms);
+  });
+
+function boxAt(
+  left: number,
+  top: number,
+  right: number,
+  bottom: number,
+): DOMRect {
+  return {
+    x: left,
+    y: top,
+    left,
+    top,
+    right,
+    bottom,
+    width: right - left,
+    height: bottom - top,
+    toJSON: () => ({}),
+  };
+}
+
+/** The card's place on a 390 x 844 phone: above the tab bar, full width less 12 px. */
+function placeStack() {
+  const stack = host.querySelector<HTMLElement>("[data-feedback-stack]")!;
+  stack.getBoundingClientRect = () => boxAt(12, 750, 378, 750);
+}
 
 function button(label: string): HTMLButtonElement {
   const found = [...host.querySelectorAll("button")].find(
@@ -170,21 +212,78 @@ it("Not now and Don't ask again are answers too", async () => {
 });
 
 it("asks only when nothing is in the way, and only as often as the rules allow", async () => {
+  fakeClock();
   await act(async () => root.render(<FeedbackHost />));
   // A sheet is open: the question waits.
   const sheet = document.createElement("dialog");
   document.body.append(sheet);
   sheet.setAttribute("open", "");
   await act(async () => askFeedback("call_outcome"));
-  await pause(1600);
+  await advance(9000);
   expect(host.textContent).not.toContain("How easy was logging that call?");
   sheet.remove();
-  await pause(1300);
+  await advance(1000);
   expect(host.textContent).toContain("How easy was logging that call?");
   await act(async () => button("Not now").click());
-  await pause(20);
+  await advance(50);
   // Once today is the most: a second moment is not asked.
   await act(async () => askFeedback("chats_used"));
-  await pause(1500);
+  await advance(10_000);
   expect(host.textContent).not.toContain("How are Chats working for you?");
+});
+
+it("never asks at once: waits until the result has been seen and left for a few seconds", async () => {
+  fakeClock();
+  await act(async () => root.render(<FeedbackHost />));
+  await act(async () => askFeedback("plan_purchase"));
+  await advance(3000);
+  expect(host.textContent).not.toContain("How was buying your plan?");
+  // A touch starts the wait again.
+  await act(async () => document.body.dispatchEvent(new Event("pointerdown")));
+  await advance(5000);
+  expect(host.textContent).not.toContain("How was buying your plan?");
+  await advance(1500);
+  expect(host.textContent).toContain("How was buying your plan?");
+});
+
+it("never covers a button: waits on Payment confirmed, then asks on the next screen", async () => {
+  fakeClock();
+  const page = document.createElement("main");
+  page.id = "main-content";
+  document.body.append(page);
+  window.history.replaceState(null, "", "/plans/return");
+  await act(async () => root.render(<FeedbackHost />));
+  placeStack();
+  // Payment confirmed's actions sit where the card would.
+  const action = document.createElement("a");
+  action.href = "/new-analysis";
+  action.textContent = "Analyse a call";
+  action.getBoundingClientRect = () => boxAt(16, 640, 374, 688);
+  page.append(action);
+  await act(async () => askFeedback("plan_purchase"));
+  await advance(30_000);
+  expect(host.textContent).not.toContain("How was buying your plan?");
+
+  // The person taps through to the next screen; a list's rows there may sit
+  // under the card (they scroll), but a button would still hold it back.
+  await act(async () => document.body.dispatchEvent(new Event("pointerdown")));
+  action.remove();
+  window.history.replaceState(null, "", "/new-analysis");
+  const list = document.createElement("ul");
+  const row = document.createElement("li");
+  const open = document.createElement("button");
+  open.textContent = "Open lead";
+  open.getBoundingClientRect = () => boxAt(16, 660, 374, 720);
+  row.append(open);
+  list.append(row);
+  page.append(list);
+  await advance(1000);
+  expect(host.textContent).not.toContain("How was buying your plan?");
+  await advance(1500);
+  expect(host.textContent).toContain("How was buying your plan?");
+  // The page gets room at its end while the card shows, and loses it after.
+  expect(page.querySelector("[data-feedback-room]")).not.toBeNull();
+  await act(async () => button("Not now").click());
+  await advance(50);
+  expect(page.querySelector("[data-feedback-room]")).toBeNull();
 });

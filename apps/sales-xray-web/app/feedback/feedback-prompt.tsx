@@ -9,14 +9,17 @@
  * again". "Great" says thanks (and, in the phone app after a good moment, may
  * offer the Play Store rating Google allows); "Okay" or "Not good" asks what
  * would make it better, optionally. A "Not good" with words reaches the team's
- * bug list. It appears only when no sheet, dialog or unlogged call is in the
- * way, at most once a day and three times a week (rules.ts), and leaves by
- * itself after a while.
+ * bug list. It appears only once the person has seen the result and moved on
+ * (another screen, or a few seconds without a touch), when no sheet, dialog or
+ * unlogged call is in the way and nothing they might tap is where it would sit;
+ * at most once a day and three times a week (rules.ts); and it leaves by itself
+ * after a while.
  */
 
 import { Frown, Meh, Smile, X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 import { retryLater } from "../bug-report/bug-report-client";
 import { commandId } from "../bug-report/command-id";
@@ -60,7 +63,6 @@ const REVIEW_MOMENTS: readonly Moment[] = [
   "call_outcome",
   "app_update",
 ];
-const QUIET_WAIT_MS = 120_000;
 const LEAVE_AFTER_MS = 25_000;
 const STATE_TTL_MS = 5 * 60_000;
 
@@ -88,6 +90,78 @@ export function quiet(): boolean {
     !document.querySelector("dialog[open], [aria-modal='true']") &&
     peekPendingCall() === null
   );
+}
+
+/*
+ * When a moment may ask (orchestrator, 23 Oct 2026, Redmi retest: "How was
+ * buying your plan?" came at once over Payment confirmed's buttons): only after
+ * the person has seen the result and moved on, to the next screen once it has
+ * drawn, or by leaving this one untouched for a few seconds. Never over
+ * something they might tap. While the card shows, the page gets room at its
+ * end, so nothing has to stay under it.
+ */
+const SETTLE_MS = 1500;
+const IDLE_MS = 6000;
+const WAIT_MS = 180_000;
+const POLL_MS = 500;
+const CARD_PX = 176;
+const ROOM_PX = 200;
+const INPUTS = [
+  "pointerdown",
+  "keydown",
+  "wheel",
+  "touchstart",
+  "scroll",
+] as const;
+
+let lastInput = 0;
+function noteInput(): void {
+  lastInput = Date.now();
+}
+
+/** Buttons, links and fields; a list's rows and the app's own bars don't count. */
+const ACTIONS =
+  "button, a[href], input:not([type='hidden']), select, textarea, [role='button'], [role='link'], [role='switch'], [role='tab']";
+const NOT_ACTIONS =
+  "nav, header, li, tr, [role='listitem'], [role='row'], [data-feedback-stack]";
+
+export type Area = Readonly<{
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
+}>;
+
+/** Where the card would sit: one card tall, on its stack's line, as wide as the stack. */
+function cardArea(stack: HTMLElement | null): Area | null {
+  if (!stack) return null;
+  const box = stack.getBoundingClientRect();
+  return {
+    top: box.bottom - CARD_PX,
+    bottom: box.bottom,
+    left: box.left,
+    right: box.right,
+  };
+}
+
+/** Something the person might tap is where the card would sit. */
+export function coversAction(area: Area | null): boolean {
+  if (!area || area.right <= area.left) return false;
+  for (const element of document.querySelectorAll<HTMLElement>(ACTIONS)) {
+    if (element.closest(NOT_ACTIONS)) continue;
+    const box = element.getBoundingClientRect();
+    if (box.width === 0 || box.height === 0) continue;
+    if (
+      box.bottom <= area.top ||
+      box.top >= area.bottom ||
+      box.right <= area.left ||
+      box.left >= area.right
+    ) {
+      continue;
+    }
+    return true;
+  }
+  return false;
 }
 
 async function send(request: Record<string, unknown>): Promise<void> {
@@ -313,13 +387,14 @@ function useReportRead(pathname: string | null) {
 }
 
 /**
- * Mounted once in the app frame. Listens for askFeedback(), decides with the
- * rules, waits for a quiet moment and shows the card. Also notices when a
- * call's Report has been read.
+ * Mounted once in the app frame. Listens for askFeedback(), waits until the
+ * person has moved on and nothing is in the way, decides with the rules and
+ * shows the card. Also notices when a call's Report has been read.
  */
 export function FeedbackHost() {
   const pathname = usePathname();
   const [current, setCurrent] = useState<AskDetail | null>(null);
+  const stack = useRef<HTMLDivElement>(null);
   const server = useRef<{ at: number; state: FeedbackState | null }>({
     at: 0,
     state: null,
@@ -327,16 +402,40 @@ export function FeedbackHost() {
   useReportRead(pathname);
 
   useEffect(() => {
+    for (const type of INPUTS) {
+      document.addEventListener(type, noteInput, {
+        capture: true,
+        passive: true,
+      });
+    }
+    return () => {
+      for (const type of INPUTS) {
+        document.removeEventListener(type, noteInput, { capture: true });
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     let waiting: number | null = null;
     let cancelled = false;
     const consider = async (detail: AskDetail) => {
-      // Let the moment finish, then wait until nothing is in the way.
-      const started = Date.now();
-      await new Promise((resolve) => window.setTimeout(resolve, 1200));
-      while (!quiet()) {
-        if (cancelled || Date.now() - started > QUIET_WAIT_MS) return;
+      const askedAt = Date.now();
+      const from = window.location.pathname;
+      let movedAt: number | null = null;
+      for (;;) {
+        if (cancelled) return;
+        const now = Date.now();
+        if (now - askedAt > WAIT_MS) return;
+        if (movedAt === null && window.location.pathname !== from)
+          movedAt = now;
+        const still = now - lastInput;
+        const movedOn =
+          movedAt !== null
+            ? now - movedAt >= SETTLE_MS && still >= SETTLE_MS
+            : now - askedAt >= IDLE_MS && still >= IDLE_MS;
+        if (movedOn && quiet() && !coversAction(cardArea(stack.current))) break;
         await new Promise((resolve) => {
-          waiting = window.setTimeout(resolve, 1000);
+          waiting = window.setTimeout(resolve, POLL_MS);
         });
       }
       if (cancelled) return;
@@ -369,14 +468,27 @@ export function FeedbackHost() {
     };
   }, []);
 
-  if (!current) return null;
+  // While the card shows, room at the page's end, so its last buttons can scroll clear.
+  const page = current ? document.getElementById("main-content") : null;
   return (
-    <div className={styles.stack}>
-      <FeedbackCard
-        key={`${current.moment}:${current.subject ?? ""}`}
-        ask={current}
-        onDone={() => setCurrent(null)}
-      />
+    <div ref={stack} className={styles.stack} data-feedback-stack="">
+      {current ? (
+        <FeedbackCard
+          key={`${current.moment}:${current.subject ?? ""}`}
+          ask={current}
+          onDone={() => setCurrent(null)}
+        />
+      ) : null}
+      {page
+        ? createPortal(
+            <div
+              data-feedback-room=""
+              aria-hidden="true"
+              style={{ height: ROOM_PX }}
+            />,
+            page,
+          )
+        : null}
     </div>
   );
 }
