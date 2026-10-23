@@ -306,6 +306,7 @@
   font: 700 14px/1 var(--lx-font-ui);
   cursor: pointer;
   text-align: center;
+  text-decoration: none;
   transition:
     background-color 140ms ease,
     color 140ms ease,

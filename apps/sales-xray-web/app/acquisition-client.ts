@@ -302,7 +302,7 @@ export class AcquisitionError extends Error {
                   ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
                   : status === 403
                     ? reason === "trial_allowance_insufficient"
-                      ? "This recording is longer than your remaining trial allowance. Contact the AC team for more access."
+                      ? "This recording is longer than your remaining analysis minutes. Get more minutes from Plans, then analyse it; your recording stays private."
                       : reason === "provider_allowance_used"
                         ? "This analysis allowance has been used. Your recording is saved. Contact the AC team for help."
                         : reason === "plan_stale"

@@ -685,3 +685,23 @@ it.each([404, 403, 503])(
     expect(readInvoices).toHaveBeenCalledTimes(2);
   },
 );
+
+it("offers Talk to us for Enterprise until it is on sale, with no seat stepper or price", async () => {
+  const plans = PLANS_CATALOGUE_FIXTURE.map((plan) =>
+    plan.key === "enterprise"
+      ? { ...plan, status: "coming_soon" as const, prices: null }
+      : plan,
+  );
+  await render(<PlansScreen plans={plans} gstRate={PLANS_GST_RATE} />);
+  const card = host.querySelector('[data-plan="enterprise"]')!;
+  const contact = [...card.querySelectorAll("a")].find(
+    (link) => link.textContent?.trim() === "Talk to us",
+  );
+  expect(contact?.getAttribute("href")).toMatch(
+    /^mailto:admin@authorityclosers\.com\?subject=/,
+  );
+  expect(card.textContent).toContain("Custom");
+  expect(card.textContent).not.toContain("Unavailable");
+  expect(card.querySelector('[aria-label="Seats for Enterprise"]')).toBeNull();
+  expect(button("Get Organisation")).toBeTruthy();
+});

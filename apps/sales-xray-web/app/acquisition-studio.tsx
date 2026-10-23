@@ -144,6 +144,7 @@ import {
   type SourcePlaybackRange,
 } from "./source-playback-context";
 import { track } from "./telemetry";
+import { dismissNotice, notify } from "./notice-center";
 import styles from "./acquisition-studio.module.css";
 import { formatAnalysisTime } from "./analysis-time";
 
@@ -459,6 +460,27 @@ export function AcquisitionStudio({
   // the misses in a row for the call on screen.
   const [statusCard, setStatusCard] = useState(false);
   const statusMissRef = useRef({ id: "", count: 0 });
+  // Out of minutes: point a signed-in seller at Plans (a plan or a top-up) instead of a dead end.
+  const minutesOut =
+    access?.authenticated === true &&
+    ((allowance !== null &&
+      !allowance.unlimited &&
+      allowance.available_seconds === 0) ||
+      (error instanceof AcquisitionError &&
+        error.reason === "trial_allowance_insufficient"));
+  useEffect(() => {
+    if (!minutesOut) return;
+    const id = "analysis-minutes-out";
+    notify({
+      id,
+      tone: "info",
+      title: "Get more analysis minutes",
+      message:
+        "Choose a plan or a top-up to analyse more calls. Your recordings stay private.",
+      action: { label: "See plans", run: () => router.push("/plans") },
+    });
+    return () => dismissNotice(id);
+  }, [minutesOut, router]);
   const [moment, setMoment] = useState<SourcePlaybackRange | null>(null);
   const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
   const [playbackMessage, setPlaybackMessage] = useState("");
@@ -3141,6 +3163,11 @@ export function AcquisitionStudio({
                         allowanceUnknown,
                       )}
                     </span>
+                    {minutesOut ? (
+                      <Link className={styles.moreMinutes} href="/plans">
+                        Get more minutes
+                      </Link>
+                    ) : null}
                   </div>
                 )}
                 {displayFileSelected &&
