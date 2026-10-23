@@ -269,3 +269,19 @@ def test_production_always_gets_a_snapshot(tmp_path: Path, monkeypatch: pytest.M
                 "i",
             ]
         )
+
+
+def test_an_empty_target_is_fine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A restore drill imports into a Pulse that has no organisation yet."""
+    empty = {
+        "migrations": ["0949", "0950"],
+        "org_taken": None,
+        "handle_taken": False,
+        "host_taken": None,
+        "account": None,
+        "licence": None,
+        "orgs": None,
+        "columns": {},
+    }
+    monkeypatch.setattr(move, "check_target", lambda *a, **k: (empty, []))
+    assert move.main(["import", "--bundle", str(bundle_dir(tmp_path)), "--print-sql"]) == 0

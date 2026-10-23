@@ -573,7 +573,9 @@ def cmd_import(args: argparse.Namespace) -> int:
         problems.append(f"person {link[1]} is not in the bundle")
     org = m["org"]
     print(f"{org['name']} ({org['code']}, {org['id']}) -> {args.database} via {args.exec}")
-    print(f"  target organisations now: {', '.join(o['handle'] or o['id'] for o in t['orgs'])}")
+    print(
+        f"  target organisations now: {', '.join(o['handle'] or o['id'] for o in t['orgs'] or [])}"
+    )
     print(
         f"  {m['rows']} rows in {len(m['tables'])} tables; passwords {'carried' if m['carry_passwords'] else 'not carried'}"
     )
@@ -625,11 +627,13 @@ def cmd_verify(args: argparse.Namespace) -> int:
     pg = Pg(args.exec, args.db_user, args.database)
     oid = m["org"]["id"]
     expected = {e["table"]: e["rows"] for e in m["tables"]}
-    # The move writes one audit_event of its own (the import's record), on top of the organisation's history.
+    # The import of this bundle writes one audit_event of its own, on top of the organisation's history (which may
+    # already carry the record of an earlier move): count only records of this bundle.
     moves = (
         pg.one_json(
             f"select count(*) from pulse.audit_event where org_id = {lit(oid)} and resource = 'org' "
-            f"and action = 'import' and actor_account like {lit('Data change ' + SCRIPT + '%')};"
+            f"and action = 'import' and actor_account like {lit('Data change ' + SCRIPT + '%')} "
+            f"and changes ->> 'bundle_sha256' = {lit(m['bundle_sha256'])};"
         )
         or 0
     )
