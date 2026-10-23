@@ -37,12 +37,13 @@ def _body(name: str, **extra: Any) -> dict[str, Any]:
 
 async def exercise(case: ReviewCase) -> None:
     ops = case.admin_actor
+    other = uuid4()  # another workspace: none of this offer is its
     offer_id = uuid4()
 
     async def save(base: int | None, body: dict[str, Any], *, tenant=None, archived=False):
         async with case.sessions() as database, database.begin():
             return await OfferStudioStore(database).save(
-                tenant_id=tenant or ops.tenant_id,
+                tenant_id=ops.tenant_id if tenant is None else tenant,
                 person_id=ops.person_id,
                 offer_id=offer_id,
                 base_version=base,
@@ -74,15 +75,15 @@ async def exercise(case: ReviewCase) -> None:
         )
         # Another workspace sees none of it.
         with pytest.raises(ConversationNotFound):
-            await store.history(case.foreign_actor.tenant_id, offer_id)
+            await store.history(other, offer_id)
         with pytest.raises(ConversationNotFound):
-            await store.version(case.foreign_actor.tenant_id, offer_id, 1)
-        foreign = (await store.latest(case.foreign_actor.tenant_id))["offers"]
+            await store.version(other, offer_id, 1)
+        foreign = (await store.latest(other))["offers"]
         assert str(offer_id) not in {o["offer_id"] for o in foreign}
 
     # Nor can it save on top of it.
     with pytest.raises(ConversationNotFound):
-        await save(2, _body("Foreign"), tenant=case.foreign_actor.tenant_id)
+        await save(2, _body("Foreign"), tenant=other)
 
     # Too large: refused before anything is read or written.
     with pytest.raises(OfferTooLarge):
