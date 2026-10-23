@@ -34,6 +34,8 @@ POSTGRES_IMAGE = "postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a
 MAX_DUMP_BYTES = 32 * 1024 * 1024
 MAX_AGE = timedelta(hours=24)
 OPTIONS = "-c lock_timeout=2000 -c statement_timeout=30000"
+# A scratch database in the same disposable server; see Database.canonical_schema.
+CANONICAL_DATABASE = "ac_migration_canonical"
 ALLOWED_OPS = {
     "create_table",
     "drop_table",
@@ -317,19 +319,43 @@ class Database:
             options=OPTIONS,
         )  # noqa: S106 - disposable fictional credential
 
-    def schema(self) -> bytes:
-        return normalized_schema(
+    def schema(self, database: str = "ac_migration_safety") -> bytes:
+        return normalized_schema(self.raw_schema(database))
+
+    def raw_schema(self, database: str = "ac_migration_safety") -> bytes:
+        return self.tool(
+            "pg_dump", "-U", "ac_owner", "-d", database, "--schema-only", "--no-owner", "--no-acl"
+        )
+
+    def canonical_schema(self) -> bytes:
+        """The schema as a dump and restore writes it, so both sides of a comparison match.
+
+        The baseline is restored from staging's pg_dump, and PostgreSQL re-parses CHECK
+        expressions on restore: an IN list on a varchar that a migration creates prints as
+        ``(ARRAY['a'::character varying, ...])::text[]``, and after a restore as
+        ``ARRAY[('a'::character varying)::text, ...]``. Comparing raw dumps refused every
+        downgrade that recreates such a CHECK (v0.86, 0123). Every compared schema now goes
+        through the same dump, restore into a scratch database and dump again.
+        """
+        dump = self.raw_schema()
+        admin = ("psql", "-U", "ac_owner", "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-c")
+        self.tool(*admin, f"DROP DATABASE IF EXISTS {CANONICAL_DATABASE}")
+        self.tool(*admin, f"CREATE DATABASE {CANONICAL_DATABASE}")
+        try:
             self.tool(
-                "pg_dump",
+                "psql",
                 "-U",
                 "ac_owner",
                 "-d",
-                "ac_migration_safety",
-                "--schema-only",
-                "--no-owner",
-                "--no-acl",
+                CANONICAL_DATABASE,
+                "-v",
+                "ON_ERROR_STOP=1",
+                "-q",
+                data=dump,
             )
-        )
+            return self.schema(CANONICAL_DATABASE)
+        finally:
+            self.tool(*admin, f"DROP DATABASE IF EXISTS {CANONICAL_DATABASE}")
 
 
 @contextmanager
@@ -426,7 +452,7 @@ def rehearse(
             connection.execute(
                 sql.SQL("ALTER DATABASE ac_migration_safety SET statement_timeout = '30s'")
             )
-        before = database.schema()
+        before = database.canonical_schema()
         environment = {
             k: v
             for k, v in os.environ.items()
@@ -458,12 +484,12 @@ def rehearse(
                     raise GateError("migration did not reach its exact requested revision")
 
         migrate("upgrade", candidate)
-        upgraded = database.schema()
+        upgraded = database.canonical_schema()
         migrate("downgrade", baseline)
-        if database.schema() != before:
+        if database.canonical_schema() != before:
             raise GateError("downgrade did not restore the baseline schema")
         migrate("upgrade", candidate)
-        if database.schema() != upgraded:
+        if database.canonical_schema() != upgraded:
             raise GateError("re-upgrade did not reproduce the candidate schema")
 
 

@@ -262,6 +262,56 @@ def test_real_upgrade_downgrade_comparison_and_reupgrade(tmp_path, docker_eviden
         gate.rehearse(directory, checksum, BASELINE, [item], CANDIDATE, repo=tmp_path)
 
 
+@pytest.fixture
+def docker_check_evidence(tmp_path):
+    if os.getenv("AC_REQUIRE_SCHEMA_GATE_DOCKER_TEST") != "1":
+        pytest.skip("Docker rehearsal runs in the required migration-safety CI job")
+    with gate.disposable_postgres() as database:
+        with database.connect() as connection:
+            connection.execute("CREATE TABLE alembic_version (version_num varchar(32) PRIMARY KEY)")
+            connection.execute(
+                "CREATE TABLE existing (id integer PRIMARY KEY, mode varchar(16) NOT NULL,"
+                " CONSTRAINT ck_existing_mode CHECK (mode IN ('a', 'b')))"
+            )
+            version = int(connection.execute("SHOW server_version_num").fetchone()[0])
+        data = database.tool(
+            "pg_dump",
+            "-U",
+            "ac_owner",
+            "-d",
+            "ac_migration_safety",
+            "--schema-only",
+            "--no-owner",
+            "--no-acl",
+            "--format=custom",
+        )
+    return evidence(tmp_path, data, postgres_version_num=version)
+
+
+@pytest.mark.parametrize(("restored", "passes"), [("'a', 'b'", True), ("'a', 'x'", False)])
+def test_real_downgrade_recreating_an_in_list_check_compares_as_restored(
+    tmp_path, docker_check_evidence, restored, passes
+):
+    # v0.86 root cause 2: the baseline comes from a restored dump, whose CHECK text a
+    # downgrade's freshly created constraint never matches byte for byte. The gate compares
+    # both sides as a dump and restore writes them; a really different CHECK still fails.
+    widened, recreated = "mode IN ('a', 'b', 'c')", f"mode IN ({restored})"
+    item = migration(
+        tmp_path,
+        "    op.drop_constraint('ck_existing_mode', 'existing')\n"
+        f"    op.create_check_constraint('ck_existing_mode', 'existing', {widened!r})",
+        "op.drop_constraint('ck_existing_mode', 'existing')\n"
+        f"    op.create_check_constraint('ck_existing_mode', 'existing', {recreated!r})",
+    )
+    write_rehearsal_repo(tmp_path)
+    directory, checksum = docker_check_evidence
+    if passes:
+        gate.rehearse(directory, checksum, BASELINE, [item], CANDIDATE, repo=tmp_path)
+    else:
+        with pytest.raises(gate.GateError, match="restore the baseline schema"):
+            gate.rehearse(directory, checksum, BASELINE, [item], CANDIDATE, repo=tmp_path)
+
+
 def test_real_full_backup_rejected_before_restore(tmp_path, docker_evidence):
     directory, _, full_data = docker_evidence
     directory, checksum = evidence(tmp_path, full_data)
