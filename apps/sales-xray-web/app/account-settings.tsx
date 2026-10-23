@@ -279,6 +279,12 @@ export function AccountSettings({
     setAllowance({ state: "loading" });
     setAttempt((value) => value + 1);
   };
+  // Beside Plan & billing, that pane's card already names the analysis time.
+  useReadErrorCard(
+    shows("usage") && !shows("billing"),
+    allowance.state === "error" ? ["your analysis time"] : [],
+    retry,
+  );
 
   const who = profile.state === "ready" ? profile.value : null;
 
@@ -431,7 +437,7 @@ export function AccountSettings({
           onBack={back}
         >
           {shows("usage") ? <CallActivitySummary variant={variant} /> : null}
-          <AllowanceSummary allowance={allowance} onRetry={retry} />
+          <AllowanceSummary allowance={allowance} />
           {purchasesAllowed ? (
             <div className={styles.row}>
               <div className={styles.rowText}>
@@ -1157,13 +1163,44 @@ function ProfileForm({
   );
 }
 
-function AllowanceSummary({
-  allowance,
-  onRetry,
-}: {
-  allowance: Loaded<Allowance>;
-  onRetry: () => void;
-}) {
+const READ_ERROR_NOTICE = "settings-read-error";
+
+/** "a, b and c" */
+function listed(items: readonly string[]): string {
+  return items.length < 2
+    ? (items[0] ?? "")
+    : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/**
+ * Errors are corner cards (owner rule): a failed read raises one card with
+ * one Try again for everything that failed, and the page keeps a quiet
+ * placeholder, never red text or a button per block (QA, 23 Oct 2026).
+ */
+function useReadErrorCard(
+  active: boolean,
+  failed: readonly string[],
+  retry: () => void,
+) {
+  const latest = useRef(retry);
+  useEffect(() => {
+    latest.current = retry;
+  });
+  const what = listed(failed);
+  useEffect(() => {
+    if (!active || !what) return;
+    notify({
+      id: READ_ERROR_NOTICE,
+      tone: "error",
+      title: "Some details didn't load",
+      message: `${what[0].toUpperCase()}${what.slice(1)} couldn't be loaded.`,
+      action: { label: "Try again", run: () => latest.current() },
+    });
+    return () => dismissNotice(READ_ERROR_NOTICE);
+  }, [active, what]);
+}
+
+function AllowanceSummary({ allowance }: { allowance: Loaded<Allowance> }) {
   if (allowance.state === "loading")
     return (
       <p className={styles.muted} role="status" aria-busy="true">
@@ -1171,14 +1208,7 @@ function AllowanceSummary({
       </p>
     );
   if (allowance.state === "error")
-    return (
-      <div className={styles.error} role="alert">
-        <p>Your analysis time is unavailable right now.</p>
-        <button type="button" className={styles.secondary} onClick={onRetry}>
-          <RefreshCw size={15} aria-hidden="true" /> Try again
-        </button>
-      </div>
-    );
+    return <p className={styles.muted}>Analysis time: not loaded.</p>;
   const { allowance_seconds, available_seconds, committed_seconds } =
     allowance.value;
 
@@ -1303,6 +1333,21 @@ export function PlanAndBillingPane({
   const canCancel =
     current && ["active", "past_due", "halted"].includes(current.status);
   const loading = status === "loading";
+  const unread = !loading && status !== "ready";
+  useReadErrorCard(
+    active,
+    [
+      unread ? "your plan details" : null,
+      documents && purchasesAllowed && invoicesStatus === "error"
+        ? "your invoices"
+        : null,
+      allowance.state === "error" ? "your analysis time" : null,
+    ].filter((item): item is string => item !== null),
+    () => {
+      onRefresh?.();
+      onRetry();
+    },
+  );
   useEffect(() => {
     if (!active || status !== "ready" || !error) return;
     const id = "settings-billing-error";
@@ -1326,13 +1371,17 @@ export function PlanAndBillingPane({
           <span
             className={styles.badge}
             data-tone={
-              current?.status === "active" && !isCancelled ? "ok" : "pending"
+              unread
+                ? undefined
+                : current?.status === "active" && !isCancelled
+                  ? "ok"
+                  : "pending"
             }
           >
             {loading
               ? "Loading…"
-              : status !== "ready"
-                ? "Try again"
+              : unread
+                ? "Not loaded"
                 : isCancelled
                   ? "Cancels at period end"
                   : current?.status === "active"
@@ -1361,20 +1410,7 @@ export function PlanAndBillingPane({
             <i />
           </div>
         ) : status !== "ready" ? (
-          <div className={styles.error} role="alert">
-            <p>
-              {error ??
-                "Billing details could not be loaded. Please try again."}
-            </p>
-            <button
-              type="button"
-              className={styles.secondary}
-              disabled={busy || !onRefresh}
-              onClick={onRefresh}
-            >
-              <RefreshCw size={15} aria-hidden="true" /> Reload billing details
-            </button>
-          </div>
+          <p className={styles.muted}>Billing details: not loaded.</p>
         ) : (
           <dl className={styles.facts}>
             <div className={styles.row}>
@@ -1510,7 +1546,7 @@ export function PlanAndBillingPane({
             Analyse a call
           </Link>
         </div>
-        <AllowanceSummary allowance={allowance} onRetry={onRetry} />
+        <AllowanceSummary allowance={allowance} />
       </div>
 
       {purchasesAllowed ? (
@@ -1572,19 +1608,7 @@ export function PlanAndBillingPane({
               Loading invoices…
             </p>
           ) : invoicesStatus !== "ready" ? (
-            <div className={styles.error} role="alert">
-              <p>
-                Invoices and receipts could not be loaded. Please try again.
-              </p>
-              <button
-                type="button"
-                className={styles.secondary}
-                disabled={busy || !onRefresh}
-                onClick={onRefresh}
-              >
-                <RefreshCw size={15} aria-hidden="true" /> Reload invoices
-              </button>
-            </div>
+            <p className={styles.muted}>Invoices and receipts: not loaded.</p>
           ) : documents.length === 0 ? (
             <p className={styles.muted}>No invoices or receipts yet.</p>
           ) : (

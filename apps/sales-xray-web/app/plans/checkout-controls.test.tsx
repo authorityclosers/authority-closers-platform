@@ -18,6 +18,7 @@ import {
 } from "../review-fixture/plans/fixture-billing";
 import { WorkspaceAccessContext } from "../workspace-access";
 import { openHostedCheckout } from "./hosted-checkout";
+import { notify } from "../notice-center";
 import { PlansPurchase } from "./plans-purchase";
 
 const push = vi.fn();
@@ -459,8 +460,12 @@ it("Settings keeps a paid subscription usable when only invoice reads fail", asy
     await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
   expect(button("Cancel renewal").disabled).toBe(false);
   expect(host.textContent).toContain("Personal");
-  expect(host.textContent).toContain(
-    "Invoices and receipts could not be loaded",
+  expect(host.textContent).toContain("Invoices and receipts: not loaded.");
+  expect(vi.mocked(notify)).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "settings-read-error",
+      message: expect.stringContaining("your invoices"),
+    }),
   );
   expect(host.textContent).not.toContain("No invoices or receipts yet");
 });
@@ -508,7 +513,7 @@ it("Settings treats subscription and invoice 404 as billing-off when canonical r
     />,
   );
   await click("Plan & billing");
-  expect(host.textContent).not.toContain("Billing details could not be loaded");
+  expect(host.textContent).not.toContain("Billing details: not loaded");
   expect(host.textContent).toContain("Choose a plan");
   expect(host.textContent).not.toContain("Cancel renewal");
 });
@@ -525,8 +530,14 @@ it("Settings retains error state when canonical plan or usage reads return 404",
     />,
   );
   await click("Plan & billing");
-  expect(host.textContent).toContain("Billing details could not be loaded");
-  expect(button("Try again")).toBeDefined();
+  expect(host.textContent).toContain("Billing details: not loaded.");
+  expect(vi.mocked(notify)).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "settings-read-error",
+      message: expect.stringContaining("your plan details"),
+      action: expect.objectContaining({ label: "Try again" }),
+    }),
+  );
 });
 
 it("Settings retains error state on subscription 5xx server failure", async () => {
@@ -541,6 +552,12 @@ it("Settings retains error state on subscription 5xx server failure", async () =
     />,
   );
   await click("Plan & billing");
-  expect(host.textContent).toContain("Billing details could not be loaded");
-  expect(button("Try again")).toBeDefined();
+  expect(host.textContent).toContain("Billing details: not loaded.");
+  expect(vi.mocked(notify)).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "settings-read-error",
+      message: expect.stringContaining("your plan details"),
+      action: expect.objectContaining({ label: "Try again" }),
+    }),
+  );
 });

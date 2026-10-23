@@ -15,6 +15,7 @@ vi.mock("./profile-menu", () => ({
 }));
 
 import { AccountView } from "./account-view";
+import { NoticeCenter } from "./notice-center";
 import { UploadSessionProvider } from "./hooks/upload-session";
 import { WorkspaceAccessProvider } from "./workspace-access";
 
@@ -81,6 +82,7 @@ async function renderAccount(authenticated = true) {
           }}
         >
           <AccountView />
+          <NoticeCenter />
         </WorkspaceAccessProvider>
       </UploadSessionProvider>,
     ),
@@ -118,6 +120,12 @@ function billingReads() {
     "GET /v1/invoices": () => json({ invoices: [], next_before: null }),
   };
 }
+
+/** The corner card's Try again buttons (never one per block). */
+const tryAgain = () =>
+  [...host.querySelectorAll<HTMLButtonElement>("button")].filter(
+    (button) => button.textContent?.trim() === "Try again",
+  );
 
 async function openBilling() {
   await renderAccount();
@@ -170,18 +178,19 @@ it("keeps billing failures distinct from an empty account and retries the live r
       failed ? json({}, 503) : reads["GET /v1/me/plan"](),
   });
   const pane = await openBilling();
-  expect(pane.querySelector('[role="alert"]')?.textContent).toContain(
-    "Billing details could not be loaded",
-  );
+  // Errors are corner cards (owner rule): a quiet placeholder in the page,
+  // one card with one Try again in the corner.
+  expect(pane.textContent).toContain("Billing details: not loaded.");
+  expect(pane.querySelector('[role="alert"]')).toBeNull();
   expect(pane.textContent).not.toContain("No subscription yet.");
   expect(pane.textContent).not.toMatch(/Billing (is )?unavailable|Unavailable/);
-  const retry = [...pane.querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent?.includes("Reload billing details"),
-  )!;
+  expect(host.textContent).toContain("Some details didn't load");
+  const retries = tryAgain();
+  expect(retries).toHaveLength(1);
   failed = false;
-  await act(async () => retry.click());
+  await act(async () => retries[0].click());
   await flush();
-  expect(pane.querySelector('[role="alert"]')).toBeNull();
+  expect(host.textContent).not.toContain("Some details didn't load");
   expect(pane.textContent).toContain("No subscription yet.");
   expect(calls.filter(({ path }) => path === "/v1/me/plan")).toHaveLength(2);
   expect(calls.every(({ init }) => (init.method ?? "GET") === "GET")).toBe(
@@ -226,15 +235,13 @@ it("retries failed invoice reads without changing billing state", async () => {
     );
   });
   const pane = await openBilling();
-  expect(pane.querySelector('[role="alert"]')?.textContent).toContain(
-    "Invoices and receipts could not be loaded",
-  );
+  expect(pane.textContent).toContain("Invoices and receipts: not loaded.");
+  expect(pane.querySelector('[role="alert"]')).toBeNull();
   expect(pane.textContent).toContain("No subscription yet.");
   expect(pane.textContent).not.toContain("No invoices or receipts yet.");
-  const retry = [...pane.querySelectorAll<HTMLButtonElement>("button")].find(
-    (button) => button.textContent?.includes("Reload invoices"),
-  )!;
-  await act(async () => retry.click());
+  const retries = tryAgain();
+  expect(retries).toHaveLength(1);
+  await act(async () => retries[0].click());
   await flush();
   expect(pane.querySelector('[role="alert"]')).toBeNull();
   expect(pane.textContent).toContain("Loading invoices…");
@@ -337,9 +344,8 @@ it("keeps the profile readable when the allowance read fails", async () => {
   });
   await renderAccount();
   expect(host.textContent).toContain("Asha Rao");
-  expect(host.textContent).toContain(
-    "Your analysis time is unavailable right now.",
-  );
+  expect(host.textContent).toContain("Analysis time: not loaded.");
+  expect(host.querySelector('[role="alert"]')).toBeNull();
   expect(host.querySelector("[data-allowance]")).toBeNull();
 });
 
