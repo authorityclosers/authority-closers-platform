@@ -164,23 +164,35 @@ def test_build_alignment_accepts_current_scribe_shape_and_is_deterministic() -> 
     assert "No emotion" in first["limitations"][1]
 
 
-def test_build_alignment_accepts_hosted_audioatlas_one_hour_ceiling() -> None:
-    signal = _signal(duration_ms=3_600_000)
+def test_build_alignment_accepts_hosted_audioatlas_two_hour_ceiling() -> None:
+    signal = _signal(duration_ms=7_200_000)
     transcript = _transcript(
         _segment("s1", 0, 200),
         timebase_id="decoded_audio_track",
-        duration_ms=3_600_000,
+        duration_ms=7_200_000,
     )
 
     alignment = build_alignment(signal, transcript)
 
-    assert alignment["duration_ms"] == 3_600_000
-    assert signal["acoustics"]["sample_count"] == 57_600_000
+    assert alignment["duration_ms"] == 7_200_000
+    assert signal["acoustics"]["sample_count"] == 115_200_000
     assert alignment["measurement_parent"]["feature_sha256"] == "b" * 64
 
 
-def test_build_alignment_rejects_audioatlas_beyond_one_hour() -> None:
-    signal = _signal(duration_ms=3_600_001)
+def test_build_alignment_takes_two_thousand_segments_an_hour() -> None:
+    signal = _signal(duration_ms=7_200_000)
+    segments = [_segment(f"s{i}", i * 1_000, i * 1_000 + 500) for i in range(4_000)]
+    transcript = _transcript(*segments, duration_ms=7_200_000)
+
+    assert len(build_alignment(signal, transcript)["segments"]) == 4_000
+
+    over = _transcript(*segments, _segment("s4000", 4_000_000, 4_000_500), duration_ms=7_200_000)
+    with pytest.raises(AlignmentError, match="^alignment_segments_invalid$"):
+        build_alignment(signal, over)
+
+
+def test_build_alignment_rejects_audioatlas_beyond_two_hours() -> None:
+    signal = _signal(duration_ms=7_200_001)
     transcript = _transcript(_segment("s1", 0, 200))
 
     with pytest.raises(AlignmentError, match="^alignment_acoustics_duration_invalid$"):

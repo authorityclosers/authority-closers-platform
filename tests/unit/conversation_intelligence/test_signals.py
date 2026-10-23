@@ -426,9 +426,7 @@ def test_exact_two_hour_probe_padding_and_decoded_plus_010_seconds_bound() -> No
 
 
 @pytest.mark.parametrize("function", [signals.inspect_media, signals.validate_media])
-def test_duration_limit_above_the_two_hour_window_is_refused(
-    tmp_path: Path, function: Any
-) -> None:
+def test_duration_limit_above_the_two_hour_window_is_refused(tmp_path: Path, function: Any) -> None:
     source = tmp_path / "source.media"
     source.write_bytes(b"synthetic source")
     with pytest.raises(signals.SignalError, match="^signal_invalid_duration_limit$"):

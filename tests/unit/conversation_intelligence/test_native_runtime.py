@@ -260,7 +260,9 @@ def test_two_hour_stereo_workspace_bound_requires_the_1536m_tmpfs(tmp_path: Path
     assert "--memory=2g" in command
     assert "--memory-swap=2g" in command
     assert "fsize=1073741824:1073741824" in command
-    assert "--tmpfs=/work:rw,noexec,nosuid,nodev,size=1536m,uid=10001,gid=10001,mode=0700" in command
+    assert (
+        "--tmpfs=/work:rw,noexec,nosuid,nodev,size=1536m,uid=10001,gid=10001,mode=0700" in command
+    )
     program = command[-1]
     assert '(cgroup / "memory.max").read_text()) <= 2147483648' in program
     assert '("/work", 1610612736)' in program

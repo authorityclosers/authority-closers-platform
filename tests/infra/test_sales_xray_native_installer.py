@@ -15,6 +15,13 @@ import pytest
 ROOT = Path(__file__).parents[2]
 SCRIPT = ROOT / "infra" / "application" / "scripts" / "install-sales-xray-native.py"
 RENDERER = ROOT / "infra" / "application" / "scripts" / "render-sales-xray-native.py"
+# The one-hour renderer (64 MiB output, 800 s stop) that rendered the exact development
+# predecessor; the checked-in renderer is the 120-minute one (23 Oct 2026).
+ONE_HOUR_RENDERER = (
+    RENDERER.read_bytes()
+    .replace(b"Options=size=128m,", b"Options=size=64m,")
+    .replace(b"TimeoutStopSec=1600s", b"TimeoutStopSec=800s")
+)
 
 spec = importlib.util.spec_from_file_location("install_sales_xray_native", SCRIPT)
 assert spec is not None and spec.loader is not None
@@ -247,9 +254,14 @@ PREDECESSORS = {
 }
 
 
-def _render(environment: str, binding: Any, supervisor: str | None = None) -> dict[str, Any]:
+def _render(
+    environment: str,
+    binding: Any,
+    supervisor: str | None = None,
+    renderer: Path = RENDERER,
+) -> dict[str, Any]:
     return installer._rendered_descriptor(
-        renderer=RENDERER,
+        renderer=renderer,
         renderer_python=Path(sys.executable),
         environment=environment,
         canonical_paths=False,
@@ -273,10 +285,14 @@ def _predecessor_args(
     """Fictional candidate artifact over an installed predecessor and its historical R."""
     helper, image, supervisor = PREDECESSORS[kind]
     fields = {"helper": helper, "image": image, "supervisor": supervisor, **changes}
+    one_hour = tmp_path / "one-hour" / "render-sales-xray-native.py"
+    one_hour.parent.mkdir()
+    one_hour.write_bytes(ONE_HOUR_RENDERER)
     previous = _render(
         previous_environment or environment,
         installer.NativeBinding(fields["helper"], fields["image"], fields["image"]),
         fields["supervisor"],
+        one_hour if kind == "exact" else RENDERER,
     )
     old, old_digest = _write(tmp_path / "previous-units.json", previous)
     manifest, manifest_digest, binding = _new_artifact(tmp_path)
@@ -294,7 +310,7 @@ def _predecessor_args(
         installer.APPLICATION_ROOT
     )
     reference.parent.mkdir(parents=True)
-    reference.write_bytes(RENDERER.read_bytes())
+    reference.write_bytes(ONE_HOUR_RENDERER)
     for name, content in previous["units"].items():
         installer._unit_path(args["unit_root"], name).write_bytes(content.encode())
     return args, binding, previous["units"]
@@ -393,7 +409,7 @@ def test_exact_predecessor_refusals_leave_runtime_untouched(
         reference.parent.rename(tmp_path / "moved")
         reference.parent.symlink_to(tmp_path / "moved")
     else:
-        reference.write_bytes(RENDERER.read_bytes() + b"\n")
+        reference.write_bytes(ONE_HOUR_RENDERER + b"\n")
     _assert_refused(args, old_units, code)
 
 
@@ -995,6 +1011,10 @@ def test_deployment_lock_uses_exclusive_flock(
 def test_checked_in_renderer_is_reviewed_for_every_environment() -> None:
     digest = hashlib.sha256(RENDERER.read_bytes()).hexdigest()
     assert installer.REVIEWED_RENDERERS[digest] == installer.ENVIRONMENTS
+    # The one-hour renderer stays reviewed, for predecessors and rollback.
+    one_hour = hashlib.sha256(ONE_HOUR_RENDERER).hexdigest()
+    assert one_hour == EXACT.renderer_sha256
+    assert installer.REVIEWED_RENDERERS[one_hour] == installer.ENVIRONMENTS
 
 
 def _reviewed_copy(

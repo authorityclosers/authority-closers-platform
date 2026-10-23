@@ -34,7 +34,9 @@ REFRESH_HASH = "951c82dcb3390ba1e0ffe836d2032deb9aee86c1232d2d8452674da5a6b8feb3
 RENDERER_HASH = "e51105e97dfa6d7b7e3287990a4724e744ecde57a86fd6488f8375410d525acf"
 # The one-hour renderer stays accepted for a predecessor rendered before the
 # 120-minute window (23 Oct 2026); a candidate needs the current RENDERER_HASH.
-PREDECESSOR_RENDERER_HASHES = frozenset({"88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76", RENDERER_HASH})
+PREDECESSOR_RENDERER_HASHES = frozenset(
+    {"88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76", RENDERER_HASH}
+)
 SHA40 = re.compile(r"[0-9a-f]{40}\Z")
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 IMAGE = re.compile(r"sha256:[0-9a-f]{64}\Z")
