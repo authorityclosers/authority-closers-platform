@@ -46,6 +46,9 @@ INSTRUCTIONS = (
 _ID = {"type": "string", "description": "The id from a list."}
 # search and fetch need either scope, and then cover only the kinds it allows.
 _SEARCHABLE = ("calls:read", "leads:read")
+# Every hint explicit, as the ChatGPT and Claude directories ask: nothing deletes or
+# overwrites, and every tool stays inside this person's own workspace (a closed world).
+_READS = {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False}
 SEARCH_LIMIT = 20
 TOOLS: tuple[dict[str, Any], ...] = (
     {
@@ -55,7 +58,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
             "The person, workspace or organisation this connection reads, and its scopes."
         ),
         "inputSchema": {"type": "object", "properties": {}},
-        "annotations": {"readOnlyHint": True},
+        "annotations": _READS,
         "scope": None,
     },
     {
@@ -70,7 +73,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
             "properties": {"query": {"type": "string", "description": "Words to look for."}},
             "required": ["query"],
         },
-        "annotations": {"readOnlyHint": True},
+        "annotations": _READS,
         "scope": _SEARCHABLE,
     },
     {
@@ -85,7 +88,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
             "properties": {"id": {"type": "string", "description": "An id from search."}},
             "required": ["id"],
         },
-        "annotations": {"readOnlyHint": True},
+        "annotations": _READS,
         "scope": _SEARCHABLE,
     },
     {
@@ -99,7 +102,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
             "type": "object",
             "properties": {"before": {"type": "string", "description": "next_before from a page"}},
         },
-        "annotations": {"readOnlyHint": True},
+        "annotations": _READS,
         "scope": "calls:read",
     },
     {
@@ -109,7 +112,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
             "One call with its title, date, length, report state and the facts found in it."
         ),
         "inputSchema": {"type": "object", "properties": {"call_id": _ID}, "required": ["call_id"]},
-        "annotations": {"readOnlyHint": True},
+        "annotations": _READS,
         "scope": "calls:read",
     },
     {
@@ -119,7 +122,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
             "The facts Sales X-Ray found in one call (budget, timeline, needs and more)."
         ),
         "inputSchema": {"type": "object", "properties": {"call_id": _ID}, "required": ["call_id"]},
-        "annotations": {"readOnlyHint": True},
+        "annotations": _READS,
         "scope": "reports:read",
     },
     {
@@ -137,7 +140,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
                 "offset": {"type": "integer", "minimum": 0},
             },
         },
-        "annotations": {"readOnlyHint": True},
+        "annotations": _READS,
         "scope": "leads:read",
     },
     {
@@ -145,7 +148,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "title": "Read one lead",
         "description": "One lead with its contact details, stage, owner and history.",
         "inputSchema": {"type": "object", "properties": {"lead_id": _ID}, "required": ["lead_id"]},
-        "annotations": {"readOnlyHint": True},
+        "annotations": _READS,
         "scope": "leads:read",
     },
     {
@@ -171,7 +174,7 @@ TOOLS: tuple[dict[str, Any], ...] = (
                 )
             },
         },
-        "annotations": {"readOnlyHint": False, "idempotentHint": True},
+        "annotations": {**_READS, "readOnlyHint": False, "idempotentHint": True},
         "scope": "leads:write",
     },
 )

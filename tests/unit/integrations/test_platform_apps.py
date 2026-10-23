@@ -148,6 +148,10 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     for tool in mcp_http.listed(frozenset(scopes.SCOPES)):
         assert "scope" not in tool and tool["inputSchema"]["type"] == "object"
         assert tool["annotations"]["readOnlyHint"] is (tool["name"] != "add_lead")
+        # The directories ask for every hint, true or false, never left out.
+        assert tool["annotations"]["destructiveHint"] is False
+        assert tool["annotations"]["openWorldHint"] is False
+        assert tool["title"]
 
 
 BASE = "https://salesxray.example.test"
