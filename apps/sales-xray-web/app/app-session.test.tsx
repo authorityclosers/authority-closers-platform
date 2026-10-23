@@ -360,6 +360,22 @@ it.each([
   ).not.toBeNull();
   expect(host.querySelector("[data-purchase-shell]")).toBeNull();
 });
+it.each(["/account/billing/return", "/account/billing/return/"])(
+  "confirms the signed-in buyer on %s before the paid order is shown",
+  async (route) => {
+    pathname = route;
+    await mount(<ReturnProbe />);
+    expect(paths().slice(0, 2)).toEqual([
+      "/v1/me/workspaces",
+      "/v1/me/sales-xray-workspaces",
+    ]);
+    expect(host.textContent).toBe("signed in");
+  },
+);
+function ReturnProbe() {
+  const access = useWorkspaceAccess();
+  return <p>{access?.authenticated ? "signed in" : "signed out"}</p>;
+}
 it("keeps login and fixture routes outside both session boundaries", async () => {
   for (const route of ["/login/", "/auth/callback", "/review-fixture/plans"]) {
     pathname = route;

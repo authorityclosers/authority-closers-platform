@@ -291,6 +291,7 @@
 }
 
 .planActionBtn {
+  box-sizing: border-box;
   margin-top: auto;
   display: inline-flex;
   align-items: center;

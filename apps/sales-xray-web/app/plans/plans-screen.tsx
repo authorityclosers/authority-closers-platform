@@ -499,8 +499,9 @@ export function PlansScreen({
                             aria-hidden="true"
                           />
                           <span>
-                            {count(item.includedMinutes * (team ? number : 1))}{" "}
-                            {team ? "pooled " : ""}analysis minutes / mo
+                            {talkToUs
+                              ? `${count(item.includedMinutes)} pooled analysis minutes per seat / mo`
+                              : `${count(item.includedMinutes * (team ? number : 1))} ${team ? "pooled " : ""}analysis minutes / mo`}
                           </span>
                         </li>
                       ) : null}
