@@ -96,7 +96,7 @@ export function BillingView({
     !isCancelled &&
     ["active", "past_due", "halted"].includes(current.status);
   const allowance = usage?.allowance ?? mePlan?.allowance;
-  const planName = mePlan?.plan.name ?? "Not loaded";
+  const planName = mePlan?.plan.name ?? "—";
   const unread = !loading && status !== "ready";
   const readFailed =
     unread || (documents !== undefined && invoicesStatus === "error");
@@ -200,7 +200,7 @@ export function BillingView({
                                 current?.status === "cancelled"
                               ? "Ended"
                               : unread
-                                ? "Not loaded"
+                                ? "Unavailable"
                                 : (mePlan?.plan.name ?? "Trial")}
                 </span>
               </div>
@@ -209,6 +209,10 @@ export function BillingView({
                 <p className={styles.planPrice}>
                   {formatMoney(current.amount)}
                   <small>{` / ${current.interval}`}</small>
+                </p>
+              ) : unread ? (
+                <p className={styles.lead}>
+                  {"We couldn't load your plan right now."}
                 </p>
               ) : status === "ready" ? (
                 <p className={styles.lead}>
@@ -332,7 +336,7 @@ export function BillingView({
                         ? ringHoursText
                           ? `${count(ringAvailMins)} min (${ringHoursText}) left`
                           : `${count(ringAvailMins)} min left`
-                        : "Not loaded"}
+                        : "Couldn't load right now"}
                   </b>
                   <span>
                     {allowance?.unlimited
@@ -369,7 +373,7 @@ export function BillingView({
                         : day(current.renewsAt)
                       : status === "ready"
                         ? "No renewal scheduled"
-                        : "Not loaded"}
+                        : "Couldn't load right now"}
                   </dd>
                 </div>
                 {paid ? (

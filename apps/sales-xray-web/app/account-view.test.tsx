@@ -180,7 +180,9 @@ it("keeps billing failures distinct from an empty account and retries the live r
   const pane = await openBilling();
   // Errors are corner cards (owner rule): a quiet placeholder in the page,
   // one card with one Try again in the corner.
-  expect(pane.textContent).toContain("Billing details: not loaded.");
+  expect(pane.textContent).toContain(
+    "We couldn't load your plan details right now.",
+  );
   expect(pane.querySelector('[role="alert"]')).toBeNull();
   expect(pane.textContent).not.toContain("No subscription yet.");
   expect(pane.textContent).not.toMatch(/Billing (is )?unavailable|Unavailable/);
@@ -348,7 +350,8 @@ it("keeps the profile readable when the allowance read fails", async () => {
   expect(host.textContent).toContain("Asha Rao");
   // A quiet line in the page; any alert is the corner card, not this block.
   const line = [...host.querySelectorAll("p")].find(
-    (node) => node.textContent === "Analysis time: not loaded.",
+    (node) =>
+      node.textContent === "We couldn't load your analysis time right now.",
   );
   expect(line).toBeDefined();
   expect(line!.closest('[role="alert"]')).toBeNull();

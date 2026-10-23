@@ -1136,7 +1136,11 @@ function AllowanceSummary({ allowance }: { allowance: Loaded<Allowance> }) {
       </p>
     );
   if (allowance.state === "error")
-    return <p className={styles.muted}>Analysis time: not loaded.</p>;
+    return (
+      <p className={styles.muted}>
+        {"We couldn't load your analysis time right now."}
+      </p>
+    );
   const { allowance_seconds, available_seconds, committed_seconds } =
     allowance.value;
 
@@ -1309,7 +1313,7 @@ export function PlanAndBillingPane({
             {loading
               ? "Loading…"
               : unread
-                ? "Not loaded"
+                ? "Unavailable"
                 : isCancelled
                   ? "Cancels at period end"
                   : current?.status === "active"
@@ -1338,7 +1342,9 @@ export function PlanAndBillingPane({
             <i />
           </div>
         ) : status !== "ready" ? (
-          <p className={styles.muted}>Billing details: not loaded.</p>
+          <p className={styles.muted}>
+            {"We couldn't load your plan details right now."}
+          </p>
         ) : (
           <dl className={styles.facts}>
             <div className={styles.row}>

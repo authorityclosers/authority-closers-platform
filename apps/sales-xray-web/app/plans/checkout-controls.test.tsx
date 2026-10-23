@@ -524,7 +524,9 @@ it("Settings treats subscription and invoice 404 as billing-off when canonical r
     />,
   );
   await click("Plan & billing");
-  expect(host.textContent).not.toContain("Billing details: not loaded");
+  expect(host.textContent).not.toContain(
+    "We couldn't load your plan details right now.",
+  );
   expect(host.textContent).toContain("Choose a plan");
   expect(host.textContent).not.toContain("Cancel renewal");
 });
@@ -541,7 +543,9 @@ it("Settings retains error state when canonical plan or usage reads return 404",
     />,
   );
   await click("Plan & billing");
-  expect(host.textContent).toContain("Billing details: not loaded.");
+  expect(host.textContent).toContain(
+    "We couldn't load your plan details right now.",
+  );
   expect(vi.mocked(notify)).toHaveBeenCalledWith(
     expect.objectContaining({
       id: "settings-read-error",
@@ -563,7 +567,9 @@ it("Settings retains error state on subscription 5xx server failure", async () =
     />,
   );
   await click("Plan & billing");
-  expect(host.textContent).toContain("Billing details: not loaded.");
+  expect(host.textContent).toContain(
+    "We couldn't load your plan details right now.",
+  );
   expect(vi.mocked(notify)).toHaveBeenCalledWith(
     expect.objectContaining({
       id: "settings-read-error",

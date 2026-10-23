@@ -669,7 +669,9 @@ it.each([
       expect(text()).toContain("No renewal scheduled");
     } else {
       // A read that failed: quiet placeholders and one corner card (owner rule).
-      await until(() => text().includes("Not loaded"));
+      await until(() =>
+        text().includes("We couldn't load your plan right now."),
+      );
       expect(notify).toHaveBeenCalledWith(
         expect.objectContaining({ id: "billing-read-error" }),
       );

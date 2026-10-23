@@ -38,7 +38,7 @@ it("shows the cards' outline while billing loads, not a line of text", async () 
     host.querySelector('[aria-label="Loading billing details"]'),
   ).not.toBeNull();
   expect(host.textContent).not.toContain("Loading billing details");
-  expect(host.textContent).not.toContain("Not loaded");
+  expect(host.textContent).not.toContain("couldn't load");
 });
 
 it("raises one corner card when billing can't be read, with quiet placeholders", async () => {
@@ -47,7 +47,7 @@ it("raises one corner card when billing can't be read, with quiet placeholders",
     root.render(<BillingView status="error" onRefresh={onRefresh} />),
   );
   expect(host.querySelector('[role="alert"]')).toBeNull();
-  expect(host.textContent).toContain("Not loaded");
+  expect(host.textContent).toContain("We couldn't load your plan right now.");
   expect(vi.mocked(notify)).toHaveBeenCalledWith(
     expect.objectContaining({
       id: "billing-read-error",
