@@ -13,6 +13,7 @@ import {
   RefreshCw,
   Settings2,
   ShieldCheck,
+  Trash2,
   X,
   type LucideIcon,
 } from "lucide-react";
@@ -523,6 +524,7 @@ export function AccountSettings({
               {signOutError}
             </p>
           ) : null}
+          <DeleteAccountRow email={who?.email ?? null} />
         </Pane>
 
         <Pane
@@ -632,6 +634,74 @@ function Pane({
       )}
       <div className={styles.rows}>{children}</div>
     </section>
+  );
+}
+
+/** Where an account's deletion is asked for: the same address and subject as /data-deletion. */
+const DELETION_ADDRESS = "admin@authorityclosers.com";
+const DELETION_SUBJECT = "Delete my data";
+
+/**
+ * Delete account (Google Play, 23 Oct 2026: apps with sign-up need an in-app way
+ * to ask). It asks, by email, as the data deletion page says; nothing is deleted
+ * from here.
+ */
+function DeleteAccountRow({ email }: { email: string | null }) {
+  const [open, setOpen] = useState(false);
+  const body = [
+    "Please delete my Sales Xray account and its data.",
+    "",
+    `Account email: ${email ?? ""}`,
+  ].join("\n");
+  const request = `mailto:${DELETION_ADDRESS}?subject=${encodeURIComponent(
+    DELETION_SUBJECT,
+  )}&body=${encodeURIComponent(body)}`;
+  return (
+    <>
+      <Row
+        label="Delete account"
+        hint="Ask us to delete your account and its data."
+      >
+        <button
+          type="button"
+          className={styles.danger}
+          aria-expanded={open}
+          aria-controls="delete-account-request"
+          onClick={() => setOpen((value) => !value)}
+        >
+          <Trash2 size={15} aria-hidden="true" />
+          Delete account
+        </button>
+      </Row>
+      {open ? (
+        <div
+          id="delete-account-request"
+          className={styles.deleteAccount}
+          role="region"
+          aria-label="Delete account"
+        >
+          <p className={styles.muted}>
+            Send the request from the email address your account uses
+            {email ? ` (${email})` : ""}. Say if you only want some recordings
+            or reports deleted instead of the whole account.
+          </p>
+          <div className={styles.deleteAccountActions}>
+            <a className={styles.danger} href={request}>
+              <Mail size={15} aria-hidden="true" />
+              Email the request
+            </a>
+            <a
+              className={styles.secondary}
+              href="/data-deletion"
+              target="_blank"
+              rel="noopener"
+            >
+              How deletion works
+            </a>
+          </div>
+        </div>
+      ) : null}
+    </>
   );
 }
 

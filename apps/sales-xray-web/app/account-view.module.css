@@ -538,6 +538,20 @@
   box-shadow: var(--lx-ring-focus);
 }
 
+/* Delete account (Google Play, 23 Oct 2026): the request, under its row. */
+.deleteAccount {
+  display: grid;
+  gap: 12px;
+  padding: 12px 0 14px;
+  border-bottom: 1px solid var(--lx-line);
+}
+
+.deleteAccountActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .muted {
   margin: 0;
   color: var(--lx-muted);
