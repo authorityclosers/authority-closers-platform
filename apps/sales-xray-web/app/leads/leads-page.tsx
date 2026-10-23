@@ -7,7 +7,7 @@
  * one lead at a time, and every call ends on "Was the call connected?".
  *
  * Owner, 22 Oct 2026 ("pathetic", "a design flaw"): one page, one strip of
- * stage tabs. To call is the desk; Open, New, Not contacted, Follow up,
+ * stage tabs. To call is the desk; Open, New, Couldn't reach, Follow up,
  * Interested, Won and Lost come from the organisation's own stages, with
  * real counts, and switch in place (the address follows without a page
  * move). Owners and admins pick whose leads in one small chip. The switches
@@ -59,7 +59,7 @@ import { RecordedCallsCard } from "./recorded-calls";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
-import { DeskView, dueNow, whyLine, type RowActions } from "./desk-view";
+import { DeskView, toCallNow, whyLine, type RowActions } from "./desk-view";
 import { usePullToRefresh } from "./gestures";
 import {
   MAIN_PIPELINE,
@@ -429,7 +429,7 @@ export function LeadsRoute() {
         if (!toCallPipeline)
           publishBadge({
             overdue: next.counts.overdue ?? 0,
-            to_call: dueNow(next),
+            to_call: toCallNow(next),
           });
         settle();
       })
@@ -776,7 +776,7 @@ export function LeadsRoute() {
     access?.workspaces?.find(
       (workspace) => workspace.tenant_id === access.context?.tenantId,
     )?.name ?? "";
-  const toCall = dueNow(desk);
+  const toCall = toCallNow(desk);
 
   // Tabs and filters change the address in place, so Back never steps
   // through them; a settings page is a step of its own, so Back returns.

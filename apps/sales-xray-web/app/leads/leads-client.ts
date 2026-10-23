@@ -417,11 +417,17 @@ function json(method: string, body: unknown): RequestInit {
 export const commandId = () => crypto.randomUUID();
 
 /** Overdue, then call now, then later today: the due-now list in sections. */
-export function deskSections(queue: LeadRow[]): {
+export function deskSections(
+  all: LeadRow[],
+  /** Leads already listed under Call back: not again here. */
+  callBack: readonly LeadRow[] = [],
+): {
   key: "overdue" | "now" | "later";
   title: string;
   rows: LeadRow[];
 }[] {
+  const listed = new Set(callBack.map((row) => row.lead_id));
+  const queue = all.filter((row) => !listed.has(row.lead_id));
   const overdue = queue.filter((row) => row.overdue);
   const now = queue.filter(
     (row) =>
