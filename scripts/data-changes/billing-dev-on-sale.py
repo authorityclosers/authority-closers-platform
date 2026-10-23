@@ -8,8 +8,10 @@ transaction:
      are ``coming_soon`` and carry a price; each changed row's revision goes up by 1. Prices,
      minutes, seats and packs are not touched: they stay the owner-confirmed stored values.
      Enterprise stays ``coming_soon`` ("talk to us");
-  2. a new ``billing_provider_settings`` revision enables ``fake`` in ``test`` mode, unless the
-     latest revision already does (the provider plan references it holds are carried over);
+  2. a new ``billing_provider_settings`` revision enables ``--provider`` (``fake``, the default,
+     or ``razorpay``) in ``test`` mode, unless the latest revision already does. Provider plan
+     references carry over only within the same provider. ``razorpay`` needs the deployed API
+     to hold the three AC_RAZORPAY_* test values (ac-secret-drop ... dev), else it refuses;
   3. one audit event names the approver and the issue.
 Development only: it refuses any other environment, and the fake provider is forbidden in
 production by the settings anyway. Dry run unless --apply; a rerun after apply changes nothing.
@@ -50,6 +52,7 @@ class Refused(RuntimeError):
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="billing-dev-on-sale", allow_abbrev=False)
     parser.add_argument("--plans", default="personal,organisation")
+    parser.add_argument("--provider", choices=("fake", "razorpay"), default="fake")
     parser.add_argument("--approver-email", required=True)
     parser.add_argument("--issue", required=True)
     parser.add_argument("--apply", action="store_true")
@@ -77,6 +80,13 @@ async def change(database: AsyncSession, args: argparse.Namespace) -> dict[str, 
         raise Refused("development_only")
     if settings.operations_tenant_id is None:
         raise Refused("operations_tenant_missing")
+    if args.provider == "razorpay" and (
+        settings.razorpay_key_id is None
+        or settings.razorpay_key_secret is None
+        or settings.razorpay_webhook_secret is None
+        or settings.billing_allow_live
+    ):
+        raise Refused("razorpay_test_keys_are_not_in_the_dev_api_settings")
     keys = [key.strip() for key in args.plans.split(",") if key.strip()]
     if not keys or "enterprise" in keys:
         raise Refused("plans_must_be_named_and_enterprise_stays_talk_to_us")
@@ -88,9 +98,7 @@ async def change(database: AsyncSession, args: argparse.Namespace) -> dict[str, 
     if len(approver) != 1:
         raise Refused("exactly_one_person_must_match_the_approver_email")
     now = datetime.now(UTC)
-    plans = list(
-        await database.scalars(select(Plan).where(Plan.key.in_(keys)).with_for_update())
-    )
+    plans = list(await database.scalars(select(Plan).where(Plan.key.in_(keys)).with_for_update()))
     if sorted(plan.key for plan in plans) != sorted(keys):
         raise Refused("unknown_plan_key")
     before = [_plan_row(plan) for plan in plans]
@@ -114,20 +122,21 @@ async def change(database: AsyncSession, args: argparse.Namespace) -> dict[str, 
     )
     settings_before = _settings_row(latest)
     enable = latest is None or not (
-        latest.enabled and latest.provider == "fake" and latest.mode == "test"
+        latest.enabled and latest.provider == args.provider and latest.mode == "test"
     )
+    same_provider = latest is not None and latest.provider == args.provider
     if enable:
         database.add(
             BillingProviderSettings(
                 id=uuid4(),
                 revision=1 if latest is None else latest.revision + 1,
-                provider="fake",
+                provider=args.provider,
                 mode="test",
                 enabled=True,
-                plan_refs={} if latest is None else dict(latest.plan_refs or {}),
+                plan_refs=dict(latest.plan_refs or {}) if same_provider and latest else {},
                 key_alias=None,
                 actor_person_id=approver[0].id,
-                reason=f"{args.issue}: fake provider (test) on dev for purchase proofs",
+                reason=f"{args.issue}: {args.provider} provider (test) on dev",
                 audit_event_id=None,
                 created_at=now,
             )
@@ -143,12 +152,12 @@ async def change(database: AsyncSession, args: argparse.Namespace) -> dict[str, 
             resource_type="tenant",
             resource_id=settings.operations_tenant_id,
             request_id=str(uuid5(NAMESPACE_URL, f"{DATA_CHANGE}:{args.issue}:{now.isoformat()}")),
-            reason=f"{args.issue}: plans on sale on dev with the fake provider",
+            reason=f"{args.issue}: plans on sale on dev with the {args.provider} provider",
             payload={
                 "issue": args.issue,
                 "data_change": DATA_CHANGE,
                 "plans_activated": changed,
-                "provider_enabled": "fake/test" if enable else None,
+                "provider_enabled": f"{args.provider}/test" if enable else None,
             },
         )
     latest_after = await database.scalar(
