@@ -1,12 +1,15 @@
 """Bug reports over HTTP (owner, 23 Oct 2026: "bug catcher for everyone").
 
 - POST /v1/bug-reports                     any signed-in person on Sales X-Ray: their words,
-                                           the screen, app and device, recent client errors
-                                           and an optional picture of the screen
+                                           the screen, app and device, recent client errors,
+                                           an optional picture of the screen and voice note
+- GET  /v1/bug-reports/mine                that person's own recent reports and where each
+                                           stands, so the app can say when one is fixed
 - GET  /v1/admin/bugs                      the team's list: filters for status, severity,
                                            area and organisation, counts per status
 - GET  /v1/admin/bugs/{id}                 one report with everything captured and its history
 - GET  /v1/admin/bugs/{id}/screenshot      its picture (same origin, private)
+- GET  /v1/admin/bugs/{id}/voice           its voice note (same origin, private)
 - POST /v1/admin/bugs/{id}/events          change status, severity or area, or add a note
 
 Everything the device sends is scrubbed again here (scrub.py). Admin routes follow the
@@ -32,6 +35,7 @@ from ac_platform.bug_reports.models import AREAS, SEVERITIES, STATUSES
 from ac_platform.bug_reports.screenshots import (
     ScreenshotError,
     ScreenshotStore,
+    check_voice,
     clean_screenshot,
 )
 from ac_platform.bug_reports.scrub import area_for, clean_context, clean_errors, scrub_route
@@ -69,6 +73,14 @@ class Screenshot(BaseModel):
     source: Literal["auto", "upload"]
 
 
+class Voice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    content_type: Literal["audio/webm", "audio/ogg", "audio/mp4"]
+    data: str = Field(min_length=8, max_length=2_100_000)
+    seconds: int = Field(ge=1, le=120)
+
+
 class NewBugReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -80,6 +92,7 @@ class NewBugReport(BaseModel):
     context: dict[str, Any] = Field(default_factory=dict)
     client_errors: list[Any] = Field(default_factory=list, max_length=50)
     screenshot: Screenshot | None = None
+    voice: Voice | None = None
 
 
 class BugChange(BaseModel):
@@ -109,6 +122,13 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
 
     reports = APIRouter(prefix="/v1/bug-reports", tags=["bug-reports"])
 
+    def on_app_host(request: Request) -> None:
+        hosts = {settings.public_app_url.host}
+        if settings.sales_xray_app_url is not None:
+            hosts.add(settings.sales_xray_app_url.host)
+        if request.url.hostname not in hosts or request.query_params:
+            raise HTTPException(404, "Not found.", headers=PRIVATE)
+
     @reports.post("", status_code=201)
     async def send(
         command: NewBugReport,
@@ -117,11 +137,7 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
         auth: AuthenticatedTransaction = dependency,
     ) -> dict[str, Any]:
         response.headers.update(PRIVATE)
-        hosts = {settings.public_app_url.host}
-        if settings.sales_xray_app_url is not None:
-            hosts.add(settings.sales_xray_app_url.host)
-        if request.url.hostname not in hosts or request.query_params:
-            raise HTTPException(404, "Not found.", headers=PRIVATE)
+        on_app_host(request)
         try:
             require_safe_origin(request, settings)
         except DomainError:
@@ -134,6 +150,7 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
             return {
                 "bug_id": str(earlier.id),
                 "screenshot": "kept" if earlier.screenshot_key else "none",
+                "voice": "kept" if await store.voice_kept(earlier.id) else "none",
             }
         words = _words(command.words)
         if not words:
@@ -178,6 +195,27 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
                     "screenshot_source": command.screenshot.source,
                 }
                 kept = "kept"
+        voice: dict[str, Any] | None = None
+        spoken = "none"
+        if command.voice is not None:
+            spoken = "skipped"
+            try:
+                raw = base64.b64decode(command.voice.data, validate=True)
+                if not pictures.available:
+                    raise ScreenshotError("Voice notes are not kept here.")
+                note = check_voice(raw, command.voice.content_type, command.voice.seconds)
+                key = await run_in_threadpool(pictures.put_voice, bug_id, note)
+            except (ScreenshotError, binascii.Error, ValueError):
+                voice = None
+            else:
+                voice = {
+                    "storage_key": key,
+                    "content_type": note.content_type,
+                    "bytes": len(note.data),
+                    "sha256": note.sha256,
+                    "seconds": note.seconds,
+                }
+                spoken = "kept"
         await store.create(
             NewReport(
                 person_id=actor.person_id,
@@ -194,8 +232,20 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
             bug_id=bug_id,
             now=now,
             screenshot=picture,
+            voice=voice,
         )
-        return {"bug_id": str(bug_id), "screenshot": kept}
+        return {"bug_id": str(bug_id), "screenshot": kept, "voice": spoken}
+
+    @reports.get("/mine")
+    async def mine(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = read_dependency,
+    ) -> dict[str, Any]:
+        response.headers.update(PRIVATE)
+        on_app_host(request)
+        items = await BugReportStore(auth.database).mine(auth.resolved.actor.person_id)
+        return {"items": items}
 
     app.include_router(reports)
 
@@ -272,6 +322,29 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
             return await BugReportStore(auth.database).detail(bug_id)
         except BugReportNotFound:
             raise HTTPException(404, "That report is not here.") from None
+
+    @admin.get("/{bug_id}/voice")
+    async def voice_note(
+        bug_id: UUID,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = read_dependency,
+    ) -> Response:
+        await admit(request, response, auth, write=False)
+        try:
+            key, digest, content_type = await BugReportStore(auth.database).voice(bug_id)
+            data = await run_in_threadpool(pictures.read, key, expected_sha256=digest)
+        except (BugReportNotFound, ScreenshotError):
+            raise HTTPException(404, "That voice note is not here.") from None
+        return Response(
+            content=data,
+            media_type=content_type,
+            headers={
+                **PRIVATE,
+                "X-Content-Type-Options": "nosniff",
+                "Cross-Origin-Resource-Policy": "same-origin",
+            },
+        )
 
     @admin.get("/{bug_id}/screenshot")
     async def picture(

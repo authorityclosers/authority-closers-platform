@@ -57,6 +57,7 @@ from ac_platform.conversation_intelligence import models as conversation_models
 from ac_platform.db.base import Base
 from ac_platform.economics import models as economics_models
 from ac_platform.enrollment import models as enrollment_models
+from ac_platform.feedback import models as feedback_models
 from ac_platform.fx import models as fx_models
 from ac_platform.identity import google_profile_models, sales_xray_profile_models
 from ac_platform.identity import models as identity_models
@@ -119,6 +120,7 @@ MODEL_MODULES = (
     brain4_models,
     call_ai_models,
     bug_report_models,
+    feedback_models,
     fx_models,
     usage_people_models,
     integration_models,

@@ -23,6 +23,7 @@ from ac_platform.bug_reports.models import (
     SEVERITIES,
     STATUSES,
     BugReport,
+    BugReportAttachment,
     BugReportEvent,
 )
 from ac_platform.identity.models import Person
@@ -86,6 +87,7 @@ class BugReportStore:
         bug_id: UUID,
         now: datetime,
         screenshot: dict[str, Any] | None = None,
+        voice: dict[str, Any] | None = None,
     ) -> BugReport:
         # One number at a time: reports are few, so a transaction lock is enough.
         await self.database.execute(
@@ -120,8 +122,23 @@ class BugReportStore:
                 created_at=now,
             )
         )
+        if voice is not None:
+            self.database.add(
+                BugReportAttachment(
+                    id=uuid4(), bug_id=bug_id, kind="voice", created_at=now, **voice
+                )
+            )
         await self.database.flush()
         return row
+
+    async def voice_kept(self, bug_id: UUID) -> bool:
+        return (
+            await self.database.scalar(
+                select(BugReportAttachment.id).where(
+                    BugReportAttachment.bug_id == bug_id, BugReportAttachment.kind == "voice"
+                )
+            )
+        ) is not None
 
     async def change(
         self,
@@ -363,6 +380,7 @@ class BugReportStore:
             }
             for event, name, email in actors.all()
         ]
+        note = await self._voice(bug_id)
         return {
             **self._summary(row),
             "context": report.context,
@@ -377,8 +395,68 @@ class BugReportStore:
                 if report.screenshot_key is not None
                 else None
             ),
+            "voice": (
+                {"content_type": note.content_type, "bytes": note.bytes, "seconds": note.seconds}
+                if note is not None
+                else None
+            ),
+            "from_feedback": (report.context or {}).get("feedback"),
             "history": history,
         }
+
+    async def voice(self, bug_id: UUID) -> tuple[str, str, str]:
+        """The voice note's key, digest and type; BugReportNotFound when there is none."""
+        note = await self._voice(bug_id)
+        if note is None:
+            raise BugReportNotFound(str(bug_id))
+        return note.storage_key, note.sha256, note.content_type
+
+    async def _voice(self, bug_id: UUID) -> BugReportAttachment | None:
+        found: BugReportAttachment | None = await self.database.scalar(
+            select(BugReportAttachment).where(
+                BugReportAttachment.bug_id == bug_id, BugReportAttachment.kind == "voice"
+            )
+        )
+        return found
+
+    async def mine(self, person_id: UUID, *, limit: int = 20) -> list[dict[str, Any]]:
+        """A person's own newest reports: their first words, where each stands and since when."""
+        status = (
+            select(
+                BugReportEvent.bug_id.label("bug_id"),
+                BugReportEvent.status.label("value"),
+                BugReportEvent.created_at.label("since"),
+            )
+            .where(BugReportEvent.kind == "status")
+            .distinct(BugReportEvent.bug_id)
+            .order_by(BugReportEvent.bug_id, BugReportEvent.created_at.desc(), BugReportEvent.id)
+            .subquery()
+        )
+        rows = (
+            await self.database.execute(
+                select(
+                    BugReport.id,
+                    BugReport.created_at,
+                    BugReport.words,
+                    status.c.value,
+                    status.c.since,
+                )
+                .outerjoin(status, status.c.bug_id == BugReport.id)
+                .where(BugReport.person_id == person_id)
+                .order_by(BugReport.created_at.desc())
+                .limit(limit)
+            )
+        ).all()
+        return [
+            {
+                "bug_id": str(bug_id),
+                "created_at": created_at.isoformat(),
+                "words": words[:160],
+                "status": value or "new",
+                "status_at": (since or created_at).isoformat(),
+            }
+            for bug_id, created_at, words, value, since in rows
+        ]
 
     async def screenshot(self, bug_id: UUID) -> tuple[str, str, str]:
         """The picture's key, digest and type; BugReportNotFound when there is none."""

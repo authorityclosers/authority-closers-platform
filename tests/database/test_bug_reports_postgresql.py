@@ -156,7 +156,7 @@ def test_a_tester_reports_a_bug_and_the_team_works_it(
                 bug_id = sent.json()["bug_id"]
                 again = await http.post("/v1/bug-reports", json=first, headers=WRITE)
                 assert again.status_code == 200
-                assert again.json() == {"bug_id": bug_id, "screenshot": "kept"}
+                assert again.json() == {"bug_id": bug_id, "screenshot": "kept", "voice": "none"}
 
                 # Not from the app's own page, or nothing said: refused.
                 no_origin = await http.post(
