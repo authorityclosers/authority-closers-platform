@@ -32,6 +32,7 @@ import { useApkLinksAllowed } from "../purchase-policy";
 import { Panel } from "../ui/kit";
 import { ConnectedApps } from "./connected-apps";
 import { DevelopersSection } from "./developers";
+import { PrivacySettings } from "./privacy";
 import { SellingSettings } from "./selling";
 import type { SettingsSectionId } from "./settings-sections";
 import styles from "./sections.module.css";
@@ -156,6 +157,8 @@ export function SettingsSectionView({
       return <AccountSettings only={["security"]} />;
     case "plan":
       return <AccountSettings only={["usage", "billing"]} billing={billing} />;
+    case "privacy":
+      return <PrivacySettings />;
     case "help":
       return <AccountSettings only={["help"]} />;
     case "organisation":

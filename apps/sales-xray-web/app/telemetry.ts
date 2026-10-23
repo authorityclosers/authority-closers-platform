@@ -302,6 +302,15 @@ export type ReportView =
   | "share";
 export type DeviceClass = "phone" | "tablet" | "desktop";
 export type AppKind = "web" | "android";
+/** How capable the device is: its cores and memory as the browser reports them. */
+export type DeviceTier = "low" | "mid" | "high" | "unknown";
+export type NetworkSpeed = "slow_2g" | "2g" | "3g" | "4g" | "unknown";
+export type NetworkLink =
+  | "wifi"
+  | "cellular"
+  | "ethernet"
+  | "offline"
+  | "unknown";
 
 export const sizeBand = (bytes: number): SizeBand =>
   bytes < 5 * 1024 ** 2
@@ -348,6 +357,52 @@ export const readBand = (milliseconds: number): ReadBand =>
 export const deviceClass = (width: number): DeviceClass =>
   width < 600 ? "phone" : width < 1024 ? "tablet" : "desktop";
 
+/**
+ * Low (2 GB or less, or 4 cores or fewer), high (8 GB and 8 cores or more) or
+ * mid; unknown when the browser says neither (Safari and Firefox hide memory).
+ */
+export function deviceTier(
+  cores: number | undefined,
+  memoryGb: number | undefined,
+): DeviceTier {
+  const knownCores = typeof cores === "number" && cores > 0;
+  const knownMemory = typeof memoryGb === "number" && memoryGb > 0;
+  if (!knownCores && !knownMemory) return "unknown";
+  if ((knownMemory && memoryGb <= 2) || (knownCores && cores <= 4))
+    return "low";
+  if (knownMemory && memoryGb >= 8 && knownCores && cores >= 8) return "high";
+  return "mid";
+}
+
+/** The network as the browser reports it (Chrome and Android WebView only). */
+export function network(
+  connection: { effectiveType?: string; type?: string } | undefined,
+  online: boolean,
+): { net: NetworkSpeed; link: NetworkLink } {
+  const speed = connection?.effectiveType;
+  const net: NetworkSpeed =
+    speed === "slow-2g"
+      ? "slow_2g"
+      : speed === "2g" || speed === "3g" || speed === "4g"
+        ? speed
+        : "unknown";
+  const type = connection?.type;
+  const link: NetworkLink = !online
+    ? "offline"
+    : type === "wifi" || type === "cellular" || type === "ethernet"
+      ? type
+      : "unknown";
+  return { net, link };
+}
+
+/** The phone app's version from its user agent ("SalesXrayApp/0.3.88"). */
+export function appVersion(userAgent: string): string | null {
+  const version = /\bSalesXrayApp\/([0-9][0-9a-z.-]{0,30})/i.exec(
+    userAgent,
+  )?.[1];
+  return version ? version.toLowerCase() : null;
+}
+
 /** The server's route templates (ingest.py): ids become their names in brackets. */
 const STATIC_ROUTES = new Set([
   "/",
@@ -386,6 +441,41 @@ export function routeTemplate(pathname: string): string | null {
   return ROUTE_PATTERNS.find(([pattern]) => pattern.test(path))?.[1] ?? null;
 }
 
+const SCREENS: Record<string, Screen> = {
+  "/": "home",
+  "/dashboard": "dashboard",
+  "/analysis": "analysis",
+  "/analysis/new": "new_call",
+  "/analysis/calls": "calls_list",
+  "/analysis/calls/[callId]": "report",
+  "/calls": "calls",
+  "/leads": "leads",
+  "/chats": "chats",
+  "/coaching": "coaching",
+  "/prospects": "prospects",
+  "/prospects/[prospectId]": "prospect",
+  "/organisation": "organisation",
+  "/organisation/insights": "org_insights",
+  "/organisation/invites": "org_invites",
+  "/organisation/people/[personId]": "org_person",
+  "/settings": "settings",
+  "/settings/[section]": "settings_section",
+  "/account": "account",
+  "/account/billing": "billing",
+  "/billing": "billing",
+  "/plans": "plans",
+  "/apps": "apps",
+  "/developers": "developers",
+  "/review": "review",
+};
+
+/** The screen a page is (the server's SCREENS); a lead open on Leads is "lead". */
+export function screenOf(pathname: string, search = ""): Screen {
+  const template = routeTemplate(pathname);
+  const screen = (template && SCREENS[template]) || "other";
+  return screen === "leads" && /[?&]lead=/.test(search) ? "lead" : screen;
+}
+
 const CALL_ID =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -398,7 +488,8 @@ const VALUE = /^[a-z0-9_.-]{0,64}$/;
 /** True when a payload is short enums and finite numbers only. */
 export function safePayload(payload: Record<string, unknown>): boolean {
   const entries = Object.entries(payload);
-  if (entries.length > 8) return false;
+  // An event's own keys and where it ran (device, tier, network, link, app, version).
+  if (entries.length > 12) return false;
   return entries.every(
     ([key, value]) =>
       KEY.test(key) &&
@@ -430,6 +521,10 @@ export type EventContext = Readonly<{
   route: string | null;
   device: DeviceClass;
   app: AppKind;
+  tier?: DeviceTier;
+  net?: NetworkSpeed;
+  link?: NetworkLink;
+  appVersion?: string | null;
 }>;
 
 type Sender = Readonly<{
@@ -486,6 +581,10 @@ export class TelemetryClient {
     if (context) {
       values.device = context.device;
       values.app = context.app;
+      if (context.tier) values.tier = context.tier;
+      if (context.net) values.net = context.net;
+      if (context.link) values.link = context.link;
+      if (context.appVersion) values.app_version = context.appVersion;
     }
     if (!safePayload(values)) return;
     this.queue.push({
@@ -502,6 +601,25 @@ export class TelemetryClient {
     });
     if (this.queue.length > 200) this.queue.splice(0, this.queue.length - 200);
     this.schedule(this.queue.length >= BATCH ? 0 : DELAY_MS);
+  }
+
+  /**
+   * False once the server has said it records nothing for this person (they or
+   * their workspace turned usage analytics off): automatic capture stops.
+   */
+  active(): boolean {
+    return (
+      this.enabled &&
+      !this.off &&
+      (this.known === undefined || !!this.known?.size)
+    );
+  }
+
+  /** Read the server's list again (after a switch in Settings, Privacy). */
+  refresh() {
+    this.accepted = null;
+    this.known = undefined;
+    this.off = false;
   }
 
   /** Once per page load for a key (a report opened, a paywall seen). */
@@ -605,14 +723,23 @@ export class TelemetryClient {
 
 const browser = typeof window !== "undefined";
 
-/** This page: its route template, the window's device class, web or the app. */
+type BrowserNavigator = Navigator & {
+  deviceMemory?: number;
+  connection?: { effectiveType?: string; type?: string };
+};
+
+/** This page: its route, the device's class and tier, the network, web or the app. */
 function browserContext(): EventContext {
+  const nav = navigator as BrowserNavigator;
   return {
     route: routeTemplate(window.location.pathname),
     device: deviceClass(window.innerWidth),
     app: document.documentElement.hasAttribute(IN_APP_ATTRIBUTE)
       ? "android"
       : "web",
+    tier: deviceTier(nav.hardwareConcurrency, nav.deviceMemory),
+    ...network(nav.connection, nav.onLine !== false),
+    appVersion: appVersion(nav.userAgent),
   };
 }
 

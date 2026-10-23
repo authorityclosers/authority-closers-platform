@@ -4,6 +4,7 @@
  * section is its own address under /settings; older addresses map here. Pure.
  */
 import {
+  Activity,
   BellRing,
   Blocks,
   Bot,
@@ -28,6 +29,7 @@ export type SettingsSectionId =
   | "selling"
   | "security"
   | "plan"
+  | "privacy"
   | "organisation"
   | "team"
   | "lead-rules"
@@ -80,6 +82,14 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     label: "Plan & usage",
     hint: "Your plan and invoices",
     icon: CreditCard,
+    group: "Account",
+  },
+  {
+    // Owner, 24 Oct 2026: usage analytics on by default, each person can turn it off.
+    id: "privacy",
+    label: "Privacy",
+    hint: "Usage analytics, for you and your workspace",
+    icon: Activity,
     group: "Account",
   },
   {
