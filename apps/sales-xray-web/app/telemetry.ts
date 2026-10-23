@@ -179,6 +179,29 @@ export type TelemetryEvents = {
     screen?: Screen;
   };
   "sx.feature_used": { feature: string; screen?: Screen };
+  // Lead OS (24 Oct 2026): the pipeline board, stage sheet and lead sheet.
+  /** One stage move; wait is from opening the stage sheet to Save. */
+  "sx.lead_stage_moved": {
+    via: "board" | "sheet" | "after_call" | "table" | "bulk" | "meeting";
+    source?: "seller" | "ai_suggestion";
+    from_kind?: LeadKind;
+    to_kind: LeadKind;
+    /** Required fields the move asked for, 0 to 4. */
+    needs?: number;
+    wait?: WaitBand;
+    wait_ms?: number;
+  };
+  "sx.board_drag": { result: "moved" | "sheet" | "refused" | "undone" };
+  /** From opening a lead to its first call, message or move. */
+  "sx.lead_open_to_action": {
+    wait: WaitBand;
+    first?: "call" | "message" | "move";
+    wait_ms?: number;
+  };
+  "sx.lead_suggestion": {
+    action: "shown" | "accepted" | "changed" | "dismissed";
+    from?: "call" | "chat" | "rule";
+  };
 };
 
 /** The app's screens (the server's SCREENS); routeTemplate's pages, a lead open on Leads. */
@@ -284,10 +307,23 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.api_slow",
   "sx.tap_issue",
   "sx.feature_used",
+  "sx.lead_stage_moved",
+  "sx.board_drag",
+  "sx.lead_open_to_action",
+  "sx.lead_suggestion",
 ] as const satisfies readonly TelemetryEventName[];
 
 export type SizeBand = "under_5mb" | "5_to_20mb" | "over_20mb";
 export type AudioFormat = "mp3" | "wav" | "m4a" | "ogg" | "flac" | "other";
+/** A lead's desk stage kind (Lead OS: Junk is the seventh). */
+export type LeadKind =
+  | "new"
+  | "not_connected"
+  | "follow_up"
+  | "interested"
+  | "won"
+  | "lost"
+  | "junk";
 export type WaitBand =
   | "under_2m"
   | "2_to_5m"

@@ -553,6 +553,19 @@ FEATURES: tuple[tuple[str, str, Callable[[Row], bool]], ...] = (
         lambda r: r.event == "sx.screen_viewed" and r.payload.get("screen") == "chats",
     ),
     (
+        "pipeline_board",
+        "Pipeline board",
+        lambda r: (
+            r.event == "sx.board_drag"
+            or (r.event == "sx.lead_stage_moved" and r.payload.get("via") == "board")
+        ),
+    ),
+    (
+        "stage_suggestions",
+        "AI stage suggestions taken",
+        lambda r: r.event == "sx.lead_suggestion" and r.payload.get("action") == "accepted",
+    ),
+    (
         "prospects",
         "Prospects",
         lambda r: (

@@ -138,6 +138,10 @@ ERROR_SOURCES = frozenset({"app", "vendor", "extension", "unknown"})
 API_STATUSES = frozenset({"2xx", "3xx", "4xx", "5xx", "network", "unknown"})
 # Longest a tap is timed for, a screen is stayed on and a start or vital is counted.
 MAX_ACTION_MS = 60_000
+# Lead OS (24 Oct 2026): a lead's desk stage kinds, Junk included, never a business's labels.
+LEAD_KINDS = frozenset({"new", "not_connected", "follow_up", "interested", "won", "lost", "junk"})
+WAIT_BANDS = frozenset({"under_2m", "2_to_5m", "5_to_15m", "over_15m", "unknown"})
+MAX_WAIT_MS = 3_600_000
 MAX_STAY_MS = 1_800_000
 MAX_LOAD_MS = 120_000
 # The Report's parts as its components name them (xray-report/panels.tsx: Overview, the AI
@@ -329,6 +333,37 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
         "sx.feature_used": _event(
             values={"screen": SCREENS}, tokens=("feature",), required=("feature",)
         ),
+        # Lead OS (24 Oct 2026, asked by the Lead OS session): the pipeline board and sheet.
+        # A stage move: how it was made, whether an AI suggestion made it, the stage kinds
+        # either side, how many required fields it asked for, and the wait from opening the
+        # stage sheet to saving.
+        "sx.lead_stage_moved": _event(
+            values={
+                "via": ("board", "sheet", "after_call", "table", "bulk", "meeting"),
+                "source": ("seller", "ai_suggestion"),
+                "from_kind": LEAD_KINDS,
+                "to_kind": LEAD_KINDS,
+                "wait": WAIT_BANDS,
+            },
+            numbers={"needs": 4, "wait_ms": MAX_WAIT_MS},
+            required=("via", "to_kind"),
+        ),
+        "sx.board_drag": _event(
+            values={"result": ("moved", "sheet", "refused", "undone")}, required=("result",)
+        ),
+        # From opening a lead to its first call, message or move.
+        "sx.lead_open_to_action": _event(
+            values={"wait": WAIT_BANDS, "first": ("call", "message", "move")},
+            numbers={"wait_ms": MAX_WAIT_MS},
+            required=("wait",),
+        ),
+        "sx.lead_suggestion": _event(
+            values={
+                "action": ("shown", "accepted", "changed", "dismissed"),
+                "from": ("call", "chat", "rule"),
+            },
+            required=("action",),
+        ),
     }
 )
 
@@ -435,6 +470,7 @@ __all__ = [
     "ACTIONS",
     "AI_LEVELS",
     "CALL_REF_PREFIX",
+    "LEAD_KINDS",
     "LINKS",
     "LOOKS",
     "MAX_ACTION_MS",

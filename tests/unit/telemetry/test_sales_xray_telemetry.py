@@ -201,6 +201,37 @@ def test_performance_events_take_bounded_codes_and_numbers_only() -> None:
     )
 
 
+def test_lead_os_events_take_stage_kinds_and_bands_never_labels() -> None:
+    moved = SALES_XRAY_EVENTS["sx.lead_stage_moved"]
+    check_payload_values(
+        moved,
+        {
+            "via": "board",
+            "source": "ai_suggestion",
+            "from_kind": "follow_up",
+            "to_kind": "junk",
+            "needs": 2,
+            "wait": "under_2m",
+            "wait_ms": 8_400,
+        },
+    )
+    for bad in (
+        {"via": "board"},  # no stage it moved to
+        {"via": "board", "to_kind": "Demo Scheduled"},  # a business's own label
+        {"via": "drag", "to_kind": "won"},
+        {"via": "board", "to_kind": "won", "needs": 5},
+    ):
+        with pytest.raises(ValueError):
+            check_payload_values(moved, bad)
+    check_payload_values(SALES_XRAY_EVENTS["sx.board_drag"], {"result": "refused"})
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.lead_open_to_action"], {"wait": "2_to_5m", "first": "call"}
+    )
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.lead_suggestion"], {"action": "accepted", "from": "call"}
+    )
+
+
 def test_the_privacy_page_shows_the_notice_of_the_version_recorded() -> None:
     page = (_APP / "policy-content.tsx").read_text(encoding="utf-8")
     for paragraph in NOTICES[NOTICE_VERSION]:
