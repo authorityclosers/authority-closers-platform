@@ -6,9 +6,17 @@ import { resetBackCloseForTests } from "../ui/back-close";
 import { History } from "./lead-sheet";
 import type { LeadEvent } from "./leads-client";
 import { parseCallLog, parseRecorder, parseSetup } from "./native-phone";
-import { lineTodo, PhoneSetupBar, setupLines } from "./phone-setup";
+import {
+  lineTodo,
+  needsAllFiles,
+  needsFolderPick,
+  PhoneSetupBar,
+  setupLines,
+} from "./phone-setup";
 import {
   ALL_FILES_EXPLAINER,
+  CHECK_TODO,
+  FOLDER_TODO,
   HIDDEN_TODO,
   recorderGuide,
 } from "./phone-setup-words";
@@ -132,6 +140,31 @@ it("reads the new setup fields, and an older app sends none", () => {
     needsAllFiles: false,
   });
   expect(lineTodo("recordings", status)).toBe(HIDDEN_TODO);
+});
+
+it("asks the Play build to pick the recordings folder, which then clears it (S8)", () => {
+  const play = parseSetup({
+    ...HYPEROS,
+    allFilesSupported: false,
+    folderPickSupported: true,
+    store: "play",
+  })!;
+  expect(play).toMatchObject({ folderPickSupported: true, folderPicked: false });
+  expect(needsAllFiles(play)).toBe(false);
+  expect(needsFolderPick(play)).toBe(true);
+  expect(lineTodo("recordings", play)).toBe(FOLDER_TODO);
+  const picked = parseSetup({
+    ...HYPEROS,
+    allFilesSupported: false,
+    folderPickSupported: true,
+    folderPicked: true,
+    needsAllFiles: false,
+  })!;
+  expect(needsFolderPick(picked)).toBe(false);
+  expect(lineTodo("recordings", picked)).toBe(CHECK_TODO.recordings);
+  // An older Play build without the picker says nothing it can't do.
+  const older = parseSetup({ ...HYPEROS, allFilesSupported: false })!;
+  expect(needsFolderPick(older)).toBe(false);
 });
 
 it("leaves out work-call logging in the Play build of the app", () => {

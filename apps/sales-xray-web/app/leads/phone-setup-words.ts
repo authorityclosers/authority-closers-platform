@@ -161,6 +161,20 @@ export const ALL_FILES_EXPLAINER: Explainer = {
 export const HIDDEN_TODO =
   "Your phone hides its call recordings. Allow All files access.";
 
+/** The same phones in the Play build: the seller picks the folder instead (S8). */
+export const FOLDER_EXPLAINER: Explainer = {
+  title: "Call recordings",
+  reads:
+    "Only the folder you choose: your Phone app's call recordings. Sales X-Ray doesn't open your photos, documents or other files.",
+  sends:
+    "Only a recording you choose to analyse, after you agree to the terms. Nothing is sent by itself.",
+  why: "Your phone keeps call recordings in a folder other apps can't see. Android opens that folder for you: tap Use this folder, then Allow.",
+  allow: "Choose the folder",
+};
+
+export const FOLDER_TODO =
+  "Your phone hides its call recordings. Choose their folder.";
+
 /** Truecaller's after-call screen covers "How did it go?" (Redmi audit #48). */
 export const TRUECALLER_NOTE =
   "Truecaller opens its own screen after each call, on top of Sales X-Ray. Close it to log your call, or tap the How did the call go? notification.";

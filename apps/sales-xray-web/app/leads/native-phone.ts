@@ -578,6 +578,12 @@ export type SetupStatus = {
   needsAllFiles: boolean;
   /** This app build can ask for All files access (download builds, not Play). */
   allFilesSupported: boolean;
+  /**
+   * Without All files access (the Play build), the seller picks the recordings
+   * folder once instead (S8, app 0.3.100+); a picked folder clears needsAllFiles.
+   */
+  folderPickSupported: boolean;
+  folderPicked: boolean;
   /** Truecaller is on this phone: its after-call screen covers "How did it go?" (#48). */
   truecaller: boolean;
   /** This app build can log work calls from the call history (not the Play build, 23 Oct 2026). */
@@ -652,6 +658,8 @@ export function parseSetup(raw: unknown): SetupStatus | null {
     recorder: parseRecorder(value.recorderProfile),
     needsAllFiles: value.needsAllFiles === true,
     allFilesSupported: value.allFilesSupported === true,
+    folderPickSupported: value.folderPickSupported === true,
+    folderPicked: value.folderPicked === true,
     truecaller: value.truecaller === true,
     // Apps before the two builds always had call history.
     callLogSupported: value.callLogSupported !== false,
@@ -673,6 +681,20 @@ export async function setupStatus(): Promise<SetupStatus | null> {
  * Opens the phone screen that fixes a line: battery, autostart, recorder,
  * notifications, allFiles (MIUI's hidden recordings, app 0.3.80+) or truecaller.
  */
+/**
+ * "Choose your recordings folder" (S8): Android's folder picker opens at the
+ * phone's call recordings; the new checklist comes back once the seller has
+ * picked (or backed out). Null in a browser or an older app.
+ */
+export async function pickRecordingsFolder(): Promise<SetupStatus | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    return parseSetup(await ask("pickRecordingsFolder", {}, 600_000));
+  } catch {
+    return null;
+  }
+}
+
 export async function setupOpen(what: string): Promise<boolean> {
   try {
     const raw = await ask<{ opened?: boolean }>("setupOpen", { what }, 10_000);

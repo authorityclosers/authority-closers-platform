@@ -29,6 +29,7 @@ import {
   onPhoneSignal,
   setupMark,
   recorderOpen,
+  pickRecordingsFolder,
   setupOpen,
   setupStatus,
   type CallLogStatus,
@@ -36,6 +37,8 @@ import {
 } from "./native-phone";
 import {
   ALL_FILES_EXPLAINER,
+  FOLDER_EXPLAINER,
+  FOLDER_TODO,
   CHECK_ORDER,
   CHECK_TODO,
   checkLabel,
@@ -64,9 +67,19 @@ export function needsAllFiles(status: SetupStatus): boolean {
   return status.needsAllFiles && status.allFilesSupported;
 }
 
+/** The same in the Play build, which has no All files access: the seller picks the folder (S8). */
+export function needsFolderPick(status: SetupStatus): boolean {
+  return (
+    status.needsAllFiles &&
+    !status.allFilesSupported &&
+    status.folderPickSupported
+  );
+}
+
 /** What a line says while it is not done yet, for this phone. */
 export function lineTodo(key: PhoneCheck, status: SetupStatus): string {
   if (key === "recordings" && needsAllFiles(status)) return HIDDEN_TODO;
+  if (key === "recordings" && needsFolderPick(status)) return FOLDER_TODO;
   return CHECK_TODO[key];
 }
 
@@ -262,7 +275,10 @@ export function PhoneSetupSheet({
         key !== "battery" &&
         key !== "recorder" &&
         key !== "autostart" &&
-        !(key === "recordings" && needsAllFiles(status))
+        !(
+          key === "recordings" &&
+          (needsAllFiles(status) || needsFolderPick(status))
+        )
       )
         setNote(
           "Not allowed yet. You can allow it in your phone's settings for Sales X-Ray.",
@@ -278,9 +294,11 @@ export function PhoneSetupSheet({
         return run(key, () => askCallAccess().catch(() => false));
       case "recordings":
         // Android's All files access screen opens; the line ticks when the seller comes back.
-        return needsAllFiles(status)
-          ? run(key, () => setupOpen("allFiles"))
-          : run(key, askRecordingAccess);
+        if (needsAllFiles(status))
+          return run(key, () => setupOpen("allFiles"));
+        // Android's folder picker opens at the recordings; the line ticks once it's picked.
+        if (needsFolderPick(status)) return run(key, pickRecordingsFolder);
+        return run(key, askRecordingAccess);
       case "notifications":
         return run(key, askNotifications);
       case "battery":
@@ -294,9 +312,11 @@ export function PhoneSetupSheet({
   const explainer =
     view === "recordings" && needsAllFiles(status)
       ? ALL_FILES_EXPLAINER
-      : view
-        ? explainerFor(view, status.store)
-        : undefined;
+      : view === "recordings" && needsFolderPick(status)
+        ? FOLDER_EXPLAINER
+        : view
+          ? explainerFor(view, status.store)
+          : undefined;
 
   return (
     <Sheet

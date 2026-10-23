@@ -33,6 +33,7 @@ import {
   callRecorderStart,
   callRecorderStatus,
   inPhoneApp,
+  pickRecordingsFolder,
   recorderOpen,
   setupOpen,
   setupStatus,
@@ -41,6 +42,7 @@ import {
 } from "./native-phone";
 import {
   ALL_FILES_EXPLAINER,
+  FOLDER_EXPLAINER,
   explainerFor,
   recorderSteps,
 } from "./phone-setup-words";
@@ -147,7 +149,9 @@ function screenFor(
   const words =
     step === "recordings" && hidesRecordings(status)
       ? ALL_FILES_EXPLAINER
-      : explainerFor(step, status.store);
+      : step === "recordings" && picksRecordingsFolder(status)
+        ? FOLDER_EXPLAINER
+        : explainerFor(step, status.store);
   const icon =
     step === "calls" ? Phone : step === "notifications" ? Bell : FileAudio;
   return {
@@ -165,6 +169,15 @@ function hidesRecordings(status: SetupStatus): boolean {
   return status.needsAllFiles && status.allFilesSupported;
 }
 
+/** The Play build has no All files access: the seller picks the recordings folder (S8). */
+function picksRecordingsFolder(status: SetupStatus): boolean {
+  return (
+    status.needsAllFiles &&
+    !status.allFilesSupported &&
+    status.folderPickSupported
+  );
+}
+
 async function allow(
   step: OnboardingStep,
   status: SetupStatus,
@@ -174,6 +187,8 @@ async function allow(
   else if (step === "notifications") await askNotifications();
   else if (step === "recordings" && hidesRecordings(status))
     await setupOpen("allFiles");
+  else if (step === "recordings" && picksRecordingsFolder(status))
+    await pickRecordingsFolder();
   else if (step === "recordings") await askRecordingAccess();
   else if (recorder?.available) {
     await callRecorderStart();
