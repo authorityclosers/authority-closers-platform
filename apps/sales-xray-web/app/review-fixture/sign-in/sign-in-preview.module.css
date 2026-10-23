@@ -1,4 +1,10 @@
 /* The preview bar sits above the real screens; ?chrome=0 hides it. */
+.frame *,
+.frame *::before,
+.frame *::after {
+  box-sizing: border-box;
+}
+
 .frame {
   min-height: 100dvh;
   background: var(--sx-paper);
