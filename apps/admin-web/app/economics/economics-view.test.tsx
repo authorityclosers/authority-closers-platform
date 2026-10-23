@@ -1,6 +1,10 @@
 // @vitest-environment happy-dom
 import { renderToStaticMarkup } from "react-dom/server";
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: () => undefined }),
+}));
 
 import { economicsFixture } from "../review-fixture/economics/economics-fixture";
 import {
@@ -100,4 +104,25 @@ it("names a plan that loses money", () => {
   expect(text).toContain(
     "Personal, monthly, Play Store on Today loses money at full use.",
   );
+});
+
+it("offers the fixed costs for editing, the measured line left out", () => {
+  const host = document.createElement("div");
+  host.innerHTML = renderToStaticMarkup(
+    <EconomicsView economics={normalizeEconomics(economicsFixture())} />,
+  );
+  expect(host.textContent).toContain("Edit fixed costs");
+  const values = Array.from(host.querySelectorAll("form input")).map(
+    (input) => (input as HTMLInputElement).value,
+  );
+  expect(values).toContain("2000");
+  expect(values).not.toContain(
+    "AI on test, staging and development calls (measured, last 30 days, scaled to a month)",
+  );
+  expect(host.querySelector("button[type=submit]")?.textContent).toBe(
+    "Save fixed costs",
+  );
+  // No settings document (an older API): no editor.
+  const bare = { ...economicsFixture(), settings: { revision: null } };
+  expect(render(bare)).not.toContain("Edit fixed costs");
 });

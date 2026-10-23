@@ -55,6 +55,7 @@ from ac_platform.conversation_intelligence import (
 )
 from ac_platform.conversation_intelligence import models as conversation_models
 from ac_platform.db.base import Base
+from ac_platform.economics import models as economics_models
 from ac_platform.enrollment import models as enrollment_models
 from ac_platform.fx import models as fx_models
 from ac_platform.identity import google_profile_models, sales_xray_profile_models
@@ -141,6 +142,7 @@ MODEL_MODULES = (
     billing_invoice_models,
     billing_order_models,
     offer_studio_models,
+    economics_models,
 )
 
 

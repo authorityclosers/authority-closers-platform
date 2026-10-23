@@ -14,8 +14,9 @@ import pytest
 from fastapi import FastAPI, Request
 
 from ac_platform.application.settings import Settings
+from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
-from ac_platform.economics import service
+from ac_platform.economics import policy, service, store
 from ac_platform.economics.model import PlanTerms
 from ac_platform.http.auth import AuthenticatedTransaction
 from ac_platform.http.problem import register_problem_handlers
@@ -71,16 +72,39 @@ async def _client(
         yield client
 
 
+SAVED: list[dict[str, Any]] = []
+AUDITED: list[dict[str, Any]] = []
+
+
 @pytest.fixture(autouse=True)
 def _admitted(monkeypatch: pytest.MonkeyPatch) -> None:
+    SAVED.clear()
+    AUDITED.clear()
+
     async def admit(_service: Any, _actor: Any) -> None:
         return None
 
     async def active_plans(_db: Any) -> list[PlanTerms]:
         return [PERSONAL]
 
+    async def read(_db: Any) -> tuple[dict[str, Any], int | None]:
+        if not SAVED:
+            return policy.validate({}), None
+        return SAVED[-1], len(SAVED)
+
+    async def save(_db: Any, config: Any, *, person_id: Any, reason: Any, now: Any) -> int:
+        SAVED.append(policy.validate(config))
+        return len(SAVED)
+
+    async def append_for_actor(_repo: Any, _actor: Any, **event: Any) -> None:
+        AUDITED.append(event)
+
     monkeypatch.setattr(ConversationProviderAdmin, "admit", admit)
     monkeypatch.setattr(service, "active_plans", active_plans)
+    monkeypatch.setattr(store, "read", read)
+    monkeypatch.setattr(store, "save", save)
+    monkeypatch.setattr(AuditRepository, "__init__", lambda self, _db: None)
+    monkeypatch.setattr(AuditRepository, "append_for_actor", append_for_actor)
 
 
 async def test_economics_reads_plans_and_bounds_filters(tmp_path: Path) -> None:
@@ -111,3 +135,42 @@ async def test_economics_reads_plans_and_bounds_filters(tmp_path: Path) -> None:
         assert (await client.get("/v1/admin/economics")).status_code == 403
     async with _client(operations=None, store=str(tmp_path)) as client:
         assert (await client.get("/v1/admin/economics")).status_code == 403
+
+
+async def test_fixed_costs_are_saved_as_audited_revisions(tmp_path: Path) -> None:
+    write = {"Origin": "https://admin.test"}
+    config = policy.validate({})
+    config["fixed"][0] = {**config["fixed"][0], "rupees": 2499, "source": "invoice"}
+    async with _client(store=str(tmp_path)) as client:
+        response = await client.put(
+            "/v1/admin/economics/settings",
+            json={"expected_revision": None, "config": config, "reason": "Hostinger invoice"},
+            headers=write,
+        )
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["settings"]["revision"] == 1
+        server = next(item for item in body["fixed"]["items"] if item["key"] == "server_ac")
+        assert server == {**server, "rupees": 2499.0, "source": "invoice"}
+        assert AUDITED[0]["action"] == "economics.settings_saved"
+        assert AUDITED[0]["payload"]["old"]["fixed"][0]["rupees"] == 2000
+        assert AUDITED[0]["payload"]["new"]["fixed"][0]["rupees"] == 2499
+        # A stale revision, a bad document and a write from another origin are refused.
+        stale = await client.put(
+            "/v1/admin/economics/settings",
+            json={"expected_revision": None, "config": config},
+            headers=write,
+        )
+        assert stale.status_code == 409
+        bad = await client.put(
+            "/v1/admin/economics/settings",
+            json={"expected_revision": 1, "config": {"routes": ["nowhere"]}},
+            headers=write,
+        )
+        assert bad.status_code == 422 and "routes" in bad.json()["detail"]
+        foreign = await client.put(
+            "/v1/admin/economics/settings",
+            json={"expected_revision": 1, "config": config},
+        )
+        assert foreign.status_code == 403
+    assert len(SAVED) == 1

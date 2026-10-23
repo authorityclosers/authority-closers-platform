@@ -107,3 +107,67 @@
   font-size: var(--sx-text-sm, 13px);
   font-weight: 500;
 }
+
+/* The fixed-costs editor: one row per cost, stacked on phones. */
+.editor {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.editRow {
+  display: grid;
+  grid-template-columns: minmax(180px, 2fr) minmax(100px, 1fr) minmax(
+      130px,
+      1fr
+    ) minmax(110px, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+  margin: 0;
+  padding: 0 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--sx-line);
+  min-width: 0;
+}
+
+@media (max-width: 720px) {
+  .editRow {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .editRow > :first-of-type {
+    grid-column: 1 / -1;
+  }
+}
+
+.editFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 8px 12px;
+}
+
+.editFoot > label {
+  flex: 1 1 240px;
+}
+
+.saved {
+  color: var(--sx-good);
+  font-size: var(--sx-text-xs);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.edit summary {
+  cursor: pointer;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm, 13px);
+  font-weight: 600;
+}

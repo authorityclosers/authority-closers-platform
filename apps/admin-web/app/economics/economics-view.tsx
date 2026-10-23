@@ -16,6 +16,7 @@ import {
   type Offer,
 } from "./economics-data";
 import styles from "./economics.module.css";
+import { FixedCostsEditor } from "./fixed-costs-editor";
 
 const ENVIRONMENT_WORDS: Record<string, string> = {
   production: "production",
@@ -383,9 +384,23 @@ export function EconomicsView({ economics }: { economics: Economics }) {
       <div className={styles.columns}>
         <Panel
           title="Fixed costs a month"
-          sub="Estimates until invoices are entered; editing in Admin comes with the settings table"
+          sub={
+            economics.settingsRevision === null
+              ? "Estimates until invoices are entered"
+              : `Saved revision ${economics.settingsRevision}`
+          }
         >
           <FixedList economics={economics} />
+          {economics.settingsConfig ? (
+            <details className={styles.edit}>
+              <summary>Edit fixed costs</summary>
+              <FixedCostsEditor
+                revision={economics.settingsRevision}
+                config={economics.settingsConfig}
+                items={economics.fixed.items}
+              />
+            </details>
+          ) : null}
         </Panel>
         <Panel title="Top-ups and the free trial">
           <ul className={styles.fixed}>

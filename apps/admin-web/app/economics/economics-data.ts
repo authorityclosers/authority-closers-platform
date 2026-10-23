@@ -92,6 +92,8 @@ export type Economics = {
   };
   warnings: { offer: string; route: string; kind: string }[];
   settingsRevision: number | null;
+  /** The saved settings document (or the defaults), sent back whole when edited. */
+  settingsConfig: Record<string, unknown> | null;
   problems: string[];
 };
 
@@ -109,6 +111,11 @@ const recordOf = <T>(raw: unknown, map: (value: unknown) => T) =>
   Object.fromEntries(
     Object.entries(read.object(raw)).map(([key, value]) => [key, map(value)]),
   );
+
+const configOf = (raw: unknown) =>
+  typeof raw === "object" && raw !== null && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : null;
 
 export function normalizeEconomics(raw: unknown): Economics {
   const body = read.object(raw);
@@ -217,6 +224,7 @@ export function normalizeEconomics(raw: unknown): Economics {
       };
     }),
     settingsRevision: read.optionalNumber(read.object(body.settings).revision),
+    settingsConfig: configOf(read.object(body.settings).config),
     problems: read
       .array(body.problems)
       .map((item) => read.string(read.object(item).problem))
