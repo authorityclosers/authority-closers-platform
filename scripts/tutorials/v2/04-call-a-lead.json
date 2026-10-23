@@ -1,0 +1,775 @@
+{
+  "id": "04-call-a-lead",
+  "number": "04",
+  "title": {
+    "en": "Call a lead and log how it went",
+    "hi": "Lead ko call karo, result log karo",
+    "mr": "Lead la call kara, result log kara"
+  },
+  "description": {
+    "en": "Call your leads straight from Sales X-Ray and log how each call went in two taps: who to call today, the lead's page, calling, logging the result and what happens next, and Start calling for long lists.",
+    "hi": "Sales X-Ray se seedha apne leads ko call kijiye aur har call ka result do tap mein log kijiye: aaj kisko call karna hai, lead ka page, call, result aur aage kya hoga, aur lambi list ke liye Start calling.",
+    "mr": "Sales X-Ray madhun thet tumchya leads na call kara aani pratyek call cha result don tap madhye log kara: aaj konala call karaycha, lead cha page, call, result aani pudhe kay honar, aani mothya list saathi Start calling."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "sales app",
+    "lead management",
+    "call log",
+    "follow up",
+    "real estate sales",
+    "sales CRM India",
+    "cold calling",
+    "Hinglish",
+    "Marathi"
+  ],
+  "names": {
+    "[the owner's one-line reason]": "a quick partnership idea",
+    "Can I show you in 10 minutes how": "Can I quickly show you how"
+  },
+  "thumb": {
+    "beat": "next-step",
+    "text": {
+      "en": "Log every call in 2 taps",
+      "hi": "Har call 2 tap mein log",
+      "mr": "Pratyek call 2 tap madhye log"
+    },
+    "accent": { "en": "2 taps", "hi": "2 tap", "mr": "2 tap" }
+  },
+  "next": {
+    "id": "06-call-report",
+    "title": {
+      "en": "Read your call Report",
+      "hi": "Call Report kaise padhein",
+      "mr": "Call Report kashi vaachaychi"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "In this video, you'll call a lead from Sales X-Ray, and log how the call went, in just two taps.",
+      "hi": "इस video में हम Sales X-Ray से lead को call करेंगे, और call कैसा रहा, वो बस दो tap में log करेंगे.",
+      "mr": "या video मध्ये आपण Sales X-Ray मधून lead ला call करू, आणि call कसा झाला, ते फक्त दोन tap मध्ये log करू."
+    },
+    "latn": {
+      "hi": "Is video mein hum Sales X-Ray se lead ko call karenge, aur call kaisa raha, woh bas do tap mein log karenge.",
+      "mr": "Ya video madhye aapan Sales X-Ray madhun lead la call karu, aani call kasa jhala, te fakta don tap madhye log karu."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "Call. Log. Next.",
+      "hi": "Call. Log. Next.",
+      "mr": "Call. Log. Next."
+    },
+    "say": {
+      "en": "Next, see how to read the Report Sales X-Ray makes from your calls.",
+      "hi": "अगले video में देखेंगे, आपके calls से बनी Report कैसे पढ़ें.",
+      "mr": "पुढच्या video मध्ये बघूया, तुमच्या calls मधून बनलेली Report कशी वाचायची."
+    },
+    "latn": {
+      "hi": "Agle video mein dekhenge, aapke calls se bani Report kaise padhein.",
+      "mr": "Pudhchya video madhye baghuya, tumchya calls madhun banleli Report kashi vaachaychi."
+    }
+  },
+  "chapters": [
+    {
+      "id": "find",
+      "title": {
+        "en": "Who to call today",
+        "hi": "Aaj kisko call karna hai",
+        "mr": "Aaj konala call karaycha"
+      }
+    },
+    {
+      "id": "lead",
+      "title": { "en": "Open a lead", "hi": "Lead kholiye", "mr": "Lead ughda" }
+    },
+    {
+      "id": "call",
+      "title": { "en": "Make the call", "hi": "Call kijiye", "mr": "Call kara" }
+    },
+    {
+      "id": "log",
+      "title": {
+        "en": "Log how it went",
+        "hi": "Call ka result log kijiye",
+        "mr": "Call cha result log kara"
+      }
+    },
+    {
+      "id": "desk",
+      "title": {
+        "en": "Calling a long list",
+        "hi": "Lambi list ke liye",
+        "mr": "Mothya list saathi"
+      }
+    }
+  ],
+  "reel": {
+    "hook": {
+      "beat": "next-step",
+      "text": {
+        "en": "Log every call in 2 taps",
+        "hi": "Har call 2 tap mein log",
+        "mr": "Pratyek call 2 tap madhye log"
+      },
+      "accent": { "en": "2 taps", "hi": "2 tap", "mr": "2 tap" },
+      "say": {
+        "en": "Log every call in two taps. Here's how.",
+        "hi": "हर call दो tap में log कीजिए. देखिए कैसे.",
+        "mr": "प्रत्येक call दोन tap मध्ये log करा. बघा कसं."
+      },
+      "latn": {
+        "hi": "Har call do tap mein log kijiye. Dekhiye kaise.",
+        "mr": "Pratyek call don tap madhye log kara. Bagha kasa."
+      }
+    },
+    "beats": [
+      "open-lead",
+      "call",
+      "log-open",
+      "outcome",
+      "next-step",
+      "note",
+      "save",
+      "start-calling",
+      "dial"
+    ]
+  },
+  "shots": [
+    {
+      "id": "leads",
+      "device": "reel",
+      "setup": [
+        { "do": "goto", "url": "/review-fixture/leads" },
+        { "do": "hide", "target": { "text": "Deal value" }, "collapse": true },
+        { "do": "wait", "ms": 500 }
+      ],
+      "beats": [
+        {
+          "id": "leads-open",
+          "chapter": "find",
+          "actions": [
+            { "do": "wait", "ms": 300 },
+            {
+              "do": "highlight",
+              "target": { "role": "tab", "name": "To call" },
+              "ms": 1700
+            },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "Everything starts in Leads. The To call tab is your list for today.",
+            "hi": "सब कुछ Leads से शुरू होता है. To call tab में आज की पूरी list है.",
+            "mr": "सगळं Leads पासून सुरू होतं. To call tab मध्ये आजची पूर्ण list आहे."
+          },
+          "latn": {
+            "hi": "Sab kuch Leads se shuru hota hai. To call tab mein aaj ki poori list hai.",
+            "mr": "Sagla Leads pasun suru hota. To call tab madhye aajchi poorna list aahe."
+          }
+        },
+        {
+          "id": "late-first",
+          "chapter": "find",
+          "actions": [
+            { "do": "highlight", "target": { "text": "Overdue" }, "ms": 1500 },
+            { "do": "unhighlight" },
+            { "do": "highlight", "target": { "text": "Call now" }, "ms": 1500 },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "Late follow-ups sit on top. Below them, the people to call right now.",
+            "hi": "जो follow-ups late हो गए, वो सबसे ऊपर. उनके नीचे, जिनको अभी call करना है.",
+            "mr": "जे follow-ups late झालेत, ते सगळ्यात वर. त्यांच्या खाली, ज्यांना आत्ता call करायचाय."
+          },
+          "latn": {
+            "hi": "Jo follow-ups late ho gaye, woh sabse upar. Unke neeche, jinko abhi call karna hai.",
+            "mr": "Je follow-ups late jhalet, te saglyat var. Tyanchya khali, jyanna aatta call karaychay."
+          }
+        },
+        {
+          "id": "stages",
+          "chapter": "find",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "role": "tab", "name": "Call back" },
+              "ms": 1400
+            },
+            { "do": "unhighlight" },
+            {
+              "do": "highlight",
+              "target": { "role": "tab", "name": "Site visit booked" },
+              "ms": 1400
+            },
+            { "do": "unhighlight" },
+            {
+              "do": "highlight",
+              "target": { "role": "tab", "name": "To call" },
+              "ring": false,
+              "zoom": false,
+              "ms": 500
+            }
+          ],
+          "say": {
+            "en": "Swipe the tabs to see every stage, like Call back, or Site visit booked.",
+            "hi": "Tabs को swipe कीजिए, हर stage दिखेगा, जैसे Call back, या Site visit booked.",
+            "mr": "Tabs swipe करा, प्रत्येक stage दिसेल, जसं Call back, किंवा Site visit booked."
+          },
+          "latn": {
+            "hi": "Tabs ko swipe kijiye, har stage dikhega, jaise Call back, ya Site visit booked.",
+            "mr": "Tabs swipe kara, pratyek stage disel, jasa Call back, kinva Site visit booked."
+          }
+        },
+        {
+          "id": "tip",
+          "chapter": "find",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "text": "Swipe a lead right" },
+              "ms": 2000
+            },
+            { "do": "unhighlight" },
+            {
+              "do": "tap",
+              "target": { "role": "button", "name": "Got it" },
+              "ms": 900
+            }
+          ],
+          "say": {
+            "en": "Here's a shortcut: swipe a lead right to call, or left to WhatsApp.",
+            "hi": "एक shortcut: lead को right swipe करो तो call, left swipe करो तो WhatsApp.",
+            "mr": "एक shortcut: lead ला right swipe केलं की call, left swipe केलं की WhatsApp."
+          },
+          "latn": {
+            "hi": "Ek shortcut: lead ko right swipe karo toh call, left swipe karo toh WhatsApp.",
+            "mr": "Ek shortcut: lead la right swipe kela ki call, left swipe kela ki WhatsApp."
+          }
+        },
+        {
+          "id": "open-lead",
+          "chapter": "lead",
+          "sync": { "en": "Tap", "hi": "tap", "mr": "tap" },
+          "actions": [
+            {
+              "do": "tap",
+              "target": { "role": "button", "name": "Open Asha Fictional" },
+              "ms": 1500
+            }
+          ],
+          "say": {
+            "en": "Tap a lead to open it.",
+            "hi": "किसी भी lead पे tap कीजिए.",
+            "mr": "कुठल्याही lead वर tap करा."
+          },
+          "latn": {
+            "hi": "Kisi bhi lead pe tap kijiye.",
+            "mr": "Kuthlyahi lead var tap kara."
+          }
+        },
+        {
+          "id": "story",
+          "chapter": "lead",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "text": "The story so far" },
+              "ms": 2000
+            },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "The story so far tells you where things stand, before you even dial.",
+            "hi": "The story so far में पूरा हाल दिखता है, call लगाने से पहले ही.",
+            "mr": "The story so far मध्ये सगळी माहिती दिसते, call लावायच्या आधीच."
+          },
+          "latn": {
+            "hi": "The story so far mein poora haal dikhta hai, call lagane se pehle hi.",
+            "mr": "The story so far madhye sagli maahiti diste, call laavaychya aadhich."
+          }
+        },
+        {
+          "id": "badges",
+          "chapter": "lead",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "text": "Added by hand", "nth": -1 },
+              "ms": 1600
+            },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "You also see their stage, and where the lead came from.",
+            "hi": "Lead का stage और वो कहाँ से आया, ये भी यहीं दिखता है.",
+            "mr": "Lead चा stage आणि तो कुठून आला, हे पण इथेच दिसतं."
+          },
+          "latn": {
+            "hi": "Lead ka stage aur woh kahan se aaya, yeh bhi yahin dikhta hai.",
+            "mr": "Lead cha stage aani to kuthun aala, he pan ithech dista."
+          }
+        },
+        {
+          "id": "call",
+          "chapter": "call",
+          "sync": { "en": "Call", "hi": "Call", "mr": "Call" },
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "css": "a[href^='tel:']" },
+              "ms": 1700
+            },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "Ready? Tap Call, and your phone dials the number straight away.",
+            "hi": "Ready? Call दबाइए, phone तुरंत number लगा देगा.",
+            "mr": "Ready? Call दाबा, phone लगेच number लावेल."
+          },
+          "latn": {
+            "hi": "Ready? Call dabaiye, phone turant number laga dega.",
+            "mr": "Ready? Call daba, phone lagech number laavel."
+          },
+          "short": {
+            "say": {
+              "en": "Tap Call. Your phone dials right away.",
+              "hi": "Call दबाइए, phone तुरंत लग जाएगा.",
+              "mr": "Call दाबा, phone लगेच लागेल."
+            },
+            "latn": {
+              "hi": "Call dabaiye, phone turant lag jaayega.",
+              "mr": "Call daba, phone lagech laagel."
+            }
+          }
+        },
+        {
+          "id": "message",
+          "chapter": "call",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "role": "button", "name": "WhatsApp" },
+              "ms": 1400
+            },
+            { "do": "unhighlight" },
+            {
+              "do": "highlight",
+              "target": { "role": "button", "name": "SMS", "exact": true },
+              "ms": 900
+            },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "Want to send a message instead? WhatsApp and SMS are right next to it.",
+            "hi": "Message भेजना है? WhatsApp और SMS बगल में ही हैं.",
+            "mr": "Message पाठवायचाय? WhatsApp आणि SMS बाजूलाच आहेत."
+          },
+          "latn": {
+            "hi": "Message bhejna hai? WhatsApp aur SMS bagal mein hi hain.",
+            "mr": "Message pathvaychay? WhatsApp aani SMS bajulach aahet."
+          }
+        },
+        {
+          "id": "log-open",
+          "chapter": "log",
+          "sync": {
+            "en": "Log a call",
+            "hi": "Log a call",
+            "mr": "Log a call"
+          },
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "text": "Log a call" },
+              "ms": 1100,
+              "key": true
+            },
+            { "do": "unhighlight", "ms": 100 },
+            { "do": "tap", "target": { "text": "Log a call" }, "ms": 1300 }
+          ],
+          "say": {
+            "en": "When the call ends, Sales X-Ray asks how it went. Or tap Log a call, any time.",
+            "hi": "Call खत्म होते ही Sales X-Ray पूछता है कि call कैसा रहा. या कभी भी Log a call दबाइए.",
+            "mr": "Call संपला की Sales X-Ray विचारतो, call कसा झाला. किंवा कधीही Log a call दाबा."
+          },
+          "latn": {
+            "hi": "Call khatam hote hi Sales X-Ray poochta hai ki call kaisa raha. Ya kabhi bhi Log a call dabaiye.",
+            "mr": "Call sampla ki Sales X-Ray vichaarto, call kasa jhala. Kinva kadhihi Log a call daba."
+          },
+          "short": {
+            "say": {
+              "en": "Call over? Tap Log a call.",
+              "hi": "Call हो गया? Log a call दबाइए.",
+              "mr": "Call झाला? Log a call दाबा."
+            },
+            "latn": {
+              "hi": "Call ho gaya? Log a call dabaiye.",
+              "mr": "Call jhala? Log a call daba."
+            }
+          }
+        },
+        {
+          "id": "outcome",
+          "chapter": "log",
+          "sync": { "en": "we talked", "hi": "We talked", "mr": "We talked" },
+          "actions": [
+            {
+              "do": "tap",
+              "target": { "role": "button", "name": "We talked" },
+              "ms": 1300
+            }
+          ],
+          "say": {
+            "en": "Pick what happened. Here, we talked to them.",
+            "hi": "जो हुआ वो चुनिए. यहाँ बात हो गई, तो We talked.",
+            "mr": "जे झालं ते निवडा. इथे बोलणं झालं, म्हणून We talked."
+          },
+          "latn": {
+            "hi": "Jo hua woh chuniye. Yahan baat ho gayi, toh We talked.",
+            "mr": "Je jhala te nivda. Ithe bolna jhala, mhanun We talked."
+          },
+          "short": {
+            "say": {
+              "en": "Tap what happened.",
+              "hi": "जो हुआ वो tap कीजिए.",
+              "mr": "जे झालं ते tap करा."
+            },
+            "latn": {
+              "hi": "Jo hua woh tap kijiye.",
+              "mr": "Je jhala te tap kara."
+            }
+          }
+        },
+        {
+          "id": "no-answer",
+          "chapter": "log",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "role": "button", "name": "No answer" },
+              "ms": 1300
+            },
+            { "do": "unhighlight" },
+            {
+              "do": "highlight",
+              "target": { "role": "button", "name": "Didn't get through" },
+              "ms": 1200
+            },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "If they didn't pick up, tap No answer, or Didn't get through.",
+            "hi": "Phone नहीं उठाया? तो No answer, या Didn't get through.",
+            "mr": "Phone उचलला नाही? तर No answer, किंवा Didn't get through."
+          },
+          "latn": {
+            "hi": "Phone nahi uthaya? Toh No answer, ya Didn't get through.",
+            "mr": "Phone uchalla nahi? Tar No answer, kinva Didn't get through."
+          }
+        },
+        {
+          "id": "next-step",
+          "chapter": "log",
+          "sync": {
+            "en": "Site visit booked",
+            "hi": "Site visit booked",
+            "mr": "Site visit booked"
+          },
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "text": "What happens next?" },
+              "ms": 1200
+            },
+            { "do": "unhighlight", "ms": 100 },
+            {
+              "do": "tap",
+              "target": { "role": "button", "name": "Site visit booked" },
+              "ms": 1300,
+              "key": true
+            }
+          ],
+          "say": {
+            "en": "Then choose what happens next. Say they agreed to visit: Site visit booked.",
+            "hi": "फिर चुनिए आगे क्या होगा. मान लो वो visit के लिए ready हैं: Site visit booked.",
+            "mr": "मग निवडा पुढे काय होणार. समजा ते visit ला तयार आहेत: Site visit booked."
+          },
+          "latn": {
+            "hi": "Phir chuniye aage kya hoga. Maan lo woh visit ke liye ready hain: Site visit booked.",
+            "mr": "Mag nivda pudhe kay honar. Samja te visit la tayar aahet: Site visit booked."
+          },
+          "short": {
+            "say": {
+              "en": "Then, what happens next.",
+              "hi": "फिर, आगे क्या होगा.",
+              "mr": "मग, पुढे काय होणार."
+            },
+            "latn": {
+              "hi": "Phir, aage kya hoga.",
+              "mr": "Mag, pudhe kay honar."
+            }
+          }
+        },
+        {
+          "id": "other-steps",
+          "chapter": "log",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "role": "button", "name": "Call back" },
+              "ms": 1300
+            },
+            { "do": "unhighlight" },
+            {
+              "do": "highlight",
+              "target": { "role": "button", "name": "Booked They bought" },
+              "ms": 1100
+            },
+            { "do": "unhighlight" },
+            {
+              "do": "highlight",
+              "target": { "role": "button", "name": "Not interested" },
+              "ms": 1100
+            },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "Asked you to call later? Call back. Booked means they bought. Not interested means they won't.",
+            "hi": "बाद में call करने को बोला? Call back. Booked मतलब उन्होंने ले लिया. Not interested मतलब नहीं लेंगे.",
+            "mr": "नंतर call करायला सांगितलं? Call back. Booked म्हणजे त्यांनी घेतलं. Not interested म्हणजे नाही घेणार."
+          },
+          "latn": {
+            "hi": "Baad mein call karne ko bola? Call back. Booked matlab unhone le liya. Not interested matlab nahi lenge.",
+            "mr": "Nantar call karayla sangitla? Call back. Booked mhanje tyanni ghetla. Not interested mhanje nahi ghenaar."
+          }
+        },
+        {
+          "id": "note",
+          "chapter": "log",
+          "actions": [
+            {
+              "do": "type",
+              "target": { "placeholder": "What they need, what you promised" },
+              "text": "Wants a 2 BHK near Baner. Visit on Sunday morning.",
+              "delay": 42,
+              "ms": 700
+            }
+          ],
+          "say": {
+            "en": "Add a quick note: what they need, and what you promised.",
+            "hi": "एक छोटा सा note लिख दीजिए: उन्हें क्या चाहिए, और आपने क्या promise किया.",
+            "mr": "एक छोटी note लिहा: त्यांना काय हवंय, आणि तुम्ही काय promise केलं."
+          },
+          "latn": {
+            "hi": "Ek chhota sa note likh dijiye: unhe kya chahiye, aur aapne kya promise kiya.",
+            "mr": "Ek chhoti note liha: tyanna kay havay, aani tumhi kay promise kela."
+          },
+          "short": {
+            "say": {
+              "en": "Add a quick note.",
+              "hi": "एक छोटा note.",
+              "mr": "एक छोटी note."
+            },
+            "latn": { "hi": "Ek chhota note.", "mr": "Ek chhoti note." }
+          }
+        },
+        {
+          "id": "save",
+          "chapter": "log",
+          "sync": { "en": "Save", "hi": "Save", "mr": "Save" },
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "role": "button", "name": "Save", "exact": true },
+              "ms": 1600
+            },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "Tap Save, and it's all there for your next call.",
+            "hi": "Save दबाइए, अगले call के लिए सब याद रहेगा.",
+            "mr": "Save दाबा, पुढच्या call साठी सगळं लक्षात राहील."
+          },
+          "latn": {
+            "hi": "Save dabaiye, agle call ke liye sab yaad rahega.",
+            "mr": "Save daba, pudhchya call saathi sagla lakshat raahil."
+          },
+          "short": {
+            "say": {
+              "en": "Save. Done.",
+              "hi": "Save. हो गया.",
+              "mr": "Save. झालं."
+            },
+            "latn": { "hi": "Save. Ho gaya.", "mr": "Save. Jhala." }
+          }
+        }
+      ]
+    },
+    {
+      "id": "stage-list",
+      "device": "reel",
+      "setup": [
+        { "do": "goto", "url": "/review-fixture/leads" },
+        {
+          "do": "tap",
+          "target": { "role": "button", "name": "Got it" },
+          "ms": 500,
+          "optional": true
+        }
+      ],
+      "beats": [
+        {
+          "id": "stage-tab",
+          "chapter": "log",
+          "actions": [
+            {
+              "do": "tap",
+              "target": { "role": "tab", "name": "Site visit booked" },
+              "ms": 2000
+            }
+          ],
+          "say": {
+            "en": "Every lead moves to the right stage. Site visit booked shows everyone with a visit booked.",
+            "hi": "हर lead सही stage में चला जाता है. Site visit booked में वो सब हैं जिनकी visit book हो चुकी है.",
+            "mr": "प्रत्येक lead योग्य stage मध्ये जातो. Site visit booked मध्ये ते सगळे आहेत ज्यांची visit book झालीय."
+          },
+          "latn": {
+            "hi": "Har lead sahi stage mein chala jaata hai. Site visit booked mein woh sab hain jinki visit book ho chuki hai.",
+            "mr": "Pratyek lead yogya stage madhye jaato. Site visit booked madhye te sagle aahet jyanchi visit book jhaliy."
+          }
+        },
+        {
+          "id": "start-calling",
+          "chapter": "desk",
+          "actions": [
+            {
+              "do": "tap",
+              "target": { "role": "tab", "name": "To call" },
+              "ms": 900,
+              "zoom": false
+            },
+            {
+              "do": "highlight",
+              "target": { "role": "button", "name": "Start calling" },
+              "ms": 1800,
+              "key": true
+            },
+            { "do": "unhighlight" }
+          ],
+          "sync": {
+            "en": "Start calling",
+            "hi": "Start calling",
+            "mr": "Start calling"
+          },
+          "say": {
+            "en": "Got a long list to get through? Tap Start calling.",
+            "hi": "लंबी list है? Start calling दबाइए.",
+            "mr": "मोठी list आहे? Start calling दाबा."
+          },
+          "latn": {
+            "hi": "Lambi list hai? Start calling dabaiye.",
+            "mr": "Mothi list aahe? Start calling daba."
+          },
+          "short": {
+            "say": {
+              "en": "Long list? Start calling.",
+              "hi": "लंबी list? Start calling.",
+              "mr": "मोठी list? Start calling."
+            },
+            "latn": {
+              "hi": "Lambi list? Start calling.",
+              "mr": "Mothi list? Start calling."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "desk",
+      "device": "reel",
+      "setup": [
+        { "do": "goto", "url": "/review-fixture/cold-calling" },
+        {
+          "do": "hide",
+          "target": { "text": "the owner writes these" },
+          "collapse": true
+        }
+      ],
+      "beats": [
+        {
+          "id": "next-lead",
+          "chapter": "desk",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "text": "Priya Nair", "exact": true },
+              "ms": 1500
+            },
+            { "do": "unhighlight" },
+            { "do": "highlight", "target": { "text": "Best 11" }, "ms": 1200 },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "Sales X-Ray brings up the next lead, with the best time to reach them.",
+            "hi": "Sales X-Ray अगला lead सामने लाता है, और उन्हें call करने का best time भी.",
+            "mr": "Sales X-Ray पुढचा lead समोर आणतो, आणि त्यांना call करायची best वेळ पण."
+          },
+          "latn": {
+            "hi": "Sales X-Ray agla lead saamne laata hai, aur unhe call karne ka best time bhi.",
+            "mr": "Sales X-Ray pudhcha lead samor aanto, aani tyanna call karaychi best vel pan."
+          }
+        },
+        {
+          "id": "opener",
+          "chapter": "desk",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "text": "Opener for" },
+              "ms": 1500
+            },
+            { "do": "unhighlight" },
+            { "do": "scroll", "dy": 260, "ms": 500 },
+            {
+              "do": "highlight",
+              "target": { "text": "If they say" },
+              "ms": 1500
+            },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "Your opener is right there, with answers ready for whatever they say.",
+            "hi": "आपका opener यहीं है, और वो जो भी बोलें, उसके जवाब भी ready हैं.",
+            "mr": "तुमचा opener इथेच आहे, आणि ते जे काही बोलतील, त्याची उत्तरं पण ready आहेत."
+          },
+          "latn": {
+            "hi": "Aapka opener yahin hai, aur woh jo bhi bolein, uske jawaab bhi ready hain.",
+            "mr": "Tumcha opener ithech aahe, aani te je kahi boltil, tyachi uttara pan ready aahet."
+          }
+        },
+        {
+          "id": "dial",
+          "chapter": "desk",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": { "role": "button", "name": "Call Priya" },
+              "ms": 1600
+            },
+            { "do": "unhighlight" }
+          ],
+          "say": {
+            "en": "Call, log, next. That's the whole routine.",
+            "hi": "Call, log, next. बस, इतना ही.",
+            "mr": "Call, log, next. बस, एवढंच."
+          },
+          "latn": {
+            "hi": "Call, log, next. Bas, itna hi.",
+            "mr": "Call, log, next. Bas, evdhach."
+          }
+        }
+      ]
+    }
+  ]
+}

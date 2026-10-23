@@ -1,0 +1,66 @@
+{
+  "about": "Tutorials v2 narrators: one per language, used in every v2 video (owner order 23 Oct 2026: better voices that match, one consistent narrator per language). ElevenLabs library voices, no cloning. Picked from an audition on 23 Oct 2026 (12 voices, the same passage, an ElevenLabs Scribe hearing check; audition files in ~/sx-tutorials/v2/voice-audition and on the Drive). 'alternates' are the runners-up; to switch, swap voice_id and name and rebuild (only changed lines are re-voiced).",
+  "model_id": "eleven_v4",
+  "output_format": "mp3_44100_192",
+  "voice_settings": {
+    "stability": 0.5,
+    "similarity_boost": 0.8,
+    "speed": 1.0
+  },
+  "languages": {
+    "en": {
+      "label": "English (Indian)",
+      "language_code": "en",
+      "voice_id": "2zRM7PkgwBPiau2jvVXc",
+      "name": "Monika Sogam - Deep and Natural",
+      "gender": "female"
+    },
+    "hi": {
+      "label": "Hinglish",
+      "language_code": "hi",
+      "voice_id": "1qEiC6qsybMkmnNdVMbK",
+      "name": "Monika Sogam - Calm and Natural",
+      "gender": "female"
+    },
+    "mr": {
+      "label": "Marathi-English",
+      "language_code": "mr",
+      "voice_id": "4mCfn38CsM9hGLvDrPxv",
+      "name": "Sujata - Clear Marathi Audiobook",
+      "gender": "female"
+    }
+  },
+  "alternates": {
+    "en": [
+      {
+        "voice_id": "vYENaCJHl4vFKNDYPr8y",
+        "name": "Riya Rao - Confident and Clear",
+        "gender": "female"
+      },
+      {
+        "voice_id": "bajNon13EdhNMndG3z05",
+        "name": "Viraj - Energetic and Confident",
+        "gender": "male"
+      }
+    ],
+    "hi": [
+      {
+        "voice_id": "gHu9GtaHOXcSqFTK06ux",
+        "name": "Anjali - Warm, Cheerful and Clear",
+        "gender": "female"
+      },
+      {
+        "voice_id": "FmBhnvP58BK0vz65OOj7",
+        "name": "Viraj - Energetic, Clear Narrator",
+        "gender": "male"
+      }
+    ],
+    "mr": [
+      {
+        "voice_id": "8fqGzH80bdkm2UseeV9f",
+        "name": "Sharad - Deep Powerful Marathi Narrator",
+        "gender": "male"
+      }
+    ]
+  }
+}

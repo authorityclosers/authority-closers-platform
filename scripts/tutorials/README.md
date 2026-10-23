@@ -68,3 +68,30 @@ scripts/tutorials/with-elevenlabs python3 scripts/tutorials/tutorials.py samples
 Heavy steps (capture, build) run one at a time under `nice -n 19 ionice -c3`, ffmpeg with `-threads 2`, and pause
 while the load average is above 4. Outputs go to `$SXTUT_OUT` (default `~/sx-tutorials`); keep it under 5 GB.
 Tests: `ssh ac wb-ci --py --py-tests tests/unit/tutorials/test_tutorial_pipeline.py`.
+
+## v2: brand B reels and YouTube tutorials
+
+Owner order, 23 Oct 2026: remake every tutorial in brand B ("Insight": Deep teal, Mint, Hind, the listening-bars
+mark) as a 9:16 reel (20-45 s, hook in the first 2 s, captions burned in) and a 16:9 YouTube tutorial (2-5 min,
+chapters, intro and outro cards), with tight cuts, zooms on taps, one narrator per language, a transcript,
+captions, translations and a manifest per video.
+
+```
+v2/<id>.json  shots -> beats (one line + the actions seen while it plays), chapters, reel hook and beats
+  -> v2 take    capture.mjs take: one recording per shot at full pixel ratio (phone 390x693 at 3x, 9:16;
+                computer 1280x720 at 2x); beat starts, tap and highlight times and boxes in take-<id>.json
+  -> v2 voice   ElevenLabs per line (voices-v2.json: Monika Sogam en and hi, Sujata mr), cached
+  -> v2 build   per format and language: beats cut to their own voice line, the tap landing on the spoken
+                word, zoompan toward what is tapped, brand B stage and moving cards, chapter tags or the
+                reel hook, karaoke captions (reel), music bed ducked under the voice, -14 LUFS
+  -> library    v2/library/<id>/{reel,youtube}/: MP4, captions (en, hi, hi-Latn, mr, mr-Latn; SRT and VTT),
+                transcript(s), thumbnail, manifest (.json), paste-ready YouTube text, cue sheet;
+                editor/ holds the raw shot clips and every voice line; library.json and INDEX.md list all
+```
+
+`python3 scripts/tutorials/tutorials.py v2 take <id>` (no key needed), then
+`scripts/tutorials/with-elevenlabs python3 scripts/tutorials/tutorials.py v2 build <id> [--langs en,hi,mr]
+[--formats reel,youtube]`. `v2 index` rebuilds the library index. Storyboards are checked by `tutorials.py lint`
+(owner rules, all three languages and Roman-script captions present). Every screen gets the store demo names
+(Skyline Realty, Asha Kulkarni, ...), coloured avatars, filled glass bars and masked phone numbers
+(+91 98XXX XX210). Helpers: `capture.mjs probe <spec> <out>` lists a screen's buttons after setup steps.

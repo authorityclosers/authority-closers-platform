@@ -9,6 +9,7 @@
     tutorials.py build   <which>  A (narrated), B (voice-over kit) and C (editor pack)
     tutorials.py fonts            caption font for burned-in subtitles (once per output folder)
     tutorials.py pack             READMEs into the A, B and C folders (then upload-to-drive)
+    tutorials.py v2 <step> <which>  v2, brand B: take | voice | build | all | index (v2/*.json)
 
 <which> is a tutorial id, a comma-separated list, batch1, batch2 or all. `--langs en,hi,mr` limits
 languages. Outputs go to $SXTUT_OUT (default ~/sx-tutorials)/<date>. Only quota, samples and voice
@@ -120,6 +121,53 @@ def cmd_samples(args: argparse.Namespace) -> int:
     return 0
 
 
+NOT_PROSE = {
+    "id",
+    "url",
+    "do",
+    "chapter",
+    "beat",
+    "css",
+    "role",
+    "name",
+    "placeholder",
+    "label",
+    "device",
+    "names",
+    "sync",
+    "key",
+    "theme",
+}
+
+
+def lint_v2(board: dict) -> list[str]:
+    """Owner rules on every word a v2 storyboard puts on screen or in a voice, and every spoken
+    line present in all three languages (Roman-script captions for Hinglish and Marathi)."""
+    problems: list[str] = []
+
+    def walk(node: object, where: str) -> None:
+        if isinstance(node, dict):
+            for k, v in node.items():
+                if k not in NOT_PROSE:
+                    walk(v, f"{where}.{k}")
+        elif isinstance(node, list):
+            for i, v in enumerate(node):
+                walk(v, f"{where}[{i}]")
+        elif isinstance(node, str):
+            problems.extend(f"{where}: {p}" for p in textprep.lint(node))
+
+    walk(board, board.get("id", "?"))
+    from sxtut import v2
+
+    for o in v2.spoken_lines(board):
+        for lang in LANGS:
+            if not (o.get("say") or {}).get(lang):
+                problems.append(f"{o.get('id', 'line')}: no {lang} line")
+            if lang != "en" and not (o.get("latn") or {}).get(lang):
+                problems.append(f"{o.get('id', 'line')}: no Roman-script {lang} caption")
+    return problems
+
+
 def cmd_lint(_: argparse.Namespace) -> int:
     problems = []
     for t in load("tutorials.json")["tutorials"]:
@@ -151,6 +199,8 @@ def cmd_lint(_: argparse.Namespace) -> int:
                 ):
                     where = f"{path.stem}.{seg['id']}.{lang}"
                     problems.append(f"{where}: say and caption need the same number of phrases")
+    for path in sorted((HERE / "v2").glob("*.json")):
+        problems += [f"v2/{path.name}: {p}" for p in lint_v2(json.loads(path.read_text("utf-8")))]
     for p in problems:
         print(p)
     print("lint:", "clean" if not problems else f"{len(problems)} problem(s)")
@@ -254,6 +304,92 @@ def cmd_build(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+def v2_boards(which: str) -> list[tuple[Path, dict]]:
+    files = sorted((HERE / "v2").glob("*.json"))
+    ids = None if which == "all" else set(which.split(","))
+    return [
+        (f, json.loads(f.read_text(encoding="utf-8")))
+        for f in files
+        if ids is None or f.stem in ids
+    ]
+
+
+def cmd_v2(args: argparse.Namespace) -> int:
+    """Tutorials v2 (brand B reels and YouTube tutorials): take, voice, build, all, index."""
+    from sxtut import render, tts, v2
+
+    root = OUT / "v2"
+    take_dir = root / "take"
+    if args.step == "index":
+        index = v2.library_index(root)
+        print(f"index: {len(index['videos'])} video(s)")
+        return 0
+    cast = load("voices-v2.json")
+    todo = v2_boards(args.which)
+    if not todo:
+        print(f"no v2 storyboard matches {args.which}")
+        return 1
+    if args.step in ("take", "all"):
+        import play_listing
+
+        for _, b in todo:
+            spec = root / "work" / b["id"] / "take.json"
+            spec.parent.mkdir(parents=True, exist_ok=True)
+            spec.write_text(json.dumps(v2.resolved(b, play_listing.NAMES)), encoding="utf-8")
+            cmd = ["node", str(HERE / "capture.mjs"), "take", str(spec), str(take_dir)]
+            if args.only:
+                cmd += ["--only", args.only]
+            render.wait_for_headroom()
+            subprocess.run(  # noqa: S603 - fixed node argument list
+                [*render.NICE, *cmd],
+                check=True,
+                cwd=REPO,
+                env=render.safe_env(),
+                stdin=subprocess.DEVNULL,
+            )
+    if args.step not in ("voice", "build", "all"):
+        return 0
+    if os.environ.get("ELEVENLABS_API_KEY"):
+        need = sum(v2.characters(b, args.langs) for _, b in todo)
+        q = tts.quota()
+        print(f"characters in these scripts ~{need} (cached lines cost nothing); left {q['left']}")
+        if need > q["left"]:
+            print("not enough characters left; stopping (never buy credits without the owner)")
+            return 2
+    music = None if args.no_music else OUT / "music" / "bed-warm-30s.mp3"
+    failed = []
+    for _, b in todo:
+        try:
+            voices = v2.voice_all(b, cast, args.langs, OUT / "cache" / "tts")
+            print(f"{b['id']}: {len(voices)} voice lines ready", flush=True)
+            if args.step == "voice":
+                continue
+            v2.build(
+                REPO,
+                b,
+                cast,
+                args.langs,
+                args.formats,
+                take_dir,
+                root,
+                OUT / "fonts",
+                root / "brand" / "logo" / "svg",
+                music,
+                voices,
+            )
+        except (
+            KeyError,
+            ValueError,
+            FileNotFoundError,
+            subprocess.CalledProcessError,
+            tts.TtsError,
+        ) as e:
+            failed.append(b["id"])
+            print(f"{b['id']}: FAILED ({type(e).__name__}: {e})", flush=True)
+    v2.library_index(root)
+    return 1 if failed else 0
+
+
 def cmd_pack(args: argparse.Namespace) -> int:
     import shutil
 
@@ -293,6 +429,14 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("--only", help="capture: comma-separated segment ids to re-shoot")
         c.add_argument("--date")
         c.set_defaults(fn=fn)
+    w = sub.add_parser("v2", help="brand B reels and YouTube tutorials (see README, v2)")
+    w.add_argument("step", choices=["take", "voice", "build", "all", "index"])
+    w.add_argument("which", nargs="?", default="all")
+    w.add_argument("--langs", type=lambda v: v.split(","), default=list(LANGS))
+    w.add_argument("--formats", type=lambda v: v.split(","), default=["reel", "youtube"])
+    w.add_argument("--only", help="take: comma-separated shot ids to re-record")
+    w.add_argument("--no-music", action="store_true")
+    w.set_defaults(fn=cmd_v2)
     f = sub.add_parser("fonts")
     f.set_defaults(fn=cmd_fonts)
     k = sub.add_parser("pack")
