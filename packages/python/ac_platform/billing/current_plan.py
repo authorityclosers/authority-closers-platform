@@ -27,7 +27,6 @@ from ac_platform.billing.order_models import (
 class CurrentPlan:
     key: str
     name: str
-    period_end: datetime
 
 
 async def current_personal_plan(
@@ -37,31 +36,25 @@ async def current_personal_plan(
         BillingRefundEvent.payment_ref == BillingPaymentEvent.payment_ref,
         BillingRefundEvent.state == "refunded",
     )
-    row = (
-        await database.execute(
-            select(
-                BillingSubscription.plan_key,
-                BillingSubscription.plan_name,
-                BillingPeriod.period_end,
-            )
-            .join(BillingAccount, BillingAccount.id == BillingSubscription.account_id)
-            .join(BillingPeriod, BillingPeriod.subscription_id == BillingSubscription.id)
-            .join(BillingPaymentEvent, BillingPaymentEvent.id == BillingPeriod.payment_event_id)
-            .where(
-                BillingAccount.kind == "personal",
-                BillingAccount.tenant_id == tenant_id,
-                BillingAccount.person_id == person_id,
-                BillingPeriod.period_start <= now,
-                BillingPeriod.period_end > now,
-                ~refunded,
-            )
-            .order_by(BillingPeriod.period_end.desc())
-            .limit(1)
+    subscription = await database.scalar(
+        select(BillingSubscription)
+        .join(BillingAccount, BillingAccount.id == BillingSubscription.account_id)
+        .join(BillingPeriod, BillingPeriod.subscription_id == BillingSubscription.id)
+        .join(BillingPaymentEvent, BillingPaymentEvent.id == BillingPeriod.payment_event_id)
+        .where(
+            BillingAccount.kind == "personal",
+            BillingAccount.tenant_id == tenant_id,
+            BillingAccount.person_id == person_id,
+            BillingPeriod.period_start <= now,
+            BillingPeriod.period_end > now,
+            ~refunded,
         )
-    ).first()
-    if row is None:
+        .order_by(BillingPeriod.period_end.desc())
+        .limit(1)
+    )
+    if not isinstance(subscription, BillingSubscription):
         return None
-    return CurrentPlan(key=row.plan_key, name=row.plan_name, period_end=row.period_end)
+    return CurrentPlan(key=subscription.plan_key, name=subscription.plan_name)
 
 
 __all__ = ["CurrentPlan", "current_personal_plan"]

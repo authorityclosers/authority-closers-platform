@@ -148,9 +148,9 @@ async def billing_revenue(database: AsyncSession, *, mode: Mode, now: datetime) 
     plan_names: dict[tuple[str, str], str] = {}
     account_ids: set[UUID] = set()
     for invoice, order in invoices:
-        key = (order.plan_key, order.kind)
-        plan_names[key] = order.plan_name
-        totals = plan_totals[key]
+        plan_kind = (order.plan_key, order.kind)
+        plan_names[plan_kind] = order.plan_name
+        totals = plan_totals[plan_kind]
         totals[0] += invoice.total_minor
         totals[1] += invoice.taxable_minor
         totals[2] += 1
@@ -199,19 +199,19 @@ async def billing_revenue(database: AsyncSession, *, mode: Mode, now: datetime) 
     recurring_names: dict[tuple[str, str], str] = {}
     active = cancelling = 0
     for subscription in subscriptions:
-        event = latest.get(subscription.id)
-        if event is None or event.status not in RECURRING_STATUSES:
+        newest = latest.get(subscription.id)
+        if newest is None or newest.status not in RECURRING_STATUSES:
             continue
         active += 1
-        if event.cancel_state != "none":
+        if newest.cancel_state != "none":
             cancelling += 1
             continue  # it does not renew, so it is not recurring revenue
         taxable = tax_from_total(
             subscription.amount_minor, "inclusive" if subscription.gst_inclusive else "exclusive"
         ).taxable_minor
-        key = (subscription.plan_key, subscription.interval)
-        recurring_names[key] = subscription.plan_name
-        row = recurring[key]
+        plan_interval = (subscription.plan_key, subscription.interval)
+        recurring_names[plan_interval] = subscription.plan_name
+        row = recurring[plan_interval]
         row[0] += 1
         row[1] += subscription.seats
         row[2] += taxable // 12 if subscription.interval == "year" else taxable
