@@ -1,12 +1,12 @@
 [
   {
-    "artifact_id": 12484488572,
-    "digest": "11c8c2ae03d0eba56d937b446c25d30add52f3da8b8c2a7d6e51833b36e43358",
-    "identity": "3f0ba224b9b60718941005ce384cfc1f92b732f50e30ec9911310435ed7c2836",
+    "artifact_id": 12486217699,
+    "digest": "d0b11f34045dbf688938d3807a850083ebcb831ba2e83c3918732bc7e919f6c1",
+    "identity": "54ef77ee856ba826a13e048faf53ea88f3bb97f34234e7897fd1e0516c6309a6",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 39915282593,
-    "source_sha": "e54cb9fb9c6255a898dfb3d6e154e194103aac52",
-    "reviewed_source_sha": "840ed57e2378b31a651473caf39fc07c78819d17",
-    "review": "Orchestrator 23 Oct 2026: 840ed57e only raises the bundle download timeout (180 s to 600 s); producer run 39915282593 on request e54cb9fb, which has 840ed57e as its only parent and changes only .wb-ci/request.json; artifact digest from the API"
+    "run_id": 39920297639,
+    "source_sha": "8bf569c7f52f289adf00c44d4f321dee7fb0f29f",
+    "reviewed_source_sha": "67a749e29caaccb49d2d62a15e7ab87f9460e114",
+    "review": "Orchestrator 23 Oct 2026: 67a749e2 only adds a 2/5/10 s retry for GitHub API refusals (404/410/5xx); producer run 39920297639 green on request 8bf569c7, which has 67a749e2 as its only parent and changes only .wb-ci/request.json; artifact digest from the API"
   }
 ]
