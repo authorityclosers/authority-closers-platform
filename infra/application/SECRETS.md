@@ -97,13 +97,13 @@ This reserves names only; it does not create or read secrets or enable billing.
 Each row is a separate `/application` mapping in Infisical `dev`, `staging`, and
 `prod`; production credentials must never supply either other environment.
 
-| Plan name | Runtime name read by `Settings` | Reservation |
-| --- | --- | --- |
-| `RAZORPAY_KEY_ID` | `AC_RAZORPAY_KEY_ID` | dev/staging TEST; prod awaits S7 |
-| `RAZORPAY_KEY_SECRET` | `AC_RAZORPAY_KEY_SECRET` | same environment's matching key pair |
-| `RAZORPAY_WEBHOOK_SECRET` | `AC_RAZORPAY_WEBHOOK_SECRET` | separate webhook credential per environment |
-| `CASHFREE_CLIENT_ID` | not implemented; reserve `AC_CASHFREE_CLIENT_ID` | S3 only, not injected |
-| `CASHFREE_CLIENT_SECRET` | not implemented; reserve `AC_CASHFREE_CLIENT_SECRET` | S3 only, not injected |
+| Plan name                 | Runtime name read by `Settings`                      | Reservation                                 |
+| ------------------------- | ---------------------------------------------------- | ------------------------------------------- |
+| `RAZORPAY_KEY_ID`         | `AC_RAZORPAY_KEY_ID`                                 | dev/staging TEST; prod awaits S7            |
+| `RAZORPAY_KEY_SECRET`     | `AC_RAZORPAY_KEY_SECRET`                             | same environment's matching key pair        |
+| `RAZORPAY_WEBHOOK_SECRET` | `AC_RAZORPAY_WEBHOOK_SECRET`                         | separate webhook credential per environment |
+| `CASHFREE_CLIENT_ID`      | not implemented; reserve `AC_CASHFREE_CLIENT_ID`     | S3 only, not injected                       |
+| `CASHFREE_CLIENT_SECRET`  | not implemented; reserve `AC_CASHFREE_CLIENT_SECRET` | S3 only, not injected                       |
 
 The canonical Razorpay store names are the runtime names above: settings uses
 `env_prefix="AC_"`, with no unprefixed aliases. Existing application Compose does
@@ -123,14 +123,15 @@ once all its settings exist and are valid; missing or malformed values keep it
 off and never stop the API. No release requires them. Compose forwards them to
 the API only.
 
-| Secret                         | Constraint                                                                                                   |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------ |
-| `AC_FACEBOOK_LOGIN_APP_ID`     | numeric App ID of that environment's "Sales Xray Sign-in" app (production the parent, staging and dev test apps) |
-| `AC_FACEBOOK_LOGIN_APP_SECRET` | that same app's App Secret; redirect URI `<Sales Xray URL>/v1/auth/facebook/callback`                       |
-| `AC_APPLE_SIGN_IN_SERVICE_ID`  | the Sign in with Apple Services ID; return URL `<Sales Xray URL>/v1/auth/apple/callback`                    |
-| `AC_APPLE_SIGN_IN_TEAM_ID`     | the 10-character Apple Team ID                                                                               |
-| `AC_APPLE_SIGN_IN_KEY_ID`      | the 10-character ID of the Sign in with Apple key                                                            |
-| `AC_APPLE_SIGN_IN_PRIVATE_KEY` | that key's `.p8` file: PEM, PEM with `\n`, or base64 of the file                                            |
+| Secret                           | Constraint                                                                                                                     |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `AC_FACEBOOK_LOGIN_APP_ID`       | numeric App ID of that environment's "Sales Xray Sign-in" app (production the parent, staging and dev test apps)               |
+| `AC_FACEBOOK_LOGIN_APP_SECRET`   | that same app's App Secret; redirect URI `<Sales Xray URL>/v1/auth/facebook/callback`                                          |
+| `AC_FACEBOOK_LOGIN_CLIENT_TOKEN` | that same app's Client token (Settings → Advanced → Security); the Android app uses it to sign in with Facebook inside the app |
+| `AC_APPLE_SIGN_IN_SERVICE_ID`    | the Sign in with Apple Services ID; return URL `<Sales Xray URL>/v1/auth/apple/callback`                                       |
+| `AC_APPLE_SIGN_IN_TEAM_ID`       | the 10-character Apple Team ID                                                                                                 |
+| `AC_APPLE_SIGN_IN_KEY_ID`        | the 10-character ID of the Sign in with Apple key                                                                              |
+| `AC_APPLE_SIGN_IN_PRIVATE_KEY`   | that key's `.p8` file: PEM, PEM with `\n`, or base64 of the file                                                               |
 
 `AC_FACEBOOK_LOGIN_GRAPH_VERSION` is optional and not secret (default `v23.0`).
 Never copy a production value into staging or dev. On hosts behind Cloudflare
@@ -145,13 +146,13 @@ Ads connector stays off (the CRM shows "Coming soon") until all five exist, and
 no release requires them. Compose forwards them to the API only, not to the
 worker or the migrator.
 
-| Secret                         | Constraint                                                                        |
-| ------------------------------ | --------------------------------------------------------------------------------- |
+| Secret                         | Constraint                                                                       |
+| ------------------------------ | -------------------------------------------------------------------------------- |
 | `AC_META_APP_ID`               | that environment's Meta app: production the parent app, staging its own test app |
-| `AC_META_APP_SECRET`           | the App Secret of that same app                                                   |
-| `AC_META_LOGIN_CONFIG_ID`      | the Facebook Login for Business configuration ID in that app                      |
-| `AC_META_WEBHOOK_VERIFY_TOKEN` | independent random value, entered once in that app's lead webhook subscription    |
-| `AC_LEAD_DESK_TOKEN_KEY`       | independent 32-byte url-safe base64 key that seals stored Page tokens             |
+| `AC_META_APP_SECRET`           | the App Secret of that same app                                                  |
+| `AC_META_LOGIN_CONFIG_ID`      | the Facebook Login for Business configuration ID in that app                     |
+| `AC_META_WEBHOOK_VERIFY_TOKEN` | independent random value, entered once in that app's lead webhook subscription   |
+| `AC_LEAD_DESK_TOKEN_KEY`       | independent 32-byte url-safe base64 key that seals stored Page tokens            |
 
 Each environment has its own Meta app and its own values; never copy a
 production value into staging or dev. Changing `AC_LEAD_DESK_TOKEN_KEY` means
@@ -166,11 +167,11 @@ with Google" on the CRM's Sources tab. The connector stays off (the CRM shows
 also seals each account's Google refresh token and webhook key. No release
 requires them. Compose forwards them to the API only.
 
-| Secret                          | Constraint                                                                                                                  |
-| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| Secret                          | Constraint                                                                                                                         |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `AC_GOOGLE_ADS_CLIENT_ID`       | that environment's OAuth web client in GCP project ac-sales-xray-ads; redirect URI `<Sales Xray URL>/v1/lead-desk/google/callback` |
-| `AC_GOOGLE_ADS_CLIENT_SECRET`   | that client's secret                                                                                                        |
-| `AC_GOOGLE_ADS_DEVELOPER_TOKEN` | the project's Google Ads API developer token (Explorer access or above reaches live Ads accounts)                           |
+| `AC_GOOGLE_ADS_CLIENT_SECRET`   | that client's secret                                                                                                               |
+| `AC_GOOGLE_ADS_DEVELOPER_TOKEN` | the project's Google Ads API developer token (Explorer access or above reaches live Ads accounts)                                  |
 
 `AC_GOOGLE_ADS_API_VERSION` is optional and not secret (default `v25`). Each
 environment has its own OAuth client; never copy a production value into
@@ -188,12 +189,12 @@ seals each number's business token and PIN. No release requires them. Compose
 forwards them to the API only. Customers' messages are billed by Meta to the
 customer's own WhatsApp account.
 
-| Secret                             | Constraint                                                                                                              |
-| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| `AC_WHATSAPP_APP_ID`               | that environment's WhatsApp app: production the parent app, staging and dev their own test apps                        |
-| `AC_WHATSAPP_APP_SECRET`           | the App Secret of that same app; it also signs the webhook (`X-Hub-Signature-256`)                                      |
+| Secret                             | Constraint                                                                                                                               |
+| ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| `AC_WHATSAPP_APP_ID`               | that environment's WhatsApp app: production the parent app, staging and dev their own test apps                                          |
+| `AC_WHATSAPP_APP_SECRET`           | the App Secret of that same app; it also signs the webhook (`X-Hub-Signature-256`)                                                       |
 | `AC_WHATSAPP_CONFIG_ID`            | that app's Facebook Login for Business configuration for Embedded Signup; redirect URI `<Sales Xray URL>/v1/lead-desk/whatsapp/callback` |
-| `AC_WHATSAPP_WEBHOOK_VERIFY_TOKEN` | independent random value, entered once in that app's WhatsApp webhook (`<Sales Xray URL>/v1/lead-desk/whatsapp/webhook`) |
+| `AC_WHATSAPP_WEBHOOK_VERIFY_TOKEN` | independent random value, entered once in that app's WhatsApp webhook (`<Sales Xray URL>/v1/lead-desk/whatsapp/webhook`)                 |
 
 `AC_WHATSAPP_GRAPH_VERSION` is optional and not secret (default: the Meta
 leads connector's version). Each environment has its own app and values; never

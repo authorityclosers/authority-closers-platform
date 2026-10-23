@@ -108,6 +108,22 @@ DEFAULT_RATE_LIMIT_RULES = (
         refill_seconds=600,
     ),
     RateLimitRule(
+        # Sign-in inside the Android app: the same transaction as oauth-start.
+        name="oauth-native-start",
+        method="POST",
+        path=re.compile(r"^/v1/auth/(?:google|facebook)/native/start$"),
+        capacity=20,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
+        # ...and its finish, which stands in for the provider callback.
+        name="oauth-native-finish",
+        method="POST",
+        path=re.compile(r"^/v1/auth/(?:google|facebook)/native/finish$"),
+        capacity=30,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
         name="oauth-callback",
         method="GET",
         path=re.compile(r"^/v1/auth/(?:google|facebook|apple)/callback$"),
