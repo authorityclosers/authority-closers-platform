@@ -183,31 +183,36 @@ async function act(page, a, device, stills) {
       // Fixture-only messages ("Sample data only.") and the usage lines the owner keeps out of
       // tutorials (analysis minutes left, minutes per call). Hides the smallest wrapper around
       // just that text, icon included, and keeps it hidden when the page redraws.
-      await page.evaluate((needle) => {
-        const apply = () => {
-          const walker = document.createTreeWalker(
-            document.body,
-            NodeFilter.SHOW_TEXT,
-          );
-          for (let t = walker.nextNode(); t; t = walker.nextNode()) {
-            if (!t.nodeValue || !t.nodeValue.includes(needle)) continue;
-            let node = t.parentElement;
-            while (
-              node.parentElement &&
-              node.parentElement !== document.body &&
-              node.parentElement.textContent.trim() === node.textContent.trim()
-            )
-              node = node.parentElement;
-            node.style.visibility = "hidden";
-          }
-        };
-        apply();
-        new MutationObserver(apply).observe(document.body, {
-          childList: true,
-          subtree: true,
-          characterData: true,
-        });
-      }, a.target.text);
+      await page.evaluate(
+        ({ needle, collapse }) => {
+          const apply = () => {
+            const walker = document.createTreeWalker(
+              document.body,
+              NodeFilter.SHOW_TEXT,
+            );
+            for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+              if (!t.nodeValue || !t.nodeValue.includes(needle)) continue;
+              let node = t.parentElement;
+              while (
+                node.parentElement &&
+                node.parentElement !== document.body &&
+                node.parentElement.textContent.trim() ===
+                  node.textContent.trim()
+              )
+                node = node.parentElement;
+              if (collapse) node.style.display = "none";
+              else node.style.visibility = "hidden";
+            }
+          };
+          apply();
+          new MutationObserver(apply).observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+          });
+        },
+        { needle: a.target.text, collapse: !!a.collapse },
+      );
       await page.waitForTimeout(a.ms ?? 200);
       break;
     case "scrollto":
@@ -237,16 +242,134 @@ async function act(page, a, device, stills) {
       break;
     case "frost":
       // Headless Chromium draws no backdrop blur, so text shows through glass bars; give every
-      // blurred element a near-opaque fill, close to how the blur reads on a real phone.
+      // blurred element a near-opaque fill in the page's own theme, close to the blur on a phone.
       await page.evaluate(() => {
+        const bg = getComputedStyle(document.body).backgroundColor.match(
+          /\d+/g,
+        ) || [255, 255, 255];
+        const dark = bg.slice(0, 3).reduce((s, v) => s + Number(v), 0) < 3 * 96;
+        const fill = dark ? "rgba(22,22,24,0.97)" : "rgba(248,249,251,0.97)";
         for (const el of document.querySelectorAll("body *")) {
           const cs = getComputedStyle(el);
           const blur = cs.backdropFilter || cs.webkitBackdropFilter;
-          if (blur && blur !== "none")
-            el.style.backgroundColor = "rgba(248,249,251,0.97)";
+          if (blur && blur !== "none") el.style.backgroundColor = fill;
         }
       });
       await page.waitForTimeout(a.ms ?? 150);
+      break;
+    case "marketing":
+      // Store screenshots only: the fixtures' demo names ("Asha Fictional") become realistic made-up
+      // ones, initial avatars get colours, and the empty account avatar gets the user's initials.
+      await page.evaluate(
+        ({ names, me }) => {
+          const pairs = Object.entries(names).sort(
+            (x, y) => y[0].length - x[0].length,
+          );
+          const palette = [
+            "#0f766e",
+            "#0e7490",
+            "#7c3aed",
+            "#c2410c",
+            "#be185d",
+            "#15803d",
+            "#1d4ed8",
+            "#b45309",
+          ];
+          // Two capital letters are avatar initials: swap only a text that is exactly them.
+          const initials = pairs.filter(([from]) => /^[A-Z]{2}$/.test(from));
+          const words = pairs.filter(([from]) => !/^[A-Z]{2}$/.test(from));
+          const swap = (s) => {
+            const hit = initials.find(([from]) => s.trim() === from);
+            if (hit) return s.replace(hit[0], hit[1]);
+            return words.reduce((t, [from, to]) => t.split(from).join(to), s);
+          };
+          const round = (el) => {
+            const r = el.getBoundingClientRect();
+            const radius =
+              parseFloat(getComputedStyle(el).borderTopLeftRadius) || 0;
+            return (
+              r.width >= 20 &&
+              r.width <= 80 &&
+              Math.abs(r.width - r.height) < 3 &&
+              radius >= r.width / 2 - 2
+            );
+          };
+          const apply = () => {
+            const walker = document.createTreeWalker(
+              document.body,
+              NodeFilter.SHOW_TEXT,
+            );
+            for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+              const next = swap(t.nodeValue || "");
+              if (next !== t.nodeValue) t.nodeValue = next;
+            }
+            for (const el of document.querySelectorAll("input, textarea")) {
+              const next = swap(el.value || "");
+              if (next !== el.value) el.value = next;
+            }
+            for (const el of document.querySelectorAll("body *")) {
+              if (el.dataset.sxAvatar || !round(el)) continue;
+              const text = el.textContent.trim();
+              if (/^[A-Z]{2}$/.test(text)) {
+                const hash = [...text].reduce(
+                  (h, c) => h * 31 + c.charCodeAt(0),
+                  7,
+                );
+                el.style.background = palette[Math.abs(hash) % palette.length];
+                el.style.color = "#fff";
+                el.dataset.sxAvatar = "1";
+              } else if (
+                !text &&
+                !el.querySelector("img,svg") &&
+                el.getBoundingClientRect().top < 80
+              ) {
+                el.style.background = "linear-gradient(135deg,#2dd4bf,#0f766e)";
+                el.style.display = "grid";
+                el.style.placeItems = "center";
+                el.style.color = "#fff";
+                el.style.font = "700 15px system-ui, sans-serif";
+                el.textContent = me;
+                el.dataset.sxAvatar = "1";
+              }
+            }
+          };
+          apply();
+          new MutationObserver(apply).observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+          });
+        },
+        { names: a.names || {}, me: a.me || "" },
+      );
+      await page.waitForTimeout(a.ms ?? 300);
+      break;
+    case "glow":
+      // One highlighted element per store shot: a teal ring and soft glow. `up` lifts it to a
+      // parent; card=true climbs to the first wide element with its own background or border.
+      await loc.evaluate(
+        (el, { up, card }) => {
+          let n = el;
+          for (let i = 0; i < up && n.parentElement; i++) n = n.parentElement;
+          const isCard = (e) => {
+            const cs = getComputedStyle(e);
+            const clear =
+              cs.backgroundColor === "rgba(0, 0, 0, 0)" ||
+              cs.backgroundColor === "transparent";
+            return (
+              e.getBoundingClientRect().width > 220 &&
+              (!clear || parseFloat(cs.borderTopWidth) > 0)
+            );
+          };
+          while (card && n.parentElement && !isCard(n)) n = n.parentElement;
+          n.style.boxShadow =
+            "0 0 0 4px #2dd4bf, 0 0 40px 12px rgba(45,212,191,.55)";
+          n.style.position = n.style.position || "relative";
+          n.style.zIndex = "5";
+        },
+        { up: a.up ?? 0, card: !!a.card },
+      );
+      await page.waitForTimeout(a.ms ?? 200);
       break;
     case "select":
       // Native <select> menus do not open in headless Chromium; pick the option directly.
