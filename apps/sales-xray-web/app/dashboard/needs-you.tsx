@@ -13,7 +13,8 @@ import { useEffect, useState } from "react";
 import { displayName } from "../display-name";
 import { leadLink, type Desk } from "../leads/leads-client";
 import { waCall, type SlaReport } from "../leads/whatsapp-client";
-import { ActionList, ActionRow } from "../ui/kit";
+import { ActionList, ActionRow, Avatar, Badge } from "../ui/kit";
+import { NeedsSkeleton } from "./sales-home-skeleton";
 import styles from "./sales-home.module.css";
 
 /** How many named leads the waiting row lists before "See all". */
@@ -56,11 +57,7 @@ export function NeedsYou({
         <h2 id="needs-title">Needs you</h2>
       </div>
       {loading ? (
-        <div className={styles.listSkeleton} aria-busy="true">
-          {[0, 1].map((index) => (
-            <i key={index} />
-          ))}
-        </div>
+        <NeedsSkeleton />
       ) : nothing ? (
         <p className={styles.quiet} role="status">
           Nothing needs you right now.
@@ -71,14 +68,25 @@ export function NeedsYou({
             <ActionRow
               icon={<MessageCircleWarning size={20} />}
               tone="bad"
-              title={`${waiting.length} ${waiting.length === 1 ? "lead is" : "leads are"} waiting for a first response`}
-              note={`Longer than ${waited(sla?.settings.minutes ?? 0)}, your target`}
+              title="Waiting for a first response"
+              note={`Right now, longer than ${waited(sla?.settings.minutes ?? 0)} (your target)`}
+              end={<Badge tone="bad">{waiting.length}</Badge>}
               href="/settings/lead-rules"
             />
           ) : null}
           {waiting.slice(0, SHOWN).map((lead) => (
             <ActionRow
               key={lead.leadId}
+              // A monogram, so the named leads read as part of the row above
+              // (Liquid Glass review, 22 Oct 2026).
+              tone="neutral"
+              icon={
+                <Avatar
+                  name={displayName(lead.leadName)}
+                  size={34}
+                  shape="square"
+                />
+              }
               title={displayName(lead.leadName)}
               note={`Waiting ${waited(lead.minutesLate)} · ${displayName(lead.seller)}`}
               href={leadLink(lead.leadId)}
@@ -88,8 +96,9 @@ export function NeedsYou({
             <ActionRow
               icon={<UserX size={20} />}
               tone="warn"
-              title={`${unassigned} new ${unassigned === 1 ? "lead has" : "leads have"} no owner`}
+              title="New leads with no owner"
               note="Give them to a seller, or let the lead rules decide"
+              end={<Badge tone="warn">{unassigned}</Badge>}
               href="/leads?tab=all&stage=open&who=unassigned"
             />
           ) : null}
@@ -97,8 +106,9 @@ export function NeedsYou({
             <ActionRow
               icon={<CalendarClock size={20} />}
               tone="warn"
-              title={`${late} ${late === 1 ? "follow-up is" : "follow-ups are"} late`}
-              note="Across the team; Sellers below shows whose"
+              title="Late follow-ups"
+              note="Across the team. Sellers below shows whose."
+              end={<Badge tone="warn">{late}</Badge>}
               href="/leads?tab=all&stage=open"
             />
           ) : null}

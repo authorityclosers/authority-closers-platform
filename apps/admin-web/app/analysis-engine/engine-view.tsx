@@ -14,6 +14,7 @@ import {
 import { Badge, Card, Kpi, Panel, Table, Tiles, Why } from "../ui/kit";
 import {
   STATUS_WORDS,
+  agreementWords,
   ratioTone,
   ratioWords,
   rupeeWords,
@@ -21,6 +22,7 @@ import {
   type AnalysisEngine,
   type EngineModuleRow,
   type EnginePlan,
+  type QualityRow,
   type RegistryModule,
   type TokenPair,
 } from "./engine-data";
@@ -265,6 +267,65 @@ function RegistryList({ modules }: { modules: RegistryModule[] }) {
   );
 }
 
+const ARTIFACT_WORDS: Record<string, string> = {
+  review: "Pointer review",
+  brain4: "Brain 4.0",
+};
+
+function QualityTable({ rows }: { rows: QualityRow[] }) {
+  const which = (row: QualityRow) =>
+    row.module ? (
+      <code>{row.module}</code>
+    ) : (
+      <>
+        research, informs <code>{row.nearest}</code>
+      </>
+    );
+  return (
+    <Table
+      label="Agreement with the coaching lead's gold labels"
+      cards={rows.map((row) => (
+        <Card key={row.setup}>
+          <strong>{row.setup}</strong>
+          <span>
+            {ARTIFACT_WORDS[row.artifact] ?? row.artifact} ·{" "}
+            <b>{agreementWords(row)}</b>
+          </span>
+          <small className={styles.muted}>{which(row)}</small>
+        </Card>
+      ))}
+    >
+      <thead>
+        <tr>
+          <th scope="col">Setup</th>
+          <th scope="col">Artifact</th>
+          <th scope="col" data-num="">
+            Agreement (95%)
+          </th>
+          <th scope="col">Module</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.setup}>
+            <th scope="row">
+              <span className={styles.name}>
+                <strong>{row.setup}</strong>
+                <small>{row.evidence}</small>
+              </span>
+            </th>
+            <td>{ARTIFACT_WORDS[row.artifact] ?? row.artifact}</td>
+            <td data-num="">{agreementWords(row)}</td>
+            <td>
+              <small className={styles.muted}>{which(row)}</small>
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </Table>
+  );
+}
+
 export function EngineView({ engine }: { engine: AnalysisEngine }) {
   const where = ENVIRONMENT_WORDS[engine.environment] ?? engine.environment;
   const { window, registry, drift } = engine;
@@ -354,6 +415,17 @@ export function EngineView({ engine }: { engine: AnalysisEngine }) {
       >
         <RegistryList modules={registry.modules} />
       </Panel>
+      {registry.quality.length ? (
+        <Panel
+          title="Quality"
+          sub="Agreement with the coaching lead's gold labels · beta and research, never an official score"
+          tools={
+            <Why detail="Gold v1: the coaching lead's 43 labels on 6 real calls, all on the same Flash-Lite transcripts, with 95% intervals. A row names its module when that module was scored exactly as built; research prompts only inform the module they name. Every interval overlaps today, so no setup is shown to be better than another. Rows not scored yet wait for production's exact requests on the 7 gold calls." />
+          }
+        >
+          <QualityTable rows={registry.quality} />
+        </Panel>
+      ) : null}
     </>
   );
 }

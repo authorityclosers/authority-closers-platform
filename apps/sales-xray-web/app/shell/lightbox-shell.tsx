@@ -18,11 +18,13 @@ import {
   PhoneCall,
   Plug,
   Plus,
+  Rows3,
   Search,
   Settings,
   UserPlus,
   UserRound,
   Users,
+  UsersRound,
 } from "lucide-react";
 import Form from "next/form";
 import Link from "next/link";
@@ -229,6 +231,9 @@ const subscribeNothing = () => () => {};
 // A rail icon's name for text readers and tests. Hidden inline, so it stays
 // hidden even when the page draws before its stylesheet (dev recompiles);
 // the visible label floats above every layer on hover or focus (rail-tip.tsx).
+/** Every open lead (owner, 23 Oct 2026: "All leads one tap from anywhere"). */
+const ALL_LEADS_HREF = "/leads?tab=all&stage=open";
+
 const RAIL_NAME_STYLE: CSSProperties = {
   position: "absolute",
   width: 1,
@@ -790,6 +795,7 @@ function LightboxShellFrame({
       workspace.kind === "organisation" &&
       (workspace.role === "owner" || workspace.role === "admin"),
   );
+  const orgLabel = orgAdmin ? "Team & organisation" : "Organisation";
   const branding = useBranding(inOrganisation);
   // Confirmed signed out (not merely unknown yet): nothing personal to show.
   const guest = !authenticated && !sessionPending && !loading;
@@ -877,6 +883,22 @@ function LightboxShellFrame({
       place("Calls", "/analysis/calls", <FolderOpen size={17} />, "reports"),
       place("Coaching", "/coaching", <GraduationCap size={17} />),
       place("Prospects", "/prospects", <Users size={17} />),
+      ...(inOrganisation
+        ? [
+            place(
+              "All leads",
+              ALL_LEADS_HREF,
+              <Rows3 size={17} />,
+              "every open lead list",
+            ),
+            place(
+              orgAdmin ? "Team & organisation" : "Organisation",
+              "/organisation",
+              <UsersRound size={17} />,
+              "members invites roles company",
+            ),
+          ]
+        : []),
       ...(orgAdmin
         ? [
             place(
@@ -935,8 +957,14 @@ function LightboxShellFrame({
               "Members, invites and who can do what",
             ),
             setting(
+              "Lead rules",
+              "/settings/lead-rules",
+              <Users size={17} />,
+              "Who gets new leads, limits and work hours",
+            ),
+            setting(
               "Lead stages",
-              "/leads?tab=stages",
+              "/settings/stages",
               <Layers size={17} />,
               "Stages and pipelines",
             ),
@@ -1201,6 +1229,15 @@ function LightboxShellFrame({
               <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Leads</span>
             </ScreenLink>
+            {/* Every open lead, one click from anywhere; the open sidebar only. */}
+            {inOrganisation ? (
+              <ScreenLink
+                className={`${styles.stripBtn} ${styles.stripSub}`}
+                href={ALL_LEADS_HREF}
+              >
+                All leads
+              </ScreenLink>
+            ) : null}
             <ScreenLink
               className={`${styles.stripBtn}${place === "chats" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/chats"
@@ -1238,6 +1275,25 @@ function LightboxShellFrame({
               <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Calls</span>
             </ScreenLink>
+            {/* Owner, 23 Oct 2026: team and organisation were "too hidden";
+                owners and admins find them right after the daily places. */}
+            {inOrganisation || place === "organisation" ? (
+              <ScreenLink
+                className={`${styles.stripBtn}${place === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
+                href="/organisation"
+                aria-label={orgLabel}
+                data-rail-tip={orgLabel}
+                aria-current={place === "organisation" ? "page" : undefined}
+              >
+                {orgAdmin ? (
+                  <UsersRound size={20} strokeWidth={1.75} aria-hidden="true" />
+                ) : (
+                  <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
+                )}
+                <span className={styles.railPill} aria-hidden="true" />
+                <span style={RAIL_NAME_STYLE}>{orgLabel}</span>
+              </ScreenLink>
+            ) : null}
             <ScreenLink
               className={`${styles.stripBtn}${place === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
               href="/prospects"
@@ -1260,19 +1316,6 @@ function LightboxShellFrame({
               <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Coaching</span>
             </ScreenLink>
-            {inOrganisation || place === "organisation" ? (
-              <ScreenLink
-                className={`${styles.stripBtn}${place === "organisation" ? ` ${styles.stripBtnActive}` : ""}`}
-                href="/organisation"
-                aria-label="Organisation"
-                data-rail-tip="Organisation"
-                aria-current={place === "organisation" ? "page" : undefined}
-              >
-                <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
-                <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>Organisation</span>
-              </ScreenLink>
-            ) : null}
             {orgAdmin || place === "insights" ? (
               <ScreenLink
                 className={`${styles.stripBtn}${place === "insights" ? ` ${styles.stripBtnActive}` : ""}`}

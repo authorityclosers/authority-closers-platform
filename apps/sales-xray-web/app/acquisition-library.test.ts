@@ -92,3 +92,42 @@ it.each([
 ])("fails closed for %s", (_label, value) => {
   expect(() => parseSubmissionLibraryPage(value)).toThrow();
 });
+
+// Approved map, slice 7 (22 Oct 2026): include_leads=true names a call's lead.
+it("reads a call's lead exactly, and refuses a malformed one", () => {
+  const lead = {
+    lead_id: "66666666-6666-4666-8666-666666666666",
+    name: "meera fictional",
+    stage: "interested",
+    step: "site_visit",
+    pipeline: "main",
+  };
+  expect(
+    parseSubmissionLibraryPage({
+      submissions: [{ ...row(), lead }, row(secondId)],
+      next_cursor: null,
+    }).submissions.map((submission) => submission.lead),
+  ).toEqual([
+    {
+      leadId: lead.lead_id,
+      name: "meera fictional",
+      stage: "interested",
+      step: "site_visit",
+      pipeline: "main",
+    },
+    undefined,
+  ]);
+  for (const bad of [
+    { ...lead, stage: "maybe" },
+    { ...lead, lead_id: "not-a-uuid" },
+    { ...lead, name: " " },
+    { ...lead, phone: "+91 98765 43210" },
+    null,
+  ])
+    expect(() =>
+      parseSubmissionLibraryPage({
+        submissions: [{ ...row(), lead: bad }],
+        next_cursor: null,
+      }),
+    ).toThrow();
+});

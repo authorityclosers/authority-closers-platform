@@ -20,7 +20,7 @@ export const DASHBOARD_PATHS = {
   activity: "/v1/conversation/acquisition/activity",
   allowance: "/v1/conversation/acquisition/session",
   recent:
-    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true",
+    "/v1/conversation/acquisition/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true",
   // The sandbox card sits above the figures: read with them, so it never
   // arrives late and pushes them down.
   sandbox: "/v1/organisation/sandbox",

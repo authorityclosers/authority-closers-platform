@@ -1,7 +1,7 @@
 """The one-pass C4 request on GPT-6 Luna (OpenAI Responses), standard and Flex.
 
 The measured request (luna-route-spec, 21 Oct 2026): its own schema, not strict, the
-provider's default reasoning, up to 20,000 output tokens, nothing stored; on Flex the same
+low reasoning, up to 20,000 output tokens, nothing stored; on Flex the same
 request with ``service_tier: flex`` for up to ten minutes, then once on the default tier.
 No database, no network, no key; every transcript line is fictional.
 """
@@ -83,7 +83,8 @@ def test_the_luna_request_is_the_measured_one() -> None:
     assert (prepared.chunk_index, prepared.chunk_count) == (1, 1)
     body = prepared.as_provider_body()
     assert body["model"] == LUNA and body["max_output_tokens"] == 20_000
-    assert "reasoning" not in body  # the provider's default, as measured
+    # Low reasoning: the default spent a long call's whole 20,000-token ceiling (23 Oct 2026).
+    assert body["reasoning"] == {"effort": "low"}
     assert body["store"] is False and body["service_tier"] == "default"
     assert body["text"]["format"] == {
         "type": "json_schema",

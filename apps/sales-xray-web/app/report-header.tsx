@@ -11,6 +11,7 @@ import {
   Plus,
   ShieldCheck,
   Trash2,
+  UserRound,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -22,7 +23,10 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 
+import { CALL_LEAD_STAGE_WORDS, type CallLead } from "./acquisition-client";
 import { callTitle, type CallLabel } from "./call-label";
+import { displayName } from "./display-name";
+import { leadLink } from "./leads/leads-client";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import { formatClock } from "./lightbox/time";
 import styles from "./acquisition-studio.module.css";
@@ -50,6 +54,8 @@ export type ReportHeaderProps = {
   onOpenTranscript?: () => void;
   /** Server-confirmed owner call name (C1); null/absent on older servers. */
   label?: CallLabel | null;
+  /** The lead this call belongs to (slice 7): its name links to its sheet in Leads. */
+  lead?: CallLead | null;
   /** Shown while the call has no saved name (never "Untitled call" when known). */
   fallbackTitle?: string;
   /** An optional picture of the call (the call map) below the title. */
@@ -147,6 +153,7 @@ export function ReportHeader({
   onRequestDeletion,
   onOpenTranscript,
   label = null,
+  lead = null,
   fallbackTitle,
   rename,
   visual,
@@ -382,6 +389,19 @@ export function ReportHeader({
               <Clock3 size={14} aria-hidden="true" />
               {formatClock(durationMs)}
             </span>
+            {lead ? (
+              <span data-report-lead="">
+                <UserRound size={14} aria-hidden="true" />
+                <Link
+                  className={pinned.lead}
+                  href={leadLink(lead.leadId)}
+                  aria-label={`Open lead ${displayName(lead.name)}`}
+                >
+                  {displayName(lead.name)}
+                </Link>
+                <span>· {CALL_LEAD_STAGE_WORDS[lead.stage]}</span>
+              </span>
+            ) : null}
             {languageLabel ? (
               <span title={`Report language: ${languageLabel}`}>
                 <Languages size={14} aria-hidden="true" />

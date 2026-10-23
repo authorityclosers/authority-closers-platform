@@ -20,6 +20,7 @@ import {
   LoaderCircle,
   RefreshCw,
   Search,
+  UserRound,
   Users,
   X,
 } from "lucide-react";
@@ -41,10 +42,13 @@ import {
   acquisition,
   parseSubmissionLibraryPage,
   rememberSubmission,
+  CALL_LEAD_STAGE_WORDS,
   type LibrarySubmission,
   type SubmissionLibraryPage,
 } from "./acquisition-client";
 import { seededLibraryPage } from "./calls-seed";
+import { displayName } from "./display-name";
+import { leadLink } from "./leads/leads-client";
 import {
   cachedCallsPage,
   readCallsList,
@@ -250,7 +254,30 @@ const FILTERS: { id: "all" | CallTone; label: string }[] = [
 
 /** The Calls page reads calls with Reports before never-analysed ones. */
 const LIST_PATH =
-  "/submissions?include_owners=true&order=reports_first&include_summary=true";
+  "/submissions?include_owners=true&order=reports_first&include_summary=true&include_leads=true";
+
+/**
+ * A teammate on a phone row's one quiet line: "Swamini F.", "You", "Rahul E.
+ * (2)". The wide screen's column keeps the whole name.
+ */
+function shortRep(rep: string) {
+  const match = /^(.*?)( \(\d+\))?$/.exec(rep);
+  const [first, ...rest] = (match?.[1] ?? rep).trim().split(/\s+/);
+  const last = rest.at(-1);
+  return `${last ? `${first} ${last[0]}.` : first}${match?.[2] ?? ""}`;
+}
+
+/**
+ * A phone row's length in words, so it never reads like the clock time beside
+ * it (Liquid Glass, 22 Oct 2026): "40 s", "21 min", "1 h 5 min".
+ */
+function lengthWords(ms: number) {
+  if (ms < 60_000) return `${Math.max(1, Math.round(ms / 1000))} s`;
+  const minutes = Math.round(ms / 60_000);
+  if (minutes < 60) return `${minutes} min`;
+  const rest = minutes % 60;
+  return `${Math.floor(minutes / 60)} h${rest ? ` ${rest} min` : ""}`;
+}
 
 /** A saved call whose analysis never started (the server orders these last). */
 function notAnalysed(submission: LibrarySubmission) {
@@ -1071,8 +1098,23 @@ function CallsLibraryContent({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [workspace]);
+  // A call with no name of its own is named by its lead (slice 7).
   const titleOf = (submission: LibrarySubmission) =>
-    callTitle(submission.label, unnamedCallName(submission.createdAt, dates));
+    callTitle(
+      submission.label,
+      submission.lead
+        ? displayName(submission.lead.name)
+        : unnamedCallName(submission.createdAt, dates),
+    );
+  // The lead a call belongs to (approved map, slice 7, 22 Oct 2026): where it
+  // stands now, and its name unless the call's own name already says it.
+  const leadMark = (submission: LibrarySubmission, title: string) => {
+    if (!submission.lead) return null;
+    const name = displayName(submission.lead.name);
+    const stage = CALL_LEAD_STAGE_WORDS[submission.lead.stage];
+    const named = !title.toLowerCase().includes(name.toLowerCase());
+    return { text: named ? `${name} · ${stage}` : stage, named, name, stage };
+  };
   const lengthOf = (
     submission: LibrarySubmission,
     insight: CallInsight | null,
@@ -1197,16 +1239,23 @@ function CallsLibraryContent({
     insight?.durationMs
       ? {
           text: formatClock(insight.durationMs),
+          words: lengthWords(insight.durationMs),
           label: `Measured call duration: ${formatClock(insight.durationMs)}`,
           title: "Measured from the recording",
         }
       : hasRecordedLength(submission)
         ? {
             text: formatDuration(submission.durationSeconds),
+            words: lengthWords(submission.durationSeconds * 1000),
             label: `Length: ${formatDuration(submission.durationSeconds)}`,
             title: "Measured from the audio at upload",
           }
-        : { text: "", label: "Length unavailable", title: undefined };
+        : {
+            text: "",
+            words: "",
+            label: "Length unavailable",
+            title: undefined,
+          };
 
   const callRow = (submission: LibrarySubmission) => {
     const tone = callTone(submission);
@@ -1217,6 +1266,7 @@ function CallsLibraryContent({
     const read =
       workspace && submission.hasReport ? rowStatus(submission) : null;
     const title = titleOf(submission);
+    const lead = leadMark(submission, title);
     const label = submission.label;
     const length = lengthCell(submission, insight);
     const rep =
@@ -1282,20 +1332,48 @@ function CallsLibraryContent({
         >
           <span className={`${styles.copy} calls-library-copy`}>
             <strong
-              data-unnamed={label?.displayName ? undefined : "true"}
+              data-unnamed={
+                label?.displayName || submission.lead ? undefined : "true"
+              }
               title={title}
             >
               {title}
             </strong>
+            {lead ? (
+              <span className={styles.leadLine}>
+                <UserRound size={12} aria-hidden="true" />
+                <span className={styles.srOnly}>Lead: </span>
+                {lead.text}
+              </span>
+            ) : null}
             {/* Phone: one quiet line carries what the desktop columns show. */}
-            <small className={styles.meta}>
+            <small
+              className={styles.meta}
+              data-lead={lead ? "" : undefined}
+              data-lead-named={lead?.named ? "" : undefined}
+            >
               <span className={styles.metaStatus} data-tone={tone}>
                 <i aria-hidden="true" />
                 {shortState(submission)}
               </span>
+              {lead ? (
+                <span className={styles.metaLead}>
+                  <UserRound size={11} aria-hidden="true" />
+                  <span className={styles.srOnly}>Lead: </span>
+                  {lead.text}
+                </span>
+              ) : null}
               <span>{when}</span>
-              {length.text ? <span>{length.text}</span> : null}
-              {rep ? <span>{rep}</span> : null}
+              {length.text ? (
+                <span className={styles.metaLength} title={length.label}>
+                  {length.words}
+                </span>
+              ) : null}
+              {rep ? (
+                <span className={styles.metaRep} title={rep}>
+                  {shortRep(rep)}
+                </span>
+              ) : null}
             </small>
             {/* The summary line shows only with something in it: a row
                 never keeps an empty line under its name. */}
@@ -2002,7 +2080,14 @@ function CallsLibraryContent({
             open={previewSubmission !== null}
             id={shownPreview.id}
             title={titleOf(shownPreview)}
-            meta={`${formatCreatedDate(shownPreview.createdAt, dates)} · ${formatCreatedTime(shownPreview.createdAt, dates)} · ${lengthOf(shownPreview, rowInsight(shownPreview))}`}
+            // The length in words, as the rows say it, never a second clock.
+            meta={[
+              formatCreatedDate(shownPreview.createdAt, dates),
+              formatCreatedTime(shownPreview.createdAt, dates),
+              lengthCell(shownPreview, rowInsight(shownPreview)).words,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
             status={submissionState(shownPreview)}
             tone={callTone(shownPreview)}
             insight={rowInsight(shownPreview)}
@@ -2012,6 +2097,15 @@ function CallsLibraryContent({
             canRename={Boolean(
               shownPreview.label && ownsCall(shownPreview.owner, viewerId),
             )}
+            lead={
+              shownPreview.lead
+                ? {
+                    href: leadLink(shownPreview.lead.leadId),
+                    name: displayName(shownPreview.lead.name),
+                    stage: CALL_LEAD_STAGE_WORDS[shownPreview.lead.stage],
+                  }
+                : null
+            }
             onOpen={() => openSubmission(shownPreview)}
             onRename={() => {
               setPreviewId(null);

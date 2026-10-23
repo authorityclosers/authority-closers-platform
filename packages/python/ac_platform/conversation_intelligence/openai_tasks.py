@@ -6,9 +6,11 @@ schema here only constrains the provider wire format.
 
 The one-pass C4 request (``one_pass.stage``) goes to GPT-6 Luna only, as the cost
 research measured it (21 Oct 2026, luna-route-spec): its own JSON schema, not strict
-(OpenAI took both one-pass schemas so on every request), the provider's default
-reasoning, up to 20,000 output tokens. ``gpt-6-luna:flex`` is the same model and
-request on OpenAI's Flex tier (the transport adds ``service_tier: flex``).
+(OpenAI took both one-pass schemas so on every request), low reasoning, up to 20,000
+output tokens. Low reasoning (23 Oct 2026): with the provider's default, a 23.9-minute
+gold call spent all 20,000 output tokens and came back incomplete (no report); with low,
+the long calls answered completely in about 5,800 output tokens. ``gpt-6-luna:flex`` is the
+same model and request on OpenAI's Flex tier (the transport adds ``service_tier: flex``).
 """
 
 from __future__ import annotations
@@ -79,8 +81,11 @@ _ONE_PASS_KEYS = frozenset(
         "tools",
         "tool_choice",
         "truncation",
+        "reasoning",
     }
 )
+# Low reasoning keeps a long call's answer well inside the 20,000-token ceiling (above).
+_ONE_PASS_REASONING = {"effort": "low"}
 
 
 def _one_pass_format(recipe: str = ONE_PASS_RECIPE) -> dict[str, Any]:
@@ -104,7 +109,6 @@ def _one_pass_body(model: str, maximum: Any, instructions: str, user_input: str)
     text_format = _one_pass_format(recipe)
     if _input_bytes(instructions, user_input, text_format["schema"]) > OPENAI_MAX_INPUT_BYTES:
         _fail("openai_input_budget_exceeded")
-    # No reasoning setting: the provider's default, as measured ("high" did not help).
     return {
         "model": api_model(model),
         "instructions": instructions,
@@ -118,6 +122,7 @@ def _one_pass_body(model: str, maximum: Any, instructions: str, user_input: str)
         "tools": [],
         "tool_choice": "none",
         "truncation": "disabled",
+        "reasoning": dict(_ONE_PASS_REASONING),
     }
 
 

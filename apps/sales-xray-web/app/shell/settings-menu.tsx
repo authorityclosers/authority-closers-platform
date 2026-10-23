@@ -33,11 +33,13 @@ import {
   MailOpen,
   PhoneCall,
   Plug,
+  Rows3,
   Settings2,
   Smartphone,
   Sparkles,
   UserRound,
   Users,
+  UsersRound,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -321,9 +323,20 @@ export function SettingsMenu({
   // in the rail).
   const openPhoneCalls = inApp ? phoneCallsOpener() : null;
   const goTo = [
+    // Owner, 23 Oct 2026: "All leads one tap from anywhere".
+    ...(organisation
+      ? [
+          {
+            href: "/leads?tab=all&stage=open",
+            label: "All leads",
+            icon: <Rows3 size={20} />,
+          },
+        ]
+      : []),
     { href: "/prospects", label: "Prospects", icon: <Users size={20} /> },
     { href: "/coaching", label: "Coaching", icon: <GraduationCap size={20} /> },
-    ...(organisation
+    // Owners and admins have Team & organisation at the top of You.
+    ...(organisation && !insights
       ? [
           {
             href: "/organisation",
@@ -360,11 +373,14 @@ export function SettingsMenu({
     icon,
   }));
   // Leads' settings have one home in Settings since slice 5 (22 Oct 2026).
+  // Owner, 23 Oct 2026: team and organisation were "too hidden", so the
+  // organisation's own page leads the group.
   const theirs = [
     {
-      ...sectionById("team"),
-      href: "/settings/team",
-      icon: <Users size={18} />,
+      label: "Team & organisation",
+      hint: "Members, invites, roles and company details",
+      href: "/organisation",
+      icon: <UsersRound size={18} />,
     },
     {
       ...sectionById("lead-rules"),
@@ -465,11 +481,11 @@ export function SettingsMenu({
         </button>
       </div>
 
-      {phone ? (
-        <section className={styles.group} aria-label="Your settings">
-          <h3 className={styles.heading}>You</h3>
-          <ActionList label="Your settings">
-            {yours.map((item) => (
+      {phone && organisation && insights ? (
+        <section className={styles.group} aria-label="Organisation settings">
+          <h3 className={styles.heading}>Organisation</h3>
+          <ActionList label="Organisation settings">
+            {theirs.map((item) => (
               <ActionRow
                 key={item.href}
                 icon={item.icon}
@@ -483,11 +499,11 @@ export function SettingsMenu({
         </section>
       ) : null}
 
-      {phone && organisation && insights ? (
-        <section className={styles.group} aria-label="Organisation settings">
-          <h3 className={styles.heading}>Organisation</h3>
-          <ActionList label="Organisation settings">
-            {theirs.map((item) => (
+      {phone ? (
+        <section className={styles.group} aria-label="Your settings">
+          <h3 className={styles.heading}>You</h3>
+          <ActionList label="Your settings">
+            {yours.map((item) => (
               <ActionRow
                 key={item.href}
                 icon={item.icon}

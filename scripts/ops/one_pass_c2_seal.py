@@ -24,6 +24,8 @@ professional_gate_ref, after the owner confirmed the OpenAI DPA) (owner, 21 Oct 
   existing records); the summary prints its references for Root to check before installing.
 - ``--luna-c4`` (with ``--luna``): the hybrid, only the one-pass C4 request on Luna and C5
   kept on Gemini 3.8 Flash (profiles ``luna-c4-one-pass`` and ``luna-c4-one-pass-flex``).
+- ``--retire PROFILE`` (repeatable): take that profile out of every acquisition policy in the
+  same seal (a policy holds at most 8 profiles); each must be present, never the new one.
 - ``--brain4`` (with ``--one-pass``): the one-pass request is recipe v2, the same read plus
   the Brain 4.0 part (``one_pass.brain4_part``), on its own profiles beside v1's
   (``gemini-one-pass-v2``, ``luna-c4-one-pass-v2``, each with ``-flex``).
@@ -76,6 +78,13 @@ def main(argv: list[str] | None = None) -> int:
         "--luna-c4",
         action="store_true",
         help="with --luna: only the one-pass C4 request on Luna, C5 kept on Gemini 3.8 Flash",
+    )
+    parser.add_argument(
+        "--retire",
+        action="append",
+        default=[],
+        metavar="PROFILE",
+        help="take this profile out of every policy in the same seal (repeatable)",
     )
     parser.add_argument(
         "--brain4",
@@ -136,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
         luna=governance,
         luna_report=not arguments.luna_c4,
         recipe=recipe,
+        retire=tuple(arguments.retire),
     )
     arguments.out.mkdir(parents=True, exist_ok=True, mode=0o700)
     (arguments.out / "hosted-approval.json").write_bytes(sealed.to_json())
@@ -171,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
                 "classic_configuration": classic.digest,
                 "gemini_c2_configuration": derived.digest,
                 "recipe": recipe,
+                "retired": list(arguments.retire),
                 "profile": c2_route.versioned(
                     (
                         c2_route.LUNA_C4_FLEX_PROFILE_ID
@@ -196,6 +207,7 @@ def main(argv: list[str] | None = None) -> int:
                     recipe,
                 ),
                 "policies": [str(item.tenant_id) for item in policies],
+                "profiles_per_policy": [len(item.profiles) for item in policies],
                 "classic_stages_unchanged": True,
                 **openai_summary,
             },

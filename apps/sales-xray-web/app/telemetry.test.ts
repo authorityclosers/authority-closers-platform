@@ -3,11 +3,15 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
   audioFormat,
+  deviceClass,
+  readBand,
+  routeTemplate,
   safePayload,
   sizeBand,
   TELEMETRY_EVENT_NAMES,
   TelemetryClient,
   waitBand,
+  type EventContext,
 } from "./telemetry";
 
 const SESSION = "11111111-1111-4111-8111-111111111111";
@@ -15,7 +19,7 @@ let calls: Array<{ url: string; body: unknown }>;
 let taxonomy: string[] | null;
 let ingestStatus: number;
 
-function client(enabled = true) {
+function client(enabled = true, context?: () => EventContext) {
   let n = 0;
   return new TelemetryClient(
     {
@@ -35,6 +39,7 @@ function client(enabled = true) {
       }) as unknown as typeof fetch,
       now: () => new Date("2026-10-11T05:00:00Z"),
       id: () => `00000000-0000-4000-8000-${String(++n).padStart(12, "0")}`,
+      ...(context ? { context } : {}),
     },
     enabled,
   );
@@ -174,4 +179,68 @@ it("reports sizes, formats and waits in bands, not exact values", () => {
   expect(waitBand(90_000)).toBe("under_2m");
   expect(waitBand(4 * 60_000)).toBe("2_to_5m");
   expect(waitBand(Number.NaN)).toBe("unknown");
+});
+
+const CALL = "3F2B7D10-AAAA-4BBB-8CCC-0123456789AB";
+
+it("sends a report's call apart from its payload, with the page, device and app", async () => {
+  const telemetry = client(true, () => ({
+    route: routeTemplate(`/analysis/calls/${CALL}`),
+    device: "phone",
+    app: "android",
+  }));
+  telemetry.setSession(SESSION);
+  telemetry.track("sx.section_read", {
+    call_id: CALL,
+    section: "analysis",
+    skill: "d07",
+    read_band: "5_30s",
+    dwell_ms: 12_400,
+  });
+  // A malformed id is left off; the event still counts.
+  telemetry.track("sx.full_report_requested", {
+    call_id: "not-a-call",
+    surface: "report",
+  });
+  await vi.runAllTimersAsync();
+  expect(sent()).toEqual([
+    expect.objectContaining({
+      event_name: "sx.section_read",
+      route: "/analysis/calls/[callId]",
+      call_id: CALL.toLowerCase(),
+      payload: {
+        section: "analysis",
+        skill: "d07",
+        read_band: "5_30s",
+        dwell_ms: 12_400,
+        device: "phone",
+        app: "android",
+      },
+    }),
+    expect.objectContaining({
+      event_name: "sx.full_report_requested",
+      payload: { surface: "report", device: "phone", app: "android" },
+    }),
+  ]);
+  expect(sent()[1]).not.toHaveProperty("call_id");
+  expect(JSON.stringify(sent())).not.toContain(`calls/${CALL}`);
+});
+
+it("names pages by their templates, never their ids, and bands reads and screens", () => {
+  expect(routeTemplate("/")).toBe("/");
+  expect(routeTemplate("/leads/")).toBe("/leads");
+  expect(routeTemplate("/prospects/5d1c")).toBe("/prospects/[prospectId]");
+  expect(routeTemplate("/settings/lead-rules")).toBe("/settings/[section]");
+  expect(routeTemplate("/organisation/people/abc")).toBe(
+    "/organisation/people/[personId]",
+  );
+  expect(routeTemplate("/login")).toBeNull();
+  expect(routeTemplate("/analysis/calls/a/b")).toBeNull();
+  expect(readBand(4_999)).toBe("under_5s");
+  expect(readBand(5_000)).toBe("5_30s");
+  expect(readBand(30_000)).toBe("30_120s");
+  expect(readBand(120_000)).toBe("over_120s");
+  expect(deviceClass(390)).toBe("phone");
+  expect(deviceClass(820)).toBe("tablet");
+  expect(deviceClass(1440)).toBe("desktop");
 });

@@ -27,6 +27,7 @@ import {
   DashboardBody,
   toState,
   useDashboardTeam,
+  useSalesRole,
   type ReadState,
 } from "./dashboard-body";
 import { seededDashboard, type ServerDashboard } from "./dashboard-seed";
@@ -235,12 +236,7 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
 
   const team = useDashboardTeam();
   // In an organisation, Home starts with sales (owner, 22 Oct 2026).
-  const inOrganisation =
-    access?.workspaces?.find(
-      (workspace) => workspace.tenant_id === access.context?.tenantId,
-    )?.kind === "organisation";
-  const salesRole =
-    inOrganisation && team !== null ? (team ? "manager" : "seller") : null;
+  const salesRole = useSalesRole();
   const sales = salesRole ? (
     <SalesHome manager={salesRole === "manager"} />
   ) : null;

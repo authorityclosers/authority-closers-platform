@@ -61,6 +61,21 @@ export function useDashboardTeam(): boolean | null {
   );
 }
 
+/**
+ * In an organisation, Home starts with sales (owner, 22 Oct 2026): owners and
+ * admins see the team's, everyone else their own day. Null outside one, or
+ * while the workspace list loads.
+ */
+export function useSalesRole(): "manager" | "seller" | null {
+  const access = useWorkspaceAccess();
+  const team = useDashboardTeam();
+  const inOrganisation =
+    access?.workspaces?.find(
+      (workspace) => workspace.tenant_id === access.context?.tenantId,
+    )?.kind === "organisation";
+  return inOrganisation && team !== null ? (team ? "manager" : "seller") : null;
+}
+
 /** A word-shaped placeholder inside a line of text, so the line keeps its height. */
 function Ph({ w }: { w: string }) {
   return (

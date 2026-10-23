@@ -4,7 +4,7 @@
  * The real Calls page with a fictional organisation's calls, for screenshots
  * (wb-ci --visual and the design-direction proposal, 22 Oct 2026). The calls
  * list is answered here; nothing leaves the browser. `?empty=1` shows a
- * workspace with no calls yet.
+ * workspace with no calls yet. Five calls belong to a lead (slice 7).
  */
 
 import { Suspense, useState } from "react";
@@ -95,6 +95,16 @@ const CALLS: Call[] = [
   ["Walk-in · Priya Sample", SELLER, 4300, 655, "ready", false, null, null],
 ];
 
+/** The lead each call belongs to (slice 7): by the call's place in CALLS. */
+const LEADS: Record<number, [name: string, stage: string]> = {
+  0: ["asha fictional", "interested"],
+  1: ["ravi sample", "follow_up"],
+  3: ["karan example", "new"],
+  4: ["neha fictional", "won"],
+  // A cold call whose name doesn't say whom: the row names the lead.
+  5: ["anil example", "lost"],
+};
+
 const OWNERS: Record<string, string> = {
   [SELLER]: "Swamini Fictional",
   [SECOND]: "Rahul Example",
@@ -118,6 +128,17 @@ function page(now: number, empty: boolean) {
             display_name_revision: 1,
             owner_person_id: owner,
             owner_name: OWNERS[owner],
+            ...(LEADS[index]
+              ? {
+                  lead: {
+                    lead_id: `00000000-0000-4000-8000-0000000006${String(index).padStart(2, "0")}`,
+                    name: LEADS[index][0],
+                    stage: LEADS[index][1],
+                    step: null,
+                    pipeline: "main",
+                  },
+                }
+              : {}),
             summary: report
               ? {
                   outcome,

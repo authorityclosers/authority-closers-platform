@@ -9,15 +9,15 @@ import pytest
 from ac_platform.conversation_intelligence.admin_pricing import FX_USD_TO_INR, PRICING_SNAPSHOTS
 from ac_platform.conversation_intelligence.analysis_engine import registry
 
-# docs/research/2026-10-22-adaptive-analysis/01-research-one-pass-to-production.md §4, with the
-# Brain 4.0 answer from 1.5k to 2.5k output tokens (the registry uses the 2k midpoint).
-DESIGN = {
-    "today-brain4-read": (0.872, 0.918),
-    "v2": (0.826, 0.872),
-    "v2-report-on-demand": (0.621, 0.667),
-    "v2-flex-report-on-demand": (0.311, 0.334),
-    "v2-luna-flex-report-on-demand": (0.153, 0.156),
-    "v2-luna-flex-compact": (0.112, 0.115),
+# The one-pass session's measured options on the same mix (brain4-options-table, 22 Oct):
+# option 1, today plus the separate Brain 4.0 read, ₹0.85/min; option 2, v2, ₹0.82-0.85/min.
+MEASURED = {"today-brain4-read": (0.845, 0.855), "v2": (0.82, 0.85)}
+# The rest, pinned: a fit that changes moves them on purpose (registry v1, 22 Oct).
+PINNED = {
+    "v2-report-on-demand": 0.6266,
+    "v2-flex-report-on-demand": 0.3143,
+    "v2-luna-flex-report-on-demand": 0.1530,
+    "v2-luna-flex-compact": 0.1119,
 }
 
 
@@ -38,10 +38,15 @@ def test_today_recomputes_the_measured_rate_on_the_reference_mix() -> None:
     assert round(projected["modules"]["c5.after-one-pass"], 3) == 0.205
 
 
-@pytest.mark.parametrize(("plan_id", "bounds"), sorted(DESIGN.items()))
-def test_every_plan_lands_in_the_designs_range(plan_id: str, bounds: tuple[float, float]) -> None:
+@pytest.mark.parametrize(("plan_id", "bounds"), sorted(MEASURED.items()))
+def test_brain4_plans_match_the_measured_options(plan_id: str, bounds: tuple[float, float]) -> None:
     low, high = bounds
     assert low <= _without_fast_facts(plan_id) <= high
+
+
+@pytest.mark.parametrize(("plan_id", "value"), sorted(PINNED.items()))
+def test_the_cheaper_plans_are_pinned(plan_id: str, value: float) -> None:
+    assert _without_fast_facts(plan_id) == pytest.approx(value, abs=0.0002)
 
 
 def test_each_tenth_of_calls_asking_for_the_report_adds_a_tenth_of_its_cost() -> None:
@@ -154,7 +159,7 @@ def test_the_digest_moves_with_any_edit(monkeypatch: pytest.MonkeyPatch) -> None
 
 def test_describe_carries_version_examples_and_reference_projections() -> None:
     body = registry.describe()
-    assert body["version"] == "analysis-engine-registry/0"
+    assert body["version"] == "analysis-engine-registry/1"
     assert body["digest"] == registry.digest()
     one_pass = next(row for row in body["modules"] if row["id"] == "c4.one-pass-v1")
     assert [row["minutes"] for row in one_pass["examples"]] == [2.0, 5.0, 15.0]
@@ -164,3 +169,21 @@ def test_describe_carries_version_examples_and_reference_projections() -> None:
     assert today["reference"]["calls"] == 62 and today["reference_with_uptake"] is None
     on_demand = next(row for row in body["plans"] if row["id"] == "v2-report-on-demand")
     assert on_demand["reference_with_uptake"]["per_minute"] > on_demand["reference"]["per_minute"]
+
+
+def test_gold_rows_name_real_modules_and_hold_their_intervals() -> None:
+    known = {item.id for item in registry.MODULES}
+    for row in registry.QUALITY:
+        assert (row.module is None) != (row.nearest is None), row.setup
+        assert (row.module or row.nearest) in known, row.setup
+        if row.agreement is None:
+            assert row.low is None and row.high is None and "not scored" in row.evidence
+        else:
+            assert row.low is not None and row.high is not None
+            assert 0 <= row.low <= row.agreement <= row.high <= 1, row.setup
+    # Only a module exactly as built carries a row of its own; research arms only inform it.
+    assert [row.agreement for row in registry.quality_of("pr.classic")] == [0.64]
+    assert [row.agreement for row in registry.quality_of("b4.shadow")] == [0.55]
+    assert [row.agreement for row in registry.quality_of("c4.one-pass-v1")] == [None]
+    assert registry.quality_of("c4.one-pass-v2.luna-flex") == ()
+    assert len(registry.describe()["quality"]) == len(registry.QUALITY)
