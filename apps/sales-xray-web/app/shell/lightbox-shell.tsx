@@ -48,6 +48,7 @@ import {
 
 import { useBranding } from "./branding-store";
 import { AddSheet } from "./add-sheet";
+import { BugReportHost } from "../bug-report/bug-report-sheet";
 import { useAppRouter } from "./app-router";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
@@ -1933,6 +1934,7 @@ function LightboxShellFrame({
           search={searchEverything}
         />
       )}
+      {guest ? null : <BugReportHost />}
       {guest ? null : (
         <AddSheet
           open={addOpen}

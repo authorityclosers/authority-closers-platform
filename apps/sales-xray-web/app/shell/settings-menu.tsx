@@ -20,6 +20,7 @@ import {
   AudioLines,
   BarChart3,
   Bell,
+  Bug,
   Building2,
   ChevronLeft,
   ChevronRight,
@@ -58,6 +59,7 @@ import { createPortal } from "react-dom";
 
 import type { Allowance } from "../acquisition-client";
 import { useSalesXraySignOut } from "../account-navigation";
+import { openBugReport } from "../bug-report/open";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { phoneCallsOpener, useInApp } from "../in-app-client";
 import { inPhoneApp } from "../leads/native-phone";
@@ -567,6 +569,15 @@ export function SettingsMenu({
           label="What's new"
           badge={unseen > 0 ? `${unseen} new` : undefined}
           onClick={() => setView("news")}
+        />
+        {/* Bug reporter (owner, 23 Oct 2026): two taps from any screen. */}
+        <Row
+          icon={<Bug size={17} />}
+          label="Report a problem"
+          onClick={() => {
+            onClose();
+            openBugReport();
+          }}
         />
         <Row
           icon={<LifeBuoy size={17} />}

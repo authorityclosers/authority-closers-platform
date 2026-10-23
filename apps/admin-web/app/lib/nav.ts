@@ -60,7 +60,8 @@ export type NavIcon =
   | "updates"
   | "safety"
   | "catalogue"
-  | "offers";
+  | "offers"
+  | "bugs";
 
 type Need =
   | { kind: "console" }
@@ -94,6 +95,13 @@ export const NAVIGATION: readonly NavGroup[] = [
         icon: "home",
         need: { kind: "console" },
         phone: true,
+      },
+      // Bug reports from Sales X-Ray testers (owner, 23 Oct 2026).
+      {
+        href: "/bugs",
+        label: "Bugs",
+        icon: "bugs",
+        need: { kind: "salesXray" },
       },
     ],
   },

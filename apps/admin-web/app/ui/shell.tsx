@@ -13,6 +13,7 @@ import {
   Activity,
   BadgeIndianRupee,
   BarChart3,
+  Bug,
   ChartNoAxesCombined,
   BookOpenCheck,
   ClipboardCheck,
@@ -90,6 +91,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   safety: ShieldCheck,
   catalogue: LayoutGrid,
   offers: Sparkles,
+  bugs: Bug,
 };
 
 export function AcMark({ size = 20 }: { size?: number }) {
