@@ -27,6 +27,7 @@ import {
   UsersRound,
 } from "lucide-react";
 import Form from "next/form";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -122,7 +123,6 @@ import {
   type UpdateNotification,
 } from "./updates-client";
 import { ChatsTabIcon } from "../chats/chats-badge";
-import { AddLeadDialog } from "../leads/capture-dialogs";
 import { leadLink, readLeads } from "../leads/leads-client";
 import { CommandBar, type Command } from "../ui/command-bar";
 import { useRegisteredCommands } from "../ui/command-registry";
@@ -233,6 +233,17 @@ const subscribeNothing = () => () => {};
 // the visible label floats above every layer on hover or focus (rail-tip.tsx).
 /** Every open lead (owner, 23 Oct 2026: "All leads one tap from anywhere"). */
 const ALL_LEADS_HREF = "/leads?tab=all&stage=open";
+
+/**
+ * Add lead (about 1,000 lines with the pipelines it reads) loads when it is
+ * first wanted, not with every page (launch readiness, 23 Oct 2026); opening
+ * + or choosing "Add a lead" fetches it first, so the form still opens at once.
+ */
+const loadCaptureDialogs = () => import("../leads/capture-dialogs");
+const AddLeadDialog = dynamic(
+  () => loadCaptureDialogs().then((module) => module.AddLeadDialog),
+  { ssr: false },
+);
 
 const RAIL_NAME_STYLE: CSSProperties = {
   position: "absolute",
@@ -845,10 +856,14 @@ function LightboxShellFrame({
     },
     [router],
   );
-  const openLeadForm = useCallback(
-    () => setLeadForm((form) => ({ open: true, round: form.round + 1 })),
-    [],
-  );
+  const openLeadForm = useCallback(() => {
+    void loadCaptureDialogs();
+    setLeadForm((form) => ({ open: true, round: form.round + 1 }));
+  }, []);
+  // Add lead is one tap away while + is open: fetch the form then.
+  useEffect(() => {
+    if (addOpen) void loadCaptureDialogs();
+  }, [addOpen]);
   const commands = useMemo<Command[]>(() => {
     const place = (
       label: string,
