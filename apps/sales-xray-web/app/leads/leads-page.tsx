@@ -50,6 +50,7 @@ import { leavingOverlay } from "../ui/back-close";
 import { Badge, Button, Empty, PageHeader, SkeletonRow } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { requestWorkspace } from "../call-ownership";
+import { identityOf } from "../calls-cache";
 import type { AddWay } from "./capture-dialogs";
 import { AlertsCard } from "./alerts-card";
 import { PhoneLogCard } from "./phone-log-card";
@@ -59,6 +60,7 @@ import { RecordedCallsCard } from "./recorded-calls";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
+import { cachedDesk, rememberDesk } from "./desk-cache";
 import { DeskView, toCallNow, whyLine, type RowActions } from "./desk-view";
 import { usePullToRefresh } from "./gestures";
 import {
@@ -259,8 +261,19 @@ export function LeadsRoute() {
     !!access.context;
   const contextKey = `${access?.context?.personId}:${access?.context?.tenantId}`;
 
-  const [desk, setDesk] = useState<Desk | null>(null);
-  const [deskKey, setDeskKey] = useState<string | null>(null);
+  // What this identity's To call showed last (desk-cache.ts): a return to
+  // Leads paints it at once and reads again quietly. Not under test, where
+  // every case starts from nothing.
+  const identity = identityOf(access?.context);
+  const [seed] = useState(() =>
+    process.env.NODE_ENV === "test"
+      ? null
+      : cachedDesk(identity, storedToCall(contextKey)),
+  );
+  const [desk, setDesk] = useState<Desk | null>(seed);
+  const [deskKey, setDeskKey] = useState<string | null>(
+    seed ? contextKey : null,
+  );
   const [error, setError] = useState<LeadsError | null>(null);
   const [version, setVersion] = useState(0);
   const [openLead, setOpenLead] = useState<string | null>(null);
@@ -424,6 +437,7 @@ export function LeadsRoute() {
       .then((next) => {
         setDesk(next);
         setDeskKey(contextKey);
+        rememberDesk(identity, toCallPipeline, next);
         setError(null);
         // The app's badge counts the whole day, never one pipeline's.
         if (!toCallPipeline)
@@ -453,7 +467,14 @@ export function LeadsRoute() {
         settle();
       });
     return () => controller.abort();
-  }, [authenticated, contextKey, version, toCallPipeline, chooseToCall]);
+  }, [
+    authenticated,
+    contextKey,
+    identity,
+    version,
+    toCallPipeline,
+    chooseToCall,
+  ]);
 
   // Back in the app or the tab, an alert while open, or a minute gone: read again.
   useEffect(() => {

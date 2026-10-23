@@ -70,6 +70,12 @@ it("names each page's first reads, exactly as the page asks for them", () => {
     `/v1/organisation/members/${person.toLowerCase()}/activity?weeks=${PERSON_WEEKS}`,
   ]);
   expect(earlyReadsFor("/organisation/people/someone")).toEqual([]);
+  // Leads: the session, then To call's desk.
+  expect(earlyReadsFor("/leads")).toEqual([
+    "/v1/me/workspaces",
+    "/v1/me/sales-xray-workspaces",
+    "/v1/lead-desk",
+  ]);
   // Public pages and unknown addresses start nothing.
   expect(earlyReadsFor("/pricing")).toEqual([]);
   expect(earlyReadsFor("/analysis/calls/not-a-call")).toEqual([]);

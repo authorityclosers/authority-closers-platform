@@ -7,6 +7,7 @@
  */
 
 import { withDisplayNames } from "../display-name";
+import { earlyFetch } from "../early-reads";
 
 export const LEADS_PATH = "/leads";
 const API = "/v1/lead-desk";
@@ -369,7 +370,9 @@ const FALLBACK: Record<number, string> = {
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   let response: Response;
   try {
-    response = await fetch(`${API}${path}`, {
+    // A read the Leads tab press already started (early-reads.ts) is
+    // taken as it lands; anything else goes to the network.
+    response = await earlyFetch(`${API}${path}`, {
       credentials: "same-origin",
       cache: "no-store",
       redirect: "error",
