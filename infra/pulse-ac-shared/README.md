@@ -16,7 +16,6 @@ servers are the source of truth; update this copy whenever one of them changes.
 | ac | `/usr/local/sbin/ac-pulse-snapshot` (+ timer drop-in `nightly-shared-pulse.conf`, 21:40 UTC) | nightly AC-only export pulled from ea → gpg → AC Drive "AC Backups/pulse" (`pulse-shared-*`) |
 | ac | `ac-pulse-forward.service` | AC's own address: 127.0.0.1:8090, behind AC's Cloudflare tunnel for pulse.authorityclosers.com, is an SSH forward to the shared Pulse on ea (127.0.0.1:4002). The key `/etc/pulse/secrets/forward_ed25519` can only forward there (`restrict,port-forwarding,permitopen="127.0.0.1:4002"`, from ac, no shell) |
 | ac | `/usr/local/sbin/ac-pulse-redirect`, `ac-pulse-redirect.service` (disabled) | the 23 Oct interim 301 to https://ac-pulse.estateautopilots.com, replaced by the forward when the owner asked for AC's own domain |
-| ea | `ea-cloudflare` route `ac-pulse.estateautopilots.com` → 127.0.0.1:4002 (public) | AC's secondary address |
 | ac | `rotate-db-passwords` (run once, from `/root/ac-org-move`) | rotated the old install's four login-role passwords without printing them |
 
 **The old install on ac** (compose project `pulse`, containers `pulse-pulse-1` and `pulse-postgres-1`) is frozen:
@@ -24,9 +23,9 @@ servers are the source of truth; update this copy whenever one of them changes.
 - the database is `default_transaction_read_only = on`;
 - the timers `ac-pulse-sync` and `ac-pulse-snapshot` (old hourly mode) are retired.
 
-Keep it until 30 Oct 2026; removing it needs the owner's deletion approval.
+It is kept frozen and intact, by the owner's decision of 23 Oct, as the likely first node of the federation (EST card "Pulse federation", P2). Don't remove it.
 
-**Addresses** (`pulse.org_domain`): `pulse.authorityclosers.com` is primary and `ac-pulse.estateautopilots.com` is secondary, both with password sign-in. Pulse has no per-organisation redirect from a secondary address to the primary.
+**Addresses** (`pulse.org_domain`): `pulse.authorityclosers.com` is AC's only address (primary, password sign-in). The interim `ac-pulse.estateautopilots.com` was removed on 23 Oct 08:20 UTC, both its route and its row.
 
 To skip the forward's detour through ac, the owner can add a tunnel connector on ea in AC's Cloudflare account (or the Pulse team can build Cloudflare for SaaS custom hostnames) and stop `ac-pulse-forward`.
 
