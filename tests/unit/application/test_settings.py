@@ -126,7 +126,10 @@ def test_fake_billing_accepts_nonproduction_environments(environment: str) -> No
     )
     app = compose_billing(settings)
     assert app is not None and app.service.providers.names == ("fake",)
-    assert app.service.fake_checkout_base_url == str(settings.api_url).rstrip("/")
+    # A plain-http (local) API URL is unreachable from a browser: the test payment page
+    # then lives on the Sales Xray origin, which serves /v1 on dev.
+    expected = settings.api_url if environment == "staging" else settings.sales_xray_app_url
+    assert app.service.fake_checkout_base_url == str(expected).rstrip("/")
 
 
 @pytest.mark.parametrize("enabled", [False, True])
