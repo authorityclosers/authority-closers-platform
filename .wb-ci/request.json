@@ -1,0 +1,17 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "3f34d337f4249520c50c15e3ab2d5aafacd90434",
+  "full": false,
+  "checks": [
+    "e2e"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/leads/phone-setup-recordings.test.tsx",
+    "apps/sales-xray-web/app/leads/phone-setup.tsx"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
