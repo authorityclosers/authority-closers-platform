@@ -312,6 +312,23 @@ def test_real_downgrade_recreating_an_in_list_check_compares_as_restored(
             gate.rehearse(directory, checksum, BASELINE, [item], CANDIDATE, repo=tmp_path)
 
 
+@pytest.mark.parametrize("downgrade", ["op.drop_table('added')", "pass"])
+def test_real_rehearsal_on_a_baseline_built_from_migrations(tmp_path, downgrade):
+    # v0.86 root cause 4: wb-ci rehearses every migration commit without staging's export,
+    # which is published by hand and kept for one day.
+    if os.getenv("AC_REQUIRE_SCHEMA_GATE_DOCKER_TEST") != "1":
+        pytest.skip("Docker rehearsal runs in the migration-safety jobs")
+    item = migration(
+        tmp_path, "    op.create_table('added', sa.Column('id', sa.Integer()))", downgrade
+    )
+    write_rehearsal_repo(tmp_path)
+    if downgrade == "pass":
+        with pytest.raises(gate.GateError, match="restore the baseline schema"):
+            gate.rehearse_from_migrations(BASELINE, [item], CANDIDATE, repo=tmp_path)
+    else:
+        gate.rehearse_from_migrations(BASELINE, [item], CANDIDATE, repo=tmp_path)
+
+
 def test_real_full_backup_rejected_before_restore(tmp_path, docker_evidence):
     directory, _, full_data = docker_evidence
     directory, checksum = evidence(tmp_path, full_data)

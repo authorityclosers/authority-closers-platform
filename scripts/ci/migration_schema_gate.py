@@ -440,57 +440,93 @@ def rehearse(
         )
         with database.connect() as connection:
             connection.execute("INSERT INTO alembic_version (version_num) VALUES (%s)", (baseline,))
-            rows = connection.execute(
-                "SELECT schemaname, tablename FROM pg_tables "
-                "WHERE schemaname NOT IN ('pg_catalog','information_schema')"
-            ).fetchall()
-            check_operations(chain, set(rows))
-            # Set defaults for every migration connection, including autocommit blocks.
-            connection.execute(
-                sql.SQL("ALTER DATABASE ac_migration_safety SET lock_timeout = '2s'")
-            )
-            connection.execute(
-                sql.SQL("ALTER DATABASE ac_migration_safety SET statement_timeout = '30s'")
-            )
-        before = database.canonical_schema()
-        environment = {
-            k: v
-            for k, v in os.environ.items()
-            if not k.upper().startswith(
-                ("AC_", "PG", "INFISICAL", "PAPERCLIP", "GITHUB_TOKEN", "GH_TOKEN")
-            )
-        }
-        url = f"postgresql+psycopg://ac_owner:fictional-ci-only@127.0.0.1:{database.port}/ac_migration_safety"
-        environment.update(
-            AC_DATABASE_URL=url,
-            AC_DATABASE_MIGRATOR_URL=url,
-            AC_ENVIRONMENT="test",
-            AC_EXTERNAL_SIDE_EFFECTS_HOLD="true",
-            AC_EMAIL_PROVIDER="fake",
-            PGOPTIONS=OPTIONS,
-            PYTHONPATH=str(repo / "packages/python"),
+        prepare_rehearsal(database, chain)
+        rehearse_chain(database, migration_environment(database, repo), repo, baseline, candidate)
+
+
+def rehearse_from_migrations(
+    baseline: str, chain: list[Migration], candidate: str, repo: Path = ROOT
+) -> None:
+    """Rehearse on a baseline the checked-in migrations build (wb-ci; no staging evidence).
+
+    v0.86 root cause 4 (owner, 24 Oct 2026): migration-safety ran only on the release PR, so
+    authors learned hours later. wb-ci cannot depend on staging's export, which is published by
+    hand with a one-day retention, so it upgrades an empty disposable database to the base
+    head and then rehearses the chain exactly as against staging. Released migrations are
+    unchanged history (scripts/ci/released_migrations.py), so this is the schema the releases
+    built; staging drift is not covered here, and the release PR still rehearses on staging's
+    export.
+    """
+    with disposable_postgres() as database:
+        environment = migration_environment(database, repo)
+        migrate(database, environment, repo, "upgrade", baseline)
+        prepare_rehearsal(database, chain)
+        rehearse_chain(database, environment, repo, baseline, candidate)
+
+
+def prepare_rehearsal(database: Database, chain: list[Migration]) -> None:
+    with database.connect() as connection:
+        rows = connection.execute(
+            "SELECT schemaname, tablename FROM pg_tables "
+            "WHERE schemaname NOT IN ('pg_catalog','information_schema')"
+        ).fetchall()
+        check_operations(chain, set(rows))
+        # Set defaults for every migration connection, including autocommit blocks.
+        connection.execute(sql.SQL("ALTER DATABASE ac_migration_safety SET lock_timeout = '2s'"))
+        connection.execute(
+            sql.SQL("ALTER DATABASE ac_migration_safety SET statement_timeout = '30s'")
         )
 
-        def migrate(direction: str, revision: str) -> None:
-            run(
-                [sys.executable, "-m", "alembic", "-c", "alembic.ini", direction, revision],
-                env=environment,
-                cwd=repo,
-            )
-            with database.connect() as connection:
-                if connection.execute("SELECT version_num FROM alembic_version").fetchall() != [
-                    (revision,)
-                ]:
-                    raise GateError("migration did not reach its exact requested revision")
 
-        migrate("upgrade", candidate)
-        upgraded = database.canonical_schema()
-        migrate("downgrade", baseline)
-        if database.canonical_schema() != before:
-            raise GateError("downgrade did not restore the baseline schema")
-        migrate("upgrade", candidate)
-        if database.canonical_schema() != upgraded:
-            raise GateError("re-upgrade did not reproduce the candidate schema")
+def migration_environment(database: Database, repo: Path) -> dict[str, str]:
+    environment = {
+        k: v
+        for k, v in os.environ.items()
+        if not k.upper().startswith(
+            ("AC_", "PG", "INFISICAL", "PAPERCLIP", "GITHUB_TOKEN", "GH_TOKEN")
+        )
+    }
+    url = f"postgresql+psycopg://ac_owner:fictional-ci-only@127.0.0.1:{database.port}/ac_migration_safety"
+    environment.update(
+        AC_DATABASE_URL=url,
+        AC_DATABASE_MIGRATOR_URL=url,
+        AC_ENVIRONMENT="test",
+        AC_EXTERNAL_SIDE_EFFECTS_HOLD="true",
+        AC_EMAIL_PROVIDER="fake",
+        PGOPTIONS=OPTIONS,
+        PYTHONPATH=str(repo / "packages/python"),
+    )
+    return environment
+
+
+def migrate(
+    database: Database, environment: dict[str, str], repo: Path, direction: str, revision: str
+) -> None:
+    run(
+        [sys.executable, "-m", "alembic", "-c", "alembic.ini", direction, revision],
+        env=environment,
+        cwd=repo,
+        timeout=600,
+    )
+    with database.connect() as connection:
+        if connection.execute("SELECT version_num FROM alembic_version").fetchall() != [
+            (revision,)
+        ]:
+            raise GateError("migration did not reach its exact requested revision")
+
+
+def rehearse_chain(
+    database: Database, environment: dict[str, str], repo: Path, baseline: str, candidate: str
+) -> None:
+    before = database.canonical_schema()
+    migrate(database, environment, repo, "upgrade", candidate)
+    upgraded = database.canonical_schema()
+    migrate(database, environment, repo, "downgrade", baseline)
+    if database.canonical_schema() != before:
+        raise GateError("downgrade did not restore the baseline schema")
+    migrate(database, environment, repo, "upgrade", candidate)
+    if database.canonical_schema() != upgraded:
+        raise GateError("re-upgrade did not reproduce the candidate schema")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -499,6 +535,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--artifact-dir", type=Path)
     parser.add_argument("--manifest-sha256", default="")
     parser.add_argument("--scope-only", action="store_true")
+    parser.add_argument(
+        "--baseline-from-migrations",
+        action="store_true",
+        help="build the baseline from the checked-in migrations instead of staging evidence (wb-ci)",
+    )
     args = parser.parse_args(argv)
     try:
         base_ref = (
@@ -526,6 +567,13 @@ def main(argv: list[str] | None = None) -> int:
             or set(paths) & {m.file for m in base.values()}
         ):
             raise GateError("migration PR must add revisions without rewriting migration history")
+        if args.baseline_from_migrations:
+            rehearse_from_migrations(baseline, chain, candidate)
+            print(
+                f"migration-safety: PASS ({len(chain)} revisions; upgrade/downgrade/schema/"
+                "re-upgrade on a baseline built from the migrations)"
+            )
+            return 0
         if args.artifact_dir is None:
             raise GateError("governed staging schema evidence is missing")
         rehearse(args.artifact_dir, args.manifest_sha256, baseline, chain, candidate)
