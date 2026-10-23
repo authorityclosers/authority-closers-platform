@@ -34,11 +34,13 @@ SHA256 = re.compile(r"^[0-9a-f]{64}$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 DEB = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9.+_:%~-]*\.deb$")
 MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024
-# Conservative admission, not a claim about GitHub's delayed billing quota.
-# Reserve a full upload before acquisition; leave 512 MiB of a 2 GiB pool for releases.
+# Conservative admission, not a claim about GitHub's billing quota. The repository is public, so
+# GitHub does not charge for or cap its artifact storage (22 Oct: 5.4 GB retained, uploads still
+# accepted). The total ceiling only guards against runaway growth; the bundle ceiling below stops
+# duplicate bundles. Reserve a full upload before acquisition.
 MAX_PUBLICATION_BYTES = 512 * 1024 * 1024
 MAX_RETAINED_BUNDLE_BYTES = 1024 * 1024 * 1024
-MAX_RETAINED_ARTIFACT_BYTES = 1536 * 1024 * 1024
+MAX_RETAINED_ARTIFACT_BYTES = 4096 * 1024 * 1024
 MAX_IDENTITY_PUBLICATIONS = 2  # bootstrap plus one baseline/age recovery
 BOOTSTRAP_FILE = Path(__file__).with_name("ci-prerequisite-bootstrap.json")
 PUBLICATION_OWNER = "ci-prerequisite-publication-v3"
