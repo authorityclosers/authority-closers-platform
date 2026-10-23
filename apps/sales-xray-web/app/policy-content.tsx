@@ -29,7 +29,7 @@ const TITLES: Record<PolicySlug, string> = {
 const UPDATED: Record<PolicySlug, [string, string]> = {
   pricing: ["2026-10-03", "3 October 2026"],
   terms: ["2026-10-03", "3 October 2026"],
-  privacy: ["2026-10-21", "21 October 2026"],
+  privacy: ["2026-10-24", "24 October 2026"],
   refunds: ["2026-10-16", "16 October 2026"],
   delivery: ["2026-10-03", "3 October 2026"],
   contact: ["2026-10-16", "16 October 2026"],
@@ -262,6 +262,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "If you use Google sign-in, the Google account identifier and basic profile information needed to authenticate or link your identity. We do not receive your Google password. We keep your first and last name, language setting, Google Workspace email domain when supplied, and a small copy of your Google profile photo.",
         "Razorpay processes payment credentials entered in its hosted checkout. Sales X-Ray receives payment status and transaction references, not complete card credentials.",
         "If a business connects its WhatsApp number, Facebook Page or Instagram account to Sales X-Ray: the messages people send that business there, and the business's replies.",
+        "How you use the app and how fast it responds: screens, taps, response times, errors, page speed, the app version and the type of device and network. See Usage analytics, below.",
       ],
     },
     {
@@ -270,6 +271,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "To provide analysis and reports.",
         "To run your account, plan, and billing.",
         "To keep the service secure.",
+        "To make Sales X-Ray faster, easier to use and cheaper to run (usage analytics).",
         "To meet legal and tax duties.",
       ],
     },
@@ -280,6 +282,15 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "Razorpay for payments made through its hosted checkout.",
         "Google (the Gemini API, provided by Google LLC), to draft replies to messages, only for a business that switches on AI replies. See AI replies to messages, below.",
         "Sales X-Ray does not use your recordings or reports to target advertising.",
+      ],
+    },
+    {
+      // The notice's words, version sx-product-analytics-2026-10-24-v1 (telemetry/sales_xray.py
+      // NOTICES; a test pins them). New words are a new version there.
+      title: "Usage analytics",
+      paragraphs: [
+        "Sales X-Ray records how its app is used and how fast it responds, to make it faster, easier to use and cheaper to run. It records the screens and report sections you open and for how long, taps and how quickly the app responds to them, errors, page speed, the app version and the type of device and network. It never records call content, transcripts, lead names, phone numbers or email addresses. Records are kept for 180 days and are never used to score you or to set your access, payments or plan.",
+        "This is on in every workspace unless it is turned off. You can turn it off for yourself at any time in Settings, Privacy; an owner or admin can turn it off for the whole workspace there. Sandbox workspaces never record it.",
       ],
     },
     {

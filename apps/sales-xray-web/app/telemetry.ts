@@ -131,7 +131,126 @@ export type TelemetryEvents = {
   "sx.prospect_edited": { field: string };
   "sx.outcome_set": Partial<AboutCall> & { outcome: string };
   "sx.error_shown": { surface: string; code: string };
+  // Performance and usage (owner, 24 Oct 2026); telemetry-auto.tsx sends these.
+  "sx.screen_viewed": {
+    screen: Screen;
+    from?: Screen | "none";
+    nav: "first" | "push" | "back" | "reload";
+    stay_ms?: number;
+  };
+  /** Tap to the screen settling, and the browser's own input-to-paint time. */
+  "sx.action_timing": {
+    action: TimedAction;
+    ms: number;
+    result: "settled" | "timeout" | "no_change";
+    paint_ms?: number;
+    screen?: Screen;
+  };
+  "sx.web_vital": {
+    metric: "lcp" | "inp" | "cls" | "fcp" | "ttfb";
+    value: number;
+    rating?: "good" | "needs_improvement" | "poor";
+    screen?: Screen;
+  };
+  "sx.app_start": {
+    start: "cold" | "warm";
+    ms: number;
+    nav_type?: "navigate" | "reload" | "back_forward" | "prerender";
+    screen?: Screen;
+  };
+  /** Never the message: its class and a fingerprint of where it was thrown. */
+  "sx.js_error": {
+    kind: "error" | "rejection" | "react" | "chunk";
+    error: ErrorClass;
+    where?: string;
+    source?: "app" | "vendor" | "extension" | "unknown";
+    screen?: Screen;
+  };
+  "sx.api_slow": {
+    endpoint: string;
+    status: "2xx" | "3xx" | "4xx" | "5xx" | "network" | "unknown";
+    ms: number;
+    screen?: Screen;
+  };
+  "sx.tap_issue": {
+    kind: "rage" | "dead";
+    target: TapTarget;
+    action?: TimedAction;
+    screen?: Screen;
+  };
+  "sx.feature_used": { feature: string; screen?: Screen };
 };
+
+/** The app's screens (the server's SCREENS); routeTemplate's pages, a lead open on Leads. */
+export type Screen =
+  | "home"
+  | "dashboard"
+  | "analysis"
+  | "new_call"
+  | "calls_list"
+  | "report"
+  | "calls"
+  | "leads"
+  | "lead"
+  | "chats"
+  | "coaching"
+  | "prospects"
+  | "prospect"
+  | "organisation"
+  | "org_insights"
+  | "org_invites"
+  | "org_person"
+  | "settings"
+  | "settings_section"
+  | "account"
+  | "billing"
+  | "plans"
+  | "apps"
+  | "developers"
+  | "review"
+  | "other";
+
+/** Key actions whose tap-to-response time is measured (the server's ACTIONS). */
+export type TimedAction =
+  | "lead_open"
+  | "call_start"
+  | "tab_switch"
+  | "outcome_save"
+  | "report_open"
+  | "nav_switch"
+  | "sheet_open"
+  | "search"
+  | "save"
+  | "send"
+  | "filter"
+  | "back"
+  | "other";
+
+export type TapTarget =
+  | "button"
+  | "link"
+  | "tab"
+  | "row"
+  | "card"
+  | "input"
+  | "icon"
+  | "text"
+  | "image"
+  | "other";
+
+export type ErrorClass =
+  | "typeerror"
+  | "referenceerror"
+  | "rangeerror"
+  | "syntaxerror"
+  | "chunkloaderror"
+  | "aborterror"
+  | "networkerror"
+  | "securityerror"
+  | "notallowederror"
+  | "quotaexceedederror"
+  | "error"
+  | "other";
 
 export type TelemetryEventName = keyof TelemetryEvents;
 
@@ -157,6 +276,14 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.prospect_edited",
   "sx.outcome_set",
   "sx.error_shown",
+  "sx.screen_viewed",
+  "sx.action_timing",
+  "sx.web_vital",
+  "sx.app_start",
+  "sx.js_error",
+  "sx.api_slow",
+  "sx.tap_issue",
+  "sx.feature_used",
 ] as const satisfies readonly TelemetryEventName[];
 
 export type SizeBand = "under_5mb" | "5_to_20mb" | "over_20mb";
