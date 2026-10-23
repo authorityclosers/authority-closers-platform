@@ -1,0 +1,19 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "84061e6741436584aff6aef8a24e8a06570fb7e6",
+  "full": false,
+  "checks": [
+    "e2e"
+  ],
+  "changed_files": [
+    "scripts/tutorials/capture.mjs",
+    "scripts/tutorials/scripts/09-team-organisation.json",
+    "scripts/tutorials/scripts/12-upload-recording.json",
+    "scripts/tutorials/tutorials.json"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
