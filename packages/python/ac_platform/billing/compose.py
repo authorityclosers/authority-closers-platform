@@ -55,13 +55,18 @@ def compose_billing(
             )
         )
     registry = PaymentProviderRegistry(providers, allow_live=settings.billing_allow_live)
+    # The test payment page needs an origin a browser can reach. Dev serves /v1
+    # behind the Sales Xray origin, and its own API URL is a plain loopback one.
+    fake_checkout_base_url = str(settings.api_url).rstrip("/")
+    if not fake_checkout_base_url.startswith("https://"):
+        fake_checkout_base_url = str(settings.sales_xray_app_url).rstrip("/")
     service = CheckoutService(
         catalogue=catalogue or PlansTableCatalogue(),
         providers=registry,
         public_learner_tenant_id=public_tenant,
         operations_tenant_id=operations_tenant,
         return_url_base=str(settings.sales_xray_app_url).rstrip("/"),
-        fake_checkout_base_url=str(settings.api_url).rstrip("/"),
+        fake_checkout_base_url=fake_checkout_base_url,
         trial_policy=TrialPolicy(
             settings.sales_xray_trial_policy, settings.sales_xray_trial_policy_switch_at
         ),
