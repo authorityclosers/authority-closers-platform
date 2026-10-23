@@ -149,7 +149,10 @@ def github(path: str, *, output: Path | None = None) -> dict | None:
         if output is not None:
             with output.open("wb") as stream:
                 result = subprocess.run(  # noqa: S603 - fixed gh executable, no shell
-                    command, stdout=stream, stderr=subprocess.PIPE, timeout=180
+                    # 23 Oct: runner downloads of the 452 MB bundle began exceeding 180 s, which
+                    # surfaced as a misleading duplicate-publication refusal. 600 s still fits
+                    # every consumer step (13 min) and the producer job (25 min).
+                    command, stdout=stream, stderr=subprocess.PIPE, timeout=600
                 )
         else:
             result = subprocess.run(  # noqa: S603 - fixed gh executable, no shell
