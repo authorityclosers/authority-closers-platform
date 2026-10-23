@@ -409,7 +409,7 @@ export function BillingView({
                   >
                     {invoicesStatus === "loading"
                       ? "Loading invoices…"
-                      : "Invoices and receipts: not loaded."}
+                      : "Invoices and receipts are currently unavailable. Use Refresh status to try again."}
                   </p>
                 ) : documents.length > 0 ? (
                   <div className={styles.tableWrap}>

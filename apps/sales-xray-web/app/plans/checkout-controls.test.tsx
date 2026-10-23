@@ -460,7 +460,9 @@ it("Settings keeps a paid subscription usable when only invoice reads fail", asy
     await act(async () => new Promise((resolve) => setTimeout(resolve, 20)));
   expect(button("Cancel renewal").disabled).toBe(false);
   expect(host.textContent).toContain("Personal");
-  expect(host.textContent).toContain("Invoices and receipts: not loaded.");
+  expect(host.textContent).toContain(
+    "Invoices and receipts are currently unavailable.",
+  );
   expect(vi.mocked(notify)).toHaveBeenCalledWith(
     expect.objectContaining({
       id: "settings-read-error",
