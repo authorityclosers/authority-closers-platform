@@ -5,8 +5,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { resetBackCloseForTests } from "../ui/back-close";
 import { History } from "./lead-sheet";
 import type { LeadEvent } from "./leads-client";
-import { parseRecorder, parseSetup } from "./native-phone";
-import { lineTodo, PhoneSetupBar } from "./phone-setup";
+import { parseCallLog, parseRecorder, parseSetup } from "./native-phone";
+import { lineTodo, PhoneSetupBar, setupLines } from "./phone-setup";
 import {
   ALL_FILES_EXPLAINER,
   HIDDEN_TODO,
@@ -132,6 +132,22 @@ it("reads the new setup fields, and an older app sends none", () => {
     needsAllFiles: false,
   });
   expect(lineTodo("recordings", status)).toBe(HIDDEN_TODO);
+});
+
+it("leaves out work-call logging in the Play build of the app", () => {
+  const play = parseSetup({
+    ...HYPEROS,
+    callLogSupported: false,
+    store: "play",
+  })!;
+  expect(play.store).toBe("play");
+  expect(setupLines(play)).not.toContain("callLog");
+  const direct = parseSetup(HYPEROS)!;
+  expect(direct.store).toBe("direct");
+  expect(setupLines(direct)).toContain("callLog");
+  // The Play build's call-log status says it's unsupported: no logging card.
+  expect(parseCallLog({ on: false, supported: false, sims: [] })).toBeNull();
+  expect(parseCallLog({ on: false, sims: [] })?.on).toBe(false);
 });
 
 it("says the recorder folder is hidden, not empty", () => {

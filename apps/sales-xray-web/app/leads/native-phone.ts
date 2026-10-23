@@ -497,6 +497,8 @@ export function parseCallLog(raw: unknown): CallLogStatus | null {
   if (!raw || typeof raw !== "object") return null;
   const value = raw as Record<string, unknown>;
   if (typeof value.on !== "boolean") return null;
+  // The Play build of the app can't read call history (Play's call log policy, 23 Oct 2026).
+  if (value.supported === false) return null;
   const sims = Array.isArray(value.sims)
     ? value.sims.flatMap((item) => {
         if (!item || typeof item !== "object") return [];
@@ -573,6 +575,10 @@ export type SetupStatus = {
   allFilesSupported: boolean;
   /** Truecaller is on this phone: its after-call screen covers "How did it go?" (#48). */
   truecaller: boolean;
+  /** This app build can log work calls from the call history (not the Play build, 23 Oct 2026). */
+  callLogSupported: boolean;
+  /** "direct" (the download-link app) or "play" (Google Play). */
+  store: "direct" | "play";
 };
 
 /** This phone's call recorder as the app sees it (owner, 19 Oct: check, don't ask). */
@@ -642,6 +648,9 @@ export function parseSetup(raw: unknown): SetupStatus | null {
     needsAllFiles: value.needsAllFiles === true,
     allFilesSupported: value.allFilesSupported === true,
     truecaller: value.truecaller === true,
+    // Apps before the two builds always had call history.
+    callLogSupported: value.callLogSupported !== false,
+    store: value.store === "play" ? "play" : "direct",
   };
 }
 

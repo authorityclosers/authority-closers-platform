@@ -70,10 +70,15 @@ export function lineTodo(key: PhoneCheck, status: SetupStatus): string {
   return CHECK_TODO[key];
 }
 
-/** The lines this phone shows: Autostart only on brands that have it. */
+/**
+ * The lines this phone shows: Autostart only on brands that have it, and work-call
+ * logging only in an app build that can read the call history (not the Play build).
+ */
 export function setupLines(status: SetupStatus): PhoneCheck[] {
   return CHECK_ORDER.filter(
-    (key) => key !== "autostart" || status.autostartNeeded,
+    (key) =>
+      (key !== "autostart" || status.autostartNeeded) &&
+      (key !== "callLog" || status.callLogSupported),
   );
 }
 
