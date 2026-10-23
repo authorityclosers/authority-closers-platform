@@ -92,7 +92,7 @@ it("keeps navigation, one main landmark and help, without placeholder chrome", a
   expect(shell.querySelector('a[href="#main-content"]')?.textContent).toBe(
     "Skip to workspace",
   );
-  expect(shell.querySelector('a[aria-label="Sales Xray home"]')).not.toBeNull();
+  expect(shell.querySelector('a[aria-label="Sales X-Ray home"]')).not.toBeNull();
 
   // Studio request 2 moves legal/support actions into the header profile menu.
   const trigger = shell.querySelector<HTMLButtonElement>(
