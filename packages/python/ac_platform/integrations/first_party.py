@@ -27,7 +27,9 @@ APPS: tuple[FirstPartyApp, ...] = (
         name="Pulse",
         maker="Estate Autopilots",
         hosts={
-            "production": ("pulse.estateautopilots.com",),
+            # Authority Closers' own Pulse address: its organisation lives in the shared
+            # production Pulse since 23 Oct 2026 and keeps its own domain.
+            "production": ("pulse.estateautopilots.com", "pulse.authorityclosers.com"),
             "staging": ("pulse-staging.estateautopilots.com",),
             "development": ("pulse-dev.estateautopilots.com",),
             "local": LOCAL,

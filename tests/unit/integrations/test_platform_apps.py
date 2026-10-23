@@ -77,6 +77,14 @@ def test_only_the_real_first_party_host_gets_the_checked_mark() -> None:
     )
     assert pulse is not None and pulse.maker == "Estate Autopilots"
     assert first_party.verified("pulse", ["https://pulse.estateautopilots.com/cb"], "production")
+    # A company's own address under the shared Pulse (Authority Closers, 23 Oct 2026).
+    assert first_party.verified(
+        "Pulse", ["https://pulse.authorityclosers.com/apps/sales-xray/callback"], "production"
+    )
+    assert (
+        first_party.verified("Pulse", ["https://pulse.authorityclosers.com/cb"], "development")
+        is None
+    )
     # The production app's address is not checked on dev, nor any other host or name.
     assert (
         first_party.verified("Pulse", ["https://pulse.estateautopilots.com/cb"], "development")
@@ -96,6 +104,24 @@ def test_only_the_real_first_party_host_gets_the_checked_mark() -> None:
         is None
     )
     assert first_party.verified("Pulse", [], "production") is None
+
+
+@pytest.mark.parametrize(
+    ("uri", "allowed"),
+    [
+        ("https://pulse.example.test/apps/sales-xray/callback", True),
+        ("http://127.0.0.1:8765/callback", True),
+        ("http://localhost/callback", True),
+        # A Pulse company's local rehearsal address (RFC 6761: *.localhost is loopback).
+        ("http://ac-rehearsal.localhost:3203/apps/sales-xray/callback", True),
+        ("http://pulse.example.test/callback", False),
+        ("http://localhost.example.test/callback", False),
+        ("https://user@pulse.example.test/callback", False),
+        ("https://pulse.example.test/callback#part", False),
+    ],
+)
+def test_return_addresses_are_https_or_this_computer(uri: str, allowed: bool) -> None:
+    assert oauth.redirect_allowed(uri) is allowed
 
 
 def test_mcp_tools_follow_the_connection_scopes() -> None:
