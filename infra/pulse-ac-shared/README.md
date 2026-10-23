@@ -8,6 +8,7 @@ servers are the source of truth; update this copy whenever one of them changes.
 | Where | Installed as | What it does |
 |---|---|---|
 | ea | `/usr/local/sbin/pulse-ac-tasks` (forced command), `/usr/local/sbin/pulse-ac-tasks-root` | AC's task route. One JSON request in, fixed task operations inside AC's organisation only, never SQL from the caller; plus `project` (work_project_save), `check` (task_check_set) and `chat` into channels listed in `/etc/pulse-ac-tasks.chat-allow` (today AC Leadership, for Align 3's release cards) |
+| ea | `/root/ac-org-move/ac-pulse-contacts-retype`, `ac-pulse-contact-set` (run once, AUT-2210) | the owner's correction: the testers are relationship contacts (type "Relationship contact": Business role Unknown/Business owner/Employee, Company, Tags, Introduced by) with the tag "Sales X-Ray Play tester"; the device account to "Other"; type "Play tester" archived. Same API and session pattern |
 | ea | `/root/ac-org-move/ac-pulse-contacts-import` (run once, AUT-2210) | AC contacts through Pulse's own API (`/api/v0/settings/types`, `/api/v0/contacts`) as the owner, on a short-lived organisation-switch session that is signed out at the end; used for the Sales X-Ray Play testers |
 | ea | `/usr/local/sbin/pulse-org-export`, `/usr/local/sbin/pulse-org-export-root` | AC-only export of the shared Pulse (`pulse-org-move.py export`) streamed as a tar; organisations listed in `/etc/pulse-org-export.allow` |
 | ea | `/usr/local/lib/pulse-org-move/pulse-org-move.py` | a copy of the move tool, which the export uses |
