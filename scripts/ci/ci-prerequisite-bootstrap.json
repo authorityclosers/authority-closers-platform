@@ -1,12 +1,12 @@
 [
   {
-    "artifact_id": 12467987846,
-    "digest": "273b7feff4971eadea879515701ead4a52011acfa316d2c5398323b8401f6214",
-    "identity": "9e8b57ad4374297242b1a708cda5f6bec39113cd5c592bf4a417f01f0ff53d9a",
+    "artifact_id": 12484488572,
+    "digest": "11c8c2ae03d0eba56d937b446c25d30add52f3da8b8c2a7d6e51833b36e43358",
+    "identity": "3f0ba224b9b60718941005ce384cfc1f92b732f50e30ec9911310435ed7c2836",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 39875816929,
-    "source_sha": "e865715c08171647140f55766f8496b66ae1ed84",
-    "reviewed_source_sha": "4a8df93c7f3a1e42ff65269148f654278fd722e7",
-    "review": "Orchestrator 23 Oct 2026: 4a8df93c changes only the total artifact ceiling and its comment; producer run 39875816929 green; request commit e865715c has 4a8df93c as its only parent and changes only .wb-ci/request.json; artifact digest from the API"
+    "run_id": 39915282593,
+    "source_sha": "e54cb9fb9c6255a898dfb3d6e154e194103aac52",
+    "reviewed_source_sha": "840ed57e2378b31a651473caf39fc07c78819d17",
+    "review": "Orchestrator 23 Oct 2026: 840ed57e only raises the bundle download timeout (180 s to 600 s); producer run 39915282593 on request e54cb9fb, which has 840ed57e as its only parent and changes only .wb-ci/request.json; artifact digest from the API"
   }
 ]
