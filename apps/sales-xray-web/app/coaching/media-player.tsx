@@ -1,5 +1,6 @@
 "use client";
 
+import { usePurchasesAllowed } from "../purchase-policy";
 import { Lock, Pause, Play, RefreshCw, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import {
@@ -84,6 +85,7 @@ export function ClipOfferCard({
   clip: CoachingClip;
   finished: boolean;
 }) {
+  const purchasesAllowed = usePurchasesAllowed();
   const offer = clip.offer;
   return (
     <div className={styles.offer} role="group" aria-label={CLIP.offer}>
@@ -96,25 +98,27 @@ export function ClipOfferCard({
           <p>{CLIP.offerText}</p>
         </div>
       </div>
-      <div className={styles.actions}>
-        <Link
-          href={offer?.full_coaching_href ?? FULL_COACHING_HREF}
-          className={kitStyles.button}
-          data-variant="primary"
-        >
-          {CLIP.getFull}
-        </Link>
-        {offer?.academy ? (
-          <a
-            href={offer.academy.href}
+      {purchasesAllowed ? (
+        <div className={styles.actions}>
+          <Link
+            href={offer?.full_coaching_href ?? FULL_COACHING_HREF}
             className={kitStyles.button}
-            target="_blank"
-            rel="noopener noreferrer"
+            data-variant="primary"
           >
-            {offer.academy.label}
-          </a>
-        ) : null}
-      </div>
+            {CLIP.getFull}
+          </Link>
+          {offer?.academy ? (
+            <a
+              href={offer.academy.href}
+              className={kitStyles.button}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {offer.academy.label}
+            </a>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

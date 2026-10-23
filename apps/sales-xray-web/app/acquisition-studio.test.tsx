@@ -1933,8 +1933,9 @@ it("sends a signed-in seller with no minutes left to Plans, never a guest", () =
   );
   expect(analysisMinutesOut(true, null, "")).toBe(false);
   expect(analysisMinutesOut(false, empty, tooLong)).toBe(false);
-  expect(tooLong.message).toContain("Get more minutes from Plans");
-  expect(tooLong.message).not.toMatch(/₹|price|cost/i);
+  expect(tooLong.message).toContain("remaining analysis minutes");
+  // The same copy shows in the Google Play app: no plans, prices or buying.
+  expect(tooLong.message).not.toMatch(/plan|₹|price|cost|buy/i);
 });
 
 it("does not present a legacy tester flag as a plan or finite balance", () => {

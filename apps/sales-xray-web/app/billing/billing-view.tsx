@@ -1,5 +1,6 @@
 "use client";
 
+import { usePurchasesAllowed } from "../purchase-policy";
 import {
   Check,
   Clock3,
@@ -63,6 +64,7 @@ export function BillingView({
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
   const [cancelAsk, setCancelAsk] = useState(false);
+  const purchasesAllowed = usePurchasesAllowed();
   const loading = status === "loading";
   const current = subs?.current;
   const isPaidActive = current?.status === "active";
@@ -95,10 +97,12 @@ export function BillingView({
               <CreditCard size={20} aria-hidden="true" />
               <h1>Billing &amp; Subscription</h1>
             </div>
-            <Link className={styles.primary} href="/plans">
-              <Gem size={15} aria-hidden="true" />
-              View all plans
-            </Link>
+            {purchasesAllowed ? (
+              <Link className={styles.primary} href="/plans">
+                <Gem size={15} aria-hidden="true" />
+                View all plans
+              </Link>
+            ) : null}
           </div>
           <p className={styles.subtitle}>
             Manage your Sales X-Ray subscription, analysis minutes, and
@@ -177,9 +181,12 @@ export function BillingView({
             ) : null}
 
             <div className={styles.actions}>
-              <Link className={styles.primary} href="/plans">
-                {current ? "Change plan" : "Choose a plan"}
-              </Link>
+              {purchasesAllowed ? (
+                <Link className={styles.primary} href="/plans">
+                  {current ? "Change plan" : "Choose a plan"}
+                </Link>
+              ) : null}
+
               {current &&
               !isCancelled &&
               ["active", "past_due", "halted"].includes(current.status) ? (
@@ -371,9 +378,11 @@ export function BillingView({
                       ? "No invoices or receipts yet."
                       : "Invoices and receipts are currently unavailable."}
                   </p>
-                  <Link className={styles.primary} href="/plans">
-                    Choose a plan
-                  </Link>
+                  {purchasesAllowed ? (
+                    <Link className={styles.primary} href="/plans">
+                      Choose a plan
+                    </Link>
+                  ) : null}
                 </div>
               )}
             </section>

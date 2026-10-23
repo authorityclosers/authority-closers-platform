@@ -69,6 +69,8 @@ export type NativeStatus = {
   connect: boolean;
   /** The app signs in with Apple and Facebook through the phone's browser too. */
   signIn: boolean;
+  /** "direct" (download link) or "play" (Google Play), from app builds of 23 Oct 2026. */
+  store?: "direct" | "play";
 };
 
 type Channel = {
@@ -251,6 +253,9 @@ export async function phoneStatus(): Promise<NativeStatus | null> {
       audio: raw.audio === true,
       connect: raw.connect === true,
       signIn: raw.signIn === true,
+      ...(raw.store === "play" || raw.store === "direct"
+        ? { store: raw.store }
+        : {}),
     };
   } catch {
     return null;

@@ -145,6 +145,7 @@ import {
 } from "./source-playback-context";
 import { track } from "./telemetry";
 import { dismissNotice, notify } from "./notice-center";
+import { usePurchasesAllowed } from "./purchase-policy";
 import styles from "./acquisition-studio.module.css";
 import { formatAnalysisTime } from "./analysis-time";
 
@@ -257,6 +258,7 @@ export function AcquisitionStudio({
   const embedded = variant === "embedded";
   // The standalone shell owns the page landmark; embedded mounts inherit one.
   const access = useWorkspaceAccess();
+  const purchasesAllowed = usePurchasesAllowed();
   const resolvedTheme = useTheme()?.resolved ?? "light";
   const accessStatus = access?.status ?? null;
   const accessAuthenticated = access?.authenticated ?? null;
@@ -488,18 +490,30 @@ export function AcquisitionStudio({
   useEffect(() => {
     if (!minutesOut) return;
     const id = "analysis-minutes-out";
-    notify({
-      id,
-      tone: "info",
-      title: "Get more analysis minutes",
-      message:
-        "Choose a plan or a top-up to analyse more calls. Your recordings stay private.",
-      action: { label: "See plans", run: () => router.push("/plans") },
-      // Stays until the seller closes it (info cards otherwise leave after 5 s).
-      timeout: 0,
-    });
+    // The Google Play app never sends a seller to plans (purchase-policy.tsx).
+    notify(
+      purchasesAllowed
+        ? {
+            id,
+            tone: "info",
+            title: "Get more analysis minutes",
+            message:
+              "Choose a plan or a top-up to analyse more calls. Your recordings stay private.",
+            action: { label: "See plans", run: () => router.push("/plans") },
+            // Stays until the seller closes it (info cards otherwise leave after 5 s).
+            timeout: 0,
+          }
+        : {
+            id,
+            tone: "info",
+            title: "Analysis minutes used up",
+            message:
+              "Ask your workspace owner for more minutes. Your recordings stay private.",
+            timeout: 0,
+          },
+    );
     return () => dismissNotice(id);
-  }, [minutesOut, router]);
+  }, [minutesOut, purchasesAllowed, router]);
   const [moment, setMoment] = useState<SourcePlaybackRange | null>(null);
   const [transcriptReaderOpen, setTranscriptReaderOpen] = useState(false);
   const [playbackMessage, setPlaybackMessage] = useState("");
@@ -3182,7 +3196,7 @@ export function AcquisitionStudio({
                         allowanceUnknown,
                       )}
                     </span>
-                    {minutesOut ? (
+                    {minutesOut && purchasesAllowed ? (
                       <Link className={styles.moreMinutes} href="/plans">
                         Get more minutes
                       </Link>
@@ -3652,7 +3666,9 @@ export function AcquisitionStudio({
                     advertisedTrial,
                     allowanceUnknown,
                   )}
-                  moreMinutesHref={minutesOut ? "/plans" : undefined}
+                  moreMinutesHref={
+                    minutesOut && purchasesAllowed ? "/plans" : undefined
+                  }
                 />
               ) : null}
               {embedded && !submission && !report && !deletionOnlyId && (

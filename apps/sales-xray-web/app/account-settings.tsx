@@ -36,6 +36,7 @@ import {
 } from "./acquisition-client";
 import { useSalesXraySignOut } from "./account-navigation";
 import type { BillingViewProps } from "./billing/billing-view";
+import { PLANS_ON_WEB, usePurchasesAllowed } from "./purchase-policy";
 import { useWorkspaceAccess } from "./workspace-access";
 import { useBillingAccount } from "./billing/use-billing-account";
 import { count, day, formatMoney, money } from "./billing/money";
@@ -173,6 +174,7 @@ export function AccountSettings({
     null,
   );
   const topUp = usePurchaseCheckout(undefined, "/account#billing");
+  const purchasesAllowed = usePurchasesAllowed();
   useEffect(() => {
     if (!topUp.error) return;
     const id = "topup-checkout-error";
@@ -427,34 +429,41 @@ export function AccountSettings({
         >
           {shows("usage") ? <CallActivitySummary variant={variant} /> : null}
           <AllowanceSummary allowance={allowance} onRetry={retry} />
-          <div className={styles.row}>
-            <div className={styles.rowText}>
-              <span className={styles.rowLabel}>Need more minutes?</span>
-              <span className={styles.rowHint}>
-                Add analysis minutes anytime without changing your monthly
-                subscription.
-              </span>
+          {purchasesAllowed ? (
+            <div className={styles.row}>
+              <div className={styles.rowText}>
+                <span className={styles.rowLabel}>Need more minutes?</span>
+                <span className={styles.rowHint}>
+                  Add analysis minutes anytime without changing your monthly
+                  subscription.
+                </span>
+              </div>
+              <div className={styles.rowControl}>
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  onClick={() => {
+                    if (only?.includes("billing")) {
+                      document
+                        .getElementById("account-pane-billing")
+                        ?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
+                      return;
+                    }
+                    setSection("billing");
+                    if (typeof window !== "undefined")
+                      window.location.hash = "billing";
+                  }}
+                >
+                  Top up minutes
+                </button>
+              </div>
             </div>
-            <div className={styles.rowControl}>
-              <button
-                type="button"
-                className={styles.secondary}
-                onClick={() => {
-                  if (only?.includes("billing")) {
-                    document
-                      .getElementById("account-pane-billing")
-                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    return;
-                  }
-                  setSection("billing");
-                  if (typeof window !== "undefined")
-                    window.location.hash = "billing";
-                }}
-              >
-                Top up minutes
-              </button>
-            </div>
-          </div>
+          ) : (
+            <p className={styles.muted}>{PLANS_ON_WEB}</p>
+          )}
         </Pane>
 
         <Pane
@@ -1260,6 +1269,7 @@ export function PlanAndBillingPane({
   onRetry: () => void;
 }) {
   const [cancelAsk, setCancelAsk] = useState(false);
+  const purchasesAllowed = usePurchasesAllowed();
   // Offer only the top-up the selected workspace can buy: Personal in a personal
   // workspace, Organisation in an organisation (unknown: both).
   const access = useWorkspaceAccess();
@@ -1355,14 +1365,17 @@ export function PlanAndBillingPane({
               <dt className={styles.rowLabel}>Plan</dt>
               <dd>{mePlan?.plan.name ?? current?.planName ?? "—"}</dd>
             </div>
-            <div className={styles.row}>
-              <dt className={styles.rowLabel}>Price</dt>
-              <dd>
-                {current
-                  ? `${formatMoney(current.amount)} / ${current.interval === "month" ? "month" : "year"}${current.amount.gstInclusive ? " · GST included" : ""}`
-                  : "No subscription"}
-              </dd>
-            </div>
+            {purchasesAllowed ? (
+              <div className={styles.row}>
+                <dt className={styles.rowLabel}>Price</dt>
+                <dd>
+                  {current
+                    ? `${formatMoney(current.amount)} / ${current.interval === "month" ? "month" : "year"}${current.amount.gstInclusive ? " · GST included" : ""}`
+                    : "No subscription"}
+                </dd>
+              </div>
+            ) : null}
+
             {current?.seats ? (
               <div className={styles.row}>
                 <dt className={styles.rowLabel}>Seats</dt>
@@ -1388,7 +1401,9 @@ export function PlanAndBillingPane({
                 {isCancelled
                   ? day(current?.currentPeriod?.end ?? null) || "—"
                   : current?.renewsAt
-                    ? `${day(current.renewsAt)} · ${formatMoney(current.amount)}`
+                    ? purchasesAllowed
+                      ? `${day(current.renewsAt)} · ${formatMoney(current.amount)}`
+                      : day(current.renewsAt)
                     : status === "ready" && !current
                       ? "No renewal scheduled"
                       : "—"}
@@ -1397,20 +1412,25 @@ export function PlanAndBillingPane({
           </dl>
         )}
 
-        {status === "ready" && !current ? (
+        {status === "ready" && (!current || !purchasesAllowed) ? (
           <p className={styles.muted}>
-            No subscription yet. View plans when you’re ready to choose one.
+            {purchasesAllowed
+              ? "No subscription yet. View plans when you’re ready to choose one."
+              : PLANS_ON_WEB}
           </p>
         ) : null}
 
         <div className={styles.actions}>
-          <Link
-            className={styles.primary}
-            href="/plans"
-            replace={variant === "dialog"}
-          >
-            {current ? "Change or upgrade plan" : "Choose a plan"}
-          </Link>
+          {purchasesAllowed ? (
+            <Link
+              className={styles.primary}
+              href="/plans"
+              replace={variant === "dialog"}
+            >
+              {current ? "Change or upgrade plan" : "Choose a plan"}
+            </Link>
+          ) : null}
+
           {current &&
             !isCancelled &&
             (cancelAsk ? (
@@ -1448,7 +1468,7 @@ export function PlanAndBillingPane({
               </button>
             ))}
         </div>
-        {current?.renewalNeedsCustomerApproval ? (
+        {purchasesAllowed && current?.renewalNeedsCustomerApproval ? (
           <p className={styles.muted}>
             Your bank will ask you to approve each renewal above ₹15,000.
           </p>
@@ -1469,54 +1489,56 @@ export function PlanAndBillingPane({
         <AllowanceSummary allowance={allowance} onRetry={onRetry} />
       </div>
 
-      <div className={styles.billingCard}>
-        <div className={styles.billingCardHead}>
-          <div>
-            <h3>Need more minutes?</h3>
-            <p className={styles.muted}>
-              Add analysis minutes without changing your subscription.
-            </p>
+      {purchasesAllowed ? (
+        <div className={styles.billingCard}>
+          <div className={styles.billingCardHead}>
+            <div>
+              <h3>Need more minutes?</h3>
+              <p className={styles.muted}>
+                Add analysis minutes without changing your subscription.
+              </p>
+            </div>
+          </div>
+          <div className={styles.topUpsMiniGrid}>
+            {packs.map((pack) => {
+              const total =
+                pack.pricePaise +
+                (pack.gstInclusive
+                  ? 0
+                  : Math.round(pack.pricePaise * PLANS_GST_RATE));
+              return (
+                <div className={styles.topUpMiniCard} key={pack.key}>
+                  <div className={styles.topUpMiniHead}>
+                    <span>
+                      {pack.title} · {pack.minutes} min
+                    </span>
+                    <span className={styles.topUpMiniPrice}>
+                      {money(pack.pricePaise)}
+                      {pack.gstInclusive ? "" : " + GST"}
+                    </span>
+                  </div>
+                  <p className={styles.muted}>
+                    {pack.gstInclusive
+                      ? "GST included"
+                      : `${money(total)} total incl. GST`}{" "}
+                    · {pack.audience}
+                  </p>
+                  <button
+                    type="button"
+                    className={styles.secondary}
+                    disabled={busy || !onBuyTopUp}
+                    onClick={() => onBuyTopUp?.(pack)}
+                  >
+                    Top up {pack.minutes} min
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
-        <div className={styles.topUpsMiniGrid}>
-          {packs.map((pack) => {
-            const total =
-              pack.pricePaise +
-              (pack.gstInclusive
-                ? 0
-                : Math.round(pack.pricePaise * PLANS_GST_RATE));
-            return (
-              <div className={styles.topUpMiniCard} key={pack.key}>
-                <div className={styles.topUpMiniHead}>
-                  <span>
-                    {pack.title} · {pack.minutes} min
-                  </span>
-                  <span className={styles.topUpMiniPrice}>
-                    {money(pack.pricePaise)}
-                    {pack.gstInclusive ? "" : " + GST"}
-                  </span>
-                </div>
-                <p className={styles.muted}>
-                  {pack.gstInclusive
-                    ? "GST included"
-                    : `${money(total)} total incl. GST`}{" "}
-                  · {pack.audience}
-                </p>
-                <button
-                  type="button"
-                  className={styles.secondary}
-                  disabled={busy || !onBuyTopUp}
-                  onClick={() => onBuyTopUp?.(pack)}
-                >
-                  Top up {pack.minutes} min
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      ) : null}
 
-      {documents ? (
+      {documents && purchasesAllowed ? (
         <div className={styles.billingCard}>
           <div className={styles.billingCardHead}>
             <h3>Invoices &amp; Receipts</h3>
