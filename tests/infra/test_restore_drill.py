@@ -1264,6 +1264,7 @@ def test_checked_in_migrations_preserve_forward_only_recovery_policy() -> None:
             "20261021_0119",
             "20261021_0120",
             "20261022_0121",
+            "20261022_0122",
             "20261023_0123",
             "20261023_0125",
         }:

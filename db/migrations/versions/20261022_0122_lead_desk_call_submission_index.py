@@ -10,8 +10,10 @@
 migration's transaction: the history keeps taking writes while it builds. Nothing else
 changes.
 
-Rollback: forward-only (the schema gate's recovery policy); a later migration drops the
-index if it is ever unwanted. No data depends on it.
+Rollback: like 0088-0121, only while nothing uses it: with no call history the index is
+dropped CONCURRENTLY (the schema gate rehearses upgrade, downgrade and re-upgrade on an
+empty database); once any call event exists, recovery is forward (a later migration drops
+the index if it is ever unwanted). No data depends on it.
 
 Chain: after 20261022_0121 (lead pipelines).
 """
@@ -37,6 +39,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError(
-        "The call-history index is forward-only: a later migration drops it if unwanted."
-    )
+    events = sa.table("lead_desk_events", sa.column("kind"))
+    if op.get_bind().scalar(sa.select(sa.exists().where(events.c.kind == "call"))):
+        raise RuntimeError(
+            "Call history requires forward recovery: a later migration drops the index."
+        )
+    with op.get_context().autocommit_block():
+        op.drop_index(
+            "ix_lead_desk_event_call_submission",
+            table_name="lead_desk_events",
+            postgresql_concurrently=True,
+        )

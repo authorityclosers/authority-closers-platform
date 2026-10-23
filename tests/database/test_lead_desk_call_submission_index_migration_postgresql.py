@@ -1,11 +1,13 @@
 """Migration 0122: the call-history index passes the schema gate, builds CONCURRENTLY
-outside a transaction, matches what the Calls list asks for, and is forward-only."""
+outside a transaction, matches what the Calls list asks for, and rolls back only while there is
+no call history."""
 
 from __future__ import annotations
 
 import importlib.util
 from collections.abc import Iterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -85,6 +87,29 @@ def test_index_builds_concurrently_and_matches_the_lookup(postgres_harness: Engi
     assert _index(postgres_harness) == built
 
 
-def test_rollback_is_forward_only() -> None:
-    with pytest.raises(RuntimeError, match="forward-only"):
-        migration().downgrade()
+def test_rollback_with_call_history_requires_forward_recovery() -> None:
+    module = migration()
+    module.op = SimpleNamespace(get_bind=lambda: SimpleNamespace(scalar=lambda statement: True))
+    with pytest.raises(RuntimeError, match="history requires forward recovery"):
+        module.downgrade()
+
+
+def test_rollback_without_call_history_drops_the_index_concurrently(
+    postgres_harness: Engine,
+) -> None:
+    built = _index(postgres_harness)
+    assert built is not None
+    with postgres_harness.connect() as connection:
+        calls = connection.execute(
+            text("SELECT count(*) FROM lead_desk_events WHERE kind = 'call'")
+        ).scalar_one()
+        assert calls == 0  # the module's database holds no call history
+        with Operations.context(MigrationContext.configure(connection)):
+            migration().downgrade()
+        connection.commit()
+    assert _index(postgres_harness) is None
+    with postgres_harness.connect() as connection:
+        with Operations.context(MigrationContext.configure(connection)):
+            migration().upgrade()
+        connection.commit()
+    assert _index(postgres_harness) == built
