@@ -6,7 +6,7 @@ import {
   Bell,
   Building2,
   ChevronDown,
-  FolderOpen,
+  Contact,
   GraduationCap,
   Layers,
   LayoutGrid,
@@ -905,9 +905,9 @@ function LightboxShellFrame({
     });
     return [
       place("Home", "/dashboard", <LayoutGrid size={17} />, "dashboard sales"),
-      place("Leads", "/leads", <PhoneCall size={17} />, "pipeline stages"),
+      place("Leads", "/leads", <Contact size={17} />, "pipeline stages"),
       place("Chats", "/chats", <MessagesSquare size={17} />, "whatsapp inbox"),
-      place("Calls", "/analysis/calls", <FolderOpen size={17} />, "reports"),
+      place("Calls", "/analysis/calls", <AudioLines size={17} />, "reports"),
       place("Coaching", "/coaching", <GraduationCap size={17} />),
       place("Prospects", "/prospects", <Users size={17} />),
       ...(inOrganisation
@@ -1055,7 +1055,7 @@ function LightboxShellFrame({
           group: "Calls",
           label: call.name,
           hint: call.date,
-          icon: <FolderOpen size={17} />,
+          icon: <AudioLines size={17} />,
           run: () => go(callHref(call.id)),
         }));
       const everyCall: Command = {
@@ -1311,7 +1311,7 @@ function LightboxShellFrame({
               data-rail-tip="Calls"
               aria-current={place === "calls" ? "page" : undefined}
             >
-              <FolderOpen size={20} strokeWidth={1.75} aria-hidden="true" />
+              <AudioLines size={20} strokeWidth={1.75} aria-hidden="true" />
               <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Calls</span>
             </ScreenLink>
@@ -1851,7 +1851,7 @@ function LightboxShellFrame({
             onClick={tapTab("calls")}
             aria-current={phoneTab === "calls" ? "page" : undefined}
           >
-            <FolderOpen size={20} aria-hidden="true" />
+            <AudioLines size={20} aria-hidden="true" />
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Calls</span>
           </ScreenLink>

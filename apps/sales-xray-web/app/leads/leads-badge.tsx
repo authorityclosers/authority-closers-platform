@@ -10,7 +10,7 @@
  * so a signed-out visitor never sends a read (pages count their reads).
  */
 
-import { PhoneCall } from "lucide-react";
+import { Contact } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
 import { useUnreadChats } from "../chats/chats-badge";
@@ -103,7 +103,7 @@ export function LeadsTabIcon({
   const count = late || due + unread;
   return (
     <span className={styles.tabIcon}>
-      <PhoneCall size={size} strokeWidth={strokeWidth} aria-hidden="true" />
+      <Contact size={size} strokeWidth={strokeWidth} aria-hidden="true" />
       {count ? (
         <span className={styles.tabBadge} data-tone={late ? "bad" : "accent"}>
           <span aria-hidden="true">{count > 99 ? "99+" : count}</span>
