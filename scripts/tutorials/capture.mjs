@@ -21,6 +21,13 @@ const CHROME =
 const WATCHDOG_S = Number(process.env.SXTUT_WATCHDOG_S || 900);
 
 export const DEVICES = {
+  // Tablet: a 1280x800 landscape viewport at 2x (2560x1600 frames), touch on.
+  tablet: {
+    viewport: { width: 1280, height: 800 },
+    deviceScaleFactor: 2,
+    isMobile: false,
+    hasTouch: true,
+  },
   // Phone: a 390x844 Android-class viewport at 3x (1170x2532 frames).
   phone: {
     viewport: { width: 390, height: 844 },

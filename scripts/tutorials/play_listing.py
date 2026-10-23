@@ -4,6 +4,7 @@
     play_listing.py stills --theme light|dark   screenshots of the screens below
     play_listing.py art --theme light|dark      phone and tablet shots, feature graphic, icon
     play_listing.py all --theme light|dark      both
+    play_listing.py captures --theme light|dark clean key screens, phone/tablet/computer, no styling
 
 Bold store style: brand gradient (teal to navy), a short white headline, the real screen in one
 device frame, and one glowing element per shot. Demo names are swapped for realistic made-up ones
@@ -199,6 +200,60 @@ def cmd_stills(out: Path, theme: str) -> None:
     (out / "stills.json").unlink()
 
 
+# Key screens as clean captures for a brand designer: the phone setup, and where a wider screen
+# needs another path (icon-only tabs, the Report's own scroller), the setup for tablet and computer.
+WIDE = {
+    "report-score": [
+        {"do": "goto", "url": REPORT},
+        {
+            "do": "scrollto",
+            "target": {"text": "2. AI Coaching Score"},
+            "offset": 52,
+            "parent": True,
+        },
+        *JARGON,
+    ],
+    "leads-table": [
+        {"do": "goto", "url": "/review-fixture/leads?tab=all&pipelines=2"},
+        {"do": "tap", "target": {"text": "Table", "exact": True}, "ms": 900, "optional": True},
+    ],
+}
+
+
+def cmd_captures(theme: str) -> None:
+    store = [{"do": "marketing", "names": NAMES, "me": "VS"}, {"do": "frost"}]
+    spec = []
+    for name, _k, _h, setup, _g in PHONE:
+        spec.append(
+            {"name": f"phone/{name}", "device": "phone", "theme": theme, "setup": [*setup, *store]}
+        )
+        wide = WIDE.get(name, setup)
+        for device in ("tablet", "desktop"):
+            spec.append(
+                {
+                    "name": f"{device}/{name}",
+                    "device": device,
+                    "theme": theme,
+                    "setup": [*wide, *store],
+                }
+            )
+    for device in ("tablet", "desktop"):
+        spec.append(
+            {
+                "name": f"{device}/leads-table",
+                "device": device,
+                "theme": theme,
+                "setup": [*WIDE["leads-table"], *store],
+            }
+        )
+    out = OUT.parent / "captures" / theme
+    for sub in ("phone", "tablet", "desktop"):
+        (out / sub).mkdir(parents=True, exist_ok=True)
+    (out / "spec.json").write_text(json.dumps(spec), encoding="utf-8")
+    node("stills", str(out / "spec.json"), str(out))
+    (out / "spec.json").unlink()
+
+
 def data_uri(path: Path) -> str:
     kind = "svg+xml" if path.suffix == ".svg" else "png"
     return f"data:image/{kind};base64," + base64.b64encode(path.read_bytes()).decode()
@@ -369,11 +424,14 @@ def main() -> int:
     p = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    p.add_argument("step", choices=["stills", "art", "all"])
+    p.add_argument("step", choices=["stills", "art", "all", "captures"])
     p.add_argument("--theme", choices=["light", "dark"], default="light")
     p.add_argument("--icon", help="launcher icon artwork (PNG or SVG) for the 512 px store icon")
     a = p.parse_args()
     out = OUT / a.theme
+    if a.step == "captures":
+        cmd_captures(a.theme)
+        return 0
     if a.step in ("stills", "all"):
         cmd_stills(out, a.theme)
     if a.step in ("art", "all"):
