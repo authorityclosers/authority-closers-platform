@@ -1019,18 +1019,33 @@ export function storyLines(
           }.`,
   ];
   const results = detail.events.filter((event) => event.kind === "result");
-  const talks = results.filter((event) => event.connected).length;
-  if (!lead.attempts) lines.push("Not called yet.");
+  // Calls the phone logged by itself (its dialler, incoming calls) count too: the
+  // question above the story may be about one (Redmi #12, 23 Oct 2026).
+  const phoneTalks = detail.events.filter(
+    (event) =>
+      event.kind === "call" && event.via === "phone" && event.connected,
+  );
+  const talks = Math.max(
+    results.filter((event) => event.connected).length,
+    phoneTalks.length,
+  );
+  const tries = Math.max(lead.attempts, lead.calls, phoneTalks.length);
+  if (!tries) lines.push("Not called yet.");
   else
     lines.push(
-      `Tried ${lead.attempts} time${lead.attempts === 1 ? "" : "s"}${
+      `Tried ${tries} time${tries === 1 ? "" : "s"}${
         talks
           ? `, talked ${talks === 1 ? "once" : `${talks} times`}`
           : ", not reached yet"
       }.`,
     );
   const last = results[0];
-  if (last)
+  const lastPhone = phoneTalks[0];
+  if (lastPhone && (!last || Date.parse(lastPhone.at) > Date.parse(last.at)))
+    lines.push(
+      `Last talk ${ago(lastPhone.at, now)}: ${talkTime(lastPhone.duration_seconds ?? 0)} on the phone.`,
+    );
+  else if (last)
     lines.push(
       last.connected
         ? `Last talk ${ago(last.at, now)}: ${last.stage_label ?? "talked"}.`

@@ -222,6 +222,9 @@
   box-shadow: var(--sx-glass-shadow), var(--sx-glass-shine);
   backdrop-filter: var(--sx-glass-blur);
   -webkit-backdrop-filter: var(--sx-glass-blur);
+  /* As far below as it sticks from the bottom: at the list's end it sits under
+     the last lead, never over it (Redmi #15, 23 Oct 2026). */
+  margin-bottom: 16px;
   font-size: var(--sx-text-sm);
 }
 
@@ -256,6 +259,9 @@
 
   .bar {
     bottom: calc(
+      var(--sx-bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 10px
+    );
+    margin-bottom: calc(
       var(--sx-bottom-nav-h) + env(safe-area-inset-bottom, 0px) + 10px
     );
   }
