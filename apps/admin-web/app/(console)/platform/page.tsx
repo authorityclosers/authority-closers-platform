@@ -3,6 +3,7 @@ import { Building2, ShieldCheck } from "lucide-react";
 import { loadConsoleAccess } from "@/app/lib/console-access";
 import { adminRead } from "@/app/lib/server-api";
 import { BillingPanel } from "@/app/platform/billing-panel";
+import { RevenuePanel } from "@/app/platform/revenue-panel";
 import {
   PLATFORM_PERMISSION_NAMES,
   isUuid,
@@ -51,7 +52,12 @@ export default async function PlatformPage({
         context={["Every academy and team on the platform, kept apart"]}
       />
       <QueryTabs base="/platform" items={tabs} current={current} />
-      {current === "billing" ? <BillingPanel /> : null}
+      {current === "billing" ? (
+        <>
+          <RevenuePanel />
+          <BillingPanel />
+        </>
+      ) : null}
       {current === "academies" && academies && !academies.ok ? (
         <Unavailable title="Academies" reason={academies.error} />
       ) : null}
