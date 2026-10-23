@@ -211,13 +211,42 @@ async function act(page, a, device, stills) {
       await page.waitForTimeout(a.ms ?? 200);
       break;
     case "scrollto":
-      // Brings a heading to the top of the screen, leaving room above it (sticky bars included);
-      // `offset` leaves more room, to show what sits just above the anchor.
-      await loc.evaluate((el, offset) => {
-        el.scrollIntoView({ block: "start" });
-        window.scrollBy(0, -offset);
-      }, a.offset ?? 96);
+      // Brings a heading to the top of the screen, leaving `offset` px above it (sticky bars
+      // included). parent=true scrolls the anchor's own scroller (a panel), not the window.
+      await loc.evaluate(
+        (el, { offset, parent }) => {
+          el.scrollIntoView({ block: "start" });
+          let box = null;
+          if (parent) {
+            box = el.parentElement;
+            while (box) {
+              const oy = getComputedStyle(box).overflowY;
+              if (
+                box.scrollHeight > box.clientHeight &&
+                (oy === "auto" || oy === "scroll")
+              )
+                break;
+              box = box.parentElement;
+            }
+          }
+          (box || window).scrollBy(0, -offset);
+        },
+        { offset: a.offset ?? 96, parent: !!a.parent },
+      );
       await page.waitForTimeout(a.ms ?? 600);
+      break;
+    case "frost":
+      // Headless Chromium draws no backdrop blur, so text shows through glass bars; give every
+      // blurred element a near-opaque fill, close to how the blur reads on a real phone.
+      await page.evaluate(() => {
+        for (const el of document.querySelectorAll("body *")) {
+          const cs = getComputedStyle(el);
+          const blur = cs.backdropFilter || cs.webkitBackdropFilter;
+          if (blur && blur !== "none")
+            el.style.backgroundColor = "rgba(248,249,251,0.97)";
+        }
+      });
+      await page.waitForTimeout(a.ms ?? 150);
       break;
     case "select":
       // Native <select> menus do not open in headless Chromium; pick the option directly.
@@ -514,25 +543,65 @@ async function shootSegment(board, seg, page, dir, out) {
 }
 
 async function cards(specFile, out) {
+  // Each card: {name, html, width?, height?, scale?, transparent?, jpeg?}; 1920x1080 at 1x by default.
   const specs = JSON.parse(fs.readFileSync(specFile, "utf8"));
   const ref = {};
   watchdog(ref);
   const browser = (ref.b = await launch());
-  const page = await browser.newPage({
-    viewport: { width: 1920, height: 1080 },
-    deviceScaleFactor: 1,
-  });
   for (const c of specs) {
+    const page = await browser.newPage({
+      viewport: { width: c.width ?? 1920, height: c.height ?? 1080 },
+      deviceScaleFactor: c.scale ?? 1,
+    });
     await page.setContent(c.html, { waitUntil: "load" });
     await page.evaluate(() => document.fonts.ready);
-    await page.screenshot({
-      path: path.join(out, `${c.name}.png`),
-      type: "png",
-      omitBackground: !!c.transparent,
-    });
+    await page.evaluate(() =>
+      Promise.all(
+        [...document.images].map((i) =>
+          i.complete ? null : i.decode().catch(() => null),
+        ),
+      ),
+    );
+    const file = path.join(out, `${c.name}.${c.jpeg ? "jpg" : "png"}`);
+    await page.screenshot(
+      c.jpeg
+        ? { path: file, type: "jpeg", quality: 92 }
+        : { path: file, type: "png", omitBackground: !!c.transparent },
+    );
+    await page.close();
   }
   await browser.close();
   console.log(`cards: ${specs.length}`);
+}
+
+// Full-resolution screenshots of screens (phone 1170x2532, desktop 2880x1800): [{name, device, setup}].
+async function stills(specFile, out) {
+  const specs = JSON.parse(fs.readFileSync(specFile, "utf8"));
+  const ref = {};
+  watchdog(ref);
+  const browser = (ref.b = await launch());
+  fs.mkdirSync(out, { recursive: true });
+  let failed = 0;
+  for (const s of specs) {
+    const { ctx, page } = await newPage(browser, s.device, s.theme || "light");
+    try {
+      for (const a of s.setup || []) await act(page, a, s.device, []);
+      await page.waitForTimeout(s.settle_ms ?? 700);
+      await page.screenshot({
+        path: path.join(out, `${s.name}.png`),
+        type: "png",
+        scale: "device",
+      });
+      console.log(`${s.name}: ok`);
+    } catch (e) {
+      failed += 1;
+      console.log(`${s.name}: FAILED ${String(e.message).split("\n")[0]}`);
+    } finally {
+      await ctx.close();
+    }
+  }
+  await browser.close();
+  if (failed) process.exit(1);
 }
 
 const [, , mode, a1, a2, ...rest] = process.argv;
@@ -544,6 +613,7 @@ if (mode === "survey") await survey(a1, a2.split(","), flag("device"));
 else if (mode === "shoot")
   await shoot(a1, a2, flag("device"), flag("only")?.split(","));
 else if (mode === "cards") await cards(a1, a2);
+else if (mode === "stills") await stills(a1, a2);
 else {
   console.error(
     "usage: capture.mjs survey <out> <routes> | shoot <board.json> <out>",
