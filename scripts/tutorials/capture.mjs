@@ -186,11 +186,12 @@ async function act(page, a, device, stills) {
       });
       break;
     case "scrollto":
-      // Brings a heading to the top of the screen, leaving room above it (sticky bars included).
-      await loc.evaluate((el) => {
+      // Brings a heading to the top of the screen, leaving room above it (sticky bars included);
+      // `offset` leaves more room, to show what sits just above the anchor.
+      await loc.evaluate((el, offset) => {
         el.scrollIntoView({ block: "start" });
-        window.scrollBy(0, -96);
-      });
+        window.scrollBy(0, -offset);
+      }, a.offset ?? 96);
       await page.waitForTimeout(a.ms ?? 600);
       break;
     case "select":

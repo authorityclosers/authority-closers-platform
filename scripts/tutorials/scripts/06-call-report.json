@@ -33,25 +33,51 @@
       "id": "s1-calls",
       "device": "phone",
       "label": "Open Calls",
-      "setup": [{ "do": "goto", "url": "/review-fixture/calls" }],
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/calls"
+        }
+      ],
       "actions": [
-        { "do": "wait", "ms": 800 },
+        {
+          "do": "wait",
+          "ms": 800
+        },
         {
           "do": "highlight",
-          "target": { "role": "link", "name": "Calls", "exact": true },
+          "target": {
+            "role": "link",
+            "name": "Calls",
+            "exact": true
+          },
           "ms": 1200,
           "optional": true
         },
-        { "do": "unhighlight" },
-        { "do": "scroll", "dy": 300, "ms": 700 },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "scroll",
+          "dy": 300,
+          "ms": 700
+        },
         {
           "do": "highlight",
-          "target": { "text": "Ready", "exact": true },
+          "target": {
+            "text": "Ready",
+            "exact": true
+          },
           "ms": 1600,
           "optional": true
         },
-        { "do": "unhighlight" },
-        { "do": "still", "label": "calls-ready" }
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "calls-ready"
+        }
       ],
       "en": {
         "say": [
@@ -91,32 +117,52 @@
         },
         {
           "do": "scrollto",
-          "target": { "text": "AI coaching score", "exact": true },
+          "target": {
+            "text": "2. AI Coaching Score"
+          },
+          "offset": 150,
           "ms": 700
         }
       ],
       "actions": [
-        { "do": "wait", "ms": 700 },
+        {
+          "do": "wait",
+          "ms": 700
+        },
         {
           "do": "highlight",
-          "target": { "text": "How You Talk", "exact": false },
+          "target": {
+            "text": "How You Talk",
+            "exact": false
+          },
           "ms": 1400,
           "optional": true
         },
         {
           "do": "highlight",
-          "target": { "text": "Understanding the Buyer", "exact": false },
+          "target": {
+            "text": "Understanding the Buyer",
+            "exact": false
+          },
           "ms": 1400,
           "optional": true
         },
         {
           "do": "highlight",
-          "target": { "text": "Moving the Sale Forward", "exact": false },
+          "target": {
+            "text": "Moving the Sale Forward",
+            "exact": false
+          },
           "ms": 1400,
           "optional": true
         },
-        { "do": "unhighlight" },
-        { "do": "still", "label": "ai-coaching-score" }
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "ai-coaching-score"
+        }
       ],
       "en": {
         "say": [
@@ -156,33 +202,52 @@
         },
         {
           "do": "scrollto",
-          "target": { "text": "Biggest Strength" },
+          "target": {
+            "text": "Biggest Strength"
+          },
           "ms": 700
         }
       ],
       "actions": [
-        { "do": "wait", "ms": 600 },
+        {
+          "do": "wait",
+          "ms": 600
+        },
         {
           "do": "highlight",
-          "target": { "text": "Biggest Strength" },
+          "target": {
+            "text": "Biggest Strength"
+          },
           "ms": 1600,
           "optional": true
         },
         {
           "do": "highlight",
-          "target": { "text": "Biggest Improvement Area" },
+          "target": {
+            "text": "Biggest Improvement Area"
+          },
           "ms": 1700,
           "optional": true
         },
-        { "do": "unhighlight" },
+        {
+          "do": "unhighlight"
+        },
         {
           "do": "highlight",
-          "target": { "role": "button", "name": "Play 17:41" },
+          "target": {
+            "role": "button",
+            "name": "Play 17:41"
+          },
           "ms": 1400,
           "optional": true
         },
-        { "do": "unhighlight" },
-        { "do": "still", "label": "strength-improvement" }
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "strength-improvement"
+        }
       ],
       "en": {
         "say": [
@@ -222,13 +287,23 @@
         },
         {
           "do": "scrollto",
-          "target": { "text": "2. AI Coaching Score" },
+          "target": {
+            "text": "2. AI Coaching Score"
+          },
           "ms": 700
         }
       ],
       "actions": [
-        { "do": "wait", "ms": 600 },
-        { "do": "scroll", "dy": 700, "steps": 18, "ms": 800 },
+        {
+          "do": "wait",
+          "ms": 600
+        },
+        {
+          "do": "scroll",
+          "dy": 700,
+          "steps": 18,
+          "ms": 800
+        },
         {
           "do": "highlight",
           "target": {
@@ -238,8 +313,13 @@
           "ms": 1800,
           "optional": true
         },
-        { "do": "unhighlight" },
-        { "do": "still", "label": "skills" }
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "skills"
+        }
       ],
       "en": {
         "say": [
@@ -274,21 +354,37 @@
         }
       ],
       "actions": [
-        { "do": "wait", "ms": 600 },
+        {
+          "do": "wait",
+          "ms": 600
+        },
         {
           "do": "highlight",
-          "target": { "role": "button", "name": "Coaching view" },
+          "target": {
+            "role": "button",
+            "name": "Coaching view"
+          },
           "ms": 1300,
           "optional": true
         },
         {
           "do": "tap",
-          "target": { "role": "button", "name": "Coaching view" },
+          "target": {
+            "role": "button",
+            "name": "Coaching view"
+          },
           "ms": 1800,
           "optional": true
         },
-        { "do": "still", "label": "coaching-view" },
-        { "do": "scroll", "dy": 450, "ms": 900 }
+        {
+          "do": "still",
+          "label": "coaching-view"
+        },
+        {
+          "do": "scroll",
+          "dy": 450,
+          "ms": 900
+        }
       ],
       "en": {
         "say": [
@@ -323,21 +419,40 @@
         },
         {
           "do": "scrollto",
-          "target": { "text": "AI coaching score", "exact": true },
-          "ms": 700
+          "target": {
+            "text": "Rated by AI on",
+            "exact": false
+          },
+          "ms": 700,
+          "offset": 260
         }
       ],
       "actions": [
-        { "do": "wait", "ms": 900 },
+        {
+          "do": "wait",
+          "ms": 900
+        },
         {
           "do": "highlight",
-          "target": { "role": "button", "name": "Transcript" },
+          "target": {
+            "role": "button",
+            "name": "Transcript"
+          },
           "ms": 1500,
           "optional": true
         },
-        { "do": "unhighlight" },
-        { "do": "still", "label": "report-desktop" },
-        { "do": "scroll", "dy": 500, "ms": 900 }
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "report-desktop"
+        },
+        {
+          "do": "scroll",
+          "dy": 500,
+          "ms": 900
+        }
       ],
       "en": {
         "say": [

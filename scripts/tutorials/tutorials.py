@@ -239,11 +239,19 @@ def cmd_build(args: argparse.Namespace) -> int:
     out = day_dir(args)
     if not (OUT / "fonts" / "PlusJakartaSans-Bold.ttf").exists():
         cmd_fonts(args)
+    failed = []
     for _, b in boards(args.which):
-        voices = build.voice(b, cast, args.langs, OUT / "cache" / "tts")
-        r = build.build(REPO, b, cast, args.langs, out / "capture", out, OUT / "fonts", voices)
-        print(json.dumps(r))
-    return 0
+        # One tutorial with a missing shot must not stop the others from rebuilding.
+        try:
+            voices = build.voice(b, cast, args.langs, OUT / "cache" / "tts")
+            r = build.build(REPO, b, cast, args.langs, out / "capture", out, OUT / "fonts", voices)
+            print(json.dumps(r), flush=True)
+        except (KeyError, FileNotFoundError, subprocess.CalledProcessError) as e:
+            failed.append(b["id"])
+            print(f"{b['id']}: build FAILED ({type(e).__name__}: {e})", flush=True)
+    if failed:
+        print("failed:", ", ".join(failed))
+    return 1 if failed else 0
 
 
 def cmd_pack(args: argparse.Namespace) -> int:
