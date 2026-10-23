@@ -1,0 +1,270 @@
+#!/usr/bin/env python3
+"""Sales X-Ray bug reports -> the team's work board (owner, 23 Oct 2026: "bug catcher for
+everyone ... a database to immediately get that done").
+
+Every minute (ac-bug-board@<env>.timer) each new report from that environment becomes one
+Paperclip card in the Sales Xray project: todo, unassigned (no agent is woken per report),
+high priority when the tester said it stops their work. The card carries the tester's words,
+the screen, app and device and up to five recent errors (already scrubbed by the app), and
+a link to the report in Admin; never the tester's or organisation's name. The card number
+is then written back as the report's board event, so Admin shows it and a report never
+raises two cards: a card made but not yet written back is remembered in
+/var/lib/ac-bug-board/<env>.json and only written back on the next run.
+
+The reports are read and the card recorded by the application's own module
+(ac_platform.bug_reports.board_cli) inside the environment: the worker container on staging
+and production, the active slot on dev. Before a release carries that module, the run
+does nothing.
+
+  ac-bug-board development-live | staging | production
+  ac-bug-board <env> --dry-run      print the cards it would raise, change nothing
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+MODULE = "ac_platform.bug_reports.board_cli"
+COMPANY = "543c7c03-9779-4c06-b9d2-e67f91197265"
+PROJECT = "75dcceb7-b751-42e8-a283-ec1ea42f5c25"  # Sales Xray
+STATE = Path(os.environ.get("AC_BUG_BOARD_STATE", "/var/lib/ac-bug-board"))
+PAPERCLIP = os.environ.get(
+    "AC_BUG_BOARD_PAPERCLIP",
+    "env HOME=/root PATH=/home/acdev/.local/opt/node/bin:/usr/bin:/bin "
+    "/home/acdev/.local/bin/paperclipai",
+).split()
+ADMIN = {
+    "production": "https://admin.authorityclosers.com",
+    "staging": "https://admin-staging.authorityclosers.com",
+    "development-live": "https://admin-dev.authorityclosers.com",
+}
+LABEL = {"production": "", "staging": "[staging] ", "development-live": "[dev] "}
+AREAS = {
+    "home": "Home",
+    "leads": "Leads",
+    "calls": "Calls",
+    "report": "Report",
+    "chats": "Chats",
+    "coaching": "Coaching",
+    "settings": "Settings",
+    "sign_in": "Sign-in",
+    "other": "Other",
+}
+IST = timezone(timedelta(hours=5, minutes=30))
+PER_RUN = 10
+
+
+def runner(env: str) -> list[str]:
+    """The command that runs the board module inside the environment."""
+    override = os.environ.get("AC_BUG_BOARD_RUNNER")
+    if override:
+        return override.split()
+    if env == "development-live":
+        slot = Path("/var/lib/ac-dev-live-backend/active-slot").read_text().strip()
+        python = f"/srv/authority-closers/development/live-backend/{slot}/.venv/bin/python"
+        return [
+            "env",
+            "-i",
+            "PATH=/usr/bin:/bin",
+            "HOME=/root",
+            "LANG=C.UTF-8",
+            python,
+            "-m",
+            MODULE,
+            "--database-url-file",
+            "/etc/authority-closers/development/database-url-live",
+        ]
+    container = f"ac-application-{env}-sales-xray-worker-1"
+    return [
+        "docker",
+        "exec",
+        container,
+        "python",
+        "-m",
+        MODULE,
+        "--database-url-file",
+        "/run/ac-sales-xray/database-url",
+    ]
+
+
+def run_module(env: str, *args: str) -> dict | None:
+    """The module's JSON answer; None when this environment has no module yet."""
+    done = subprocess.run(  # noqa: S603 - argv lists from fixed commands; no shell is used.
+        [*runner(env), *args],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd="/",
+        check=False,
+    )
+    if done.returncode != 0 and "No module named" in done.stderr:
+        return None
+    try:
+        answer = json.loads(done.stdout.strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError):
+        raise RuntimeError(f"board module gave no answer (exit {done.returncode})") from None
+    if done.returncode != 0 or "error" in answer:
+        raise RuntimeError(f"board module refused: {answer.get('error', done.returncode)}")
+    return answer
+
+
+def _one_line(text: object, limit: int) -> str:
+    words = " ".join(str(text or "").split())
+    return words if len(words) <= limit else words[: limit - 1].rstrip() + "…"
+
+
+def _when(stamp: str) -> str:
+    try:
+        moment = datetime.fromisoformat(stamp).astimezone(IST)
+    except ValueError:
+        return stamp
+    return moment.strftime("%d %b %Y, %H:%M IST").lstrip("0")
+
+
+def card_for(env: str, report: dict) -> dict[str, str]:
+    """Title, description and priority of one report's card."""
+    area = AREAS.get(report.get("area", ""), "Other")
+    title = (
+        f"{LABEL.get(env, '')}Bug {report['number']} · {area} · "
+        f"{_one_line(report.get('words'), 70)}"
+    )
+    app = report.get("app") or {}
+    device = report.get("device") or {}
+    app_line = ", ".join(
+        part
+        for part in (
+            f"{app.get('channel', 'web')} app",
+            f"version {app['version']}" if app.get("version") else "",
+            f"release {str(app['release'])[:12]}" if app.get("release") else "",
+            f"phone app {app['native_version']}" if app.get("native_version") else "",
+        )
+        if part
+    )
+    device_line = ", ".join(
+        str(device[key]) for key in ("os", "browser", "model", "viewport") if device.get(key)
+    )
+    errors = [
+        _one_line(
+            " ".join(
+                str(part)
+                for part in (
+                    item.get("kind"),
+                    item.get("status") or "",
+                    item.get("method") or "",
+                    item.get("path") or "",
+                    item.get("message") or "",
+                    f"(ref {item['reference']})" if item.get("reference") else "",
+                )
+                if part
+            ),
+            220,
+        )
+        for item in report.get("errors") or []
+    ]
+    quote = "\n".join("> " + line for line in str(report.get("words", "")).splitlines() if line)
+    lines = [
+        f"**Bug report from Sales X-Ray ({env})**, {_when(report.get('created_at', ''))}."
+        + (" **It stops their work.**" if report.get("blocks_work") else ""),
+        "",
+        quote or "> (no words)",
+        "",
+        f"- Area: {area}. Screen: `{report.get('route', '/')}`",
+        f"- App: {app_line or 'not known'}",
+        f"- Device: {device_line or 'not known'}",
+        f"- Picture of the screen: {'yes, in Admin' if report.get('has_screenshot') else 'no'}",
+    ]
+    if errors:
+        lines.append("- Recent errors on the device (scrubbed):")
+        lines.extend(f"  - {error}" for error in errors)
+    lines += [
+        "",
+        f"Open it in Admin: {ADMIN.get(env, ADMIN['production'])}/bugs/{report['bug_id']}",
+        "",
+        "Raised by the ac-bug-board job (bug reporter, owner order 23 Oct 2026). Change the "
+        "report's status in Admin → Bugs as the work moves (triaged, in progress, fixed, "
+        "verified).",
+    ]
+    return {
+        "title": title[:200],
+        "description": "\n".join(lines),
+        "priority": "high" if report.get("blocks_work") else "medium",
+    }
+
+
+def raise_card(card: dict[str, str]) -> str:
+    done = subprocess.run(  # noqa: S603 - argv lists from fixed commands; no shell is used.
+        [
+            *PAPERCLIP,
+            "issue",
+            "create",
+            "-C",
+            COMPANY,
+            "--project-id",
+            PROJECT,
+            "--status",
+            "todo",
+            "--priority",
+            card["priority"],
+            "--title",
+            card["title"],
+            "--description",
+            card["description"],
+            "--json",
+            "--profile",
+            "ac-watchdog",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=90,
+        check=False,
+    )
+    if done.returncode != 0:
+        raise RuntimeError(f"board refused the card (exit {done.returncode})")
+    issue = json.loads(done.stdout)
+    issue = issue.get("issue", issue) if isinstance(issue, dict) else {}
+    identifier = issue.get("identifier")
+    if not isinstance(identifier, str) or not identifier:
+        raise RuntimeError("board answered without a card number")
+    return identifier
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] not in ADMIN:
+        print("usage: ac-bug-board development-live|staging|production [--dry-run]")
+        return 2
+    env, dry = argv[0], "--dry-run" in argv[1:]
+    answer = run_module(env, "pending", "--limit", str(PER_RUN))
+    if answer is None:
+        return 0
+    state_file = STATE / f"{env}.json"
+    made: dict[str, str] = json.loads(state_file.read_text()) if state_file.exists() else {}
+    failures = 0
+    for report in answer.get("reports", []):
+        bug_id = report["bug_id"]
+        if dry:
+            print(json.dumps({"bug_id": bug_id, **card_for(env, report)}, ensure_ascii=False))
+            continue
+        card = made.get(bug_id)
+        try:
+            if card is None:
+                card = raise_card(card_for(env, report))
+                made[bug_id] = card
+                STATE.mkdir(mode=0o700, parents=True, exist_ok=True)
+                temporary = state_file.with_suffix(".tmp")
+                temporary.write_text(json.dumps(made, indent=1, sort_keys=True))
+                temporary.replace(state_file)
+            run_module(env, "mark", bug_id, card)
+            print(json.dumps({"env": env, "bug": report["number"], "card": card}))
+        except (RuntimeError, OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
+            failures += 1
+            print(json.dumps({"env": env, "bug": report["number"], "failed": str(error)[:200]}))
+    return 1 if failures else 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

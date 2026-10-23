@@ -187,6 +187,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "conversation_brain4_reviews",
         "call_ai_settings",
         "call_ai_decisions",
+        "bug_reports",
+        "bug_report_events",
         "fx_reference_rates",
         "metrics_pseudonym_keys",
         "lead_desk_chat_reads",
