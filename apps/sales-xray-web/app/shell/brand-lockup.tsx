@@ -3,12 +3,13 @@
 import Link from "next/link";
 import { useId, type CSSProperties } from "react";
 
+import { MARK_ART } from "../brand/brand-art";
 import styles from "./brand-lockup.module.css";
 
 // The Sales X-Ray mark (brand B "Insight", owner's pick, 23 Oct 2026): a call's waveform whose centre bar is a
 // lowercase "i", the insight Sales X-Ray finds in every call. Mint bars and a white i on a lit deep-teal tile: the
-// same art as the app icon. The brand colours are fixed artwork, the same in every theme, so they live in this SVG
-// rather than in the theme tokens.
+// same art as the app icon. The brand colours are fixed artwork, the same in every theme, so they live in
+// ../brand/brand-art.ts rather than in the theme tokens.
 const BAR_WIDTH = 11;
 const BARS = [
   { x: 11.5, y: 43, height: 24 },
@@ -51,13 +52,13 @@ export function BrandMark({ markOnly = false }: { markOnly?: boolean }) {
         <svg viewBox="0 0 100 100" focusable="false">
           <defs>
             <linearGradient id={`${id}-ground`} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0" stopColor="#0F6157" />
-              <stop offset="0.55" stopColor="#0B4A44" />
-              <stop offset="1" stopColor="#073B36" />
+              <stop offset="0" stopColor={MARK_ART.ground[0]} />
+              <stop offset="0.55" stopColor={MARK_ART.ground[1]} />
+              <stop offset="1" stopColor={MARK_ART.ground[2]} />
             </linearGradient>
             <radialGradient id={`${id}-light`} cx="50%" cy="0%" r="75%">
-              <stop offset="0" stopColor="#FFFFFF" stopOpacity="0.16" />
-              <stop offset="1" stopColor="#FFFFFF" stopOpacity="0" />
+              <stop offset="0" stopColor={MARK_ART.light} stopOpacity="0.16" />
+              <stop offset="1" stopColor={MARK_ART.light} stopOpacity="0" />
             </radialGradient>
             <linearGradient
               id={`${id}-bars`}
@@ -67,8 +68,8 @@ export function BrandMark({ markOnly = false }: { markOnly?: boolean }) {
               x2="0"
               y2="82"
             >
-              <stop offset="0" stopColor="#7CF7CF" />
-              <stop offset="1" stopColor="#18C08C" />
+              <stop offset="0" stopColor={MARK_ART.bars[0]} />
+              <stop offset="1" stopColor={MARK_ART.bars[1]} />
             </linearGradient>
             <linearGradient
               id={`${id}-i`}
@@ -78,8 +79,8 @@ export function BrandMark({ markOnly = false }: { markOnly?: boolean }) {
               x2="0"
               y2="82"
             >
-              <stop offset="0" stopColor="#FFFFFF" />
-              <stop offset="1" stopColor="#D3F7EA" />
+              <stop offset="0" stopColor={MARK_ART.i[0]} />
+              <stop offset="1" stopColor={MARK_ART.i[1]} />
             </linearGradient>
             <radialGradient
               id={`${id}-halo`}
@@ -88,8 +89,8 @@ export function BrandMark({ markOnly = false }: { markOnly?: boolean }) {
               cy="29.7"
               r="22.5"
             >
-              <stop offset="0" stopColor="#3DEBB0" stopOpacity="0.55" />
-              <stop offset="1" stopColor="#3DEBB0" stopOpacity="0" />
+              <stop offset="0" stopColor={MARK_ART.halo} stopOpacity="0.55" />
+              <stop offset="1" stopColor={MARK_ART.halo} stopOpacity="0" />
             </radialGradient>
           </defs>
           <rect width="100" height="100" fill={`url(#${id}-ground)`} />
