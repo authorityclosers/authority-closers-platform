@@ -200,6 +200,78 @@ export function resetFixtureBilling() {
   }
 }
 
+/** One point of the buying journey (review and tutorial recordings). */
+export type FixtureSeed =
+  | "trial"
+  | "pending"
+  | "paid"
+  | "refunded"
+  | "cancelled";
+
+/**
+ * Puts the fictional server at one point of the journey: on the trial, an
+ * order waiting on the payment page, a paid Personal month, that month
+ * refunded, or its renewal cancelled. Returns the order it made, if any.
+ */
+export async function seedFixtureBilling(
+  seed: FixtureSeed,
+): Promise<string | null> {
+  resetFixtureBilling();
+  if (seed === "trial") return null;
+  const checkout = await fixtureBilling.checkout(
+    {
+      kind: "subscription",
+      account: "personal",
+      planKey: "personal",
+      interval: "month",
+      seats: 1,
+    },
+    `journey-${seed}`,
+  );
+  const orderId = checkout.order.orderId;
+  if (seed === "pending") return orderId;
+  fixtureProviderReports(orderId, "paid");
+  if (seed === "refunded") {
+    const order = await fixtureBilling.readOrder(orderId);
+    if (order.refund)
+      await fixtureBilling.requestRefund?.(
+        order.refund.paymentId,
+        "Fictional journey refund",
+        "journey-refund",
+      );
+  }
+  if (seed === "cancelled") {
+    const { current } = await fixtureBilling.readSubscriptions("personal");
+    if (current)
+      await fixtureBilling.cancelSubscription(
+        current.subscriptionId,
+        null,
+        "journey-cancel",
+      );
+  }
+  return orderId;
+}
+
+const RECORDING = "ac.xray.fixture-recording";
+
+/** Recording mode hides the development banner for tutorial videos. */
+export function fixtureRecording(): boolean {
+  try {
+    return sessionStorage.getItem(RECORDING) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setFixtureRecording(on: boolean) {
+  try {
+    if (on) sessionStorage.setItem(RECORDING, "1");
+    else sessionStorage.removeItem(RECORDING);
+  } catch {
+    // Private windows may refuse storage; the banner then stays.
+  }
+}
+
 export function fixtureAccount(): "personal" | "organisation" {
   return liveSubscription(read())?.account === "organisation"
     ? "organisation"
