@@ -2,12 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { parseSetup } from "./native-phone";
-import {
-  ONBOARDED_KEY,
-  onboardingSteps,
-  PhoneOnboarding,
-} from "./phone-onboarding";
+import { ONBOARDED_KEY, PhoneOnboarding } from "./phone-onboarding";
 import { PhoneSetupBar } from "./phone-setup";
 
 (
@@ -63,6 +58,8 @@ const NONE = {
   callLog: false,
 };
 
+const ALL = Object.fromEntries(Object.keys(NONE).map((key) => [key, true]));
+
 const setup = (checks: Record<string, boolean>, recorderProfile?: unknown) => ({
   checks,
   family: "xiaomi",
@@ -72,14 +69,6 @@ const setup = (checks: Record<string, boolean>, recorderProfile?: unknown) => ({
   device: "5c0de5a7-0000-4000-8000-00000000d5c5",
   recorderProfile,
 });
-
-const folderOff = {
-  kind: "folder",
-  maker: "xiaomi",
-  dialerLabel: "Xiaomi Phone",
-  recording: "off",
-  folders: [],
-};
 
 let root: Root;
 let host: HTMLDivElement;
@@ -118,78 +107,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("onboardingSteps", () => {
-  it("asks only for what is missing, in order, the recorder last", () => {
-    const status = parseSetup(setup(NONE, folderOff))!;
-    expect(
-      onboardingSteps(status, { available: true, enabled: false }),
-    ).toEqual(["calls", "notifications", "recordings", "recorder"]);
-    const done = parseSetup(
-      setup({ ...NONE, calls: true, notifications: true, recordings: true }),
-    )!;
-    expect(onboardingSteps(done, { available: true, enabled: true })).toEqual(
-      [],
-    );
-  });
-
-  it("offers the dialer's own recorder only when it saves to a folder and is off (Play build)", () => {
-    const off = parseSetup(setup(NONE, folderOff))!;
-    expect(
-      onboardingSteps(off, { available: false, enabled: false }),
-    ).toContain("recorder");
-    const google = parseSetup(
-      setup(NONE, { ...folderOff, kind: "private", recording: "private" }),
-    )!;
-    expect(
-      onboardingSteps(google, { available: false, enabled: false }),
-    ).not.toContain("recorder");
-  });
-});
-
 describe("PhoneOnboarding", () => {
-  it("walks one permission at a time, then marks the phone onboarded", async () => {
+  it("opens Set up this phone after the Terms, then marks the phone onboarded", async () => {
+    let checks = { ...ALL, calls: false };
     const sent = fakePhone(({ method }) => {
-      if (method === "setupStatus") return setup(NONE, folderOff);
+      if (method === "requestCallAccess") {
+        checks = { ...checks, calls: true };
+        return { callAccess: true };
+      }
       if (method === "callRecorderStatus")
-        return { available: true, enabled: false };
-      if (method === "requestCallAccess") return { callAccess: true };
-      if (method === "callRecorderOpen") return { opened: true };
-      return {};
+        return { available: false, enabled: false };
+      return setup(checks);
     });
     await act(async () => root.render(<PhoneOnboarding />));
     await settle();
-    expect(host.textContent).toContain("Step 1 of 4");
-    expect(host.textContent).toContain("Calls and call history");
+    expect(host.querySelector("h1")?.textContent).toBe(
+      "Calls and call history",
+    );
+    expect(localStorage.getItem(ONBOARDED_KEY)).toBeNull();
 
     await act(async () => button("Allow calls").click());
     await settle();
     expect(sent.map((item) => item.method)).toContain("requestCallAccess");
-    expect(host.textContent).toContain("Step 2 of 4");
-
-    await act(async () => button("Not now").click());
-    await settle();
-    expect(host.textContent).toContain("Step 3 of 4");
-    expect(sent.map((item) => item.method)).not.toContain(
-      "requestNotifications",
-    );
-
-    await act(async () => button("Not now").click());
-    await settle();
-    expect(host.textContent).toContain("Record your calls (optional)");
-    await act(async () => button("Open Accessibility").click());
-    await settle();
-    const methods = sent.map((item) => item.method);
-    expect(methods).toEqual(
-      expect.arrayContaining([
-        "callRecorderConsent",
-        "callRecorderSet",
-        "callRecorderOpen",
-      ]),
-    );
-
-    expect(host.textContent).toContain("Your phone is ready");
-    expect(localStorage.getItem(ONBOARDED_KEY)).toBeNull();
-    await act(async () => button("Open Sales X-Ray").click());
+    // Nothing else to do: the flow closes by itself, no "ready" screen to tap.
     expect(localStorage.getItem(ONBOARDED_KEY)).not.toBeNull();
     expect(host.textContent).toBe("");
   });
@@ -213,7 +153,7 @@ describe("PhoneOnboarding", () => {
   it("skips straight in when the phone already allows everything", async () => {
     fakePhone(({ method }) =>
       method === "setupStatus"
-        ? setup({ ...NONE, calls: true, notifications: true, recordings: true })
+        ? setup(ALL)
         : { available: false, enabled: false },
     );
     await act(async () => root.render(<PhoneOnboarding />));

@@ -91,13 +91,17 @@ const button = (label: string) =>
     item.textContent?.startsWith(label),
   )!;
 
+async function settle() {
+  for (let i = 0; i < 10; i++) await act(async () => await Promise.resolve());
+}
+
 describe("the phone setup bar (UX study item 7)", () => {
   it("shows nothing in a browser", async () => {
     await act(async () => root.render(<PhoneSetupBar />));
     expect(host.innerHTML).toBe("");
   });
 
-  it("shows progress, reports the checklist once, and explains a permission first", async () => {
+  it("shows progress, reports the checklist once, and starts Set up this phone at the first thing to do", async () => {
     let checks = { ...CHECKS };
     const sent = fakePhone((message) => {
       if (message.method === "requestNotifications")
@@ -119,28 +123,36 @@ describe("the phone setup bar (UX study item 7)", () => {
       checks: { calls: true, battery: false },
     });
 
+    // One tap on the bar: the guided flow, at Notifications (calls are done).
     await act(async () => button("Phone setup").click());
-    const lines = [...host.querySelectorAll('ol[aria-label="Phone setup"] li')];
-    expect(lines).toHaveLength(9);
-    expect(lines[0].hasAttribute("data-done")).toBe(true);
-
-    // Notifications: the explainer comes before Android asks.
-    const notifications = lines[2].querySelector("button")!;
-    await act(async () => notifications.click());
-    expect(host.textContent).toContain("What leaves your phone");
+    await settle();
+    expect(host.querySelector("h1")?.textContent).toBe("Notifications");
     expect(sent.some((item) => item.method === "requestNotifications")).toBe(
       false,
     );
     await act(async () => button("Allow notifications").click());
+    await settle();
     expect(sent.some((item) => item.method === "requestNotifications")).toBe(
       true,
     );
+    // On to the next by itself.
+    expect(host.querySelector("h1")?.textContent).toBe("Battery unrestricted");
+    await act(async () =>
+      (
+        host.querySelector(
+          '[aria-label="Close phone setup"]',
+        ) as HTMLButtonElement
+      ).click(),
+    );
+    await settle();
+    expect(host.querySelector("dialog h1")).toBeNull();
     expect(host.textContent).toContain("4 of 9 done");
   });
 
-  it("walks the call recorder steps for the phone's brand", async () => {
+  it("walks the call recorder steps for the phone's brand from the checklist", async () => {
     let checks = { ...CHECKS };
     const sent = fakePhone((message) => {
+      if (message.method === "setupOpen") return { opened: true };
       if (message.method === "setupMark")
         checks = { ...checks, recorder: true };
       return setup(checks);
@@ -149,16 +161,33 @@ describe("the phone setup bar (UX study item 7)", () => {
       "fetch",
       vi.fn<typeof fetch>(async () => new Response("{}")),
     );
+    window.history.replaceState(null, "", "/leads#phone-setup");
     await act(async () => root.render(<PhoneSetupBar />));
-    await act(async () => button("Phone setup").click());
+    await settle();
     const lines = [...host.querySelectorAll('ol[aria-label="Phone setup"] li')];
+    expect(lines).toHaveLength(9);
+    expect(lines[0].hasAttribute("data-done")).toBe(true);
     await act(async () => lines[3].querySelector("button")!.click());
+    await settle();
     expect(host.textContent).toContain("Record calls automatically");
-    await act(async () => button("It").click());
+    await act(async () => button("Open call recording settings").click());
+    await settle();
+    expect(sent).toContainEqual({
+      method: "setupOpen",
+      args: { what: "recorder" },
+    });
+    // Back from the dialer's settings: the line ticks.
+    await act(async () => {
+      window.dispatchEvent(
+        new CustomEvent("sx-phone", { detail: { event: "resume" } }),
+      );
+    });
+    await settle();
     expect(sent.filter((item) => item.method === "setupMark")).toEqual([
       { method: "setupMark", args: { what: "recorder", done: true } },
     ]);
     expect(host.textContent).toContain("4 of 9 done");
+    window.history.replaceState(null, "", "/leads");
   });
 
   it("hides once the phone is ready, and leaves out Autostart where a brand has none", async () => {
