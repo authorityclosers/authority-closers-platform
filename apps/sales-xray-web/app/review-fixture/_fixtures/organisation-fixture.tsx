@@ -124,7 +124,29 @@ function install() {
     auto_join: autoJoin,
     member_count: MEMBERS.filter((item) => item.status === "active").length,
   });
+  const failing =
+    new URLSearchParams(window.location.search).get("billing") === "fail";
   const ANSWERS: Record<string, () => unknown> = {
+    "/v1/me/sales-xray-profile": () => ({
+      name: "vikram example",
+      email: "vikram@fictionalhomes.in",
+      phone_number_e164: null,
+      phone_verified: false,
+      profile_complete: true,
+      revision: 1,
+      photo_url: null,
+    }),
+    ...(failing
+      ? {}
+      : {
+          "/v1/conversation/acquisition/session": () => ({
+            allowance: {
+              allowance_seconds: 36000,
+              committed_seconds: 7200,
+              available_seconds: 28800,
+            },
+          }),
+        }),
     "/v1/me/sales-xray-workspaces": () => ({
       selected_tenant_id: TENANT,
       workspaces: WORKSPACES,

@@ -15,7 +15,10 @@ import {
   Smartphone,
 } from "lucide-react";
 
-import { AccountSettings } from "../account-settings";
+import {
+  AccountSettings,
+  type SettingsBillingProps,
+} from "../account-settings";
 import { ANDROID_APK_URL } from "../apps/release";
 import { CallAiSettingsSection } from "../call-ai/call-ai-settings";
 import { AlertsCard } from "../leads/alerts-card";
@@ -133,7 +136,14 @@ function Devices() {
   );
 }
 
-export function SettingsSectionView({ id }: { id: SettingsSectionId }) {
+export function SettingsSectionView({
+  id,
+  billing,
+}: {
+  id: SettingsSectionId;
+  /** Plan & usage's billing from elsewhere (review pages); else it reads its own. */
+  billing?: SettingsBillingProps;
+}) {
   switch (id) {
     case "profile":
       return <AccountSettings only={["profile", "general"]} />;
@@ -142,7 +152,7 @@ export function SettingsSectionView({ id }: { id: SettingsSectionId }) {
     case "security":
       return <AccountSettings only={["security"]} />;
     case "plan":
-      return <AccountSettings only={["usage", "billing"]} />;
+      return <AccountSettings only={["usage", "billing"]} billing={billing} />;
     case "help":
       return <AccountSettings only={["help"]} />;
     case "organisation":
