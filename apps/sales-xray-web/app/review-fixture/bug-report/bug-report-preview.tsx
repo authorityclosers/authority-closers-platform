@@ -5,8 +5,8 @@
  * (wb-ci --visual). The real shell draws; its reads get "sample data only"
  * and a report "sends" to a stand-in, so nothing leaves the browser.
  *
- * `?view=sheet` (default): the reporter opened from You, with the picture it
- * took of this screen.
+ * `?view=sheet` (default): the reporter, with the picture it took of this screen.
+ * `?view=you`: the You menu with its Report a problem row.
  * `?view=typed`: the same with words typed and "This stops my work" on.
  * `?view=card`: an error corner card with its Report button.
  * `?view=private`: opened on a call's Report: no picture is taken.
@@ -16,6 +16,7 @@ import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { AcquisitionShell } from "../../acquisition-shell";
+import { openBugReport } from "../../bug-report/open";
 import { notify } from "../../notice-center";
 import { PageHeader } from "../../ui/kit";
 import { WorkspaceAccessContext } from "../../workspace-access";
@@ -60,7 +61,7 @@ function Preview() {
       );
     }
     void (async () => {
-      await pause(400);
+      await pause(300);
       if (stopped) return;
       if (view === "card") {
         notify({
@@ -72,24 +73,24 @@ function Preview() {
         });
         return;
       }
-      // Two taps, as a person would: You, then Report a problem.
-      document
-        .querySelector<HTMLButtonElement>(
-          'button[aria-label="Account and log out"]',
-        )
-        ?.click();
-      await pause(700);
-      if (stopped) return;
-      const row = Array.from(
-        document.querySelectorAll<HTMLButtonElement>("button"),
-      ).find((button) => button.textContent?.trim() === "Report a problem");
-      row?.click();
-      if (!row) {
-        const { openBugReport } = await import("../../bug-report/open");
-        openBugReport();
+      if (view === "you") {
+        // The You menu, scrolled to its Report a problem row.
+        document
+          .querySelector<HTMLButtonElement>(
+            'button[aria-label="Account and log out"]',
+          )
+          ?.click();
+        await pause(500);
+        Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+          .find((button) => button.textContent?.trim() === "Report a problem")
+          ?.scrollIntoView({ block: "center" });
+        return;
       }
+      // Screenshots come soon after load, so the reporter opens at once here;
+      // the two taps (You, then Report a problem) have their own unit test.
+      openBugReport();
       if (view !== "typed") return;
-      await pause(900);
+      await pause(300);
       if (stopped) return;
       const area =
         document.querySelector<HTMLTextAreaElement>("dialog textarea");
