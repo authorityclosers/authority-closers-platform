@@ -4,7 +4,7 @@ import { AppsView } from "./apps-view";
 import { latestAndroidRelease } from "./release";
 
 export const metadata: Metadata = {
-  title: "Get the Sales Xray apps · Authority Closers",
+  title: "Get the Sales X-Ray apps · Authority Closers",
   description: "Download Sales Xray for Android, with install help.",
 };
 

@@ -125,7 +125,7 @@ function screenFor(
         icon: Mic,
         title: "Record your calls (optional)",
         lines: [
-          "Sales Xray can record your work calls itself, on phones whose dialer doesn't.",
+          "Sales X-Ray can record your work calls itself, on phones whose dialer doesn't.",
           "Tell the other person the call is recorded. Recordings stay on this phone until you choose one to analyse.",
           "Android asks you to switch it on in Accessibility. If it says the setting is restricted, open App info, tap ⋮ and Allow restricted settings, then try again.",
         ],
@@ -136,7 +136,7 @@ function screenFor(
       icon: Mic,
       title: "Turn on call recording (optional)",
       lines: [
-        `${status.recorder?.dialerLabel ?? "Your Phone app"} can save every call. Sales Xray finds those recordings so a call can get its Report.`,
+        `${status.recorder?.dialerLabel ?? "Your Phone app"} can save every call. Sales X-Ray finds those recordings so a call can get its Report.`,
       ],
       steps: recorderSteps(status.family),
       allow: "Open Phone settings",
@@ -284,7 +284,7 @@ export function PhoneOnboarding() {
         </div>
         <div className={styles.actions}>
           <Button variant="primary" onClick={finish}>
-            Open Sales Xray
+            Open Sales X-Ray
           </Button>
         </div>
       </div>

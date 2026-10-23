@@ -137,7 +137,7 @@ export function RecordedCallsCard({ me }: { me: Desk["me"] }) {
         <span>
           <strong>Your phone hides its call recordings</strong>
           <small>
-            Allow All files access so Sales Xray can find your lead calls&apos;
+            Allow All files access so Sales X-Ray can find your lead calls&apos;
             recordings.
           </small>
         </span>

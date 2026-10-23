@@ -86,7 +86,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError")
       throw error;
-    throw new CallDataError("Sales Xray isn't answering. Try again.", 0);
+    throw new CallDataError("Sales X-Ray isn't answering. Try again.", 0);
   }
   if (!response.ok) {
     let detail: string | undefined;

@@ -80,8 +80,8 @@ export function PhoneAppDialog({
   return (
     <Dialog
       open={open}
-      title="Sales Xray on your phone"
-      description="Call leads from your phone. Sales Xray places the call, notes whether they picked up and for how long, and offers the phone's own recording for analysis."
+      title="Sales X-Ray on your phone"
+      description="Call leads from your phone. Sales X-Ray places the call, notes whether they picked up and for how long, and offers the phone's own recording for analysis."
       onClose={onClose}
     >
       <div className={styles.apps}>
@@ -145,7 +145,7 @@ export function PhoneAppDialog({
                     If your phone asks, allow your browser to install apps.
                   </li>
                   <li>
-                    Open Sales Xray and sign in with the email code (Google
+                    Open Sales X-Ray and sign in with the email code (Google
                     sign-in doesn&apos;t work inside apps).
                   </li>
                   <li>
@@ -212,7 +212,7 @@ export function PhoneAppBanner({ onOpen }: { onOpen: () => void }) {
     <div className={styles.appBanner} role="note">
       <Smartphone size={18} aria-hidden="true" />
       <span>
-        <strong>Get the Sales Xray app.</strong> Tap Call, and it fills in how
+        <strong>Get the Sales X-Ray app.</strong> Tap Call, and it fills in how
         the call went and finds the recording for you.
       </span>
       {/* Tonal: Leads keeps one filled action, Start calling (Liquid Glass

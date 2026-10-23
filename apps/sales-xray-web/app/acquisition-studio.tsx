@@ -989,7 +989,7 @@ export function AcquisitionStudio({
             });
         } else if (timedOut) {
           setError(
-            "Sales Xray is taking longer than expected to load. Check again to continue your call.",
+            "Sales X-Ray is taking longer than expected to load. Check again to continue your call.",
           );
           if (requested)
             setExistingCallEntry({
@@ -2340,7 +2340,7 @@ export function AcquisitionStudio({
             ? entryError.message
             : typeof entryError === "string" && entryError
               ? entryError
-              : "Sales Xray could not verify this saved call. Try again; your saved work has not been changed.";
+              : "Sales X-Ray could not verify this saved call. Try again; your saved work has not been changed.";
       const entryView = (
         <div
           className={`xray-app simple-app ${styles.app}`}
@@ -2736,7 +2736,7 @@ export function AcquisitionStudio({
                 ) : null}
               </div>
               {statusIssue && !error && !isFinalStatusAnswer(statusIssue) && (
-                <p>Your call is saved. Sales Xray keeps checking by itself.</p>
+                <p>Your call is saved. Sales X-Ray keeps checking by itself.</p>
               )}
               <ErrorMessage
                 message={
@@ -3781,7 +3781,7 @@ export function AcquisitionStudio({
                     callRecord: result.callRecord,
                     title: callTitle(
                       result.label,
-                      file?.name ?? "Sales Xray call report",
+                      file?.name ?? "Sales X-Ray call report",
                     ),
                     callType: result.callRecord?.call_type ?? undefined,
                     callLength: formatClock(result.transcript.duration_ms),
@@ -3933,7 +3933,7 @@ export function AcquisitionStudio({
                   callId={submission?.id ?? null}
                   callTitle={callTitle(
                     result.label,
-                    file?.name ?? "Sales Xray call report",
+                    file?.name ?? "Sales X-Ray call report",
                   )}
                   onSeek={playFrom}
                   audioAvailable={Boolean(audio.current)}

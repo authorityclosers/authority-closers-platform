@@ -1619,7 +1619,9 @@ function LightboxShellFrame({
                   {/* Two lines from the first paint: the workspace line is a
                       placeholder while it loads, so the title never drops. */}
                   <small className={styles.mobileContext}>
-                    {pageTitle ? (workspaceLabel ?? "Sales Xray") : "Workspace"}
+                    {pageTitle
+                      ? (workspaceLabel ?? "Sales X-Ray")
+                      : "Workspace"}
                   </small>
                   <b>{barTitle ?? workspaceLabel}</b>
                 </span>
@@ -1659,7 +1661,7 @@ function LightboxShellFrame({
                         : undefined
                     }
                   >
-                    {workspaceLabel ?? "Sales Xray"}
+                    {workspaceLabel ?? "Sales X-Ray"}
                   </span>
                   {heading ? (
                     <h1 key={heading.title} className={styles.titleText}>

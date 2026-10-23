@@ -286,7 +286,7 @@ export function AcquisitionGuideRail({
               <BookOpen size={34} strokeWidth={1.7} aria-hidden="true" />
               <div>
                 <h3>Need help?</h3>
-                <p>Get the most out of Sales Xray with a few quick tips.</p>
+                <p>Get the most out of Sales X-Ray with a few quick tips.</p>
               </div>
             </div>
             <details>

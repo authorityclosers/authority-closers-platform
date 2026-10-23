@@ -34,7 +34,7 @@ vi.mock("./report-outcome-context", () => ({
 }));
 vi.mock("./report-docx", () => ({
   createReportDocx: mocks.generate,
-  reportDocxFilename: (title: string) => `${title} – Sales Xray report.docx`,
+  reportDocxFilename: (title: string) => `${title} – Sales X-Ray report.docx`,
 }));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -291,7 +291,7 @@ it("builds the Word file only when asked, from the same report", async () => {
   expect(url).toHaveBeenCalledWith(blob);
   const link = click.mock.instances[0] as unknown as HTMLAnchorElement;
   expect(link.download).toBe(
-    "Amit Sharma · discovery call – Sales Xray report.docx",
+    "Amit Sharma · discovery call – Sales X-Ray report.docx",
   );
   click.mockRestore();
 });

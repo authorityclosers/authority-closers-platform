@@ -28,7 +28,7 @@ export function SyntheticReportPreview() {
       <div className={styles.frame}>
         <header className={styles.heading}>
           <div>
-            <p className={styles.eyebrow}>Sales Xray · local visual review</p>
+            <p className={styles.eyebrow}>Sales X-Ray · local visual review</p>
             <h1>Synthetic report preview</h1>
             <p>
               Actual report components with invented dialogue. No recording,

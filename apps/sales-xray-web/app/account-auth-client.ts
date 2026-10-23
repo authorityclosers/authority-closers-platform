@@ -552,7 +552,7 @@ export function connectOutcome(
   if (result === "already_linked")
     return {
       tone: "error",
-      message: `That ${label} account is already used by another Sales Xray account.`,
+      message: `That ${label} account is already used by another Sales X-Ray account.`,
     };
   if (result === "fresh_sign_in")
     return {

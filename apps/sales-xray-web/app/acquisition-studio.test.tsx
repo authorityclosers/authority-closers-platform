@@ -1856,7 +1856,7 @@ it("offers a retry after a saved-call timeout without losing its opaque selector
   await act(async () => vi.advanceTimersByTimeAsync(12_000));
   await flush();
   expect(container.textContent).toContain(
-    "Sales Xray is taking longer than expected",
+    "Sales X-Ray is taking longer than expected",
   );
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(
@@ -2341,7 +2341,7 @@ it("keeps checking a call on screen through repeated misses, with one corner car
     "Can’t refresh this call’s status",
   );
   expect(container.textContent).toContain(
-    "Sales Xray keeps checking by itself",
+    "Sales X-Ray keeps checking by itself",
   );
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
     "In progress",

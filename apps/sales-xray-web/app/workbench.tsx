@@ -203,7 +203,7 @@ export function Workbench({ hasRunLink = false }: { hasRunLink?: boolean }) {
             <BrandMark />
           </span>
           <span>
-            Sales Xray<small>BY AUTHORITY CLOSERS</small>
+            Sales X-Ray<small>BY AUTHORITY CLOSERS</small>
           </span>
         </Link>
         <div className="workspace-label">YOUR CONVERSATION STUDIO</div>
@@ -248,7 +248,7 @@ export function Workbench({ hasRunLink = false }: { hasRunLink?: boolean }) {
       <div className="main-shell">
         <header className="topbar">
           <div className="breadcrumb">
-            Sales Xray <ChevronRight size={14} />
+            Sales X-Ray <ChevronRight size={14} />
             <span>{nav.find((v) => v.id === tab)?.label}</span>
           </div>
           <div className="header-actions">

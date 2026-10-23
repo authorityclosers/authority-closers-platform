@@ -268,7 +268,7 @@ it("sends only a same-origin JSON auth request and never exposes provider error 
   expect(maskedEmail("fictional@example.test")).toBe("f•••@example.test");
 });
 
-it("requests current Sales Xray consent capability on the correct surface", async () => {
+it("requests current Sales X-Ray consent capability on the correct surface", async () => {
   const fetcher = vi.fn().mockResolvedValue(Response.json(config));
   vi.stubGlobal("fetch", fetcher);
   await emailCodeRequest("config", new AbortController().signal);
@@ -412,7 +412,7 @@ it("reads the Connect results and says them plainly", () => {
     message: "Google is connected. You can now sign in with Google.",
   });
   expect(connectOutcome("already_linked", "facebook").message).toBe(
-    "That Facebook account is already used by another Sales Xray account.",
+    "That Facebook account is already used by another Sales X-Ray account.",
   );
   expect(connectOutcome("fresh_sign_in", "apple").message).toContain(
     "within 10 minutes",

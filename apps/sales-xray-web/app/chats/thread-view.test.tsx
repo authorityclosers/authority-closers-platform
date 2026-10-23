@@ -284,7 +284,7 @@ it("puts the AI's suggested reply in the box to edit before sending", async () =
   ).toBe(false);
 });
 
-it("shows photos, voice notes and files through Sales Xray, never Meta's link", async () => {
+it("shows photos, voice notes and files through Sales X-Ray, never Meta's link", async () => {
   socialMessages = [
     ...socialMessages,
     {

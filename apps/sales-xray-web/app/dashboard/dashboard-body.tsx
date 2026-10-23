@@ -480,7 +480,7 @@ function SandboxCard({ facts }: { facts: SandboxFacts }) {
           Fictional AC Sandbox · only you and your admins see it
         </p>
         <h2 id="sandbox-title">
-          A made-up sales team, so you can see Sales Xray at scale
+          A made-up sales team, so you can see Sales X-Ray at scale
         </h2>
         <p>
           Nobody here is real. Every call has a report, coaching and a recorded
@@ -529,8 +529,8 @@ function GetStarted() {
       <div className={styles.getStartedCopy}>
         <h2 id="get-started">Analyse your first call</h2>
         <p>
-          Upload a recording of a real sales call. Sales Xray transcribes it and
-          writes a report on what happened and what to do next.
+          Upload a recording of a real sales call. Sales X-Ray transcribes it
+          and writes a report on what happened and what to do next.
         </p>
       </div>
       <ol className={styles.steps}>

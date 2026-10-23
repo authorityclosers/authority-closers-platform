@@ -113,7 +113,7 @@ export function AssistantSetup() {
     >
       <ol className={styles.steps} data-steps="remote">
         <li>
-          <strong>Add Sales Xray to your assistant</strong>
+          <strong>Add Sales X-Ray to your assistant</strong>
           <div className={styles.picker}>
             <Segmented
               label="Your assistant"
@@ -131,7 +131,7 @@ export function AssistantSetup() {
         <li>
           <strong>Sign in</strong>
           <span>
-            Your assistant opens Sales Xray: approve it for your account. It
+            Your assistant opens Sales X-Ray: approve it for your account. It
             reads what you can see, in the workspace you have open, and you can
             remove it any time. Nothing to download, no key to copy.
           </span>
@@ -159,7 +159,7 @@ export function AssistantSetup() {
             </span>
           </li>
           <li>
-            <strong>Download the Sales Xray MCP server</strong>
+            <strong>Download the Sales X-Ray MCP server</strong>
             <span>
               One file; it needs Python 3.10 or newer and nothing else.
             </span>

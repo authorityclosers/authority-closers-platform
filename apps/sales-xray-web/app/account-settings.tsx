@@ -294,7 +294,7 @@ export function AccountSettings({
             </span>
             <div className={styles.navWho}>
               {variant === "dialog" ? <h2>Settings</h2> : <h1>Account</h1>}
-              <p>{who?.email ?? "Sales Xray settings"}</p>
+              <p>{who?.email ?? "Sales X-Ray settings"}</p>
             </div>
             {onClose ? (
               <button
@@ -353,7 +353,7 @@ export function AccountSettings({
           <ThemeRow />
           <Row
             label="App language"
-            hint="Sales Xray is available in English. Choose the report language when you start an analysis."
+            hint="Sales X-Ray is available in English. Choose the report language when you start an analysis."
           >
             <span>English</span>
           </Row>
@@ -507,7 +507,7 @@ export function AccountSettings({
           <SignInMethods active={shows("security")} />
           <Row
             label="Log out of this device"
-            hint="End your Sales Xray session in this browser."
+            hint="End your Sales X-Ray session in this browser."
           >
             <button
               type="button"
@@ -649,7 +649,7 @@ const DELETION_SUBJECT = "Delete my data";
 function DeleteAccountRow({ email }: { email: string | null }) {
   const [open, setOpen] = useState(false);
   const body = [
-    "Please delete my Sales Xray account and its data.",
+    "Please delete my Sales X-Ray account and its data.",
     "",
     `Account email: ${email ?? ""}`,
   ].join("\n");

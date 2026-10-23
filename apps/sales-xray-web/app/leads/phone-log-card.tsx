@@ -35,7 +35,7 @@ import styles from "./leads.module.css";
 const HIDE_KEY = "sx-leads-phone-log-card";
 
 const NO_ACCESS =
-  "Allow call history for Sales Xray in your phone's settings, then try again.";
+  "Allow call history for Sales X-Ray in your phone's settings, then try again.";
 
 /** The small line under "Logging work calls". */
 export function phoneLogLine(status: CallLogStatus, now = new Date()): string {

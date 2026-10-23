@@ -295,7 +295,7 @@ it("shows a hand-off on the channel, and nothing when AI replies are off", async
   expect(button("Suggest a reply")).toBeUndefined();
 });
 
-it("stays out of the reply box until Sales Xray's AI is switched on", async () => {
+it("stays out of the reply box until Sales X-Ray's AI is switched on", async () => {
   await act(async () =>
     root.render(
       <AiHelp

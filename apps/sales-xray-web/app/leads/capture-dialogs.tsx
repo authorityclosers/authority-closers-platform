@@ -172,7 +172,7 @@ export function AddLeadDialog({
   onClose,
   onAdded,
   initial = null,
-  initialNote = "From the Sales Xray extension. Check the details, then add the lead.",
+  initialNote = "From the Sales X-Ray extension. Check the details, then add the lead.",
 }: {
   open: boolean;
   canManage: boolean;

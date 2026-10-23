@@ -823,7 +823,7 @@ export function AccountAuth({
           inFlight.current = false;
           setPending(false);
           setError(
-            `Update the Sales Xray app to sign in with ${label}, or use Google or an email code.`,
+            `Update the Sales X-Ray app to sign in with ${label}, or use Google or an email code.`,
           );
           return;
         }
@@ -910,7 +910,7 @@ export function AccountAuth({
               {brandContent}
             </button>
           ) : (
-            <div className={styles.brand} aria-label="Sales Xray">
+            <div className={styles.brand} aria-label="Sales X-Ray">
               {brandContent}
             </div>
           )
@@ -972,7 +972,7 @@ export function AccountAuth({
                 ? "You’re signed in"
                 : displayedStep === "password"
                   ? "Existing AC account"
-                  : "Welcome to Sales Xray"}
+                  : "Welcome to Sales X-Ray"}
           </p>
           <h1 id="account-auth-heading">{heading}</h1>
           <p className={styles.lead}>{lead}</p>

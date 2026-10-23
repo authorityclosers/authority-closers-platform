@@ -452,7 +452,7 @@ export function WhatsAppSettings() {
         logo={LOGO}
         title={TITLE}
         status={<StatusPill>Coming soon</StatusPill>}
-        summary="Talk to leads on your own WhatsApp Business number, inside Sales Xray. Sales Xray is finishing this with Meta."
+        summary="Talk to leads on your own WhatsApp Business number, inside Sales X-Ray. Sales X-Ray is finishing this with Meta."
       />
     );
 
@@ -491,7 +491,7 @@ export function WhatsAppSettings() {
           <StatusPill>Not connected</StatusPill>
         )
       }
-      summary="Talk to leads on your own WhatsApp Business number, inside Sales Xray. Meta bills your business for its messages; Sales Xray adds nothing."
+      summary="Talk to leads on your own WhatsApp Business number, inside Sales X-Ray. Meta bills your business for its messages; Sales X-Ray adds nothing."
       action={
         status.configured ? (
           <a

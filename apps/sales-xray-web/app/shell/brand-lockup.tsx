@@ -79,7 +79,7 @@ export function BrandMark({ markOnly = false }: { markOnly?: boolean }) {
       </span>
       {!markOnly && (
         <span className={styles.wordmark} aria-hidden="true">
-          <span className={styles.name}>Sales Xray</span>
+          <span className={styles.name}>Sales X-Ray</span>
           <span className={styles.by}>by Authority Closers</span>
         </span>
       )}

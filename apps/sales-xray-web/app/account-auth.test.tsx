@@ -984,7 +984,7 @@ describe("Apple and Facebook next to Google", () => {
     expect(open).not.toHaveBeenCalled();
     expect(navigate).not.toHaveBeenCalled();
     expect(host.querySelector('p[role="alert"]')?.textContent).toContain(
-      "Update the Sales Xray app to sign in with Apple",
+      "Update the Sales X-Ray app to sign in with Apple",
     );
   });
 

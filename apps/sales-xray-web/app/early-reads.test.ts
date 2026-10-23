@@ -125,7 +125,7 @@ it("keeps the server's headers on the answer it hands out", async () => {
   expect(await response.json()).toEqual({ ok: true });
 });
 
-it("starts only the session reads until this tab has seen Sales Xray on", () => {
+it("starts only the session reads until this tab has seen Sales X-Ray on", () => {
   boot("/dashboard", false);
   expect(network.mock.calls.map(([url]) => url)).toEqual([
     "/v1/me/workspaces",

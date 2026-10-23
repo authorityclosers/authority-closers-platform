@@ -20,7 +20,7 @@ export function ConnectionNotice({
   message,
   failures,
   onRetry,
-  title = "Can't reach Sales Xray",
+  title = "Can't reach Sales X-Ray",
 }: {
   title?: string;
   message: string;

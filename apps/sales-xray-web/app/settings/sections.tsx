@@ -67,10 +67,10 @@ function Notifications() {
   return (
     <div className={styles.stack}>
       <AlertsCard />
-      <Panel title="Where you hear from Sales Xray">
+      <Panel title="Where you hear from Sales X-Ray">
         <Note icon={<BellRing size={18} />} title="Lead alerts on your phone">
           A new lead or a call that is due shows on your phone. Turn them on in
-          the Sales Xray phone app; your phone&rsquo;s settings can turn them
+          the Sales X-Ray phone app; your phone&rsquo;s settings can turn them
           off.
         </Note>
         <Note icon={<Megaphone size={18} />} title="What's new">
@@ -88,7 +88,7 @@ function Notifications() {
 function Devices() {
   return (
     <div className={styles.stack}>
-      <Panel title="Sales Xray on your phone">
+      <Panel title="Sales X-Ray on your phone">
         <Note
           icon={<Download size={18} />}
           title="Android app"

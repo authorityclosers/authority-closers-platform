@@ -124,7 +124,7 @@ it("keeps navigation, one main landmark and help, without placeholder chrome", a
   for (const removed of [
     "Need help?",
     "Welcome back",
-    "Welcome to Sales Xray",
+    "Welcome to Sales X-Ray",
     "TURN CALLS INTO CLARITY",
     "Better",
     "Win more deals",

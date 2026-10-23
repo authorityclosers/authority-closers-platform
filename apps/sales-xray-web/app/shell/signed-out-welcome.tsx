@@ -58,7 +58,7 @@ export function SignedOutWelcome({
             />
           ))}
         </div>
-        <p className={styles.kicker}>Sales Xray</p>
+        <p className={styles.kicker}>Sales X-Ray</p>
         <h2 id="signed-out-title" className={styles.title}>
           {title}
         </h2>

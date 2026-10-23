@@ -1124,7 +1124,7 @@ function StageSheet({
                 ))}
               </select>
               <small>
-                Sales Xray uses this to tell your ad platforms what happened.
+                Sales X-Ray uses this to tell your ad platforms what happened.
               </small>
             </label>
           )}

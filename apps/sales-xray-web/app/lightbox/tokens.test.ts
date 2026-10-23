@@ -401,7 +401,7 @@ describe("Lightbox token derivative", () => {
     expect(offenders).toEqual([]);
   });
 
-  describe("Scoped Pulse-role to Sales Xray teal adapter (AUT-1451 card 2)", () => {
+  describe("Scoped Pulse-role to Sales X-Ray teal adapter (AUT-1451 card 2)", () => {
     const pulseTokensPath = join(appDir, "ui", "pulse-tokens.css");
     const pulseTokensCss = readFileSync(pulseTokensPath, "utf8");
 
@@ -436,7 +436,7 @@ describe("Lightbox token derivative", () => {
       expect(pulseRoles).toHaveLength(20);
     });
 
-    it("maps Pulse roles strictly to Sales Xray teal/neutral tokens without iris or circular aliases", () => {
+    it("maps Pulse roles strictly to Sales X-Ray teal/neutral tokens without iris or circular aliases", () => {
       const clean = withoutComments(pulseTokensCss);
 
       // No Iris action or brand colors

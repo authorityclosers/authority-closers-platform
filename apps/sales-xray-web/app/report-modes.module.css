@@ -1067,7 +1067,7 @@
     size: A4 portrait;
     margin: 16mm 18mm;
     @top-left {
-      content: "Authority Closers — Sales Xray call report";
+      content: "Authority Closers — Sales X-Ray call report";
       font: 8pt sans-serif;
     }
     @bottom-center {

@@ -185,7 +185,7 @@ function SignInPrompt() {
       className={styles.picture}
       viewBox="0 0 220 150"
       role="img"
-      aria-label="Open Sales Xray and sign in with the code sent to your email"
+      aria-label="Open Sales X-Ray and sign in with the code sent to your email"
     >
       <rect
         x="1"
@@ -204,7 +204,7 @@ function SignInPrompt() {
         className={styles.pCard}
       />
       <text x="26" y="38" className={styles.pTitle}>
-        Sales Xray
+        Sales X-Ray
       </text>
       <rect
         x="26"
@@ -312,13 +312,13 @@ export function AppsView({ android }: { android: AndroidRelease }) {
     <main className={styles.page} data-apps-page="">
       <header className={styles.top}>
         <Link className={styles.brand} href="/">
-          Sales Xray
+          Sales X-Ray
         </Link>
       </header>
 
       <section className={styles.hero}>
-        <p className={styles.eyebrow}>Sales Xray apps</p>
-        <h1>Get Sales Xray on your phone</h1>
+        <p className={styles.eyebrow}>Sales X-Ray apps</p>
+        <h1>Get Sales X-Ray on your phone</h1>
         <p className={styles.lead}>
           Call leads with one tap. The app notes who picked up and for how long,
           logs every work call, and sends the phone&apos;s own recording for
@@ -393,8 +393,8 @@ export function AppsView({ android }: { android: AndroidRelease }) {
             <SignInPrompt />
             <span>
               <strong>3. Sign in</strong>
-              Open Sales Xray and sign in with the code we email you. On a lead,
-              tap Call and allow Phone, Call history and Music and audio.
+              Open Sales X-Ray and sign in with the code we email you. On a
+              lead, tap Call and allow Phone, Call history and Music and audio.
             </span>
           </li>
         </ol>

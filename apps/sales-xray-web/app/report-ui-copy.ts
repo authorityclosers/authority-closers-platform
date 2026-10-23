@@ -46,7 +46,7 @@ const EN_COPY: ReportUiCopy = {
   allSpeakers: "All speakers",
   unlabelledSpeaker: "Unknown speaker",
   speakerNote:
-    "Sales Xray works out who is speaking. It can be wrong, and some names may show as codes.",
+    "Sales X-Ray works out who is speaking. It can be wrong, and some names may show as codes.",
   speakerNamesNote:
     "Names come from the call map at the top. Choose a name there to change it.",
   matchingSegments: "matching lines",

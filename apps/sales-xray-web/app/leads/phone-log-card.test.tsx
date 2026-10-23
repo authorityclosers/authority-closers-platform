@@ -111,7 +111,7 @@ describe("logging work calls on the phone", () => {
     await act(async () => root.render(<PhoneLogCard />));
     expect(host.querySelector('[role="group"]')).toBeNull();
     await act(async () => button("Turn on").click());
-    expect(host.textContent).toContain("Allow call history for Sales Xray");
+    expect(host.textContent).toContain("Allow call history for Sales X-Ray");
     expect(host.querySelector('button[role="switch"]')).toBeNull();
   });
 

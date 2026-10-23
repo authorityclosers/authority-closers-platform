@@ -77,7 +77,7 @@ def main() -> None:
             downloaded = info.value
             assert (
                 downloaded.suggested_filename
-                == "Fictional seller — sample call report – Sales Xray report.docx"
+                == "Fictional seller — sample call report – Sales X-Ray report.docx"
             )
             path = OUT / f"fictional-report-{width}.docx"
             downloaded.save_as(path)

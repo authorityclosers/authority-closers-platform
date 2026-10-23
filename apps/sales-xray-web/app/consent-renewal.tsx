@@ -231,7 +231,7 @@ export function ConsentRenewal() {
         </h2>
         <p id={leadId} className={styles.lead}>
           Please read the {renewal ? "updated " : ""}Terms and Privacy notice,
-          then accept to keep using Sales Xray.
+          then accept to keep using Sales X-Ray.
         </p>
         <div className={styles.links}>
           <a

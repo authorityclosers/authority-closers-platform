@@ -266,7 +266,7 @@ it.each(["/dashboard/", "/analysis/new/", "/analysis/calls/"])(
       container.querySelector('[data-testid="protected-page"]'),
     ).toBeNull();
     expect(container.textContent).toContain(
-      "Choose your Sales Xray workspace.",
+      "Choose your Sales X-Ray workspace.",
     );
     expect(container.querySelectorAll("button[data-tenant-id]")).toHaveLength(
       2,

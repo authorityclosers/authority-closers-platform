@@ -260,7 +260,7 @@ export function PhoneSetupSheet({
         !(key === "recordings" && needsAllFiles(status))
       )
         setNote(
-          "Not allowed yet. You can allow it in your phone's settings for Sales Xray.",
+          "Not allowed yet. You can allow it in your phone's settings for Sales X-Ray.",
         );
     } finally {
       setBusy(false);
@@ -350,7 +350,7 @@ export function PhoneSetupSheet({
             {explainer ? (
               <dl>
                 <div>
-                  <dt>What Sales Xray reads</dt>
+                  <dt>What Sales X-Ray reads</dt>
                   <dd>{explainer.reads}</dd>
                 </div>
                 <div>
@@ -375,7 +375,7 @@ export function PhoneSetupSheet({
             ) : null}
             {view === "autostart" ? (
               <p>
-                Your phone stops apps that start by themselves. Find Sales Xray
+                Your phone stops apps that start by themselves. Find Sales X-Ray
                 in the list and switch it on, then come back.
               </p>
             ) : null}

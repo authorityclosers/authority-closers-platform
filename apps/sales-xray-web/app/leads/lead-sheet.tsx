@@ -1537,7 +1537,7 @@ function RecordingUpload({
         <>
           <p className={styles.recordWarn}>
             Your phone hides its call recordings. Allow All files access so
-            Sales Xray can find this call&apos;s recording.
+            Sales X-Ray can find this call&apos;s recording.
           </p>
           <div className={styles.row}>
             <Button onClick={() => void setupOpen("allFiles")}>
@@ -1582,7 +1582,7 @@ function RecordingUpload({
             found ? "Pick a different recording" : "Add the recording",
             found
               ? "From your phone's recordings or files."
-              : "Pick the call your phone just recorded. Sales Xray analyses it and puts its Report here.",
+              : "Pick the call your phone just recorded. Sales X-Ray analyses it and puts its Report here.",
           )
         : null}
       {state === "reading" ? (
@@ -2095,7 +2095,7 @@ export function LeadCard({
       </div>
       {permits ? (
         <section className={styles.permits} aria-label="Allow calling">
-          <h3>Call from Sales Xray</h3>
+          <h3>Call from Sales X-Ray</h3>
           <p>Your phone asks you to allow three things, once:</p>
           <ul>
             <li>

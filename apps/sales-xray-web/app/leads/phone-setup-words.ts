@@ -50,10 +50,10 @@ export const CHECK_TODO: Record<PhoneCheck, string> = {
   notifications: "Hear about a new lead or a call that is due.",
   recorder: "Your phone's dialer saves every call.",
   folder: "Ticks when your phone's first call recording appears.",
-  battery: "Your phone lets Sales Xray run in the background.",
-  autostart: "Your phone lets Sales Xray start by itself.",
+  battery: "Your phone lets Sales X-Ray run in the background.",
+  autostart: "Your phone lets Sales X-Ray start by itself.",
   testCall:
-    "Call any lead from Sales Xray and talk for a few seconds. Ticks when the recording is found.",
+    "Call any lead from Sales X-Ray and talk for a few seconds. Ticks when the recording is found.",
   callLog: "Calls with your leads from the phone dialer show on the lead.",
 };
 
@@ -70,7 +70,7 @@ export const EXPLAINERS: Partial<Record<PhoneCheck, Explainer>> = {
   calls: {
     title: "Calls and call history",
     reads:
-      "When you call a lead from Sales Xray, the app places the call and reads how long it lasted from your call history.",
+      "When you call a lead from Sales X-Ray, the app places the call and reads how long it lasted from your call history.",
     sends:
       "Only calls with your leads: when they happened and how long they lasted. Other numbers never leave your phone.",
     why: "So every call is logged and the after-call answer is filled in for you.",
@@ -87,7 +87,7 @@ export const EXPLAINERS: Partial<Record<PhoneCheck, Explainer>> = {
   },
   notifications: {
     title: "Notifications",
-    reads: "Nothing. Sales Xray only shows you alerts.",
+    reads: "Nothing. Sales X-Ray only shows you alerts.",
     sends: "Nothing.",
     why: "So you hear about a new lead the moment it comes in, and about a call that is due.",
     allow: "Allow notifications",
@@ -96,7 +96,7 @@ export const EXPLAINERS: Partial<Record<PhoneCheck, Explainer>> = {
     title: "Battery unrestricted",
     reads: "Nothing.",
     sends: "Nothing.",
-    why: "Android stops apps in the background to save battery. Sales Xray needs to wake up now and then to log your calls and show alerts. It uses very little battery.",
+    why: "Android stops apps in the background to save battery. Sales X-Ray needs to wake up now and then to log your calls and show alerts. It uses very little battery.",
     allow: "Open battery settings",
   },
 };
@@ -108,10 +108,10 @@ export const EXPLAINERS: Partial<Record<PhoneCheck, Explainer>> = {
 export const ALL_FILES_EXPLAINER: Explainer = {
   title: "Call recordings",
   reads:
-    "Only your Phone app's call recordings folder. Sales Xray doesn't open your photos, documents or other files.",
+    "Only your Phone app's call recordings folder. Sales X-Ray doesn't open your photos, documents or other files.",
   sends:
     "Only a recording you choose to analyse, after you agree to the terms. Nothing is sent by itself.",
-  why: "Your phone keeps call recordings in a hidden folder. Android lets Sales Xray see it only with All files access. Turn it on for Sales Xray, then come back.",
+  why: "Your phone keeps call recordings in a hidden folder. Android lets Sales X-Ray see it only with All files access. Turn it on for Sales X-Ray, then come back.",
   allow: "Open All files access",
 };
 
@@ -121,7 +121,7 @@ export const HIDDEN_TODO =
 
 /** Truecaller's after-call screen covers "How did it go?" (Redmi audit #48). */
 export const TRUECALLER_NOTE =
-  "Truecaller opens its own screen after each call, on top of Sales Xray. Close it to log your call, or tap the How did the call go? notification.";
+  "Truecaller opens its own screen after each call, on top of Sales X-Ray. Close it to log your call, or tap the How did the call go? notification.";
 
 /** "Record calls automatically" in each brand's own dialer. */
 export const RECORDER_STEPS: Record<string, string[]> = {
@@ -168,7 +168,7 @@ export const RECORDER_STEPS: Record<string, string[]> = {
   other: [
     "Open your phone's dialer and look in its settings for Call recording.",
     "Turn on automatic recording for all calls, if your phone has it.",
-    "Google's Phone app keeps its recordings private, so Sales Xray can't read them.",
+    "Google's Phone app keeps its recordings private, so Sales X-Ray can't read them.",
   ],
 };
 
@@ -193,16 +193,16 @@ export function recorderGuide(
     return { lead: null, steps: recorderSteps(family), closed: false };
   if (recorder.kind === "private") {
     return {
-      lead: `${recorder.dialerLabel} is Google's Phone app. It keeps call recordings inside itself, so no other app, Sales Xray included, can read them.`,
+      lead: `${recorder.dialerLabel} is Google's Phone app. It keeps call recordings inside itself, so no other app, Sales X-Ray included, can read them.`,
       steps: recorder.switchTo
         ? [
             `Make ${recorder.switchTo} your Phone app (Settings, Apps, Default apps, Phone app).`,
             `Open ${recorder.switchTo}, then its Settings, and turn on Call recording for all calls.`,
-            "Or record meetings in Sales Xray: Calls on this phone, then Record.",
+            "Or record meetings in Sales X-Ray: Calls on this phone, then Record.",
           ]
         : [
             "This phone has no other Phone app that saves recordings.",
-            "Record meetings and in-person talks in Sales Xray: Calls on this phone, then Record.",
+            "Record meetings and in-person talks in Sales X-Ray: Calls on this phone, then Record.",
             "Phone calls can be recorded only by phones whose own Phone app saves them (Samsung, Xiaomi's own dialer, OnePlus, Oppo, Realme, Vivo).",
           ],
       closed: true,
@@ -212,7 +212,7 @@ export function recorderGuide(
   const where = found ?? recorder.folders[0];
   if (where?.state === "hidden")
     return {
-      lead: `${recorder.dialerLabel} saves recordings in ${where.path}, which your phone hides from other apps. Allow All files access for Sales Xray in Call recordings.`,
+      lead: `${recorder.dialerLabel} saves recordings in ${where.path}, which your phone hides from other apps. Allow All files access for Sales X-Ray in Call recordings.`,
       steps: recorderSteps(family),
       closed: false,
     };

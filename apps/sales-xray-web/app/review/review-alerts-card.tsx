@@ -103,7 +103,7 @@ export function ReviewAlertsCard() {
       <span>
         <strong>Know when a new Report is ready.</strong>{" "}
         {state === "off"
-          ? "Alerts are off. Allow notifications for Sales Xray in your phone's settings, then try again."
+          ? "Alerts are off. Allow notifications for Sales X-Ray in your phone's settings, then try again."
           : "Get an alert on this phone for each new call to review. Tap it to open the call."}
       </span>
       <button
