@@ -102,7 +102,15 @@ export function CallsReport() {
     const controller = new AbortController();
     readCallReport(start, end, controller.signal)
       .then((next) => {
-        setReport(next);
+        setReport({
+          ...next,
+          sellers: Array.isArray(next?.sellers)
+            ? next.sellers.map((seller) => ({
+                ...seller,
+                days: Array.isArray(seller.days) ? seller.days : [],
+              }))
+            : [],
+        });
         setError(null);
       })
       .catch((reason: unknown) => {

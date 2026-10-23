@@ -61,7 +61,9 @@ export function LeadActions({
     if (!leadId) return;
     const controller = new AbortController();
     readLead(leadId, controller.signal)
-      .then(setDetail)
+      .then((next) =>
+        setDetail({ ...next, reps: Array.isArray(next.reps) ? next.reps : [] }),
+      )
       .catch(() => undefined);
     return () => controller.abort();
   }, [leadId]);

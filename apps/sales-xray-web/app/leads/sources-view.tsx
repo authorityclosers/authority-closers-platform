@@ -207,7 +207,12 @@ function GoogleTile() {
 
   const load = () =>
     connectorCall<GoogleStatus>(`${GOOGLE}/status`)
-      .then(setStatus)
+      .then((next) =>
+        setStatus({
+          ...next,
+          accounts: Array.isArray(next?.accounts) ? next.accounts : [],
+        }),
+      )
       .catch(() => setStatus({ configured: false, accounts: [] }));
   useEffect(() => {
     void load();
@@ -449,7 +454,12 @@ function MetaTile() {
 
   const load = () =>
     metaCall<MetaStatus>("/status")
-      .then(setStatus)
+      .then((next) =>
+        setStatus({
+          ...next,
+          pages: Array.isArray(next?.pages) ? next.pages : [],
+        }),
+      )
       .catch(() => setStatus({ configured: false, pages: [] }));
   useEffect(() => {
     void load();
