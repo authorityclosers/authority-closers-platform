@@ -25,8 +25,8 @@ from ac_platform.billing.order_models import BillingOrder, BillingProviderSettin
 from ac_platform.payments.fake import FakePaymentProvider
 from ac_platform.payments.registry import PaymentProviderRegistry
 from ac_platform.plans.models import Plan
-from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
+from tests.database.test_conversation_postgresql import run, seed
 from tests.integration.test_operations_http_postgresql import _seed as seed_operations
 
 T0 = datetime(2026, 10, 23, 6, 0, tzinfo=UTC)
