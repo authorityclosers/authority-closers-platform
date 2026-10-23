@@ -1,12 +1,12 @@
 [
   {
-    "artifact_id": 12452071131,
-    "digest": "8f1e02fa0191f5e0e718e0ba88eda11959baf1a88fdb2d70ffbe38e0d43f463c",
-    "identity": "f2f6966933d5e6ec94e1a7feeb383042af56a49258bc6f1c23887ccb04b8e38c",
+    "artifact_id": 12467987846,
+    "digest": "273b7feff4971eadea879515701ead4a52011acfa316d2c5398323b8401f6214",
+    "identity": "9e8b57ad4374297242b1a708cda5f6bec39113cd5c592bf4a417f01f0ff53d9a",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 39837257389,
-    "source_sha": "adfc31e64dd539f37f4a4af507b433e00ad82cc1",
-    "reviewed_source_sha": "c2ade062061f09ffdd4c7269d8d5858072000e2a",
-    "review": "AUT-2197 CTO source review and parent cold source proof"
+    "run_id": 39875816929,
+    "source_sha": "e865715c08171647140f55766f8496b66ae1ed84",
+    "reviewed_source_sha": "4a8df93c7f3a1e42ff65269148f654278fd722e7",
+    "review": "Orchestrator 23 Oct 2026: 4a8df93c changes only the total artifact ceiling and its comment; producer run 39875816929 green; request commit e865715c has 4a8df93c as its only parent and changes only .wb-ci/request.json; artifact digest from the API"
   }
 ]
