@@ -201,7 +201,7 @@ describe("plans catalogue (GET /v1/plans)", () => {
     ]);
     expect(plans[0].prices?.monthlyPaise).toBe(249900);
     expect(plans[0].topUpPacks[0]).toEqual({
-      key: "personal_100",
+      key: "topup_100",
       minutes: 100,
       validityRule: "billing_year_end",
       pricePaise: 29900,
