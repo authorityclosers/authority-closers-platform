@@ -130,9 +130,10 @@ it("lists every section in groups on the Settings page", async () => {
   // the organisation's sections live in its hub (owner, 23 Oct 2026).
   expect(new Set(links.map((link) => link.getAttribute("href")))).toEqual(
     new Set(
-      SETTINGS_SECTIONS.filter((item) => !hubAddress(item.id)).map(
-        (item) => `/settings/${item.id}`,
-      ),
+      // Privacy and Apps & devices open inside Phone & alerts (owner, 24 Oct 2026).
+      SETTINGS_SECTIONS.filter(
+        (item) => !hubAddress(item.id) && !item.within,
+      ).map((item) => `/settings/${item.id}`),
     ),
   );
   expect(
@@ -195,11 +196,13 @@ it("builds each section from the existing screens, with only its own parts", asy
   // Connected apps is one grid of app cards of its own.
   await render("apps");
   expect(host.querySelector('[data-testid="connected-apps"]')).not.toBeNull();
+  // Phone & alerts: your own switches on one screen; Apps & devices opens it too.
   await render("devices");
   expect(host.querySelector('a[href="/apps"]')).not.toBeNull();
-  expect(host.querySelector('a[href="/leads#phone-setup"]')).not.toBeNull();
+  expect(host.textContent).toContain("Usage analytics");
   await render("notifications");
-  expect(host.textContent).toContain("Lead alerts on your phone");
+  expect(host.textContent).toContain("Usage analytics");
+  expect(host.textContent).toContain("Product updates show under the bell");
 });
 
 it("sends an old /account address to its section", async () => {
@@ -217,7 +220,7 @@ it("keeps the Settings frame while the session is checked", async () => {
     '[role="status"][aria-label="Loading settings"]',
   );
   expect(status?.getAttribute("aria-busy")).toBe("true");
-  expect(host.querySelector("h1")?.textContent).toBe("Notifications");
+  expect(host.querySelector("h1")?.textContent).toBe("Phone & alerts");
   expect(
     host.querySelector("a[aria-current='page']")?.getAttribute("href"),
   ).toBe("/settings/notifications");
@@ -226,8 +229,8 @@ it("keeps the Settings frame while the session is checked", async () => {
   await act(async () => root.render(<SettingsSkeleton />));
   expect(host.querySelector("h1")?.textContent).toBe("Settings");
   expect(host.querySelectorAll("a[data-variant='list']")).toHaveLength(
-    SETTINGS_SECTIONS.filter((item) => !hubAddress(item.id)).length +
-      SETTINGS_LINKS.length,
+    SETTINGS_SECTIONS.filter((item) => !hubAddress(item.id) && !item.within)
+      .length + SETTINGS_LINKS.length,
   );
 });
 

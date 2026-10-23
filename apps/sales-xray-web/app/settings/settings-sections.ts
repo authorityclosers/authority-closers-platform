@@ -52,6 +52,8 @@ export type SettingsSection = {
   group: "Account" | "Organisation" | "Connections" | "This device";
   /** Shown to organisation owners and admins only (the API decides the rest). */
   managers?: true;
+  /** Opens inside that section's screen, so it isn't listed on its own (its address still works). */
+  within?: SettingsSectionId;
 };
 
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
@@ -91,6 +93,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "Usage analytics, for you and your workspace",
     icon: Activity,
     group: "Account",
+    // Owner, 24 Oct 2026: one screen for your own switches.
+    within: "notifications",
   },
   {
     id: "organisation",
@@ -164,8 +168,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   },
   {
     id: "notifications",
-    label: "Notifications",
-    hint: "Lead alerts on your phone",
+    label: "Phone & alerts",
+    hint: "Phone setup, alerts, vibration and usage analytics",
     icon: BellRing,
     group: "This device",
   },
@@ -175,6 +179,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "The phone app and call recording",
     icon: Smartphone,
     group: "This device",
+    within: "notifications",
   },
   {
     id: "help",

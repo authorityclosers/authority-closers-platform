@@ -74,6 +74,5 @@ it("links to no APK inside the Google Play app", async () => {
   expect(host.textContent).toContain(
     "You're using Sales X-Ray from Google Play. Updates come from Google Play.",
   );
-  // Phone setup stays: it is how the Play app finds recordings.
-  expect(host.textContent).toContain("Set up this phone");
+  // Phone setup is on the same screen inside the app (phone-panel.test.tsx).
 });

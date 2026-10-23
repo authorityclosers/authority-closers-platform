@@ -66,7 +66,8 @@
   border: 1px solid var(--sx-accent);
   border-radius: var(--sx-radius-sm);
   background: var(--sx-accent-soft);
-  color: var(--sx-accent-ink);
+  /* The accent on its soft tint (the light ink on it didn't read, 24 Oct 2026). */
+  color: var(--sx-accent);
   font-size: var(--sx-text-sm);
   font-weight: 650;
   text-decoration: none;
@@ -77,4 +78,62 @@
   margin: 4px 14px 12px;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
+}
+
+/* Phone & alerts → Phone setup (phone-panel.tsx): how far it is, the way to
+   finish, and each line with its Fix. */
+.setupHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px 4px;
+}
+
+.setupLines {
+  display: grid;
+  gap: 2px;
+  margin: 4px 0 0;
+  padding: 0 16px;
+  list-style: none;
+}
+
+.setupLines li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  color: var(--sx-ink);
+}
+
+.setupLines li > svg {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.setupLines li > span {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.setupLines small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* What is already done, in one line under what is left. */
+.setupDone {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 6px 16px 14px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.setupDone svg {
+  flex: none;
+  color: var(--sx-good);
 }

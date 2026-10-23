@@ -9,6 +9,7 @@
  */
 
 import { fromPhone, rememberCapture } from "../capture-source";
+import { hapticsOn } from "../ui/haptics";
 
 /**
  * Is anyone heard in a recording? The phone decodes it to tell (app 0.3.80+,
@@ -447,6 +448,8 @@ export function missedReason(result: NativeCallResult): string | null {
  * browser the page asks the browser; elsewhere nothing happens.
  */
 export function buzz(kind: "tick" | "press" | "done" = "tick"): void {
+  // Settings, Phone & alerts: Vibration off on this device.
+  if (!hapticsOn()) return;
   if (inPhoneApp()) {
     void ask("haptic", { kind }, 2_000).catch(() => undefined);
     return;
