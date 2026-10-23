@@ -303,20 +303,24 @@ class CheckoutService:
         key = f"{plan.key}:{interval}:{plan.revision}:gst18:{money.amount_minor}"
         refs = dict(choice.settings.plan_refs or {})
         existing = refs.get(key)
+        recurring = RecurringPlan(
+            reference=f"gst_{hashlib.sha256(key.encode()).hexdigest()[:24]}",
+            name=f"{plan.name} ({interval})",
+            money=money,
+            interval=_INTERVALS[interval],
+        )
         if isinstance(existing, str) and existing:
+            fake = choice.provider
+            if isinstance(fake, FakePaymentProvider) and existing not in fake.plans:
+                # The fake keeps plans in process memory: another API worker or a restart
+                # forgets them. The reference is derived from the key, so it is the same plan.
+                await fake.create_plan(recurring)
             return existing
         provider = recurring_provider(choice.provider)
         if provider is None:
             raise NotOnSale("The payment provider does not offer subscriptions.")
         try:
-            ref = await provider.create_plan(
-                RecurringPlan(
-                    reference=f"gst_{hashlib.sha256(key.encode()).hexdigest()[:24]}",
-                    name=f"{plan.name} ({interval})",
-                    money=money,
-                    interval=_INTERVALS[interval],
-                )
-            )
+            ref = await provider.create_plan(recurring)
         except ProviderError as error:
             raise ProviderUnavailable("The payment provider could not create the plan.") from error
         refs[key] = ref

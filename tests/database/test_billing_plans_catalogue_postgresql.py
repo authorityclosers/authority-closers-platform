@@ -21,7 +21,11 @@ from ac_platform.billing.catalogue import PlansTableCatalogue
 from ac_platform.billing.checkout import CheckoutService
 from ac_platform.billing.commands import Caller, CheckoutCommand
 from ac_platform.billing.errors import NotOnSale
-from ac_platform.billing.order_models import BillingOrder, BillingProviderSettings
+from ac_platform.billing.order_models import (
+    BillingOrder,
+    BillingProviderSettings,
+    BillingSubscription,
+)
 from ac_platform.payments.fake import FakePaymentProvider
 from ac_platform.payments.registry import PaymentProviderRegistry
 from ac_platform.plans.models import Plan
@@ -129,6 +133,63 @@ async def checkout_follows_status(url: str, operations_tenant_id: UUID) -> None:
         await engine.dispose()
 
 
+async def second_worker_reuses_the_cached_plan(url: str, operations_tenant_id: UUID) -> None:
+    """Dev runs two API workers: the fake provider's plan memory is per process."""
+    engine = create_async_engine(url)
+    try:
+        first = await seed(engine)
+        second = await seed(engine, tenant_id=first.tenant_id)
+        async with AsyncSession(engine) as database:
+            await database.begin()
+            database.add(
+                BillingProviderSettings(
+                    id=uuid4(),
+                    revision=1,
+                    provider="fake",
+                    mode="test",
+                    enabled=True,
+                    plan_refs={},
+                    key_alias=None,
+                    actor_person_id=None,
+                    reason="fictional two-worker proof",
+                    audit_event_id=None,
+                    created_at=T0,
+                )
+            )
+            await database.execute(
+                update(Plan).where(Plan.key == "personal").values(status="active")
+            )
+            await database.flush()
+
+            def worker() -> CheckoutService:
+                return CheckoutService(
+                    catalogue=PlansTableCatalogue(),
+                    providers=PaymentProviderRegistry(
+                        [FakePaymentProvider(signing_key="fictional-fake-signing-key")]
+                    ),
+                    public_learner_tenant_id=first.tenant_id,
+                    operations_tenant_id=operations_tenant_id,
+                    return_url_base="https://salesxray.example.test",
+                    clock=lambda: T0,
+                )
+
+            views = []
+            for learner, key in ((first, "worker-a"), (second, "worker-b")):
+                caller = Caller(learner.person_id, learner.session_id, learner.tenant_id, "learner")
+                views.append(await worker().checkout(database, caller, personal_monthly(key)))
+            refs = []
+            for view in views:
+                order = await database.get(BillingOrder, UUID(view.order.order_id))
+                assert order is not None and order.subscription_id is not None
+                subscription = await database.get(BillingSubscription, order.subscription_id)
+                assert subscription is not None
+                refs.append(subscription.provider_plan_ref)
+            assert refs[0] == refs[1]
+            await database.rollback()
+    finally:
+        await engine.dispose()
+
+
 def test_catalogue_reads_the_stored_plans(postgres_harness) -> None:
     run(read_catalogue(postgres_harness.url))
 
@@ -136,3 +197,8 @@ def test_catalogue_reads_the_stored_plans(postgres_harness) -> None:
 def test_checkout_sells_only_an_active_stored_plan(postgres_harness) -> None:
     operations = seed_operations(postgres_harness)
     run(checkout_follows_status(postgres_harness.url, operations.tenant_id))
+
+
+def test_a_second_worker_reuses_the_cached_fake_plan(postgres_harness) -> None:
+    operations = seed_operations(postgres_harness)
+    run(second_worker_reuses_the_cached_plan(postgres_harness.url, operations.tenant_id))
