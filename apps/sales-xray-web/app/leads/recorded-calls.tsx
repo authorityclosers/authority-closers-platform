@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { UploadPolicy } from "../acquisition-client";
 import { displayName } from "../display-name";
 import { Badge, Button } from "../ui/kit";
-import { Sheet } from "./lead-sheet";
+import { Sheet } from "./sheet-frame";
 import {
   LeadsError,
   readLead,

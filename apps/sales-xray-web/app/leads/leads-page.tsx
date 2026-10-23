@@ -20,6 +20,7 @@
  * /leads#lead=<id> (ids only, after "#"); pull down to refresh.
  */
 
+import dynamic from "next/dynamic";
 import {
   ArrowLeft,
   Building2,
@@ -46,7 +47,7 @@ import { DeskChats } from "../chats/desk-chats";
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import { settingsPath } from "../settings/settings-sections";
 import { leavingOverlay } from "../ui/back-close";
-import { Badge, Button, Empty, PageHeader } from "../ui/kit";
+import { Badge, Button, Empty, PageHeader, SkeletonRow } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import { requestWorkspace } from "../call-ownership";
 import {
@@ -77,7 +78,7 @@ import {
   takeHandedLead,
   type HandedLead,
 } from "./lead-handoff";
-import { CallingLoop, LeadSheet, type LeadIntent } from "./lead-sheet";
+import type { LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
 import {
@@ -95,13 +96,10 @@ import {
 import { MessageSetup } from "./message-sheet";
 import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { LeadsSkeleton } from "./leads-skeleton";
-import { JourneyTab } from "./journey/journey-view";
 import { ListView, TEST, type Scope } from "./list-view";
 import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
-import { SourcesView } from "./sources-view";
 import { TakingSwitch } from "./taking-switch";
-import { TeamView } from "./team-view";
 import { several, usePipelines } from "./use-pipelines";
 
 /** To call's pipeline, remembered per seller and workspace on this device. */
@@ -177,6 +175,42 @@ function viewHref(
 }
 
 export { LeadsSkeleton };
+
+// Route splitting (launch readiness, 23 Oct 2026: /leads was 467 KB of
+// script before its first paint on a mid-range phone): the lead sheet and
+// Start calling, and the Team, Stages and Sources views, load after the list.
+const loadLeadSheet = () => import("./lead-sheet");
+const LeadSheet = dynamic(
+  () => loadLeadSheet().then((module) => module.LeadSheet),
+  { ssr: false },
+);
+const CallingLoop = dynamic(
+  () => loadLeadSheet().then((module) => module.CallingLoop),
+  { ssr: false },
+);
+const TeamView = dynamic(
+  () => import("./team-view").then((module) => module.TeamView),
+  { ssr: false, loading: ViewLoading },
+);
+const JourneyTab = dynamic(
+  () => import("./journey/journey-view").then((module) => module.JourneyTab),
+  { ssr: false, loading: ViewLoading },
+);
+const SourcesView = dynamic(
+  () => import("./sources-view").then((module) => module.SourcesView),
+  { ssr: false, loading: ViewLoading },
+);
+
+/** A view still loading: its rows' outline, where they will be. */
+function ViewLoading() {
+  return (
+    <div className={styles.leadRowsSkeleton} aria-busy="true">
+      {[0, 1, 2, 3].map((key) => (
+        <SkeletonRow key={key} avatar={40} lines={2} />
+      ))}
+    </div>
+  );
+}
 
 export function LeadsRoute() {
   const access = useWorkspaceAccess();

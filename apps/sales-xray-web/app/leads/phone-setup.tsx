@@ -15,7 +15,7 @@ import { CheckCircle2, ChevronRight, Circle, Smartphone } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "../ui/kit";
-import { Sheet } from "./lead-sheet";
+import { Sheet } from "./sheet-frame";
 import { usePhoneOnboarded } from "./phone-onboarding";
 import { reportPhone } from "./leads-client";
 import {

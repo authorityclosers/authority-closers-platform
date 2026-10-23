@@ -24,7 +24,6 @@ import {
   Shuffle,
   Trash2,
   Workflow,
-  X,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -122,8 +121,8 @@ import {
   type SimulationStep,
 } from "./simulated-call";
 import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
-import { Sheet as KitSheet } from "../ui/sheet";
 import { DeleteLeadsSheet, type Doomed } from "./delete-leads";
+import { Sheet } from "./sheet-frame";
 import deleteStyles from "./delete-leads.module.css";
 import styles from "./leads.module.css";
 
@@ -135,48 +134,6 @@ const NO_RETRY = new Set([
   "incoming_not_available",
   "not_in_use",
 ]);
-
-/* ---------- Sheet ---------- */
-
-/**
- * Every Leads sheet is the kit Sheet (design system v2): phones swipe it away
- * from the top, computers get the floating panel on the right. The label
- * names the dialog; the content brings its own heading.
- */
-export function Sheet({
-  open,
-  label,
-  onClose,
-  children,
-}: {
-  open: boolean;
-  label: string;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <KitSheet
-      open={open}
-      onClose={onClose}
-      title={label}
-      hideTitle
-      closeButton={false}
-      className={styles.sheet}
-    >
-      <div className={styles.sheetBody}>
-        <button
-          type="button"
-          className={styles.sheetClose}
-          onClick={onClose}
-          aria-label="Close"
-        >
-          <X size={18} aria-hidden="true" />
-        </button>
-        {children}
-      </div>
-    </KitSheet>
-  );
-}
 
 /* ---------- After the call ---------- */
 
@@ -2999,3 +2956,5 @@ function WhatsAppGlyph() {
     </svg>
   );
 }
+
+export { Sheet };
