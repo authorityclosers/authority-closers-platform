@@ -208,7 +208,8 @@ describe("plans catalogue (GET /v1/plans)", () => {
       priceCents: null,
     });
     expect(onSale(plans[0])).toBe(true);
-    expect(onSale(plans[2])).toBe(true);
+    // Enterprise is Talk to us until it is on sale (owner, 30 Sep 2026).
+    expect(onSale(plans[2])).toBe(false);
     expect(plans[0].perSeat).toBe(false);
     expect(plans[1].perSeat).toBe(true);
     expect(() =>
