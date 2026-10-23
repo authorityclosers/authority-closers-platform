@@ -84,9 +84,9 @@ export function BillingView({
   const purchasesAllowed = usePurchasesAllowed();
   const loading = status === "loading";
   const current = subs?.current;
-  // The refund promise is about a payment; a trial has none.
-  const paid =
-    Boolean(current) || Boolean(documents?.some((document) => document.refund));
+  // The refund promise is about a payment that can still be refunded; a trial
+  // (or one just refunded) has none.
+  const paid = Boolean(current) || Boolean(refundable);
   const isPaidActive = current?.status === "active";
   const isCancelled = current?.cancelAtPeriodEnd === true;
   const allowance = usage?.allowance ?? mePlan?.allowance;

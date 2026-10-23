@@ -1108,6 +1108,21 @@
   gap: 8px;
   color: var(--lx-ink-2);
   font: 500 13px/1.4 var(--lx-font-ui);
+  /* Even lines, so "/ mo" never sits on a line of its own. */
+  text-wrap: balance;
+}
+
+/* Three narrow cards (a phone's desktop view, small laptops): room between
+   the plan name and the "Most popular" pill (QA, 23 Oct 2026). */
+@media (min-width: 769px) and (max-width: 1100px) {
+  .cardTitle {
+    font-size: 18px;
+  }
+
+  .planCard .planBadge {
+    top: 8px;
+    right: 8px;
+  }
 }
 
 .featureList li svg {

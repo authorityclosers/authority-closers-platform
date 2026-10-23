@@ -32,6 +32,9 @@ type State =
 const settled = (order: Order) =>
   order.status !== "awaiting_payment" && order.status !== "confirming";
 
+/** How long the confirmation stays clear before "How was buying your plan?". */
+export const FEEDBACK_DELAY_MS = 10_000;
+
 /**
  * Where the payment page sends the buyer back (C1 §2).
  * The server verifies payment; returning from checkout never grants minutes.
@@ -103,11 +106,21 @@ function OrderReturnState({
   }, [authenticated, client, paidId]);
 
   // Reviews engine (owner, 23 Oct 2026): how buying went, once per order.
+  // Asked after a pause, so the card never covers the confirmation's buttons
+  // while the buyer reads it; leaving sooner skips it (QA, 23 Oct 2026).
   useEffect(() => {
     if (!paidId) return;
-    askFeedback("plan_purchase", {
-      subject: `order:${paidId.replace(/[^A-Za-z0-9_.:-]/g, "-")}`.slice(0, 64),
-    });
+    const timer = setTimeout(
+      () =>
+        askFeedback("plan_purchase", {
+          subject: `order:${paidId.replace(/[^A-Za-z0-9_.:-]/g, "-")}`.slice(
+            0,
+            64,
+          ),
+        }),
+      FEEDBACK_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
   }, [paidId]);
 
   useEffect(() => {

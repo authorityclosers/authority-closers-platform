@@ -1,6 +1,6 @@
 import { act, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BillingClient } from "../billing/billing-api";
 import {
   parseOrder,
@@ -10,7 +10,8 @@ import {
 } from "../billing/contract";
 import { fixtureBilling } from "../review-fixture/plans/fixture-billing";
 import { WorkspaceAccessContext } from "../workspace-access";
-import { OrderReturn } from "./order-return";
+import { ASK_FEEDBACK_EVENT } from "../feedback/ask";
+import { FEEDBACK_DELAY_MS, OrderReturn } from "./order-return";
 
 vi.mock("../acquisition-shell", () => ({
   AcquisitionShell: ({ children }: { children: ReactNode }) => (
@@ -187,4 +188,45 @@ it.each([
   expect(field("New balance")).toBeUndefined();
   expect(host.querySelector('span[aria-live="polite"]')).toBeNull();
   expect(readUsage).not.toHaveBeenCalled();
+});
+
+describe("how buying went (reviews engine)", () => {
+  let asked: unknown[];
+  const listen = (event: Event) => asked.push((event as CustomEvent).detail);
+  beforeEach(() => {
+    asked = [];
+    vi.useFakeTimers();
+    window.addEventListener(ASK_FEEDBACK_EVENT, listen);
+  });
+  afterEach(() => {
+    window.removeEventListener(ASK_FEEDBACK_EVENT, listen);
+    vi.useRealTimers();
+  });
+  const paid = () => {
+    const result = order();
+    return render(result, {
+      ...fixtureBilling,
+      verifyOrder: async () => result,
+      readUsage: async () => usage(862),
+    });
+  };
+
+  // The card covered the confirmation's buttons when it came at once (QA, 23 Oct 2026).
+  it("asks only after the confirmation has had time to be read", async () => {
+    await paid();
+    expect(host.textContent).toContain("Payment confirmed");
+    await act(async () => vi.advanceTimersByTime(FEEDBACK_DELAY_MS - 1));
+    expect(asked).toEqual([]);
+    await act(async () => vi.advanceTimersByTime(1));
+    expect(asked).toEqual([
+      { moment: "plan_purchase", subject: "order:fictional-personal-order" },
+    ]);
+  });
+
+  it("skips the question when the buyer moves on sooner", async () => {
+    await paid();
+    await act(async () => root.render(<></>));
+    await act(async () => vi.advanceTimersByTime(FEEDBACK_DELAY_MS));
+    expect(asked).toEqual([]);
+  });
 });

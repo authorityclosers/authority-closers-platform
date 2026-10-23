@@ -484,6 +484,19 @@ it("renders authoritative renewal date and amount when quote exists on live Plan
   expect(host.textContent).not.toContain("Confirmed after payment");
 });
 
+it("shows Enterprise as Talk to us while the plans load, never a price", async () => {
+  await render(
+    <PlansPurchase
+      client={{ ...fixtureBilling, readPlans: () => new Promise(() => {}) }}
+    />,
+  );
+  const enterprise = host.querySelector('[data-plan="enterprise"]')!;
+  expect(enterprise.textContent).toContain("Talk to us");
+  expect(enterprise.textContent).not.toContain("₹");
+  expect(button("Get Enterprise")).toBeUndefined();
+  expect(button("Get Personal")).toBeDefined();
+});
+
 it("confirms renewal at checkout when no server quote exists", async () => {
   await render(<PlansPurchase client={fixtureBilling} />);
   await click("Get Personal");
