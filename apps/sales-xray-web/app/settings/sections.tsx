@@ -139,8 +139,11 @@ function Devices() {
 export function SettingsSectionView({
   id,
   billing,
+  headless = false,
 }: {
   id: SettingsSectionId;
+  /** Inside the organisation hub, which has the organisation's header. */
+  headless?: boolean;
   /** Plan & usage's billing from elsewhere (review pages); else it reads its own. */
   billing?: SettingsBillingProps;
 }) {
@@ -156,9 +159,13 @@ export function SettingsSectionView({
     case "help":
       return <AccountSettings only={["help"]} />;
     case "organisation":
-      return <OrganisationView embedded sections={["company"]} />;
+      return (
+        <OrganisationView embedded headless={headless} sections={["company"]} />
+      );
     case "team":
-      return <OrganisationView embedded sections={["members"]} />;
+      return (
+        <OrganisationView embedded headless={headless} sections={["members"]} />
+      );
     case "lead-rules":
       return <LeadRulesPane />;
     case "stages":
