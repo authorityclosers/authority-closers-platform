@@ -274,20 +274,16 @@ class Settlement:
         # Commit the intent before submission: neither caller rollback nor a
         # process crash may undo the hold after the provider receives a refund.
         async with AsyncSession(bind=database.bind, expire_on_commit=False) as durable:
-            if staff:
-                # Fresh platform projection locks Person and Session. Prepare
-                # the attributable audit/hold in that same transaction so their
-                # foreign keys cannot wait on our own authentication locks.
-                # Commit the intent before any provider call, as on the customer path.
-                prepared = await self._prepare_refund(
-                    database, caller, payment_id, reason, idempotency_key, staff=True
-                )
-                await database.commit()
-            else:
-                async with durable.begin():
-                    prepared = await self._prepare_refund(
-                        durable, caller, payment_id, reason, idempotency_key
-                    )
+            # The request's authentication locks Person and Session (and staff
+            # authority projects afresh). Prepare the attributable audit/hold in
+            # that same transaction so their foreign keys cannot wait on our own
+            # authentication locks, and commit the intent before any provider
+            # call. A second connection here waited on the request forever
+            # (customer refund on dev, 23 Oct 2026).
+            prepared = await self._prepare_refund(
+                database, caller, payment_id, reason, idempotency_key, staff=staff
+            )
+            await database.commit()
             view, order, payment, money, send = prepared
             if not send:
                 return view
