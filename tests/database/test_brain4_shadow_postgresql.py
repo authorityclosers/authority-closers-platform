@@ -133,12 +133,14 @@ def test_a_shadow_read_is_admitted_saved_counted_shown_and_erased(
                     "usageMetadata": {"promptTokenCount": 9_000, "candidatesTokenCount": 2_100},
                 }
 
-            # Development's defaults: background off, the feature at ₹0.
+            # Development's defaults: the feature at ₹0. Brain 4.0's read is the Report
+            # (owner, 23 Oct 2026), so only its own cap stops it, never the background
+            # switch: switching background AI on below changes nothing for it.
             async with sessions() as session:
                 refusal = await spend_guard.check_async(
                     session, brain4_shadow.FEATURE, environment="development"
                 )
-            assert refusal is not None and refusal.code == "ai_spend_background_off"
+            assert refusal is not None and refusal.code == "ai_spend_feature_cap"
             async with sessions() as session, session.begin():
                 await spend_store.save(
                     session,
