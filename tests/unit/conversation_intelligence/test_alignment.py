@@ -192,9 +192,13 @@ def test_build_alignment_takes_two_thousand_segments_an_hour() -> None:
 
 
 def test_build_alignment_rejects_audioatlas_beyond_two_hours() -> None:
-    signal = _signal(duration_ms=7_200_001)
     transcript = _transcript(_segment("s1", 0, 200))
+    # The checkpoint's own duration and the native sample count are each bounded.
+    with pytest.raises(AlignmentError, match="^alignment_media_duration_ms_invalid$"):
+        build_alignment(_signal(duration_ms=7_200_001), transcript)
 
+    signal = _signal(duration_ms=7_200_000)
+    signal["acoustics"]["sample_count"] += 1
     with pytest.raises(AlignmentError, match="^alignment_acoustics_duration_invalid$"):
         build_alignment(signal, transcript)
 

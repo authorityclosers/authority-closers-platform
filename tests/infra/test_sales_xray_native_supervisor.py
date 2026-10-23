@@ -52,13 +52,13 @@ def test_units_bind_frozen_sources_and_isolate_environment(environment: str) -> 
     assert f"--image-ref {VALUES['native_image_ref']}" in service
     assert VALUES["helper_root"] in service
     assert VALUES["supervisor_source"] in service
-    assert "TimeoutStopSec=1600s" in service
+    assert "TimeoutStopSec=800s" in service
     assert "KillMode=mixed" in service
     assert "RestrictAddressFamilies=AF_UNIX" in service
     assert "InaccessiblePaths=-/etc/authority-closers/secrets" in service
     assert "ExecStart=/usr/bin/env -i " in service
     assert "EnvironmentFile=" not in service
-    assert "size=128m,mode=0700,uid=10001,gid=10001,nosuid,nodev,noexec" in units[mount_name]
+    assert "size=64m,mode=0700,uid=10001,gid=10001,nosuid,nodev,noexec" in units[mount_name]
     for other in {"development", "staging", "production"} - {environment}:
         assert f"sales-xray/{other}" not in service
     assert result["installed"] is False and result["provider_calls"] == 0

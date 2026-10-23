@@ -16,9 +16,7 @@ verifier requires it; there is no separate host script copy/install step.
 The native renderer comes from the already installed target core T. Its file
 mode and blob must equal the renderer committed by native artifact N, and its
 SHA-256 must be the reviewed
-`e51105e97dfa6d7b7e3287990a4724e744ecde57a86fd6488f8375410d525acf`
-(the 120-minute renderer, 23 Oct 2026; a predecessor may still carry the one-hour
-`88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76`).
+`88f6e50960566c61d780e9fc2370c61c2db17c818c7d2c5963a8974ef70eec76`.
 The rendered descriptor and service prestart explicitly name T's renderer.
 This binding is confined to the new supported development operator; ordinary
 installer candidate checks and staging/production commands stay unchanged.

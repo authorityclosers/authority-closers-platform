@@ -96,7 +96,7 @@ Before={service_name}
 What=tmpfs
 Where={output}
 Type=tmpfs
-Options=size=128m,mode=0700,uid=10001,gid=10001,nosuid,nodev,noexec
+Options=size=64m,mode=0700,uid=10001,gid=10001,nosuid,nodev,noexec
 DirectoryMode=0700
 
 [Install]
@@ -122,7 +122,7 @@ ExecStartPre={prestart}
 ExecStart={command}
 Restart=on-failure
 RestartSec=5s
-TimeoutStopSec=1600s
+TimeoutStopSec=800s
 KillMode=mixed
 NoNewPrivileges=yes
 PrivateTmp=yes

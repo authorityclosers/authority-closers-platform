@@ -59,7 +59,12 @@ The source is a regular file <=128 MiB, accessible only to the worker's approved
 UID mapping. The output is a separate **128 MiB quota-limited private filesystem**,
 owned by mapped UID/GID10001 and mode0700. A host-mounted tmpfs with size128m,
 nosuid,nodev,noexec can satisfy this temporary-output requirement; provision it
-through the infrastructure owner, not by this image. An ordinary unbounded bind
+through the infrastructure owner, not by this image. The supervisor renderer
+(`render-sales-xray-native.py`) still renders the one-hour size64m mount: the
+installer re-renders a predecessor's units with the current renderer, so a
+renderer change needs its own transition. Until then a host takes size128m from
+a mount drop-in; 64 MiB admits two-hour mono but stereo only to about 84 minutes.
+An ordinary unbounded bind
 directory does not satisfy the disk boundary. Tmpfs outputs are ephemeral: the
 domain worker must validate and persist them before that mount is torn down.
 
@@ -171,8 +176,7 @@ source ceiling. The one-hour 768 MiB work limit admits the mono case but rejects
 stereo; the 1,536 MiB work limit admits both with the same two-hour/channel
 contract. The decoded stereo PCM (921,728,000 bytes) is the largest file, under
 the 1 GiB file bound; packed stereo features (95,040,032 bytes) plus the
-checkpoint fit the 128 MiB output filesystem (a 64 MiB one admits two-hour mono
-but not stereo past about 84 minutes). Measured on the 4-core host (23 Oct 2026, a 7,195 s
+checkpoint fit the 128 MiB output filesystem. Measured on the 4-core host (23 Oct 2026, a 7,195 s
 fictional MP3, one CPU): the whole inspection took 124 s mono and 248 s stereo,
 with a cgroup memory peak of 737 MB and 1,380 MB and a /work peak of 669 MB and
 1,309 MB; the timeouts above were doubled with the window.
