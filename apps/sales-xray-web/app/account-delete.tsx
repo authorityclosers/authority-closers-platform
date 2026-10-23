@@ -75,8 +75,13 @@ function people(count: number) {
   return count === 1 ? "1 other member" : `${count} other members`;
 }
 
-export function DeleteAccountRow() {
-  const [open, setOpen] = useState(false);
+export function DeleteAccountRow({
+  defaultOpen = false,
+}: {
+  /** Review fixtures only: start with the panel open. */
+  defaultOpen?: boolean;
+} = {}) {
+  const [open, setOpen] = useState(defaultOpen);
   const regionId = useId();
   return (
     <>

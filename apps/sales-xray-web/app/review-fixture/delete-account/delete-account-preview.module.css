@@ -1,0 +1,15 @@
+.page {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+}
+
+.title {
+  margin: 0 0 8px;
+  font-size: 22px;
+  font-weight: 750;
+}

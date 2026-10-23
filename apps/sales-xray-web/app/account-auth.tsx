@@ -52,6 +52,7 @@ import {
   type SignInProvider,
 } from "./account-auth-client";
 import styles from "./account-auth.module.css";
+import { noteFreshSignIn } from "./welcome/setup-state";
 import {
   inPhoneApp,
   phoneStatus,
@@ -292,6 +293,10 @@ export function AccountAuth({
     previewState === "auth.code" ? "sample@example.test" : "",
   );
   const [consent, setConsent] = useState(false);
+  // Owner, 23 Oct 2026 ("not progressive"): the buttons are never greyed out;
+  // pressing one before the box is ticked points at the box instead.
+  const [consentNudge, setConsentNudge] = useState(false);
+  const consentRef = useRef<HTMLInputElement>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<"email" | "code" | "password" | "confirmed">(
     previewState === "auth.code" ? "code" : "email",
@@ -447,12 +452,26 @@ export function AccountAuth({
   function complete() {
     if (preview || verified.current) return;
     verified.current = true;
+    // Home offers first-run setup after this sign-in, never with a call waiting.
+    if (!selectedFile) noteFreshSignIn();
     setStep("confirmed");
     onAuthenticated();
   }
 
+  function askConsent() {
+    setConsentNudge(true);
+    consentRef.current?.focus({ preventScroll: true });
+    consentRef.current
+      ?.closest("label")
+      ?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }
+
   async function sendCode(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
+    if (!preview && !consent) {
+      askConsent();
+      return;
+    }
     if (
       preview ||
       !activeConfig?.enabled ||
@@ -757,6 +776,10 @@ export function AccountAuth({
   }
 
   function startProvider(provider: SignInProvider) {
+    if (!preview && !consent) {
+      askConsent();
+      return;
+    }
     if (
       preview ||
       !activeConfig ||
@@ -980,7 +1003,7 @@ export function AccountAuth({
     ) : unavailable && !googleAvailable ? (
       "Sign in with your existing Authority Closers account."
     ) : (
-      "One quick step for new and returning members."
+      "New here? The same steps create your account."
     );
   return (
     <section
@@ -1115,14 +1138,23 @@ export function AccountAuth({
                   <label
                     className={styles.consent}
                     data-checked={consent ? "true" : undefined}
+                    data-nudge={consentNudge && !consent ? "true" : undefined}
                   >
                     <input
+                      ref={consentRef}
                       type="checkbox"
                       form="account-email-form"
                       checked={consent}
-                      onChange={(event) => setConsent(event.target.checked)}
+                      onChange={(event) => {
+                        setConsent(event.target.checked);
+                        if (event.target.checked) setConsentNudge(false);
+                      }}
                       disabled={preview || pending}
-                      required
+                      aria-describedby={
+                        consentNudge && !consent
+                          ? "account-consent-nudge"
+                          : undefined
+                      }
                     />
                     <span className={styles.check} aria-hidden="true">
                       <svg viewBox="0 0 16 16">
@@ -1150,6 +1182,15 @@ export function AccountAuth({
                       for my Authority Closers account.
                     </span>
                   </label>
+                  {consentNudge && !consent ? (
+                    <p
+                      id="account-consent-nudge"
+                      className={styles.consentNudge}
+                      role="alert"
+                    >
+                      Tick this box to continue.
+                    </p>
+                  ) : null}
                   {googleBlocked ? (
                     <p className={styles.consentHint}>
                       Google sign-in is not available on the dev site yet. Use
@@ -1167,12 +1208,7 @@ export function AccountAuth({
                             className={styles.google}
                             data-provider={provider}
                             onClick={() => startProvider(provider)}
-                            disabled={preview || !consent || pending}
-                            aria-describedby={
-                              !consent
-                                ? "account-google-consent-hint"
-                                : undefined
-                            }
+                            disabled={preview || pending}
                           >
                             <Mark />
                             Continue with {providerLabel(provider)}
@@ -1180,15 +1216,6 @@ export function AccountAuth({
                         );
                       })}
                     </div>
-                  )}
-                  {googleAvailable && !consent && (
-                    <p
-                      id="account-google-consent-hint"
-                      className={styles.consentHint}
-                    >
-                      Tick the box above to continue with{" "}
-                      {offeredProviders.map(providerLabel).join(", ")} or email.
-                    </p>
                   )}
                   {googleAvailable && available && (
                     <div className={styles.divider}>
@@ -1226,9 +1253,7 @@ export function AccountAuth({
                         <button
                           type="submit"
                           className={styles.primary}
-                          disabled={
-                            preview || !available || !consent || pending
-                          }
+                          disabled={preview || !available || pending}
                         >
                           {pending ? (
                             <>
@@ -1388,9 +1413,10 @@ export function AccountAuth({
                     autoComplete="one-time-code"
                     pattern="[0-9]{6}"
                     onInput={(event) => {
-                      event.currentTarget.value = event.currentTarget.value
-                        .replace(/\D/g, "")
-                        .slice(0, 6);
+                      const field = event.currentTarget;
+                      field.value = field.value.replace(/\D/g, "").slice(0, 6);
+                      if (field.value.length === 6 && !pending && !expired)
+                        field.form?.requestSubmit?.();
                     }}
                     required
                     disabled={pending || preview}

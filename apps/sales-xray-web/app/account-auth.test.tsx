@@ -218,12 +218,13 @@ it("keeps the local file through explicit consent, neutral code request and veri
     return_path: "/",
   });
   expect(onAuthenticated).not.toHaveBeenCalled();
+  // The sixth digit verifies by itself; a second submit sends nothing more.
   await changeInput("#account-code", "123 456");
-  expect(host.querySelector<HTMLInputElement>("#account-code")?.value).toBe(
-    "123456",
-  );
+  await flush();
+  expect(onAuthenticated).toHaveBeenCalledOnce();
   await submit();
   expect(onAuthenticated).toHaveBeenCalledOnce();
+  expect(calls.filter(({ url }) => url.endsWith("/verify"))).toHaveLength(1);
   expect(calls.map(({ url }) => url).slice(-2)).toEqual([
     "/v1/auth/email-code/verify",
     "/v1/me/workspaces",
@@ -373,13 +374,21 @@ it("keeps Google in a blank popup until fresh consent policy is confirmed", asyn
     root.render(<AccountAuth selectedFile={file} onAuthenticated={vi.fn()} />),
   );
   await flush();
+  // Never greyed out (owner, 23 Oct 2026): pressing it before the box is
+  // ticked points at the box and opens nothing.
   expect(
     Array.from(host.querySelectorAll("button")).find((button) =>
       button.textContent?.includes("Continue with Google"),
     )?.disabled,
-  ).toBe(true);
+  ).toBe(false);
   await click("Continue with Google");
   expect(open).not.toHaveBeenCalled();
+  expect(host.querySelector("#account-consent-nudge")?.textContent).toBe(
+    "Tick this box to continue.",
+  );
+  expect(
+    host.querySelector('label[data-nudge="true"] input[type="checkbox"]'),
+  ).toBeTruthy();
   await act(async () =>
     host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
   );
@@ -888,9 +897,8 @@ describe("Apple and Facebook next to Google", () => {
       "Continue with Apple",
       "Continue with Facebook",
     ]);
-    expect(host.textContent).toContain(
-      "Tick the box above to continue with Google, Apple, Facebook or email.",
-    );
+    // Nothing waits behind a greyed-out button: no "tick the box" line yet.
+    expect(host.querySelector("#account-consent-nudge")).toBeNull();
     const text = host.textContent ?? "";
     expect(text.indexOf("Continue with Facebook")).toBeLessThan(
       text.indexOf("or use email"),

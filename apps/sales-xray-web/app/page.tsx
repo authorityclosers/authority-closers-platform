@@ -1,4 +1,5 @@
 import { AcquisitionStudio } from "./acquisition-studio";
+import { FirstRunGate } from "./welcome/first-run-gate";
 import {
   requestedExistingCallId,
   type SalesXraySearchParams,
@@ -14,9 +15,13 @@ export default async function Page({
     ? undefined
     : requestedExistingCallId(await searchParams);
   return (
-    <AcquisitionStudio
-      requestedCallId={requestedCallId}
-      deferRouteSelection={staticPreview}
-    />
+    <>
+      {/* A brand-new account goes to first-run setup once (welcome/). */}
+      {requestedCallId ? null : <FirstRunGate />}
+      <AcquisitionStudio
+        requestedCallId={requestedCallId}
+        deferRouteSelection={staticPreview}
+      />
+    </>
   );
 }
