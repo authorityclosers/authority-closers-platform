@@ -101,7 +101,8 @@ export function BillingView({
             </Link>
           </div>
           <p className={styles.subtitle}>
-            Manage your Sales Xray subscription, analysis minutes, and invoices.
+            Manage your Sales X-Ray subscription, analysis minutes, and
+            invoices.
           </p>
         </header>
 

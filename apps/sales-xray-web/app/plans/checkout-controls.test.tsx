@@ -220,7 +220,7 @@ it.each(["fake", "razorpay"] as const)(
 
 it("shell Back and Close leave plans; drawer Close only dismisses checkout", async () => {
   await render(<PlansPurchase client={fixtureBilling} />);
-  await click("Back to Sales Xray");
+  await click("Back to Sales X-Ray");
   await click("Close");
   expect(push.mock.calls).toEqual([["/"], ["/"]]);
   push.mockClear();

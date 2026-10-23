@@ -6,7 +6,9 @@
   gap: 16px;
   width: 100%;
   max-width: 1140px;
-  animation: page-in 260ms var(--lx-ease-move, ease) both;
+  /* Backwards, not both: a kept opacity animation leaves a stacking context, and the
+     shell header (z-index 10) then painted over the full-screen checkout drawer. */
+  animation: page-in 260ms var(--lx-ease-move, ease) backwards;
 }
 
 .page[data-plans-screen] {
@@ -1404,6 +1406,7 @@
 }
 
 .shellBrandName {
+  white-space: nowrap;
   font: 800 15px/1 var(--lx-font-display, var(--lx-font-ui));
   letter-spacing: -0.01em;
   color: var(--lx-ink, #0f172a);
@@ -1416,6 +1419,7 @@
 }
 
 .shellReceiptLink {
+  white-space: nowrap;
   color: var(--lx-muted, #64748b);
   font: 500 12.5px/1 var(--lx-font-ui);
   text-decoration: none;
@@ -1679,6 +1683,8 @@
 }
 
 .checkoutDrawer {
+  /* Border-box: 100vw plus the side padding ran 40 px past a phone's edge. */
+  box-sizing: border-box;
   position: fixed;
   top: 0;
   right: 0;
@@ -1692,11 +1698,13 @@
   border-left: 1px solid var(--lx-line);
   box-shadow: -6px 0 28px rgba(0, 0, 0, 0.16);
   background: var(--lx-surface);
+  overflow-x: hidden;
   overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
   flex-direction: column;
   gap: 14px;
-  padding: 22px 20px;
+  padding: 22px 20px calc(22px + env(safe-area-inset-bottom, 0px));
   animation: slideDrawer 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
@@ -1709,10 +1717,21 @@
   }
 }
 
+.checkoutDrawer > * {
+  min-width: 0;
+}
+
+/* Long values wrap inside the drawer instead of widening it. */
+.checkoutDrawer .rows dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
 @media (max-width: 640px) {
   .checkoutDrawer {
     inset: 0;
-    width: 100vw;
+    width: 100%;
+    padding-inline: 16px;
     border-left: none;
     animation: slideUp 240ms cubic-bezier(0.16, 1, 0.3, 1) both;
   }
@@ -1837,5 +1856,33 @@
 
   .planCard[data-mobile-active="true"] {
     flex: 0 0 auto;
+  }
+}
+
+/* Phones: a long value sits under its label instead of squeezing beside it. */
+@media (max-width: 430px) {
+  .checkoutDrawer .rows div:not(.total) {
+    flex-wrap: wrap;
+    row-gap: 2px;
+  }
+
+  .checkoutDrawer .rows div:not(.total) dd {
+    margin-left: auto;
+  }
+}
+
+.receiptShort {
+  display: none;
+}
+
+/* Narrow phones: one-line top bar (shorter receipts label, no sparkle). */
+@media (max-width: 400px) {
+  .receiptLong,
+  .shellSparkle {
+    display: none;
+  }
+
+  .receiptShort {
+    display: inline;
   }
 }
