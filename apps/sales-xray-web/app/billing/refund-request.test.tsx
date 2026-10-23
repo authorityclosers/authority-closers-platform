@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { BillingError } from "./billing-api";
 import type { Refund } from "./contract";
-import { RefundRequest } from "./refund-request";
+import { RefundRequest, type RequestRefund } from "./refund-request";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), back: vi.fn(), replace: vi.fn() }),
@@ -79,7 +79,7 @@ it("says where a refund already stands", async () => {
 });
 
 it("asks once, then shows the refund as requested", async () => {
-  const onRequest = vi.fn(async () => ({
+  const onRequest = vi.fn<RequestRefund>(async () => ({
     ...available,
     state: "pending" as const,
   }));
