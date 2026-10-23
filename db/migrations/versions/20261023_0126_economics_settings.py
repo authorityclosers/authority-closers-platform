@@ -6,7 +6,9 @@ according to how much we overall spend from all points").
   old and new. Until a revision is saved, the code's defaults apply. The ORM refuses updates
   and deletes (the schema gate allows no triggers): a change is a new revision.
 
-Forward-only: a later migration changes this table.
+A rollback is possible while no settings were saved (the release gate rehearses upgrade,
+downgrade and re-upgrade on an empty schema); after that, the history requires forward
+recovery.
 
 Chain: after 20261023_0125 (Offer Studio offer versions).
 """
@@ -36,4 +38,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise RuntimeError("Economics settings are forward-only: a later migration changes them.")
+    # Fence writes before the history check, then remove only an empty table.
+    op.execute(sa.text("LOCK TABLE economics_settings IN ACCESS EXCLUSIVE MODE"))
+    saved = sa.table("economics_settings", sa.column("id"))
+    if op.get_bind().scalar(sa.select(sa.exists().where(saved.c.id.is_not(None)))):
+        raise RuntimeError("Economics settings history requires forward recovery.")
+    op.drop_table("economics_settings")

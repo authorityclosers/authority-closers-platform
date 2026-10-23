@@ -1,8 +1,8 @@
 """Economics settings on PostgreSQL (owner, 23 Oct 2026: fixed costs editable in Admin).
 
-Migration 0126 passes the schema gate and is forward-only; each save is a new revision and
-the newest wins; until the first save the code's defaults apply; the ORM refuses updates and
-deletes. Disposable loopback PostgreSQL, fictional numbers only.
+Migration 0126 passes the schema gate and rolls back only while no settings were saved; each
+save is a new revision and the newest wins; until the first save the code's defaults apply;
+the ORM refuses updates and deletes. Disposable loopback PostgreSQL, fictional numbers only.
 """
 
 from __future__ import annotations
@@ -10,6 +10,7 @@ from __future__ import annotations
 import importlib.util
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -41,7 +42,7 @@ def migration() -> Any:
     return module
 
 
-def test_migration_chain_schema_gate_and_forward_only() -> None:
+def test_migration_chain_schema_gate_and_rollback_only_while_empty() -> None:
     from scripts.ci.migration_schema_gate import check_operations
     from scripts.ops.migration_safety import classify_source
 
@@ -49,8 +50,20 @@ def test_migration_chain_schema_gate_and_forward_only() -> None:
     assert (module.revision, module.down_revision) == (REVISION, DOWN)
     path = Path(module.__file__)
     check_operations([classify_source(path.read_text(), str(path))], set())
-    with pytest.raises(RuntimeError, match="forward-only"):
+    # With saved history the rollback refuses; on an empty table it drops what upgrade made.
+    calls: list[str] = []
+    module.op = SimpleNamespace(
+        execute=lambda statement: calls.append("lock"),
+        get_bind=lambda: SimpleNamespace(scalar=lambda statement: True),
+        drop_table=lambda name: calls.append(f"drop {name}"),
+    )
+    with pytest.raises(RuntimeError, match="history requires forward recovery"):
         module.downgrade()
+    assert calls == ["lock"]
+    calls.clear()
+    module.op.get_bind = lambda: SimpleNamespace(scalar=lambda statement: False)
+    module.downgrade()
+    assert calls == ["lock", "drop economics_settings"]
 
 
 def _with_server(rupees: int) -> dict[str, Any]:
