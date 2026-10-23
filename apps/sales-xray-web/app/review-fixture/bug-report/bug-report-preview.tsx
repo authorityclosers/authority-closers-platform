@@ -88,7 +88,12 @@ function Preview() {
       }
       // Screenshots come soon after load, so the reporter opens at once here;
       // the two taps (You, then Report a problem) have their own unit test.
-      openBugReport();
+      // The frame mounts the reporter a moment after the page; ask until it opens.
+      for (let tries = 0; tries < 40 && !stopped; tries += 1) {
+        if (document.querySelector("dialog[open] textarea")) break;
+        openBugReport();
+        await pause(100);
+      }
       if (view !== "typed") return;
       await pause(300);
       if (stopped) return;
