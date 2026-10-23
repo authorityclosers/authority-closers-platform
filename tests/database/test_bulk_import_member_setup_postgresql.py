@@ -26,7 +26,6 @@ from ac_platform.conversation_intelligence.worker_account_gate import (
 )
 from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
 from ac_platform.outbox.models import Job
-from ac_platform.outbox.repository import RecoveryStateRepository
 from tests.database.test_bulk_import_postgresql import (
     batch_headers,
     client_for,
@@ -230,10 +229,10 @@ def test_an_expired_import_call_is_not_retried_into_another_hold_before_member_s
                 await db.flush()
                 setup.clock[0] += timedelta(hours=1, seconds=1)
                 assert await ReportMinutes(db).release_expired_source(now=setup.clock[0])
-                recovery = await RecoveryStateRepository(db).require_ready(
-                    lock=True, shared_lock=True
-                )
-                assert await stop_released_run(db, generation=recovery.generation)
+                # A local job is never fenced to a recovery generation, so this
+                # does not depend on the shared recovery state row.
+                assert held.recovery_generation == 0
+                assert await stop_released_run(db, generation=1)
             async with setup.sessions() as db:
                 stopped = await db.scalar(select(Job))
                 assert (stopped.status, stopped.last_error) == (
