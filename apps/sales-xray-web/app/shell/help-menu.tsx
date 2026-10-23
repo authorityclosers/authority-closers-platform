@@ -28,8 +28,7 @@ export function HelpMenu() {
         <p className={styles.title}>Help</p>
         <ul className={styles.tips}>
           <li>
-            Choose an audio or video file up to 100 MB and {CALL_LIMIT_MINUTES}{" "}
-            minutes long.
+            {`Choose an audio or video file up to 100 MB and ${CALL_LIMIT_MINUTES} minutes long.`}
           </li>
           <li>Review the language and privacy details before analysis.</li>
           <li>Open saved calls to revisit completed reports.</li>

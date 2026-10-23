@@ -376,7 +376,9 @@ const FALLBACK: Record<number, string> = {
  */
 export const AHEAD_MS = 60_000;
 const AHEAD_MOST = 12;
-const ahead = new Map<string, { at: number; p: Promise<LeadDetail | null> }>();
+// A read ahead that failed: the opening reads for itself.
+const FAILED = Symbol("failed");
+const ahead = new Map<string, { at: number; p: Promise<unknown> }>();
 let aheadScope: string | null = null;
 
 /** Whose reads these are (person, session, workspace); a change drops them. */
@@ -385,22 +387,51 @@ export function setAheadScope(scope: string | null) {
   aheadScope = scope;
 }
 
-/** Start reading a lead's details now, for its sheet to take when it opens. */
-export function readLeadAhead(leadId: string) {
+function readAhead(path: string) {
   if (!aheadScope) return;
-  const known = ahead.get(leadId);
+  const known = ahead.get(path);
   if (known && Date.now() - known.at <= AHEAD_MS) return;
   while (ahead.size >= AHEAD_MOST) {
     const oldest = ahead.keys().next().value;
     if (oldest === undefined) break;
     ahead.delete(oldest);
   }
-  ahead.set(leadId, {
+  ahead.set(path, {
     at: Date.now(),
-    p: request<LeadDetail>(`/leads/${encodeURIComponent(leadId)}`).catch(
-      () => null,
-    ),
+    p: request<unknown>(path).catch(() => FAILED),
   });
+}
+
+/** What was read ahead for this path, taken once, or null (none, or too old). */
+function takeAhead<T>(path: string, signal?: AbortSignal): Promise<T> | null {
+  const known = ahead.get(path);
+  ahead.delete(path);
+  if (!known || Date.now() - known.at > AHEAD_MS) return null;
+  return known.p.then((value) => {
+    if (signal?.aborted)
+      throw new DOMException("The read was cancelled.", "AbortError");
+    return value === FAILED ? request<T>(path, { signal }) : (value as T);
+  });
+}
+
+const leadPath = (leadId: string) => `/leads/${encodeURIComponent(leadId)}`;
+
+function nextPath(skip?: string, pipeline?: string | null) {
+  const query = new URLSearchParams();
+  if (skip) query.set("skip", skip);
+  if (pipeline) query.set("pipeline", pipeline);
+  const asked = query.toString();
+  return asked ? `/next?${asked}` : "/next";
+}
+
+/** Start reading a lead's details now, for its sheet to take when it opens. */
+export function readLeadAhead(leadId: string) {
+  readAhead(leadPath(leadId));
+}
+
+/** Start reading Start calling's first lead now, in the pipeline To call shows. */
+export function readNextAhead(pipeline?: string | null) {
+  readAhead(nextPath(undefined, pipeline));
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -533,13 +564,11 @@ export function readNext(
   signal?: AbortSignal,
   pipeline?: string | null,
 ) {
-  const query = new URLSearchParams();
-  if (skip) query.set("skip", skip);
-  if (pipeline) query.set("pipeline", pipeline);
-  const asked = query.toString();
-  return request<LeadDetail | null>(asked ? `/next?${asked}` : "/next", {
-    signal,
-  });
+  const path = nextPath(skip, pipeline);
+  return (
+    takeAhead<LeadDetail | null>(path, signal) ??
+    request<LeadDetail | null>(path, { signal })
+  );
 }
 
 export function readLeads(
@@ -597,17 +626,11 @@ export function deleteLeads(leadIds: string[], command = commandId()) {
 }
 
 export function readLead(leadId: string, signal?: AbortSignal) {
-  const path = `/leads/${encodeURIComponent(leadId)}`;
-  const known = ahead.get(leadId);
-  ahead.delete(leadId);
-  if (!known || Date.now() - known.at > AHEAD_MS)
-    return request<LeadDetail>(path, { signal });
+  const path = leadPath(leadId);
   // Read ahead: taken as it lands (or read now, if that read failed).
-  return known.p.then((detail) => {
-    if (signal?.aborted)
-      throw new DOMException("The read was cancelled.", "AbortError");
-    return detail ?? request<LeadDetail>(path, { signal });
-  });
+  return (
+    takeAhead<LeadDetail>(path, signal) ?? request<LeadDetail>(path, { signal })
+  );
 }
 
 export type NewLead = {

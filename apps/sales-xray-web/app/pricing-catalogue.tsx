@@ -147,11 +147,11 @@ export function PricingCatalogue({ initialPlans }: { initialPlans?: Plan[] }) {
                 {plan.includedMinutes !== null && perSeat ? " per seat" : ""}
               </li>
               <li>
-                Longest call:{" "}
-                {plan.longestCallMinutes === null
-                  ? "not listed in the catalogue"
-                  : count(callLimitMinutes(plan.longestCallMinutes)) +
-                    " minutes"}
+                {`Longest call: ${
+                  plan.longestCallMinutes === null
+                    ? "not listed in the catalogue"
+                    : `${count(callLimitMinutes(plan.longestCallMinutes))} minutes`
+                }`}
               </li>
               <li>
                 Recording and report retention:{" "}

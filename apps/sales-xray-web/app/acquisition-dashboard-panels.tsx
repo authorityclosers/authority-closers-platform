@@ -297,8 +297,7 @@ export function AcquisitionGuideRail({
               </summary>
               <ul className={styles.helpTips}>
                 <li>
-                  Choose an audio or video file up to 100 MB and{" "}
-                  {CALL_LIMIT_MINUTES} minutes long.
+                  {`Choose an audio or video file up to 100 MB and ${CALL_LIMIT_MINUTES} minutes long.`}
                 </li>
                 <li>
                   Check the language and privacy details before you continue.

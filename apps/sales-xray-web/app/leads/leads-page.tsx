@@ -91,6 +91,7 @@ import {
   type PickedContact,
   likelyNext,
   readLeadAhead,
+  readNextAhead,
   setAheadScope,
 } from "./leads-client";
 import { MessageSetup } from "./message-sheet";
@@ -443,12 +444,13 @@ export function LeadsRoute() {
         setDesk(next);
         setDeskKey(contextKey);
         rememberDesk(identity, toCallPipeline, next);
-        // Once a visit: the next few leads' details, so their sheet opens
-        // on them (leads-client.ts readLeadAhead).
+        // Once a visit: the next few leads' details and Start calling's
+        // first lead, so they open on them (leads-client.ts readAhead).
         if (!readAhead.current && !savingData()) {
           readAhead.current = true;
           setAheadScope(identity);
           likelyNext(next).forEach(readLeadAhead);
+          readNextAhead(toCallPipeline);
         }
         setError(null);
         // The app's badge counts the whole day, never one pipeline's.

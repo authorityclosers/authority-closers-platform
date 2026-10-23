@@ -5,6 +5,8 @@ import {
   likelyNext,
   readLead,
   readLeadAhead,
+  readNext,
+  readNextAhead,
   setAheadScope,
   type LeadRow,
 } from "./leads-client";
@@ -65,6 +67,21 @@ it("drops what was read ahead after a write, or for another identity", async () 
   setAheadScope(null);
   readLeadAhead("c");
   expect(fetchMock).toHaveBeenCalledTimes(5);
+});
+
+it("starts calling on the first lead read ahead, for the same pipeline only", async () => {
+  const fetchMock = network();
+  setAheadScope("me");
+  readNextAhead("rentals");
+  expect(String(fetchMock.mock.calls[0]?.[0])).toBe(
+    "/v1/lead-desk/next?pipeline=rentals",
+  );
+  await readNext(undefined, undefined, "rentals");
+  expect(fetchMock).toHaveBeenCalledTimes(1);
+  // Another pipeline (or all of them) reads for itself.
+  readNextAhead("rentals");
+  await readNext();
+  expect(fetchMock).toHaveBeenCalledTimes(3);
 });
 
 it("a cancelled opening never takes the answer read ahead", async () => {

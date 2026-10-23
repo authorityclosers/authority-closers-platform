@@ -3,6 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { MePlan, Order, Plan } from "../billing/contract";
+import { CALL_LIMIT_MINUTES } from "../call-limit";
 import { PlansScreen } from "./plans-screen";
 
 vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -119,6 +120,25 @@ it.each([
     expect(text()).toContain(expected);
   },
 );
+
+it("says a plan's call length as one text node, so TalkBack keeps its spaces", async () => {
+  await act(async () => {
+    root.render(
+      <PlansScreen
+        plans={FICTIONAL_PLANS}
+        gstRate={GST_RATE}
+        mePlan={fictionalMePlan(3_600)}
+      />,
+    );
+  });
+  const line = [...host.querySelectorAll("span")].find((span) =>
+    span.textContent?.startsWith("Calls up to"),
+  );
+  expect(line?.textContent).toBe(
+    `Calls up to ${CALL_LIMIT_MINUTES} minutes long`,
+  );
+  expect(line?.childNodes).toHaveLength(1);
+});
 
 it("retains legacy unlimited presentation for current-plan badge", async () => {
   await act(async () => {

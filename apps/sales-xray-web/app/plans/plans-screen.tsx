@@ -515,9 +515,9 @@ export function PlansScreen({
                             aria-hidden="true"
                           />
                           <span>
-                            Calls up to{" "}
-                            {callLimitMinutes(item.longestCallMinutes)} minutes
-                            long
+                            {/* One text node: Android's accessibility tree drops a
+                                lone " ", and TalkBack read "up to60". */}
+                            {`Calls up to ${callLimitMinutes(item.longestCallMinutes)} minutes long`}
                           </span>
                         </li>
                       ) : null}
