@@ -81,6 +81,8 @@ function OrderReturnState({
   const [state, setState] = useState<State>({ status: "loading" });
   const [checking, setChecking] = useState(false);
   const verifyKey = useRef<string | null>(null);
+  // Bumped after a refund is asked for, so the balance is read again.
+  const [reads, setReads] = useState(0);
   const [balance, setBalance] = useState<{
     orderId: string;
     allowance: Allowance;
@@ -103,7 +105,7 @@ function OrderReturnState({
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [authenticated, client, paidId]);
+  }, [authenticated, client, paidId, reads]);
 
   // Reviews engine (owner, 23 Oct 2026): how buying went, once per order.
   // Asked after a pause, so the card never covers the confirmation's buttons
@@ -167,6 +169,24 @@ function OrderReturnState({
       if (timer) clearTimeout(timer);
     };
   }, [authenticated, client, orderId]);
+
+  // After a refund is asked for, the page says what is true now: the order's
+  // refund state (no more "Changed your mind?") and the balance without the
+  // payment's minutes (QA, 23 Oct 2026).
+  const requestRefund = client.requestRefund
+    ? async (paymentId: string, reason: string, key: string) => {
+        const outcome = await client.requestRefund!(paymentId, reason, key);
+        if (orderId)
+          await client
+            .readOrder(orderId)
+            .then((next) =>
+              setState({ status: "order", order: next, waited: true }),
+            )
+            .catch(() => {});
+        setReads((value) => value + 1);
+        return outcome;
+      }
+    : null;
 
   const check = async () => {
     if (!orderId || checking) return;
@@ -242,6 +262,8 @@ function OrderReturnState({
       order.kind === "top_up"
         ? formatPurchaseMinutes(order.minutes, "top-up minutes")
         : `${order.planName}${order.interval ? `, ${order.interval === "month" ? "monthly" : "yearly"}` : ""}`;
+    const refunded =
+      order.refund?.state === "pending" || order.refund?.state === "refunded";
     if (order.status === "paid") {
       body = (
         <>
@@ -251,7 +273,7 @@ function OrderReturnState({
             aria-hidden="true"
           />
           <h2>Payment confirmed</h2>
-          <AnimatedCountUp targetMinutes={order.minutes} />
+          {refunded ? null : <AnimatedCountUp targetMinutes={order.minutes} />}
           <dl className={styles.rows}>
             <div>
               <dt>{order.kind === "top_up" ? "Top-up" : "Plan"}</dt>
@@ -308,12 +330,12 @@ function OrderReturnState({
               minutes.
             </p>
           ) : null}
-          {order.refund && client.requestRefund ? (
+          {order.refund && requestRefund ? (
             <div className={styles.actions}>
               <RefundRequest
                 refund={order.refund}
                 amount={formatMoney(order.amount)}
-                onRequest={client.requestRefund.bind(client)}
+                onRequest={requestRefund}
                 className={styles.ghost}
               />
             </div>

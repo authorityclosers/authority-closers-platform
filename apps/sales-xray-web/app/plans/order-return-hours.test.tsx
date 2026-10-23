@@ -230,3 +230,60 @@ describe("how buying went (reviews engine)", () => {
     expect(asked).toEqual([]);
   });
 });
+
+it("after a refund, drops the refund hint and the new minutes and reads the balance again", async () => {
+  const refund = {
+    payment_id: "fictional-payment",
+    refundable_until: "2026-10-12T10:01:00Z",
+    state: "available",
+    reason_code: null,
+  };
+  const raw = (state: string) =>
+    parseOrder({
+      order_id: "fictional-personal-order",
+      kind: "subscription",
+      account: "personal",
+      status: "paid",
+      mode: "test",
+      amount: { minor: 249900, currency: "INR", gst_inclusive: true },
+      plan_key: "personal",
+      plan_name: "Personal",
+      interval: "month",
+      seats: 1,
+      pack_key: null,
+      minutes: 800,
+      subscription_id: null,
+      created_at: "2026-10-05T10:00:00Z",
+      paid_at: "2026-10-05T10:01:00Z",
+      refund: { ...refund, state },
+    });
+  const paid = raw("available");
+  const readUsage = vi
+    .fn()
+    .mockResolvedValueOnce(usage(862))
+    .mockResolvedValue(usage(62));
+  await render(paid, {
+    ...fixtureBilling,
+    verifyOrder: async () => paid,
+    readOrder: async () => raw("pending"),
+    readUsage,
+    requestRefund: async () => ({
+      paymentId: "fictional-payment",
+      refundableUntil: refund.refundable_until,
+      state: "pending",
+      reasonCode: null,
+    }),
+  });
+  expect(host.textContent).toContain("Changed your mind?");
+  expect(field("New balance")).toBe("862 analysis minutes (14 h 22 min)");
+  const inBody = (label: string) =>
+    [...document.body.querySelectorAll("button")].find(
+      (node) => node.textContent?.trim() === label,
+    )!;
+  await act(async () => inBody("Request refund").click());
+  await act(async () => inBody("Refund ₹2,499").click());
+  expect(host.textContent).not.toContain("Changed your mind?");
+  expect(host.querySelector('span[aria-live="polite"]')).toBeNull();
+  expect(field("New balance")).toBe("62 analysis minutes (1 h 2 min)");
+  expect(host.textContent).toContain("Refund requested");
+});
