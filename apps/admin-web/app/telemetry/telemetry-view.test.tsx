@@ -80,10 +80,13 @@ it("builds its address from the filters and keeps the others on each row of tabs
 it("shows the slow-device headline, speed by tier, vitals, the heatmap, funnels and problems", () => {
   const host = render(telemetryFixture(NOW));
   const text = host.textContent ?? "";
-  expect(text).toContain(
+  // The headline is the speed panel's first line, in the tone of its share.
+  const headline = host.querySelector('p[data-tone="bad"]');
+  expect(headline?.textContent).toBe(
     "40% of devices are slow when they open a lead (their median is over 1 s).",
   );
   expect(text).toContain("Low-end 2.1 s · Mid-range 880 ms · High-end 460 ms");
+  expect(text).toContain("11,000");
   const tones = [...host.querySelectorAll("tbody [data-tone]")].map((item) =>
     item.getAttribute("data-tone"),
   );
