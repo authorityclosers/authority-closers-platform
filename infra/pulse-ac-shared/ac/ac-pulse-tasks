@@ -35,8 +35,9 @@ SSH = ["ssh", "-i", KEY, "-o", "BatchMode=yes", "-o", "ConnectTimeout=20", "-o",
 
 def call(request: dict, timeout: int = 120) -> dict:
     """Send one request; return ea's answer (raises on transport errors or an error answer)."""
-    proc = subprocess.run(SSH, input=json.dumps(request, ensure_ascii=False), capture_output=True, text=True,
+    proc = subprocess.run(SSH, input=json.dumps(request, ensure_ascii=False).encode("utf-8"), capture_output=True,
                           timeout=timeout, check=False)
+    proc.stdout, proc.stderr = proc.stdout.decode("utf-8", "replace"), proc.stderr.decode("utf-8", "replace")
     try:
         out = json.loads(proc.stdout.strip().splitlines()[-1])
     except (IndexError, json.JSONDecodeError):
@@ -56,7 +57,9 @@ def main() -> int:
     ap.add_argument("--dry", action="store_true")
     a = ap.parse_args()
     if a.batch:
-        req = json.load(sys.stdin if a.batch == "-" else open(a.batch, encoding="utf-8"))
+        # UTF-8 whatever the server's locale is (under sudo over ssh it is often ASCII).
+        raw = sys.stdin.buffer.read() if a.batch == "-" else open(a.batch, "rb").read()
+        req = json.loads(raw.decode("utf-8"))
     elif a.op:
         req = {"as": a.who, "actor": a.actor, "dry": a.dry, "ops": [{"op": a.op, **json.loads(a.args)}]}
     else:
@@ -66,7 +69,8 @@ def main() -> int:
     except RuntimeError as e:
         print(json.dumps({"error": str(e)}), file=sys.stderr)
         return 1
-    print(json.dumps(out if a.batch else out["results"][0]["r"], ensure_ascii=False, indent=1))
+    shown = json.dumps(out if a.batch else out["results"][0]["r"], ensure_ascii=False, indent=1)
+    sys.stdout.buffer.write((shown + "\n").encode("utf-8"))
     return 0
 
 

@@ -7,7 +7,8 @@ servers are the source of truth; update this copy whenever one of them changes.
 
 | Where | Installed as | What it does |
 |---|---|---|
-| ea | `/usr/local/sbin/pulse-ac-tasks` (forced command), `/usr/local/sbin/pulse-ac-tasks-root` | AC's task route. One JSON request in, fixed task operations inside AC's organisation only, never SQL from the caller; plus `chat` into channels listed in `/etc/pulse-ac-tasks.chat-allow` (today AC Leadership, for Align 3's release cards) |
+| ea | `/usr/local/sbin/pulse-ac-tasks` (forced command), `/usr/local/sbin/pulse-ac-tasks-root` | AC's task route. One JSON request in, fixed task operations inside AC's organisation only, never SQL from the caller; plus `project` (work_project_save), `check` (task_check_set) and `chat` into channels listed in `/etc/pulse-ac-tasks.chat-allow` (today AC Leadership, for Align 3's release cards) |
+| ea | `/root/ac-org-move/ac-pulse-contacts-import` (run once, AUT-2210) | AC contacts through Pulse's own API (`/api/v0/settings/types`, `/api/v0/contacts`) as the owner, on a short-lived organisation-switch session that is signed out at the end; used for the Sales X-Ray Play testers |
 | ea | `/usr/local/sbin/pulse-org-export`, `/usr/local/sbin/pulse-org-export-root` | AC-only export of the shared Pulse (`pulse-org-move.py export`) streamed as a tar; organisations listed in `/etc/pulse-org-export.allow` |
 | ea | `/usr/local/lib/pulse-org-move/pulse-org-move.py` | a copy of the move tool, which the export uses |
 | ea | `/home/pulsesync/.ssh/authorized_keys`, `/etc/sudoers.d/pulsesync` | one key per route from ac (187.127.163.77): `ac-pulse-org-export`, `ac-pulse-tasks`, `ac-pulse-forward`; the old `ac-pulse-sync` line is removed |

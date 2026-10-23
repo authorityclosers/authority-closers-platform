@@ -146,3 +146,58 @@ def test_chat_posts_only_to_allowlisted_channels(
         },
     )
     assert code == 0 and "pulse.chat_send(" in sent[0] and sent[0].rstrip().endswith("rollback;")
+
+
+cli = load("ac_pulse_tasks_cli", HERE / "ac" / "ac-pulse-tasks")
+
+
+def test_project_and_checklist_steps_use_pulse_functions(monkeypatch: pytest.MonkeyPatch) -> None:
+    code, answer, sent = run(
+        monkeypatch,
+        {
+            "dry": True,
+            "ops": [
+                {"op": "project", "fields": {"type": "internal", "name": "Play testing"}},
+                {
+                    "op": "check",
+                    "taskId": "6f1e2d3c-4b5a-4978-8a1b-0c2d3e4f5a6b",
+                    "key": "s1qawrio",
+                    "label": "Asked",
+                    "done": True,
+                },
+            ],
+        },
+    )
+    assert (
+        code == 0 and "pulse.work_project_save(" in sent[0] and "pulse.task_check_set(" in sent[0]
+    )
+
+
+def test_the_client_sends_and_reads_utf8_whatever_the_locale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, bytes] = {}
+
+    def fake_run(argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        seen["input"] = kwargs["input"]  # type: ignore[assignment]
+        out = json.dumps(
+            {"results": [{"i": 0, "op": "find", "r": [{"title": "Play · tester — ok"}]}]},
+            ensure_ascii=False,
+        )
+        return subprocess.CompletedProcess(argv, 0, out.encode("utf-8"), b"")
+
+    monkeypatch.setattr(cli.subprocess, "run", fake_run)
+    request = {"ops": [{"op": "find", "titleLike": "Play · tester — ok"}]}
+    monkeypatch.setattr(
+        sys,
+        "stdin",
+        types.SimpleNamespace(
+            buffer=io.BytesIO(json.dumps(request, ensure_ascii=False).encode("utf-8"))
+        ),
+    )
+    shown = io.BytesIO()
+    monkeypatch.setattr(sys, "stdout", types.SimpleNamespace(buffer=shown))
+    monkeypatch.setattr(sys, "argv", ["ac-pulse-tasks", "--batch", "-"])
+    assert cli.main() == 0
+    assert "Play · tester — ok" in seen["input"].decode("utf-8")
+    assert "Play · tester — ok" in shown.getvalue().decode("utf-8")

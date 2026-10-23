@@ -1,0 +1,95 @@
+#!/usr/bin/env python3
+"""EA server: add contacts to Authority Closers' Pulse through Pulse's own app API (owner order 23 Oct 2026, AUT-2210).
+
+Reads a JSON request on stdin: {"type": {label, plural, color, hint, fields}, "contacts": [{name, email, phone, notes,
+custom: {...}}]}. The calls are POST /api/v0/settings/types (only if the type is missing) and POST /api/v0/contacts
+(only for names not already of that type), at pulse.authorityclosers.com. Each call runs as the owner (@suyash) on a
+short-lived session that Pulse's own organisation switch makes for his account (pulse.acct_session, no password). The
+session is labelled with this card and signed out through the app at the end. The token is never printed or stored.
+Prints counts and the new contact ids only.
+"""
+from __future__ import annotations
+
+import hashlib
+import json
+import secrets
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+
+ORG = "350ce338-d796-4de2-b17b-07cbc337f27a"
+HOST = "pulse.authorityclosers.com"
+BASE = "http://127.0.0.1:4002"
+DEVICE = "Claude · Play tester import (AUT-2210)"
+PSQL = ["docker", "exec", "-i", "ea-postgres", "psql", "-U", "ea_admin", "-d", "pulse", "-X", "-q", "-A", "-t", "-v", "ON_ERROR_STOP=1"]
+
+
+def psql(sql: str) -> str:
+    out = subprocess.run(PSQL, input=sql, capture_output=True, text=True, check=False)
+    if out.returncode:
+        raise SystemExit(f"psql: {out.stderr.strip()[-300:]}")
+    return out.stdout.strip()
+
+
+class Api:
+    def __init__(self, token: str) -> None:
+        self.cookie = f"pulse_session={token}"
+
+    def call(self, method: str, path: str, body: object | None = None) -> object:
+        data = json.dumps(body).encode() if body is not None else None
+        req = urllib.request.Request(BASE + path, data=data, method=method, headers={
+            "Host": HOST, "X-Forwarded-Proto": "https", "X-Forwarded-Host": HOST, "Origin": f"https://{HOST}", "Referer": f"https://{HOST}/contacts", "Cookie": self.cookie,
+            "Content-Type": "application/json", "Accept": "application/json", "User-Agent": "ac-pulse-contacts-import"})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                return json.loads(r.read() or b"null")
+        except urllib.error.HTTPError as e:
+            raise RuntimeError(f"{method} {path}: HTTP {e.code} {e.read()[:300].decode(errors='replace')}") from None
+
+
+def main() -> int:
+    req = json.load(sys.stdin)
+    token = secrets.token_urlsafe(32)
+    digest = hashlib.sha256(token.encode()).hexdigest()
+    minted = psql(f"select pulse.acct_session((select id from pulse_priv.pulse_account where handle = 'suyash'), '{ORG}', "
+                  f"'{digest}', '{DEVICE}')::text;")
+    if not minted or minted == "null":
+        raise SystemExit("no session (is @suyash linked to his AC person?)")
+    api = Api(token)
+    made, kept, ids = 0, 0, {}
+    try:
+        types = api.call("GET", "/api/v0/types")["contact"]  # type: ignore[index]
+        t = next((x for x in types if x["label"].lower() == req["type"]["label"].lower()), None)
+        if not t:
+            t = api.call("POST", "/api/v0/settings/types", {"entity": "contact", "key": "", **req["type"]})
+            print("type created:", t["key"], "with", len(t.get("fields", [])), "fields")  # type: ignore[index]
+        else:
+            print("type kept:", t["key"])
+        key = t["key"]  # type: ignore[index]
+        existing = {(c["name"], c["contactType"]): c["id"] for c in api.call("GET", "/api/v0/contacts")["contacts"]}  # type: ignore[index]
+        for c in req["contacts"]:
+            if (c["name"], key) in existing:
+                kept += 1
+                ids[c["name"]] = existing[(c["name"], key)]
+                continue
+            body = {"name": c["name"], "contactType": key, "email": c.get("email") or "", "phone": c.get("phone") or "",
+                    "notes": c.get("notes") or "", **{f"custom.{k}": v for k, v in (c.get("custom") or {}).items()}}
+            ids[c["name"]] = api.call("POST", "/api/v0/contacts", body)["id"]  # type: ignore[index]
+            made += 1
+        print(json.dumps({"created": made, "already_there": kept, "ids": ids}, ensure_ascii=False))
+    finally:
+        try:
+            api.call("POST", "/api/v0/auth/sign-out", {})
+        except RuntimeError as e:
+            print("sign-out through the app failed:", e, "- using Pulse's own logout instead")
+            psql(f"select set_config('pulse.org_id', '{ORG}', false) \\g /dev/null\n"
+                 f"select pulse.auth_logout('staff', '{digest}');")
+        left = psql(f"select count(*) from pulse.login_session where org_id = '{ORG}' and token_hash = '{digest}' "
+                    "and revoked_at is null and expires_at > now();")
+        print("import session signed out" if left == "0" else f"WARNING: import session still open ({left})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

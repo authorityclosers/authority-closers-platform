@@ -23,6 +23,8 @@ Request: {"as": "suyash", "actor": "align-3", "dry": false, "ops": [{"op": "find
                                             assignee, made if missing) unless a task's notes already hold the marker
   close {marker, status, note?}             move every open task whose notes hold the marker
   state {markers: [...]}                    each marker's task: id, status, has a parent
+  project {id?, fields}                     pulse.work_project_save (e.g. {"type": "internal", "name": "…"})
+  check {taskId, key, label, done}          pulse.task_check_set: one checklist step on a task
   chat {channelId, body, clientId?}         pulse.chat_send into an allowlisted AC channel only
                                             (/etc/pulse-ac-tasks.chat-allow, one channel id per line; today the
                                             Leadership chat, for Align 3's release cards); pass a clientId (uuid) so a retry
@@ -104,6 +106,9 @@ OPS = {
         'parent', t.parent_id is not null)), '[]')
       from jsonb_array_elements_text(p->'markers') m(marker)
       join pulse.task t on t.deleted_at is null and position(m.marker in coalesce(t.notes, '')) > 0""",
+    "project": """select to_json(pulse.work_project_save(nullif(p->>'id', '')::uuid, p->'fields'))""",
+    "check": """select to_json(pulse.task_check_set((p->>'taskId')::uuid, p->>'key', p->>'label',
+        coalesce((p->>'done')::boolean, false)))""",
     "chat": """select json_build_object('id', pulse.chat_send((p->>'channelId')::uuid, p->>'body', null::uuid, '[]'::jsonb,
         coalesce(nullif(p->>'clientId', '')::uuid, gen_random_uuid()), null::uuid))""",
 }
