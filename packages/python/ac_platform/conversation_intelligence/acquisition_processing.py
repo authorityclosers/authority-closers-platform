@@ -14,9 +14,8 @@ from ac_platform.conversation_intelligence.contracts import QuoteAcceptance, Run
 from ac_platform.conversation_intelligence.guest_models import ConversationProcessingPrincipal
 from ac_platform.conversation_intelligence.guest_ownership import GuestOwnership
 from ac_platform.conversation_intelligence.intake import IntakePolicy
-from ac_platform.conversation_intelligence.limits import MAX_AUDIO_BYTES
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS, MAX_AUDIO_BYTES
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor
-from ac_platform.conversation_intelligence.signals import MAX_SECONDS
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Organisation
 
@@ -76,7 +75,7 @@ def upload_policy(policy: IntakePolicy) -> dict[str, Any]:
         "privacy_revision": policy.privacy_revision,
         "recipe_revision": policy.acoustic_recipe,
         "maximum_file_bytes": MAX_AUDIO_BYTES,
-        "maximum_call_seconds": MAX_SECONDS,
+        "maximum_call_seconds": CALL_LIMIT_SECONDS,
         "max_cost_paise": 0,
         "retention_days": policy.retention_days,
         "retention_mode": policy.retention_mode,

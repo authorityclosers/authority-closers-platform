@@ -34,14 +34,16 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationVisitorClaim,
 )
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 from ac_platform.conversation_intelligence.minute_account_admin import audited_admin_grants
 from ac_platform.conversation_intelligence.models import ConversationMinuteAccount
 
 LEGACY_GRANT_PREFIX = "legacy-grant:"
-# Until the plans table drives admission (S2), the per-call limits are the
-# decided catalogue values; grant-only accounts keep the measured-source cap.
-PER_CALL_DEFAULT_SECONDS = 6000
-PLAN_PER_CALL_SECONDS = {"personal": 90 * 60, "organisation": 120 * 60}
+# Until the plans table drives admission (S2), every plan's per-call limit is the
+# one call-length limit (limits.CALL_LIMIT_SECONDS: owner, 23 Oct 2026), and so is a
+# grant-only account's.
+PER_CALL_DEFAULT_SECONDS = CALL_LIMIT_SECONDS
+PLAN_PER_CALL_SECONDS = {"personal": CALL_LIMIT_SECONDS, "organisation": CALL_LIMIT_SECONDS}
 _SETTLED_LEGACY_STATES = {"settled", "released", "reconciliation_required"}
 
 

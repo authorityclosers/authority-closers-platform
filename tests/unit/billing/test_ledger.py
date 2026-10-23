@@ -38,6 +38,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationVisitor,
     ConversationVisitorClaim,
 )
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 from ac_platform.db.models import model_metadata
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
@@ -650,7 +651,7 @@ async def test_project_visitor_gives_the_trial_lot_only(state: SimpleNamespace) 
     assert projected.granted_seconds == 3600
     assert projected.committed_seconds == 0
     assert projected.plan_key == TRIAL_LOT_ID
-    assert projected.per_call_seconds == 6000
+    assert projected.per_call_seconds == CALL_LIMIT_SECONDS
 
 
 async def test_project_visitor_counts_its_own_uses_only(state: SimpleNamespace) -> None:
@@ -678,7 +679,7 @@ async def test_project_person_without_account_or_legacy_grants_gives_the_trial_l
     assert [item.lot.lot_id for item in projected.projection.positions] == [TRIAL_LOT_ID]
     assert projected.available_seconds == 3600
     assert projected.plan_key == TRIAL_LOT_ID
-    assert projected.per_call_seconds == 6000
+    assert projected.per_call_seconds == CALL_LIMIT_SECONDS
     assert state.db.scalar(select(func.count()).select_from(BillingAccount)) == 0
 
     # Mirroring creates the account under the caller's lock, still trial only.
@@ -764,7 +765,7 @@ async def test_project_person_under_v2_uses_the_v2_trial(state: SimpleNamespace)
 
 @pytest.mark.parametrize(
     ("plan_key", "expected"),
-    [("personal", 90 * 60), ("organisation", 120 * 60)],
+    [("personal", CALL_LIMIT_SECONDS), ("organisation", CALL_LIMIT_SECONDS)],
 )
 async def test_per_call_limit_follows_the_plan_in_effect(
     state: SimpleNamespace, plan_key: str, expected: int
@@ -793,7 +794,7 @@ async def test_per_call_limit_follows_the_plan_in_effect(
 
 async def test_per_call_limit_on_trial_follows_the_trial_policy(state: SimpleNamespace) -> None:
     account = await personal(state)
-    for version, expected in (("v1", 6000), ("v2", 3600)):
+    for version, expected in (("v1", CALL_LIMIT_SECONDS), ("v2", CALL_LIMIT_SECONDS)):
         ledger = BillingLedger(state.async_db, clock=lambda: T0, trial_policy=TrialPolicy(version))
         projected = await ledger.project_person(
             tenant_id=state.tenant, person_id=state.person, now=T0
@@ -806,7 +807,7 @@ async def test_per_call_limit_on_trial_follows_the_trial_policy(state: SimpleNam
 async def test_per_call_limit_for_grant_only_accounts_is_the_default(
     state: SimpleNamespace,
 ) -> None:
-    assert PER_CALL_DEFAULT_SECONDS == 6000
+    assert PER_CALL_DEFAULT_SECONDS == CALL_LIMIT_SECONDS
     account = await personal(state)
     # The use predates the grant, so only the trial can absorb it.
     usage(state, 3600, at=day(-0.5))

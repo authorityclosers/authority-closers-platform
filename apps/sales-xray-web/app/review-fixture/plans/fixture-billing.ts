@@ -24,6 +24,7 @@ import {
   type Refund,
   type Subscription,
 } from "../../billing/contract";
+import { CALL_LIMIT_SECONDS } from "../../call-limit";
 
 const STORE = "ac.xray.fixture-billing";
 export const FIXTURE_PAY_PATH = "/review-fixture/plans/pay";
@@ -223,11 +224,7 @@ export const fixtureBilling: BillingClient = {
         committed_seconds: (store.minutesTotal - store.minutesLeft) * 60,
         available_seconds: store.minutesLeft * 60,
       },
-      longest_call_seconds: current
-        ? current.plan_key === "organisation"
-          ? 7200
-          : 5400
-        : 3600,
+      longest_call_seconds: CALL_LIMIT_SECONDS,
     });
   },
   async readUsage() {

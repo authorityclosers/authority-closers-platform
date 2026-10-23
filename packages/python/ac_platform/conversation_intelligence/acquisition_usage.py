@@ -23,6 +23,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.conversation_intelligence.canary import recording_is_canary
 from ac_platform.conversation_intelligence.entitlements import MinuteAccount
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 from ac_platform.conversation_intelligence.minute_account_admin import audited_admin_grant_seconds
 from ac_platform.conversation_intelligence.models import (
     ConversationMinuteAccount,
@@ -34,12 +35,16 @@ from ac_platform.conversation_intelligence.submission_label_models import (
 )
 
 ALLOWANCE_SECONDS = 3600
-LONGEST_CALL_SECONDS = 7200
+# The longest call any plan analyses (limits.CALL_LIMIT_SECONDS).
+LONGEST_CALL_SECONDS = CALL_LIMIT_SECONDS
+# A measured source receipt's technical ceiling: the database's duration bound.
+RECEIPT_CEILING_SECONDS = 7200
 TRIAL_ALLOWANCE_INSUFFICIENT_MESSAGE = (
     "Your remaining trial minutes are not enough for this recording. Contact AC for more access."
 )
 LONGEST_CALL_EXCEEDED_MESSAGE = (
-    "This recording is longer than the longest call your plan allows. Split it and try again."
+    f"This recording is longer than {CALL_LIMIT_SECONDS // 60} minutes, the longest call "
+    "Sales X-Ray analyses. Split it and try again."
 )
 
 

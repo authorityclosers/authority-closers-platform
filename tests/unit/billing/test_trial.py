@@ -9,6 +9,7 @@ import pytest
 
 from ac_platform.billing.projection import LotKind
 from ac_platform.billing.trial import TRIAL_LOT_ID, TrialPolicy
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 
 T0 = datetime(2026, 10, 1, 12, tzinfo=UTC)
 SWITCH = datetime(2026, 10, 15, tzinfo=UTC)
@@ -23,7 +24,7 @@ def test_v1_is_the_shared_quota_with_no_end() -> None:
     assert policy.version == "v1"
     assert policy.active_version(T0) == "v1"
     assert policy.seconds(T0) == 3600
-    assert policy.per_call_seconds(T0) == 6000
+    assert policy.per_call_seconds(T0) == CALL_LIMIT_SECONDS
 
     lot = policy.lot(first_use_at=hours(-48), now=T0)
     assert lot.lot_id == TRIAL_LOT_ID
@@ -65,12 +66,12 @@ def test_v2_switch_keeps_v1_before_the_instant_and_never_starts_before_it() -> N
 
     assert policy.active_version(before) == "v1"
     assert policy.seconds(before) == 3600
-    assert policy.per_call_seconds(before) == 6000
+    assert policy.per_call_seconds(before) == CALL_LIMIT_SECONDS
     v1_lot = policy.lot(first_use_at=T0, now=before)
     assert (v1_lot.seconds, v1_lot.expires_at, v1_lot.valid_from) == (3600, None, T0)
 
     assert policy.active_version(SWITCH) == "v2"
-    assert policy.per_call_seconds(SWITCH) == 3600
+    assert policy.per_call_seconds(SWITCH) == CALL_LIMIT_SECONDS
     at_switch = policy.lot(first_use_at=T0, now=SWITCH)
     assert at_switch.seconds == 6000
     # The first use predates the switch: the window opens at the switch, not retroactively.
