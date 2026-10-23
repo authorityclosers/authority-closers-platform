@@ -55,7 +55,7 @@ it("falls back to the six kinds, without counts until they arrive", () => {
   expect(stageTabs(null, null)).toEqual([
     { key: "open", label: "All leads", count: undefined },
     { key: "new", label: "New", count: undefined },
-    { key: "not_connected", label: "Not contacted", count: undefined },
+    { key: "not_connected", label: "Couldn't reach", count: undefined },
     { key: "follow_up", label: "Follow up", count: undefined },
     { key: "interested", label: "Interested", count: undefined },
     { key: "won", label: "Won", count: undefined },

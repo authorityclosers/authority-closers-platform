@@ -30,7 +30,7 @@ const OPEN_KINDS: Kind[] = ["new", "not_connected", "follow_up", "interested"];
 /** Plain words for a kind, when a business has several stages of it. */
 export const KIND_WORDS: Record<Kind, string> = {
   new: "New",
-  not_connected: "Not contacted",
+  not_connected: "Couldn't reach",
   follow_up: "Follow up",
   interested: "Interested",
   won: "Won",

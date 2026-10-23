@@ -440,7 +440,9 @@ function Funnel({
               <span className={styles.funnelTrack} aria-hidden="true">
                 <span
                   className={styles.funnelBar}
-                  style={{ width: `${Math.max(2, (count / most) * 100)}%` }}
+                  style={{
+                    width: count ? `${Math.max(2, (count / most) * 100)}%` : 0,
+                  }}
                 />
               </span>
               <strong className={styles.funnelCount}>{count}</strong>

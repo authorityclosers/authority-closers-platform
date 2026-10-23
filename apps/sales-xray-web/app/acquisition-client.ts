@@ -756,10 +756,10 @@ export const submissionPath = (id: string) => {
   return `/submissions/${id}`;
 };
 
-/** How Calls words a lead's stage (New, Not contacted, …), for the Report too. */
+/** How Calls words a lead's stage (New, Couldn't reach, …), for the Report too. */
 export const CALL_LEAD_STAGE_WORDS: Record<CallLead["stage"], string> = {
   new: "New",
-  not_connected: "Not contacted",
+  not_connected: "Couldn't reach",
   follow_up: "Follow up",
   interested: "Interested",
   won: "Won",
