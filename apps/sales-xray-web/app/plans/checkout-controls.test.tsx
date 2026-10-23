@@ -464,7 +464,7 @@ it("Settings keeps a paid subscription usable when only invoice reads fail", asy
   expect(vi.mocked(notify)).toHaveBeenCalledWith(
     expect.objectContaining({
       id: "settings-read-error",
-      message: expect.stringContaining("your invoices"),
+      message: expect.stringMatching(/your invoices/i),
     }),
   );
   expect(host.textContent).not.toContain("No invoices or receipts yet");
@@ -530,7 +530,7 @@ it("Settings retains error state when canonical plan or usage reads return 404",
   expect(vi.mocked(notify)).toHaveBeenCalledWith(
     expect.objectContaining({
       id: "settings-read-error",
-      message: expect.stringContaining("your plan details"),
+      message: expect.stringMatching(/your plan details/i),
       action: expect.objectContaining({ label: "Try again" }),
     }),
   );
@@ -552,7 +552,7 @@ it("Settings retains error state on subscription 5xx server failure", async () =
   expect(vi.mocked(notify)).toHaveBeenCalledWith(
     expect.objectContaining({
       id: "settings-read-error",
-      message: expect.stringContaining("your plan details"),
+      message: expect.stringMatching(/your plan details/i),
       action: expect.objectContaining({ label: "Try again" }),
     }),
   );

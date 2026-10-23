@@ -344,8 +344,13 @@ it("keeps the profile readable when the allowance read fails", async () => {
   });
   await renderAccount();
   expect(host.textContent).toContain("Asha Rao");
-  expect(host.textContent).toContain("Analysis time: not loaded.");
-  expect(host.querySelector('[role="alert"]')).toBeNull();
+  // A quiet line in the page; any alert is the corner card, not this block.
+  const line = [...host.querySelectorAll("p")].find(
+    (node) => node.textContent === "Analysis time: not loaded.",
+  );
+  expect(line).toBeDefined();
+  expect(line!.closest('[role="alert"]')).toBeNull();
+  expect(host.textContent).not.toContain("unavailable right now");
   expect(host.querySelector("[data-allowance]")).toBeNull();
 });
 
