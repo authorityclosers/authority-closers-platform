@@ -107,10 +107,10 @@ async function mount() {
   return root;
 }
 
-const tracked = (spy: ReturnType<typeof vi.spyOn>, name: string) =>
+const tracked = (spy: { mock: { calls: unknown[][] } }, name: string) =>
   spy.mock.calls
-    .filter((call) => call[0] === name)
-    .map((call) => call[1] as Record<string, unknown>);
+    .filter((call: unknown[]) => call[0] === name)
+    .map((call: unknown[]) => call[1] as Record<string, unknown>);
 
 it("times a tap on a lead row to the screen settling", async () => {
   const track = vi.spyOn(telemetry, "track");
