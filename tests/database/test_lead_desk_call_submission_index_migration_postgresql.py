@@ -104,6 +104,7 @@ def test_rollback_without_call_history_drops_the_index_concurrently(
             text("SELECT count(*) FROM lead_desk_events WHERE kind = 'call'")
         ).scalar_one()
         assert calls == 0  # the module's database holds no call history
+        connection.commit()
         with Operations.context(MigrationContext.configure(connection)):
             migration().downgrade()
         connection.commit()
