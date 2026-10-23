@@ -18,6 +18,7 @@ import { useWorkspaceAccess } from "../workspace-access";
 import { AnimatedCountUp } from "./animated-count-up";
 import styles from "./plans.module.css";
 import { formatPurchaseMinutes } from "./purchase-time";
+import { askFeedback } from "../feedback/ask";
 
 const POLL_MS = 3_000;
 const POLL_FOR_MS = 60_000;
@@ -93,6 +94,14 @@ function OrderReturnState({
       .catch(() => {});
     return () => controller.abort();
   }, [authenticated, client, paidId]);
+
+  // Reviews engine (owner, 23 Oct 2026): how buying went, once per order.
+  useEffect(() => {
+    if (!paidId) return;
+    askFeedback("plan_purchase", {
+      subject: `order:${paidId.replace(/[^A-Za-z0-9_.:-]/g, "-")}`.slice(0, 64),
+    });
+  }, [paidId]);
 
   useEffect(() => {
     if (!orderId || !authenticated) return;

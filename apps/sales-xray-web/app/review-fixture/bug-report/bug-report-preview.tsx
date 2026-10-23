@@ -10,6 +10,8 @@
  * `?view=typed`: the same with words typed and "This stops my work" on.
  * `?view=card`: an error corner card with its Report button.
  * `?view=private`: opened on a call's Report: no picture is taken.
+ * `?view=sent`: after Send report: "We'll tell you when it's fixed".
+ * `?view=mine`: Your reports, one being fixed and one fixed.
  */
 
 import { Suspense, useEffect, useState } from "react";
@@ -31,9 +33,35 @@ function install() {
   window.fetch = async (input, init) => {
     const url = String(input instanceof Request ? input.url : input);
     const path = url.replace(/^https?:\/\/[^/]+/, "");
+    if (path.startsWith("/v1/bug-reports/mine"))
+      return new Response(
+        JSON.stringify({
+          items: [
+            {
+              bug_id: "00000000-0000-4000-8000-000000000701",
+              created_at: new Date(Date.now() - 3600_000).toISOString(),
+              words: "Tapped Call on Asha Fictional and nothing happened.",
+              status: "in_progress",
+              status_at: new Date(Date.now() - 1800_000).toISOString(),
+            },
+            {
+              bug_id: "00000000-0000-4000-8000-000000000702",
+              created_at: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+              words: "The Leads list was empty after signing in.",
+              status: "fixed",
+              status_at: new Date(Date.now() - 86_400_000).toISOString(),
+            },
+          ],
+        }),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
     if (path.startsWith("/v1/bug-reports"))
       return new Response(
-        JSON.stringify({ bug_id: "fixture", screenshot: "kept" }),
+        JSON.stringify({
+          bug_id: "fixture",
+          screenshot: "kept",
+          voice: "none",
+        }),
         { status: 201, headers: { "content-type": "application/json" } },
       );
     if (path.startsWith("/v1/"))
@@ -94,7 +122,18 @@ function Preview() {
         openBugReport();
         await pause(100);
       }
-      if (view !== "typed") return;
+      const press = (label: string) =>
+        Array.from(
+          document.querySelectorAll<HTMLButtonElement>("dialog button"),
+        )
+          .find((button) => button.textContent?.trim() === label)
+          ?.click();
+      if (view === "mine") {
+        await pause(400);
+        press("Your reports");
+        return;
+      }
+      if (view !== "typed" && view !== "sent") return;
       await pause(300);
       if (stopped) return;
       const area =
@@ -109,9 +148,10 @@ function Preview() {
         );
         area.dispatchEvent(new Event("input", { bubbles: true }));
       }
-      Array.from(document.querySelectorAll<HTMLButtonElement>("dialog button"))
-        .find((button) => button.textContent?.trim() === "This stops my work")
-        ?.click();
+      press("This stops my work");
+      if (view !== "sent") return;
+      await pause(400);
+      document.querySelector<HTMLFormElement>("dialog form")?.requestSubmit();
     })();
     return () => {
       stopped = true;
@@ -137,6 +177,25 @@ function Preview() {
     >
       <AcquisitionShell authenticated active="dashboard">
         <PageHeader title="Home" titleInBar />
+        {/* Something on the screen, so its picture shows something. */}
+        <section
+          aria-label="Today"
+          style={{ display: "grid", gap: 12, padding: 16 }}
+        >
+          <h2>Today</h2>
+          {[
+            ["Asha Fictional", "Call back · 4:30 pm"],
+            ["Rahul Example", "New lead · Website"],
+            ["Meera Sample", "Interested · Site visit"],
+            ["Kabir Demo", "No answer · try again"],
+          ].map(([name, line]) => (
+            <p key={name} style={{ margin: 0 }}>
+              <b>{name}</b>
+              <br />
+              <small>{line}</small>
+            </p>
+          ))}
+        </section>
       </AcquisitionShell>
     </WorkspaceAccessContext.Provider>
   );

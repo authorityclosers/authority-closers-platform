@@ -28,6 +28,7 @@ import {
   LayoutGrid,
   LogOut,
   Megaphone,
+  MessageSquareHeart,
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
@@ -92,6 +93,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   catalogue: LayoutGrid,
   offers: Sparkles,
   bugs: Bug,
+  feedback: MessageSquareHeart,
 };
 
 export function AcMark({ size = 20 }: { size?: number }) {

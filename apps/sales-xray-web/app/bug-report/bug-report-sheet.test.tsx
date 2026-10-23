@@ -14,6 +14,18 @@ vi.mock("./device", () => ({
     device: { os: "Android 14", viewport: "390x844" },
   }),
 }));
+const phone = { app: false };
+const askScreenshot = vi.fn<() => Promise<Blob | null>>(async () => null);
+vi.mock("../leads/native-phone", () => ({
+  inPhoneApp: () => phone.app,
+  askScreenshot: () => askScreenshot(),
+}));
+const keep = vi.fn(async () => false);
+vi.mock("./outbox", () => ({
+  keepNow: (kind: string, id: string, body: unknown) =>
+    keep(...([{ id, kind, body }] as unknown as [])),
+  flush: async () => 0,
+}));
 
 import { useRegisteredCommands } from "../ui/command-registry";
 import { resetBackCloseForTests } from "../ui/back-close";
@@ -54,6 +66,11 @@ const pause = (ms: number) =>
 
 beforeEach(async () => {
   notify.mockReset();
+  keep.mockReset();
+  keep.mockResolvedValue(false);
+  phone.app = false;
+  askScreenshot.mockReset();
+  askScreenshot.mockResolvedValue(null);
   captureScreen.mockReset();
   clearRecentErrors();
   if (!URL.createObjectURL) {
@@ -169,15 +186,38 @@ it("sends words, the screen, device, recent errors and the picture, then thanks"
     screenshot: { content_type: "image/webp", data: "AQID", source: "auto" },
   });
   expect(body.command_id).toMatch(/^[0-9a-f-]{36}$/);
-  expect(notify).toHaveBeenCalledWith(
-    expect.objectContaining({
-      tone: "success",
-      title: "Thanks. The team has your report.",
-    }),
+  expect(body.voice).toBeNull();
+  // The sheet stays to say what happens next.
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "Sent. We'll tell you when it's fixed.",
   );
-  // The sheet slides away, then its dialog closes.
+  expect(notify).not.toHaveBeenCalled();
+  await act(async () => button("Done").click());
   await pause(600);
   expect(document.querySelector("dialog")?.open).toBe(false);
+});
+
+it("with no connection, keeps the report on the phone and says it will go later", async () => {
+  captureScreen.mockResolvedValue(null);
+  keep.mockResolvedValue(true);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>().mockRejectedValue(new TypeError("Failed to fetch")),
+  );
+  await act(async () => openBugReport());
+  await pause(450);
+  await act(async () => type("Leads list is blank"));
+  await submit();
+  expect(keep).toHaveBeenCalledWith(
+    expect.objectContaining({
+      kind: "bug",
+      body: expect.objectContaining({ words: "Leads list is blank" }),
+    }),
+  );
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "Saved on this phone.",
+  );
+  expect(notify).not.toHaveBeenCalled();
 });
 
 it("keeps everything when sending fails and offers Send again in a corner card", async () => {
@@ -223,6 +263,37 @@ it("keeps everything when sending fails and offers Send again in a corner card",
     "The note vanished\n\n(About: Couldn't save the note, ref req-77aa)",
   );
   expect(body.screenshot).toBeNull();
+});
+
+it("in the phone app, uses the phone's own picture of the screen, taken before the sheet opens", async () => {
+  phone.app = true;
+  const shot = new Blob([new Uint8Array([9, 9, 9])], { type: "image/jpeg" });
+  askScreenshot.mockResolvedValue(shot);
+  await act(async () => openBugReport());
+  // The sheet waits for the phone's picture, so the picture is of the screen, not the sheet.
+  expect(document.querySelector("dialog")?.open ?? false).toBe(false);
+  await pause(400); // the phone answers and the sheet opens
+  await pause(60); // the sheet shows the phone's picture
+  expect(askScreenshot).toHaveBeenCalledTimes(1);
+  expect(captureScreen).not.toHaveBeenCalled();
+  expect(document.querySelector("dialog")?.open).toBe(true);
+  expect(document.querySelector("dialog img")?.getAttribute("alt")).toContain(
+    "Picture of the screen",
+  );
+});
+
+it("in the phone app, falls back to copying the page when the phone takes no picture", async () => {
+  phone.app = true;
+  askScreenshot.mockResolvedValue(null);
+  captureScreen.mockResolvedValue(
+    new Blob([new Uint8Array([1])], { type: "image/webp" }),
+  );
+  await act(async () => openBugReport());
+  await pause(400); // the phone answers nothing and the sheet opens
+  await pause(450); // the page is copied instead
+  expect(askScreenshot).toHaveBeenCalledTimes(1);
+  expect(captureScreen).toHaveBeenCalledTimes(1);
+  expect(document.querySelector("dialog img")).not.toBeNull();
 });
 
 it("takes no picture of screens that can show calls or messages", async () => {

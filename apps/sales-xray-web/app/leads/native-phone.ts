@@ -168,6 +168,45 @@ function ask<T>(
   });
 }
 
+/**
+ * The Play Store's own rating card (In-App Review), after a good moment
+ * (owner, 23 Oct 2026). The phone app asks Google, whose quota decides
+ * whether it shows; builds without it answer nothing. Never after a bad
+ * rating.
+ */
+export async function askStoreReview(): Promise<boolean> {
+  if (!inPhoneApp()) return false;
+  try {
+    const raw = await ask<{ shown?: boolean }>("review", {}, 10_000);
+    return raw?.shown === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A picture of the app's screen taken by the phone itself, for a bug report
+ * (more faithful than copying the page in the browser). Asked for before
+ * the report sheet opens; null when the app build cannot (older builds) or
+ * it takes longer than two seconds.
+ */
+export async function askScreenshot(): Promise<Blob | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    const raw = await ask<{ data?: string; type?: string }>(
+      "screenshot",
+      { format: "jpeg", quality: 82, maxEdge: 1600 },
+      2_000,
+    );
+    const type = raw?.type === "image/png" ? "image/png" : "image/jpeg";
+    if (typeof raw?.data !== "string" || raw.data.length < 100) return null;
+    const bytes = Uint8Array.from(atob(raw.data), (c) => c.charCodeAt(0));
+    return new Blob([bytes], { type });
+  } catch {
+    return null;
+  }
+}
+
 const text = (value: unknown) => (typeof value === "string" ? value : "");
 const count = (value: unknown) =>
   typeof value === "number" && Number.isFinite(value) ? value : 0;

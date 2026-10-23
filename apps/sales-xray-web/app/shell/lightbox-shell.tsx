@@ -49,6 +49,7 @@ import {
 import { useBranding } from "./branding-store";
 import { AddSheet } from "./add-sheet";
 import { BugReportHost } from "../bug-report/bug-report-sheet";
+import { FeedbackHost } from "../feedback/feedback-prompt";
 import { useAppRouter } from "./app-router";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
@@ -1958,6 +1959,7 @@ function LightboxShellFrame({
         />
       )}
       {guest ? null : <BugReportHost />}
+      {guest ? null : <FeedbackHost />}
       {guest ? null : (
         <AddSheet
           open={addOpen}

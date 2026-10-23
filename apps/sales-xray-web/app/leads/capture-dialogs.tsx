@@ -42,6 +42,7 @@ import {
   type PickedContact,
   type SharedLead,
 } from "./leads-client";
+import { askFeedback } from "../feedback/ask";
 import { PASTED_FILE, pastedFile, readPasted } from "./paste-import";
 import styles from "./leads.module.css";
 
@@ -806,6 +807,8 @@ export function ImportDialog({
         ),
       );
       onDone();
+      // Reviews engine: how the first import went, asked once.
+      askFeedback("first_import", { subject: "first-import" });
     } catch (reason) {
       setError(
         reason instanceof LeadsError

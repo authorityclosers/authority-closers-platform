@@ -60,6 +60,7 @@ import { createPortal } from "react-dom";
 import type { Allowance } from "../acquisition-client";
 import { useSalesXraySignOut } from "../account-navigation";
 import { openBugReport } from "../bug-report/open";
+import { UpdateRating } from "../feedback/update-rating";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { phoneCallsOpener, useInApp } from "../in-app-client";
 import { inPhoneApp } from "../leads/native-phone";
@@ -653,6 +654,10 @@ export function SettingsMenu({
                 <li key={item}>{item}</li>
               ))}
             </ul>
+            {/* Reviews engine: a one-tap rating of the newest update. */}
+            {index === 0 && !entry.draft ? (
+              <UpdateRating update={entry.key} />
+            ) : null}
           </li>
         ))}
       </ol>

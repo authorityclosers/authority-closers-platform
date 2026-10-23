@@ -186,7 +186,8 @@ const config: NextConfig = {
                 { key: "X-Frame-Options", value: "DENY" },
                 {
                   key: "Permissions-Policy",
-                  value: "camera=(), microphone=(), geolocation=()",
+                  // The bug reporter's voice note records here (owner, 23 Oct 2026).
+                  value: "camera=(), microphone=(self), geolocation=()",
                 },
                 { key: "Cache-Control", value: "no-store" },
               ],

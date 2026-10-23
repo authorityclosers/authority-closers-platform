@@ -117,8 +117,30 @@ export default async function BugPage({
       />
       <div className={styles.detail}>
         <div className={styles.main}>
-          <Panel title="What they said">
+          <Panel
+            title="What they said"
+            sub={
+              bug.fromFeedback
+                ? `From feedback: "Not good" after ${bug.fromFeedback.about}`
+                : undefined
+            }
+          >
             <p className={styles.said}>{bug.words}</p>
+            {bug.voice ? (
+              <div className={styles.voice}>
+                <small className={kitStyles.muted}>
+                  Voice note, {bug.voice.seconds} s
+                </small>
+                {/* A private, same-origin recording from the tester. */}
+                <audio
+                  controls
+                  preload="none"
+                  src={`/v1/admin/bugs/${bug.id}/voice`}
+                >
+                  <track kind="captions" />
+                </audio>
+              </div>
+            ) : null}
           </Panel>
           <Panel
             title="Picture of the screen"

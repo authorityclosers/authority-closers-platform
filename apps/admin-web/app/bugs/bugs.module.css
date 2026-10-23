@@ -68,6 +68,17 @@
   overflow-wrap: anywhere;
 }
 
+.voice {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.voice audio {
+  width: 100%;
+  max-width: 420px;
+}
+
 .shot {
   display: block;
   max-width: 420px;

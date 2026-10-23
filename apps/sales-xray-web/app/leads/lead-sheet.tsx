@@ -121,6 +121,7 @@ import {
   type SimulationStep,
 } from "./simulated-call";
 import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
+import { askFeedback } from "../feedback/ask";
 import { DeleteLeadsSheet, type Doomed } from "./delete-leads";
 import { Sheet } from "./sheet-frame";
 import deleteStyles from "./delete-leads.module.css";
@@ -411,6 +412,8 @@ export function CallOutcome({
       });
       buzz("done");
       after(saved);
+      // Reviews engine (owner, 23 Oct 2026): asks later, when nothing is in the way.
+      askFeedback("call_outcome");
     } catch (failure) {
       setError(
         failure instanceof LeadsError

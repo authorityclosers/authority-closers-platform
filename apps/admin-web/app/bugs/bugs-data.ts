@@ -189,6 +189,9 @@ export type BugDetail = BugSummary & {
   workspaceRole: string | null;
   userAgent: string;
   screenshot: { source: string; bytes: number } | null;
+  voice: { seconds: number; contentType: string } | null;
+  /** Set when a "Not good" with words became this report. */
+  fromFeedback: { about: string; moment: string } | null;
   errors: ClientError[];
   history: BugEvent[];
 };
@@ -283,6 +286,18 @@ export function normalizeDetail(raw: unknown): BugDetail {
       ? {
           source: read.string(screenshot.source),
           bytes: read.number(screenshot.bytes),
+        }
+      : null,
+    voice: read.optionalString(read.object(body.voice).content_type)
+      ? {
+          seconds: read.number(read.object(body.voice).seconds),
+          contentType: read.string(read.object(body.voice).content_type),
+        }
+      : null,
+    fromFeedback: read.optionalString(read.object(body.from_feedback).moment)
+      ? {
+          moment: read.string(read.object(body.from_feedback).moment),
+          about: read.string(read.object(body.from_feedback).about, "a moment"),
         }
       : null,
     errors: read.array(body.client_errors).map((item) => {
