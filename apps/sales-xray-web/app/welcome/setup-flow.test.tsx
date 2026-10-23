@@ -136,9 +136,10 @@ async function settle() {
 }
 
 async function press(name: string) {
-  const button = Array.from(host.querySelectorAll("button")).find((item) =>
-    item.textContent?.includes(name),
-  );
+  // The last match: a step's own action comes after the choice it names.
+  const button = Array.from(host.querySelectorAll("button"))
+    .filter((item) => item.textContent?.includes(name))
+    .at(-1);
   if (!button) throw new Error(`Missing button: ${name}`);
   await act(async () => button.click());
   await settle();

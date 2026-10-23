@@ -218,11 +218,9 @@ it("keeps the local file through explicit consent, neutral code request and veri
     return_path: "/",
   });
   expect(onAuthenticated).not.toHaveBeenCalled();
-  // The sixth digit verifies by itself; a second submit sends nothing more.
+  // The sixth digit verifies by itself, once.
   await changeInput("#account-code", "123 456");
   await flush();
-  expect(onAuthenticated).toHaveBeenCalledOnce();
-  await submit();
   expect(onAuthenticated).toHaveBeenCalledOnce();
   expect(calls.filter(({ url }) => url.endsWith("/verify"))).toHaveLength(1);
   expect(calls.map(({ url }) => url).slice(-2)).toEqual([

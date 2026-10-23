@@ -20,6 +20,7 @@ import {
   UserPlus,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 
 import { readAccountProfile } from "../account-profile-client";
@@ -160,7 +161,7 @@ function leave(
   href: string,
 ) {
   if (personId) markSetup(personId, mark);
-  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- the app frame must read the workspace chosen here.
+  // A full load: the app frame must read the workspace chosen here.
   window.location.assign(href);
 }
 
@@ -401,9 +402,9 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
                 >
                   Try again
                 </button>
-                <a className={styles.secondary} href="/">
+                <Link className={styles.secondary} href="/">
                   Go to Home
-                </a>
+                </Link>
               </div>
             </>
           ) : (

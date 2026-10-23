@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
 import { readCallSummary } from "../dashboard/dashboard-data";
@@ -20,7 +19,6 @@ import {
  */
 export function FirstRunGate() {
   const access = useWorkspaceAccess();
-  const router = useRouter();
   const personId =
     access?.authenticated === true && access.status === "ready"
       ? access.context?.personId
@@ -42,12 +40,13 @@ export function FirstRunGate() {
         if (controller.signal.aborted) return;
         forgetFreshSignIn();
         const calls = summary?.total ?? null;
-        if (needsSetup({ organisations, calls })) router.replace(WELCOME_PATH);
+        if (needsSetup({ organisations, calls }))
+          window.location.replace(WELCOME_PATH);
         else if (calls !== null) markSetup(personId, "not-needed");
       })
       .catch(() => undefined);
     return () => controller.abort();
-  }, [personId, organisations, router]);
+  }, [personId, organisations]);
 
   return null;
 }
