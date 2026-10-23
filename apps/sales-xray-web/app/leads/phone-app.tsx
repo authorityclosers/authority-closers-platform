@@ -123,7 +123,7 @@ export function PhoneAppDialog({
                   {android ? null : (
                     <p className={styles.hint}>
                       Scan with your Android phone&apos;s camera, or open Sales
-                      Xray on the phone and download it there.
+                      X-Ray on the phone and download it there.
                     </p>
                   )}
                   <a className={styles.downloadButton} href={link}>

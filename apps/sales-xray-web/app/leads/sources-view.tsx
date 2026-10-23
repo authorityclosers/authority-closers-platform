@@ -345,7 +345,7 @@ function GoogleTile() {
       status.accounts.some((account) => account.active && account.other) ? (
         <p className={styles.hint}>
           Some forms already send leads to another tool, so they keep it. Sales
-          Xray still checks them every 10 minutes.
+          X-Ray still checks them every 10 minutes.
         </p>
       ) : null}
       {note ? (

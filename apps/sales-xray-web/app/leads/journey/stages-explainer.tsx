@@ -60,7 +60,7 @@ export function StagesExplainer() {
           Facebook, Instagram or Google under Ad platforms and confirm which
           stages they hear about. When a lead reaches one, the ad platform finds
           more people like that lead. Names, notes and calls never leave Sales
-          Xray.
+          X-Ray.
         </li>
       </ol>
     </details>
