@@ -1,6 +1,7 @@
 "use client";
 
-import { CircleCheck, CircleX, Clock3, RefreshCw } from "lucide-react";
+import { RefundRequest } from "../billing/refund-request";
+import { CircleX, Clock3, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
@@ -16,7 +17,9 @@ import { count, day, formatMoney, minutes } from "../billing/money";
 import { useWorkspaceAccess } from "../workspace-access";
 import { AnimatedCountUp } from "./animated-count-up";
 import styles from "./plans.module.css";
+import { ResultSeal } from "./result-seal";
 import { formatPurchaseMinutes } from "./purchase-time";
+import { askFeedback } from "../feedback/ask";
 
 const POLL_MS = 3_000;
 const POLL_FOR_MS = 60_000;
@@ -30,6 +33,9 @@ type State =
 const settled = (order: Order) =>
   order.status !== "awaiting_payment" && order.status !== "confirming";
 
+/** How long the confirmation stays clear before "How was buying your plan?". */
+export const FEEDBACK_DELAY_MS = 10_000;
+
 /**
  * Where the payment page sends the buyer back (C1 §2).
  * The server verifies payment; returning from checkout never grants minutes.
@@ -39,10 +45,13 @@ export function OrderReturn({
   orderId,
   client = liveBilling,
   plansHref = "/plans",
+  billingHref = "/account#billing",
 }: {
   orderId: string | null;
   client?: BillingClient;
   plansHref?: string;
+  /** Where Billing & receipts goes (the review fixture keeps its own). */
+  billingHref?: string;
 }) {
   const access = useWorkspaceAccess();
   return (
@@ -51,6 +60,7 @@ export function OrderReturn({
       orderId={orderId}
       client={client}
       plansHref={plansHref}
+      billingHref={billingHref}
     />
   );
 }
@@ -59,16 +69,21 @@ function OrderReturnState({
   orderId,
   client = liveBilling,
   plansHref = "/plans",
+  billingHref = "/account#billing",
 }: {
   orderId: string | null;
   client?: BillingClient;
   plansHref?: string;
+  /** Where Billing & receipts goes (the review fixture keeps its own). */
+  billingHref?: string;
 }) {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
   const [state, setState] = useState<State>({ status: "loading" });
   const [checking, setChecking] = useState(false);
   const verifyKey = useRef<string | null>(null);
+  // Bumped after a refund is asked for, so the balance is read again.
+  const [reads, setReads] = useState(0);
   const [balance, setBalance] = useState<{
     orderId: string;
     allowance: Allowance;
@@ -91,7 +106,25 @@ function OrderReturnState({
       })
       .catch(() => {});
     return () => controller.abort();
-  }, [authenticated, client, paidId]);
+  }, [authenticated, client, paidId, reads]);
+
+  // Reviews engine (owner, 23 Oct 2026): how buying went, once per order.
+  // Asked after a pause, so the card never covers the confirmation's buttons
+  // while the buyer reads it; leaving sooner skips it (QA, 23 Oct 2026).
+  useEffect(() => {
+    if (!paidId) return;
+    const timer = setTimeout(
+      () =>
+        askFeedback("plan_purchase", {
+          subject: `order:${paidId.replace(/[^A-Za-z0-9_.:-]/g, "-")}`.slice(
+            0,
+            64,
+          ),
+        }),
+      FEEDBACK_DELAY_MS,
+    );
+    return () => clearTimeout(timer);
+  }, [paidId]);
 
   useEffect(() => {
     if (!orderId || !authenticated) return;
@@ -137,6 +170,24 @@ function OrderReturnState({
       if (timer) clearTimeout(timer);
     };
   }, [authenticated, client, orderId]);
+
+  // After a refund is asked for, the page says what is true now: the order's
+  // refund state (no more "Changed your mind?") and the balance without the
+  // payment's minutes (QA, 23 Oct 2026).
+  const requestRefund = client.requestRefund
+    ? async (paymentId: string, reason: string, key: string) => {
+        const outcome = await client.requestRefund!(paymentId, reason, key);
+        if (orderId)
+          await client
+            .readOrder(orderId)
+            .then((next) =>
+              setState({ status: "order", order: next, waited: true }),
+            )
+            .catch(() => {});
+        setReads((value) => value + 1);
+        return outcome;
+      }
+    : null;
 
   const check = async () => {
     if (!orderId || checking) return;
@@ -212,17 +263,30 @@ function OrderReturnState({
       order.kind === "top_up"
         ? formatPurchaseMinutes(order.minutes, "top-up minutes")
         : `${order.planName}${order.interval ? `, ${order.interval === "month" ? "monthly" : "yearly"}` : ""}`;
+    const refunded =
+      order.refund?.state === "pending" || order.refund?.state === "refunded";
     if (order.status === "paid") {
       body = (
         <>
-          <CircleCheck
-            className={styles.iconGood}
-            size={40}
-            aria-hidden="true"
-          />
-          <h2>Payment confirmed</h2>
-          <AnimatedCountUp targetMinutes={order.minutes} />
-          <dl className={styles.rows}>
+          <div className={styles.resultHead}>
+            <ResultSeal tone={refunded ? "refund" : "good"} />
+            <div>
+              <h2>
+                {!refunded
+                  ? "Payment confirmed"
+                  : order.refund?.state === "refunded"
+                    ? "Refunded"
+                    : "Refund requested"}
+              </h2>
+              <p className={styles.resultLead}>
+                {refunded
+                  ? `${formatMoney(order.amount)} goes back to the way you paid. This payment's minutes have left your balance.`
+                  : `${what} · ${formatMoney(order.amount)}`}
+              </p>
+            </div>
+          </div>
+          {refunded ? null : <AnimatedCountUp targetMinutes={order.minutes} />}
+          <dl className={`${styles.rows} ${styles.receipt}`}>
             <div>
               <dt>{order.kind === "top_up" ? "Top-up" : "Plan"}</dt>
               <dd>{what}</dd>
@@ -259,24 +323,35 @@ function OrderReturnState({
               </dd>
             </div>
           </dl>
-          <div className={styles.actions}>
-            <Link className={styles.primary} href="/new-analysis">
+          <div className={styles.resultActions}>
+            <Link className={styles.pay} href="/new-analysis">
               Analyse a call
             </Link>
-            <Link className={styles.ghost} href={plansHref}>
-              See your plan
-            </Link>
-            <Link className={styles.ghost} href="/account#billing">
-              Billing &amp; receipts
-            </Link>
+            <div className={styles.resultLinks}>
+              <Link className={styles.ghost} href={plansHref}>
+                See your plan
+              </Link>
+              <Link className={styles.ghost} href={billingHref}>
+                Billing &amp; receipts
+              </Link>
+            </div>
           </div>
-          {order.refund?.state === "available" &&
-          order.refund.refundableUntil ? (
-            <p className={styles.hint}>
-              Changed your mind? Ask for a refund until{" "}
-              {day(order.refund.refundableUntil)} if you have not used any
-              minutes.
-            </p>
+          {order.refund?.state === "available" && requestRefund ? (
+            <div className={styles.refundNote}>
+              <p>
+                Changed your mind? You can ask for a full refund
+                {order.refund.refundableUntil
+                  ? ` until ${day(order.refund.refundableUntil)}`
+                  : ""}{" "}
+                if none of this payment&apos;s minutes are used.
+              </p>
+              <RefundRequest
+                refund={order.refund}
+                amount={formatMoney(order.amount)}
+                onRequest={requestRefund}
+                className={styles.copy}
+              />
+            </div>
           ) : null}
         </>
       );

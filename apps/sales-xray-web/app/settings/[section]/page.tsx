@@ -1,6 +1,11 @@
 import { notFound } from "next/navigation";
 
-import { isSettingsSection, SETTINGS_SECTIONS } from "../settings-sections";
+import {
+  hubAddress,
+  isSettingsSection,
+  SETTINGS_SECTIONS,
+} from "../settings-sections";
+import { HubRedirect } from "../hub-redirect";
 import { SettingsSectionView } from "../sections";
 
 /** Every section address, so the static preview (output: "export") can build the page. */
@@ -16,5 +21,8 @@ export default async function SettingsSectionPage({
 }) {
   const { section } = await params;
   if (!isSettingsSection(section)) notFound();
+  // The organisation's sections live in its hub (owner, 23 Oct 2026).
+  const hub = hubAddress(section);
+  if (hub) return <HubRedirect to={hub} />;
   return <SettingsSectionView id={section} />;
 }

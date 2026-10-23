@@ -8,12 +8,13 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Mapping
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
-from sqlalchemy import func, or_, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.call_ai import policy as call_ai_policy
@@ -120,6 +121,7 @@ from ac_platform.one_pass.markers import RECIPES as ONE_PASS_RECIPES
 from ac_platform.one_pass.markers import ROUTES as ONE_PASS_ROUTES
 from ac_platform.outbox.models import Job
 from ac_platform.outbox.repository import RecoveryStateRepository
+from ac_platform.outbox.tenant_turns import TenantTurns, turn_order
 
 PLAN_PRIVACY_REVISION: Literal["sales-xray-processing-plan-v1"] = "sales-xray-processing-plan-v1"
 C5_AUTO_REPAIR_ATTEMPTS = 1
@@ -1676,6 +1678,38 @@ class ConversationProcessingPlans:
         row.next_check_at = min(utc(row.expires_at), utc(self.app.clock()) + timedelta(seconds=2))
 
 
+def due_plan_statement(
+    tenant_ranks: Mapping[UUID, int] | None = None,
+) -> Select[tuple[ConversationProcessingPlan]]:
+    """The next plan to check: round-robin by organisation, then next_check_at.
+
+    Every active plan is due again two seconds after its check, so ordering by
+    next_check_at alone let one organisation's bulk import take nearly every
+    check, and each paid stage waits for its plan's check before it is queued.
+    """
+
+    order: list[Any] = [ConversationProcessingPlan.next_check_at]
+    turn = turn_order(ConversationProcessingPlan.tenant_id, tenant_ranks)
+    if turn is not None:
+        order.insert(0, turn)
+    return (
+        select(ConversationProcessingPlan)
+        .where(
+            ConversationProcessingPlan.state.in_(("active", "quoted")),
+            or_(
+                ConversationProcessingPlan.expires_at <= func.clock_timestamp(),
+                (
+                    (ConversationProcessingPlan.state == "active")
+                    & (ConversationProcessingPlan.next_check_at <= func.clock_timestamp())
+                ),
+            ),
+            ConversationProcessingPlan.erased_at.is_(None),
+        )
+        .order_by(*order)
+        .limit(1)
+    )
+
+
 class ProcessingPlanScheduler:
     """Bounded database-driven coordinator; no browser or provider credentials."""
 
@@ -1686,6 +1720,8 @@ class ProcessingPlanScheduler:
         storage: PrivateLocalRecordingStorage | None = None,
     ) -> None:
         self.sessions, self.authority, self.storage = sessions, authority, storage
+        # Shared by every provider consumer: organisations take turns.
+        self.tenant_turns = TenantTurns()
 
     async def step(self) -> bool:
         async with self.sessions() as db, db.begin():
@@ -1702,24 +1738,10 @@ class ProcessingPlanScheduler:
                 return True
             if await ReportMinutes(db).release_expired_source():
                 return True
-            candidate = await db.scalar(
-                select(ConversationProcessingPlan)
-                .where(
-                    ConversationProcessingPlan.state.in_(("active", "quoted")),
-                    or_(
-                        ConversationProcessingPlan.expires_at <= func.clock_timestamp(),
-                        (
-                            (ConversationProcessingPlan.state == "active")
-                            & (ConversationProcessingPlan.next_check_at <= func.clock_timestamp())
-                        ),
-                    ),
-                    ConversationProcessingPlan.erased_at.is_(None),
-                )
-                .order_by(ConversationProcessingPlan.next_check_at)
-                .limit(1)
-            )
+            candidate = await db.scalar(due_plan_statement(self.tenant_turns.ranks()))
             if candidate is None:
                 return False
+            self.tenant_turns.served(candidate.tenant_id)
             identifier, recording_id = candidate.id, candidate.recording_id
             # Expiry owns the terminal transition even when execution admission
             # can no longer succeed (expired lease, permission or retention).

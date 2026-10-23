@@ -33,6 +33,7 @@ from ac_platform.identity.repositories import (
 )
 from ac_platform.identity.sales_xray_profile import erase_sales_xray_profile
 from ac_platform.identity.services import (
+    AccountClosedError,
     AccountUnavailableError,
     AmbiguousProviderIdentityError,
     AuthenticationReplayError,
@@ -627,6 +628,11 @@ class AsyncIdentityApplication:
         ip_address: str | None,
         audience: SessionAudience = SessionAudience.ACCOUNT,
     ) -> IssuedSession:
+        # Every sign-in ends here. Settings -> Security -> Delete account closes the
+        # account while its deletion request is open (close_account), so no way in
+        # opens it again; only the deletion process can cancel the request.
+        if await self._repository.find_open_deletion_request(person.id) is not None:
+            raise AccountClosedError("the account was closed by its deletion request")
         token = secrets.token_urlsafe(self._token_length_bytes)
         selected_tenant_id = (
             None
@@ -1187,6 +1193,41 @@ class AsyncIdentityApplication:
                 ) from None
             return existing
         return request
+
+    async def close_account(
+        self,
+        token: str,
+        *,
+        reason: str | None = None,
+        now: datetime | None = None,
+    ) -> tuple[DeletionRequestSnapshot, int]:
+        """Settings -> Security -> Delete account: ask for deletion and close the account.
+
+        In the caller's transaction: the person's one open deletion request, then every
+        session of theirs revoked, so this device and all others are signed out, and no
+        new session is issued while the request is open (``_issue_session``). Nothing is
+        deleted here: the purge is the owner-approved deletion process
+        (``begin_deletion_processing`` then ``complete_deletion``). Returns the request
+        and how many sessions were revoked.
+        """
+
+        current_time = _now(now)
+        request = await self.request_deletion(token, reason=reason, now=current_time)
+        revoked = 0
+        for session in await self._repository.list_sessions_for_person_for_update(
+            request.person_id
+        ):
+            if session.revoked_at is None:
+                await self._repository.save_session(
+                    replace(
+                        session,
+                        revoked_at=current_time,
+                        revocation_reason="account closed for deletion",
+                        revision=session.revision + 1,
+                    )
+                )
+                revoked += 1
+        return request, revoked
 
     async def cancel_deletion(
         self,

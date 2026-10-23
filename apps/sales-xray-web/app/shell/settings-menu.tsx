@@ -17,22 +17,20 @@
  * 5. the phone app download (website only) and the first-call guide.
  */
 import {
-  AudioLines,
   BarChart3,
   Bell,
+  Bug,
   Building2,
   ChevronLeft,
   ChevronRight,
   Clock3,
   Compass,
   GraduationCap,
-  Layers,
   LifeBuoy,
   ListChecks,
   LogOut,
   MailOpen,
   PhoneCall,
-  Plug,
   Rows3,
   Settings2,
   Smartphone,
@@ -58,6 +56,8 @@ import { createPortal } from "react-dom";
 
 import type { Allowance } from "../acquisition-client";
 import { useSalesXraySignOut } from "../account-navigation";
+import { openBugReport } from "../bug-report/open";
+import { UpdateRating } from "../feedback/update-rating";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { phoneCallsOpener, useInApp } from "../in-app-client";
 import { inPhoneApp } from "../leads/native-phone";
@@ -95,7 +95,8 @@ export function accountInitials(name: string | null, email: string | null) {
   const parts = source.split(/\s+/).filter(Boolean);
   const letters =
     parts.length > 1 ? parts[0][0] + parts[1][0] : source.slice(0, 2);
-  return letters.toUpperCase() || "·";
+  // Nothing to take initials from: the caller shows a person instead.
+  return letters.toUpperCase();
 }
 
 const noSubscription = () => () => {};
@@ -372,35 +373,20 @@ export function SettingsMenu({
     href: `/settings/${id}`,
     icon,
   }));
-  // Leads' settings have one home in Settings since slice 5 (22 Oct 2026).
-  // Owner, 23 Oct 2026: team and organisation were "too hidden", so the
-  // organisation's own page leads the group.
+  // Owner, 23 Oct 2026: the organisation's hub holds every management area
+  // (team, analytics, insights, leads setup, connections, company), so You
+  // offers the hub and its most used tab.
   const theirs = [
     {
-      label: "Team & organisation",
-      hint: "Members, invites, roles and company details",
+      label: "Organisation",
+      hint: "Team, analytics, insights, leads setup, connections and company",
       href: "/organisation",
+      icon: <Building2 size={18} />,
+    },
+    {
+      ...sectionById("team"),
+      href: "/organisation?tab=team",
       icon: <UsersRound size={18} />,
-    },
-    {
-      ...sectionById("lead-rules"),
-      href: "/settings/lead-rules",
-      icon: <ListChecks size={18} />,
-    },
-    {
-      ...sectionById("stages"),
-      href: "/settings/stages",
-      icon: <Layers size={18} />,
-    },
-    {
-      ...sectionById("apps"),
-      href: "/settings/apps",
-      icon: <Plug size={18} />,
-    },
-    {
-      ...sectionById("call-ai"),
-      href: "/settings/call-ai",
-      icon: <AudioLines size={18} />,
     },
   ];
 
@@ -460,7 +446,7 @@ export function SettingsMenu({
       <div className={styles.who}>
         <span className={styles.avatar} aria-hidden="true">
           <AccountAvatarImage key={email} photoUrl={photoUrl}>
-            {accountInitials(name, email)}
+            {accountInitials(name, email) || <UserRound size={20} />}
           </AccountAvatarImage>
         </span>
         <span className={styles.whoText}>
@@ -567,6 +553,15 @@ export function SettingsMenu({
           badge={unseen > 0 ? `${unseen} new` : undefined}
           onClick={() => setView("news")}
         />
+        {/* Bug reporter (owner, 23 Oct 2026): two taps from any screen. */}
+        <Row
+          icon={<Bug size={17} />}
+          label="Report a problem"
+          onClick={() => {
+            onClose();
+            openBugReport();
+          }}
+        />
         <Row
           icon={<LifeBuoy size={17} />}
           label="Help & support"
@@ -641,6 +636,10 @@ export function SettingsMenu({
                 <li key={item}>{item}</li>
               ))}
             </ul>
+            {/* Reviews engine: a one-tap rating of the newest update. */}
+            {index === 0 && !entry.draft ? (
+              <UpdateRating update={entry.key} />
+            ) : null}
           </li>
         ))}
       </ol>

@@ -77,3 +77,34 @@ def test_blind_saves_take_a_rating_or_a_moment_only() -> None:
     ):
         with pytest.raises(ValidationError):
             GoldSave(review_id=review, **bad)
+
+
+def test_report_items_take_agree_disagree_or_fix_with_a_note() -> None:
+    review = uuid4()
+    agree = GoldSave(review_id=review, target="item:brain4.D04", verdict="agree", opinion="Fine.")
+    assert agree.verdict == "agree"
+    fix = GoldSave(review_id=review, target="item:brain4.D04", verdict="fix", rating=2)
+    assert fix.rating == 2
+    words = GoldSave(
+        review_id=review,
+        target="item:outcome.next_steps.1",
+        verdict="fix",
+        correction="Call on Monday, not Friday.",
+    )
+    assert words.correction == "Call on Monday, not Friday."
+    skipped = GoldSave(review_id=review, target="item:overview.summary", skip="not_sure")
+    assert skipped.verdict is None
+    for bad in (
+        {"target": "item:brain4.D04"},
+        {"target": "item:brain4.D04", "verdict": "partly"},
+        {"target": "item:brain4.D04", "verdict": "fix"},
+        {"target": "item:brain4.D04", "verdict": "agree", "rating": 3},
+        {"target": "item:brain4.D04", "verdict": "agree", "score": 50},
+        {"target": "item:brain4.D04", "verdict": "fix", "rating": 6},
+        {"target": "item:brain4.D04", "verdict": "fix", "correction": "x" * 601},
+        {"target": "item:overview.summary", "skip": "not_sure", "verdict": "agree"},
+        {"target": "pointer-1", "verdict": "fix", "correction": "No."},
+        {"target": "pointer-1", "verdict": "agree", "correction": "No."},
+    ):
+        with pytest.raises(ValidationError):
+            GoldSave(review_id=review, **bad)

@@ -49,7 +49,7 @@ function Bubble({ message }: { message: WaMessage }) {
       <small>
         {ago(message.at)}
         {message.direction === "out"
-          ? ` · ${message.auto ? "Automatic" : (message.by ?? "Sales Xray")} · ${STATUS[message.status] ?? message.status}`
+          ? ` · ${message.auto ? "Automatic" : (message.by ?? "Sales X-Ray")} · ${STATUS[message.status] ?? message.status}`
           : null}
         {message.error ? ` · ${message.error}` : null}
       </small>

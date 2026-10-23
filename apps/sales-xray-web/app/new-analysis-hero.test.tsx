@@ -81,3 +81,23 @@ it("omits the allowance line for an exempt account and keeps the steps", async (
     [...host.querySelectorAll("li")].map((step) => step.textContent),
   ).toEqual(["1Upload", "2We analyse", "3Your report"]);
 });
+
+it("offers more minutes beside an exhausted balance only when asked", async () => {
+  await act(async () =>
+    root.render(
+      <NewAnalysisFooter
+        allowanceLabel="Remaining analysis time · 0m 00s · exhausted"
+        moreMinutesHref="/plans"
+      />,
+    ),
+  );
+  const link = host.querySelector('a[href="/plans"]');
+  expect(link?.textContent).toBe("Get more minutes");
+  expect(host.textContent).not.toMatch(/₹|price|cost/i);
+  await act(async () =>
+    root.render(
+      <NewAnalysisFooter allowanceLabel="Remaining analysis time · 0m 45s" />,
+    ),
+  );
+  expect(host.querySelector('a[href="/plans"]')).toBeNull();
+});

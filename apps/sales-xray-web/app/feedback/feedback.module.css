@@ -1,0 +1,258 @@
+/* "How was it?" (owner, 23 Oct 2026): a small card, never a modal. Tokens only. */
+
+.stack {
+  position: fixed;
+  z-index: 79;
+  right: 20px;
+  bottom: 20px;
+  width: min(360px, calc(100vw - 24px));
+  pointer-events: none;
+}
+
+.card {
+  display: grid;
+  gap: 10px;
+  padding: 12px 12px 10px 14px;
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
+  color: var(--lx-ink);
+  pointer-events: auto;
+  animation: rise var(--sx-dur-sheet) var(--sx-spring) both;
+}
+
+.head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: start;
+}
+
+.question,
+.thanks {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.thanks {
+  padding: 4px 0;
+  font-weight: 500;
+}
+
+.close {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin: -10px -8px -10px 0;
+  place-items: center;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.faces {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.face {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-height: 64px;
+  padding: 8px 4px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--sx-dur-base) var(--sx-spring),
+    border-color var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.face:active {
+  transform: scale(var(--sx-press-scale));
+  transition-duration: var(--sx-dur-instant);
+}
+
+.face[data-rating="1"] > svg {
+  color: var(--sx-bad);
+}
+
+.face[data-rating="2"] > svg {
+  color: var(--sx-warn);
+}
+
+.face[data-rating="3"] > svg {
+  color: var(--lx-teal);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .face:hover {
+    border-color: var(--lx-teal-edge);
+  }
+}
+
+.never {
+  justify-self: start;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  cursor: pointer;
+}
+
+.words {
+  display: grid;
+  gap: 8px;
+}
+
+.words textarea {
+  width: 100%;
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: max(16px, var(--sx-text-sm));
+  resize: vertical;
+}
+
+.words textarea:focus {
+  border-color: var(--sx-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--sx-accent-soft);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.skip,
+.send {
+  min-height: 40px;
+  padding: 0 16px;
+  border-radius: var(--sx-radius-pill);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.skip {
+  border: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+}
+
+.send {
+  border: 0;
+  background: var(--sx-accent);
+  color: var(--sx-on-accent, var(--sx-surface));
+}
+
+.close:focus-visible,
+.face:focus-visible,
+.never:focus-visible,
+.skip:focus-visible,
+.send:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* The update's rating inside What's new. */
+.update {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.updateLabel {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.updateFaces {
+  display: flex;
+  gap: 6px;
+}
+
+.updateFace {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.updateFace[aria-pressed="true"] {
+  border-color: var(--lx-teal-edge);
+  background: var(--lx-teal-tint);
+  color: var(--sx-ink);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+/* Phone: full width, above the bottom tab bar (like the corner cards). */
+@media (max-width: 760px) {
+  .stack {
+    right: 12px;
+    bottom: calc(
+      var(--lx-bottom-nav-h, 56px) + 8px + env(safe-area-inset-bottom, 0px)
+    );
+    left: 12px;
+    width: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    animation: none;
+  }
+
+  .face {
+    transition: none;
+  }
+}

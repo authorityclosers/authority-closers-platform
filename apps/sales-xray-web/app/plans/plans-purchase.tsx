@@ -18,6 +18,17 @@ import {
   type TopUpPack,
 } from "./plans-screen";
 
+/**
+ * Shown until the server's plans load, and while nothing is on sale.
+ * Enterprise is "Talk to us" until it is on sale (owner, 30 Sep 2026), so
+ * it never flashes a price and a Get button first (QA, 23 Oct 2026).
+ */
+const DISPLAY_CATALOGUE: Plan[] = PLANS_CATALOGUE_FIXTURE.map((plan) =>
+  plan.key === "enterprise"
+    ? { ...plan, status: "coming_soon", prices: null }
+    : plan,
+);
+
 /** Remount on account/workspace changes so an old order cannot cross identities. */
 export function PlansPurchase({
   client = liveBilling,
@@ -76,7 +87,7 @@ function Purchase({
     });
   return (
     <PlansScreen
-      plans={catalogue ?? PLANS_CATALOGUE_FIXTURE}
+      plans={catalogue ?? DISPLAY_CATALOGUE}
       gstRate={PLANS_GST_RATE}
       mePlan={billing.mePlan}
       quote={quote}

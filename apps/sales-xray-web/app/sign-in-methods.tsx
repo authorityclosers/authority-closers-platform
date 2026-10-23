@@ -172,7 +172,7 @@ export function connectReturnNotice(
     tone: error === "cancelled" ? "info" : "error",
     title:
       error === "in_use"
-        ? `${provider ? `That ${name} account` : name} is already used by another Sales Xray account`
+        ? `${provider ? `That ${name} account` : name} is already used by another Sales X-Ray account`
         : error === "cancelled"
           ? `${name} wasn’t connected`
           : `Couldn’t connect ${provider ? name : "that account"}`,

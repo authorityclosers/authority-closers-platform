@@ -1,0 +1,491 @@
+{
+  "id": "04-call-a-lead",
+  "number": "04",
+  "title": "Call a lead and log what happened",
+  "kicker": "Sales X-Ray tutorial",
+  "end_headline": "Call, log, next.",
+  "next": "Read your call Report",
+  "segments": [
+    {
+      "id": "card",
+      "device": "card",
+      "en": {
+        "say": ["Let's make your first call from Sales X-Ray."]
+      },
+      "hi": {
+        "say": ["चलिए, Sales X-Ray से आपका पहला call करते हैं."],
+        "caption": ["Chaliye, Sales X-Ray se aapka pehla call karte hain."]
+      },
+      "mr": {
+        "say": ["चला, Sales X-Ray मधून तुमचा पहिला call करूया."],
+        "caption": ["Chala, Sales X-Ray madhun tumcha pahila call karuya."]
+      }
+    },
+    {
+      "id": "s1-to-call",
+      "device": "phone",
+      "label": "Leads, To call",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 700
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "tab",
+            "name": "To call"
+          },
+          "ms": 1800
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "Overdue",
+            "exact": false
+          },
+          "ms": 1600
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "leads-to-call"
+        }
+      ],
+      "en": {
+        "say": [
+          "Open Leads.",
+          "The To call tab shows everyone you should call today, with late ones on top."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Leads खोलिए.",
+          "To call tab में आज जिनको call करना है, वो सब दिखते हैं. Late वाले सबसे ऊपर."
+        ],
+        "caption": [
+          "Leads kholiye.",
+          "To call tab mein aaj jinko call karna hai, woh sab dikhte hain. Late waale sabse upar."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Leads उघडा.",
+          "To call tab मध्ये आज ज्यांना call करायचाय, ते सगळे दिसतात. Late वाले सगळ्यात वर."
+        ],
+        "caption": [
+          "Leads ughda.",
+          "To call tab madhye aaj jyanna call karaychay, te sagle distat. Late wale saglyat var."
+        ]
+      }
+    },
+    {
+      "id": "s2-open-lead",
+      "device": "phone",
+      "label": "Tap a lead",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Got it"
+          },
+          "ms": 500,
+          "optional": true
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 500
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Open Asha Fictional"
+          },
+          "ms": 1500
+        },
+        {
+          "do": "still",
+          "label": "lead-sheet"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "The story so far"
+          },
+          "ms": 1800
+        },
+        {
+          "do": "unhighlight"
+        }
+      ],
+      "en": {
+        "say": [
+          "Tap a lead to open it.",
+          "Their story, notes and calls are all on this one page."
+        ]
+      },
+      "hi": {
+        "say": [
+          "किसी भी lead पे tap कीजिए.",
+          "उसकी पूरी story, notes और calls, सब एक ही page पे."
+        ],
+        "caption": [
+          "Kisi bhi lead pe tap kijiye.",
+          "Uski poori story, notes aur calls, sab ek hi page pe."
+        ]
+      },
+      "mr": {
+        "say": [
+          "कुठल्याही lead वर tap करा.",
+          "त्याची पूर्ण story, notes आणि calls, सगळं एकाच page वर."
+        ],
+        "caption": [
+          "Kuthlyahi lead var tap kara.",
+          "Tyachi poorna story, notes aani calls, sagla ekach page var."
+        ]
+      }
+    },
+    {
+      "id": "s3-call",
+      "device": "phone",
+      "label": "Tap Call",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Got it"
+          },
+          "ms": 400,
+          "optional": true
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Open Asha Fictional"
+          },
+          "ms": 1200
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 400
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "css": "a[href^='tel:']"
+          },
+          "ms": 1500
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "WhatsApp"
+          },
+          "ms": 1300
+        },
+        {
+          "do": "unhighlight"
+        }
+      ],
+      "en": {
+        "say": [
+          "Tap Call, and your phone dials right away.",
+          "Prefer a message? WhatsApp and SMS are right next to it."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Call दबाइए, phone तुरंत number लगा देता है.",
+          "Message भेजना है? WhatsApp और SMS बगल में ही हैं."
+        ],
+        "caption": [
+          "Call dabaiye, phone turant number laga deta hai.",
+          "Message bhejna hai? WhatsApp aur SMS bagal mein hi hain."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Call दाबा, phone लगेच number लावतो.",
+          "Message पाठवायचाय? WhatsApp आणि SMS बाजूलाच आहेत."
+        ],
+        "caption": [
+          "Call daba, phone lagech number lavto.",
+          "Message pathvaychay? WhatsApp aani SMS bajulach aahet."
+        ]
+      }
+    },
+    {
+      "id": "s4-log",
+      "device": "phone",
+      "label": "Log how it went",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Got it"
+          },
+          "ms": 400,
+          "optional": true
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Open Asha Fictional"
+          },
+          "ms": 1200
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 400
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "Log a call"
+          },
+          "ms": 1500
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "text": "Log a call"
+          },
+          "ms": 1300
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "We talked"
+          },
+          "ms": 1400
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "What happens next?"
+          },
+          "ms": 1800,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "after-call"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "What did they say?"
+          },
+          "ms": 1400,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        }
+      ],
+      "en": {
+        "say": [
+          "After a call, the app asks how it went. Or tap Log a call, any time.",
+          "We talked? Pick what happens next, like Call back or Site visit booked, and add a quick note."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Call के बाद app खुद पूछता है कि call कैसा रहा. या कभी भी Log a call पे tap कीजिए.",
+          "We talked? तो चुनिए आगे क्या होगा, जैसे Call back या Site visit booked, और एक छोटा सा note लिख दीजिए."
+        ],
+        "caption": [
+          "Call ke baad app khud poochta hai ki call kaisa raha. Ya kabhi bhi Log a call pe tap kijiye.",
+          "We talked? Toh chuniye aage kya hoga, jaise Call back ya Site visit booked, aur ek chhota sa note likh dijiye."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Call नंतर app स्वतः विचारतो की call कसा झाला. किंवा कधीही Log a call वर tap करा.",
+          "We talked? मग निवडा पुढे काय होणार, जसं Call back किंवा Site visit booked, आणि एक छोटी note लिहा."
+        ],
+        "caption": [
+          "Call nantar app swatah vichaarto ki call kasa jhala. Kinva kadhihi Log a call var tap kara.",
+          "We talked? Mag nivda pudhe kay honar, jasa Call back kinva Site visit booked, aani ek chhoti note liha."
+        ]
+      }
+    },
+    {
+      "id": "s5-start-calling",
+      "device": "phone",
+      "label": "Start calling",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Got it"
+          },
+          "ms": 400,
+          "optional": true
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 500
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Start calling"
+          },
+          "ms": 1800
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "start-calling-bar"
+        }
+      ],
+      "en": {
+        "say": ["Got a long list?", "Tap Start calling."]
+      },
+      "hi": {
+        "say": ["लंबी list है?", "Start calling दबाइए."],
+        "caption": ["Lambi list hai?", "Start calling dabaiye."]
+      },
+      "mr": {
+        "say": ["मोठी list आहे?", "Start calling दाबा."],
+        "caption": ["Mothi list aahe?", "Start calling daba."]
+      }
+    },
+    {
+      "id": "s6-desk",
+      "device": "phone",
+      "label": "Next lead, ready",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/cold-calling"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 600
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "Priya Sample",
+            "exact": true
+          },
+          "ms": 1400
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "If they say"
+          },
+          "ms": 1600
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "calling-desk"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Call Priya"
+          },
+          "ms": 1400
+        },
+        {
+          "do": "unhighlight"
+        }
+      ],
+      "en": {
+        "say": [
+          "Sales X-Ray brings up the next lead in line, with your opener and replies ready.",
+          "Call, log, next. That's it."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Sales X-Ray अगला lead सामने ला देता है, opener और जवाब ready के साथ.",
+          "Call, log, next. बस इतना ही."
+        ],
+        "caption": [
+          "Sales X-Ray agla lead saamne la deta hai, opener aur jawaab ready ke saath.",
+          "Call, log, next. Bas itna hi."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Sales X-Ray पुढचा lead समोर आणतो, opener आणि उत्तरं ready सकट.",
+          "Call, log, next. बस एवढंच."
+        ],
+        "caption": [
+          "Sales X-Ray pudhcha lead samor aanto, opener aani uttara ready sakat.",
+          "Call, log, next. Bas evdhach."
+        ]
+      }
+    }
+  ]
+}

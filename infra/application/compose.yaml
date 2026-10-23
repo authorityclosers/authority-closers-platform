@@ -62,6 +62,19 @@ x-migration-environment: &migration-environment
 services:
   postgres:
     image: ${AC_POSTGRES_IMAGE:-postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af}
+    # AUT-2202: 512MB is 25% of this service's 2GiB cgroup limit. Apply through
+    # the release installer (staging first); preload/buffers require a restart.
+    # Install the extension's SQL objects through the governed migration path.
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - shared_buffers=512MB
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - jit=off
     restart: unless-stopped
     user: "999:999"
     read_only: true
@@ -163,6 +176,7 @@ services:
       AC_FACEBOOK_LOGIN_APP_ID: ${AC_FACEBOOK_LOGIN_APP_ID:-}
       AC_FACEBOOK_LOGIN_APP_SECRET: ${AC_FACEBOOK_LOGIN_APP_SECRET:-}
       AC_FACEBOOK_LOGIN_GRAPH_VERSION: ${AC_FACEBOOK_LOGIN_GRAPH_VERSION:-}
+      AC_FACEBOOK_LOGIN_CLIENT_TOKEN: ${AC_FACEBOOK_LOGIN_CLIENT_TOKEN:-}
       AC_APPLE_SIGN_IN_SERVICE_ID: ${AC_APPLE_SIGN_IN_SERVICE_ID:-}
       AC_APPLE_SIGN_IN_TEAM_ID: ${AC_APPLE_SIGN_IN_TEAM_ID:-}
       AC_APPLE_SIGN_IN_KEY_ID: ${AC_APPLE_SIGN_IN_KEY_ID:-}

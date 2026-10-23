@@ -802,7 +802,10 @@ def test_caddy_routes_only_named_application_hosts() -> None:
     assert PRODUCTION_EDGE_ROUTE.index("\thandle @admin_api {") < PRODUCTION_EDGE_ROUTE.index(
         "\thandle @admin {"
     )
-    assert application_routes.count("connect-src 'self';") == 8
+    # The two Sales Xray hosts also let Razorpay Checkout call home (billing, 23 Oct 2026).
+    assert application_routes.count("connect-src 'self';") == 6
+    razorpay = "connect-src 'self' https://api.razorpay.com https://lumberjack.razorpay.com;"
+    assert application_routes.count(razorpay) == 2
     assert "connect-src 'self' https://api.authorityclosers.com" not in application_routes
     for route in (
         "learner-production",

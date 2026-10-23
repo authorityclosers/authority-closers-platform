@@ -42,6 +42,8 @@ import {
   type PickedContact,
   type SharedLead,
 } from "./leads-client";
+import { askFeedback } from "../feedback/ask";
+import { PASTED_FILE, pastedFile, readPasted } from "./paste-import";
 import styles from "./leads.module.css";
 
 export type AddWay = "type" | "contacts" | "file" | "sources";
@@ -171,7 +173,7 @@ export function AddLeadDialog({
   onClose,
   onAdded,
   initial = null,
-  initialNote = "From the Sales Xray extension. Check the details, then add the lead.",
+  initialNote = "From the Sales X-Ray extension. Check the details, then add the lead.",
 }: {
   open: boolean;
   canManage: boolean;
@@ -709,16 +711,26 @@ const MAPPABLE = [
   "interest",
 ];
 
+/** A file's stage and owner columns (owner P0, 23 Oct 2026): names, matched by the server. */
+const COLUMN_LABELS: Record<string, string> = {
+  ...FIELD_LABELS,
+  stage: "Stage",
+  owner: "Owner",
+};
+
 export function ImportDialog({
   open,
   canManage,
   onClose,
   onDone,
+  pasted = null,
 }: {
   open: boolean;
   canManage: boolean;
   onClose: () => void;
   onDone: () => void;
+  /** Rows pasted into the list's quick add: read as soon as it opens. */
+  pasted?: string | null;
 }) {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
@@ -730,6 +742,9 @@ export function ImportDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const command = useRef(commandId());
+  // Rows pasted from a sheet, a CSV or a chat (owner P0, 23 Oct 2026).
+  const [text, setText] = useState("");
+  const [dropped, setDropped] = useState(0);
 
   const pick = async (file: File | undefined) => {
     if (!file) return;
@@ -750,6 +765,29 @@ export function ImportDialog({
     }
   };
 
+  const readText = (value: string) => {
+    const rows = readPasted(value);
+    if (!rows) {
+      setError(
+        "There are no rows in that. Copy the rows from your sheet, with their headings if it has them.",
+      );
+      return;
+    }
+    setDropped(rows.dropped);
+    void pick(pastedFile(rows));
+  };
+  const reading = useRef(readText);
+  useEffect(() => {
+    reading.current = readText;
+  });
+  const handed = useRef(false);
+  useEffect(() => {
+    if (!open || !pasted || handed.current) return;
+    handed.current = true;
+    setText(pasted);
+    reading.current(pasted);
+  }, [open, pasted]);
+
   const run = async () => {
     if (!preview) return;
     if (!mapping.name && !mapping.phone) {
@@ -769,6 +807,8 @@ export function ImportDialog({
         ),
       );
       onDone();
+      // Reviews engine: how the first import went, asked once.
+      askFeedback("first_import", { subject: "first-import" });
     } catch (reason) {
       setError(
         reason instanceof LeadsError
@@ -784,7 +824,7 @@ export function ImportDialog({
     <Dialog
       open={open}
       title="Import leads"
-      description="Excel (.xlsx) or CSV with a header row, up to 2,000 leads. We match the columns for you, and every column is kept on the lead."
+      description="An Excel (.xlsx) or CSV file, or rows pasted from a sheet or a chat, up to 2,000 leads. We match the columns for you, and every column is kept on the lead."
       onClose={onClose}
       actions={
         result ? (
@@ -830,8 +870,33 @@ export function ImportDialog({
                 <dd>{result.skipped}</dd>
               </div>
             ) : null}
+            {result.staged ? (
+              <div>
+                <dt>Given their stage</dt>
+                <dd>{result.staged}</dd>
+              </div>
+            ) : null}
+            {result.owned ? (
+              <div>
+                <dt>Given the owner named</dt>
+                <dd>{result.owned}</dd>
+              </div>
+            ) : null}
           </dl>
-        ) : !preview ? (
+        ) : null}
+        {result?.unmatched_stages?.length ? (
+          <p className={styles.hint}>
+            No stage called {result.unmatched_stages.join(", ")}: those leads
+            stay New.
+          </p>
+        ) : null}
+        {result?.unmatched_owners?.length ? (
+          <p className={styles.hint}>
+            Nobody on your team called {result.unmatched_owners.join(", ")}:
+            those leads went by the lead rules.
+          </p>
+        ) : null}
+        {result ? null : !preview ? (
           <>
             <label
               className={styles.drop}
@@ -854,6 +919,32 @@ export function ImportDialog({
                 onChange={(event) => void pick(event.target.files?.[0])}
               />
             </label>
+            <div className={`${styles.pasteBox} ${styles.pasteRows}`}>
+              <textarea
+                aria-label="Paste rows"
+                rows={3}
+                value={text}
+                disabled={busy}
+                placeholder="Or paste rows from a sheet, a CSV or ChatGPT"
+                onChange={(event) => {
+                  setText(event.target.value);
+                  setError(null);
+                }}
+                onPaste={(event) => {
+                  const value = event.clipboardData.getData("text");
+                  if (!value.trim()) return;
+                  event.preventDefault();
+                  setText(value);
+                  readText(value);
+                }}
+              />
+              <Button
+                onClick={() => readText(text)}
+                disabled={busy || !text.trim()}
+              >
+                Read rows
+              </Button>
+            </div>
             <a
               className={styles.linkButton}
               href={`data:text/csv;charset=utf-8,${encodeURIComponent(SAMPLE_CSV)}`}
@@ -865,39 +956,53 @@ export function ImportDialog({
         ) : (
           <>
             <p className={styles.hint}>
-              {preview.file_name}: {preview.total_rows} rows
-              {preview.truncated ? " (only the first 2,000)" : ""},{" "}
-              {preview.with_phone} with a phone
+              {preview.file_name === PASTED_FILE ? "Pasted" : preview.file_name}
+              : {preview.total_rows} rows
+              {preview.truncated || dropped
+                ? " (only the first 2,000)"
+                : ""}, {preview.with_phone} with a phone
               {preview.repeats_in_file
                 ? `, ${preview.repeats_in_file} repeated in the file`
+                : ""}
+              {preview.known_leads
+                ? `, ${preview.known_leads} already ${preview.known_leads === 1 ? "a lead" : "leads"} (kept as they are, not added again)`
                 : ""}
               .
             </p>
             <div className={styles.formGrid}>
-              {MAPPABLE.map((field) => (
-                <Field key={field} label={FIELD_LABELS[field]}>
-                  <select
-                    value={mapping[field] ?? ""}
-                    onChange={(event) =>
-                      setMapping((current) => {
-                        const next = { ...current };
-                        if (event.target.value)
-                          next[field] = event.target.value;
-                        else delete next[field];
-                        return next;
-                      })
-                    }
-                  >
-                    <option value="">Not in this file</option>
-                    {preview.headers.map((header) => (
-                      <option key={header} value={header}>
-                        {header}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-              ))}
+              {[...MAPPABLE, "stage", ...(canManage ? ["owner"] : [])].map(
+                (field) => (
+                  <Field key={field} label={COLUMN_LABELS[field]}>
+                    <select
+                      value={mapping[field] ?? ""}
+                      onChange={(event) =>
+                        setMapping((current) => {
+                          const next = { ...current };
+                          if (event.target.value)
+                            next[field] = event.target.value;
+                          else delete next[field];
+                          return next;
+                        })
+                      }
+                    >
+                      <option value="">Not in this file</option>
+                      {preview.headers.map((header) => (
+                        <option key={header} value={header}>
+                          {header}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                ),
+              )}
             </div>
+            {mapping.stage || (canManage && mapping.owner) ? (
+              <p className={styles.hint}>
+                Stages are matched by name to the pipeline&apos;s stages, and
+                owners to your team. One that doesn&apos;t match stays New, or
+                goes by the lead rules.
+              </p>
+            ) : null}
             <div className={styles.previewTable}>
               <table className={styles.table}>
                 <thead>

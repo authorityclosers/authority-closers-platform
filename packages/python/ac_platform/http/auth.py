@@ -112,8 +112,8 @@ from ac_platform.identity.sales_xray_profile import (
     normalize_profile_name,
     update_sales_xray_profile,
 )
-from ac_platform.identity.services import AuthorizationDenied as IdentityAuthorizationDenied
 from ac_platform.identity.services import (
+    AccountClosedError,
     ConflictingProviderIdentityError,
     IdentityConcurrencyError,
     IdentityResolutionError,
@@ -127,6 +127,7 @@ from ac_platform.identity.services import (
     VerifiedProviderAssertion,
     validate_verified_provider_assertion,
 )
+from ac_platform.identity.services import AuthorizationDenied as IdentityAuthorizationDenied
 from ac_platform.identity.sign_in_methods import PROVIDER_ISSUERS, session_is_fresh
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError, ResourceNotFound
@@ -528,6 +529,18 @@ class SignInMethodConnectRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     return_to: str = Field(min_length=1, max_length=200)
+
+
+class NativeSignInStartRequest(BaseModel):
+    """The page's GET start parameters, sent by fetch for the app's own sign-in."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    action: ProviderAuthorizationType
+    return_path: str = Field(min_length=1, max_length=512)
+    consent: bool = False
+    age_attested: bool = False
+    consent_version: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class GoogleCompletionRequest(BaseModel):
@@ -1543,6 +1556,7 @@ def _sales_xray_auth_result_response(
         "linked",
         "already_linked",
         "fresh_sign_in",
+        "account_closed",
     ],
     transaction_cookie_names: tuple[str, ...],
     flow_id: UUID | None = None,
@@ -1761,7 +1775,15 @@ async def identity_error_handler(
     request: Request,
     error: IdentityServiceError,
 ) -> JSONResponse:
-    if isinstance(error, TenantScopeDeniedError):
+    if isinstance(error, AccountClosedError):
+        error_status = status.HTTP_403_FORBIDDEN
+        code = "account_closed"
+        title = "This account is closed"
+        detail = (
+            "This account was closed when its deletion was requested. If that was a "
+            "mistake, write to admin@authorityclosers.com before it is deleted."
+        )
+    elif isinstance(error, TenantScopeDeniedError):
         error_status = status.HTTP_403_FORBIDDEN
         code = "tenant_context_denied"
         title = "Tenant context is not allowed"
@@ -2870,6 +2892,63 @@ def install_identity_http(
             app_challenge=app_challenge,
         )
 
+    @router.post("/auth/{provider_name}/native/start", name="sales_xray_native_sign_in_start")
+    async def sales_xray_native_sign_in_start(
+        request: Request,
+        provider_name: Literal["google", "facebook"],
+        body: NativeSignInStartRequest,
+    ) -> Response:
+        """The app's own sign-in (owner, 23 Oct 2026): Android's Google account sheet
+        or the Facebook app, never the phone's browser.
+
+        Same checks and transaction as the GET start; the answer is what the phone
+        needs instead of a redirect. The page then posts the phone's token to
+        ``/v1/auth/{provider}/native/finish``.
+        """
+
+        _require_surface_host(request, settings, "sales_xray")
+        require_safe_origin(request, settings)
+        return await _start_provider_sign_in(
+            provider_name,
+            request,
+            authorization_type=body.action,
+            surface="sales_xray",
+            return_path=body.return_path,
+            consent=body.consent,
+            age_attested=body.age_attested,
+            client_consent_version=body.consent_version,
+            app_challenge=None,
+            native=True,
+        )
+
+    @router.post("/auth/{provider_name}/native/finish", name="sales_xray_native_sign_in_finish")
+    async def sales_xray_native_sign_in_finish(
+        request: Request,
+        provider_name: Literal["google", "facebook"],
+    ) -> Response:
+        """The page's form post with the phone's token; then exactly the callback."""
+
+        _require_surface_host(request, settings, "sales_xray")
+        require_safe_origin(request, settings)
+        raw = await request.body()
+        try:
+            if len(raw) > 32_768:
+                raise ValueError("form too large")
+            fields = parse_qs(raw.decode("utf-8"), strict_parsing=True, max_num_fields=4)
+        except (UnicodeDecodeError, ValueError):
+            fields = {}
+        if not fields or not set(fields) <= {"state", "token"}:
+            # Malformed: the same failed answer as a malformed callback.
+            fields = {"state": [], "token": []}
+        return await _finish_provider_sign_in(
+            provider_name,
+            request,
+            state_values=fields.get("state", []),
+            code_values=fields.get("token", []),
+            error_values=[],
+            native=True,
+        )
+
     async def _start_provider_sign_in(
         provider_name: str,
         request: Request,
@@ -2881,6 +2960,7 @@ def install_identity_http(
         age_attested: bool,
         client_consent_version: str | None,
         app_challenge: str | None,
+        native: bool = False,
     ) -> Response:
         _require_surface_host(request, settings, surface)
         if provider_name != "google" and surface != "sales_xray":
@@ -2888,6 +2968,28 @@ def install_identity_http(
         selected_provider = sign_in_providers.get(provider_name)
         if selected_provider is None:
             raise IdentityProviderUnavailable("This sign-in provider is not configured.")
+        native_answer: dict[str, str] = {}
+        if native:
+            # Sign-in and sign-up only: Settings -> Connect stays a browser page.
+            facebook_token = settings.facebook_login_client_token
+            if (
+                surface != "sales_xray"
+                or authorization_type is ProviderAuthorizationType.LINK
+                or isinstance(selected_provider, DisabledIdentityProvider)
+                or getattr(selected_provider, "verify_native_token", None) is None
+            ):
+                raise IdentityProviderUnavailable("Sign-in on this phone is not offered here.")
+            if provider_name == "google":
+                native_answer = {"client_id": selected_provider.audience}
+            elif facebook_token is not None and facebook_token.get_secret_value().strip():
+                # Meta's client token is made to sit inside apps; the app needs it
+                # with the app ID to start the Facebook SDK for this environment.
+                native_answer = {
+                    "app_id": selected_provider.audience,
+                    "client_token": facebook_token.get_secret_value().strip(),
+                }
+            else:
+                raise IdentityProviderUnavailable("Facebook on this phone is not set up here.")
         safe_return_path = normalize_return_path(return_path)
         if app_challenge is not None and surface != "sales_xray":
             raise InvalidAuthTransaction("Only the Sales Xray app can take a sign-in back.")
@@ -3008,12 +3110,18 @@ def install_identity_http(
             app_challenge=app_challenge,
             provider=provider_name,
         )
-        redirect_uri = _surface_callback_uri(settings, surface, provider_name)
-        authorization_url = selected_provider.authorization_url(
-            transaction,
-            redirect_uri=redirect_uri,
-        )
-        response = RedirectResponse(authorization_url, status_code=status.HTTP_303_SEE_OTHER)
+        response: Response
+        if native:
+            response = JSONResponse(
+                {"state": transaction.state, "nonce": transaction.nonce, **native_answer}
+            )
+        else:
+            redirect_uri = _surface_callback_uri(settings, surface, provider_name)
+            authorization_url = selected_provider.authorization_url(
+                transaction,
+                redirect_uri=redirect_uri,
+            )
+            response = RedirectResponse(authorization_url, status_code=status.HTTP_303_SEE_OTHER)
         _prune_oauth_transaction_cookies(request, response, settings, codec)
         if surface == "sales_xray":
             _delete_sales_xray_completion_cookie(response)
@@ -3354,7 +3462,10 @@ def install_identity_http(
         code_values: list[str],
         error_values: list[str],
         apple_name: tuple[str | None, str | None] = (None, None),
+        native: bool = False,
     ) -> Response:
+        # A Google ID token from the phone is longer than an authorization code.
+        code_limit = 16_384 if native else 4096
         malformed_callback = (
             len(state_values) != 1
             or re.fullmatch(r"[A-Za-z0-9_-]{32,160}", state_values[0] if state_values else "")
@@ -3364,7 +3475,11 @@ def install_identity_http(
             or bool(code_values)
             and bool(error_values)
             or bool(code_values)
-            and (not code_values[0] or len(code_values[0]) > 4096 or not code_values[0].isascii())
+            and (
+                not code_values[0]
+                or len(code_values[0]) > code_limit
+                or not code_values[0].isascii()
+            )
             or bool(error_values)
             and (not error_values[0] or len(error_values[0]) > 200)
         )
@@ -3432,6 +3547,8 @@ def install_identity_http(
                 raise InvalidAuthTransaction("The callback state does not match the transaction.")
             if transaction.provider != provider_name:
                 raise InvalidAuthTransaction("The sign-in transaction belongs to another provider.")
+            if native and (settings_return is not None or transaction.app_challenge is not None):
+                raise InvalidAuthTransaction("This sign-in was not started on this phone.")
         except InvalidAuthTransaction as error:
             if not transaction_cookie_names:
                 transaction_cookie_names = _oauth_callback_failure_cookie_names(
@@ -3577,15 +3694,21 @@ def install_identity_http(
                 transaction_cookie_names=transaction_cookie_names,
             )
         redirect_uri = _surface_callback_uri(settings, transaction.surface, provider_name)
+        selected_provider = sign_in_providers.get(provider_name, DisabledIdentityProvider())
         try:
-            assertion = await sign_in_providers.get(
-                provider_name, DisabledIdentityProvider()
-            ).exchange_code(
-                code,
-                transaction,
-                callback_state=state_value,
-                redirect_uri=redirect_uri,
-            )
+            if native:
+                # The phone's own sign-in: a Google ID token or a Facebook user token.
+                verify_native_token = getattr(selected_provider, "verify_native_token", None)
+                if verify_native_token is None:
+                    raise IdentityProviderUnavailable("Sign-in on this phone is not offered here.")
+                assertion = await verify_native_token(code, transaction, callback_state=state_value)
+            else:
+                assertion = await selected_provider.exchange_code(
+                    code,
+                    transaction,
+                    callback_state=state_value,
+                    redirect_uri=redirect_uri,
+                )
         except IdentityProviderRejected as rejection:
             if transaction.surface == "learner":
                 return _learner_oauth_recovery_response(
@@ -3977,7 +4100,10 @@ def install_identity_http(
             if transaction.surface == "sales_xray":
                 return _sales_xray_auth_result_response(
                     settings,
-                    result="failed",
+                    # Its deletion request closed the account: say so, not "failed".
+                    result=(
+                        "account_closed" if isinstance(error, AccountClosedError) else "failed"
+                    ),
                     transaction_cookie_names=transaction_cookie_names,
                     flow_id=completion_flow_id,
                     app_handoff=app_handoff,

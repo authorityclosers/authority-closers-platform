@@ -103,11 +103,29 @@ export async function emailCodeRequest(
     },
   );
   // Do not echo server/provider bodies, email-existence details or raw errors.
-  if (!response.ok)
+  if (!response.ok) {
+    if (await isClosedAccount(response)) throw new Error(ACCOUNT_CLOSED);
     throw new Error(
       response.status === 429 ? "rate-limited" : "sign-in-unavailable",
     );
+  }
   return response.json() as Promise<unknown>;
+}
+
+/**
+ * Settings -> Security -> Delete account closed this account (its deletion is
+ * waiting): every sign-in answers 403 "account_closed" until it is carried out.
+ */
+export const ACCOUNT_CLOSED = "account-closed";
+export const ACCOUNT_CLOSED_MESSAGE =
+  "This account is closed because its deletion was asked for. If that was a mistake, write to admin@authorityclosers.com.";
+
+async function isClosedAccount(response: Response) {
+  if (response.status !== 403) return false;
+  const body = (await response.json().catch(() => null)) as {
+    code?: unknown;
+  } | null;
+  return body?.code === "account_closed";
 }
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -129,7 +147,9 @@ export type AuthCompletionResult =
   /** Settings -> Connect: that provider account signs in to another account. */
   | "already_linked"
   /** Settings -> Connect: sign in again first (within 10 minutes). */
-  | "fresh_sign_in";
+  | "fresh_sign_in"
+  /** The account's deletion was asked for, which closed it. */
+  | "account_closed";
 
 const AUTH_COMPLETION_RESULTS = new Set<AuthCompletionResult>([
   "success",
@@ -141,6 +161,7 @@ const AUTH_COMPLETION_RESULTS = new Set<AuthCompletionResult>([
   "linked",
   "already_linked",
   "fresh_sign_in",
+  "account_closed",
 ]);
 
 export function parseAuthCompletionQuery(
@@ -275,6 +296,104 @@ export async function readCanonicalSession(signal: AbortSignal) {
   return parseCanonicalSession(await response.json());
 }
 
+/** What the server answers for the phone's own sign-in (native/start). */
+export type NativeSignInStart = {
+  state: string;
+  nonce: string;
+  clientId?: string;
+  appId?: string;
+  clientToken?: string;
+};
+
+const NATIVE_STATE = /^[A-Za-z0-9_-]{32,160}$/;
+
+export function parseNativeSignInStart(
+  value: unknown,
+): NativeSignInStart | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const raw = object(value);
+  const text = (key: string) =>
+    typeof raw[key] === "string" && raw[key] && String(raw[key]).length <= 512
+      ? String(raw[key])
+      : undefined;
+  const state = text("state");
+  const nonce = text("nonce");
+  if (!state || !NATIVE_STATE.test(state) || !nonce) return null;
+  return {
+    state,
+    nonce,
+    ...(text("client_id") ? { clientId: text("client_id") } : {}),
+    ...(text("app_id") ? { appId: text("app_id") } : {}),
+    ...(text("client_token") ? { clientToken: text("client_token") } : {}),
+  };
+}
+
+/**
+ * Starts the phone's own sign-in: the same transaction as the browser start, by
+ * fetch. Null when this environment can't (the page then uses the phone's browser).
+ */
+export async function startNativeSignIn(
+  provider: "google" | "facebook",
+  body: {
+    consent_version: string;
+    return_path: string;
+  },
+  signal: AbortSignal,
+): Promise<NativeSignInStart | null> {
+  let response: Response;
+  try {
+    response = await fetch(`/v1/auth/${provider}/native/start`, {
+      method: "POST",
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      signal,
+      headers: {
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        action: "authenticate",
+        consent: true,
+        age_attested: true,
+        ...body,
+      }),
+    });
+  } catch (error) {
+    if (signal.aborted) throw error;
+    return null;
+  }
+  if (!response.ok) return null;
+  return parseNativeSignInStart(await response.json().catch(() => null));
+}
+
+/**
+ * Hands the phone's token to the server as a plain same-origin form post. The
+ * server answers like the provider callback: on to /auth/complete.
+ */
+export function submitNativeSignIn(
+  provider: "google" | "facebook",
+  state: string,
+  token: string,
+) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = `/v1/auth/${provider}/native/finish`;
+  form.hidden = true;
+  for (const [name, value] of [
+    ["state", state],
+    ["token", token],
+  ]) {
+    const input = document.createElement("input");
+    input.type = "hidden";
+    input.name = name;
+    input.value = value;
+    form.append(input);
+  }
+  document.body.append(form);
+  form.submit();
+}
+
 export async function passwordLogin(
   email: string,
   password: string,
@@ -289,7 +408,10 @@ export async function passwordLogin(
     headers: { accept: "application/json", "content-type": "application/json" },
     body: JSON.stringify({ email, password }),
   });
-  if (!response.ok) throw new Error("Password sign-in was not confirmed");
+  if (!response.ok) {
+    if (await isClosedAccount(response)) throw new Error(ACCOUNT_CLOSED);
+    throw new Error("Password sign-in was not confirmed");
+  }
   return readCanonicalSession(signal);
 }
 
@@ -552,7 +674,7 @@ export function connectOutcome(
   if (result === "already_linked")
     return {
       tone: "error",
-      message: `That ${label} account is already used by another Sales Xray account.`,
+      message: `That ${label} account is already used by another Sales X-Ray account.`,
     };
   if (result === "fresh_sign_in")
     return {

@@ -33,8 +33,14 @@ import {
   record,
   type Allowance,
 } from "./acquisition-client";
+import { DeleteAccountRow } from "./account-delete";
 import { useSalesXraySignOut } from "./account-navigation";
 import type { BillingViewProps } from "./billing/billing-view";
+import { documentStatus } from "./billing/document-status";
+import { revealAboveTabBar } from "./billing/reveal";
+import { RefundRequest } from "./billing/refund-request";
+import { PLANS_ON_WEB, usePurchasesAllowed } from "./purchase-policy";
+import { useWorkspaceAccess } from "./workspace-access";
 import { useBillingAccount } from "./billing/use-billing-account";
 import { count, day, formatMoney, money } from "./billing/money";
 import {
@@ -171,6 +177,7 @@ export function AccountSettings({
     null,
   );
   const topUp = usePurchaseCheckout(undefined, "/account#billing");
+  const purchasesAllowed = usePurchasesAllowed();
   useEffect(() => {
     if (!topUp.error) return;
     const id = "topup-checkout-error";
@@ -272,6 +279,12 @@ export function AccountSettings({
     setAllowance({ state: "loading" });
     setAttempt((value) => value + 1);
   };
+  // Beside Plan & billing, that pane's card already names the analysis time.
+  useReadErrorCard(
+    shows("usage") && !shows("billing"),
+    allowance.state === "error" ? ["your analysis time"] : [],
+    retry,
+  );
 
   const who = profile.state === "ready" ? profile.value : null;
 
@@ -293,7 +306,7 @@ export function AccountSettings({
             </span>
             <div className={styles.navWho}>
               {variant === "dialog" ? <h2>Settings</h2> : <h1>Account</h1>}
-              <p>{who?.email ?? "Sales Xray settings"}</p>
+              <p>{who?.email ?? "Sales X-Ray settings"}</p>
             </div>
             {onClose ? (
               <button
@@ -352,7 +365,7 @@ export function AccountSettings({
           <ThemeRow />
           <Row
             label="App language"
-            hint="Sales Xray is available in English. Choose the report language when you start an analysis."
+            hint="Sales X-Ray is available in English. Choose the report language when you start an analysis."
           >
             <span>English</span>
           </Row>
@@ -424,35 +437,42 @@ export function AccountSettings({
           onBack={back}
         >
           {shows("usage") ? <CallActivitySummary variant={variant} /> : null}
-          <AllowanceSummary allowance={allowance} onRetry={retry} />
-          <div className={styles.row}>
-            <div className={styles.rowText}>
-              <span className={styles.rowLabel}>Need more minutes?</span>
-              <span className={styles.rowHint}>
-                Add analysis minutes anytime without changing your monthly
-                subscription.
-              </span>
+          <AllowanceSummary allowance={allowance} />
+          {purchasesAllowed ? (
+            <div className={styles.row}>
+              <div className={styles.rowText}>
+                <span className={styles.rowLabel}>Need more minutes?</span>
+                <span className={styles.rowHint}>
+                  Add analysis minutes anytime without changing your monthly
+                  subscription.
+                </span>
+              </div>
+              <div className={styles.rowControl}>
+                <button
+                  type="button"
+                  className={styles.secondary}
+                  onClick={() => {
+                    if (only?.includes("billing")) {
+                      document
+                        .getElementById("account-pane-billing")
+                        ?.scrollIntoView({
+                          behavior: "smooth",
+                          block: "start",
+                        });
+                      return;
+                    }
+                    setSection("billing");
+                    if (typeof window !== "undefined")
+                      window.location.hash = "billing";
+                  }}
+                >
+                  Top up minutes
+                </button>
+              </div>
             </div>
-            <div className={styles.rowControl}>
-              <button
-                type="button"
-                className={styles.secondary}
-                onClick={() => {
-                  if (only?.includes("billing")) {
-                    document
-                      .getElementById("account-pane-billing")
-                      ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                    return;
-                  }
-                  setSection("billing");
-                  if (typeof window !== "undefined")
-                    window.location.hash = "billing";
-                }}
-              >
-                Top up minutes
-              </button>
-            </div>
-          </div>
+          ) : (
+            <p className={styles.muted}>{PLANS_ON_WEB}</p>
+          )}
         </Pane>
 
         <Pane
@@ -506,7 +526,7 @@ export function AccountSettings({
           <SignInMethods active={shows("security")} />
           <Row
             label="Log out of this device"
-            hint="End your Sales Xray session in this browser."
+            hint="End your Sales X-Ray session in this browser."
           >
             <button
               type="button"
@@ -523,6 +543,7 @@ export function AccountSettings({
               {signOutError}
             </p>
           ) : null}
+          <DeleteAccountRow />
         </Pane>
 
         <Pane
@@ -1070,13 +1091,44 @@ function ProfileForm({
   );
 }
 
-function AllowanceSummary({
-  allowance,
-  onRetry,
-}: {
-  allowance: Loaded<Allowance>;
-  onRetry: () => void;
-}) {
+const READ_ERROR_NOTICE = "settings-read-error";
+
+/** "a, b and c" */
+function listed(items: readonly string[]): string {
+  return items.length < 2
+    ? (items[0] ?? "")
+    : `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
+}
+
+/**
+ * Errors are corner cards (owner rule): a failed read raises one card with
+ * one Try again for everything that failed, and the page keeps a quiet
+ * placeholder, never red text or a button per block (QA, 23 Oct 2026).
+ */
+function useReadErrorCard(
+  active: boolean,
+  failed: readonly string[],
+  retry: () => void,
+) {
+  const latest = useRef(retry);
+  useEffect(() => {
+    latest.current = retry;
+  });
+  const what = listed(failed);
+  useEffect(() => {
+    if (!active || !what) return;
+    notify({
+      id: READ_ERROR_NOTICE,
+      tone: "error",
+      title: "Some details didn't load",
+      message: `${what[0].toUpperCase()}${what.slice(1)} couldn't be loaded.`,
+      action: { label: "Try again", run: () => latest.current() },
+    });
+    return () => dismissNotice(READ_ERROR_NOTICE);
+  }, [active, what]);
+}
+
+function AllowanceSummary({ allowance }: { allowance: Loaded<Allowance> }) {
   if (allowance.state === "loading")
     return (
       <p className={styles.muted} role="status" aria-busy="true">
@@ -1085,12 +1137,9 @@ function AllowanceSummary({
     );
   if (allowance.state === "error")
     return (
-      <div className={styles.error} role="alert">
-        <p>Your analysis time is unavailable right now.</p>
-        <button type="button" className={styles.secondary} onClick={onRetry}>
-          <RefreshCw size={15} aria-hidden="true" /> Try again
-        </button>
-      </div>
+      <p className={styles.muted}>
+        {"We couldn't load your analysis time right now."}
+      </p>
     );
   const { allowance_seconds, available_seconds, committed_seconds } =
     allowance.value;
@@ -1180,6 +1229,7 @@ export function PlanAndBillingPane({
   error,
   onRefresh,
   onCancel,
+  onRefund,
   onBuyTopUp,
   topUpPacks = TOP_UP_PACKS,
 }: SettingsBillingProps & {
@@ -1189,11 +1239,47 @@ export function PlanAndBillingPane({
   onRetry: () => void;
 }) {
   const [cancelAsk, setCancelAsk] = useState(false);
+  // The confirm opens below the fold on phones: bring it up, clear of the tab
+  // bar (QA, 23 Oct 2026).
+  const revealConfirm = useCallback((box: HTMLDivElement | null) => {
+    if (box) requestAnimationFrame(() => revealAboveTabBar(box));
+  }, []);
+  const purchasesAllowed = usePurchasesAllowed();
+  const refundable = documents?.find(
+    (document) => document.refund?.state === "available",
+  );
+  // Offer only the top-up the selected workspace can buy: Personal in a personal
+  // workspace, Organisation in an organisation (unknown: both).
+  const access = useWorkspaceAccess();
+  const workspaceKind = access?.workspaces?.find(
+    (workspace) => workspace.tenant_id === access.context?.tenantId,
+  )?.kind;
+  const packs = workspaceKind
+    ? topUpPacks.filter(
+        (pack) =>
+          (pack.planKey === "personal") === (workspaceKind === "personal"),
+      )
+    : topUpPacks;
   const current = subs?.current;
   const isCancelled = current?.cancelAtPeriodEnd === true;
   const canCancel =
     current && ["active", "past_due", "halted"].includes(current.status);
   const loading = status === "loading";
+  const unread = !loading && status !== "ready";
+  useReadErrorCard(
+    active,
+    [
+      unread ? "your plan details" : null,
+      documents && purchasesAllowed && invoicesStatus === "error"
+        ? "your invoices"
+        : null,
+      allowance.state === "error" ? "your analysis time" : null,
+    ].filter((item): item is string => item !== null),
+    () => {
+      onRefresh?.();
+      onRetry();
+    },
+  );
   useEffect(() => {
     if (!active || status !== "ready" || !error) return;
     const id = "settings-billing-error";
@@ -1217,13 +1303,17 @@ export function PlanAndBillingPane({
           <span
             className={styles.badge}
             data-tone={
-              current?.status === "active" && !isCancelled ? "ok" : "pending"
+              unread
+                ? undefined
+                : current?.status === "active" && !isCancelled
+                  ? "ok"
+                  : "pending"
             }
           >
             {loading
               ? "Loading…"
-              : status !== "ready"
-                ? "Try again"
+              : unread
+                ? "Couldn't load"
                 : isCancelled
                   ? "Cancels at period end"
                   : current?.status === "active"
@@ -1252,34 +1342,26 @@ export function PlanAndBillingPane({
             <i />
           </div>
         ) : status !== "ready" ? (
-          <div className={styles.error} role="alert">
-            <p>
-              {error ??
-                "Billing details could not be loaded. Please try again."}
-            </p>
-            <button
-              type="button"
-              className={styles.secondary}
-              disabled={busy || !onRefresh}
-              onClick={onRefresh}
-            >
-              <RefreshCw size={15} aria-hidden="true" /> Reload billing details
-            </button>
-          </div>
+          <p className={styles.muted}>
+            {"We couldn't load your plan details right now."}
+          </p>
         ) : (
           <dl className={styles.facts}>
             <div className={styles.row}>
               <dt className={styles.rowLabel}>Plan</dt>
               <dd>{mePlan?.plan.name ?? current?.planName ?? "—"}</dd>
             </div>
-            <div className={styles.row}>
-              <dt className={styles.rowLabel}>Price</dt>
-              <dd>
-                {current
-                  ? `${formatMoney(current.amount)} / ${current.interval === "month" ? "month" : "year"}${current.amount.gstInclusive ? " · GST included" : ""}`
-                  : "No subscription"}
-              </dd>
-            </div>
+            {purchasesAllowed ? (
+              <div className={styles.row}>
+                <dt className={styles.rowLabel}>Price</dt>
+                <dd>
+                  {current
+                    ? `${formatMoney(current.amount)} / ${current.interval === "month" ? "month" : "year"}${current.amount.gstInclusive ? " · GST included" : ""}`
+                    : "No subscription"}
+                </dd>
+              </div>
+            ) : null}
+
             {current?.seats ? (
               <div className={styles.row}>
                 <dt className={styles.rowLabel}>Seats</dt>
@@ -1305,7 +1387,9 @@ export function PlanAndBillingPane({
                 {isCancelled
                   ? day(current?.currentPeriod?.end ?? null) || "—"
                   : current?.renewsAt
-                    ? `${day(current.renewsAt)} · ${formatMoney(current.amount)}`
+                    ? purchasesAllowed
+                      ? `${day(current.renewsAt)} · ${formatMoney(current.amount)}`
+                      : day(current.renewsAt)
                     : status === "ready" && !current
                       ? "No renewal scheduled"
                       : "—"}
@@ -1314,24 +1398,29 @@ export function PlanAndBillingPane({
           </dl>
         )}
 
-        {status === "ready" && !current ? (
+        {status === "ready" && (!current || !purchasesAllowed) ? (
           <p className={styles.muted}>
-            No subscription yet. View plans when you’re ready to choose one.
+            {purchasesAllowed
+              ? "No subscription yet. View plans when you’re ready to choose one."
+              : PLANS_ON_WEB}
           </p>
         ) : null}
 
         <div className={styles.actions}>
-          <Link
-            className={styles.primary}
-            href="/plans"
-            replace={variant === "dialog"}
-          >
-            {current ? "Change or upgrade plan" : "Choose a plan"}
-          </Link>
+          {purchasesAllowed ? (
+            <Link
+              className={styles.primary}
+              href="/plans"
+              replace={variant === "dialog"}
+            >
+              {current ? "Change or upgrade plan" : "Choose a plan"}
+            </Link>
+          ) : null}
+
           {current &&
             !isCancelled &&
             (cancelAsk ? (
-              <div className={styles.confirmCancelBox}>
+              <div className={styles.confirmCancelBox} ref={revealConfirm}>
                 <p className={styles.muted}>
                   Renewal stops; access continues to the end of the period.
                 </p>
@@ -1364,8 +1453,16 @@ export function PlanAndBillingPane({
                 Cancel renewal
               </button>
             ))}
+          {purchasesAllowed && onRefund && refundable ? (
+            <RefundRequest
+              refund={refundable.refund}
+              amount={formatMoney(refundable.amount)}
+              onRequest={onRefund}
+              className={styles.secondary}
+            />
+          ) : null}
         </div>
-        {current?.renewalNeedsCustomerApproval ? (
+        {purchasesAllowed && current?.renewalNeedsCustomerApproval ? (
           <p className={styles.muted}>
             Your bank will ask you to approve each renewal above ₹15,000.
           </p>
@@ -1383,57 +1480,59 @@ export function PlanAndBillingPane({
             Analyse a call
           </Link>
         </div>
-        <AllowanceSummary allowance={allowance} onRetry={onRetry} />
+        <AllowanceSummary allowance={allowance} />
       </div>
 
-      <div className={styles.billingCard}>
-        <div className={styles.billingCardHead}>
-          <div>
-            <h3>Need more minutes?</h3>
-            <p className={styles.muted}>
-              Add analysis minutes without changing your subscription.
-            </p>
+      {purchasesAllowed ? (
+        <div className={styles.billingCard}>
+          <div className={styles.billingCardHead}>
+            <div>
+              <h3>Need more minutes?</h3>
+              <p className={styles.muted}>
+                Add analysis minutes without changing your subscription.
+              </p>
+            </div>
+          </div>
+          <div className={styles.topUpsMiniGrid}>
+            {packs.map((pack) => {
+              const total =
+                pack.pricePaise +
+                (pack.gstInclusive
+                  ? 0
+                  : Math.round(pack.pricePaise * PLANS_GST_RATE));
+              return (
+                <div className={styles.topUpMiniCard} key={pack.key}>
+                  <div className={styles.topUpMiniHead}>
+                    <span>
+                      {pack.title} · {pack.minutes} min
+                    </span>
+                    <span className={styles.topUpMiniPrice}>
+                      {money(pack.pricePaise)}
+                      {pack.gstInclusive ? "" : " + GST"}
+                    </span>
+                  </div>
+                  <p className={styles.muted}>
+                    {pack.gstInclusive
+                      ? "GST included"
+                      : `${money(total)} total incl. GST`}{" "}
+                    · {pack.audience}
+                  </p>
+                  <button
+                    type="button"
+                    className={styles.secondary}
+                    disabled={busy || !onBuyTopUp}
+                    onClick={() => onBuyTopUp?.(pack)}
+                  >
+                    Top up {pack.minutes} min
+                  </button>
+                </div>
+              );
+            })}
           </div>
         </div>
-        <div className={styles.topUpsMiniGrid}>
-          {topUpPacks.map((pack) => {
-            const total =
-              pack.pricePaise +
-              (pack.gstInclusive
-                ? 0
-                : Math.round(pack.pricePaise * PLANS_GST_RATE));
-            return (
-              <div className={styles.topUpMiniCard} key={pack.key}>
-                <div className={styles.topUpMiniHead}>
-                  <span>
-                    {pack.title} · {pack.minutes} min
-                  </span>
-                  <span className={styles.topUpMiniPrice}>
-                    {money(pack.pricePaise)}
-                    {pack.gstInclusive ? "" : " + GST"}
-                  </span>
-                </div>
-                <p className={styles.muted}>
-                  {pack.gstInclusive
-                    ? "GST included"
-                    : `${money(total)} total incl. GST`}{" "}
-                  · {pack.audience}
-                </p>
-                <button
-                  type="button"
-                  className={styles.secondary}
-                  disabled={busy || !onBuyTopUp}
-                  onClick={() => onBuyTopUp?.(pack)}
-                >
-                  Top up {pack.minutes} min
-                </button>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      ) : null}
 
-      {documents ? (
+      {documents && purchasesAllowed ? (
         <div className={styles.billingCard}>
           <div className={styles.billingCardHead}>
             <h3>Invoices &amp; Receipts</h3>
@@ -1443,19 +1542,9 @@ export function PlanAndBillingPane({
               Loading invoices…
             </p>
           ) : invoicesStatus !== "ready" ? (
-            <div className={styles.error} role="alert">
-              <p>
-                Invoices and receipts could not be loaded. Please try again.
-              </p>
-              <button
-                type="button"
-                className={styles.secondary}
-                disabled={busy || !onRefresh}
-                onClick={onRefresh}
-              >
-                <RefreshCw size={15} aria-hidden="true" /> Reload invoices
-              </button>
-            </div>
+            <p className={styles.muted}>
+              Invoices and receipts are currently unavailable.
+            </p>
           ) : documents.length === 0 ? (
             <p className={styles.muted}>No invoices or receipts yet.</p>
           ) : (
@@ -1473,11 +1562,13 @@ export function PlanAndBillingPane({
                 <tbody>
                   {documents.map((document) => (
                     <tr key={document.id}>
-                      <td>{day(document.createdAt)}</td>
-                      <td>{document.description}</td>
-                      <td>{formatMoney(document.amount)}</td>
-                      <td>{document.status}</td>
-                      <td>
+                      <td data-label="Date">{day(document.createdAt)}</td>
+                      <td data-label="Description">{document.description}</td>
+                      <td data-label="Amount">
+                        {formatMoney(document.amount)}
+                      </td>
+                      <td data-label="Status">{documentStatus(document)}</td>
+                      <td data-label="Documents">
                         {document.invoiceHref ? (
                           <a
                             href={document.invoiceHref}
@@ -1500,6 +1591,17 @@ export function PlanAndBillingPane({
                         {!document.invoiceHref && !document.receiptHref
                           ? "—"
                           : null}
+                        {onRefund && document.refund?.state === "available" ? (
+                          <>
+                            {" · "}
+                            <RefundRequest
+                              refund={document.refund}
+                              amount={formatMoney(document.amount)}
+                              onRequest={onRefund}
+                              className={styles.secondary}
+                            />
+                          </>
+                        ) : null}
                       </td>
                     </tr>
                   ))}

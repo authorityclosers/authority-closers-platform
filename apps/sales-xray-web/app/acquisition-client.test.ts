@@ -177,7 +177,7 @@ describe("acquisition permission recovery", () => {
     ).rejects.toMatchObject({
       status: 403,
       reason: "trial_allowance_insufficient",
-      message: expect.stringContaining("remaining trial allowance"),
+      message: expect.stringContaining("remaining analysis minutes"),
     });
   });
 

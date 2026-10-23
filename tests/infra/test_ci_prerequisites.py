@@ -470,24 +470,16 @@ def test_python_shards_coverage_and_evidence_are_unchanged() -> None:
     assert "Verify complete Python shard coverage" in aggregate
 
 
-def test_shared_action_uses_exact_cache_and_saves_before_downstream_tests() -> None:
+def test_shared_action_requires_verified_bundle_without_consumer_downloads() -> None:
     action = yaml.safe_load((ROOT / ".github/actions/ci-prerequisites/action.yml").read_text())
+    assert action["inputs"]["bundle"]["required"] is True
     steps = action["runs"]["steps"]
-    restore = next(s for s in steps if "/restore@" in s.get("uses", ""))
-    save = next(s for s in steps if "/save@" in s.get("uses", ""))
-    assert restore["with"] == save["with"]
-    assert "restore-keys" not in restore["with"]
-    assert "*.deb" in restore["with"]["path"]
-    assert "manifest.json" in restore["with"]["path"]
-    assert "ms-playwright" in restore["with"]["path"]
-    assert save["if"] == "steps.restore.outputs.cache-hit != 'true'"
-    install = next(s for s in steps if s["name"] == "Install and prove the locked prerequisites")
-    assert steps.index(restore) < steps.index(install) < steps.index(save)
-    assert "--offline" in install["run"] and "--package-cache" in install["run"]
+    assert all("actions/cache" not in step.get("uses", "") for step in steps)
+    install = next(step for step in steps if "consume --directory" in step.get("run", ""))
+    assert install["env"]["PREREQ_BUNDLE"] == "${{ inputs.bundle }}"
     assert "continue-on-error" not in install
     for step in steps:
-        if "run" in step:
-            assert "${{ inputs." not in step["run"]
+        assert "${{ inputs." not in step.get("run", "")
 
 
 def test_workbench_routes_action_changes_and_overlays_action_for_historical_sources() -> None:
@@ -523,7 +515,12 @@ def test_workbench_jobs_use_cached_proofs_and_foreground_dependency_failures() -
     )
     visual = next(s for s in visual_steps if "node-browser" in s.get("with", {}))
     assert visual_steps.index(dependencies) < visual_steps.index(visual)
-    assert visual["with"] == {"components": "browser", "python": "python3", "node-browser": "true"}
+    assert visual["with"] == {
+        "bundle": "${{ needs.ci-prerequisites.outputs.bundle }}",
+        "components": "browser",
+        "python": "python3",
+        "node-browser": "true",
+    }
     scripts = "\n".join(s.get("run", "") for s in jobs["py-tests"]["steps"])
     assert "prereq.rc" not in scripts and "pnpm.rc" not in scripts
     node = next(

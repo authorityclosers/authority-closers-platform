@@ -15,7 +15,7 @@ import { CheckCircle2, ChevronRight, Circle, Smartphone } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import { Button } from "../ui/kit";
-import { Sheet } from "./lead-sheet";
+import { Sheet } from "./sheet-frame";
 import { usePhoneOnboarded } from "./phone-onboarding";
 import { reportPhone } from "./leads-client";
 import {
@@ -29,6 +29,7 @@ import {
   onPhoneSignal,
   setupMark,
   recorderOpen,
+  pickRecordingsFolder,
   setupOpen,
   setupStatus,
   type CallLogStatus,
@@ -36,10 +37,12 @@ import {
 } from "./native-phone";
 import {
   ALL_FILES_EXPLAINER,
-  CHECK_LABELS,
+  FOLDER_EXPLAINER,
+  FOLDER_TODO,
   CHECK_ORDER,
   CHECK_TODO,
-  EXPLAINERS,
+  checkLabel,
+  explainerFor,
   HIDDEN_TODO,
   recorderGuide,
   TRUECALLER_NOTE,
@@ -64,16 +67,31 @@ export function needsAllFiles(status: SetupStatus): boolean {
   return status.needsAllFiles && status.allFilesSupported;
 }
 
+/** The same in the Play build, which has no All files access: the seller picks the folder (S8). */
+export function needsFolderPick(status: SetupStatus): boolean {
+  return (
+    status.needsAllFiles &&
+    !status.allFilesSupported &&
+    status.folderPickSupported
+  );
+}
+
 /** What a line says while it is not done yet, for this phone. */
 export function lineTodo(key: PhoneCheck, status: SetupStatus): string {
   if (key === "recordings" && needsAllFiles(status)) return HIDDEN_TODO;
+  if (key === "recordings" && needsFolderPick(status)) return FOLDER_TODO;
   return CHECK_TODO[key];
 }
 
-/** The lines this phone shows: Autostart only on brands that have it. */
+/**
+ * The lines this phone shows: Autostart only on brands that have it, and work-call
+ * logging only in an app build that can read the call history (not the Play build).
+ */
 export function setupLines(status: SetupStatus): PhoneCheck[] {
   return CHECK_ORDER.filter(
-    (key) => key !== "autostart" || status.autostartNeeded,
+    (key) =>
+      (key !== "autostart" || status.autostartNeeded) &&
+      (key !== "callLog" || status.callLogSupported),
   );
 }
 
@@ -257,10 +275,13 @@ export function PhoneSetupSheet({
         key !== "battery" &&
         key !== "recorder" &&
         key !== "autostart" &&
-        !(key === "recordings" && needsAllFiles(status))
+        !(
+          key === "recordings" &&
+          (needsAllFiles(status) || needsFolderPick(status))
+        )
       )
         setNote(
-          "Not allowed yet. You can allow it in your phone's settings for Sales Xray.",
+          "Not allowed yet. You can allow it in your phone's settings for Sales X-Ray.",
         );
     } finally {
       setBusy(false);
@@ -273,9 +294,10 @@ export function PhoneSetupSheet({
         return run(key, () => askCallAccess().catch(() => false));
       case "recordings":
         // Android's All files access screen opens; the line ticks when the seller comes back.
-        return needsAllFiles(status)
-          ? run(key, () => setupOpen("allFiles"))
-          : run(key, askRecordingAccess);
+        if (needsAllFiles(status)) return run(key, () => setupOpen("allFiles"));
+        // Android's folder picker opens at the recordings; the line ticks once it's picked.
+        if (needsFolderPick(status)) return run(key, pickRecordingsFolder);
+        return run(key, askRecordingAccess);
       case "notifications":
         return run(key, askNotifications);
       case "battery":
@@ -289,9 +311,11 @@ export function PhoneSetupSheet({
   const explainer =
     view === "recordings" && needsAllFiles(status)
       ? ALL_FILES_EXPLAINER
-      : view
-        ? EXPLAINERS[view]
-        : undefined;
+      : view === "recordings" && needsFolderPick(status)
+        ? FOLDER_EXPLAINER
+        : view
+          ? explainerFor(view, status.store)
+          : undefined;
 
   return (
     <Sheet
@@ -326,7 +350,7 @@ export function PhoneSetupSheet({
                       <Circle size={20} aria-label="To do" />
                     )}
                     <span>
-                      <strong>{CHECK_LABELS[key]}</strong>
+                      <strong>{checkLabel(key, status.store)}</strong>
                       <small>{ok ? "Done" : lineTodo(key, status)}</small>
                     </span>
                     {!ok && ACTIONS.has(key) ? (
@@ -345,12 +369,15 @@ export function PhoneSetupSheet({
             </p>
           </>
         ) : (
-          <section className={styles.setupView} aria-label={CHECK_LABELS[view]}>
-            <h3>{CHECK_LABELS[view]}</h3>
+          <section
+            className={styles.setupView}
+            aria-label={checkLabel(view, status.store)}
+          >
+            <h3>{checkLabel(view, status.store)}</h3>
             {explainer ? (
               <dl>
                 <div>
-                  <dt>What Sales Xray reads</dt>
+                  <dt>What Sales X-Ray reads</dt>
                   <dd>{explainer.reads}</dd>
                 </div>
                 <div>
@@ -375,7 +402,7 @@ export function PhoneSetupSheet({
             ) : null}
             {view === "autostart" ? (
               <p>
-                Your phone stops apps that start by themselves. Find Sales Xray
+                Your phone stops apps that start by themselves. Find Sales X-Ray
                 in the list and switch it on, then come back.
               </p>
             ) : null}

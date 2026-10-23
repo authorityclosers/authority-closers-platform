@@ -1,0 +1,59 @@
+#!/bin/bash
+# AC server: nightly off-site backup of Authority Closers' Pulse data (owner approvals 16 Oct 2026 and 23 Oct 2026,
+# AUT-2207). Since 23 Oct AC's organisation lives in the shared Pulse on ea, so the copy is an AC-only export pulled
+# over the restricted pulsesync key (ea runs pulse-org-move export for organisation authorityclosers only) -> checked
+# against its own manifest -> sha256 -> AES-256 gpg with the passphrase in /etc/pulse/secrets (also in AC Infisical prod
+# as AC_PULSE_BACKUP_PASSPHRASE) -> AC Drive "AC Backups/pulse". Keeps 14 local and 30 days off-site.
+# Restore: ac-pulse-snapshot --fetch <name> <dir> fetches, decrypts and checks one copy; then
+# pulse-org-move.py import --bundle <dir>/bundle into a Pulse on the same release (see its manifest's migrations).
+set -euo pipefail
+umask 077
+DIR=/srv/authority-closers/pulse/backups/scheduled
+PASS=/etc/pulse/secrets/backup-passphrase
+KEY=/etc/pulse/secrets/org_export_ed25519
+EA="pulsesync@187.53.141.187"
+RC=(rclone --config /root/ac-drive/rclone.conf)
+REMOTE="acdrive:AC Backups/pulse"
+LOG=/var/log/ac-pulse-snapshot.log
+say() { echo "$(date -u +%FT%TZ) $*" | tee -a "$LOG"; }
+[[ -r "$PASS" ]] || { say "no passphrase file"; exit 1; }
+if [[ "${1:-}" == "--fetch" ]]; then
+  name="$2"; out="$3"; mkdir -p "$out"
+  "${RC[@]}" copy "$REMOTE/$name" "$out" --quiet
+  for ext in tar dump; do
+    if [[ -f "$out/$name.$ext.gpg" ]]; then
+      gpg --batch --quiet --pinentry-mode loopback --passphrase-file "$PASS" -o "$out/$name.$ext" -d "$out/$name.$ext.gpg"
+      (cd "$out" && sha256sum -c "$name.$ext.sha256")
+      [[ "$ext" == tar ]] && tar -C "$out" -xf "$out/$name.tar"
+    fi
+  done
+  exit 0
+fi
+mkdir -p "$DIR"
+name="pulse-shared-$(date -u +%Y%m%dT%H%M%SZ)"
+ssh -i "$KEY" -o BatchMode=yes -o ConnectTimeout=20 -o UserKnownHostsFile=/etc/pulse/secrets/known_hosts \
+  -o StrictHostKeyChecking=yes "$EA" export > "$DIR/$name.tar"
+[[ -s "$DIR/$name.tar" ]] || { say "$name: empty export"; exit 1; }
+# The bundle must match its own manifest before it counts as a backup.
+python3 - "$DIR/$name.tar" <<'PY' || { say "$name: export does not match its manifest"; exit 1; }
+import hashlib, json, sys, tarfile
+with tarfile.open(sys.argv[1]) as t:
+    m = json.load(t.extractfile("bundle/manifest.json"))
+    body = t.extractfile("bundle/bundle.sql").read()
+assert hashlib.sha256(body).hexdigest() == m["bundle_sha256"], "sha256"
+assert m["org"]["handle"] == "authorityclosers" and m["rows"] > 0, "organisation"
+PY
+(cd "$DIR" && sha256sum "$name.tar" > "$name.tar.sha256")
+gpg --batch --quiet --yes --pinentry-mode loopback --passphrase-file "$PASS" --symmetric --cipher-algo AES256 -o "$DIR/$name.tar.gpg" "$DIR/$name.tar"
+"${RC[@]}" copy "$DIR/$name.tar.gpg" "$REMOTE/$name" --quiet
+"${RC[@]}" copy "$DIR/$name.tar.sha256" "$REMOTE/$name" --quiet
+local_size=$(stat -c %s "$DIR/$name.tar.gpg")
+remote_size=$("${RC[@]}" size "$REMOTE/$name" --json --include "*.gpg" | python3 -c 'import json,sys; print(json.load(sys.stdin)["bytes"])')
+[[ "$local_size" == "$remote_size" ]] || { say "$name off-site size mismatch $local_size vs $remote_size"; exit 1; }
+rm -f "$DIR/$name.tar.gpg"
+# Our own fixed file names; ls -t gives newest first, so everything after the 14 newest goes.
+# shellcheck disable=SC2012
+ls -1t "$DIR"/pulse-shared-*.tar 2>/dev/null | tail -n +15 | while read -r f; do rm -f "$f" "$f.sha256"; done
+"${RC[@]}" delete "$REMOTE" --min-age 30d --quiet || true
+"${RC[@]}" rmdirs "$REMOTE" --leave-root --quiet || true
+say "$name ok: AC-only export $(stat -c %s "$DIR/$name.tar") bytes, encrypted copy $local_size bytes off-site"

@@ -9,9 +9,12 @@
  * `?tab=stages&tap=change` the kinds of business. `&pipelines=2` gives the
  * organisation two pipelines (enquiries and partner outreach; `&pipeline=`
  * picks one), and `?tab=stages&pipelines=2&tap=new` opens New pipeline.
- * `?after-call=1` opens the first lead as if a call to it just ended, so the
- * "How did it go?" sheet shows (Redmi #47: Save says what it still needs);
- * `&tap=next` then saves "Didn't get through" and shows who is next.
+ * `?after-call=1` opens the first lead just after a call to it that the phone
+ * logged with 1 min 22 s of talk, so "How did it go?" shows (Redmi #47: Save
+ * says what it still needs); `&tap=next` then saves "Didn't get through" and
+ * shows who is next. `?after-call=back` opens it back from a browser's dialler
+ * instead: whether it connected is unknown, so only the "Log this" chip shows
+ * (owner, 23 Oct 2026: the question only after a real call).
  * `?tab=all&stage=open&tap=bulk` ticks two leads and opens Select → Actions;
  * `tap=bulkwa` goes on to a WhatsApp template and who gets it.
  * `?loop=1&tap=loop` opens Start calling just back from a call and taps No answer:
@@ -76,6 +79,36 @@ const LEADS: [string, string | null, string | null, Stage, string, string][] = [
 const hub = () =>
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).get("hub") === "1";
+
+const afterCall = () =>
+  typeof window === "undefined"
+    ? null
+    : new URLSearchParams(window.location.search).get("after-call");
+
+/** A call the phone logged from its own dialler 95 s ago, 1 min 22 s of talk. */
+function diallerCall(now: number) {
+  return {
+    kind: "call",
+    at: new Date(now - 95_000).toISOString(),
+    actor_name: "rahul example",
+    stage: null,
+    stage_label: null,
+    reason: null,
+    reason_label: null,
+    connected: true,
+    note: null,
+    next_action_at: null,
+    owner_name: null,
+    previous_owner_name: null,
+    allocation_reason: null,
+    source_label: null,
+    submission_id: null,
+    simulated: null,
+    duration_seconds: 82,
+    via: "phone",
+    direction: "outgoing",
+  };
+}
 
 function hubEvents(now: number) {
   const at = (minutes: number) =>
@@ -352,8 +385,14 @@ function answers(now: number, path: string): unknown {
       next_action_note: null,
       fields: [],
       source_fields: [],
-      events:
-        hub() && row.lead_id === all[0].lead_id ? hubEvents(Date.now()) : [],
+      events: [
+        ...(afterCall() === "1" && row.lead_id === all[0].lead_id
+          ? [diallerCall(Date.now())]
+          : []),
+        ...(hub() && row.lead_id === all[0].lead_id
+          ? hubEvents(Date.now())
+          : []),
+      ],
       can_edit: true,
       can_assign: true,
       reps: [],
@@ -592,8 +631,8 @@ function keepViews() {
 function install() {
   if (typeof window === "undefined") return true;
   keepViews();
-  // `?after-call=1`: a call to the first lead ended 95 s ago; the lead opens.
-  if (new URLSearchParams(window.location.search).get("after-call") === "1") {
+  // `?after-call=1|back`: a call to the first lead ended 95 s ago; it opens.
+  if (afterCall() === "1" || afterCall() === "back") {
     const first = rows(Date.now())[0].lead_id;
     rememberCall(first, Date.now() - 95_000);
     window.history.replaceState(

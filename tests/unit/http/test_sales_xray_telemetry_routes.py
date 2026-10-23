@@ -1,4 +1,5 @@
-"""The telemetry intake composed for Sales X-Ray: its events, call references and daily cap."""
+"""The telemetry intake composed for Sales X-Ray: its events, call references, daily cap,
+consent (option B: on unless a person or workspace turns it off) and Settings, Privacy."""
 
 from __future__ import annotations
 
@@ -19,7 +20,11 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from ac_platform.application.settings import Settings
+from ac_platform.audit.models import AuditEvent
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
+from ac_platform.conversation_intelligence.synthetic_import_models import (
+    ConversationSandboxOrganisation,
+)
 from ac_platform.db.models import model_metadata
 from ac_platform.http.auth import AuthenticatedTransaction
 from ac_platform.http.problem import register_problem_handlers
@@ -29,12 +34,15 @@ from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.learning.planning_models import AnalyticsEvent
+from ac_platform.telemetry import sales_xray_consent
 from ac_platform.telemetry.ingest import (
     TelemetryConsent,
     TelemetryConsentStatus,
     TelemetrySurface,
 )
 from ac_platform.telemetry.sales_xray import (
+    NOTICE_VERSION,
+    NOTICES,
     RETENTION_DAYS,
     RETENTION_POLICY_ID,
     SALES_XRAY_EVENTS,
@@ -42,6 +50,7 @@ from ac_platform.telemetry.sales_xray import (
     SalesXrayAdmission,
     call_ref,
 )
+from ac_platform.telemetry.sales_xray_consent import PERSON_ACTION, RESOURCE_TYPE
 from ac_platform.tenancy.models import Membership, Tenant
 from ac_platform.usage_people.models import MetricsPseudonymKey
 from ac_platform.usage_people.pseudonyms import pads
@@ -82,6 +91,8 @@ class _Harness:
         self.actor = ActorContext(
             person_id=self.person_id, session_id=uuid4(), tenant_id=self.tenant_id
         )
+        self.role = "member"
+        self.sequence = 0
         self.settings = Settings(
             environment="test",
             release_id="sx-telemetry-test-release",
@@ -97,7 +108,7 @@ class _Harness:
             identity=SimpleNamespace(),  # type: ignore[arg-type]
             resolved=ResolvedActorContext(
                 actor=self.actor,
-                membership_role="learner",
+                membership_role=self.role,
                 person_revision=0,
                 session_revision=0,
                 tenant_revision=0,
@@ -175,6 +186,44 @@ class _Harness:
 
     def stored(self) -> list[AnalyticsEvent]:
         return list(self.session.scalars(select(AnalyticsEvent)))
+
+    def composed(self) -> TestClient:
+        """The app's own composition (routes/telemetry.py), consent resolver and all."""
+        application = FastAPI()
+        register_problem_handlers(application)
+        context = SimpleNamespace(settings=self.settings, require_actor=self.require_actor)
+        telemetry_route.install(application, context)  # type: ignore[arg-type]
+        return TestClient(application)
+
+    def choice(
+        self,
+        resource_id: str,
+        enabled: bool,
+        *,
+        at: datetime | None = None,
+        action: str = PERSON_ACTION,
+    ) -> None:
+        """An analytics choice in this workspace's audit chain."""
+        self.sequence += 1
+        moment = at or datetime.now(UTC)
+        self.session.add(
+            AuditEvent(
+                id=uuid4(),
+                tenant_id=self.tenant_id,
+                sequence_no=self.sequence,
+                actor_person_id=self.person_id,
+                actor_type="person",
+                action=action,
+                resource_type=RESOURCE_TYPE,
+                resource_id=resource_id,
+                payload={"enabled": enabled, "notice_version": NOTICE_VERSION},
+                occurred_at=moment,
+                recorded_at=moment,
+                previous_hash="0" * 64,
+                event_hash=f"{self.sequence:064x}",
+            )
+        )
+        self.session.flush()
 
 
 @pytest.fixture
@@ -304,15 +353,97 @@ def test_one_person_stores_at_most_the_daily_cap(harness: _Harness) -> None:
     assert len(harness.stored()) == 2
 
 
-def test_the_composed_route_lists_and_stores_nothing_until_consent(
+def test_the_composed_route_records_by_default_and_purges_expired_rows(
     harness: _Harness,
 ) -> None:
-    application = FastAPI()
-    register_problem_handlers(application)
-    context = SimpleNamespace(settings=harness.settings, require_actor=harness.require_actor)
-    telemetry_route.install(application, context)  # type: ignore[arg-type]
-    client = TestClient(application)
-    # No events listed, so the app sends none (no refused batch on every page).
+    long_ago = datetime.now(UTC) - timedelta(days=200)
+    harness.session.add(
+        AnalyticsEvent(
+            event_id=str(uuid4()),
+            tenant_id=harness.tenant_id,
+            actor_person_id=harness.person_id,
+            subject_person_id=harness.person_id,
+            event_name="sx.screen_viewed",
+            event_version="1.0",
+            occurred_at=long_ago,
+            trace_id="old-trace",
+            release_id="old",
+            session_id=str(harness.actor.session_id),
+            route="/leads",
+            payload={"screen": "leads", "nav": "push"},
+            consent_status="granted",
+            consent_purpose="product_analytics",
+            consent_policy_version=NOTICE_VERSION,
+            consent_captured_at=long_ago,
+            retention_policy_id=RETENTION_POLICY_ID,
+            retention_expires_at=long_ago + timedelta(days=180),
+            created_at=long_ago,
+        )
+    )
+    harness.session.flush()
+    client = harness.composed()
+    names = {item["event_name"] for item in client.get("/v1/telemetry/taxonomy").json()["events"]}
+    assert names == set(SALES_XRAY_EVENTS)
+    response = client.post(
+        "/v1/telemetry/events",
+        json={
+            "events": [
+                harness.event(
+                    "sx.action_timing",
+                    route="/leads",
+                    payload={
+                        "action": "lead_open",
+                        "ms": 1840,
+                        "result": "settled",
+                        "paint_ms": 96,
+                        "screen": "leads",
+                        "device": "phone",
+                        "tier": "low",
+                        "net": "4g",
+                        "link": "cellular",
+                        "app": "android",
+                        "app_version": "0.3.88",
+                    },
+                )
+            ]
+        },
+        headers=_ORIGIN,
+    )
+    assert response.status_code == 202, response.text
+    [row] = harness.stored()
+    assert row.event_name == "sx.action_timing"
+    assert row.consent_policy_version == NOTICE_VERSION
+    # Kept 180 days; the expired row went with this write.
+    assert (row.retention_expires_at - row.created_at).days == 180
+
+
+def test_an_opted_out_person_is_listed_nothing_and_stores_nothing(harness: _Harness) -> None:
+    harness.choice(str(harness.person_id), False)
+    client = harness.composed()
+    assert client.get("/v1/telemetry/taxonomy").json()["events"] == []
+    response = client.post(
+        "/v1/telemetry/events", json={"events": [harness.event()]}, headers=_ORIGIN
+    )
+    assert response.status_code == 202
+    assert response.json()["reason"] == "consent_required"
+    assert harness.stored() == []
+
+
+def test_a_workspace_switched_off_or_a_sandbox_records_nothing(harness: _Harness) -> None:
+    harness.choice("workspace", False)
+    client = harness.composed()
+    assert client.get("/v1/telemetry/taxonomy").json()["events"] == []
+    harness.choice("workspace", True)
+    assert client.get("/v1/telemetry/taxonomy").json()["events"] != []
+    harness.session.add(
+        ConversationSandboxOrganisation(
+            tenant_id=harness.tenant_id,
+            approved_by_person_id=harness.person_id,
+            approval_reference="test sandbox",
+            created_at=datetime.now(UTC),
+        )
+    )
+    harness.session.flush()
     assert client.get("/v1/telemetry/taxonomy").json()["events"] == []
     response = client.post(
         "/v1/telemetry/events", json={"events": [harness.event()]}, headers=_ORIGIN
@@ -320,3 +451,71 @@ def test_the_composed_route_lists_and_stores_nothing_until_consent(
     assert response.status_code == 503
     assert response.json()["code"] == "telemetry_consent_unavailable"
     assert harness.stored() == []
+
+
+def test_privacy_settings_show_and_change_both_switches(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    appended: list[dict[str, Any]] = []
+
+    class _Audit:
+        def __init__(self, _database: object) -> None:
+            pass
+
+        async def append(self, **fields: Any) -> None:
+            appended.append(fields)
+            harness.choice(
+                fields["resource_id"],
+                fields["payload"]["enabled"],
+                at=fields["now"],
+                action=fields["action"],
+            )
+
+    monkeypatch.setattr(sales_xray_consent, "AuditRepository", _Audit)
+    client = harness.composed()
+    view = client.get("/v1/telemetry/preferences").json()
+    assert view["collecting"] is True
+    assert view["notice"] == {
+        "version": NOTICE_VERSION,
+        "paragraphs": list(NOTICES[NOTICE_VERSION]),
+    }
+    assert view["you"] == {"enabled": True, "changed_at": None}
+    assert view["workspace"]["can_change"] is False
+
+    off = client.put("/v1/telemetry/preferences/you", json={"enabled": False}, headers=_ORIGIN)
+    assert off.status_code == 200, off.text
+    assert off.json()["you"]["enabled"] is False
+    assert off.json()["collecting"] is False
+    assert appended[-1]["resource_id"] == str(harness.person_id)
+    assert appended[-1]["payload"] == {"enabled": False, "notice_version": NOTICE_VERSION}
+    assert client.get("/v1/telemetry/taxonomy").json()["events"] == []
+
+    refused = client.put(
+        "/v1/telemetry/preferences/workspace", json={"enabled": False}, headers=_ORIGIN
+    )
+    assert refused.status_code == 403
+    harness.role = "owner"
+    workspace = client.put(
+        "/v1/telemetry/preferences/workspace", json={"enabled": False}, headers=_ORIGIN
+    )
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["workspace"]["enabled"] is False
+    assert workspace.json()["workspace"]["can_change"] is True
+    back = client.put("/v1/telemetry/preferences/you", json={"enabled": True}, headers=_ORIGIN)
+    assert back.json()["you"]["enabled"] is True
+    assert back.json()["collecting"] is False  # the workspace is still off
+    assert appended[-2]["resource_id"] == "workspace"
+    # A bad body or a foreign origin changes nothing.
+    assert (
+        client.put(
+            "/v1/telemetry/preferences/you", json={"enabled": "no"}, headers=_ORIGIN
+        ).status_code
+        == 422
+    )
+    count = len(appended)
+    client.put(
+        "/v1/telemetry/preferences/you",
+        json={"enabled": False},
+        headers={"Origin": "https://evil.example"},
+    )
+    assert len(appended) == count

@@ -302,7 +302,7 @@ export class AcquisitionError extends Error {
                   ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
                   : status === 403
                     ? reason === "trial_allowance_insufficient"
-                      ? "This recording is longer than your remaining trial allowance. Contact the AC team for more access."
+                      ? "This recording is longer than your remaining analysis minutes. Your recording stays private."
                       : reason === "provider_allowance_used"
                         ? "This analysis allowance has been used. Your recording is saved. Contact the AC team for help."
                         : reason === "plan_stale"
@@ -756,10 +756,10 @@ export const submissionPath = (id: string) => {
   return `/submissions/${id}`;
 };
 
-/** How Calls words a lead's stage (New, Not contacted, …), for the Report too. */
+/** How Calls words a lead's stage (New, Couldn't reach, …), for the Report too. */
 export const CALL_LEAD_STAGE_WORDS: Record<CallLead["stage"], string> = {
   new: "New",
-  not_connected: "Not contacted",
+  not_connected: "Couldn't reach",
   follow_up: "Follow up",
   interested: "Interested",
   won: "Won",

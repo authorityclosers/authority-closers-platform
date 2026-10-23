@@ -117,7 +117,7 @@ export function AdPlatforms({ version }: { version: number }) {
           <h2>Where your stages go</h2>
           <p>
             Your ads learn which leads became customers and find more like them.
-            Sales Xray matches your stages for you.
+            Sales X-Ray matches your stages for you.
           </p>
         </div>
       </header>
@@ -163,7 +163,7 @@ const SENDS: { id: string; name: string; sends: string }[] = [
     id: "meta",
     name: "Meta",
     sends:
-      "Meta's own lead id, plus the email, phone, country and the lead's Sales Xray id, scrambled.",
+      "Meta's own lead id, plus the email, phone, country and the lead's Sales X-Ray id, scrambled.",
   },
   {
     id: "google_ads",
@@ -197,7 +197,7 @@ export function HowItWorks() {
       <div className={styles.helpBody}>
         <p>
           On their own, your ads only see who filled a form, not who became a
-          customer. When a lead reaches a stage, Sales Xray tells the ad
+          customer. When a lead reaches a stage, Sales X-Ray tells the ad
           platform. It then shows your ads to more people like the leads that
           went far, and fewer like the ones that went nowhere.
         </p>
@@ -212,7 +212,7 @@ export function HowItWorks() {
         <p>
           <strong>Scrambled</strong> means one-way: the platform can match it to
           its own users, but can&apos;t read it. Names, notes, calls and what
-          was said never leave Sales Xray.
+          was said never leave Sales X-Ray.
         </p>
         <p>
           Only stages you confirmed are sent. Each move waits 5 minutes first,
@@ -490,7 +490,7 @@ function Matches({
             {fresh.length === 1
               ? `“${fresh[0].stageLabel}” is new.`
               : `${fresh.length} stages are new.`}{" "}
-            Sales Xray matched {fresh.length === 1 ? "it" : "them"} for you.
+            Sales X-Ray matched {fresh.length === 1 ? "it" : "them"} for you.
           </span>
           <Button
             variant="primary"

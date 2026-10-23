@@ -47,7 +47,7 @@ it("starts a pressed tab's first reads, never the session's again", () => {
   expect(fetch).toHaveBeenCalledOnce();
 });
 
-it("starts no reads before this tab has seen Sales Xray on", () => {
+it("starts no reads before this tab has seen Sales X-Ray on", () => {
   const fetch = vi.spyOn(globalThis, "fetch");
   prefetchPlace({ prefetch: vi.fn() }, "/dashboard", true);
   expect(fetch).not.toHaveBeenCalled();

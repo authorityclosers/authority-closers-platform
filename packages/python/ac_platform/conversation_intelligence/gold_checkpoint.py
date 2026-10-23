@@ -33,7 +33,7 @@ from typing import Any, Final, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CONFIG_FILE: Final = Path(__file__).with_name("profiles") / "gold_checkpoint.json"
-MODES: Final = ("lines", "brain4_blind")
+MODES: Final = ("lines", "brain4_blind", "report")
 FEATURES: Final = (
     "price",
     "objection",
@@ -73,7 +73,7 @@ class Checkpoint(BaseModel):
     name: str = Field(min_length=1, max_length=64, pattern=r"^[a-z0-9][a-z0-9./-]*$")
     about: str = Field(default="", max_length=600)
     since: datetime
-    mode: Literal["lines", "brain4_blind"]
+    mode: Literal["lines", "brain4_blind", "report"]
     daily: int = Field(ge=1, le=50)
     total: int = Field(ge=1, le=500)
     # Reviewers work in India: a day's calls are assigned from this hour, Asia/Kolkata.

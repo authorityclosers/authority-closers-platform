@@ -13,9 +13,9 @@
   Every change made with a key is also audited as admin.staff_key_used with its prefix.
 - With admin:read (Phase 6, orchestrator 20 Oct: AI agents operate Admin), a key also
   makes content-free reads: organisations, the calls list, one call's stage map, the
-  review queue and analysis health. Ids, states, times, counts, costs and model names
-  only; transcripts, quotes, facts' values and report text stay in the browser, behind
-  their own audited reads.
+  review queue, analysis health and product telemetry (its overview and daily export).
+  Ids, states, times, counts, costs and model names only; transcripts, quotes, facts'
+  values and report text stay in the browser, behind their own audited reads.
 """
 
 from __future__ import annotations
@@ -66,6 +66,10 @@ READS: tuple[re.Pattern[str], ...] = tuple(
         rf"^/v1/admin/call-data/calls/{_ID}/map$",
         r"^/v1/admin/conversation/review/queue$",
         r"^/v1/admin/conversation/health$",
+        # Product telemetry: counts, timings and pseudonyms (owner, 24 Oct 2026; the cost
+        # optimiser reads the daily export with a key).
+        r"^/v1/admin/telemetry/overview$",
+        r"^/v1/admin/telemetry/daily$",
     )
 )
 MAX_ACTIVE = 2

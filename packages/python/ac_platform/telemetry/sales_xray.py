@@ -3,11 +3,17 @@ quality and very cheap").
 
 What people do in Sales X-Ray, as counts for Admin and the cost optimiser: reports opened,
 report sections read and for how long, what people do in a section, on-demand, full-report and
-re-analyse taps, outcomes saved and errors shown. The client
-(``apps/sales-xray-web/app/telemetry.ts``) sends these; the server takes only the events below.
+re-analyse taps, outcomes saved and errors shown. Since 24 Oct 2026 (owner: "Build full
+performance and usage telemetry") also how the app performs: screens and the flow between them,
+tap-to-response time for key actions, Web Vitals, app start, script errors, slow API calls, rage
+and dead taps and feature use. The client (``apps/sales-xray-web/app/telemetry.ts`` and
+``telemetry-auto.tsx``) sends these; the server takes only the events below. Who it is recorded
+for (on by default, any person or workspace can turn it off) is ``sales_xray_consent.py``.
 
-- Every payload value is one of a fixed set, a short code token, a bounded number or a flag:
-  no free text, no call content, nothing personal. ``device`` and ``app`` may ride on any event.
+- Every payload value is one of a fixed set, a short code token, a version or fingerprint
+  label, a bounded number or a flag: no free text, no call content, no lead names or numbers,
+  nothing personal. The device class, device tier, network, app and app version may ride on
+  any event.
 - A call is named only by ``call_ref``: ``c_`` and 16 hex characters of HMAC(this
   environment's metrics key, ``call:`` and the recording id), filled in by the server after it
   finds the call in the caller's workspace. The cost export can make the same reference, so
@@ -22,7 +28,7 @@ import hashlib
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping
-from datetime import datetime
+from datetime import UTC, datetime, timedelta
 from types import MappingProxyType
 from typing import Any
 from uuid import UUID
@@ -52,6 +58,88 @@ MAX_DWELL_MS = 600_000
 
 _DEVICES = frozenset({"phone", "tablet", "desktop"})
 _APPS = frozenset({"web", "android"})
+# How capable the device is (its cores and memory), its network speed and link as the browser
+# reports them: what makes "40% of devices are slow when clicking a lead" answerable.
+TIERS = frozenset({"low", "mid", "high", "unknown"})
+NETWORKS = frozenset({"slow_2g", "2g", "3g", "4g", "unknown"})
+LINKS = frozenset({"wifi", "cellular", "ethernet", "offline", "unknown"})
+# The app's screens, one per route template (telemetry.ts screenOf), and a lead open on Leads.
+SCREENS = frozenset(
+    {
+        "home",
+        "dashboard",
+        "analysis",
+        "new_call",
+        "calls_list",
+        "report",
+        "calls",
+        "leads",
+        "lead",
+        "chats",
+        "coaching",
+        "prospects",
+        "prospect",
+        "organisation",
+        "org_insights",
+        "org_invites",
+        "org_person",
+        "settings",
+        "settings_section",
+        "account",
+        "billing",
+        "plans",
+        "apps",
+        "developers",
+        "review",
+        "other",
+    }
+)
+# Key actions whose tap-to-response time is measured (telemetry-auto.tsx actionOf).
+ACTIONS = frozenset(
+    {
+        "lead_open",
+        "call_start",
+        "tab_switch",
+        "outcome_save",
+        "report_open",
+        "nav_switch",
+        "sheet_open",
+        "search",
+        "save",
+        "send",
+        "filter",
+        "back",
+        "other",
+    }
+)
+TAP_TARGETS = frozenset(
+    {"button", "link", "tab", "row", "card", "input", "icon", "text", "image", "other"}
+)
+VITALS = frozenset({"lcp", "inp", "cls", "fcp", "ttfb"})
+RATINGS = frozenset({"good", "needs_improvement", "poor"})
+ERROR_KINDS = frozenset({"error", "rejection", "react", "chunk"})
+ERROR_NAMES = frozenset(
+    {
+        "typeerror",
+        "referenceerror",
+        "rangeerror",
+        "syntaxerror",
+        "chunkloaderror",
+        "aborterror",
+        "networkerror",
+        "securityerror",
+        "notallowederror",
+        "quotaexceedederror",
+        "error",
+        "other",
+    }
+)
+ERROR_SOURCES = frozenset({"app", "vendor", "extension", "unknown"})
+API_STATUSES = frozenset({"2xx", "3xx", "4xx", "5xx", "network", "unknown"})
+# Longest a tap is timed for, a screen is stayed on and a start or vital is counted.
+MAX_ACTION_MS = 60_000
+MAX_STAY_MS = 1_800_000
+MAX_LOAD_MS = 120_000
 # The Report's parts as its components name them (xray-report/panels.tsx: Overview, the AI
 # coaching score or detailed analysis, Final Call Outcome, Prospect's Information) and the
 # call's other tabs. One skill of the coaching score is "analysis" with its ``skill``.
@@ -73,20 +161,24 @@ def _event(
     values: Mapping[str, Iterable[str]] | None = None,
     numbers: Mapping[str, float] | None = None,
     tokens: Iterable[str] = (),
+    labels: Iterable[str] = (),
     required: Iterable[str] = (),
     takes_call: bool = False,
 ) -> TelemetryEventDefinition:
-    typed = {"device": _DEVICES, "app": _APPS}
+    # Every event may say where it ran: device class and tier, network and link, app.
+    typed = {"device": _DEVICES, "app": _APPS, "tier": TIERS, "net": NETWORKS, "link": LINKS}
     typed.update({key: frozenset(items) for key, items in (values or {}).items()})
     limits = dict(numbers or {})
     codes = frozenset(tokens)
-    keys = tuple(sorted({*typed, *limits, *codes}))
+    names = frozenset({"app_version", *labels})
+    keys = tuple(sorted({*typed, *limits, *codes, *names}))
     return TelemetryEventDefinition(
         event_version="1.0",
         allowed_payload_keys=keys,
         values=MappingProxyType(typed),
         numbers=MappingProxyType(limits),
         tokens=codes,
+        labels=names,
         required=frozenset(required),
         takes_call=takes_call,
     )
@@ -166,6 +258,101 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
         "sx.prospect_edited": _event(tokens=("field",)),
         "sx.outcome_set": _event(tokens=("outcome",), required=("outcome",), takes_call=True),
         "sx.error_shown": _event(tokens=("surface", "code"), required=("surface", "code")),
+        # Performance and usage (owner, 24 Oct 2026). A screen shown, the one before it and
+        # how long that one was stayed on: flows, drop-offs and the screen heatmap.
+        "sx.screen_viewed": _event(
+            values={
+                "screen": SCREENS,
+                "from": SCREENS | {"none"},
+                "nav": ("first", "push", "back", "reload"),
+            },
+            numbers={"stay_ms": MAX_STAY_MS},
+            required=("screen", "nav"),
+        ),
+        # Tap to response: from the tap to the screen settling (no change for 150 ms), and
+        # the browser's own input-to-paint time for the same tap.
+        "sx.action_timing": _event(
+            values={
+                "action": ACTIONS,
+                "result": ("settled", "timeout", "no_change"),
+                "screen": SCREENS,
+            },
+            numbers={"ms": MAX_ACTION_MS, "paint_ms": MAX_ACTION_MS},
+            required=("action", "ms", "result"),
+        ),
+        # Core Web Vitals per screen; CLS is sent times 1,000.
+        "sx.web_vital": _event(
+            values={"metric": VITALS, "rating": RATINGS, "screen": SCREENS},
+            numbers={"value": MAX_LOAD_MS},
+            required=("metric", "value"),
+        ),
+        # The app's start: from the page or app opening to the first screen working.
+        "sx.app_start": _event(
+            values={
+                "start": ("cold", "warm"),
+                "nav_type": ("navigate", "reload", "back_forward", "prerender"),
+                "screen": SCREENS,
+            },
+            numbers={"ms": MAX_LOAD_MS},
+            required=("start", "ms"),
+        ),
+        # A script error: its kind and class, and a fingerprint of where it was thrown (a
+        # hash of the error class and the top stack frame's file and line), never its text.
+        "sx.js_error": _event(
+            values={
+                "kind": ERROR_KINDS,
+                "error": ERROR_NAMES,
+                "source": ERROR_SOURCES,
+                "screen": SCREENS,
+            },
+            labels=("where",),
+            required=("kind", "error"),
+        ),
+        # An API call slower than 1.5 s or failed: its route with every id taken out.
+        "sx.api_slow": _event(
+            values={"status": API_STATUSES, "screen": SCREENS},
+            tokens=("endpoint",),
+            numbers={"ms": MAX_LOAD_MS},
+            required=("endpoint", "status", "ms"),
+        ),
+        # Three or more taps in a second on one spot, or a tap that changed nothing.
+        "sx.tap_issue": _event(
+            values={
+                "kind": ("rage", "dead"),
+                "target": TAP_TARGETS,
+                "action": ACTIONS,
+                "screen": SCREENS,
+            },
+            required=("kind", "target"),
+        ),
+        # A named feature used (the screens name them), for adoption.
+        "sx.feature_used": _event(
+            values={"screen": SCREENS}, tokens=("feature",), required=("feature",)
+        ),
+    }
+)
+
+# The words people are shown about usage analytics, one entry per version (the Sales X-Ray
+# privacy page's "Usage analytics" section, word for word; a test pins them). Every stored
+# event and every opt-out or opt-in records the version. A change of words is a new version,
+# never an edit (supersede, never overwrite).
+NOTICE_VERSION = "sx-product-analytics-2026-10-24-v1"
+# In force from midnight India time on 24 Oct 2026 (18:30 UTC on the 23rd).
+NOTICE_EFFECTIVE_AT = datetime(2026, 10, 23, 18, 30, tzinfo=UTC)
+NOTICES: Mapping[str, tuple[str, ...]] = MappingProxyType(
+    {
+        NOTICE_VERSION: (
+            "Sales X-Ray records how its app is used and how fast it responds, to make it "
+            "faster, easier to use and cheaper to run. It records the screens and report "
+            "sections you open and for how long, taps and how quickly the app responds to "
+            "them, errors, page speed, the app version and the type of device and network. "
+            "It never records call content, transcripts, lead names, phone numbers or email "
+            "addresses. Records are kept for 180 days and are never used to score you or to "
+            "set your access, payments or plan.",
+            "This is on in every workspace unless it is turned off. You can turn it off for "
+            "yourself at any time in Settings, Privacy; an owner or admin can turn it off for "
+            "the whole workspace there. Sandbox workspaces never record it.",
+        ),
     }
 )
 
@@ -203,12 +390,14 @@ SALES_XRAY_SURFACE = TelemetrySurface(
     provenance_source=PROVENANCE_SOURCE,
     provenance_version=PROVENANCE_VERSION,
     disclaimer=(
-        "Sales X-Ray product telemetry is consented, disposable analytics only: what screens "
-        "and report sections people open, for how long, taps and errors, never call content. "
-        "It never creates progress, payment, access, audit or scoring state."
+        "Sales X-Ray product telemetry is disposable usage and performance analytics, on unless "
+        "a person or workspace turns it off: screens and report sections opened and for how "
+        "long, taps and response times, errors and page speed, never call content. It never "
+        "creates progress, payment, access, audit or scoring state."
     ),
     call_refs=call_refs,
     person_daily_cap=PERSON_DAILY_CAP,
+    purge_every=timedelta(hours=1),
 )
 
 
@@ -243,10 +432,17 @@ class SalesXrayAdmission:
 
 
 __all__ = [
+    "ACTIONS",
     "AI_LEVELS",
     "CALL_REF_PREFIX",
+    "LINKS",
     "LOOKS",
+    "MAX_ACTION_MS",
     "MAX_DWELL_MS",
+    "NETWORKS",
+    "NOTICES",
+    "NOTICE_EFFECTIVE_AT",
+    "NOTICE_VERSION",
     "PERSON_DAILY_CAP",
     "READ_BANDS",
     "REPORT_SECTIONS",
@@ -254,8 +450,10 @@ __all__ = [
     "RETENTION_POLICY_ID",
     "SALES_XRAY_EVENTS",
     "SALES_XRAY_SURFACE",
+    "SCREENS",
     "SECTION_ACTIONS",
     "SKILLS",
+    "TIERS",
     "SalesXrayAdmission",
     "call_ref",
     "call_refs",

@@ -1,0 +1,181 @@
+{
+  "id": "11-my-coaching",
+  "number": "11",
+  "title": "My coaching: one thing to get better at",
+  "kicker": "Sales X-Ray tutorial",
+  "end_headline": "One focus. Every call.",
+  "next": "Upload a recording you already have",
+  "segments": [
+    {
+      "id": "card",
+      "device": "card",
+      "en": {
+        "say": [
+          "After every call, Sales X-Ray coaches you on one thing at a time."
+        ]
+      },
+      "hi": {
+        "say": [
+          "हर call के बाद, Sales X-Ray आपको एक समय पे एक चीज़ पे coach करता है."
+        ],
+        "caption": [
+          "Har call ke baad, Sales X-Ray aapko ek samay pe ek cheez pe coach karta hai."
+        ]
+      },
+      "mr": {
+        "say": [
+          "प्रत्येक call नंतर, Sales X-Ray तुम्हाला एका वेळी एकाच गोष्टीवर coach करतो."
+        ],
+        "caption": [
+          "Pratyek call nantar, Sales X-Ray tumhala eka veli ekach goshtivar coach karto."
+        ]
+      }
+    },
+    {
+      "id": "s1-focus",
+      "device": "phone",
+      "label": "Your one focus",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/coaching"
+        },
+        {
+          "do": "scrollto",
+          "target": {
+            "text": "What You Should Work On Now"
+          },
+          "ms": 600
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 700
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "Explain value before trading price"
+          },
+          "ms": 1800,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "coaching-focus"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Hear Dipak"
+          },
+          "ms": 1600,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        }
+      ],
+      "en": {
+        "say": [
+          "Open the Report's Coaching part.",
+          "It picks the one thing this call says to work on, and Dipak explains why it matters."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Report का Coaching वाला part खोलिए.",
+          "ये बताता है कि इस call से किस एक चीज़ पे काम करना है, और Dipak समझाते हैं कि ये क्यों ज़रूरी है."
+        ],
+        "caption": [
+          "Report ka Coaching waala part kholiye.",
+          "Yeh batata hai ki is call se kis ek cheez pe kaam karna hai, aur Dipak samjhaate hain ki yeh kyun zaroori hai."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Report मधला Coaching चा part उघडा.",
+          "हा सांगतो की या call वरून कोणत्या एका गोष्टीवर काम करायचं, आणि Dipak समजावतात की ते का महत्त्वाचं आहे."
+        ],
+        "caption": [
+          "Report madhla Coaching cha part ughda.",
+          "Ha sangto ki ya call varun konatya eka goshtivar kaam karaycha, aani Dipak samjavtat ki te ka mahatvacha aahe."
+        ]
+      }
+    },
+    {
+      "id": "s2-next-call",
+      "device": "phone",
+      "label": "On your next call",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/coaching"
+        },
+        {
+          "do": "scrollto",
+          "target": {
+            "text": "On your next call"
+          },
+          "ms": 600
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 600
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "On your next call"
+          },
+          "ms": 2200,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "coaching-next-call"
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "en": {
+        "say": [
+          "Then it tells you exactly what to try on your next call.",
+          "One focus at a time, until it becomes a habit."
+        ]
+      },
+      "hi": {
+        "say": [
+          "फिर बताता है कि next call पे exactly क्या try करना है.",
+          "एक बार में एक focus, जब तक वो आदत न बन जाए."
+        ],
+        "caption": [
+          "Phir batata hai ki next call pe exactly kya try karna hai.",
+          "Ek baar mein ek focus, jab tak woh aadat na ban jaaye."
+        ]
+      },
+      "mr": {
+        "say": [
+          "मग सांगतो की पुढच्या call वर नक्की काय try करायचं.",
+          "एका वेळी एक focus, जोपर्यंत ती सवय होत नाही."
+        ],
+        "caption": [
+          "Mag sangto ki pudhchya call var nakki kay try karaycha.",
+          "Eka veli ek focus, joparyant ti savay hot nahi."
+        ]
+      }
+    }
+  ]
+}

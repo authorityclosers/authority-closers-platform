@@ -201,6 +201,35 @@ class GoogleOIDCProvider:
                 raise ValueError("ID token is invalid")
         except (KeyError, TypeError, ValueError) as exc:
             raise IdentityProviderRejected("Google returned an invalid token response.") from exc
+        return await self._assertion(raw_id_token, transaction, callback_state=callback_state)
+
+    async def verify_native_token(
+        self,
+        token: str,
+        transaction: AuthTransaction,
+        *,
+        callback_state: str,
+    ) -> VerifiedProviderAssertion:
+        """An ID token from Android's own Google account sheet (Credential Manager).
+
+        The app asks for it with our web client ID as the server client ID and the
+        transaction's nonce, so it carries the same audience and nonce as the web
+        flow's token and is checked the same way.
+        """
+
+        if not hmac.compare_digest(callback_state, transaction.state):
+            raise IdentityProviderRejected("Google sign-in state did not match.")
+        if not token or len(token) > 16_384 or not token.isascii():
+            raise IdentityProviderRejected("Google returned an invalid ID token.")
+        return await self._assertion(token, transaction, callback_state=callback_state)
+
+    async def _assertion(
+        self,
+        raw_id_token: str,
+        transaction: AuthTransaction,
+        *,
+        callback_state: str,
+    ) -> VerifiedProviderAssertion:
         try:
             claims = await asyncio.to_thread(
                 self._token_verifier,

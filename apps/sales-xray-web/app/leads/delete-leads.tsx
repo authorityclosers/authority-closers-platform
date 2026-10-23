@@ -94,7 +94,7 @@ export function DeleteLeadsSheet({
         message:
           reason instanceof LeadsError
             ? reason.message
-            : "Sales Xray isn't answering. Try again.",
+            : "Sales X-Ray isn't answering. Try again.",
       });
     } finally {
       setBusy(false);

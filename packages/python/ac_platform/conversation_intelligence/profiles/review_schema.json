@@ -1,0 +1,110 @@
+{
+  "version": "review-schema/1",
+  "about": "Which parts of the Report the coaching lead reviews, item by item (owner, 23 Oct 2026). Sections follow the Report's own structure (report-structure/1 with its AI overlays). A section the Report gains later and this file does not list is still reviewed, as one item; listing it here splits it into items. Edit this file, not code, when the Report changes.",
+  "skip": ["version", "review_status", "pointer_review", "final_call_outcome", "pointers"],
+  "sections": [
+    {
+      "id": "brain4",
+      "label": "AI coaching score",
+      "path": ["brain4", "dimensions"],
+      "kind": "list",
+      "id_key": "id",
+      "label_keys": ["label"],
+      "number_key": "number",
+      "rating_keys": ["shown_rating", "rating"],
+      "text_keys": ["observed"],
+      "detail_keys": ["coaching"]
+    },
+    {
+      "id": "overview",
+      "label": "Overview",
+      "path": ["overview"],
+      "kind": "fields",
+      "fields": {
+        "summary": "Call summary",
+        "biggest_strength": "Biggest strength",
+        "biggest_improvement": "Biggest improvement"
+      }
+    },
+    {
+      "id": "outcome",
+      "label": "Call outcome",
+      "path": ["call_outcome_details"],
+      "kind": "fields",
+      "fields": {
+        "stages": "Stages the call covered",
+        "suggested_action": "Suggested next move"
+      }
+    },
+    {
+      "id": "outcome.reasons",
+      "label": "Why it ended this way",
+      "path": ["call_outcome_details", "reasons"],
+      "kind": "list"
+    },
+    {
+      "id": "outcome.objections",
+      "label": "Objections",
+      "path": ["call_outcome_details", "objections"],
+      "kind": "list"
+    },
+    {
+      "id": "outcome.next_steps",
+      "label": "Next steps",
+      "path": ["call_outcome_details", "next_steps"],
+      "kind": "list",
+      "detail_keys": ["when", "owner"]
+    },
+    {
+      "id": "outcome.notes",
+      "label": "Other notes",
+      "path": ["call_outcome_details", "notes"],
+      "kind": "list"
+    },
+    {
+      "id": "buyer",
+      "label": "Buyer qualification",
+      "path": ["prospect_signals", "qualification"],
+      "kind": "map",
+      "text_keys": ["note"],
+      "detail_keys": ["state"]
+    },
+    {
+      "id": "buyer.pains",
+      "label": "Pains",
+      "path": ["prospect_signals", "pains"],
+      "kind": "list",
+      "detail_keys": ["intensity"]
+    },
+    {
+      "id": "buyer.objections",
+      "label": "Concerns",
+      "path": ["prospect_signals", "objections"],
+      "kind": "list",
+      "detail_keys": ["status"]
+    },
+    {
+      "id": "buyer.facts",
+      "label": "Buyer facts",
+      "path": ["prospect_signals", "facts"],
+      "kind": "list",
+      "label_keys": ["key"]
+    },
+    {
+      "id": "prospect",
+      "label": "Prospect profile",
+      "path": ["prospect_profile"],
+      "kind": "map",
+      "text_keys": ["value", "reason", "about"],
+      "detail_keys": ["score", "when"],
+      "skip_keys": ["version", "basis", "insights"]
+    },
+    {
+      "id": "prospect.insights",
+      "label": "Key facts about the buyer",
+      "path": ["prospect_profile", "insights"],
+      "kind": "list",
+      "detail_keys": ["kind"]
+    }
+  ]
+}

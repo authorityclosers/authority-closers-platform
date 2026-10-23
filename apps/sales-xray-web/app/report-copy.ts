@@ -103,7 +103,7 @@ export const COMMON = {
   /** Put on a line Sales Xray reads into the call rather than hears said. */
   possible: "Possible",
   possibleHint:
-    "Sales Xray's reading of the call. Nobody said this in so many words.",
+    "Sales X-Ray's reading of the call. Nobody said this in so many words.",
   /** One quiet line per pillar listing what this report leaves out. */
   gapsLead: "This report doesn't cover:",
   pillarFailed: "This part didn't load. The rest of the report is fine.",
@@ -573,10 +573,10 @@ export const talkShareChart = (
   }`;
 
 export const DOCUMENT = {
-  kicker: "Sales Xray · Call Report",
+  kicker: "Sales X-Ray · Call Report",
   untitled: "Sales call",
   /** Under the title: the analysis is a draft until a coach reviews it. */
-  draftNote: "Sales Xray's reading of this call. Not reviewed by a coach yet.",
+  draftNote: "Sales X-Ray's reading of this call. Not reviewed by a coach yet.",
   callLength: "Call length",
   callDate: "Call date",
   callType: "Call type",
@@ -592,10 +592,10 @@ export const DOCUMENT = {
   wordFailed: "The Word file didn't build. Please try again.",
   contents: "In this report",
   regionLabel: "Report document",
-  footer: "Sales Xray · Times are from the recording",
+  footer: "Sales X-Ray · Times are from the recording",
   /** Closing line: where the call's longer story lives. */
   closing:
-    "Prospect Information and Personalized Coaching for this call are in Sales Xray.",
+    "Prospect Information and Personalized Coaching for this call are in Sales X-Ray.",
   /** Word file name: "<title> – Sales Xray report.docx" */
-  fileName: "Sales Xray report",
+  fileName: "Sales X-Ray report",
 };

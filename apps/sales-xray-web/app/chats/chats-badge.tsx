@@ -21,7 +21,7 @@ import {
   type ChatThread,
   type SeenMarks,
 } from "./chats-client";
-import styles from "./chats.module.css";
+import styles from "./chats-badge.module.css";
 import { useChats } from "./chats-store";
 
 const NONE: SeenMarks = {};

@@ -71,6 +71,7 @@ const params = () =>
     callId: "syn-x-J01-C-01",
     assignmentId: UUID,
     runId: UUID,
+    bugId: UUID,
   });
 const searchParams = Promise.resolve({ recording: UUID, tab: "billing" });
 

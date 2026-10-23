@@ -829,6 +829,20 @@
   box-shadow: var(--sx-focus-ring);
 }
 
+/* "Log this" (owner, 23 Oct 2026): the light way in to the call's question. */
+.logThis {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+}
+
+.logThisHint {
+  min-width: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
 .formWide {
   grid-column: 1 / -1;
 }
@@ -3056,6 +3070,16 @@ a.repName {
   grid-column: 1 / -1;
 }
 
+/* Import: pasted rows get the box's whole width, Read rows under them. */
+.pasteRows {
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: end;
+}
+
+.pasteRows textarea {
+  justify-self: stretch;
+}
+
 .pickList {
   display: grid;
   max-height: 320px;
@@ -4117,36 +4141,6 @@ a.repName {
   background: var(--sx-bad);
 }
 
-/* The Leads tab badge (rail and phone tab bar). */
-.tabIcon {
-  position: relative;
-  display: inline-flex;
-}
-
-.tabBadge {
-  position: absolute;
-  top: -7px;
-  left: calc(100% - 9px);
-  box-sizing: border-box;
-  min-width: 19px;
-  height: 19px;
-  padding: 0 5px;
-  border: 2px solid var(--sx-surface);
-  border-radius: 999px;
-  background: var(--lx-danger);
-  color: var(--lx-surface);
-  font-size: 12px;
-  font-weight: 750;
-  line-height: 15px;
-  text-align: center;
-  font-variant-numeric: tabular-nums;
-}
-
-.tabBadge[data-tone="accent"] {
-  background: var(--lx-teal);
-  color: var(--lx-on-teal);
-}
-
 @media (pointer: coarse) {
   .addSmall {
     min-height: 44px;
@@ -4847,6 +4841,22 @@ a.repName {
 
 .stageTab[aria-selected="true"] .stageCount {
   background: color-mix(in oklab, var(--sx-paper) 22%, transparent);
+}
+
+/* Computers: every stage in view, the row wrapping when there are many
+   (Liquid Glass sweep, 23 Oct 2026: cut at 1440 with no hint). Phones keep
+   the strip that scrolls, faded at its edge. */
+@media (min-width: 900px) {
+  .stageTabs {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .stageTab:last-child {
+    margin-right: 0;
+  }
 }
 
 .searchRow {

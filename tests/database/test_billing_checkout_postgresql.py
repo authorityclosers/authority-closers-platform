@@ -56,6 +56,7 @@ from ac_platform.billing.periods import add_months
 from ac_platform.billing.projection import LotKind
 from ac_platform.billing.views import CheckoutView, MoneyView, PeriodView, SubscriptionView
 from ac_platform.conversation_intelligence.acquisition_sessions import AcquisitionSessions
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 from ac_platform.payments.fake import FakePaymentProvider
 from ac_platform.payments.ports import Money
 from ac_platform.payments.recurring import SubscriptionState
@@ -909,7 +910,7 @@ def test_first_charge_via_webhook_grants_the_period_once(
                     now=world.clock.now,
                 )
                 assert projected.plan_key == "personal"
-                assert projected.per_call_seconds == 5_400
+                assert projected.per_call_seconds == CALL_LIMIT_SECONDS
                 assert sorted(item.lot.kind for item in projected.projection.positions) == [
                     LotKind.PERIOD_GRANT,
                     LotKind.TRIAL,

@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  Bug,
   CheckCircle2,
   Copy,
   Info,
@@ -10,6 +11,8 @@ import {
 } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
+import { openBugReport, useReporterAvailable } from "./bug-report/open";
+import { installErrorRecorder, recordError } from "./bug-report/recent-errors";
 import styles from "./notice-center.module.css";
 
 export type NoticeTone = "error" | "info" | "success";
@@ -25,6 +28,8 @@ export type Notice = Readonly<{
   timeout?: number;
   /** Permanent dismissal: retain the card until the API acknowledges it. */
   onDismiss?: () => Promise<void>;
+  /** Error cards offer "Report" (the bug reporter); not on the reporter's own. */
+  noReport?: boolean;
 }>;
 
 let notices: readonly Notice[] = [];
@@ -33,6 +38,13 @@ const emit = () => listeners.forEach((listener) => listener());
 
 /** Show a small card in the corner. A repeated id replaces the older card. */
 export function notify(notice: Notice) {
+  if (notice.tone === "error") {
+    recordError({
+      kind: "notice",
+      message: [notice.title, notice.message].filter(Boolean).join(": "),
+      reference: notice.reference,
+    });
+  }
   notices = [...notices.filter((item) => item.id !== notice.id), notice].slice(
     -3,
   );
@@ -56,6 +68,8 @@ const EMPTY: readonly Notice[] = [];
 const ICON = { error: AlertCircle, info: Info, success: CheckCircle2 };
 
 function NoticeCard({ notice }: { notice: Notice }) {
+  const reporter = useReporterAvailable();
+  const report = notice.tone === "error" && !notice.noReport && reporter;
   const [copied, setCopied] = useState(false);
   const [dismissing, setDismissing] = useState(false);
   const [dismissFailed, setDismissFailed] = useState(false);
@@ -91,7 +105,7 @@ function NoticeCard({ notice }: { notice: Notice }) {
         {notice.message ? (
           <p className={styles.message}>{notice.message}</p>
         ) : null}
-        {notice.action || notice.reference ? (
+        {notice.action || notice.reference || report ? (
           <div className={styles.actions}>
             {notice.action ? (
               <button
@@ -120,6 +134,22 @@ function NoticeCard({ notice }: { notice: Notice }) {
               >
                 <Copy size={12} aria-hidden="true" />
                 {copied ? "Copied" : `Ref ${notice.reference.slice(0, 8)}`}
+              </button>
+            ) : null}
+            {report ? (
+              <button
+                type="button"
+                className={styles.reference}
+                onClick={() => {
+                  dismissNotice(notice.id);
+                  openBugReport({
+                    title: notice.title,
+                    reference: notice.reference,
+                  });
+                }}
+              >
+                <Bug size={12} aria-hidden="true" />
+                Report
               </button>
             ) : null}
           </div>
@@ -152,6 +182,9 @@ export function NoticeCenter() {
     () => notices,
     () => EMPTY,
   );
+
+  // Keeps the page's last twenty problems for a bug report (bug-report/).
+  useEffect(() => installErrorRecorder(), []);
 
   useEffect(() => {
     let last = 0;
@@ -186,7 +219,7 @@ export function NoticeCenter() {
   }, []);
 
   return (
-    <div className={styles.stack} aria-live="polite">
+    <div className={styles.stack} aria-live="polite" data-capture-skip="">
       {list.map((notice) => (
         <NoticeCard key={notice.id} notice={notice} />
       ))}

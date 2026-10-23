@@ -1,0 +1,400 @@
+{
+  "id": "03-add-leads",
+  "number": "03",
+  "title": "Add leads: quick add, paste a list, table view",
+  "kicker": "Sales X-Ray tutorial",
+  "end_headline": "Your leads, in. Start calling.",
+  "next": "Call a lead and log what happened",
+  "segments": [
+    {
+      "id": "card",
+      "device": "card",
+      "en": {
+        "say": ["Three quick ways to get your leads into Sales X-Ray."]
+      },
+      "hi": {
+        "say": ["Sales X-Ray में leads डालने के तीन आसान तरीके."],
+        "caption": ["Sales X-Ray mein leads daalne ke teen aasaan tareeke."]
+      },
+      "mr": {
+        "say": ["Sales X-Ray मध्ये leads टाकायचे तीन सोपे मार्ग."],
+        "caption": ["Sales X-Ray madhye leads takayche teen sope marg."]
+      }
+    },
+    {
+      "id": "s1-table",
+      "device": "desktop",
+      "label": "Leads as a table",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=all&pipelines=2"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 900
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "Table",
+            "exact": true
+          },
+          "ms": 1400,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "text": "Table",
+            "exact": true
+          },
+          "ms": 1400,
+          "optional": true
+        },
+        {
+          "do": "still",
+          "label": "leads-table"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "text": "Stage",
+            "exact": true
+          },
+          "ms": 1200,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        }
+      ],
+      "en": {
+        "say": [
+          "On a computer, open Leads and switch to Table.",
+          "Every lead on one line: stage, owner, source and the next action."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Computer पे Leads खोलिए और Table पे switch कीजिए.",
+          "हर lead एक line में: stage, owner, source और next action."
+        ],
+        "caption": [
+          "Computer pe Leads kholiye aur Table pe switch kijiye.",
+          "Har lead ek line mein: stage, owner, source aur next action."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Computer वर Leads उघडा आणि Table वर switch करा.",
+          "प्रत्येक lead एका line मध्ये: stage, owner, source आणि next action."
+        ],
+        "caption": [
+          "Computer var Leads ughda aani Table var switch kara.",
+          "Pratyek lead eka line madhye: stage, owner, source aani next action."
+        ]
+      }
+    },
+    {
+      "id": "s2-quick-add",
+      "device": "desktop",
+      "label": "Quick add",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=all&pipelines=2"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "text": "Table",
+            "exact": true
+          },
+          "ms": 900,
+          "optional": true
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 600
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "placeholder": "New lead's name"
+          },
+          "ms": 1200
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "type",
+          "target": {
+            "placeholder": "New lead's name"
+          },
+          "text": "Rohan Example",
+          "delay": 70
+        },
+        {
+          "do": "type",
+          "target": {
+            "placeholder": "Phone"
+          },
+          "text": "98765 43211",
+          "delay": 70
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Add",
+            "exact": true
+          },
+          "ms": 1600,
+          "optional": true
+        },
+        {
+          "do": "still",
+          "label": "quick-add-typed"
+        },
+        {
+          "do": "unhighlight"
+        }
+      ],
+      "en": {
+        "say": [
+          "To add one lead, type a name and a number in the last line, and press Enter.",
+          "The lead rules pick the owner for you."
+        ]
+      },
+      "hi": {
+        "say": [
+          "एक lead add करना है? आख़िरी line में नाम और number डालिए, और Enter दबाइए.",
+          "Owner lead rules अपने आप चुन लेते हैं."
+        ],
+        "caption": [
+          "Ek lead add karna hai? Aakhri line mein naam aur number daaliye, aur Enter dabaiye.",
+          "Owner lead rules apne aap chun lete hain."
+        ]
+      },
+      "mr": {
+        "say": [
+          "एक lead add करायचाय? शेवटच्या line मध्ये नाव आणि number टाका, आणि Enter दाबा.",
+          "Owner lead rules आपोआप निवडतात."
+        ],
+        "caption": [
+          "Ek lead add karaychay? Shevatchya line madhye naav aani number taka, aani Enter daba.",
+          "Owner lead rules aapoaap nivadtat."
+        ]
+      }
+    },
+    {
+      "id": "s3-paste",
+      "device": "desktop",
+      "label": "Paste a list",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=all&pipelines=2"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "text": "Table",
+            "exact": true
+          },
+          "ms": 900,
+          "optional": true
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 600
+        },
+        {
+          "do": "paste",
+          "target": {
+            "placeholder": "New lead's name"
+          },
+          "text": "Name\tPhone\tCity\nPooja Example\t98765 43212\tPune\nAmit Sample\t98765 43213\tNashik\nKavya Fictional\t98765 43214\tThane\nSahil Example\t98765 43215\tPune",
+          "ms": 1500
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Sample data only."
+          },
+          "optional": true
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "placeholder": "Or paste rows from a sheet, a CSV or ChatGPT"
+          },
+          "ms": 2600,
+          "optional": true
+        },
+        {
+          "do": "still",
+          "label": "paste-rows"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Read rows"
+          },
+          "ms": 1800,
+          "optional": true
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "en": {
+        "say": [
+          "Got a list in Google Sheets, Excel, a CSV, or from ChatGPT?",
+          "Copy the rows and paste them right here. Sales X-Ray matches the columns, and adds them all in one go."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Google Sheets, Excel, CSV या ChatGPT में list है?",
+          "Rows copy कीजिए और यहीं paste कर दीजिए. Sales X-Ray columns खुद match करता है, और सब एक साथ add कर देता है."
+        ],
+        "caption": [
+          "Google Sheets, Excel, CSV ya ChatGPT mein list hai?",
+          "Rows copy kijiye aur yahin paste kar dijiye. Sales X-Ray columns khud match karta hai, aur sab ek saath add kar deta hai."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Google Sheets, Excel, CSV किंवा ChatGPT मध्ये list आहे?",
+          "Rows copy करा आणि इथेच paste करा. Sales X-Ray columns स्वतः match करतो, आणि सगळ्या एकदम add करतो."
+        ],
+        "caption": [
+          "Google Sheets, Excel, CSV kinva ChatGPT madhye list aahe?",
+          "Rows copy kara aani ithech paste kara. Sales X-Ray columns swatah match karto, aani saglya ekdam add karto."
+        ]
+      }
+    },
+    {
+      "id": "s4-phone",
+      "device": "phone",
+      "label": "Quick add on the phone",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=all"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 700
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "placeholder": "New lead's name"
+          },
+          "ms": 1400,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "type",
+          "target": {
+            "placeholder": "New lead's name"
+          },
+          "text": "Neel Sample",
+          "delay": 70
+        },
+        {
+          "do": "still",
+          "label": "quick-add-phone"
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "en": {
+        "say": ["On the phone, the quick add bar sits right above your list."]
+      },
+      "hi": {
+        "say": ["Phone पे quick add bar आपकी list के ठीक ऊपर है."],
+        "caption": ["Phone pe quick add bar aapki list ke theek upar hai."]
+      },
+      "mr": {
+        "say": ["Phone वर quick add bar तुमच्या list च्या अगदी वर आहे."],
+        "caption": ["Phone var quick add bar tumchya list chya agdi var aahe."]
+      }
+    },
+    {
+      "id": "s5-plus",
+      "device": "phone",
+      "label": "Or tap +",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/add-sheet"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 800
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Add lead"
+          },
+          "ms": 1600
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "still",
+          "label": "add-sheet"
+        }
+      ],
+      "en": {
+        "say": [
+          "Or tap plus, then Add lead, from any screen. A name and a number is enough."
+        ]
+      },
+      "hi": {
+        "say": [
+          "या किसी भी screen से plus दबाइए, फिर Add lead. नाम और number काफ़ी है."
+        ],
+        "caption": [
+          "Ya kisi bhi screen se plus dabaiye, phir Add lead. Naam aur number kaafi hai."
+        ]
+      },
+      "mr": {
+        "say": [
+          "किंवा कुठल्याही screen वरून plus दाबा, मग Add lead. नाव आणि number पुरेसा आहे."
+        ],
+        "caption": [
+          "Kinva kuthlyahi screen varun plus daba, mag Add lead. Naav aani number puresa aahe."
+        ]
+      }
+    }
+  ]
+}

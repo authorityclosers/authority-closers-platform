@@ -819,7 +819,7 @@ function StandaloneStudioView({
     );
   const chooser = view.kind === "chooser" || view.kind === "selecting";
   const heading = chooser
-    ? "Choose your Sales Xray workspace."
+    ? "Choose your Sales X-Ray workspace."
     : view.kind === "empty"
       ? "No workspace is ready yet."
       : view.kind === "unauthenticated"
@@ -868,7 +868,7 @@ function StandaloneStudioView({
               }}
             >
               <ShieldCheck size={20} aria-hidden="true" />
-              <span>Authority Closers · Sales Xray</span>
+              <span>Authority Closers · Sales X-Ray</span>
             </div>
           )}
           <h1
@@ -958,8 +958,8 @@ function StandaloneStudioView({
           ) : view.kind === "empty" ? (
             <>
               <p style={{ margin: "0 0 22px", color: "var(--muted)" }}>
-                Your account has no Sales Xray workspace assignment yet. Contact
-                your administrator, then try again.
+                Your account has no Sales X-Ray workspace assignment yet.
+                Contact your administrator, then try again.
               </p>
               <button
                 type="button"

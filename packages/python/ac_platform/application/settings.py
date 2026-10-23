@@ -108,6 +108,10 @@ class Settings(BaseSettings):
     facebook_login_app_id: str | None = None
     facebook_login_app_secret: SecretStr | None = None
     facebook_login_graph_version: str = "v23.0"
+    # The same app's client token (Meta: Settings -> Advanced -> Security). The Android
+    # app needs it, with the app ID, to start the Facebook SDK; without it Facebook in
+    # the app keeps opening in the phone's browser.
+    facebook_login_client_token: SecretStr | None = None
     apple_sign_in_service_id: str | None = None
     apple_sign_in_team_id: str | None = None
     apple_sign_in_key_id: str | None = None

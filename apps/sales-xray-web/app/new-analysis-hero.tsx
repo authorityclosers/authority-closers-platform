@@ -1,6 +1,7 @@
 "use client";
 
 import { ShieldCheck } from "lucide-react";
+import Link from "next/link";
 
 import styles from "./new-analysis-hero.module.css";
 import { useProfileFirstName } from "./profile-first-name";
@@ -32,8 +33,11 @@ const STEPS = ["Upload", "We analyse", "Your report"] as const;
 /** A quiet line under the upload card: the allowance and how it works. */
 export function NewAnalysisFooter({
   allowanceLabel,
+  moreMinutesHref,
 }: {
   allowanceLabel: string | null;
+  /** Set when a signed-in seller is out of minutes: where to get more. */
+  moreMinutesHref?: string;
 }) {
   return (
     <div className={styles.footer}>
@@ -41,6 +45,11 @@ export function NewAnalysisFooter({
         <span className={styles.allowance}>
           <ShieldCheck size={15} aria-hidden="true" />
           {allowanceLabel}
+          {moreMinutesHref ? (
+            <Link className={styles.moreMinutes} href={moreMinutesHref}>
+              Get more minutes
+            </Link>
+          ) : null}
         </span>
       )}
       <ol className={styles.trail} aria-label="How it works">

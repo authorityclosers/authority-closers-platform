@@ -5,6 +5,10 @@ The browser only ever visits facebook.com's authorization dialog and comes back 
 secret and the transaction's PKCE verifier, and the person is read from the Graph API
 with ``appsecret_proof``. No Facebook token reaches the browser or the database.
 
+Inside the Android app (owner, 23 Oct 2026) Facebook's own SDK signs in instead and
+the page passes its user access token here once (``verify_native_token``). It counts
+only if ``debug_token`` says Facebook issued it to this app, for that person.
+
 Meta returns ``email`` only when the person has a confirmed primary address, but it
 gives no verification flag, so Sales Xray never links a Facebook email to an existing
 account (see ``link_existing_email`` in the identity application).
@@ -152,6 +156,67 @@ class FacebookLoginProvider:
         access_token = self._json_object(token_response).get("access_token")
         if not isinstance(access_token, str) or not access_token or len(access_token) > 4096:
             raise IdentityProviderRejected("Facebook returned an invalid token response.")
+        return await self._profile_assertion(
+            access_token, transaction, callback_state=callback_state
+        )
+
+    async def verify_native_token(
+        self,
+        token: str,
+        transaction: AuthTransaction,
+        *,
+        callback_state: str,
+    ) -> VerifiedProviderAssertion:
+        """A user access token from the Facebook SDK in the Android app.
+
+        A token Facebook issued to another app, or no longer valid, is refused before
+        the person is read; the person read must be the one the token belongs to.
+        """
+
+        if not hmac.compare_digest(callback_state, transaction.state):
+            raise IdentityProviderRejected("Facebook sign-in state did not match.")
+        if not token or len(token) > 4096 or not token.isascii():
+            raise IdentityProviderRejected("Facebook returned an invalid access token.")
+        try:
+            debug_response = await self._get(
+                "debug_token",
+                {
+                    "input_token": token,
+                    "access_token": f"{self._app_id}|{self._app_secret}",
+                },
+            )
+        except httpx.HTTPError as exc:
+            raise IdentityProviderUnavailable("Facebook token check is unavailable.") from exc
+        if debug_response.status_code >= 500:
+            raise IdentityProviderUnavailable("Facebook token check is unavailable.")
+        if debug_response.status_code != 200:
+            raise IdentityProviderRejected("Facebook refused the token check.")
+        data = self._json_object(debug_response).get("data")
+        if not isinstance(data, dict):
+            raise IdentityProviderRejected("Facebook returned an invalid token check.")
+        app_id = data.get("app_id")
+        user_id = data.get("user_id")
+        if (
+            data.get("is_valid") is not True
+            or not isinstance(app_id, str)
+            or not hmac.compare_digest(app_id, self._app_id)
+            or data.get("type") != "USER"
+            or not isinstance(user_id, str)
+            or _SUBJECT.fullmatch(user_id) is None
+        ):
+            raise IdentityProviderRejected("The Facebook token is not for this app.")
+        return await self._profile_assertion(
+            token, transaction, callback_state=callback_state, expected_subject=user_id
+        )
+
+    async def _profile_assertion(
+        self,
+        access_token: str,
+        transaction: AuthTransaction,
+        *,
+        callback_state: str,
+        expected_subject: str | None = None,
+    ) -> VerifiedProviderAssertion:
         proof = hmac.new(
             self._app_secret.encode("utf-8"),
             access_token.encode("utf-8"),
@@ -176,6 +241,8 @@ class FacebookLoginProvider:
         subject = profile.get("id")
         if not isinstance(subject, str) or _SUBJECT.fullmatch(subject) is None:
             raise IdentityProviderRejected("Facebook returned an invalid person id.")
+        if expected_subject is not None and not hmac.compare_digest(subject, expected_subject):
+            raise IdentityProviderRejected("The Facebook token belongs to someone else.")
         email = profile.get("email")
         if not isinstance(email, str) or not email.strip() or len(email) > 320 or "@" not in email:
             # Phone-only accounts, or the email permission was declined.

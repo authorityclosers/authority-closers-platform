@@ -253,7 +253,9 @@ export function ReviewRoute() {
                             · {item.handled}/{item.total}
                             {item.mode === "brain4_blind"
                               ? " · Blind rating"
-                              : ""}
+                              : item.mode === "report"
+                                ? " · Report review"
+                                : ""}
                           </span>
                         </span>
                         <span

@@ -27,6 +27,8 @@ import {
 import { BrandMark } from "./shell/brand-lockup";
 import { ThemeToggle } from "./shell/theme-toggle";
 import {
+  ACCOUNT_CLOSED,
+  ACCOUNT_CLOSED_MESSAGE,
   emailCodeRequest,
   isAuthCompleteMessage,
   maskedEmail,
@@ -43,14 +45,26 @@ import {
   forgetSignInResult,
   readSignInResult,
   rememberRedirectSignIn,
+  startNativeSignIn,
+  submitNativeSignIn,
   type AuthCompletionResult,
   type EmailCodeConfig,
   type SignInProvider,
 } from "./account-auth-client";
 import styles from "./account-auth.module.css";
-import { inPhoneApp, phoneStatus } from "./leads/native-phone";
+import { noteFreshSignIn } from "./welcome/setup-state";
+import {
+  inPhoneApp,
+  phoneStatus,
+  signInOnPhone,
+  type NativeSignInProvider,
+} from "./leads/native-phone";
 
-export type AccountAuthPreviewState = "auth.email" | "auth.code" | "auth.error";
+export type AccountAuthPreviewState =
+  | "auth.email"
+  | "auth.code"
+  | "auth.password"
+  | "auth.error";
 
 const PREVIEW_CONFIG: EmailCodeConfig = {
   enabled: true,
@@ -251,6 +265,7 @@ export function signInProblem(
   provider: SignInProvider,
 ) {
   const label = providerLabel(provider);
+  if (result === "account_closed") return ACCOUNT_CLOSED_MESSAGE;
   if (result === "account_exists")
     // No method hints: staff never get email codes, and naming staff here would
     // tell anyone with that email which kind of account it is.
@@ -269,22 +284,38 @@ export function AccountAuth({
   onAuthenticated,
   onCancel,
   previewState,
+  reviewProvider,
 }: {
   selectedFile?: { name: string; size: number } | null;
   onAuthenticated: () => void;
   onCancel?: (selectedFile: { name: string; size: number }) => void;
   previewState?: AccountAuthPreviewState;
+  /** Review fixtures only (never in production): a provider press goes here,
+   * not to Google, Apple or Facebook (/review-fixture/sign-in). */
+  reviewProvider?: (provider: SignInProvider) => void;
 }) {
   const preview = process.env.NODE_ENV !== "production" && !!previewState;
+  const reviewSignIn =
+    process.env.NODE_ENV !== "production" ? reviewProvider : undefined;
   const [config, setConfig] = useState<EmailCodeConfig | null>(null);
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [email, setEmail] = useState(
-    previewState === "auth.code" ? "sample@example.test" : "",
+    previewState === "auth.code" || previewState === "auth.password"
+      ? "sample@example.test"
+      : "",
   );
   const [consent, setConsent] = useState(false);
+  // Owner, 23 Oct 2026 ("not progressive"): the buttons are never greyed out;
+  // pressing one before the box is ticked points at the box instead.
+  const [consentNudge, setConsentNudge] = useState(false);
+  const consentRef = useRef<HTMLInputElement>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [step, setStep] = useState<"email" | "code" | "password" | "confirmed">(
-    previewState === "auth.code" ? "code" : "email",
+    previewState === "auth.code"
+      ? "code"
+      : previewState === "auth.password"
+        ? "password"
+        : "email",
   );
   const [pending, setPending] = useState(false);
   const [popupActive, setPopupActive] = useState(false);
@@ -304,6 +335,8 @@ export function AccountAuth({
   const popupMessage = useRef<((event: MessageEvent) => void) | null>(null);
   const popupOutcome = useRef<AuthCompletionResult | null>(null);
   const popupProvider = useRef<SignInProvider>("google");
+  // Inside the phone app: providers it signs in with by itself (no browser).
+  const nativeProviders = useRef<NativeSignInProvider[]>([]);
   const confirmingPopup = useRef(false);
   const errorRef = useRef<HTMLParagraphElement>(null);
   const codeRef = useRef<HTMLInputElement>(null);
@@ -321,7 +354,9 @@ export function AccountAuth({
   const displayedStep = preview
     ? previewState === "auth.code"
       ? "code"
-      : "email"
+      : previewState === "auth.password"
+        ? "password"
+        : "email"
     : step;
   const displayedEmail =
     previewState === "auth.code" && preview ? "sample@example.test" : email;
@@ -342,6 +377,16 @@ export function AccountAuth({
       });
     return () => request.abort();
   }, [loadAttempt, preview]);
+  useEffect(() => {
+    if (preview || !inPhoneApp()) return;
+    let live = true;
+    void phoneStatus().then((status) => {
+      if (live) nativeProviders.current = status?.nativeSignIn ?? [];
+    });
+    return () => {
+      live = false;
+    };
+  }, [preview]);
   const finish = useRef<() => void>(() => {});
   useEffect(() => {
     finish.current = complete;
@@ -425,12 +470,26 @@ export function AccountAuth({
   function complete() {
     if (preview || verified.current) return;
     verified.current = true;
+    // Home offers first-run setup after this sign-in, never with a call waiting.
+    if (!selectedFile) noteFreshSignIn();
     setStep("confirmed");
     onAuthenticated();
   }
 
+  function askConsent() {
+    setConsentNudge(true);
+    consentRef.current?.focus({ preventScroll: true });
+    consentRef.current
+      ?.closest("label")
+      ?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+  }
+
   async function sendCode(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
+    if (!preview && !consent) {
+      askConsent();
+      return;
+    }
     if (
       preview ||
       !activeConfig?.enabled ||
@@ -554,9 +613,11 @@ export function AccountAuth({
       codeAccepted = true;
       await readCanonicalSession(request.signal);
       if (!request.signal.aborted) complete();
-    } catch {
+    } catch (failure) {
       if (!request.signal.aborted) {
-        if (codeAccepted) {
+        if (failure instanceof Error && failure.message === ACCOUNT_CLOSED) {
+          setError(ACCOUNT_CLOSED_MESSAGE);
+        } else if (codeAccepted) {
           setSessionCheckNeeded(true);
           setError(
             "Your code was accepted, but your account session could not be confirmed. Check again below.",
@@ -609,10 +670,12 @@ export function AccountAuth({
     try {
       await passwordLogin(address, password, request.signal);
       if (!request.signal.aborted) complete();
-    } catch {
+    } catch (failure) {
       if (!request.signal.aborted)
         setError(
-          "We couldn’t complete password sign-in. Check your details or try again later.",
+          failure instanceof Error && failure.message === ACCOUNT_CLOSED
+            ? ACCOUNT_CLOSED_MESSAGE
+            : "We couldn’t complete password sign-in. Check your details or try again later.",
         );
     } finally {
       if (passwordRef.current) passwordRef.current.value = "";
@@ -731,6 +794,14 @@ export function AccountAuth({
   }
 
   function startProvider(provider: SignInProvider) {
+    if (!preview && !consent) {
+      askConsent();
+      return;
+    }
+    if (reviewSignIn && !preview) {
+      reviewSignIn(provider);
+      return;
+    }
     if (
       preview ||
       !activeConfig ||
@@ -741,16 +812,21 @@ export function AccountAuth({
     )
       return;
     const label = providerLabel(provider);
-    // In the phone app only Google has the app's own sign-in window; Apple and
-    // Facebook go through this page, which the app opens in the phone's browser.
-    const appBrowser = provider !== "google" && inPhoneApp();
+    // The phone app signs in with Google and Facebook by itself (owner, 23 Oct
+    // 2026: never a jump to Chrome). Older apps: only Google has the app's own
+    // sign-in window; Apple and Facebook go through this page, which the app
+    // opens in the phone's browser.
+    const native = (nativeProviders.current as string[]).includes(provider)
+      ? (provider as NativeSignInProvider)
+      : null;
+    const appBrowser = !native && provider !== "google" && inPhoneApp();
     // Open a blank same-origin popup synchronously. Fresh policy is checked
     // before navigating it to Google, while the File stays in this document.
     // Where the window is blocked (the Claude desktop pane) or breaks (in-app
     // browsers), the same click signs in on this page instead.
     const flow = crypto.randomUUID();
     const opened =
-      appBrowser || popupHostileBrowser(navigator.userAgent)
+      native || appBrowser || popupHostileBrowser(navigator.userAgent)
         ? null
         : window.open(
             "about:blank",
@@ -819,11 +895,21 @@ export function AccountAuth({
           child.location.assign(start);
           return;
         }
+        if (native) {
+          const signedIn = await signInHere(
+            native,
+            current.consent_version,
+            flow,
+            request.signal,
+          );
+          // Otherwise this environment or app can't: the phone's browser, as before.
+          if (signedIn !== "fallback") return;
+        }
         if (appBrowser && !(await phoneStatus())?.signIn) {
           inFlight.current = false;
           setPending(false);
           setError(
-            `Update the Sales Xray app to sign in with ${label}, or use Google or an email code.`,
+            `Update the Sales X-Ray app to sign in with ${label}, or use Google or an email code.`,
           );
           return;
         }
@@ -844,6 +930,56 @@ export function AccountAuth({
         setPending(false);
         setError("Sign-in settings could not be checked. Please try again.");
       });
+  }
+
+  /** The phone's own sign-in: Android's Google sheet or the Facebook app. */
+  async function signInHere(
+    provider: NativeSignInProvider,
+    consentVersion: string,
+    flow: string,
+    signal: AbortSignal,
+  ): Promise<"finishing" | "stopped" | "fallback"> {
+    const label = providerLabel(provider);
+    const started = await startNativeSignIn(
+      provider,
+      {
+        consent_version: consentVersion,
+        return_path: `/auth/complete?flow=${flow}`,
+      },
+      signal,
+    );
+    if (signal.aborted) return "stopped";
+    if (!started) return "fallback";
+    const outcome = await signInOnPhone({
+      provider,
+      nonce: started.nonce,
+      ...(started.clientId ? { clientId: started.clientId } : {}),
+      ...(started.appId ? { appId: started.appId } : {}),
+      ...(started.clientToken ? { clientToken: started.clientToken } : {}),
+    });
+    if (signal.aborted) return "stopped";
+    if ("token" in outcome) {
+      rememberRedirectSignIn(
+        flow,
+        provider,
+        window.location.pathname + window.location.search,
+      );
+      setRedirecting(provider);
+      submitNativeSignIn(provider, started.state, outcome.token);
+      return "finishing";
+    }
+    if (outcome.error === "unavailable") return "fallback";
+    inFlight.current = false;
+    setPending(false);
+    if (outcome.error === "no_account")
+      setError(
+        "Add a Google account to this phone in its Settings, or use an email code.",
+      );
+    else if (outcome.error !== "cancelled")
+      setError(
+        `${label} sign-in didn’t finish. Try again or use an email code.`,
+      );
+    return "stopped";
   }
 
   const seconds = Math.max(0, Math.ceil((retryAt - now) / 1000));
@@ -889,7 +1025,7 @@ export function AccountAuth({
     ) : unavailable && !googleAvailable ? (
       "Sign in with your existing Authority Closers account."
     ) : (
-      "One quick step for new and returning members."
+      "New here? The same steps create your account."
     );
   return (
     <section
@@ -910,7 +1046,7 @@ export function AccountAuth({
               {brandContent}
             </button>
           ) : (
-            <div className={styles.brand} aria-label="Sales Xray">
+            <div className={styles.brand} aria-label="Sales X-Ray">
               {brandContent}
             </div>
           )
@@ -972,7 +1108,7 @@ export function AccountAuth({
                 ? "You’re signed in"
                 : displayedStep === "password"
                   ? "Existing AC account"
-                  : "Welcome to Sales Xray"}
+                  : "Welcome to Sales X-Ray"}
           </p>
           <h1 id="account-auth-heading">{heading}</h1>
           <p className={styles.lead}>{lead}</p>
@@ -1024,14 +1160,23 @@ export function AccountAuth({
                   <label
                     className={styles.consent}
                     data-checked={consent ? "true" : undefined}
+                    data-nudge={consentNudge && !consent ? "true" : undefined}
                   >
                     <input
+                      ref={consentRef}
                       type="checkbox"
                       form="account-email-form"
                       checked={consent}
-                      onChange={(event) => setConsent(event.target.checked)}
+                      onChange={(event) => {
+                        setConsent(event.target.checked);
+                        if (event.target.checked) setConsentNudge(false);
+                      }}
                       disabled={preview || pending}
-                      required
+                      aria-describedby={
+                        consentNudge && !consent
+                          ? "account-consent-nudge"
+                          : undefined
+                      }
                     />
                     <span className={styles.check} aria-hidden="true">
                       <svg viewBox="0 0 16 16">
@@ -1059,6 +1204,15 @@ export function AccountAuth({
                       for my Authority Closers account.
                     </span>
                   </label>
+                  {consentNudge && !consent ? (
+                    <p
+                      id="account-consent-nudge"
+                      className={styles.consentNudge}
+                      role="alert"
+                    >
+                      Tick this box to continue.
+                    </p>
+                  ) : null}
                   {googleBlocked ? (
                     <p className={styles.consentHint}>
                       Google sign-in is not available on the dev site yet. Use
@@ -1076,12 +1230,7 @@ export function AccountAuth({
                             className={styles.google}
                             data-provider={provider}
                             onClick={() => startProvider(provider)}
-                            disabled={preview || !consent || pending}
-                            aria-describedby={
-                              !consent
-                                ? "account-google-consent-hint"
-                                : undefined
-                            }
+                            disabled={preview || pending}
                           >
                             <Mark />
                             Continue with {providerLabel(provider)}
@@ -1089,15 +1238,6 @@ export function AccountAuth({
                         );
                       })}
                     </div>
-                  )}
-                  {googleAvailable && !consent && (
-                    <p
-                      id="account-google-consent-hint"
-                      className={styles.consentHint}
-                    >
-                      Tick the box above to continue with{" "}
-                      {offeredProviders.map(providerLabel).join(", ")} or email.
-                    </p>
                   )}
                   {googleAvailable && available && (
                     <div className={styles.divider}>
@@ -1135,9 +1275,7 @@ export function AccountAuth({
                         <button
                           type="submit"
                           className={styles.primary}
-                          disabled={
-                            preview || !available || !consent || pending
-                          }
+                          disabled={preview || !available || pending}
                         >
                           {pending ? (
                             <>
@@ -1297,9 +1435,10 @@ export function AccountAuth({
                     autoComplete="one-time-code"
                     pattern="[0-9]{6}"
                     onInput={(event) => {
-                      event.currentTarget.value = event.currentTarget.value
-                        .replace(/\D/g, "")
-                        .slice(0, 6);
+                      const field = event.currentTarget;
+                      field.value = field.value.replace(/\D/g, "").slice(0, 6);
+                      if (field.value.length === 6 && !pending && !expired)
+                        field.form?.requestSubmit?.();
                     }}
                     required
                     disabled={pending || preview}

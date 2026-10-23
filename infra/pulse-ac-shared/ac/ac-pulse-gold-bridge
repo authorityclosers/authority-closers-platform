@@ -1,0 +1,171 @@
+#!/usr/bin/env python3
+"""Sales Xray gold reviews -> AC Pulse tasks (task ecff5661, owner order 16 Oct 2026).
+
+Every production gold-review assignment becomes a Pulse subtask for its reviewer under
+"Review real sales calls for the gold dataset", with the review link. The subtask closes
+itself once all 29 lines are saved, and is cancelled if the review expires or the
+reviewer's designation is revoked. Reads Sales Xray production read-only (hq.sh); writes
+Pulse only through pulse.task_save / pulse.task_move as the owner. Task text carries the
+recording time and link only, never call content.
+
+Since 23 Oct 2026 (AUT-2207) AC's Pulse is an organisation in the shared Pulse on ea: the
+bridge writes through ac-pulse-tasks (ea's restricted AC task route: fixed operations inside
+AC's organisation, one transaction per run, recorded in Pulse's audit as this bridge).
+Task ids did not change, so the state file carries over.
+
+  ac-pulse-gold-bridge            dry run: print the plan
+  ac-pulse-gold-bridge --apply    apply it (the timer runs this every 5 minutes)
+  ac-pulse-gold-bridge --selftest exercise create + close for a fake assignment, rolled back
+"""
+
+from __future__ import annotations
+
+import datetime as dt
+import json
+import pathlib
+import subprocess
+import sys
+
+HQ = "/home/acdev/strikes/1676/operator/hq.sh"
+TASKS = "/usr/local/bin/ac-pulse-tasks"
+STATE = pathlib.Path("/var/lib/ac-pulse-gold-bridge/bridged.json")
+LOG = pathlib.Path("/var/log/ac-pulse-gold-bridge.log")
+ADMIN = "https://admin.authorityclosers.com"
+PARENT_TITLE = "Review real sales calls for the gold dataset"
+PARENT_NOTES = (
+    "Each real sales call with a new Report arrives here as a subtask with its review link. "
+    "Your view on each line builds Sales Xray's gold dataset. Subtasks close themselves "
+    "once all 29 lines are saved."
+)
+LINES = 29
+IST = dt.timezone(dt.timedelta(hours=5, minutes=30))
+ACTOR = "ac-pulse-gold-bridge (Sales Xray gold reviews, task ecff5661)"
+
+PROD_SQL = """
+select coalesce(json_agg(x), '[]') from (
+  select ga.assignment_id::text as id, lower(p.email) as email, ga.created_at, ra.expires_at,
+         gr.revoked_at, rec.created_at as recorded_at,
+         (select count(distinct r.target) from conversation_gold_rows r
+           where r.assignment_id = ga.assignment_id and r.erased_at is null) as judged
+    from conversation_gold_assignments ga
+    join conversation_review_assignments ra on ra.id = ga.assignment_id
+    join persons p on p.id = ga.reviewer_id
+    join conversation_recordings rec on rec.id = ga.recording_id
+    left join conversation_gold_reviewers gr on gr.person_id = ga.reviewer_id
+) x
+"""
+
+def log(line: str) -> None:
+    stamp = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with LOG.open("a", encoding="utf-8") as f:
+        f.write(f"{stamp} {line}\n")
+
+
+def tasks(ops: list[dict], *, dry: bool) -> list:
+    """One request to AC's task route on ea (one transaction); the operations' results in order."""
+    req = {"as": "suyash", "actor": ACTOR, "dry": dry, "ops": ops}
+    out = subprocess.run([TASKS, "--batch", "-"], input=json.dumps(req, ensure_ascii=False),
+                         capture_output=True, text=True, timeout=180, check=False)
+    if out.returncode:
+        raise SystemExit(f"AC task route failed: {out.stderr.strip()[:400]}")
+    return [r["r"] for r in json.loads(out.stdout)["results"]]
+
+
+def ts(value: str | None) -> dt.datetime | None:
+    return dt.datetime.fromisoformat(value) if value else None
+
+
+def plan_for(assignments: list[dict], people: dict[str, str], state: dict[str, str], now: dt.datetime) -> dict:
+    plan: dict[str, list] = {"parents": [], "create": [], "move": [], "check": []}
+    parents: set[str] = set()
+    for a in assignments:
+        pulse_id = people.get(a["email"] or "")
+        if pulse_id is None:
+            continue
+        marker = f"{ADMIN}/reviewer/review/{a['id']}"
+        expires = ts(a["expires_at"])
+        finished = a["judged"] >= LINES
+        gone = (expires is not None and expires <= now) or a["revoked_at"] is not None
+        known = state.get(a["id"])
+        if known is None:
+            if finished or gone:
+                continue
+            recorded = ts(a["recorded_at"]).astimezone(IST)
+            due = (ts(a["created_at"]).astimezone(IST) + dt.timedelta(days=2)).date()
+            until = expires.astimezone(IST).strftime("%d %b %Y") if expires else "no end date"
+            notes = (
+                f"Open on your phone: https://salesxray.authorityclosers.com/review#call={a['id']}\n"
+                f"Or on a computer: {marker} (sign in at {ADMIN}/reviewer/login with your authorityclosers.com email).\n"
+                f"Give your view on each of the {LINES} lines. This task closes itself once all {LINES} are saved.\n"
+                f"Open until {until}."
+            )
+            plan["create"].append({"pulse_id": pulse_id, "marker": marker, "due_on": due.isoformat(),
+                                   "title": f"Review the call recorded {recorded:%d %b, %H:%M}", "notes": notes})
+            if pulse_id not in parents:
+                parents.add(pulse_id)
+                plan["parents"].append({"pulse_id": pulse_id})
+            plan["check"].append({"marker": marker, "id": a["id"]})
+        elif known == "open" and (finished or gone):
+            note = (f"All {LINES} lines saved in Sales Xray." if finished else
+                    "The review expired or the reviewer designation was revoked in Sales Xray.")
+            plan["move"].append({"marker": marker, "status": "done" if finished else "cancelled", "note": note})
+            plan["check"].append({"marker": marker, "id": a["id"]})
+    return plan
+
+
+def apply(plan: dict, *, commit: bool) -> dict[str, str]:
+    """Create, close and read back in one transaction (rolled back unless commit)."""
+    parent = {"title": PARENT_TITLE, "fields": {"priority": "high", "tags": [], "notes": PARENT_NOTES}}
+    ops: list[dict] = []
+    for c in plan["create"]:
+        ops.append({"op": "ensure", "marker": c["marker"],
+                    "fields": {"title": c["title"], "assigneeId": c["pulse_id"], "priority": "high", "tags": [],
+                               "dueOn": c["due_on"], "notes": c["notes"]},
+                    "parent": {**parent, "fields": {**parent["fields"], "assigneeId": c["pulse_id"]}}})
+    for m in plan["move"]:
+        ops.append({"op": "close", "marker": m["marker"], "status": m["status"], "note": m["note"]})
+    ops.append({"op": "state", "markers": [m["marker"] for m in plan["check"]]})
+    out = tasks(ops, dry=not commit)
+    print(f"created: {sum(1 for r in out[:len(plan['create'])] if r['created'])}, "
+          f"closed: {sum(r['moved'] for r in out[len(plan['create']):-1])}")
+    by_marker = {m["marker"]: m["id"] for m in plan["check"]}
+    return {by_marker[row["marker"]]: "open" if row["status"] not in ("done", "cancelled") else row["status"]
+            for row in out[-1]}
+
+
+def main() -> None:
+    mode = sys.argv[1] if len(sys.argv) > 1 else ""
+    now = dt.datetime.now(dt.UTC)
+    people = {p["email"]: p["id"] for p in tasks([{"op": "people"}], dry=True)[0] if p["email"]}
+    if mode == "--selftest":
+        dipak = next(e for e in people if e.startswith("dipak"))
+        fake = {"id": "00000000-0000-4000-8000-000000001801", "email": dipak, "judged": 0, "revoked_at": None,
+                "created_at": now.isoformat(), "expires_at": (now + dt.timedelta(days=30)).isoformat(),
+                "recorded_at": now.isoformat()}
+        plan = plan_for([fake], people, {}, now)
+        plan["move"].append({"marker": plan["create"][0]["marker"], "status": "done", "note": "selftest"})
+        print(json.dumps({k: len(v) for k, v in plan.items()}))
+        print("rolled-back result:", apply(plan, commit=False))
+        return
+    raw = subprocess.run([HQ, "production", PROD_SQL], capture_output=True, text=True, check=True).stdout.strip()
+    assignments = json.loads(raw or "[]")
+    STATE.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+    state = json.loads(STATE.read_text()) if STATE.exists() else {}
+    unmapped = sorted({a["email"].split("@")[-1] for a in assignments if a["email"] not in people})
+    plan = plan_for(assignments, people, state, now)
+    summary = {k: len(v) for k, v in plan.items() if k != "check"}
+    print(f"assignments: {len(assignments)}, plan: {summary}, unmapped reviewer domains: {unmapped}")
+    if not plan["create"] and not plan["move"]:
+        return
+    if mode != "--apply":
+        print("Dry run only. Add --apply.")
+        return
+    results = apply(plan, commit=True)
+    state.update(results)
+    STATE.write_text(json.dumps(state, indent=1, sort_keys=True))
+    log(f"route=shared-pulse created={len(plan['create'])} moved={len(plan['move'])} "
+        f"ids={','.join(sorted(results))}")
+
+
+if __name__ == "__main__":
+    main()

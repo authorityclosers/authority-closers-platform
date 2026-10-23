@@ -5,7 +5,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Annotated, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request
 from pydantic import BaseModel, ConfigDict, Field, StrictStr, field_validator
 from sqlalchemy import select
 
@@ -29,6 +29,7 @@ from ac_platform.http.auth import (
     require_safe_origin,
 )
 from ac_platform.staff_billing.read import PAGE_LIMIT, billing_overview
+from ac_platform.staff_billing.revenue import billing_revenue
 
 BILLING_CAPABILITY = "platform_billing_manage"
 OrderStatus = Literal["awaiting_payment", "confirming", "paid", "failed", "expired", "needs_review"]
@@ -129,6 +130,51 @@ class StaffBillingResponse(_Strict):
     subscriptions: list[SubscriptionResponse]
 
 
+class RevenueWindowResponse(_Strict):
+    key: Literal["today", "last_7_days", "this_month", "all_time"]
+    starts_at: datetime | None
+    collected_minor: int
+    taxable_minor: int
+    gst_minor: int
+    refunded_minor: int
+    net_minor: int
+    payments: int
+    refunds: int
+
+
+class RevenuePlanResponse(_Strict):
+    plan_key: str
+    plan_name: str
+    kind: Literal["subscription", "top_up"]
+    collected_minor: int
+    taxable_minor: int
+    payments: int
+
+
+class RevenueRecurringResponse(_Strict):
+    plan_key: str
+    plan_name: str
+    interval: Literal["month", "year"]
+    subscriptions: int
+    seats: int
+    monthly_taxable_minor: int
+
+
+class StaffRevenueResponse(_Strict):
+    generated_at: datetime
+    mode: Literal["test", "live"]
+    currency: Literal["INR"]
+    windows: list[RevenueWindowResponse]
+    by_plan: list[RevenuePlanResponse]
+    recurring: list[RevenueRecurringResponse]
+    active_subscriptions: int
+    cancelling_subscriptions: int
+    monthly_recurring_taxable_minor: int
+    paying_accounts: int
+    personal_accounts: int
+    organisation_accounts: int
+
+
 class CreditGrantRequest(_Strict):
     quantity: StrictStr = Field(pattern=r"^[0-9]+(\.[0-9]+)?$")
     reason: StrictStr = Field(min_length=1, max_length=500)
@@ -198,6 +244,36 @@ def install_staff_billing_http(
             ],
         )
 
+    @router.get("/billing/revenue", response_model=StaffRevenueResponse)
+    async def revenue(
+        request: Request,
+        mode: Annotated[Literal["test", "live"], Query()] = "live",
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> StaffRevenueResponse:
+        if set(request.query_params) - {"mode"}:
+            raise CapabilityInvalid("Revenue accepts only the mode query parameter.")
+        permissions = await platform_projection(
+            auth.database, auth.resolved.actor, operations_tenant_id=settings.operations_tenant_id
+        )
+        if BILLING_CAPABILITY not in permissions:
+            raise CapabilityDenied("A current platform billing assignment is required.")
+        now = datetime.now(UTC)
+        totals = await billing_revenue(auth.database, mode=mode, now=now)
+        return StaffRevenueResponse(
+            generated_at=now,
+            mode=totals.mode,
+            currency="INR",
+            windows=[RevenueWindowResponse.model_validate(row) for row in totals.windows],
+            by_plan=[RevenuePlanResponse.model_validate(row) for row in totals.by_plan],
+            recurring=[RevenueRecurringResponse.model_validate(row) for row in totals.recurring],
+            active_subscriptions=totals.active_subscriptions,
+            cancelling_subscriptions=totals.cancelling_subscriptions,
+            monthly_recurring_taxable_minor=totals.monthly_recurring_taxable_minor,
+            paying_accounts=totals.paying_accounts,
+            personal_accounts=totals.personal_accounts,
+            organisation_accounts=totals.organisation_accounts,
+        )
+
     @router.post(
         "/billing/accounts/{tenant_id}/{account_id}/credit-grants",
         response_model=CreditGrantResponse,
@@ -258,4 +334,9 @@ def install_staff_billing_http(
     application.include_router(router)
 
 
-__all__ = ["BILLING_CAPABILITY", "StaffBillingResponse", "install_staff_billing_http"]
+__all__ = [
+    "BILLING_CAPABILITY",
+    "StaffBillingResponse",
+    "StaffRevenueResponse",
+    "install_staff_billing_http",
+]

@@ -91,9 +91,11 @@ function Table({
 function RefundCell({
   payment,
   onDone,
+  fetcher,
 }: {
   payment: BillingPayment;
   onDone: () => void;
+  fetcher: typeof fetch;
 }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState("");
@@ -137,6 +139,7 @@ function RefundCell({
       reason.trim(),
       key.current,
       AbortSignal.timeout(25000),
+      fetcher,
     );
     setBusy(false);
     if (!outcome.ok) {
@@ -191,7 +194,9 @@ function RefundCell({
   );
 }
 
-export function BillingPanel() {
+export function BillingPanel({
+  fetcher = fetch,
+}: { fetcher?: typeof fetch } = {}) {
   const [data, setData] = useState<StaffBilling | null>(null);
   const [error, setError] = useState("");
   const [pending, setPending] = useState(true);
@@ -199,7 +204,7 @@ export function BillingPanel() {
 
   useEffect(() => {
     const controller = new AbortController();
-    loadStaffBilling(controller.signal)
+    loadStaffBilling(controller.signal, fetcher)
       .then((result) => {
         if (controller.signal.aborted) return;
         setData(result);
@@ -218,7 +223,7 @@ export function BillingPanel() {
         if (!controller.signal.aborted) setPending(false);
       });
     return () => controller.abort();
-  }, [retry]);
+  }, [fetcher, retry]);
 
   const reload = () => {
     setPending(true);
@@ -342,7 +347,11 @@ export function BillingPanel() {
                 </td>
                 <td>{dateTime.format(new Date(payment.verified_at))}</td>
                 <td>
-                  <RefundCell payment={payment} onDone={reload} />
+                  <RefundCell
+                    fetcher={fetcher}
+                    payment={payment}
+                    onDone={reload}
+                  />
                 </td>
               </tr>
             ))}
@@ -447,8 +456,9 @@ export function BillingPanel() {
       <section className={styles.block} aria-labelledby="billing-invoices">
         <h3 id="billing-invoices">Invoices</h3>
         <p className={styles.empty}>
-          The platform does not issue invoices yet, so there are none to show.
-          Amounts above state whether GST is included.
+          Every verified payment gets a numbered GST tax invoice, and every
+          completed refund a credit note. Customers download them in Settings →
+          Plan &amp; usage. Amounts above state whether GST is included.
         </p>
       </section>
       <section className={styles.block} aria-labelledby="billing-grants">

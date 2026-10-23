@@ -80,6 +80,13 @@ it("says the state in words, on, off and paused", async () => {
   expect(host.textContent).toContain("Your owner or admin sets work hours.");
 });
 
+it("adds a detail under the state while it runs", async () => {
+  await render(props({ note: "Jio · checked 2 min ago" }));
+  expect(host.textContent).toContain("Jio · checked 2 min ago");
+  await render(props({ on: false, note: "Jio · checked 2 min ago" }));
+  expect(host.textContent).not.toContain("Jio · checked 2 min ago");
+});
+
 it("asks before turning off, and saves only on the answer", async () => {
   const value = props();
   await render(value);

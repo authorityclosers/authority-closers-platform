@@ -403,6 +403,84 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             ),
         )
 
+    if message.template in {"identity-account-closed", "identity-account-deletion-requested"}:
+        # Settings -> Security -> Delete account (identity/account_deletion.py).
+        if message.communication_class != "verification_security":
+            raise PermanentProviderError("account deletion email has the wrong communication class")
+        try:
+            closed = datetime.fromisoformat(
+                _required_text(message.variables, "closed_at", maximum=64).replace("Z", "+00:00")
+            )
+        except ValueError as error:
+            raise PermanentProviderError("account deletion time must be ISO-8601") from error
+        if closed.tzinfo is None:
+            raise PermanentProviderError("account deletion time must include a timezone")
+        when = closed.astimezone(UTC).strftime("%d %b %Y at %H:%M UTC")
+        link = _action_link(message.variables)
+        safe_link = html.escape(link, quote=True)
+        if message.template == "identity-account-closed":
+            support = _required_text(message.variables, "support_email", maximum=120)
+            subject = "Your Sales X-Ray account is closed"
+            what = (
+                f"You asked on {when} for your Authority Closers account to be deleted, so we "
+                "closed it and signed it out everywhere. Nobody can sign in to it now."
+            )
+            next_line = (
+                "We delete its details, recordings, reports and leads within 2 days, as the "
+                "data deletion page explains."
+            )
+            not_you = (
+                f"Didn't ask for this, or changed your mind? Write to {support} at once, "
+                "before the deletion is carried out."
+            )
+            return RenderedEmail(
+                subject=subject,
+                text=f"Hi {first_name},\n\n{what}\n\n{next_line}\n\n{not_you}\n{link}",
+                html=_email_layout(
+                    preheader="Your account is closed and will be deleted within 2 days.",
+                    eyebrow="Account security",
+                    heading=html.escape(subject) + ".",
+                    greeting=f"Hi {safe_name},",
+                    paragraphs=(html.escape(what), html.escape(next_line)),
+                    action_label="How deletion works",
+                    action_link=safe_link,
+                    security_note=html.escape(not_you).replace(
+                        html.escape(support), f"<strong>{html.escape(support)}</strong>"
+                    ),
+                ),
+            )
+        account = _required_text(message.variables, "account_email", maximum=320)
+        person = _required_text(message.variables, "person_id", maximum=64)
+        request_id = _required_text(message.variables, "request_id", maximum=64)
+        closing = _required_text(message.variables, "organisations_closing", maximum=6)
+        subject = f"Account deletion request: {account}"
+        facts = (
+            f"{account} asked in Sales X-Ray on {when} for their account to be deleted. "
+            "The account is closed and signed out everywhere.",
+            f"Person {person}, deletion request {request_id}. Organisations that close "
+            f"with it: {closing}.",
+            "Carry it out through the owner-approved deletion process within 2 days: list "
+            "what will be deleted, get the owner's approval, take a snapshot, then complete "
+            "the request. Audit history stays.",
+        )
+        return RenderedEmail(
+            subject=subject,
+            text="Hi team,\n\n" + "\n\n".join(facts) + f"\n\n{link}",
+            html=_email_layout(
+                preheader=html.escape(subject),
+                eyebrow="Account deletion",
+                heading="An account asked to be deleted.",
+                greeting="Hi team,",
+                paragraphs=tuple(html.escape(item) for item in facts),
+                action_label="What we promised",
+                action_link=safe_link,
+                security_note=(
+                    "Nothing has been deleted yet. Each deletion needs the owner's approval "
+                    "of the exact list."
+                ),
+            ),
+        )
+
     if message.template == "organisation-invitation":
         if message.communication_class != "verification_security":
             raise PermanentProviderError(

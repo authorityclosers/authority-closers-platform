@@ -34,7 +34,7 @@ it.each([
   expect(parseSalesXrayWorkspaces(value)).toBeNull();
 });
 
-it("reads only the Sales Xray directory with the existing session", async () => {
+it("reads only the Sales X-Ray directory with the existing session", async () => {
   const fetcher = vi.fn().mockResolvedValue(Response.json(choices));
   vi.stubGlobal("fetch", fetcher);
   const signal = new AbortController().signal;

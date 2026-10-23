@@ -1,0 +1,316 @@
+{
+  "id": "07-stages-pipelines",
+  "number": "07",
+  "title": "Lead stages and your two pipelines",
+  "kicker": "Sales X-Ray tutorial",
+  "end_headline": "Every lead, in its place.",
+  "next": "Chats: WhatsApp, Messenger and Instagram",
+  "segments": [
+    {
+      "id": "card",
+      "device": "card",
+      "en": {
+        "say": [
+          "Stages show where every lead is. Pipelines keep different kinds of selling apart."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Stages बताते हैं हर lead कहाँ है. Pipelines अलग-अलग तरह की selling को अलग रखते हैं."
+        ],
+        "caption": [
+          "Stages batate hain har lead kahan hai. Pipelines alag-alag tarah ki selling ko alag rakhte hain."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Stages सांगतात प्रत्येक lead कुठे आहे. Pipelines वेगवेगळ्या प्रकारची selling वेगळी ठेवतात."
+        ],
+        "caption": [
+          "Stages sangtat pratyek lead kuthe aahe. Pipelines vegveglya prakarchi selling vegli thevtat."
+        ]
+      }
+    },
+    {
+      "id": "s1-stage-tabs",
+      "device": "phone",
+      "label": "Stage tabs",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Got it"
+          },
+          "ms": 400,
+          "optional": true
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 600
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "tab",
+            "name": "Enquiry"
+          },
+          "ms": 1300
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "tab",
+            "name": "Call back"
+          },
+          "ms": 1600
+        },
+        {
+          "do": "still",
+          "label": "stage-call-back"
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "en": {
+        "say": [
+          "Every lead sits in a stage, like Enquiry, Call back or Site visit booked.",
+          "Tap a stage tab to see just those leads."
+        ]
+      },
+      "hi": {
+        "say": [
+          "हर lead किसी stage में होता है, जैसे Enquiry, Call back या Site visit booked.",
+          "किसी stage tab पे tap कीजिए, सिर्फ़ वही leads दिखेंगे."
+        ],
+        "caption": [
+          "Har lead kisi stage mein hota hai, jaise Enquiry, Call back ya Site visit booked.",
+          "Kisi stage tab pe tap kijiye, sirf wahi leads dikhenge."
+        ]
+      },
+      "mr": {
+        "say": [
+          "प्रत्येक lead एखाद्या stage मध्ये असतो, जसं Enquiry, Call back किंवा Site visit booked.",
+          "एखाद्या stage tab वर tap करा, फक्त तेच leads दिसतील."
+        ],
+        "caption": [
+          "Pratyek lead ekhadya stage madhye asto, jasa Enquiry, Call back kinva Site visit booked.",
+          "Ekhadya stage tab var tap kara, fakt tech leads distil."
+        ]
+      }
+    },
+    {
+      "id": "s2-pipeline-chip",
+      "device": "phone",
+      "label": "Pick a pipeline",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?pipelines=2"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Got it"
+          },
+          "ms": 400,
+          "optional": true
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 600
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "css": "select"
+          },
+          "ms": 1500,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "select",
+          "target": {
+            "css": "select"
+          },
+          "option": "Partner outreach",
+          "ms": 1600,
+          "optional": true
+        },
+        {
+          "do": "still",
+          "label": "pipeline-partner-outreach"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "Start calling"
+          },
+          "ms": 1500,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        }
+      ],
+      "en": {
+        "say": [
+          "If your team sells two ways, say enquiries and partner outreach, each gets its own pipeline with its own stages.",
+          "Pick one, and To call and Start calling follow it."
+        ]
+      },
+      "hi": {
+        "say": [
+          "अगर आपकी team दो तरह से बेचती है, जैसे enquiries और partner outreach, तो हर एक की अपनी pipeline, अपने stages.",
+          "एक चुनिए, और To call और Start calling उसी को follow करते हैं."
+        ],
+        "caption": [
+          "Agar aapki team do tarah se bechti hai, jaise enquiries aur partner outreach, toh har ek ki apni pipeline, apne stages.",
+          "Ek chuniye, aur To call aur Start calling usi ko follow karte hain."
+        ]
+      },
+      "mr": {
+        "say": [
+          "तुमची team दोन प्रकारे विकत असेल, जसं enquiries आणि partner outreach, तर प्रत्येकाची स्वतःची pipeline, स्वतःचे stages.",
+          "एक निवडा, आणि To call आणि Start calling तीच follow करतात."
+        ],
+        "caption": [
+          "Tumchi team don prakare vikat asel, jasa enquiries aani partner outreach, tar pratyekachi swatachi pipeline, swatache stages.",
+          "Ek nivda, aani To call aani Start calling teech follow kartat."
+        ]
+      }
+    },
+    {
+      "id": "s3-set-up",
+      "device": "desktop",
+      "label": "Set them up",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=stages&pipelines=2"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 1000
+        },
+        {
+          "do": "still",
+          "label": "stages-settings"
+        },
+        {
+          "do": "highlight",
+          "target": {
+            "role": "button",
+            "name": "New pipeline"
+          },
+          "ms": 1500,
+          "optional": true
+        },
+        {
+          "do": "unhighlight"
+        },
+        {
+          "do": "scroll",
+          "dy": 400,
+          "ms": 900
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "en": {
+        "say": [
+          "Owners set them up on a computer, in Leads, Stages.",
+          "Sales X-Ray starts you with stages that fit your kind of business, and you can change them any time."
+        ]
+      },
+      "hi": {
+        "say": [
+          "Owners इन्हें computer पे set करते हैं, Leads, Stages में.",
+          "Sales X-Ray आपके business के हिसाब से stages ready देता है, और आप इन्हें कभी भी बदल सकते हैं."
+        ],
+        "caption": [
+          "Owners inhe computer pe set karte hain, Leads, Stages mein.",
+          "Sales X-Ray aapke business ke hisaab se stages ready deta hai, aur aap inhe kabhi bhi badal sakte hain."
+        ]
+      },
+      "mr": {
+        "say": [
+          "Owners हे computer वर set करतात, Leads, Stages मध्ये.",
+          "Sales X-Ray तुमच्या business प्रमाणे stages ready देतो, आणि तुम्ही ते कधीही बदलू शकता."
+        ],
+        "caption": [
+          "Owners he computer var set kartat, Leads, Stages madhye.",
+          "Sales X-Ray tumchya business pramane stages ready deto, aani tumhi te kadhihi badlu shakta."
+        ]
+      }
+    },
+    {
+      "id": "s4-new-pipeline",
+      "device": "desktop",
+      "label": "New pipeline",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=stages&pipelines=2&tap=new"
+        }
+      ],
+      "actions": [
+        {
+          "do": "wait",
+          "ms": 1400
+        },
+        {
+          "do": "still",
+          "label": "new-pipeline"
+        },
+        {
+          "do": "wait",
+          "ms": 1600
+        }
+      ],
+      "en": {
+        "say": [
+          "Need another one? Tap New pipeline, give it a name, and pick its stages."
+        ]
+      },
+      "hi": {
+        "say": [
+          "और एक चाहिए? New pipeline दबाइए, नाम दीजिए, और उसके stages चुनिए."
+        ],
+        "caption": [
+          "Aur ek chahiye? New pipeline dabaiye, naam dijiye, aur uske stages chuniye."
+        ]
+      },
+      "mr": {
+        "say": [
+          "अजून एक हवीये? New pipeline दाबा, नाव द्या, आणि तिचे stages निवडा."
+        ],
+        "caption": [
+          "Ajun ek haviye? New pipeline daba, naav dya, aani tiche stages nivda."
+        ]
+      }
+    }
+  ]
+}

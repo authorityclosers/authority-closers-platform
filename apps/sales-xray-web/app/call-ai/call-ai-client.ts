@@ -156,7 +156,7 @@ async function request(path: string, init: RequestInit = {}) {
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError")
       throw error;
-    throw new CallAiError("Sales Xray isn't answering. Try again.", 0);
+    throw new CallAiError("Sales X-Ray isn't answering. Try again.", 0);
   }
   if (!response.ok) {
     let detail: string | undefined;

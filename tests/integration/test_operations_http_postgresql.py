@@ -43,6 +43,7 @@ from ac_platform.conversation_intelligence.entitlements import (
     MinuteGrant,
     grant_minutes,
 )
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 from ac_platform.conversation_intelligence.models import (
     ConversationBudgetAccount,
     ConversationMinuteAccount,
@@ -902,11 +903,12 @@ def test_account_minute_grants_are_finite_audited_idempotent_and_tenant_scoped_p
                     assert after_grant["allowance_seconds"] == 9_600
                     assert after_grant["available_seconds"] == 9_600
                     await acquisition.reserve(
-                        MeasuredSource(uuid4(), "c" * 64, 6_000_000, "d" * 64),
+                        # The longest call there is (limits.CALL_LIMIT_SECONDS).
+                        MeasuredSource(uuid4(), "c" * 64, CALL_LIMIT_SECONDS * 1000, "d" * 64),
                         actor=learner_actor,
                     )
                     after_long_upload = await acquisition.allowance(actor=learner_actor)
-                    assert after_long_upload["available_seconds"] == 3_600
+                    assert after_long_upload["available_seconds"] == 9_600 - CALL_LIMIT_SECONDS
                     with pytest.raises(ConversationDenied):
                         await acquisition.reserve(
                             MeasuredSource(uuid4(), "e" * 64, 3_601_000, "f" * 64),
@@ -917,8 +919,10 @@ def test_account_minute_grants_are_finite_audited_idempotent_and_tenant_scoped_p
                 assert shared_projection_after_upload.status_code == 200
                 shared_projection = shared_projection_after_upload.json()
                 assert shared_projection["shared_upload_allowance_seconds"] == 9_600
-                assert shared_projection["shared_upload_committed_seconds"] == 6_000
-                assert shared_projection["shared_upload_available_seconds"] == 3_600
+                assert shared_projection["shared_upload_committed_seconds"] == CALL_LIMIT_SECONDS
+                assert shared_projection["shared_upload_available_seconds"] == (
+                    9_600 - CALL_LIMIT_SECONDS
+                )
 
                 replay = await client.post(
                     f"{target_path}/grants",
@@ -1173,8 +1177,10 @@ def test_account_minute_grants_are_finite_audited_idempotent_and_tenant_scoped_p
                 assert final_account["granted_seconds"] == 8_340
                 assert final_account["available_seconds"] == 8_340
                 assert final_account["shared_upload_allowance_seconds"] == 11_940
-                assert final_account["shared_upload_committed_seconds"] == 6_000
-                assert final_account["shared_upload_available_seconds"] == 5_940
+                assert final_account["shared_upload_committed_seconds"] == CALL_LIMIT_SECONDS
+                assert final_account["shared_upload_available_seconds"] == (
+                    11_940 - CALL_LIMIT_SECONDS
+                )
 
             ordinary_admin = ActorContext(
                 person_id=ordinary_admin_id,

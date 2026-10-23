@@ -76,7 +76,7 @@ export async function openHostedCheckout(
           ? { subscription_id: hosted.params.subscription_ref }
           : { order_id: hosted.params.order_ref }),
         name: hosted.params.name ?? "Authority Closers",
-        description: hosted.params.description ?? "Sales Xray",
+        description: hosted.params.description ?? "Sales X-Ray",
         notes: { order_id: orderId },
         handler: () => resolve("done"),
         modal: { ondismiss: () => resolve("dismissed") },

@@ -219,7 +219,7 @@ it("lays out the switch, commitment, facts and the end strip", () => {
   ).toBe("");
 });
 
-it("marks Sales Xray's own reading as Possible, in the copy module's words", () => {
+it("marks Sales X-Ray's own reading as Possible, in the copy module's words", () => {
   const markup = html(<PossibleTag />);
   expect(markup).toContain(">Possible<");
   expect(markup).toContain("Nobody said this in so many words.");

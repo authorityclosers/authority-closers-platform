@@ -11,7 +11,7 @@ vi.mock("../notice-center", () => ({ notify: () => undefined }));
 import { resetBackCloseForTests } from "../ui/back-close";
 import { CallNext } from "./call-next";
 import { LeadSheet } from "./lead-sheet";
-import type { LeadDetail } from "./leads-client";
+import type { LeadDetail, LeadEvent } from "./leads-client";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -19,6 +19,8 @@ import type { LeadDetail } from "./leads-client";
 
 const ONE = "11111111-1111-4111-8111-111111111111";
 const TWO = "22222222-2222-4222-8222-222222222222";
+// The open lead's history (a call the phone logged, for the after-call tests).
+let history: LeadEvent[] = [];
 
 function detail(leadId: string, name: string): LeadDetail {
   return {
@@ -53,7 +55,7 @@ function detail(leadId: string, name: string): LeadDetail {
     next_action_note: null,
     fields: [],
     source_fields: [],
-    events: [],
+    events: leadId === ONE ? history : [],
     can_edit: true,
     can_assign: false,
     reps: [],
@@ -64,6 +66,7 @@ function detail(leadId: string, name: string): LeadDetail {
 let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
+  history = [];
   Element.prototype.scrollIntoView = () => undefined;
   vi.stubGlobal(
     "fetch",
@@ -113,6 +116,8 @@ it("says who is next after a save, and calls them in one tap", async () => {
     ),
   );
   await flush();
+  // No call yet: the question waits behind its light chip.
+  await act(async () => tile("Log a call").click());
   await act(async () => tile("Didn't get through").click());
   await act(async () => tile("No answer").click());
   await act(async () => tile("Save").click());
@@ -139,4 +144,64 @@ it("says plainly when nobody else is due", async () => {
   );
   expect(host.textContent).toContain("Next up: Asha Fictional");
   expect(host.textContent).not.toContain("Saved.");
+});
+
+// "How did it go?" only after a real call (owner, 23 Oct 2026).
+it("keeps the question behind a light chip until a real call", async () => {
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId={ONE}
+        me={null}
+        onClose={() => undefined}
+        onChanged={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  expect(host.textContent).not.toContain("How did the call");
+  expect(document.body.textContent).not.toContain("How did the call");
+  await act(async () => tile("Log a call").click());
+  expect(document.body.textContent).toContain("How did the call with Ravi go?");
+});
+
+it("asks straight away after a call the phone logged with talk time", async () => {
+  history = [
+    {
+      kind: "call",
+      at: new Date(Date.now() - 3 * 60_000).toISOString(),
+      actor_name: null,
+      stage: null,
+      stage_label: null,
+      reason: null,
+      reason_label: null,
+      connected: true,
+      note: null,
+      next_action_at: null,
+      owner_name: null,
+      previous_owner_name: null,
+      allocation_reason: null,
+      source_label: null,
+      submission_id: null,
+      simulated: null,
+      duration_seconds: 82,
+      via: "phone",
+      direction: "outgoing",
+    },
+  ];
+  await act(async () =>
+    root.render(
+      <LeadSheet
+        leadId={ONE}
+        me={null}
+        onClose={() => undefined}
+        onChanged={() => undefined}
+      />,
+    ),
+  );
+  await flush();
+  const text = document.body.textContent ?? "";
+  expect(text).toContain("Back from the call with Ravi. How did it go?");
+  expect(text).toContain("Your phone says you talked for 1 min 22 s.");
+  expect(tile("Log a call")).toBeUndefined();
 });

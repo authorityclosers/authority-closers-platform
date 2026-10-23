@@ -125,7 +125,7 @@ describe("ReportTranscript", () => {
     expect(details?.open).toBe(true);
     expect(container.querySelectorAll("[data-segment-id]")).toHaveLength(3);
     expect(container.textContent).toContain(
-      "Sales Xray works out who is speaking. It can be wrong",
+      "Sales X-Ray works out who is speaking. It can be wrong",
     );
     // Visible clocks never show milliseconds; long calls read as h:mm:ss.
     expect(formatTranscriptTime(61_234)).toBe("01:01");

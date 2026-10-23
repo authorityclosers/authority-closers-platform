@@ -142,6 +142,7 @@ export function ProcessingStatusCopy({
             recordingId={progress.recording_id}
             label="Get full report"
             fullReport
+            level={progress.ai_skip.level}
           />
         ) : (
           <p>An owner or admin can get the full report for this call.</p>

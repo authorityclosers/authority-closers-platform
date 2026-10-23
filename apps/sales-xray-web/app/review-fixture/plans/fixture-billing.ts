@@ -17,11 +17,14 @@ import {
   parseOfflinePayment,
   parseOrder,
   parsePlans,
+  parseRefund,
   parseSubscriptions,
   parseUsage,
   type Order,
+  type Refund,
   type Subscription,
 } from "../../billing/contract";
+import { CALL_LIMIT_SECONDS } from "../../call-limit";
 
 const STORE = "ac.xray.fixture-billing";
 export const FIXTURE_PAY_PATH = "/review-fixture/plans/pay";
@@ -38,7 +41,9 @@ export const FIXTURE_PLANS = {
     key: plan.key,
     name: plan.name,
     audience: plan.audience,
-    status: plan.status,
+    // Enterprise is "Talk to us" until it is on sale (owner, 30 Sep 2026), as
+    // on dev; the review page shows what buyers see (QA, 23 Oct 2026).
+    status: plan.key === "enterprise" ? "coming_soon" : plan.status,
     prices: plan.prices
       ? {
           monthly_paise: plan.prices.monthlyPaise!,
@@ -131,7 +136,16 @@ export function fixtureProviderReports(
       gst_minor: number;
       total_minor: number;
     };
+    const refund = {
+      payment_id: `pay_${orderId}`,
+      refundable_until: new Date(
+        Date.now() + 7 * 24 * 60 * 60 * 1000,
+      ).toISOString(),
+      state: "available",
+      reason_code: null,
+    };
     (store.invoices ??= []).unshift({
+      refund: { ...refund },
       invoice_id: orderId,
       number: `FIXTURE-${(store.invoices?.length ?? 0) + 1}`,
       created_at: order.paid_at,
@@ -143,14 +157,7 @@ export function fixtureProviderReports(
       total_minor: tax.total_minor,
       place_of_supply: store.buyers?.[orderId]?.gstin?.slice(0, 2) ?? null,
     });
-    order.refund = {
-      payment_id: `pay_${orderId}`,
-      refundable_until: new Date(
-        Date.now() + 7 * 24 * 60 * 60 * 1000,
-      ).toISOString(),
-      state: "available",
-      reason_code: null,
-    };
+    order.refund = { ...refund };
     const minutes = Number(order.minutes);
     store.minutesLeft += minutes;
     store.minutesTotal += minutes;
@@ -193,6 +200,78 @@ export function resetFixtureBilling() {
   }
 }
 
+/** One point of the buying journey (review and tutorial recordings). */
+export type FixtureSeed =
+  | "trial"
+  | "pending"
+  | "paid"
+  | "refunded"
+  | "cancelled";
+
+/**
+ * Puts the fictional server at one point of the journey: on the trial, an
+ * order waiting on the payment page, a paid Personal month, that month
+ * refunded, or its renewal cancelled. Returns the order it made, if any.
+ */
+export async function seedFixtureBilling(
+  seed: FixtureSeed,
+): Promise<string | null> {
+  resetFixtureBilling();
+  if (seed === "trial") return null;
+  const checkout = await fixtureBilling.checkout(
+    {
+      kind: "subscription",
+      account: "personal",
+      planKey: "personal",
+      interval: "month",
+      seats: 1,
+    },
+    `journey-${seed}`,
+  );
+  const orderId = checkout.order.orderId;
+  if (seed === "pending") return orderId;
+  fixtureProviderReports(orderId, "paid");
+  if (seed === "refunded") {
+    const order = await fixtureBilling.readOrder(orderId);
+    if (order.refund)
+      await fixtureBilling.requestRefund?.(
+        order.refund.paymentId,
+        "Fictional journey refund",
+        "journey-refund",
+      );
+  }
+  if (seed === "cancelled") {
+    const { current } = await fixtureBilling.readSubscriptions("personal");
+    if (current)
+      await fixtureBilling.cancelSubscription(
+        current.subscriptionId,
+        null,
+        "journey-cancel",
+      );
+  }
+  return orderId;
+}
+
+const RECORDING = "ac.xray.fixture-recording";
+
+/** Recording mode hides the development banner for tutorial videos. */
+export function fixtureRecording(): boolean {
+  try {
+    return sessionStorage.getItem(RECORDING) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function setFixtureRecording(on: boolean) {
+  try {
+    if (on) sessionStorage.setItem(RECORDING, "1");
+    else sessionStorage.removeItem(RECORDING);
+  } catch {
+    // Private windows may refuse storage; the banner then stays.
+  }
+}
+
 export function fixtureAccount(): "personal" | "organisation" {
   return liveSubscription(read())?.account === "organisation"
     ? "organisation"
@@ -217,11 +296,7 @@ export const fixtureBilling: BillingClient = {
         committed_seconds: (store.minutesTotal - store.minutesLeft) * 60,
         available_seconds: store.minutesLeft * 60,
       },
-      longest_call_seconds: current
-        ? current.plan_key === "organisation"
-          ? 7200
-          : 5400
-        : 3600,
+      longest_call_seconds: CALL_LIMIT_SECONDS,
     });
   },
   async readUsage() {
@@ -462,5 +537,47 @@ export const fixtureBilling: BillingClient = {
     item.cancel_state = "confirmed";
     write(store);
     return parseSubscriptions({ current: item, past: [] }).current!;
+  },
+  async requestRefund(paymentId): Promise<Refund> {
+    await wait();
+    const store = read();
+    const order = Object.values(store.orders).find(
+      (entry) =>
+        (entry.refund as { payment_id?: string } | null)?.payment_id ===
+        paymentId,
+    );
+    if (!order)
+      throw new BillingError(
+        404,
+        "payment_not_found",
+        "That payment does not exist.",
+      );
+    const refund = order.refund as Record<string, unknown>;
+    if (refund.state !== "available")
+      throw new BillingError(
+        409,
+        "refund_unavailable",
+        "This payment can no longer be refunded.",
+      );
+    const minutes = Number(order.minutes);
+    if (store.minutesLeft < minutes)
+      throw new BillingError(
+        409,
+        "payment_used",
+        "Minutes from this payment were already used, so it cannot be refunded.",
+      );
+    refund.state = "refunded";
+    store.minutesLeft -= minutes;
+    store.minutesTotal -= minutes;
+    for (const invoice of store.invoices ?? [])
+      if (invoice.invoice_id === order.order_id) invoice.refund = { ...refund };
+    if (order.kind === "subscription")
+      store.subscriptions = store.subscriptions.map((item) =>
+        item.subscription_id === String(order.subscription_id)
+          ? { ...item, status: "ended" }
+          : item,
+      );
+    write(store);
+    return parseRefund(refund)!;
   },
 };

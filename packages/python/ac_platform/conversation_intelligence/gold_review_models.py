@@ -10,6 +10,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Index,
+    Integer,
     String,
     UniqueConstraint,
     Uuid,
@@ -32,7 +33,10 @@ class GoldAssignment(Base):
     __tablename__ = "conversation_gold_assignments"
     __table_args__ = (
         UniqueConstraint("recording_id", "reviewer_id", name="uq_gold_assignment_call_reviewer"),
-        CheckConstraint("mode IS NULL OR mode IN ('lines', 'brain4_blind')", name="gold_mode"),
+        CheckConstraint(
+            "mode IS NULL OR mode IN ('lines', 'brain4_blind', 'report')", name="gold_mode"
+        ),
+        CheckConstraint("items IS NULL OR items BETWEEN 0 AND 500", name="gold_items"),
         CheckConstraint(
             "checkpoint IS NULL OR length(checkpoint) BETWEEN 1 AND 64", name="gold_checkpoint"
         ),
@@ -50,6 +54,9 @@ class GoldAssignment(Base):
     # chose the call.
     mode: Mapped[str | None] = mapped_column(String(16), nullable=True, default="lines")
     checkpoint: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # 0123 (23 Oct): 'report' reviews every item of the call's Report (review_schema);
+    # items is how many it had when assigned.
+    items: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class GoldRow(Base):

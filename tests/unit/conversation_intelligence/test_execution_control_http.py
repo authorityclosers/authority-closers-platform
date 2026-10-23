@@ -104,6 +104,58 @@ async def test_public_availability_is_non_sensitive_and_follows_durable_budget(m
         assert (await client.get("/v1/admin/conversation/execution")).status_code == 401
 
 
+async def test_public_availability_reads_the_database_once_per_window(monkeypatch):
+    # Every open page polls this; a burst of polls inside the window costs one read.
+    clock = [1000.0]
+    monkeypatch.setattr(module, "monotonic", lambda: clock[0])
+    state = AsyncMock(return_value={"paused": False})
+    monkeypatch.setattr(module, "execution_state", state)
+
+    def no_approval(_):
+        raise ValueError("no pinned approval")
+
+    monkeypatch.setattr(module, "load_pinned_approval", no_approval)
+
+    @asynccontextmanager
+    async def context():
+        yield database
+
+    database = SimpleNamespace(begin=context)
+    settings = SimpleNamespace(
+        environment="test",
+        operations_tenant_id=uuid4(),
+        public_app_url=SimpleNamespace(host="learner.test"),
+        sales_xray_app_url=SimpleNamespace(host="xray.test"),
+    )
+
+    async def require_actor():
+        raise HTTPException(401, "Sign in")
+
+    app = FastAPI()
+    module.install_execution_control_http(
+        app, settings=settings, sessions=context, require_actor=require_actor
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://xray.test"
+    ) as client:
+        path = "/v1/conversation/acquisition/availability"
+        for _ in range(5):
+            assert (await client.get(path)).json() == {"paused": False}
+        assert state.await_count == 1
+        state.return_value = {"paused": True}
+        clock[0] += module.AVAILABILITY_MEMO_SECONDS - 0.5
+        assert (await client.get(path)).json() == {"paused": False}
+        assert state.await_count == 1
+        clock[0] += 1.0
+        response = await client.get(path)
+        assert response.json() == {"paused": True}
+        assert response.headers["cache-control"] == "no-store"
+        assert state.await_count == 2
+        # Refusals never touch the database.
+        assert (await client.get(f"{path}?tenant_id=other")).status_code == 404
+        assert state.await_count == 2
+
+
 @pytest.mark.parametrize(
     "intent",
     [

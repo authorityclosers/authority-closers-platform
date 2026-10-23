@@ -1,0 +1,10 @@
+[Unit]
+Description=Sales Xray bug reports to the work board (%i)
+Documentation=file:///home/acdev/src/dev-live/authority-closers-platform/AGENTS.md
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-bug-board %i
+Nice=10
+TimeoutStartSec=5min

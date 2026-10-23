@@ -119,7 +119,8 @@ it("names Google (Gemini) for AI-drafted replies, and what is never sent", () =>
   expect(markup).toContain(
     "does not send Google the answers given in Facebook or Instagram lead forms",
   );
-  expect(markup).toContain('dateTime="2026-10-21"');
+  // Dated 24 Oct 2026: the Usage analytics section (telemetry option B).
+  expect(markup).toContain('dateTime="2026-10-24"');
 });
 
 it("names the AI providers for call analysis, OpenAI with its training and retention terms", () => {
@@ -259,7 +260,12 @@ it("explains how to delete data, including leads from Meta lead forms", () => {
   expect(page).toContain("admin@authorityclosers.com");
   expect(page).toContain("Facebook or Instagram lead forms");
   expect(page).toContain("What we keep");
-  expect(page).toContain('dateTime="2026-10-20"');
+  expect(page).toContain('dateTime="2026-10-23"');
+  // Google Play, 23 Oct 2026: the in-app way first, then the email.
+  expect(page).toContain(
+    "open Settings, then Security, then Delete account, and type DELETE to confirm",
+  );
+  expect(page).toContain("If you own an organisation");
   expect(page).toContain("If you signed in with Facebook");
   expect(page).toContain("remove Sales Xray Sign-in");
   expect(privacy).toContain('see <a href="/data-deletion">/data-deletion</a>');

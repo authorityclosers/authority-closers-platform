@@ -31,7 +31,7 @@ from typing import Any, Final, Literal
 
 from ac_platform.one_pass import markers
 
-VERSION: Final = "analysis-engine-registry/1"
+VERSION: Final = "analysis-engine-registry/2"
 # The rate every fit below is in: the price sheet's planning rate (admin_pricing.FX_USD_TO_INR).
 PLANNING_FX: Final = 100.0
 # The short-call rule: under a minute (or no conversation) gets the transcript and lead details.
@@ -160,6 +160,9 @@ _LUNA_V2_FLEX = Fit(
         0.0042,
     )
 )
+
+# The separate Brain 4.0 read, measured on 61 saved production reads (22 Oct).
+_BRAIN4_READ = Fit(tokens_in=(4_472, 383), tokens_out=(1_376, 24), usd=_GEMINI_FLASH)
 
 _V1_EVIDENCE = "production's exact request on 10 real dev calls (one-pass session, 21-22 Oct)"
 _STORE_EVIDENCE = "dev and staging receipts in the metrics store, 22 Oct"
@@ -363,10 +366,22 @@ MODULES: Final[tuple[Module, ...]] = (
         label="Brain 4.0 · separate read",
         stage="B4",
         models=(),
-        fit=Fit(tokens_in=(4_472, 383), tokens_out=(1_376, 24), usd=_GEMINI_FLASH),
-        status="beta",
+        fit=_BRAIN4_READ,
+        status="live",
         evidence="61 saved production reads on Gemini 3.8 Flash (one-pass session, 22 Oct)",
-        note="Brain 4.0 beta organisations only; the metrics store does not record this read.",
+        note="Every production workspace since 22 Oct (the owner's data change); the metrics store"
+        " does not record this read.",
+        recorded=False,
+    ),
+    Module(
+        id="b4.shadow.flex",
+        label="Brain 4.0 · separate read on Flex",
+        stage="B4",
+        models=(),
+        fit=_BRAIN4_READ.scaled(0.5),
+        status="planned",
+        evidence="as above; Flex is half the list price",
+        note="Not sealed: the Brain 4.0 read has no Flex route yet.",
         recorded=False,
     ),
 )
@@ -484,17 +499,29 @@ def quality_of(module_id: str) -> tuple[Quality, ...]:
 PLANS: Final[tuple[Plan, ...]] = (
     Plan(
         id="today",
-        label="Today: one pass v1 and the full report, Gemini standard",
-        status="live",
+        label="One pass v1 and the full report, Gemini standard (production until 22 Oct)",
+        status="sealed",
         short=("c2.flash-lite", "cdf.fast"),
         analysed=("c2.flash-lite", "c4.one-pass-v1", "c5.after-one-pass"),
     ),
     Plan(
         id="today-brain4-read",
-        label="Today plus a separate Brain 4.0 read on every analysed call",
-        status="beta",
+        label="Today: one pass v1, the full report and the separate Brain 4.0 read",
+        status="live",
         short=("c2.flash-lite", "cdf.fast"),
         analysed=("c2.flash-lite", "c4.one-pass-v1", "c5.after-one-pass", "b4.shadow"),
+    ),
+    Plan(
+        id="today-brain4-read-flex",
+        label="Today's configuration on Flex",
+        status="planned",
+        short=("c2.flash-lite.flex", "cdf.fast"),
+        analysed=(
+            "c2.flash-lite.flex",
+            "c4.one-pass-v1.flex",
+            "c5.after-one-pass.flex",
+            "b4.shadow.flex",
+        ),
     ),
     Plan(
         id="v2",

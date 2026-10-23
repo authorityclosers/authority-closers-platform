@@ -471,6 +471,91 @@ def coverage(moments: Sequence[Moment]) -> dict[str, Any]:
     }
 
 
+# ---------- report review (owner, 23 Oct 2026) ----------
+
+
+@dataclass(frozen=True)
+class ReviewItem:
+    """One current judgement of one item of a call's Report (review_schema): which section
+    and engine module wrote it, agree / disagree / fix, and for a rated item both ratings."""
+
+    recording_id: str
+    section: str
+    module: str
+    created_at: datetime
+    verdict: str | None
+    skip: str | None
+    ai_rating: int | None
+    rating: int | None
+
+
+def _module_label(module_id: str) -> str:
+    from .analysis_engine import registry
+
+    try:
+        return registry.module(module_id).label
+    except KeyError:
+        return module_id
+
+
+def review_agreement(items: Sequence[ReviewItem]) -> dict[str, Any]:
+    """Per section and engine module: how often the coaching lead accepts the item, with a
+    95% interval resampling whole calls. A fixed rating also counts how far it moved."""
+    from .review_schema import section_label
+
+    judged = [i for i in items if i.skip is None and i.verdict in ("agree", "disagree", "fix")]
+
+    def agree_rate(sample: list[ReviewItem]) -> float | None:
+        return (
+            round(sum(1 for i in sample if i.verdict == "agree") / len(sample), 4)
+            if sample
+            else None
+        )
+
+    def group(
+        key: Callable[[ReviewItem], tuple[str, ...]], names: Callable[[tuple[str, ...]], list[str]]
+    ) -> list[dict[str, Any]]:
+        found: dict[tuple[str, ...], list[ReviewItem]] = defaultdict(list)
+        for item in judged:
+            found[key(item)].append(item)
+        rows = []
+        for name, chosen in sorted(found.items()):
+            calls: dict[str, list[ReviewItem]] = defaultdict(list)
+            for item in chosen:
+                calls[item.recording_id].append(item)
+            moved = [
+                abs(i.rating - i.ai_rating)
+                for i in chosen
+                if i.verdict == "fix" and i.rating is not None and i.ai_rating is not None
+            ]
+            rows.append(
+                {
+                    "key": list(name),
+                    "names": names(name),
+                    "labels": len(chosen),
+                    "calls": len(calls),
+                    "agree": sum(1 for i in chosen if i.verdict == "agree"),
+                    "disagree": sum(1 for i in chosen if i.verdict == "disagree"),
+                    "fix": sum(1 for i in chosen if i.verdict == "fix"),
+                    "agree_rate": agree_rate(chosen),
+                    "agree_ci": bootstrap(calls, agree_rate),
+                    "rating_moved": round(sum(moved) / len(moved), 2) if moved else None,
+                }
+            )
+        return rows
+
+    return {
+        "items": len(judged),
+        "skipped": sum(1 for i in items if i.skip is not None),
+        "calls": len({i.recording_id for i in judged}),
+        "by_section": group(
+            lambda i: (i.section, i.module),
+            lambda k: [section_label(k[0]), _module_label(k[1])],
+        ),
+        "by_module": group(lambda i: (i.module,), lambda k: [_module_label(k[0])]),
+    }
+
+
 # ---------- the evaluation ----------
 
 
@@ -481,6 +566,7 @@ class Dataset:
     brain4: Mapping[str, Sequence[Mapping[str, Any]]]
     blind: tuple[BlindRating, ...] = ()
     moments: tuple[Moment, ...] = ()
+    review: tuple[ReviewItem, ...] = ()
 
 
 def acceptance(lines: Sequence[GoldLine]) -> dict[str, Any]:
@@ -721,6 +807,7 @@ def evaluate(dataset: Dataset, *, now: datetime) -> dict[str, Any]:
             "moments": coverage(dataset.moments),
         },
         "alerts": alerts,
+        "review": review_agreement(dataset.review),
         "checkpoints": list(checkpoints()),
         "limits": [
             "Line review: one reviewer, who saw today's AI answer before judging; an "
@@ -808,11 +895,29 @@ async def load(database: Any) -> Dataset:
     lines: list[GoldLine] = []
     blind: list[BlindRating] = []
     moments: list[Moment] = []
+    review: list[ReviewItem] = []
     for row in rows:
         if row.id in superseded or not isinstance(row.payload, dict):
             continue
         value: dict[str, Any] = row.payload
         kind = target_kind(row.target)
+        if kind == "item":
+            ai_value = value.get("ai") if isinstance(value.get("ai"), dict) else {}
+            ai_rating = ai_value.get("rating") if isinstance(ai_value, dict) else None
+            rating = value.get("rating")
+            review.append(
+                ReviewItem(
+                    recording_id=str(row.recording_id),
+                    section=str(value.get("section") or "unknown"),
+                    module=str(value.get("module") or "unknown"),
+                    created_at=row.created_at,
+                    verdict=value.get("verdict") if isinstance(value.get("verdict"), str) else None,
+                    skip=value.get("skip") if isinstance(value.get("skip"), str) else None,
+                    ai_rating=ai_rating if type(ai_rating) is int else None,
+                    rating=rating if type(rating) is int else None,
+                )
+            )
+            continue
         if kind == "dimension":
             rating = value.get("rating")
             skip = value.get("skip")
@@ -913,7 +1018,7 @@ async def load(database: Any) -> Dataset:
         for row in reviews
         if str(row.id) in judged and blocks.get(key(row))
     }
-    return Dataset(tuple(lines), runs, tuple(blind), tuple(moments))
+    return Dataset(tuple(lines), runs, tuple(blind), tuple(moments), tuple(review))
 
 
 __all__ = [
@@ -925,6 +1030,7 @@ __all__ = [
     "Moment",
     "Pair",
     "RatingPair",
+    "ReviewItem",
     "acceptance",
     "agreement",
     "between_raters",
@@ -936,6 +1042,7 @@ __all__ = [
     "label",
     "load",
     "rating_agreement",
+    "review_agreement",
     "readiness",
     "stability",
     "weighted_kappa",

@@ -90,6 +90,7 @@ class ImportSessions(AcquisitionSessions):
         ):
             raise ConversationDenied("The measured source differs from the exact import item.")
         now = await self._admit(mutation=True)
+        await self.imports.require_member_setup(item.person_id)
         await self.imports.fair_admission(item.submission_id, self.uploader)
         usage_id = await super().reserve(source, actor=actor)
         if item.usage_id is None:
@@ -120,6 +121,7 @@ class ImportSessions(AcquisitionSessions):
         ):
             raise ConversationDenied("Use this exact imported call's safe retry.")
         await self._admit(mutation=True)
+        await self.imports.require_member_setup(item.person_id)
         await self.imports.fair_admission(submission_id, self.uploader)
         return await super().reserve_report_retry(submission_id, key=key, actor=actor)
 
@@ -194,6 +196,9 @@ class ImportOwnership(GuestOwnership):
             .limit(1)
         )
         if usage is None:
+            # Before any bytes are accepted: a call its owner cannot have analysed
+            # yet waits in the batch instead of expiring unprocessed.
+            await self.imports.require_member_setup(item.person_id)
             await self.imports.fair_admission(submission_id, self.uploader)
             return None
         if item.usage_id is None:

@@ -71,10 +71,10 @@ export function AuthCompleteClient({
   const message = returning
     ? "Signing you in…"
     : !validAuthFlow(flow) || !result
-      ? "Sign-in could not be confirmed. Return to the Sales Xray window and try again."
+      ? "Sign-in could not be confirmed. Return to the Sales X-Ray window and try again."
       : result === "success"
-        ? "Return to the Sales Xray window to finish sign-in."
-        : "Sign-in needs another step. Return to the Sales Xray window for details.";
+        ? "Return to the Sales X-Ray window to finish sign-in."
+        : "Sign-in needs another step. Return to the Sales X-Ray window for details.";
 
   return (
     <main
@@ -89,7 +89,7 @@ export function AuthCompleteClient({
       }}
     >
       <div>
-        <h1 style={{ marginBottom: 8, fontSize: 24 }}>Sales Xray sign-in</h1>
+        <h1 style={{ marginBottom: 8, fontSize: 24 }}>Sales X-Ray sign-in</h1>
         <p style={{ color: "var(--muted)" }} role="status">
           {message}
         </p>

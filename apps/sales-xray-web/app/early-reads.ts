@@ -73,7 +73,8 @@ export const EARLY_READS: Readonly<Record<string, readonly string[]>> = {
   ],
   "/account": [...SESSION],
   "/prospects": [...SESSION],
-  "/leads": [...SESSION],
+  // To call's desk (leads-client.ts readDesk, all pipelines).
+  "/leads": [...SESSION, "/v1/lead-desk"],
 };
 
 /** A saved call: the session, the studio's entry and allowance, the call. */

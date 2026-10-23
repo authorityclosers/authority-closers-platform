@@ -56,6 +56,10 @@ export function isShellRoute(pathname: string | null) {
   );
 }
 
+// The payment page sends the buyer back to /account/billing/return: it needs the
+// signed-in identity too, or a paid buyer reads "Sign in to see this order".
+const PURCHASE_ROUTES = new Set(["/plans", "/account/billing/return"]);
+
 /** Confirm the same AC identity/directory without mounting the app frame. */
 function PurchaseSession({ children }: { children: ReactNode }) {
   const [attempt, setAttempt] = useState(0);
@@ -155,7 +159,7 @@ function PurchaseSession({ children }: { children: ReactNode }) {
  */
 export function AppSession({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  if (pathname?.replace(/\/$/, "") === "/plans") {
+  if (PURCHASE_ROUTES.has(pathname?.replace(/\/$/, "") ?? "")) {
     return <PurchaseSession>{children}</PurchaseSession>;
   }
   if (isShellRoute(pathname)) {

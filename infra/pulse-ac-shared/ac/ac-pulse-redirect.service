@@ -1,0 +1,17 @@
+[Unit]
+Description=pulse.authorityclosers.com -> ac-pulse.estateautopilots.com (AC Pulse moved into the shared Pulse, AUT-2207)
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/sbin/ac-pulse-redirect
+DynamicUser=yes
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+Restart=always
+RestartSec=2
+MemoryMax=64M
+
+[Install]
+WantedBy=multi-user.target

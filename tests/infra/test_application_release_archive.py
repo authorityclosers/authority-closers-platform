@@ -298,6 +298,9 @@ current_tmp=''
   backup_file="$backup"
   backup_ready=1
   database_mutation_started=1
+  postgres_restart_started=1
+  schema_mutation_started=1
+  backup_sha256="6a408ad4b13f8af4d844fca1a6f0fa4d009623da7192ea87deac534a8e2c8efe"
   write_exposure_started=0
 
 # Both rollback targets model a release without the optional hosted capability.
@@ -318,7 +321,13 @@ compose_for() {{
     printf 'compose:stop-web\n' >> "$events"
     return 0
   fi
+  if [[ "$*" == *"up --detach --no-deps --wait --wait-timeout 180 postgres"* ]]; then
+    [[ "$1" == "$previous_release" ]] || return 1
+    printf 'compose:restart-postgres\n' >> "$events"
+    return 0
+  fi
   if [[ "$*" == *"pg_restore"* ]]; then
+    [[ "$1" == "$previous_release" ]] || return 1
     printf 'compose:restore\n' >> "$events"
     [[ "$fail_stage" != restore ]]
     return
@@ -332,6 +341,7 @@ compose_for() {{
 }}
 
 set_database_writer_access() {{
+  [[ "$2" == "$previous_release" ]] || return 1
   printf 'access:%s\n' "$1" >> "$events"
   if [[ "$1" == runtime && "$fail_stage" == runtime ]]; then
     return 1
@@ -934,10 +944,8 @@ def test_installer_finalizer_rolls_back_then_removes_stages_and_preserves_failur
 
 def test_installer_arms_rollback_before_starting_candidate_postgres() -> None:
     installer = INSTALLER.read_text(encoding="utf-8")
-    rollback_arm = "mutation_started=1"
-    postgres_start = 'compose_for "$release_dir" up --detach --wait --wait-timeout 180 postgres'
-
-    assert installer.index(rollback_arm) < installer.index(postgres_start)
+    deployment = installer.split("trap finish EXIT\n", 1)[1]
+    assert deployment.index("mutation_started=1") < deployment.index("prepare_postgres_release")
 
 
 def test_installer_quiesces_writers_before_dump_and_reopens_connect_by_phase() -> None:
@@ -946,7 +954,7 @@ def test_installer_quiesces_writers_before_dump_and_reopens_connect_by_phase() -
         "set_database_writer_access",
         "\n\nrestore_current_link()",
     )
-    deployment = installer[installer.index("mutation_started=1") :]
+    deployment = installer.split("trap finish EXIT\n", 1)[1]
 
     revoke_connect = "REVOKE CONNECT ON DATABASE ac_platform FROM PUBLIC, ac_runtime, ac_migrator"
     terminate_writers = "SELECT pg_terminate_backend(pid)"
@@ -967,9 +975,13 @@ def test_installer_quiesces_writers_before_dump_and_reopens_connect_by_phase() -
 
     assert deployment.count(grant_migrator) == 1
     assert deployment.count(grant_runtime) == 1
-    assert deployment.index(stop_writers) < deployment.index(fence_writers)
-    assert deployment.index(fence_writers) < deployment.index(dump_database)
-    assert deployment.index(dump_database) < deployment.index(grant_migrator)
+    preparation = _installer_function("prepare_postgres_release", "\n\nrestore_current_link()")
+    snapshot = _installer_function("take_pre_restart_snapshot", "\n\nprepare_postgres_release()")
+    assert deployment.index(stop_writers) < deployment.index("prepare_postgres_release")
+    assert deployment.index("prepare_postgres_release") < deployment.index(grant_migrator)
+    assert preparation.index(fence_writers) < preparation.index("take_pre_restart_snapshot")
+    assert snapshot.index(dump_database) < snapshot.index("pg_restore --list")
+    assert snapshot.index("pg_restore --list") < snapshot.index("backup_ready=1")
     assert deployment.index(grant_migrator) < deployment.index(migrate_database)
     assert deployment.index(migrate_database) < deployment.index(grant_runtime)
     assert deployment.index(grant_runtime) < deployment.index(start_services)
@@ -978,22 +990,24 @@ def test_installer_quiesces_writers_before_dump_and_reopens_connect_by_phase() -
 def test_rollback_fences_and_restores_before_reopening_or_restarting() -> None:
     rollback = _installer_function("rollback_release", "\n\nrecord_forward_recovery_required() {")
     stop_services = 'stop_application_services_with_hosted_drain "$release_dir" true'
-    fence_writers = "if set_database_writer_access fence; then"
+    fence_writers = 'if set_database_writer_access fence "$recovery_release"; then'
     restore_database = "pg_restore "
-    grant_runtime = "set_database_writer_access runtime || rollback_failed=1"
+    grant_runtime = 'set_database_writer_access runtime "$recovery_release" || rollback_failed=1'
     restore_link = "restore_current_link || rollback_failed=1"
     restore_edge = "restore_edge_route || rollback_failed=1"
-    restart_previous = 'compose_for "$previous_release" up --detach'
+    restart_postgres = 'compose_for "$previous_release" up --detach --no-deps'
+    restart_previous = 'compose_for "$previous_release" up --detach --remove-orphans'
 
-    assert rollback.index(stop_services) < rollback.index(fence_writers)
+    assert rollback.index(stop_services) < rollback.index(restart_postgres)
+    assert rollback.index(restart_postgres) < rollback.index(fence_writers)
     assert rollback.index(fence_writers) < rollback.index(restore_database)
     assert rollback.index(restore_database) < rollback.index(restore_link)
     assert rollback.index(restore_link) < rollback.index(restore_edge)
     assert rollback.index(restore_edge) < rollback.index(grant_runtime)
     assert rollback.index(grant_runtime) < rollback.index(restart_previous)
     assert (
-        '[[ "$rollback_failed" == 0 && "$backup_ready" == 1 && "$rollback_fenced" == 1 ]]'
-        in rollback
+        '&& "$schema_mutation_started" == 1 ]]' in rollback
+        and '"$backup_ready" == 1 && "$rollback_fenced" == 1' in rollback
     )
     assert '[[ "$rollback_fenced" == 1 && "$rollback_failed" == 0 ]]' in rollback
 
@@ -1007,6 +1021,7 @@ def test_rollback_restarts_previous_release_only_after_restore_and_runtime_grant
     assert events == [
         "compose:stop-core",
         "compose:stop-web",
+        "compose:restart-postgres",
         "access:fence",
         "compose:restore",
         "link:restore",
@@ -1019,12 +1034,22 @@ def test_rollback_restarts_previous_release_only_after_restore_and_runtime_grant
 @pytest.mark.parametrize(
     ("fail_stage", "expected_events"),
     (
-        ("restore", ["compose:stop-core", "compose:stop-web", "access:fence", "compose:restore"]),
+        (
+            "restore",
+            [
+                "compose:stop-core",
+                "compose:stop-web",
+                "compose:restart-postgres",
+                "access:fence",
+                "compose:restore",
+            ],
+        ),
         (
             "runtime",
             [
                 "compose:stop-core",
                 "compose:stop-web",
+                "compose:restart-postgres",
                 "access:fence",
                 "compose:restore",
                 "link:restore",
@@ -1037,6 +1062,7 @@ def test_rollback_restarts_previous_release_only_after_restore_and_runtime_grant
             [
                 "compose:stop-core",
                 "compose:stop-web",
+                "compose:restart-postgres",
                 "access:fence",
                 "compose:restore",
                 "link:restore",
@@ -1064,7 +1090,7 @@ def test_installer_serializes_deployments_and_routes_signals_through_finish() ->
     artifact_mutation = 'artifacts_root="$application_root/artifacts"'
     term_trap = "trap 'exit 143' TERM"
     exit_trap = "trap finish EXIT"
-    mutation_arm = "mutation_started=1"
+    mutation_arm = "\nmutation_started=1\n"
 
     assert installer.index(lock) < installer.index(artifact_mutation)
     assert installer.index(term_trap) < installer.index(exit_trap)
@@ -1083,7 +1109,7 @@ def test_installer_restores_current_link_and_writes_evidence_atomically() -> Non
     advance = 'mv --no-target-directory --force "$current_tmp" "$current_link"'
     arm_switch = "current_switch_armed=1"
     restore_call = "restore_current_link || rollback_failed=1"
-    restart_previous = 'compose_for "$previous_release" up --detach'
+    restart_previous = 'compose_for "$previous_release" up --detach --remove-orphans'
     evidence_temp = 'evidence_tmp="$(mktemp "$evidence_root/.deployment-${release_id}.XXXXXX")"'
     evidence_commit = 'mv --no-target-directory --no-clobber "$evidence_tmp" "$evidence_file"'
     mark_committed = "release_committed=1"

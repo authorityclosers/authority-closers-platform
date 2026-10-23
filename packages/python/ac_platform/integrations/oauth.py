@@ -16,7 +16,9 @@ Two kinds of app, two reaches:
 Rules:
 - PKCE S256 for every client; the plain method is refused.
 - Redirect addresses match exactly what was registered: https, or http on
-  127.0.0.1/localhost for apps on the person's own computer (RFC 8252).
+  127.0.0.1/localhost for apps on the person's own computer (RFC 8252), or on a
+  *.localhost name, which is the computer itself too (RFC 6761; a Pulse company's
+  local rehearsal address is one).
 - A code works once, for 10 minutes, for its own client, address and verifier.
 - Codes and tokens are stored only as SHA-256. A refresh token used twice ends the
   whole connection (it was stolen or replayed).
@@ -109,7 +111,9 @@ def redirect_allowed(uri: str) -> bool:
         return False
     if parts.scheme == "https":
         return True
-    return parts.scheme == "http" and parts.hostname in {"127.0.0.1", "localhost", "::1"}
+    return parts.scheme == "http" and (
+        parts.hostname in {"127.0.0.1", "localhost", "::1"} or parts.hostname.endswith(".localhost")
+    )
 
 
 def _clean_name(name: object) -> str:

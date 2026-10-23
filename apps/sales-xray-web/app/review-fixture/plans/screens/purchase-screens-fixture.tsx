@@ -4,6 +4,7 @@ import { useState } from "react";
 import { BillingView } from "../../../billing/billing-view";
 import type { MePlan, Order, Subscription } from "../../../billing/contract";
 import { planPrice } from "../../../billing/money";
+import { CALL_LIMIT_SECONDS } from "../../../call-limit";
 import {
   PLANS_CATALOGUE_FIXTURE,
   PLANS_GST_RATE,
@@ -72,7 +73,7 @@ export function PurchaseScreensFixture() {
       availableSeconds: (order?.minutes ?? 100) * 60,
       unlimited: false,
     },
-    longestCallSeconds: (order?.planKey === "enterprise" ? 120 : 90) * 60,
+    longestCallSeconds: CALL_LIMIT_SECONDS,
   };
   const subscription: Subscription | null =
     order && quote

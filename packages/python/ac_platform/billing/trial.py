@@ -1,8 +1,8 @@
 """The trial policy: a derived lot, never a stored ledger row (ADR 0052, section A/D).
 
-``v1`` is today's shared quota: 3,600 seconds with no end and a 6,000-second
-longest upload. ``v2`` is 6,000 seconds or 14 days from the first use,
-whichever comes first, with a 3,600-second longest call. Production stays on
+``v1`` is today's shared quota: 3,600 seconds with no end. ``v2`` is 6,000
+seconds or 14 days from the first use, whichever comes first. Either's longest
+call is the one call-length limit (limits.CALL_LIMIT_SECONDS, 23 Oct 2026). Production stays on
 ``v1`` until the owner's activation step; dev and staging switch at a fixed
 UTC instant, before which ``v1`` still applies, so nobody's clock starts
 retroactively.
@@ -16,11 +16,12 @@ from typing import Literal
 from uuid import UUID
 
 from ac_platform.billing.projection import Lot, LotKind
+from ac_platform.conversation_intelligence.limits import CALL_LIMIT_SECONDS
 
 TrialVersion = Literal["v1", "v2"]
 TRIAL_LOT_ID = "trial"
 _SECONDS = {"v1": 3600, "v2": 6000}
-_PER_CALL = {"v1": 6000, "v2": 3600}
+_PER_CALL = {"v1": CALL_LIMIT_SECONDS, "v2": CALL_LIMIT_SECONDS}
 _DURATION: dict[str, timedelta | None] = {"v1": None, "v2": timedelta(days=14)}
 
 

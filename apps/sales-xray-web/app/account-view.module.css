@@ -538,6 +538,20 @@
   box-shadow: var(--lx-ring-focus);
 }
 
+/* Delete account (Google Play, 23 Oct 2026): the request, under its row. */
+.deleteAccount {
+  display: grid;
+  gap: 12px;
+  padding: 12px 0 14px;
+  border-bottom: 1px solid var(--lx-line);
+}
+
+.deleteAccountActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .muted {
   margin: 0;
   color: var(--lx-muted);
@@ -877,7 +891,7 @@
   width: 100vw;
   height: 100dvh;
   z-index: 1000;
-  background: var(--lx-paper-1, #f8f9fa);
+  background: var(--lx-paper);
   display: flex;
   flex-direction: column;
 }
@@ -905,4 +919,42 @@
 
 .billingCard .error p {
   color: var(--lx-ink-3);
+}
+
+/* Phones: each invoice is a stacked card; nothing scrolls sideways (QA, 23 Oct 2026). */
+@media (max-width: 560px) {
+  .invoiceTable thead {
+    display: none;
+  }
+
+  .invoiceTable,
+  .invoiceTable tbody,
+  .invoiceTable tr,
+  .invoiceTable td {
+    display: block;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .invoiceTable tr {
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--lx-line);
+  }
+
+  .invoiceTable td,
+  .invoiceTable tr:last-child td {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 3px 0;
+    border-bottom: 0;
+    text-align: right;
+  }
+
+  .invoiceTable td::before {
+    content: attr(data-label);
+    color: var(--lx-muted);
+    font-weight: 600;
+    text-align: left;
+  }
 }

@@ -274,20 +274,16 @@ class Settlement:
         # Commit the intent before submission: neither caller rollback nor a
         # process crash may undo the hold after the provider receives a refund.
         async with AsyncSession(bind=database.bind, expire_on_commit=False) as durable:
-            if staff:
-                # Fresh platform projection locks Person and Session. Prepare
-                # the attributable audit/hold in that same transaction so their
-                # foreign keys cannot wait on our own authentication locks.
-                # Commit the intent before any provider call, as on the customer path.
-                prepared = await self._prepare_refund(
-                    database, caller, payment_id, reason, idempotency_key, staff=True
-                )
-                await database.commit()
-            else:
-                async with durable.begin():
-                    prepared = await self._prepare_refund(
-                        durable, caller, payment_id, reason, idempotency_key
-                    )
+            # The request's authentication locks Person and Session (and staff
+            # authority projects afresh). Prepare the attributable audit/hold in
+            # that same transaction so their foreign keys cannot wait on our own
+            # authentication locks, and commit the intent before any provider
+            # call. A second connection here waited on the request forever
+            # (customer refund on dev, 23 Oct 2026).
+            prepared = await self._prepare_refund(
+                database, caller, payment_id, reason, idempotency_key, staff=staff
+            )
+            await database.commit()
             view, order, payment, money, send = prepared
             if not send:
                 return view
@@ -944,6 +940,44 @@ class Settlement:
             )
             .order_by(BillingRefundEvent.created_at.desc(), BillingRefundEvent.id.desc())
             .limit(1),
+        )
+
+    async def payment_unused(
+        self,
+        database: AsyncSession,
+        order: BillingOrder,
+        payment: BillingPaymentEvent,
+        account: BillingAccount,
+        now: datetime,
+    ) -> bool:
+        """Read only: none of this payment's minutes are used yet (C1 §4). Same lots and
+        rule as the refund command, projected without mirroring legacy grants."""
+
+        ledger = self.service.ledger(database, tenant_id=account.tenant_id)
+        entries = await ledger.entries(account.id)
+        sources = await self._sources(database, order, payment)
+        payment_lots = [
+            entry
+            for entry in entries
+            if entry.kind in ("period_grant", "purchase") and entry.source_ref in sources
+        ]
+        if not payment_lots:
+            return False
+        if account.kind == "personal":
+            assert account.person_id is not None
+            projection = (
+                await ledger.project_person(
+                    tenant_id=account.tenant_id, person_id=account.person_id, now=now
+                )
+            ).projection
+        else:
+            projection = (
+                await ledger.project_organisation(tenant_id=account.tenant_id, now=now)
+            ).projection
+        lots_by_id = {lot.lot_id: lot for lot in ledger.lots_from_entries(entries)}
+        lots = [lots_by_id[str(entry.id)] for entry in payment_lots if str(entry.id) in lots_by_id]
+        return bool(lots) and payment_refundable(
+            projection, lots, verified_at=_utc(payment.verified_at)
         )
 
     async def _projection(

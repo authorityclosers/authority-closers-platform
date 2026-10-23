@@ -18,8 +18,8 @@ function withoutComments(value: string): string {
   return value.replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
-describe("integrated Sales Xray boundary", () => {
-  it("keeps generic Sales Xray rules inside the component scope", () => {
+describe("integrated Sales X-Ray boundary", () => {
+  it("keeps generic Sales X-Ray rules inside the component scope", () => {
     const source = withoutComments(styles);
     const scopeStart = source.indexOf("@scope (.xray-app) {");
 

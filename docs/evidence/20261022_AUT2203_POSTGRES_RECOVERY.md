@@ -1,0 +1,92 @@
+# AUT-2203 — PostgreSQL restart recovery source; extension allocation pending
+
+22 October 2026. Assigned source/test child of [AUT-2202](/AUT/issues/AUT-2202). Starting source includes parent `d6c1b9bce2179765c2fde039bb89e6598d54da1d`. This is an incremental implementation output, **not the completed, reviewed release prerequisite**. No live Postgres/service/schema/role/secret/settings operation, ship or release has been performed.
+
+## Root isolated-image receipt received and checked
+
+Platform subsequently read [Root's actual verification receipt](/AUT/issues/AUT-2202#comment-d724fed9-1e09-4131-b18d-d00f84bfd794) and downloaded [its bundle](/api/attachments/3809e62e-f16e-48d5-994e-694378d53026/content). The 14,570-byte bundle matches SHA256 `8c1927541b7c3aee6d1722bc0dc14c65e8da4d7b870a95a6ed1928ec8d0f9229`. This supersedes the pending-image-proof statements in the earlier chronological entries below.
+
+The included JUnit and exit receipt confirm **7 passed, 0 failures/errors/skips, 8.373s, exit 0**, including both actual pinned-image cases. Root tested shared HEAD `c24950e0ff2e4f092a7876a1a9fdc63c0db8b662`, with implementation from `aaf81fb5821c376ad3f544e5b653aaca9a4dd54c` and strengthened test from `a9730ccb595f1fca64fe5eeddd2f01cd5eb176d5`. Platform checked the recorded pre/post hashes and matched all eleven non-document source/fixture/config files from Root's context to the current worktree; script and test still match the exact hashes below. No test or privileged operation was repeated by Platform.
+
+The receipt covers absent/already-installed extension, restricted-role invariants, SCRAM owner-password injection with wrong-password refusal, wrong-existing-owner atomic refusal, missing/empty secret refusal, and inherited-trace protection. Root's image ID/RepoDigest match the pinned PG image; its fixture observation records network `none`, no host bind mounts and 768 MiB / 0.5 CPU. The recorded post-test container list is empty, anonymous-volume destroy is observed, and final volume inspect exits 1. Platform checked these retained records; it did not independently access the Docker socket. No installer-recovery or numbered-integration test is implied by this extension receipt.
+
+**Remaining prerequisite:** the existing coordinator INBOX still has no Orchestrator 2 / Align 3 revision/down_revision allocation, accepted source selection or receiving session/custody receipt. Existing pending interaction `b4bb8c3b-2243-45fd-acdf-043648baf6cd`, addressed to Root with `wake_assignee`, remains the saved route for returning those outputs. Its first requested output is now evidenced by the linked Root receipt; no response was submitted on Root's behalf and no dispatch was repeated. Platform must still integrate the allocated source and resolve the known classifier/schema-gate refusal through reviewed gate/rehearsal changes, then obtain CTO exact-head review and CEO admission. The draft remains unwired; this is not release-ready source.
+
+Reconciliation record and the unchanged downloaded bundle are retained under `/home/acdev/strikes/2203/evidence/root-receipt-reconciliation.json` and `root-verification-bundle.tar.gz`. No runtime source or live state changed.
+
+## Implemented recovery
+
+`install-application-release.sh` now drains applications and fences writers against the existing release, then takes a custom-format `ac_backup` snapshot and verifies its archive listing before it restarts an existing PostgreSQL. The dump and append-only digest/source receipt are root-owned mode 0600; the dump is synced before the receipt is published, and the receipt directory is synced before restart. A publication/sync failure stops the restart. A published verified backup remains retained even if directory sync fails. First installation, which has no previous service, takes its snapshot after bootstrap and before schema changes.
+
+Before write exposure, rollback restarts the previous release's PostgreSQL service/configuration with `--no-deps` before any SQL or snapshot restore. Database operations explicitly select the recovered release. A startup-only failure keeps the verified backup without restoring unchanged application data. A later pre-exposure schema failure checks the backup SHA256 again before restoring. Failure to recover old PostgreSQL or a changed checksum keeps access closed. Previous application services restart only after the database, release selector and edge route recover.
+
+The existing post-write branch remains forward-only: contain ingress/services/writers and append `FORWARD_RECOVERY_REQUIRED`; do not restore the old database/application. Existing prepared/committed audit rows are retained, with new snapshot receipt/digest references. Existing production-metrics `compose_for` content is byte-for-byte unchanged.
+
+## Privileged extension draft — deliberately not wired
+
+`migrate-pg-stat-statements.sh` accepts no arguments, SQL filenames or extension names. It uses the existing PostgreSQL container's injected `POSTGRES_PASSWORD`, passed to libpq only inside that container. Fixed `psql -X --no-password --single-transaction` SQL requires the pinned PostgreSQL 18.6, preloaded library, `ac_owner`/`ac_platform`, and all three restricted roles. It creates only `public.pg_stat_statements` version 1.12, then verifies version/schema/owner even when already installed. No role creation, grants, role alteration, general migration execution, representative query reads or secret output.
+
+The installer does **not invoke this draft**. No Alembic revision or number has been invented, and no bootstrap-without-versioned-migration activation is enabled. Existing Orchestrator 2 / Align 3 must return the migration number/down_revision and exact source-selection receipt. Final integration must include the versioned migration, this one fixed privileged pre-step before ordinary `ac_migrator` Alembic, normal migration/recovery policy compatibility and required SHA-bound CTO review/CEO admission. The migration-safety classifier currently treats raw SQL as unproven; it must retain its fail-closed behavior. No generic privileged or migration-safety bypass is supplied here.
+
+## Executed verification
+
+Command from shared dev/live:
+
+```sh
+uv run pytest -q tests/infra/test_postgres_release_recovery.py tests/infra/test_pg_stat_statements_migration.py tests/infra/test_application_release.py tests/infra/test_application_release_archive.py tests/infra/test_application_release_guards.py tests/infra/test_production_metrics_release.py
+```
+
+**220 passed, 3 skipped, exit 0, 25.39s.** Two new pinned-image extension tests were intentionally skipped without Root opt-in; one pre-existing Docker contract was skipped because the Docker daemon is unavailable to this seat. Ruff format/check, Python HTTP import, Bash/sh syntax and owned whitespace checks passed. These are fictional local/source proofs, not live PostgreSQL or production acceptance.
+
+The executed shell failures cover dump/list/receipt failure before restart, published receipt sync failure, new-PG startup failure and old-config recovery, failed old-PG recovery, verified pre-exposure snapshot restore, checksum corruption refusal and post-write row preservation/append-only forward recovery. Updated existing rollback contracts distinguish PostgreSQL recovery from later application startup; their original refusal/ordering assertions remain.
+
+Earlier run: 212 passed/8 failed/3 skipped because the existing archive harness lacked the new phase flags and assumed all prior-release `up` commands were application restarts; the corrected harness asserts old-PG recovery before SQL and all existing refusal branches. An initial new-test harness classified runtime grants as fencing because it matched the whole embedded command; corrected to inspect its access-mode argument. These adverse logs are retained, not silently discarded.
+
+## Actual pinned-image proof still required
+
+A single read-only image inspect returned Docker socket permission denied for this Platform seat. No socket permission/settings changes, root impersonation or repeated access attempts were made. The new opt-in fixture uses only the existing pinned image, network none, fictional roles/data and no host mounts; it removes its own container. Root must run the exact committed test file through its authorized wrapper, retain complete exit/output and return the source/digests on this child (or its concrete fictional-proof child). The test proves absent/already-installed extension, unchanged role flags/memberships, ordinary migrator refusal (42501), least-privilege already-installed passage, denied ownership/drop and wrong-existing-owner refusal.
+
+```sh
+AC_POSTGRES_LAUNCH_DOCKER_TEST=1 uv run pytest -q /home/acdev/src/dev-live/authority-closers-platform/tests/infra/test_pg_stat_statements_migration.py
+```
+
+Pinned image: `postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af`.
+
+## Coordinator custody and remaining prerequisite
+
+Exact request was appended to `/home/acdev/strikes/2122/INBOX.md` before editing the nonoverlapping installer recovery hunks. Its historical claim covers production-metrics selection in `compose_for` only; that function is unchanged. Source allocation/receiving request was appended to `/home/acdev/strikes/coord/INBOX.md` for existing Orchestrator 2 / Align 3. **Dispatch is recorded; receiving acknowledgment, migration allocation, final source selection, CTO review and CEO admission have not been returned.** No claim of acceptance or release readiness is made.
+
+Root remains the sole host/release executor on the parent; no parent mutation is needed to read this source output. Parent must not restart live PostgreSQL on the strength of this partial receipt. Final extension/recovery source selection and review remain required. No indexes or billing/provider/account/HELD/timer changes.
+
+Retained evidence: `/home/acdev/strikes/2203/evidence/`. Temporary test files are run-owned under `PAPERCLIP_RUN_SCRATCH_DIR`.
+
+Initial source SHA256 (commit `aaf81fb5821c376ad3f544e5b653aaca9a4dd54c`):
+- `infra/application/scripts/install-application-release.sh`: `62a33eca57f5f410cde9d02ce38e4ce18b27bd518f74f022c9e540f360b16f62`
+- `infra/application/scripts/migrate-pg-stat-statements.sh`: `27943140d082aa5a9028394996326f6dacc7d31845283391b2f62a46212fee6e`
+- `tests/infra/test_postgres_release_recovery.py`: `2881f007b9c10b329fe3aecb2949c9585262c9e900860ce4d054a6fb25855e18`
+- `tests/infra/test_pg_stat_statements_migration.py`: `79d20c8601e628f1bb4662000389ea53b8894abea45969060a537a91989f348a`
+- `tests/infra/test_application_release_archive.py`: `f27ba084426489da56a40e9397aa72eda4afaa3369a0c963d3c93122543ca560`
+
+PostgreSQL primary references: [CREATE EXTENSION privileges, IF NOT EXISTS caveat and explicit version/schema](https://www.postgresql.org/docs/18/sql-createextension.html); [preload and per-database SQL objects](https://www.postgresql.org/docs/18/pgstatstatements.html). Actual final extension tests remain pending; documentation is not execution evidence.
+
+## CTO wake: close an authentication-proof gap
+
+The CTO's comment `0e99e4ab-6299-44fc-ad00-74c77a82e08a` correctly withholds approval. The coordinator and Platform inboxes still contain no migration allocation, receiving/source-selection acknowledgment or authorized extension-image result. The shared head at inspection was the initial source commit above. No final numbered integration or release PR is claimed; workbench rules reserve release PR creation to the authorized release owner.
+
+The extension fixture previously used trust authentication, which could accept an incorrect owner password. The two pending Docker tests now set a fictional owner password, require SCRAM for that owner's IPv4 connection **inside the disposable container only**, observe incorrect-password refusal, and then invoke the fixed migration script with its injected password. During asynchronous configuration reload, the refusal probe executes only `SELECT 1`, preserving the absent-extension case. Existing restricted-role and wrong-extension-owner assertions remain. This fixture correction has not been executed against Docker by Platform and must be included in the authorized executor's final proof.
+
+Executed local checks: `uv run pytest -q tests/infra/test_pg_stat_statements_migration.py tests/infra/test_postgres_release_recovery.py` — **15 passed, 2 skipped, exit 0, 1.80s**. This includes new missing/empty-password refusal before connection and inherited-shell-trace protection. Both isolated-image tests remain skipped, not passed. Ruff format/check, HTTP import and owned whitespace checks pass. Retained receipt: `/home/acdev/strikes/2203/evidence/cto-wake-verification.json`.
+
+Updated extension test SHA256: `ea73dbe587f9a7eb4d288e4fe56b347181fee898ba00ac32b662b11ca4a759c0`. Installer and privileged-script bytes are unchanged from the initial source hashes. The existing coordinator must supply the allocated revision/down_revision and receiving/source selection; the authorized isolated-image executor must return the final test result. Platform then integrates and submits the complete exact source for CTO review and CEO admission. Root remains the sole live restart/release executor on [AUT-2202](/AUT/issues/AUT-2202).
+
+## CEO wake: governed release compatibility checked
+
+At 2026-10-22 21:53 UTC, the existing Root task's latest comment remained the CEO routing request `9af836c1-6206-4d44-832f-68c24d69feed`; it contained no operator verification or allocation receipt. The Platform inbox was empty, and the coordinator inbox retained the original requests without a receiving/source-selection reply. The native CTO-review/CEO-approval path exists, but the source is still incomplete and has not been submitted to it.
+
+A non-executed fictional migration parser input under the run scratch directory used the literal fixed `CREATE EXTENSION IF NOT EXISTS pg_stat_statements WITH SCHEMA public VERSION '1.12'`. It created no repository migration or allocated revision. Against the unchanged real source, `classify_source()` returned **unknown** (`op.execute requires manual safety review`), and `check_operations()` refused it with **upgrade operation lock safety is unproven**. The release train also requires an additive classification and otherwise requires supervised promotion (`infra/release/ac_release.py`). This diagnostic proves a compatibility gap; it does not prove the final numbered integration will pass. No gate, classifier or supervised admission was bypassed or changed.
+
+The final selected integration must explicitly cover the extension operation in the reviewed gate/rehearsal path, retain rejection of other SQL and role changes, and prove upgrade/downgrade/re-upgrade and restricted-migrator behavior on its exact allocated source. The existing coordinator must provide the relevant source/file ownership and allocation receipt first. No allocation is inferred from the working-tree migration head.
+
+Executed local verification: **41 passed, 3 skipped, 2 deselected, exit 0, 0.49s** across `test_migration_schema_gate.py` and the non-Docker extension tests. The last `-k 'not actual'` applied to both files; the three schema-rehearsal Docker tests skipped, and the two actual extension tests were deselected. No Docker or live operation ran. Exact command, refusal diagnostic, source digests and receipt read-back are retained in `/home/acdev/strikes/2203/evidence/release-gate-compatibility.json`; terminal output is in `release-gate-tests.txt`.
+
+At inspection the shared HEAD was `c24950e0ff2e4f092a7876a1a9fdc63c0db8b662`. Installer, privileged script and extension-test digests still matched the earlier committed pins above. Implementation remains at `a9730ccb595f1fca64fe5eeddd2f01cd5eb176d5`; this continuation changes evidence only. Root remains the sole release executor. Missing allocation, receiving/source selection and authorized isolated-image verification prevent numbered integration and final review; no final release PR/head or approval is claimed.

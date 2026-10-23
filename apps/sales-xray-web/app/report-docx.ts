@@ -597,7 +597,7 @@ export function buildReportDocument(doc: ReportDoc) {
   );
 
   return new Document({
-    creator: "Sales Xray",
+    creator: "Sales X-Ray",
     title: doc.title,
     description: DOCUMENT.kicker,
     styles: {
@@ -664,10 +664,10 @@ export async function createReportDocx(
   return buildReportDocx(reportDocumentModel(data, people));
 }
 
-export function reportDocxFilename(title = "Sales Xray call") {
+export function reportDocxFilename(title = "Sales X-Ray call") {
   const safe =
     title.replace(/[\u0000-\u001f<>:"/\\|?*]/g, " ").trim() ||
-    "Sales Xray call";
+    "Sales X-Ray call";
   return `${safe} – ${DOCUMENT.fileName}.docx`;
 }
 

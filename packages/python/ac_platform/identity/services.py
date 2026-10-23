@@ -160,6 +160,10 @@ class AccountUnavailableError(AuthorizationDenied):
     """Authentication is denied for a suspended or deleted person."""
 
 
+class AccountClosedError(AccountUnavailableError):
+    """The person asked for the account's deletion, which closed it: no new session."""
+
+
 class EmailVerificationRequiredError(AuthorizationDenied):
     """A provider or canonical person lacks a currently verified email."""
 
@@ -1663,6 +1667,7 @@ IdentityService = PersonSelfService
 
 
 __all__ = [
+    "AccountClosedError",
     "AccountUnavailableError",
     "AmbiguousProviderIdentityError",
     "AuthenticationReplayError",

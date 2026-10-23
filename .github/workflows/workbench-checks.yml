@@ -102,8 +102,29 @@ jobs:
       - name: ${{ matrix.task }} (${{ needs.plan.outputs.scope }})
         run: python3 scripts/ci/wb_checks.py web --task ${{ matrix.task }}
 
-  py-tests:
+  ci-prerequisites:
+    # Shared by release and workbench jobs, independent of branch/identity.
+    # prepare rechecks availability only after this publication lock is acquired.
+    concurrency:
+      group: ci-prerequisite-publication-v3
+      cancel-in-progress: false
+    env:
+      PREREQ_PUBLICATION_OWNER: ci-prerequisite-publication-v3
     needs: plan
+    if: needs.plan.outputs.py == 'true' || needs.plan.outputs.visual == 'true' || needs.plan.outputs.e2e == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    outputs:
+      bundle: ${{ steps.bundle.outputs.bundle }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - id: bundle
+        uses: ./.github/actions/ci-prerequisite-bundle
+
+  py-tests:
+    needs: [plan, ci-prerequisites]
     if: needs.plan.outputs.py == 'true'
     name: py-tests (${{ matrix.fam }} ${{ matrix.shard }})
     runs-on: ubuntu-24.04
@@ -150,6 +171,7 @@ jobs:
         timeout-minutes: 13
         uses: ./.github/actions/ci-prerequisites
         with:
+          bundle: ${{ needs.ci-prerequisites.outputs.bundle }}
           components: ${{ matrix.fam == 'b' && 'codec filesystem' || 'codec filesystem browser' }}
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
         with:
@@ -190,17 +212,27 @@ jobs:
               --junitxml "$out/junit.xml" \
               --basetemp "${RUNNER_TEMP}/wb-python-basetemp-${{ matrix.shard }}"
           fi
-      - name: Keep the shard's manifest and JUnit report
-        if: always()
+      # The summary needs the manifest to prove complete coverage. Green shards
+      # retain only this small summary; full reports are useful on failure.
+      - name: Keep only the green shard's coverage summary
+        if: success() && matrix.fam != 'targeted'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-py-${{ matrix.fam }}-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/python-test-shard-${{ matrix.shard }}/manifest.json
+          if-no-files-found: error
+          retention-days: 1
+      - name: Keep the failed shard's manifest and JUnit report
+        if: failure() || cancelled()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: wb-py-${{ matrix.fam }}-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/python-test-shard-${{ matrix.shard }}
           if-no-files-found: warn
-          retention-days: 3
+          retention-days: 1
 
   visual:
-    needs: plan
+    needs: [plan, ci-prerequisites]
     if: needs.plan.outputs.visual == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -217,6 +249,7 @@ jobs:
         timeout-minutes: 13
         uses: ./.github/actions/ci-prerequisites
         with:
+          bundle: ${{ needs.ci-prerequisites.outputs.bundle }}
           components: browser
           python: python3
           node-browser: "true"
@@ -232,13 +265,13 @@ jobs:
             ${{ runner.temp }}/wb-screens/*.png
             ${{ runner.temp }}/wb-screens/receipt.json
           if-no-files-found: warn
-          retention-days: 3
+          retention-days: 1
 
   e2e:
     # Opt-in (`wb-ci --e2e`), never part of --full: the release's Sales Xray browser proofs from application.yml
     # (static export journeys and the production-standalone acquisition journey), so navigation or label drift shows
     # up before a release cut instead of 35 minutes into one.
-    needs: plan
+    needs: [plan, ci-prerequisites]
     if: needs.plan.outputs.e2e == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 40
@@ -283,6 +316,7 @@ jobs:
         timeout-minutes: 13
         uses: ./.github/actions/ci-prerequisites
         with:
+          bundle: ${{ needs.ci-prerequisites.outputs.bundle }}
           components: codec browser
       - name: Build verified AudioAtlas
         run: uv run --frozen python -c 'from ac_platform.conversation_intelligence.signals import build_native, _native_executable; built = build_native(); assert _native_executable(None) == built.resolve()'
@@ -327,12 +361,13 @@ jobs:
         with:
           name: wb-e2e-${{ github.sha }}-${{ github.run_attempt }}
           if-no-files-found: ignore
+          retention-days: 1
           path: |
             ${{ runner.temp }}/sales-xray-static-browser.xml
             ${{ runner.temp }}/sales-xray-acquisition-browser/sales-xray-acquisition-browser-receipt.json
 
   summary:
-    needs: [plan, lint, web, py-tests, visual, e2e]
+    needs: [plan, ci-prerequisites, lint, web, py-tests, visual, e2e]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

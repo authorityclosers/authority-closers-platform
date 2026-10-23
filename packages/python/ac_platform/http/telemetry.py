@@ -5,6 +5,7 @@ from __future__ import annotations
 import inspect
 import json
 import re
+import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
@@ -301,7 +302,8 @@ def install_telemetry_http(
 
     # Until every write seam is composed nothing can be stored, so the
     # taxonomy lists no events and clients send none (rather than one refused
-    # batch per page).
+    # batch per page). The same holds per person: someone the resolver does
+    # not grant (switched off, a sandbox) is listed no events.
     storing = (
         consent_resolver is not None
         and configured_retention_days is not None
@@ -311,14 +313,34 @@ def install_telemetry_http(
     router = APIRouter(prefix="/v1", tags=["telemetry"])
     actor_dependency = Depends(require_actor)
     repository = PlanningRepository()
+    # When this process last purged expired events (monotonic seconds).
+    last_purge: list[float] = []
+
+    async def _collecting(actor: ActorContext, database: object) -> bool:
+        """Whether this person's events would be stored now (a failed read: no)."""
+        if consent_resolver is None:
+            return False
+        try:
+            consent = await _resolve_consent(consent_resolver, database, actor)
+            if not isinstance(consent, TelemetryConsent):
+                return False
+            _validate_consent_binding(consent, actor)
+        except Exception:
+            return False
+        return (
+            getattr(consent.status, "value", consent.status) == TelemetryConsentStatus.GRANTED.value
+            and consent.purpose == TELEMETRY_PURPOSE
+        )
 
     @router.get("/telemetry/taxonomy", response_model=TelemetryTaxonomy)
     async def telemetry_taxonomy(
         response: Response,
         auth: AuthenticatedTransaction = actor_dependency,
     ) -> TelemetryTaxonomy:
-        _tenant(auth.resolved.actor)
+        actor = auth.resolved.actor
+        _tenant(actor)
         response.headers["cache-control"] = "private, no-store"
+        listed = storing and await _collecting(actor, auth.database)
         return TelemetryTaxonomy(
             events=[
                 TelemetryTaxonomyItem(
@@ -328,7 +350,7 @@ def install_telemetry_http(
                     takes_call=definition.takes_call,
                 )
                 for name, definition in surface.events.items()
-                if storing
+                if listed
             ],
             disclaimer=surface.disclaimer,
         )
@@ -540,6 +562,10 @@ def install_telemetry_http(
                     raise TelemetryBackpressure(
                         "This person's telemetry for the last 24 hours is full; retry later."
                     )
+                purge = surface.purge_every
+                due = purge is not None and (
+                    not last_purge or time.monotonic() - last_purge[0] >= purge.total_seconds()
+                )
                 if named_calls and surface.call_refs is not None:
                     # The call's reference replaces its id; a call this
                     # workspace does not hold is left unnamed.
@@ -548,7 +574,16 @@ def install_telemetry_http(
                         ref = refs.get(event.call_id) if event.call_id else None
                         if ref is not None:
                             row.payload = {**row.payload, "call_ref": ref}
-                return repository.add_analytics_events(database, events)
+                result = repository.add_analytics_events(database, events)
+                if due and configured_policy_id is not None:
+                    last_purge[:] = [time.monotonic()]
+                    repository.purge_expired_analytics_batch(
+                        database,
+                        retention_policy_id=configured_policy_id,
+                        now=now,
+                        batch_size=2_000,
+                    )
+                return result
 
             stored, duplicates, stored_event_ids = await auth.database.run_sync(write)
         except AnalyticsEventReplayConflict as exc:

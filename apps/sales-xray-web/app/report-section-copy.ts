@@ -28,7 +28,7 @@ export const REPORT_SECTION_COPY: Record<MeasurementLanguage, SectionCopy> = {
     empty: "Nothing here we can point to on this call.",
     details: "Report details",
     detailNote:
-      "Sales Xray's reading of this call. Who is speaking is worked out automatically and can be wrong.",
+      "Sales X-Ray's reading of this call. Who is speaking is worked out automatically and can be wrong.",
     another: "Analyse another call",
   },
   hi: {

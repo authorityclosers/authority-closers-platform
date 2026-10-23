@@ -151,7 +151,7 @@ export function AdSpendPanel() {
           <StatusPill tone="accent">Updated {ago(report.syncedAt)}</StatusPill>
         ) : null
       }
-      summary={`Your Meta campaigns over the last 30 days, and the leads that reached Sales Xray from each. Only owners and admins see this.${line ? ` ${line}.` : ""}`}
+      summary={`Your Meta campaigns over the last 30 days, and the leads that reached Sales X-Ray from each. Only owners and admins see this.${line ? ` ${line}.` : ""}`}
       action={
         <button
           type="button"

@@ -9,12 +9,18 @@
  * phone. A one-time card offers it; once it is on, a slim row says so, shows
  * when the phone last looked, and switches it off. Nothing shows in a browser
  * or in an older app.
+ *
+ * Once on, it is the kit's StateSwitch (owner, 23 Oct 2026: switches that
+ * matter say their state in words and ask before stopping): stopping asks
+ * first, and when the phone can't log (no call history access, signed out)
+ * the row says it isn't logging and why, though the switch is still on.
  */
 
 import { History, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { Button } from "../ui/kit";
+import { StateSwitch } from "../ui/state-switch";
 import { ago } from "./leads-client";
 import {
   buzz,
@@ -29,7 +35,7 @@ import styles from "./leads.module.css";
 const HIDE_KEY = "sx-leads-phone-log-card";
 
 const NO_ACCESS =
-  "Allow call history for Sales Xray in your phone's settings, then try again.";
+  "Allow call history for Sales X-Ray in your phone's settings, then try again.";
 
 /** The small line under "Logging work calls". */
 export function phoneLogLine(status: CallLogStatus, now = new Date()): string {
@@ -105,50 +111,48 @@ export function PhoneLogCard({
     else if (on) buzz("done");
   };
 
-  if (status.on && as === "chip")
+  if (status.on) {
+    // On, but the phone can't log: the row says so, and why.
+    const stuck = !status.access || status.state === "signed_out";
     return (
-      <button
-        type="button"
-        role="switch"
-        aria-checked
-        aria-label="Logging work calls"
-        className={styles.statusChip}
-        data-on=""
-        disabled={busy}
-        title={`Logging work calls: ${phoneLogLine(status)}. Tap to stop.`}
-        onClick={() => void turn(false)}
-      >
-        <History size={14} aria-hidden="true" />
-        Logging calls
-      </button>
+      <StateSwitch
+        icon={<History size={20} />}
+        label="Logging work calls"
+        meaning="While this is on, this phone puts calls with your leads on those leads, even ones from the phone's dialer. Other numbers stay on your phone."
+        onText="Calls with your leads are logged"
+        offText="Calls from this phone aren't logged"
+        note={phoneLogLine(status)}
+        chipOn="Logging calls"
+        chipOff="Not logging calls"
+        on
+        hold={
+          stuck
+            ? {
+                title: "Not logging right now",
+                reason: phoneLogLine(status),
+                chip: "Calls not logged",
+              }
+            : null
+        }
+        confirmOff={{
+          title: "Stop logging work calls?",
+          points: [
+            "Calls from this phone, including ones from the phone's dialer, stop showing on your leads.",
+            "Calls already logged stay on their leads.",
+            "Turn it back on any time, from Leads or Settings, Selling.",
+          ],
+          confirm: "Stop logging",
+          keep: "Keep logging",
+        }}
+        onChange={async (next) => {
+          const saved = await callLogSetup(next, sim);
+          if (!saved) throw new Error("Your phone didn't answer. Try again.");
+          setStatus(saved);
+        }}
+        place={as === "chip" ? "chip" : "row"}
+      />
     );
-
-  if (status.on)
-    return (
-      <div className={styles.taking} data-place="row">
-        <button
-          type="button"
-          role="switch"
-          aria-checked
-          className={styles.takingSwitch}
-          disabled={busy}
-          onClick={() => void turn(false)}
-        >
-          <span className={styles.takingTrack} aria-hidden="true">
-            <span />
-          </span>
-          <span className={styles.takingLabel}>
-            <strong>Logging work calls</strong>
-            <small>{phoneLogLine(status)}</small>
-          </span>
-        </button>
-        {problem ? (
-          <p className={styles.error} role="alert">
-            {problem}
-          </p>
-        ) : null}
-      </div>
-    );
+  }
 
   return (
     <section className={styles.phoneLogCard} aria-label="Log work calls">

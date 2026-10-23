@@ -70,6 +70,7 @@
 }
 .panel button {
   display: grid;
+  box-sizing: border-box;
   gap: 5px;
   width: 100%;
   padding: 12px;

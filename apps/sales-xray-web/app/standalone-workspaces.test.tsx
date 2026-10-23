@@ -156,7 +156,7 @@ it("shows the off message and suppresses Recents and upload for a disabled works
   };
   await mount();
   expect(host.textContent).toContain(
-    "Sales Xray isn't on for this workspace yet",
+    "Sales X-Ray isn't on for this workspace yet",
   );
   expect(host.textContent).not.toContain("Recents");
   expect(host.querySelector("[data-upload]")).toBeNull();
@@ -187,7 +187,7 @@ it.each([true, false])(
       ).toBe("org-id");
     } else {
       expect(host.textContent).toContain(
-        "Sales Xray isn't on for this workspace yet",
+        "Sales X-Ray isn't on for this workspace yet",
       );
       expect(
         fetcher.mock.calls.some(([path]) =>

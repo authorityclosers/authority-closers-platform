@@ -21,6 +21,7 @@ import { PhoneSetupSheet } from "../../leads/phone-setup";
 import { parseSetup } from "../../leads/native-phone";
 import { PageHeader } from "../../ui/kit";
 import { WorkspaceAccessContext } from "../../workspace-access";
+import { CALL_LIMIT_SECONDS } from "../../call-limit";
 
 const SELLER = "00000000-0000-4000-8000-000000000002";
 const TENANT = "00000000-0000-4000-8000-000000000004";
@@ -148,7 +149,7 @@ function install(view: string) {
           title: "Recording terms (sample)",
           description: "Sample terms for screenshots.",
           maximum_file_bytes: 100_000_000,
-          maximum_call_seconds: 7200,
+          maximum_call_seconds: CALL_LIMIT_SECONDS,
           retention_days: 30,
         }),
         { status: 200, headers: { "content-type": "application/json" } },

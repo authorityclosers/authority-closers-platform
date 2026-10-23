@@ -2,7 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
 
-import { SettingsMenu } from "./settings-menu";
+import { accountInitials, SettingsMenu } from "./settings-menu";
 import type { Allowance } from "../acquisition-client";
 import { guideOffKey } from "../guide-progress";
 import { FIRST_CALL_GUIDE } from "../guide-registry";
@@ -455,16 +455,18 @@ it("puts your settings, and an organisation's for its managers, in You", async (
     "/settings/selling",
     "/settings/notifications",
   ]);
-  expect(manager.theirs).toEqual([
-    "/organisation",
-    "/settings/lead-rules",
-    "/settings/stages",
-    "/settings/apps",
-    "/settings/call-ai",
-  ]);
+  expect(manager.theirs).toEqual(["/organisation", "/organisation?tab=team"]);
   await act(async () => root.unmount());
   host.remove();
   const seller = await rows({ organisation: true, insights: false });
   expect(seller.yours).toHaveLength(3);
   expect(seller.theirs).toEqual([]);
+});
+
+// Shell sweep, 23 Oct 2026: with nothing to take initials from, the avatar
+// shows a person, never a lone dot.
+it("takes initials from the name, then the email, else none", () => {
+  expect(accountInitials("swamini fictional", null)).toBe("SF");
+  expect(accountInitials(null, "rahul@example.com")).toBe("RA");
+  expect(accountInitials(null, null)).toBe("");
 });

@@ -69,7 +69,21 @@ export type NativeStatus = {
   connect: boolean;
   /** The app signs in with Apple and Facebook through the phone's browser too. */
   signIn: boolean;
+  /**
+   * Providers the app signs in with by itself, never the phone's browser: Android's
+   * Google account sheet and the Facebook app (app builds from 23 Oct 2026).
+   */
+  nativeSignIn: NativeSignInProvider[];
+  /** "direct" (download link) or "play" (Google Play), from app builds of 23 Oct 2026. */
+  store?: "direct" | "play";
 };
+
+export type NativeSignInProvider = "google" | "facebook";
+
+/** What the phone's own sign-in gave back: a token for the server, or why not. */
+export type NativeSignInOutcome =
+  | { token: string }
+  | { error: "cancelled" | "no_account" | "unavailable" | "failed" };
 
 type Channel = {
   postMessage: (data: string) => void;
@@ -152,6 +166,45 @@ function ask<T>(
     });
     target.postMessage(JSON.stringify({ id, method, args }));
   });
+}
+
+/**
+ * The Play Store's own rating card (In-App Review), after a good moment
+ * (owner, 23 Oct 2026). The phone app asks Google, whose quota decides
+ * whether it shows; builds without it answer nothing. Never after a bad
+ * rating.
+ */
+export async function askStoreReview(): Promise<boolean> {
+  if (!inPhoneApp()) return false;
+  try {
+    const raw = await ask<{ shown?: boolean }>("review", {}, 10_000);
+    return raw?.shown === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A picture of the app's screen taken by the phone itself, for a bug report
+ * (more faithful than copying the page in the browser). Asked for before
+ * the report sheet opens; null when the app build cannot (older builds) or
+ * it takes longer than two seconds.
+ */
+export async function askScreenshot(): Promise<Blob | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    const raw = await ask<{ data?: string; type?: string }>(
+      "screenshot",
+      { format: "jpeg", quality: 82, maxEdge: 1600 },
+      2_000,
+    );
+    const type = raw?.type === "image/png" ? "image/png" : "image/jpeg";
+    if (typeof raw?.data !== "string" || raw.data.length < 100) return null;
+    const bytes = Uint8Array.from(atob(raw.data), (c) => c.charCodeAt(0));
+    return new Blob([bytes], { type });
+  } catch {
+    return null;
+  }
 }
 
 const text = (value: unknown) => (typeof value === "string" ? value : "");
@@ -251,9 +304,47 @@ export async function phoneStatus(): Promise<NativeStatus | null> {
       audio: raw.audio === true,
       connect: raw.connect === true,
       signIn: raw.signIn === true,
+      nativeSignIn: Array.isArray(raw.nativeSignIn)
+        ? raw.nativeSignIn.filter(
+            (provider): provider is NativeSignInProvider =>
+              provider === "google" || provider === "facebook",
+          )
+        : [],
+      ...(raw.store === "play" || raw.store === "direct"
+        ? { store: raw.store }
+        : {}),
     };
   } catch {
     return null;
+  }
+}
+
+/**
+ * Signs in with the phone's own Google account sheet or the Facebook app. The
+ * values come from POST /v1/auth/{provider}/native/start; the token goes back to
+ * the server once, by the page's form post. Picking an account can take a while.
+ */
+export async function signInOnPhone(request: {
+  provider: NativeSignInProvider;
+  nonce: string;
+  clientId?: string;
+  appId?: string;
+  clientToken?: string;
+}): Promise<NativeSignInOutcome> {
+  try {
+    const raw = await ask<Record<string, unknown>>(
+      "nativeSignIn",
+      request,
+      5 * 60_000,
+    );
+    const token = typeof raw?.token === "string" ? raw.token : "";
+    return token ? { token } : { error: "failed" };
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    if (code === "cancelled" || code === "no_account") return { error: code };
+    if (code === "unavailable" || code === "no_phone_app")
+      return { error: "unavailable" };
+    return { error: "failed" };
   }
 }
 
@@ -497,6 +588,8 @@ export function parseCallLog(raw: unknown): CallLogStatus | null {
   if (!raw || typeof raw !== "object") return null;
   const value = raw as Record<string, unknown>;
   if (typeof value.on !== "boolean") return null;
+  // The Play build of the app can't read call history (Play's call log policy, 23 Oct 2026).
+  if (value.supported === false) return null;
   const sims = Array.isArray(value.sims)
     ? value.sims.flatMap((item) => {
         if (!item || typeof item !== "object") return [];
@@ -571,8 +664,18 @@ export type SetupStatus = {
   needsAllFiles: boolean;
   /** This app build can ask for All files access (download builds, not Play). */
   allFilesSupported: boolean;
+  /**
+   * Without All files access (the Play build), the seller picks the recordings
+   * folder once instead (S8, app 0.3.100+); a picked folder clears needsAllFiles.
+   */
+  folderPickSupported: boolean;
+  folderPicked: boolean;
   /** Truecaller is on this phone: its after-call screen covers "How did it go?" (#48). */
   truecaller: boolean;
+  /** This app build can log work calls from the call history (not the Play build, 23 Oct 2026). */
+  callLogSupported: boolean;
+  /** "direct" (the download-link app) or "play" (Google Play). */
+  store: "direct" | "play";
 };
 
 /** This phone's call recorder as the app sees it (owner, 19 Oct: check, don't ask). */
@@ -641,7 +744,12 @@ export function parseSetup(raw: unknown): SetupStatus | null {
     recorder: parseRecorder(value.recorderProfile),
     needsAllFiles: value.needsAllFiles === true,
     allFilesSupported: value.allFilesSupported === true,
+    folderPickSupported: value.folderPickSupported === true,
+    folderPicked: value.folderPicked === true,
     truecaller: value.truecaller === true,
+    // Apps before the two builds always had call history.
+    callLogSupported: value.callLogSupported !== false,
+    store: value.store === "play" ? "play" : "direct",
   };
 }
 
@@ -659,6 +767,20 @@ export async function setupStatus(): Promise<SetupStatus | null> {
  * Opens the phone screen that fixes a line: battery, autostart, recorder,
  * notifications, allFiles (MIUI's hidden recordings, app 0.3.80+) or truecaller.
  */
+/**
+ * "Choose your recordings folder" (S8): Android's folder picker opens at the
+ * phone's call recordings; the new checklist comes back once the seller has
+ * picked (or backed out). Null in a browser or an older app.
+ */
+export async function pickRecordingsFolder(): Promise<SetupStatus | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    return parseSetup(await ask("pickRecordingsFolder", {}, 600_000));
+  } catch {
+    return null;
+  }
+}
+
 export async function setupOpen(what: string): Promise<boolean> {
   try {
     const raw = await ask<{ opened?: boolean }>("setupOpen", { what }, 10_000);

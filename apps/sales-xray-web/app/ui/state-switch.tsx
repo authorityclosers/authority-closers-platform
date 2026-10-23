@@ -63,6 +63,8 @@ export type StateSwitchProps = {
   /** The state in words. */
   onText: string;
   offText: string;
+  /** A detail under the state while it runs: which SIM, when it last looked. */
+  note?: string;
   /** The chip's words. */
   chipOn: string;
   chipOff: string;
@@ -84,6 +86,7 @@ export function StateSwitch(props: StateSwitchProps) {
     meaning,
     onText,
     offText,
+    note,
     chipOn,
     chipOff,
     on,
@@ -140,7 +143,11 @@ export function StateSwitch(props: StateSwitchProps) {
           <span className={styles.dot} aria-hidden="true" />
           {stateText}
         </small>
-        {held ? <small className={styles.reason}>{held.reason}</small> : null}
+        {held ? (
+          <small className={styles.reason}>{held.reason}</small>
+        ) : on && note ? (
+          <small className={styles.reason}>{note}</small>
+        ) : null}
       </span>
       <button
         type="button"

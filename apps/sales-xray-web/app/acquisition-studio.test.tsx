@@ -18,8 +18,10 @@ import Page from "./page";
 import { AppSession } from "./app-session";
 import {
   AcquisitionStudio,
+  analysisMinutesOut,
   remainingAllowanceLabel,
 } from "./acquisition-studio";
+import { AcquisitionError } from "./acquisition-client";
 import {
   UploadSessionProvider,
   UploadSessionStore,
@@ -1856,7 +1858,7 @@ it("offers a retry after a saved-call timeout without losing its opaque selector
   await act(async () => vi.advanceTimersByTimeAsync(12_000));
   await flush();
   expect(container.textContent).toContain(
-    "Sales Xray is taking longer than expected",
+    "Sales X-Ray is taking longer than expected",
   );
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(
@@ -1913,6 +1915,27 @@ it.each([
   expect(
     remainingAllowanceLabel(confirmed, allowance.allowance_seconds, false),
   ).toBe(expected);
+});
+
+it("sends a signed-in seller with no minutes left to Plans, never a guest", () => {
+  const empty = {
+    allowance_seconds: 6000,
+    committed_seconds: 6000,
+    available_seconds: 0,
+  };
+  const some = { ...empty, committed_seconds: 5940, available_seconds: 60 };
+  const tooLong = new AcquisitionError(403, "trial_allowance_insufficient");
+  expect(analysisMinutesOut(true, empty, "")).toBe(true);
+  expect(analysisMinutesOut(true, some, "")).toBe(false);
+  expect(analysisMinutesOut(true, some, tooLong)).toBe(true);
+  expect(analysisMinutesOut(true, { ...empty, unlimited: true }, "")).toBe(
+    false,
+  );
+  expect(analysisMinutesOut(true, null, "")).toBe(false);
+  expect(analysisMinutesOut(false, empty, tooLong)).toBe(false);
+  expect(tooLong.message).toContain("remaining analysis minutes");
+  // The same copy shows in the Google Play app: no plans, prices or buying.
+  expect(tooLong.message).not.toMatch(/plan|₹|price|cost|buy/i);
 });
 
 it("does not present a legacy tester flag as a plan or finite balance", () => {
@@ -2341,7 +2364,7 @@ it("keeps checking a call on screen through repeated misses, with one corner car
     "Can’t refresh this call’s status",
   );
   expect(container.textContent).toContain(
-    "Sales Xray keeps checking by itself",
+    "Sales X-Ray keeps checking by itself",
   );
   expect(container.querySelector('[data-stage="C2"] small')?.textContent).toBe(
     "In progress",

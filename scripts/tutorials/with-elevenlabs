@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Run a command as acdev with ELEVENLABS_API_KEY injected from Infisical (dev, /sales-xray-test/elevenlabs).
+# Needs a sudo-capable operator on ac. The key is never printed, logged or written to disk; it lives only in the
+# child process's environment. Usage: scripts/tutorials/with-elevenlabs python3 scripts/tutorials/tutorials.py quota
+set -euo pipefail
+RUN_AS="${SXTUT_RUN_AS:-acdev}"
+TOKEN_FILE=/etc/authority-closers/development/identities/elevenlabs/token
+PROJECT=b421c44e-4599-4394-8df6-758ed8aedfed
+cwd="$(pwd)"
+exec sudo -n env SXTUT_OUT="${SXTUT_OUT:-}" bash -c '
+  set -euo pipefail
+  INFISICAL_TOKEN="$(cat "$1")"; export INFISICAL_TOKEN
+  cd "$2"; run_as="$3"; project="$4"; shift 4
+  exec /usr/local/bin/infisical run --projectId "$project" --env dev --path /sales-xray-test/elevenlabs --silent -- \
+    sudo -u "$run_as" --preserve-env=ELEVENLABS_API_KEY,SXTUT_OUT env -u INFISICAL_TOKEN "HOME=$(getent passwd "$run_as" | cut -d: -f6)" nice -n 19 ionice -c3 "$@"
+' _ "$TOKEN_FILE" "$cwd" "$RUN_AS" "$PROJECT" "$@"

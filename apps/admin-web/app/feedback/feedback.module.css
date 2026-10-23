@@ -1,0 +1,125 @@
+/* Feedback: what people say after key moments (owner, 23 Oct 2026). Tokens only. */
+
+.moments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+
+.moment {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xs, 12px);
+  text-decoration: none;
+}
+
+.moment[aria-current="page"] {
+  border-color: var(--sx-accent);
+  background: color-mix(in oklab, var(--sx-accent) 12%, transparent);
+  font-weight: 600;
+}
+
+.alert {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklab, var(--sx-bad) 40%, var(--sx-line));
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--sx-bad) 8%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+.number {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--sx-text-xs, 12px);
+  overflow-wrap: anywhere;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.days {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.days li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) 36px;
+  gap: 8px;
+  align-items: center;
+}
+
+.day {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs, 12px);
+  font-variant-numeric: tabular-nums;
+}
+
+.bar {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sx-line);
+}
+
+.bar span[data-rating="good"] {
+  background: var(--sx-good);
+}
+
+.bar span[data-rating="okay"] {
+  background: var(--sx-warn);
+}
+
+.bar span[data-rating="bad"] {
+  background: var(--sx-bad);
+}
+
+.recent {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recent li {
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.recentHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.comment {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

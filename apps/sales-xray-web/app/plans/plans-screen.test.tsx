@@ -298,7 +298,17 @@ it("prices two team seats yearly, accepts the server total and warns about renew
 
 it("requires an enterprise name and allows an omitted GSTIN", async () => {
   const checkout = vi.fn(fixtureBilling.checkout);
-  await render(<PlansPurchase client={{ ...fixtureBilling, checkout }} />);
+  // Enterprise on sale; until then it is Talk to us (owner, 30 Sep 2026).
+  const readPlans = async () =>
+    parsePlans({
+      plans: FIXTURE_PLANS.plans.map((p) =>
+        p.key === "enterprise" ? { ...p, status: "active" } : p,
+      ),
+    });
+  await render(
+    <PlansPurchase client={{ ...fixtureBilling, checkout, readPlans }} />,
+  );
+  await until(() => Boolean(button("Get Enterprise")));
   await click("Get Enterprise");
   await click("Review total");
   expect(checkout).not.toHaveBeenCalled();
@@ -409,7 +419,13 @@ it("loads billing usage and invoices, and cancels renewal at period end", async 
   );
   await click("Cancel renewal");
   await click("Yes, cancel renewal");
-  expect(text()).toContain("Try again");
+  // A failed update is a corner card (owner rule), not text in the page.
+  expect(notify).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "billing-update-error",
+      message: "Try again",
+    }),
+  );
   await click("Yes, cancel renewal");
   await until(() => text().includes("Cancels at period end"));
   expect(cancelSubscription.mock.calls[0][2]).toBe(
@@ -652,7 +668,13 @@ it.each([
       expect(text()).not.toContain("could not be loaded");
       expect(text()).toContain("No renewal scheduled");
     } else {
-      await until(() => text().includes("Billing details could not be loaded"));
+      // A read that failed: quiet placeholders and one corner card (owner rule).
+      await until(() =>
+        text().includes("We couldn't load your plan right now."),
+      );
+      expect(notify).toHaveBeenCalledWith(
+        expect.objectContaining({ id: "billing-read-error" }),
+      );
       expect(text()).not.toContain("No invoices or receipts yet");
       await click("Refresh status");
       await until(() => text().includes("62 min (1 h 2 min) left"));
@@ -685,3 +707,23 @@ it.each([404, 403, 503])(
     expect(readInvoices).toHaveBeenCalledTimes(2);
   },
 );
+
+it("offers Talk to us for Enterprise until it is on sale, with no seat stepper or price", async () => {
+  const plans = PLANS_CATALOGUE_FIXTURE.map((plan) =>
+    plan.key === "enterprise"
+      ? { ...plan, status: "coming_soon" as const, prices: null }
+      : plan,
+  );
+  await render(<PlansScreen plans={plans} gstRate={PLANS_GST_RATE} />);
+  const card = host.querySelector('[data-plan="enterprise"]')!;
+  const contact = [...card.querySelectorAll("a")].find(
+    (link) => link.textContent?.trim() === "Talk to us",
+  );
+  expect(contact?.getAttribute("href")).toMatch(
+    /^mailto:admin@authorityclosers\.com\?subject=/,
+  );
+  expect(card.textContent).toContain("Custom");
+  expect(card.textContent).not.toContain("Unavailable");
+  expect(card.querySelector('[aria-label="Seats for Enterprise"]')).toBeNull();
+  expect(button("Get Organisation")).toBeTruthy();
+});

@@ -14,6 +14,12 @@ from ac_platform.admin_settings.staff_key_email import (
     STAFF_KEY_CREATED_EVENT,
     STAFF_KEY_CREATED_JOB,
 )
+from ac_platform.identity.account_deletion import (
+    ACCOUNT_CLOSED_EVENT,
+    ACCOUNT_CLOSED_JOB,
+    DELETION_REQUESTED_EVENT,
+    DELETION_REQUESTED_JOB,
+)
 from ac_platform.identity.email_login import _encrypt_code
 from ac_platform.identity.models import (
     EmailChallenge,
@@ -209,6 +215,8 @@ def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> No
         PROVIDER_LINKED_EVENT,
         PROVIDER_REMOVED_EVENT,
         PROVIDER_CONNECTED_EVENT,
+        ACCOUNT_CLOSED_EVENT,
+        DELETION_REQUESTED_EVENT,
         ENROLLMENT_WELCOME_EVENT,
         EMAIL_LOGIN_REQUEST_EVENT,
         PASSWORD_EMAIL_VERIFICATION_EVENT,
@@ -859,6 +867,8 @@ def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -
             PROVIDER_LINKED_JOB,
             PROVIDER_REMOVED_JOB,
             PROVIDER_CONNECTED_JOB,
+            ACCOUNT_CLOSED_JOB,
+            DELETION_REQUESTED_JOB,
             EMAIL_LOGIN_REQUEST_JOB,
             PASSWORD_EMAIL_VERIFICATION_JOB,
             PASSWORD_EMAIL_RESET_JOB,

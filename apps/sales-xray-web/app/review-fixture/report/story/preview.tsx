@@ -137,8 +137,11 @@ export function StoryShellPreview({
   example = null,
   apiStructure = false,
   coach = false,
+  clean = false,
 }: {
   fixture?: StoryFixture;
+  /** For tutorial recordings: no development labels (the call stays fictional). */
+  clean?: boolean;
   /** The call as the API sends it once an AI pointer review is saved. */
   apiStructure?: boolean;
   /** The same call with a fictional Brain 4.0 read, scored by Brain 4.0 (AI coaching score). */
@@ -202,10 +205,12 @@ export function StoryShellPreview({
                 data-full-shell-fixture="true"
               >
                 <div className="studio-main">
-                  <p className={styles.banner} role="note">
-                    Development fixture · fictional data · no account, recording
-                    or provider call
-                  </p>
+                  {clean ? null : (
+                    <p className={styles.banner} role="note">
+                      Development fixture · fictional data · no account,
+                      recording or provider call
+                    </p>
+                  )}
                   <SourceWaveformProvider audioRef={audio}>
                     <section
                       className={`studio-report panel ${acquisitionStyles.report} ${styles.report}`}
@@ -217,7 +222,11 @@ export function StoryShellPreview({
                       <ReportHeader
                         durationMs={FIXTURE_DURATION_MS}
                         languageLabel={fixture.language}
-                        sourceLabel="Fictional fixture transcript"
+                        sourceLabel={
+                          clean
+                            ? "Call recording"
+                            : "Fictional fixture transcript"
+                        }
                         label={{
                           displayName: title,
                           revision: 1,
@@ -417,20 +426,22 @@ export function StoryShellPreview({
                         onSeek={playFrom}
                         audioAvailable
                       />
-                      <p
-                        className={styles.status}
-                        role="status"
-                        aria-label="Fixture action status"
-                        aria-live="polite"
-                      >
-                        {status}
-                      </p>
+                      {clean ? null : (
+                        <p
+                          className={styles.status}
+                          role="status"
+                          aria-label="Fixture action status"
+                          aria-live="polite"
+                        >
+                          {status}
+                        </p>
+                      )}
                     </section>
                     <CallAudioDock
                       audioRef={audio}
                       src=""
                       durationMs={FIXTURE_DURATION_MS}
-                      title="Fictional fixture · no audio"
+                      title={clean ? title : "Fictional fixture · no audio"}
                     />
                   </SourceWaveformProvider>
                 </div>

@@ -13,6 +13,9 @@ MAX_REQUEST_BODY_BYTES = 1 * 1024 * 1024
 MAX_TELEMETRY_BODY_BYTES = 64 * 1024
 MAX_MEDIA_CAPTION_BYTES = 25 * 1024 * 1024
 MAX_MEDIA_WEBHOOK_BYTES = 512 * 1024
+# A bug report with a picture of the screen (base64, at most 4 MB of image) and a
+# voice note (at most 1.5 MB of audio).
+MAX_BUG_REPORT_BYTES = 8 * 1024 * 1024
 MAX_DECLARED_BODY_BYTES = MAX_MEDIA_CAPTION_BYTES
 MAX_PROBLEM_INSTANCE_LENGTH = 512
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -51,6 +54,8 @@ def request_body_limit(scope: Scope) -> int:
         return MAX_MEDIA_WEBHOOK_BYTES
     if _MEDIA_CAPTION_PATH.fullmatch(path):
         return MAX_MEDIA_CAPTION_BYTES
+    if path == "/v1/bug-reports":
+        return MAX_BUG_REPORT_BYTES
     return MAX_REQUEST_BODY_BYTES
 
 

@@ -30,7 +30,7 @@ export function AccountView() {
           <>
             <header className={styles.header}>
               <h1>Account</h1>
-              <p>Your Authority Closers identity for Sales Xray.</p>
+              <p>Your Authority Closers identity for Sales X-Ray.</p>
             </header>
             <section className={styles.panel} aria-labelledby="account-signin">
               <h2 id="account-signin">Sign in to see your account</h2>

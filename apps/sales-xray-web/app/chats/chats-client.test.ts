@@ -205,7 +205,7 @@ it("marks a chat seen up to its newest message, per person", () => {
   ).toBe(true);
 });
 
-it("reads a message's file through Sales Xray, never from Meta", () => {
+it("reads a message's file through Sales X-Ray, never from Meta", () => {
   expect(mediaUrl("whatsapp", "w 1")).toBe(
     "/v1/lead-desk/chats/media/whatsapp/w%201",
   );
