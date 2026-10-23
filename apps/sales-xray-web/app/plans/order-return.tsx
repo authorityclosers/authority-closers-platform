@@ -41,10 +41,13 @@ export function OrderReturn({
   orderId,
   client = liveBilling,
   plansHref = "/plans",
+  billingHref = "/account#billing",
 }: {
   orderId: string | null;
   client?: BillingClient;
   plansHref?: string;
+  /** Where Billing & receipts goes (the review fixture keeps its own). */
+  billingHref?: string;
 }) {
   const access = useWorkspaceAccess();
   return (
@@ -53,6 +56,7 @@ export function OrderReturn({
       orderId={orderId}
       client={client}
       plansHref={plansHref}
+      billingHref={billingHref}
     />
   );
 }
@@ -61,10 +65,13 @@ function OrderReturnState({
   orderId,
   client = liveBilling,
   plansHref = "/plans",
+  billingHref = "/account#billing",
 }: {
   orderId: string | null;
   client?: BillingClient;
   plansHref?: string;
+  /** Where Billing & receipts goes (the review fixture keeps its own). */
+  billingHref?: string;
 }) {
   const access = useWorkspaceAccess();
   const authenticated = access?.authenticated === true;
@@ -276,7 +283,7 @@ function OrderReturnState({
             <Link className={styles.ghost} href={plansHref}>
               See your plan
             </Link>
-            <Link className={styles.ghost} href="/account#billing">
+            <Link className={styles.ghost} href={billingHref}>
               Billing &amp; receipts
             </Link>
           </div>

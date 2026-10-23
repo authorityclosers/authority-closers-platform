@@ -481,9 +481,7 @@ it("renders authoritative renewal date and amount when quote exists on live Plan
   await render(<PlansPurchase client={fixtureBilling} quote={quote} />);
   await click("Get Personal");
   expect(host.textContent).toContain("4 Nov 2026 · ₹2,499");
-  expect(host.textContent).not.toContain(
-    "Date and amount confirmed at checkout",
-  );
+  expect(host.textContent).not.toContain("Confirmed after payment");
 });
 
 it("confirms renewal at checkout when no server quote exists", async () => {
@@ -492,9 +490,7 @@ it("confirms renewal at checkout when no server quote exists", async () => {
   const row = [...host.querySelectorAll("dt")].find(
     (node) => node.textContent === "Next renewal",
   )!.parentElement!;
-  expect(row.textContent).toBe(
-    "Next renewalDate and amount confirmed at checkout",
-  );
+  expect(row.textContent).toBe("Next renewalConfirmed after payment");
   expect(row.textContent).not.toContain("₹0");
 });
 

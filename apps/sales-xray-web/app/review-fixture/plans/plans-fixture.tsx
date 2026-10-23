@@ -104,7 +104,10 @@ export function PayFixture() {
     router.push(`${FIXTURE_RETURN_PATH}?order=${encodeURIComponent(orderId)}`);
   };
   return (
-    <div className={plansStyles.page} style={{ padding: 16 }}>
+    <div
+      className={plansStyles.page}
+      style={{ padding: 16, boxSizing: "border-box" }}
+    >
       <Banner />
       <div className={`${plansStyles.panel} ${plansStyles.result}`}>
         <h2>Fictional payment page</h2>
@@ -145,6 +148,7 @@ export function ReturnFixture() {
         orderId={params.get("order")}
         client={fixtureBilling}
         plansHref="/review-fixture/plans"
+        billingHref="/review-fixture/plans?view=billing"
       />
     </WorkspaceAccessProvider>
   );

@@ -350,7 +350,7 @@ export function CheckoutDrawer({
               <dd>
                 {renewalDate && renewalAmount
                   ? `${renewalDate} · ${renewalAmount}`
-                  : "Date and amount confirmed at checkout"}
+                  : "Confirmed after payment"}
               </dd>
             </div>
             <div className={styles.total}>
