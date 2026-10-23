@@ -1,0 +1,26 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "3d8e6aed8fcf872ffc89d81eb50e8b6a4f598bc9",
+  "full": false,
+  "checks": [],
+  "changed_files": [
+    "apps/sales-xray-web/app/account-delete.test.tsx",
+    "apps/sales-xray-web/app/account-settings.tsx",
+    "apps/sales-xray-web/app/apps/apps-view.tsx",
+    "apps/sales-xray-web/app/leads/phone-onboarding.tsx",
+    "apps/sales-xray-web/app/leads/phone-setup-words.test.ts",
+    "apps/sales-xray-web/app/leads/phone-setup-words.ts",
+    "apps/sales-xray-web/app/leads/phone-setup.tsx",
+    "apps/sales-xray-web/app/purchase-policy.tsx",
+    "apps/sales-xray-web/app/settings/devices-play.test.tsx",
+    "apps/sales-xray-web/app/settings/sections.tsx",
+    "tests/database/test_lead_desk_call_submission_index_migration_postgresql.py"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [
+    "tests/database/test_lead_desk_call_submission_index_migration_postgresql.py"
+  ],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
