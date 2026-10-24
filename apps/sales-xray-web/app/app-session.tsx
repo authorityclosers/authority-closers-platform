@@ -12,6 +12,7 @@ import { PurchaseShell } from "./plans/purchase-shell";
 import styles from "./plans/plans.module.css";
 import { readSalesXrayWorkspaces } from "./sales-xray-workspaces";
 import { parseWorkspaceChoices, StandaloneStudio } from "./standalone-studio";
+import { WorkspaceLeadsPrompt } from "./workspace-leads-prompt";
 import {
   WorkspaceAccessProvider,
   type WorkspaceAccessValue,
@@ -163,7 +164,13 @@ export function AppSession({ children }: { children: ReactNode }) {
     return <PurchaseSession>{children}</PurchaseSession>;
   }
   if (isShellRoute(pathname)) {
-    return <StandaloneStudio>{children}</StandaloneStudio>;
+    return (
+      <>
+        <StandaloneStudio>{children}</StandaloneStudio>
+        {/* An empty workspace while another holds her leads: offer the switch (24 Oct 2026). */}
+        <WorkspaceLeadsPrompt />
+      </>
+    );
   }
   return <>{children}</>;
 }
