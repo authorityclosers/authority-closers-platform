@@ -296,13 +296,13 @@
 }
 
 /* ---------- Light report surface ----------
- * The report document stays light in every app theme until a dark report theme
- * passes the P6 matrix: report modules still carry fixed light colours. This
- * surface re-declares every token the dark block overrides (plus the tokens
- * that resolve var() at :root), so theme tokens never mix with fixed light text
- * inside a report. Values mirror :root; asserted by app/lightbox/tokens.test.ts.
+ * In light, the report document keeps its own light tokens, so theme tokens
+ * never mix with light text inside a report. Values mirror :root; asserted by
+ * app/lightbox/tokens.test.ts. In dark the report follows the app (owner,
+ * 24 Oct 2026: dark mode on every screen); its modules colour themselves
+ * from tokens, so nothing stays a light patch.
  */
-[data-lx-surface="light"] {
+:root:not([data-theme="dark"]) [data-lx-surface="light"] {
   color-scheme: light;
   --lx-ink: #0a0c10;
   --lx-ink-2: #1d212a;
@@ -365,22 +365,6 @@
     #6366f1 100%
   );
   --lx-gradient-primary: linear-gradient(135deg, #097870 0%, #0e7490 100%);
-}
-
-/* On a dark app ground the outermost light report reads as a deliberate sheet. */
-:root[data-theme="dark"]
-  [data-lx-surface="light"]:not([data-lx-surface="light"] *) {
-  padding: var(--lx-space-6);
-  border-radius: var(--lx-radius-lg);
-}
-
-/* On a phone the frame stays thin, so the paper fills the width as in light. */
-@media (max-width: 720px) {
-  :root[data-theme="dark"]
-    [data-lx-surface="light"]:not([data-lx-surface="light"] *) {
-    padding: var(--lx-space-2);
-    border-radius: var(--lx-radius-md);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -466,7 +450,7 @@
   --xr-on-mark: #ffffff;
 }
 
-[data-lx-surface="light"] {
+:root:not([data-theme="dark"]) [data-lx-surface="light"] {
   --xr-text: #0f1b2d;
   --xr-text-2: #33435a;
   --xr-muted: #56657c;

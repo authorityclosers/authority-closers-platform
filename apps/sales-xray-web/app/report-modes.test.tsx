@@ -235,7 +235,7 @@ it("shows report sections in one continuous reading layout without transcript se
   await render();
   expect(mode().dataset.view).toBe("reading");
   // The tab strip, section list and sections share one light report surface,
-  // whatever the app theme (tokens.css [data-lx-surface="light"]).
+  // in light; in dark it follows the app (tokens.css [data-lx-surface="light"]).
   expect(mode().getAttribute("data-lx-surface")).toBe("light");
   expect(sections()).toHaveLength(5);
   expect(sections().every((section) => !section.hidden)).toBe(true);
