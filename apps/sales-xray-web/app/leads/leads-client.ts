@@ -7,6 +7,7 @@
  */
 
 import { withDisplayNames } from "../display-name";
+import { sendWrite } from "../sync/write-queue";
 import { earlyFetch } from "../early-reads";
 import type { MeetingView, MoveOption } from "./pipeline/pipeline-client";
 
@@ -380,6 +381,8 @@ export class LeadsError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Not on the server yet, but kept on this phone and sent again (sync/write-queue.ts). */
+    readonly kept = false,
   ) {
     super(message);
     this.name = "LeadsError";
@@ -462,21 +465,36 @@ export function readNextAhead(pipeline?: string | null) {
   readAhead(nextPath(undefined, pipeline));
 }
 
+/** A seller's entry that didn't arrive yet but waits on this phone. */
+export const KEPT_MESSAGE =
+  "Not sent yet: Sales X-Ray isn't answering. It's kept on this phone and goes as soon as it answers.";
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  const write = (init.method ?? "GET").toUpperCase() !== "GET";
   // A write may change any lead: nothing read ahead is shown after it.
-  if ((init.method ?? "GET").toUpperCase() !== "GET") ahead.clear();
+  if (write) ahead.clear();
+  const options: RequestInit = {
+    credentials: "same-origin",
+    cache: "no-store",
+    redirect: "error",
+    ...init,
+    headers: { accept: "application/json", ...(init.headers ?? {}) },
+  };
   let response: Response;
   try {
-    // A read the Leads tab press already started (early-reads.ts) is
-    // taken as it lands; anything else goes to the network.
-    response = await earlyFetch(`${API}${path}`, {
-      credentials: "same-origin",
-      cache: "no-store",
-      redirect: "error",
-      ...init,
-      headers: { accept: "application/json", ...(init.headers ?? {}) },
-    });
+    if (write) {
+      // A seller's entry stays on this phone until the server has it, and
+      // goes again by itself (owner's P0, 24 Oct 2026: nothing lost).
+      const sent = await sendWrite(`${API}${path}`, options);
+      if (sent.kind === "kept") throw new LeadsError(KEPT_MESSAGE, 0, true);
+      response = sent.response;
+    } else {
+      // A read the Leads tab press already started (early-reads.ts) is
+      // taken as it lands; anything else goes to the network.
+      response = await earlyFetch(`${API}${path}`, options);
+    }
   } catch (error) {
+    if (error instanceof LeadsError) throw error;
     if (error instanceof DOMException && error.name === "AbortError")
       throw error;
     throw new LeadsError("Sales X-Ray isn't answering. Try again.", 0);

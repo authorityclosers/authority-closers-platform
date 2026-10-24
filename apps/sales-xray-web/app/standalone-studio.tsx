@@ -21,6 +21,7 @@ import { ConsentRenewal } from "./consent-renewal";
 import { PhoneOnboarding } from "./leads/phone-onboarding";
 import { PersistentShell } from "./shell/lightbox-shell";
 import { PlayMoveCard } from "./apps/play-move-card";
+import { WriteSync } from "./sync/write-sync";
 import { useTheme } from "./lightbox/theme-provider";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
@@ -283,6 +284,7 @@ function AppFrame({
       <ConsentRenewal />
       <PhoneOnboarding />
       <PlayMoveCard />
+      <WriteSync />
     </>
   );
 }
