@@ -415,7 +415,7 @@ def test_real_container_adversarial_credential_and_socket_probe(tmp_path):
         "assert os.geteuid() == 65534\n"
         'assert "UNCLASSIFIED_SECRET" not in os.environ\n'
         'assert not pathlib.Path("/var/run/docker.sock").exists()\n'
-        'assert not pathlib.Path("/etc/ac-release/schema-rehearsal.key").exists()\n'
+        'assert not pathlib.Path("/run/ac-release/schema-rehearsal.key").exists()\n'
         'assert not pathlib.Path("/opt/ac-schema-rehearsal").exists()\n'
         'try:\n    socket.create_connection(("192.0.2.1", 443), timeout=1)\n'
         'except OSError:\n    pass\nelse:\n    raise AssertionError("network escaped")\n'

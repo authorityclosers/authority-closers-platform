@@ -28,7 +28,8 @@ from pathlib import Path
 from uuid import uuid4
 
 CONFIG = Path("/etc/ac-release/schema-rehearsal.json")
-KEY = Path("/etc/ac-release/schema-rehearsal.key")
+# Runtime projection only; the canonical key stays in Infisical.
+KEY = Path("/run/ac-release/schema-rehearsal.key")
 RECEIPTS = Path("/var/lib/ac-release/schema-rehearsal-v2")
 SCRATCH = Path("/var/lib/ac-release/schema-rehearsal-scratch")
 SHA = re.compile(r"[0-9a-f]{40}")
