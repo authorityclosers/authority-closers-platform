@@ -663,6 +663,13 @@
   margin-left: 4px;
 }
 
+/* Opened from My work: the line the seller made, lit for a moment. */
+.history li[data-focus] {
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+  transition: background var(--sx-dur-fast, 150ms) ease;
+}
+
 .history li::before {
   content: "";
   position: absolute;
@@ -4566,6 +4573,13 @@ a.repName {
 
 .filterGroup {
   display: grid;
+  gap: 8px;
+}
+
+/* One question's answers as chips that wrap (Any first). */
+.filterChoices {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

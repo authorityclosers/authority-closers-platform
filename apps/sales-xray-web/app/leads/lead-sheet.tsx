@@ -919,7 +919,10 @@ function heardLine(call: NativeCall): string {
 
 /* ---------- History ---------- */
 
-function eventText(event: LeadEvent): { title: string; detail?: string } {
+export function eventText(event: LeadEvent): {
+  title: string;
+  detail?: string;
+} {
   const who = event.actor_name ?? "The desk";
   switch (event.kind) {
     case "captured":
@@ -1197,6 +1200,7 @@ export function History({
   chats = [],
   brief = null,
   currentLabel = null,
+  focusAt = null,
 }: {
   events: LeadEvent[];
   onChanged?: (next: LeadDetail) => void;
@@ -1206,8 +1210,22 @@ export function History({
   brief?: ReactNode;
   /** The lead's stage now: the path of stages so far ends there (Lead OS). */
   currentLabel?: string | null;
+  /** Opened from My work: the line made at this time is scrolled to and lit. */
+  focusAt?: string | null;
 }) {
   const [filter, setFilter] = useState<TimelineFilter>("all");
+  const list = useRef<HTMLOListElement>(null);
+  useEffect(() => {
+    if (!focusAt) return;
+    const line = [
+      ...(list.current?.querySelectorAll<HTMLElement>("li[data-at]") ?? []),
+    ].find((item) => item.dataset.at === focusAt);
+    if (!line) return;
+    line.scrollIntoView?.({ block: "center", behavior: "smooth" });
+    line.dataset.focus = "";
+    const timer = window.setTimeout(() => delete line.dataset.focus, 2600);
+    return () => window.clearTimeout(timer);
+  }, [focusAt, events.length]);
   const briefAt = events.findIndex(
     (event) => event.kind === "call" && event.submission_id,
   );
@@ -1235,7 +1253,7 @@ export function History({
       {events.length > 3 ? (
         <TimelineFilters value={filter} onChange={setFilter} />
       ) : null}
-      <ol className={styles.history} aria-label="History">
+      <ol className={styles.history} aria-label="History" ref={list}>
         {items.map((item, position) => {
           const day = dayLabel(item.at);
           const newDay =
@@ -1278,6 +1296,7 @@ export function History({
               <li
                 key={`${event.at}-${index}`}
                 data-kind={event.kind}
+                data-at={event.at}
                 data-missed={
                   event.direction === "missed" || event.direction === "rejected"
                     ? true
@@ -1944,6 +1963,7 @@ function NoteBox({
     <div className={styles.noteBox}>
       <div className={styles.noteRow}>
         <textarea
+          id={`lead-note-${leadId}`}
           aria-label="Add a note"
           rows={1}
           value={note}
@@ -1974,6 +1994,7 @@ export function LeadCard({
   phoneCall = null,
   intent = null,
   afterCall = null,
+  focusAt = null,
 }: {
   detail: LeadDetail;
   me: Me | null;
@@ -1989,7 +2010,13 @@ export function LeadCard({
    * calling the recording step ends with the next lead.
    */
   afterCall?: { step: "outcome" | "recording"; onNext?: () => void } | null;
+  /** Opened from My work: the history line made at this time. */
+  focusAt?: string | null;
 }) {
+  // The newest note typed on the lead, else the note with its next follow-up.
+  const lastNote =
+    detail.events.find((event) => event.kind === "note" && event.note)?.note ??
+    detail.next_action_note;
   const { lead } = detail;
   const setup = useContext(MessageSetup);
   const waitingRecording = usePendingRecording(lead.lead_id);
@@ -2180,8 +2207,8 @@ export function LeadCard({
           onMoved={onChanged}
         />
       ) : null}
-      {detail.next_action_note ? (
-        <p className={styles.nextNote}>Last note: {detail.next_action_note}</p>
+      {lastNote ? (
+        <p className={styles.nextNote}>Last note: {lastNote}</p>
       ) : null}
 
       <div className={styles.actions} data-contact="">
@@ -2243,6 +2270,23 @@ export function LeadCard({
               <small aria-hidden="true">SMS</small>
             </button>
           </>
+        ) : null}
+        {detail.can_edit ? (
+          // A note on its own, not only after a call (owner, 24 Oct 2026).
+          <button
+            type="button"
+            className={styles.contactIcon}
+            data-channel="note"
+            aria-label="Add a note"
+            onClick={() => {
+              const box = document.getElementById(`lead-note-${lead.lead_id}`);
+              box?.scrollIntoView?.({ block: "center", behavior: "smooth" });
+              box?.focus({ preventScroll: true });
+            }}
+          >
+            <NotebookPen size={22} aria-hidden="true" />
+            <small aria-hidden="true">Note</small>
+          </button>
         ) : null}
         {detail.email ? (
           <a className={styles.actionButton} href={`mailto:${detail.email}`}>
@@ -2361,6 +2405,7 @@ export function LeadCard({
           chats={chats}
           brief={<LastCallBrief detail={detail} onChanged={onChanged} />}
           currentLabel={lead.stage_label}
+          focusAt={focusAt}
         />
       </section>
 
@@ -2656,11 +2701,14 @@ export function LeadSheet({
   intent = null,
   onNext,
   pipeline = null,
+  focusAt = null,
 }: {
   leadId: string | null;
   me: Me | null;
   onClose: () => void;
   onChanged: () => void;
+  /** Opened from My work: the history line made at this time. */
+  focusAt?: string | null;
   /** Do this as soon as the lead is open (swipe, hold, an alert's Call). */
   intent?: LeadIntent | null;
   /** After an outcome is saved: call the next lead on the desk. */
@@ -2792,6 +2840,7 @@ export function LeadSheet({
               onChanged={update}
               phoneCall={phoneCall}
               intent={intent}
+              focusAt={focusAt}
               afterCall={
                 asking || intent === "log" ? { step: "outcome" } : null
               }

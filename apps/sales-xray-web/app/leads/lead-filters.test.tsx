@@ -103,7 +103,12 @@ it("a seller sees no whose-leads choice, and Clear all clears", async () => {
   );
   expect(document.body.textContent).not.toContain("Whose leads");
   await act(async () => button("Clear all").click());
-  expect(onApply).toHaveBeenCalledWith({ who: "mine", pipeline: null, q: "" });
+  expect(onApply).toHaveBeenCalledWith({
+    who: "mine",
+    pipeline: null,
+    q: "",
+    more: {},
+  });
 });
 
 it("each filter that is on has its own remove", async () => {
@@ -135,4 +140,68 @@ it("each filter that is on has its own remove", async () => {
       .click(),
   );
   expect(onChange).toHaveBeenCalledWith({ ...on, who: "team" });
+});
+
+// Owner, 24 Oct 2026: "filters and sorting both on mobile as well as PC".
+it("filters by the next follow-up and the last contact, and sorts the whole list", async () => {
+  const onApply = vi.fn();
+  await act(async () =>
+    root.render(
+      <FilterSheet
+        open
+        onClose={() => undefined}
+        filters={NONE}
+        defaultWho="team"
+        canPickWho
+        pipes={[]}
+        onApply={onApply}
+      />,
+    ),
+  );
+  await act(async () => button("Due today").click());
+  await act(async () => button("Never talked").click());
+  await act(async () => button("Name").click());
+  await act(async () => button("Show leads").click());
+  expect(onApply).toHaveBeenCalledWith({
+    ...NONE,
+    more: { due: "today", contact: "never", sort: "name", order: null },
+  });
+  expect(
+    filtersOn({ ...NONE, more: { due: "today", sort: "name" } }, "team"),
+  ).toBe(1);
+});
+
+it("the sort and the new filters show as chips that remove themselves", async () => {
+  const onChange = vi.fn();
+  const on: LeadFilters = {
+    ...NONE,
+    more: { due: "late", source: "csv", sort: "name", order: "desc" },
+  };
+  await act(async () =>
+    root.render(
+      <ActiveFilters
+        filters={on}
+        defaultWho="team"
+        pipes={PIPES}
+        onChange={onChange}
+      />,
+    ),
+  );
+  const labels = [...host.querySelectorAll("button")].map((item) =>
+    item.getAttribute("aria-label"),
+  );
+  expect(labels).toEqual([
+    "Remove filter Late",
+    "Remove filter File upload",
+    "Remove filter By name, reversed",
+  ]);
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Remove filter Late"]')!
+      .click(),
+  );
+  expect(onChange).toHaveBeenCalledWith({
+    ...on,
+    more: { ...on.more, due: null },
+  });
 });

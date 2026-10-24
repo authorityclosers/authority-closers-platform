@@ -632,6 +632,38 @@ export function readNext(
   );
 }
 
+/** The list's sort and filters, answered by the server over every lead, not one
+ *  page (owner, 24 Oct 2026: "filters and sorting both on mobile as well as PC"). */
+export type ListSort = "next_action" | "last_contact" | "name" | "created";
+export type ListDue = "late" | "today" | "week" | "none";
+export type ListSince = "today" | "week" | "month" | "never";
+export type ListMade = "today" | "week" | "month";
+export type ListMore = {
+  source?: string | null;
+  due?: ListDue | null;
+  contact?: ListSince | null;
+  created?: ListMade | null;
+  sort?: ListSort | null;
+  order?: "asc" | "desc" | null;
+};
+
+/** The address parameters of the list's sort and filters, in a fixed order. */
+export function moreParams(
+  more: ListMore | null | undefined,
+): [string, string][] {
+  if (!more) return [];
+  return (
+    [
+      ["source", more.source],
+      ["due", more.due],
+      ["contact", more.contact],
+      ["created", more.created],
+      ["sort", more.sort],
+      ["order", more.sort ? more.order : null],
+    ] as [string, string | null | undefined][]
+  ).filter((pair): pair is [string, string] => !!pair[1]);
+}
+
 export function readLeads(
   {
     scope,
@@ -641,6 +673,7 @@ export function readLeads(
     test = false,
     owner,
     pipeline,
+    more,
   }: {
     scope: "mine" | "team" | "unassigned";
     stage?: string | null;
@@ -652,10 +685,13 @@ export function readLeads(
     owner?: string;
     /** One pipeline's leads; none: every pipeline's. */
     pipeline?: string | null;
+    /** Sort and filters over the whole list. */
+    more?: ListMore | null;
   },
   signal?: AbortSignal,
 ) {
   const params = new URLSearchParams({ scope });
+  for (const [key, value] of moreParams(more)) params.set(key, value);
   if (owner) params.set("owner", owner);
   if (pipeline) params.set("pipeline", pipeline);
   if (stage) params.set("stage", stage);
@@ -663,6 +699,31 @@ export function readLeads(
   if (offset) params.set("offset", String(offset));
   if (test) params.set("test", "only");
   return request<LeadPage>(`/leads?${params}`, { signal });
+}
+
+/** My work: what the seller did, today, yesterday or this week. */
+export type WorkDay = "today" | "yesterday" | "week";
+export type ActivityItem = {
+  event_id: string;
+  lead_id: string;
+  lead_name: string;
+  stage_label: string | null;
+  event: LeadEvent;
+};
+export type ActivityPage = {
+  items: ActivityItem[];
+  next_before: string | null;
+  counts: Record<string, number>;
+};
+
+export function readActivity(
+  day: WorkDay,
+  before: string | null = null,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({ day });
+  if (before) params.set("before", before);
+  return request<ActivityPage>(`/activity?${params}`, { signal });
 }
 
 /** At most this many leads go in one delete. */
