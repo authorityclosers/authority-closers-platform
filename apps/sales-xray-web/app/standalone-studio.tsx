@@ -38,8 +38,8 @@ import { CallsSkeleton } from "./calls-skeleton";
 import { OrganisationPageSkeleton } from "./organisation/organisation-skeleton";
 import { CoachingSkeleton } from "./coaching/coaching-skeleton";
 import { PersonSkeleton } from "./organisation/people/person-skeleton";
-import { InvitesSkeleton } from "./organisation/invites/invites-view";
-import { InsightsSkeleton } from "./organisation/insights/insights-view";
+import { InvitesSkeleton } from "./organisation/invites/invites-skeleton";
+import { InsightsSkeleton } from "./organisation/insights/insights-skeleton";
 import { SettingsSkeleton } from "./settings/settings-skeleton";
 import { ConnectionNotice } from "./connection-notice";
 import {

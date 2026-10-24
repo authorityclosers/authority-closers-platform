@@ -64,6 +64,7 @@ import {
   REPORT_PROBLEM_EVENT,
   openBugReport,
   reporterMounted,
+  takeWaitingReport,
   type ReportAbout,
 } from "./open";
 import { flush, keepNow, type OutboxItem } from "./outbox";
@@ -670,6 +671,14 @@ export function BugReportHost() {
       }, 280);
     };
     window.addEventListener(REPORT_PROBLEM_EVENT, show);
+    // Asked for before this loaded (the frame loads it once the page is quiet).
+    const waiting = takeWaitingReport();
+    if (waiting)
+      show(
+        new CustomEvent<ReportAbout | null>(REPORT_PROBLEM_EVENT, {
+          detail: waiting.about,
+        }),
+      );
     return () => window.removeEventListener(REPORT_PROBLEM_EVENT, show);
   }, []);
   useCommandSource("bug-report", COMMANDS);
