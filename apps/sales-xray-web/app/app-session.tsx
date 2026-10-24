@@ -165,11 +165,11 @@ export function AppSession({ children }: { children: ReactNode }) {
   }
   if (isShellRoute(pathname)) {
     return (
-      <>
-        <StandaloneStudio>{children}</StandaloneStudio>
-        {/* An empty workspace while another holds her leads: offer the switch (24 Oct 2026). */}
+      <StandaloneStudio>
+        {children}
+        {/* Inside the frame, once signed in: an empty workspace while another holds her leads offers the switch (24 Oct 2026). */}
         <WorkspaceLeadsPrompt />
-      </>
+      </StandaloneStudio>
     );
   }
   return <>{children}</>;

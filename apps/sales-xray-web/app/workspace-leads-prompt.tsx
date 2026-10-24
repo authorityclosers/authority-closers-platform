@@ -7,15 +7,15 @@
  * were wiped). A corner card with one Switch, once per workspace per tab.
  * Sign-in now opens the right workspace on the server; this catches the rest
  * (an older app, a deliberate switch, an invitation accepted later).
+ * Rendered inside the app frame: it reads the signed-in workspace from the
+ * frame's access context and stays silent until that is ready.
  */
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 
 import { dropEarlyReads } from "./early-reads";
 import { dismissNotice, notify } from "./notice-center";
-import {
-  readSalesXrayWorkspaces,
-  type SalesXrayWorkspaceChoices,
-} from "./sales-xray-workspaces";
+import type { SalesXrayWorkspace } from "./sales-xray-workspaces";
+import { useWorkspaceAccess } from "./workspace-access";
 
 const NOTICE = "workspace-leads";
 const SHOWN = "sx.workspaceLeadsPrompt";
@@ -42,14 +42,14 @@ export type LeadsOffer = { tenantId: string; name: string; leads: number };
 
 /** The workspace to offer, or null: the open one has leads, or no other one does. */
 export function leadsOffer(
-  directory: SalesXrayWorkspaceChoices,
+  current: string | null,
+  workspaces: readonly SalesXrayWorkspace[],
   counts: Map<string, number>,
 ): LeadsOffer | null {
-  const current = directory.selected_tenant_id;
-  if (current === null || directory.workspaces.length < 2) return null;
+  if (current === null || workspaces.length < 2) return null;
   if ((counts.get(current) ?? 0) > 0) return null;
   let best: LeadsOffer | null = null;
-  for (const workspace of directory.workspaces) {
+  for (const workspace of workspaces) {
     if (workspace.tenant_id === current || !workspace.sales_xray_enabled)
       continue;
     const leads = counts.get(workspace.tenant_id) ?? 0;
@@ -97,17 +97,27 @@ async function switchTo(tenantId: string) {
 }
 
 export function WorkspaceLeadsPrompt() {
+  const access = useWorkspaceAccess();
+  const ready =
+    access?.status === "ready" &&
+    access.authenticated === true &&
+    access.context !== null;
+  const current = ready ? (access.context?.tenantId ?? null) : null;
+  const workspaces = ready ? access.workspaces : undefined;
+  // One look per open workspace while mounted, however often the frame renders.
+  const looked = useRef<string | null>(null);
   useEffect(() => {
+    if (current === null || !workspaces || workspaces.length < 2) return;
+    if (looked.current === current) return;
+    looked.current = current;
+    try {
+      if (window.sessionStorage.getItem(SHOWN) === current) return;
+    } catch {
+      // No storage: ask at most once per page.
+    }
     const control = new AbortController();
+    let settled = false;
     void (async () => {
-      const directory = await readSalesXrayWorkspaces(control.signal);
-      const current = directory.selected_tenant_id;
-      if (current === null || directory.workspaces.length < 2) return;
-      try {
-        if (window.sessionStorage.getItem(SHOWN) === current) return;
-      } catch {
-        // No storage: ask at most once per page.
-      }
       const response = await fetch("/v1/me/sales-xray-workspaces/leads", {
         method: "GET",
         credentials: "same-origin",
@@ -118,7 +128,7 @@ export function WorkspaceLeadsPrompt() {
       });
       if (!response.ok) return;
       const counts = parseWorkspaceLeads(await response.json());
-      const offer = counts ? leadsOffer(directory, counts) : null;
+      const offer = counts ? leadsOffer(current, workspaces, counts) : null;
       if (!offer || control.signal.aborted) return;
       try {
         window.sessionStorage.setItem(SHOWN, current);
@@ -133,8 +143,16 @@ export function WorkspaceLeadsPrompt() {
         action: { label: "Switch", run: () => void switchTo(offer.tenantId) },
         dismissLabel: "Not now",
       });
-    })().catch(() => undefined);
-    return () => control.abort();
-  }, []);
+    })()
+      .catch(() => undefined)
+      .finally(() => {
+        settled = true;
+      });
+    return () => {
+      control.abort();
+      // Cut short (a remount, a re-render): look again next time.
+      if (!settled) looked.current = null;
+    };
+  }, [current, workspaces]);
   return null;
 }

@@ -6,11 +6,11 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const notices = vi.hoisted(() => ({ notify: vi.fn(), dismissNotice: vi.fn() }));
 vi.mock("./notice-center", () => notices);
 vi.mock("./early-reads", () => ({ dropEarlyReads: vi.fn() }));
-const directory = vi.hoisted(() => ({ value: null as unknown }));
-vi.mock("./sales-xray-workspaces", () => ({
-  readSalesXrayWorkspaces: async () => directory.value,
-}));
 
+import {
+  WorkspaceAccessContext,
+  type WorkspaceAccessValue,
+} from "./workspace-access";
 import {
   WorkspaceLeadsPrompt,
   leadsOffer,
@@ -22,31 +22,39 @@ const PERSONAL = "00000000-0000-4000-8000-000000000001";
 const ORG = "00000000-0000-4000-8000-000000000002";
 const OTHER = "00000000-0000-4000-8000-000000000003";
 
-const choices = (selected: string | null) => ({
-  selected_tenant_id: selected,
-  workspaces: [
-    {
-      tenant_id: PERSONAL,
-      kind: "personal" as const,
-      name: "Personal",
-      role: null,
-      sales_xray_enabled: true,
-    },
-    {
-      tenant_id: ORG,
-      kind: "organisation" as const,
-      name: "Fictional Homes",
-      role: "member" as const,
-      sales_xray_enabled: true,
-    },
-    {
-      tenant_id: OTHER,
-      kind: "organisation" as const,
-      name: "Fictional Labs",
-      role: "admin" as const,
-      sales_xray_enabled: true,
-    },
-  ],
+const WORKSPACES = [
+  {
+    tenant_id: PERSONAL,
+    kind: "personal" as const,
+    name: "Personal",
+    role: null,
+    sales_xray_enabled: true,
+  },
+  {
+    tenant_id: ORG,
+    kind: "organisation" as const,
+    name: "Fictional Homes",
+    role: "member" as const,
+    sales_xray_enabled: true,
+  },
+  {
+    tenant_id: OTHER,
+    kind: "organisation" as const,
+    name: "Fictional Labs",
+    role: "admin" as const,
+    sales_xray_enabled: true,
+  },
+];
+
+const signedIn = (
+  tenantId: string,
+  workspaces = WORKSPACES,
+): WorkspaceAccessValue => ({
+  status: "ready",
+  authenticated: true,
+  workspaces,
+  context: { personId: "p", sessionId: "s", tenantId },
+  retry: () => {},
 });
 
 (
@@ -69,22 +77,33 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
+async function show(access: WorkspaceAccessValue | null) {
+  await act(async () =>
+    root.render(
+      <WorkspaceAccessContext.Provider value={access}>
+        <WorkspaceLeadsPrompt />
+      </WorkspaceAccessContext.Provider>,
+    ),
+  );
+  await act(async () => new Promise((done) => setTimeout(done, 0)));
+}
+
 it("offers the workspace with the most of her leads when the open one has none", () => {
   const counts = new Map([
     [PERSONAL, 0],
     [ORG, 383],
     [OTHER, 12],
   ]);
-  const offer = leadsOffer(choices(PERSONAL), counts);
+  const offer = leadsOffer(PERSONAL, WORKSPACES, counts);
   expect(offer).toEqual({ tenantId: ORG, name: "Fictional Homes", leads: 383 });
   expect(offerWords(offer!)).toBe("You have 383 leads in Fictional Homes");
   expect(offerWords({ ...offer!, leads: 1 })).toBe(
     "You have 1 lead in Fictional Homes",
   );
   // Nothing to say when the open workspace has leads, or no other one does.
-  expect(leadsOffer(choices(ORG), counts)).toBeNull();
-  expect(leadsOffer(choices(PERSONAL), new Map([[PERSONAL, 0]]))).toBeNull();
-  expect(leadsOffer(choices(null), counts)).toBeNull();
+  expect(leadsOffer(ORG, WORKSPACES, counts)).toBeNull();
+  expect(leadsOffer(PERSONAL, WORKSPACES, new Map([[PERSONAL, 0]]))).toBeNull();
+  expect(leadsOffer(null, WORKSPACES, counts)).toBeNull();
 });
 
 it("reads the counts strictly", () => {
@@ -98,7 +117,6 @@ it("reads the counts strictly", () => {
 });
 
 it("shows one corner card with Switch, which selects the workspace and reloads", async () => {
-  directory.value = choices(PERSONAL);
   const calls: { url: string; init?: RequestInit }[] = [];
   vi.stubGlobal(
     "fetch",
@@ -118,8 +136,7 @@ it("shows one corner card with Switch, which selects the workspace and reloads",
     .spyOn(window.location, "reload")
     .mockImplementation(() => {});
 
-  await act(async () => root.render(<WorkspaceLeadsPrompt />));
-  await act(async () => new Promise((done) => setTimeout(done, 0)));
+  await show(signedIn(PERSONAL));
 
   expect(notices.notify).toHaveBeenCalledTimes(1);
   const notice = notices.notify.mock.calls[0][0];
@@ -139,20 +156,22 @@ it("shows one corner card with Switch, which selects the workspace and reloads",
   notices.notify.mockReset();
   await act(async () => root.unmount());
   root = createRoot(host);
-  await act(async () => root.render(<WorkspaceLeadsPrompt />));
-  await act(async () => new Promise((done) => setTimeout(done, 0)));
+  await show(signedIn(PERSONAL));
   expect(notices.notify).not.toHaveBeenCalled();
 });
 
-it("stays quiet with a single workspace", async () => {
-  directory.value = {
-    ...choices(PERSONAL),
-    workspaces: choices(PERSONAL).workspaces.slice(0, 1),
-  };
+it("reads nothing until signed in with a workspace open, or with a single workspace", async () => {
   const fetcher = vi.fn();
   vi.stubGlobal("fetch", fetcher);
-  await act(async () => root.render(<WorkspaceLeadsPrompt />));
-  await act(async () => new Promise((done) => setTimeout(done, 0)));
+  await show(null);
+  await show({
+    status: "unauthenticated",
+    authenticated: false,
+    context: null,
+    retry: () => {},
+  });
+  await show({ ...signedIn(PERSONAL), status: "chooser", context: null });
+  await show(signedIn(PERSONAL, WORKSPACES.slice(0, 1)));
   expect(fetcher).not.toHaveBeenCalled();
   expect(notices.notify).not.toHaveBeenCalled();
 });
