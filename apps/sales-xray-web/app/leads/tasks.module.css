@@ -1,0 +1,309 @@
+/* Tasks: the seller's promises, Overdue / Today / Upcoming. Phones first: one
+   list, rows divided by hairlines; the due on the right, Later and Done beside
+   it at a thumb's size. Remind's sheet on the lead. Tokens only. */
+
+.tasks,
+.tasks *,
+.remind,
+.remind *,
+.leadTasks,
+.leadTasks * {
+  box-sizing: border-box;
+}
+
+.tasks {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.tasks :is(ol, p),
+.leadTasks :is(ol, p) {
+  margin: 0;
+}
+
+.list {
+  display: grid;
+  padding: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  list-style: none;
+  overflow: hidden;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--sx-hairline, var(--sx-line));
+}
+
+.item {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.row {
+  display: grid;
+  width: 100%;
+  min-height: 56px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 8px 12px 16px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.row:active {
+  background: var(--sx-fill-soft);
+}
+
+.row:focus-visible,
+.act:focus-visible,
+.choice:focus-visible,
+.kind:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+}
+
+.icon[data-kind="call_back"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.icon[data-kind="meeting"] {
+  background: color-mix(in srgb, var(--sx-warn) 18%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+.text {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+/* A name wraps to two lines, never cut mid-word on a phone. */
+.text strong {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+.text span {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.text small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.row time {
+  padding-top: 2px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.row time[data-late] {
+  color: var(--sx-bad);
+  font-weight: 700;
+}
+
+.acts {
+  display: flex;
+  gap: 4px;
+  padding-right: 8px;
+}
+
+.act {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--sx-line);
+  border-radius: 50%;
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.act[data-done] {
+  border-color: var(--sx-accent);
+  color: var(--sx-accent);
+}
+
+.act:active {
+  background: var(--sx-fill-soft);
+}
+
+.skeleton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.choices {
+  display: grid;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+
+.choice {
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md, 12px);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.choice[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+/* ---------- Remind (on the lead) ---------- */
+
+.remind {
+  display: grid;
+  gap: 14px;
+  padding: 4px 0 8px;
+}
+
+.remind h3 {
+  margin: 0 0 6px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field > span {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.error {
+  margin: 0;
+  color: var(--sx-bad);
+  font-size: var(--sx-text-sm);
+}
+
+.kinds,
+.times {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kind {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.kind[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  font-weight: 700;
+}
+
+.input {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md, 12px);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+}
+
+.input:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+textarea.input {
+  min-height: 72px;
+  resize: vertical;
+}
+
+.save {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---------- The lead's open tasks (on the lead) ---------- */
+
+.leadTasks {
+  display: grid;
+  gap: 8px;
+}
+
+.leadTasks h3 {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+@media (min-width: 900px) {
+  .times .kind {
+    min-height: 36px;
+  }
+}
+
+.row[data-static] {
+  cursor: default;
+}

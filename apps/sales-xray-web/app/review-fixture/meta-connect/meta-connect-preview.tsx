@@ -28,8 +28,25 @@ const REVIEW = {
   state: "pending",
   since: "2026-10-19",
   worksNow:
-    "Until Meta approves Sales Xray, only Pages run by people added to our Meta app as testers can connect. Ask us to add you as a tester.",
+    "Until Meta approves Sales Xray, only people added to our Meta app as testers can connect a Page, and only test leads come through. Leads from your ads can come in now through a Website form in Leads.",
   after: "Once Meta approves it, any business can connect its own Pages here.",
+};
+// connected_apps.meta_blockers and messaging_blockers, as the back end words them.
+const AD_LEADS_WAIT = {
+  short: "Meta approval pending: test leads only for now",
+  reason:
+    "Meta is still reviewing Sales Xray (sent 19 Oct). Until it approves, only test leads come through, not leads from your ads.",
+  fix: "Bring your ad leads in now: add a Website form in Leads and send your Facebook lead ads to it from a tool such as Make, Pabbly or Zapier.",
+  page: "/leads?tab=sources",
+  action: "Add a Website form",
+};
+const MESSAGES_WAIT = {
+  short: "Meta approval pending: our testers only for now",
+  reason:
+    "Meta hasn't approved Sales Xray for messages yet. Until it does, only people on our Meta app can connect, and only their messages come in.",
+  fix: "To try it now, ask us to add you to our Meta app. Your customers' messages come in once Meta approves.",
+  page: null,
+  action: null,
 };
 
 const at = (minutes: number) =>
@@ -103,6 +120,7 @@ function health(state: State) {
             ]
           : [],
         review: REVIEW,
+        blockers: [AD_LEADS_WAIT],
       },
       {
         app: "google_ads",
@@ -130,6 +148,7 @@ function health(state: State) {
         configured: true,
         connect: { method: "GET", path: "/v1/lead-desk/whatsapp/start" },
         tests: [],
+        blockers: [MESSAGES_WAIT],
       },
       {
         app: "phone_calls",

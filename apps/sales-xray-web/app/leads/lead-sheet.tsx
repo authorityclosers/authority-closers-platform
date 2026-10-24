@@ -8,6 +8,7 @@
  */
 
 import {
+  BellPlus,
   CheckCircle2,
   History as HistoryIcon,
   Mail,
@@ -34,6 +35,7 @@ import {
   useId,
   useRef,
   useState,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 
@@ -70,6 +72,9 @@ import {
   type Stage,
 } from "./leads-client";
 import { LastCallBrief } from "./call-brief-card";
+import { InAppCallHint } from "./call-hint";
+import { LeadTasks } from "./lead-tasks";
+import { RemindSheet } from "./remind-sheet";
 import {
   chatDays,
   chatDayTitle,
@@ -2022,6 +2027,8 @@ export function LeadCard({
   const waitingRecording = usePendingRecording(lead.lead_id);
   const [permits, setPermits] = useState(false);
   const [calling, setCalling] = useState(false);
+  // Remind: a task on this lead (work-memory engine).
+  const [reminding, setReminding] = useState(false);
   const [messaging, setMessaging] = useState<{
     round: number;
     preset: string | null;
@@ -2086,6 +2093,13 @@ export function LeadCard({
       window.location.href = `tel:${detail.phone}`;
     }
   };
+  // A tel: link's tap: the app places it, a browser follows the link.
+  const callHere = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (inPhoneApp()) {
+      event.preventDefault();
+      void callFromApp(false);
+    } else rememberCall(lead.lead_id);
+  };
   // Once per opening: the intent came with this lead.
   const acted = useRef(false);
   const act = useRef<() => void>(() => undefined);
@@ -2127,7 +2141,11 @@ export function LeadCard({
           {
             label: "Phone",
             value: (
-              <a href={`tel:${detail.phone}`}>{displayPhone(detail.phone)}</a>
+              // The number calls through the app too: a call from the dialler
+              // is never seen (builder, 24 Oct 2026).
+              <a href={`tel:${detail.phone}`} onClick={callHere}>
+                {displayPhone(detail.phone)}
+              </a>
             ),
           },
         ]
@@ -2198,6 +2216,7 @@ export function LeadCard({
       <p className={styles.why}>{whyLine(lead)}</p>
       <SuggestedStage detail={detail} onChanged={onChanged} />
       <MeetingCard detail={detail} onChanged={onChanged} />
+      <LeadTasks detail={detail} onChanged={onChanged} />
       {canMove ? (
         <StageSheet
           open={staging}
@@ -2217,12 +2236,7 @@ export function LeadCard({
             className={styles.callButton}
             href={`tel:${detail.phone}`}
             aria-busy={calling || undefined}
-            onClick={(event) => {
-              if (inPhoneApp()) {
-                event.preventDefault();
-                void callFromApp(false);
-              } else rememberCall(lead.lead_id);
-            }}
+            onClick={callHere}
           >
             <Phone size={20} aria-hidden="true" />
             <span>
@@ -2288,6 +2302,19 @@ export function LeadCard({
             <small aria-hidden="true">Note</small>
           </button>
         ) : null}
+        {detail.can_edit ? (
+          // A promise with a time: Tasks lists it and the phone reminds once.
+          <button
+            type="button"
+            className={styles.contactIcon}
+            data-channel="remind"
+            aria-label="Remind me"
+            onClick={() => setReminding(true)}
+          >
+            <BellPlus size={22} aria-hidden="true" />
+            <small aria-hidden="true">Remind</small>
+          </button>
+        ) : null}
         {detail.email ? (
           <a className={styles.actionButton} href={`mailto:${detail.email}`}>
             <Mail size={18} aria-hidden="true" />
@@ -2295,6 +2322,19 @@ export function LeadCard({
           </a>
         ) : null}
       </div>
+      {detail.phone ? <InAppCallHint /> : null}
+      {detail.can_edit ? (
+        <RemindSheet
+          open={reminding}
+          leadId={lead.lead_id}
+          leadName={lead.name}
+          onClose={() => setReminding(false)}
+          onSaved={() => {
+            setReminding(false);
+            readLead(lead.lead_id).then(onChanged, () => undefined);
+          }}
+        />
+      ) : null}
       {permits ? (
         <section className={styles.permits} aria-label="Allow calling">
           <h3>Call from Sales X-Ray</h3>

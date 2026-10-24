@@ -497,44 +497,65 @@ it("keeps invoices scoped to the workspace account and reports failed reads", as
 });
 
 it("keeps plan, usage, subscription facts and checkout usable while invoices load or fail", async () => {
-  const rejectInvoices: Array<(error: Error) => void> = [];
-  const checkout = vi.fn(fixtureBilling.checkout);
-  const client = {
-    ...fixtureBilling,
-    checkout,
-    readInvoices: () =>
-      new Promise<never>((_resolve, reject) => rejectInvoices.push(reject)),
-  };
-  await render(
-    <>
-      <PlansPurchase client={client} />
-      <AccountBilling client={client} />
-    </>,
-  );
-  await until(
-    () =>
-      text().includes("Current: Trial") &&
-      text().includes("62 min (1 h 2 min) left"),
-  );
-  expect(text()).toContain("No renewal scheduled");
-  expect(text()).toContain("Loading invoices");
-  expect(text()).not.toContain("No invoices or receipts yet");
-  await click("Get Personal");
-  await click("Review total");
-  await until(() => text().includes("Total confirmed"));
-  await act(async () =>
-    rejectInvoices.forEach((reject) => reject(new Error("invoice outage"))),
-  );
-  await until(() =>
-    text().includes("Invoices and receipts are currently unavailable"),
-  );
-  expect(text()).toContain("Current: Trial");
-  expect(text()).toContain("62 min (1 h 2 min) left");
-  expect(text()).toContain("No renewal scheduled");
-  expect(text()).not.toContain("Billing details could not be loaded");
-  await click("Pay ₹2,499 with Razorpay");
-  expect(checkout).toHaveBeenCalledOnce();
-  expect(openHostedCheckout).toHaveBeenCalledOnce();
+  // Plans and Billing each read the plan, usage and subscription behind the
+  // fixture's 250 ms waits. On the real clock the plans line alone met the old
+  // wait while Billing's reads were still out, so a slow runner checked
+  // Billing too early (2 of 3 full CI runs, 24 Oct 2026). The clock is fixed
+  // and every read is awaited before each check.
+  vi.useFakeTimers({
+    toFake: [
+      "setTimeout",
+      "clearTimeout",
+      "setInterval",
+      "clearInterval",
+      "Date",
+    ],
+  });
+  vi.setSystemTime(new Date("2026-10-24T09:00:00Z"));
+  const settle = () =>
+    act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+  try {
+    const rejectInvoices: Array<(error: Error) => void> = [];
+    const checkout = vi.fn(fixtureBilling.checkout);
+    const client = {
+      ...fixtureBilling,
+      checkout,
+      readInvoices: () =>
+        new Promise<never>((_resolve, reject) => rejectInvoices.push(reject)),
+    };
+    await render(
+      <>
+        <PlansPurchase client={client} />
+        <AccountBilling client={client} />
+      </>,
+    );
+    await settle();
+    expect(text()).toContain("Current: Trial");
+    expect(text()).toContain("62 min (1 h 2 min) left");
+    expect(text()).toContain("No renewal scheduled");
+    expect(text()).toContain("Loading invoices");
+    expect(text()).not.toContain("No invoices or receipts yet");
+    await click("Get Personal");
+    await click("Review total");
+    await settle();
+    expect(text()).toContain("Total confirmed");
+    await act(async () =>
+      rejectInvoices.forEach((reject) => reject(new Error("invoice outage"))),
+    );
+    await settle();
+    expect(text()).toContain("Invoices and receipts are currently unavailable");
+    expect(text()).toContain("Current: Trial");
+    expect(text()).toContain("62 min (1 h 2 min) left");
+    expect(text()).toContain("No renewal scheduled");
+    expect(text()).not.toContain("Billing details could not be loaded");
+    await click("Pay ₹2,499 with Razorpay");
+    expect(checkout).toHaveBeenCalledOnce();
+    expect(openHostedCheckout).toHaveBeenCalledOnce();
+  } finally {
+    vi.useRealTimers();
+  }
 });
 
 it("shows an empty invoice section on the first organisation visit when the API returns 404", async () => {

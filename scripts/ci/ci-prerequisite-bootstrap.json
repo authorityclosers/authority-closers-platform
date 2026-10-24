@@ -1,12 +1,12 @@
 [
   {
-    "artifact_id": 12486217699,
-    "digest": "d0b11f34045dbf688938d3807a850083ebcb831ba2e83c3918732bc7e919f6c1",
+    "artifact_id": 12575289319,
+    "digest": "ba9658ced9ae4398c783af04cf975dbba2387fa1c1ef9751f8ce106d610c3e2b",
     "identity": "54ef77ee856ba826a13e048faf53ea88f3bb97f34234e7897fd1e0516c6309a6",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 39920297639,
-    "source_sha": "8bf569c7f52f289adf00c44d4f321dee7fb0f29f",
-    "reviewed_source_sha": "67a749e29caaccb49d2d62a15e7ab87f9460e114",
-    "review": "Orchestrator 23 Oct 2026: 67a749e2 only adds a 2/5/10 s retry for GitHub API refusals (404/410/5xx); producer run 39920297639 green on request 8bf569c7, which has 67a749e2 as its only parent and changes only .wb-ci/request.json; artifact digest from the API"
+    "run_id": 40133074440,
+    "source_sha": "463d5e0305ebbb14ad01128d324583a44dde54d5",
+    "reviewed_source_sha": "af38174b73b862c63441a187e87112fc99e9b8d5",
+    "review": "Orchestrator 25 Oct 2026: af38174b is workbench e1b066190 plus one Lead OS commit that changes only 15 apps/sales-xray-web/app/leads files (no scripts/ci, workflow or lockfile change); producer run 40133074440 (workbench-checks.yml, push, success) on request 463d5e03, whose only parent is af38174b and which changes only .wb-ci/request.json; artifact digest from the API. Replaces the 23 Oct pin, whose artifact 12486217699 was past the 36 h reuse window and deleted (AUT-2188)."
   }
 ]

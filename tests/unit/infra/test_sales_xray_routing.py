@@ -26,6 +26,24 @@ HOSTS = (
 )
 
 
+@pytest.fixture(scope="module", autouse=True)
+def _warm_powershell() -> None:
+    """Pay PowerShell's cold start once, so the 20 s limits time the script itself.
+
+    The first start on a fresh runner reads the .NET runtime from a cold disk:
+    in run 40105090099 (shard b10) it passed 20 s, while the 15 starts after it
+    took about 1.6 s each (24 Oct 2026).
+    """
+    if PWSH is None:
+        return
+    subprocess.run(  # noqa: S603 - fixed PowerShell and a fixed command
+        [PWSH, "-NoProfile", "-NonInteractive", "-Command", "ConvertFrom-Json '{}' | Out-Null"],
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+
+
 def _run_script(
     tmp_path: Path,
     *,

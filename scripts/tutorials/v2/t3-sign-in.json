@@ -1,0 +1,321 @@
+{
+  "id": "t3-sign-in",
+  "number": "T3",
+  "kind": "tester",
+  "title": {
+    "en": "Sign in inside the app",
+    "hi": "App ke andar sign in kijiye",
+    "mr": "App madhye sign in kara"
+  },
+  "description": {
+    "en": "Sign in to Sales X-Ray with Continue with Google, right inside the app, then join your team's workspace. If your leads are in another workspace, Switch takes you there.",
+    "hi": "App ke andar hi Continue with Google se Sales X-Ray mein sign in kijiye, phir apni team ka workspace join kijiye. Leads doosre workspace mein hain? Switch aapko wahan le jaata hai.",
+    "mr": "App madhyech Continue with Google ne Sales X-Ray madhye sign in kara, mag tumchya team cha workspace join kara. Leads dusrya workspace madhye aahet? Switch tumhala tithe neto."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "tester",
+    "Google Play",
+    "how to",
+    "Hindi",
+    "Marathi",
+    "sign in",
+    "Google sign in",
+    "Android app"
+  ],
+  "names": {
+    "Asha Example": "Asha Kulkarni",
+    "fictional-homes.example": "skyline.example",
+    "Sales Xray": "Sales X-Ray"
+  },
+  "next": {
+    "id": "t4-first-steps",
+    "title": {
+      "en": "First steps in the app",
+      "hi": "App mein pehle steps",
+      "mr": "App madhle pahile steps"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "Signing in to Sales X-Ray, right inside the app, and landing in your team's workspace.",
+      "hi": "App के अंदर ही Sales X-Ray में sign in करना, और सीधे अपनी team के workspace में पहुँचना.",
+      "mr": "App मध्येच Sales X-Ray मध्ये sign in करणं, आणि थेट तुमच्या team च्या workspace मध्ये पोहोचणं."
+    },
+    "latn": {
+      "hi": "App ke andar hi Sales X-Ray mein sign in karna, aur seedhe apni team ke workspace mein pahunchna.",
+      "mr": "App madhyech Sales X-Ray madhye sign in karna, aani thet tumchya team chya workspace madhye pohochna."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "Signed in.",
+      "hi": "Sign in ho gaya.",
+      "mr": "Sign in jhala."
+    },
+    "say": {
+      "en": "Next: your first steps in the app.",
+      "hi": "अगले video में: app में आपके पहले steps.",
+      "mr": "पुढच्या video मध्ये: app मधले तुमचे पहिले steps."
+    },
+    "latn": {
+      "hi": "Agle video mein: app mein aapke pehle steps.",
+      "mr": "Pudhchya video madhye: app madhle tumche pahile steps."
+    }
+  },
+  "chapters": [
+    {
+      "id": "signin",
+      "title": {
+        "en": "Continue with Google",
+        "hi": "Continue with Google",
+        "mr": "Continue with Google"
+      }
+    },
+    {
+      "id": "workspace",
+      "title": {
+        "en": "Your workspace",
+        "hi": "Aapka workspace",
+        "mr": "Tumcha workspace"
+      }
+    }
+  ],
+  "reel": {
+    "all": true,
+    "hook": {
+      "text": {
+        "en": "Sign in with Google, no browser",
+        "hi": "Google se sign in, bina browser",
+        "mr": "Google ne sign in, browser shivay"
+      },
+      "say": {
+        "en": "Signing in to Sales X-Ray takes three taps. Watch.",
+        "hi": "Sales X-Ray में sign in, बस तीन taps. देखिए.",
+        "mr": "Sales X-Ray मध्ये sign in, फक्त तीन taps. बघा."
+      },
+      "latn": {
+        "hi": "Sales X-Ray mein sign in, bas teen taps. Dekhiye.",
+        "mr": "Sales X-Ray madhye sign in, fakta teen taps. Bagha."
+      }
+    }
+  },
+  "shots": [
+    {
+      "id": "signin",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/sign-in?chrome=0"
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "google-button",
+          "chapter": "signin",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Continue with Google"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Open Sales X-Ray. On the sign-in screen, use Continue with Google.",
+            "hi": "Sales X-Ray खोलिए. Sign-in screen पे Continue with Google चुनिए.",
+            "mr": "Sales X-Ray उघडा. Sign-in screen वर Continue with Google निवडा."
+          },
+          "latn": {
+            "hi": "Sales X-Ray kholiye. Sign-in screen pe Continue with Google chuniye.",
+            "mr": "Sales X-Ray ughda. Sign-in screen var Continue with Google nivda."
+          }
+        },
+        {
+          "id": "tick-first",
+          "chapter": "signin",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Continue with Google"
+              },
+              "ms": 1400
+            },
+            {
+              "do": "tap",
+              "target": {
+                "css": "input[type=checkbox]"
+              },
+              "ms": 900,
+              "key": true
+            }
+          ],
+          "say": {
+            "en": "First tick the box, to confirm you're eighteen or older and accept the terms. If you forget, the box reminds you.",
+            "hi": "पहले box पे tick कीजिए, ये confirm करने के लिए कि आप अठारह साल या उससे बड़े हैं और terms मानते हैं. भूल गए, तो box खुद याद दिलाता है.",
+            "mr": "आधी box वर tick करा, हे confirm करायला की तुम्ही अठरा वर्षांचे किंवा मोठे आहात आणि terms मान्य आहेत. विसरलात, तर box स्वतः आठवण करून देतो."
+          },
+          "latn": {
+            "hi": "Pehle box pe tick kijiye, yeh confirm karne ke liye ki aap athaarah saal ya usse bade hain aur terms maante hain. Bhool gaye, toh box khud yaad dilata hai.",
+            "mr": "Aadhi box var tick kara, he confirm karayla ki tumhi athra varshanche kinva mothe aahat aani terms manya aahet. Visarlat, tar box swatah aathvan karun deto."
+          }
+        },
+        {
+          "id": "google-sheet",
+          "chapter": "signin",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Continue with Google"
+              },
+              "ms": 1600
+            }
+          ],
+          "say": {
+            "en": "Then tap Continue with Google. In the app, Google's own sheet slides up with the accounts on your phone. No browser.",
+            "hi": "फिर Continue with Google दबाइए. App में Google की अपनी sheet नीचे से आती है, आपके phone के accounts के साथ. कोई browser नहीं.",
+            "mr": "मग Continue with Google दाबा. App मध्ये Google ची स्वतःची sheet खालून येते, तुमच्या phone वरच्या accounts सकट. Browser नाही."
+          },
+          "latn": {
+            "hi": "Phir Continue with Google dabaiye. App mein Google ki apni sheet neeche se aati hai, aapke phone ke accounts ke saath. Koi browser nahi.",
+            "mr": "Mag Continue with Google daba. App madhye Google chi swatahchi sheet khalun yete, tumchya phone varchya accounts sakat. Browser nahi."
+          },
+          "sync": {
+            "en": "Continue with Google",
+            "hi": "Continue with Google",
+            "mr": "Continue with Google"
+          }
+        },
+        {
+          "id": "pick-account",
+          "chapter": "signin",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Continue as"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight",
+              "ms": 100
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Continue as"
+              },
+              "ms": 1700
+            }
+          ],
+          "say": {
+            "en": "Pick your work account, and you're straight back in Sales X-Ray.",
+            "hi": "अपना work account चुनिए, और आप सीधे Sales X-Ray में वापस.",
+            "mr": "तुमचा work account निवडा, आणि तुम्ही थेट Sales X-Ray मध्ये परत."
+          },
+          "latn": {
+            "hi": "Apna work account chuniye, aur aap seedhe Sales X-Ray mein wapas.",
+            "mr": "Tumcha work account nivda, aani tumhi thet Sales X-Ray madhye parat."
+          }
+        }
+      ]
+    },
+    {
+      "id": "join",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/sign-in?step=setup-join&chrome=0"
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "join-team",
+          "chapter": "workspace",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "radio",
+                "name": "Join Skyline Realty"
+              },
+              "ms": 900
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Join Skyline Realty"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "If your company invited you, choose Join. You land in your team's workspace, with your leads and calls.",
+            "hi": "अगर आपकी company ने invite किया है, तो Join चुनिए. आप सीधे अपनी team के workspace में, अपने leads और calls के साथ.",
+            "mr": "तुमच्या company ने invite केलं असेल, तर Join निवडा. तुम्ही थेट तुमच्या team च्या workspace मध्ये, तुमच्या leads आणि calls सकट."
+          },
+          "latn": {
+            "hi": "Agar aapki company ne invite kiya hai, toh Join chuniye. Aap seedhe apni team ke workspace mein, apne leads aur calls ke saath.",
+            "mr": "Tumchya company ne invite kela asel, tar Join nivda. Tumhi thet tumchya team chya workspace madhye, tumchya leads aani calls sakat."
+          }
+        }
+      ]
+    },
+    {
+      "id": "steps",
+      "device": "card",
+      "beats": [
+        {
+          "id": "switch",
+          "chapter": "workspace",
+          "actions": [],
+          "card": {
+            "step": "Good to know",
+            "title": {
+              "en": "Leads in another workspace?",
+              "hi": "Leads doosre workspace mein?",
+              "mr": "Leads dusrya workspace madhye?"
+            },
+            "icon": "switch",
+            "chips": ["Switch"]
+          },
+          "say": {
+            "en": "If you ever open a workspace without your leads, a card tells you where they are. Tap Switch, and you're there.",
+            "hi": "अगर कभी ऐसा workspace खुले जिसमें आपके leads नहीं हैं, तो एक card बताता है कि वो कहाँ हैं. Switch दबाइए, और आप वहाँ पहुँच गए.",
+            "mr": "कधी असा workspace उघडला ज्यात तुमचे leads नाहीत, तर एक card सांगतो ते कुठे आहेत. Switch दाबा, आणि तुम्ही तिथे पोहोचलात."
+          },
+          "latn": {
+            "hi": "Agar kabhi aisa workspace khule jismein aapke leads nahi hain, toh ek card batata hai ki woh kahan hain. Switch dabaiye, aur aap wahan pahunch gaye.",
+            "mr": "Kadhi asa workspace ughdla jyat tumche leads nahit, tar ek card sangto te kuthe aahet. Switch daba, aani tumhi tithe pohochlat."
+          }
+        }
+      ]
+    }
+  ]
+}
