@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
-import io
 import os
 import subprocess
 import sys
-import tarfile
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -139,14 +137,14 @@ def test_worker_cannot_access_credentials_network_or_host_control(monkeypatch, t
 
     def run(command, **kwargs):
         calls.append((command, kwargs))
-        return subprocess.CompletedProcess(command, 0, b"", b"")
+        return b""
 
-    monkeypatch.setattr(h.subprocess, "run", run)
+    monkeypatch.setattr(h, "command", run)
     h.docker(*argv)
     command, kwargs = calls[0]
     assert command[:3] == ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock"]
-    assert kwargs["env"] == h.ENV and "DOCKER_HOST" not in kwargs["env"]
-    assert "UNCLASSIFIED_SECRET" not in kwargs["env"]
+    assert "DOCKER_HOST" not in h.ENV and "UNCLASSIFIED_SECRET" not in h.ENV
+    assert kwargs["output_limit"] == 1024 * 1024
 
 
 @pytest.mark.parametrize(
@@ -210,34 +208,12 @@ def test_actual_unprivileged_path_ownership_check_refuses(tmp_path):
         h.protected(file)
 
 
-@pytest.mark.parametrize(
-    "name,kind",
-    [
-        ("../escape", tarfile.REGTYPE),
-        ("/absolute", tarfile.REGTYPE),
-        ("scripts/ci/gate.py", tarfile.SYMTYPE),
-        ("hardlink", tarfile.LNKTYPE),
-    ],
-)
-def test_candidate_archive_cannot_escape_into_trusted_tools(tmp_path, monkeypatch, name, kind):
-    raw = io.BytesIO()
-    with tarfile.open(fileobj=raw, mode="w") as archive:
-        entry = tarfile.TarInfo(name)
-        entry.type = kind
-        entry.linkname = "/etc/fictional-secret"
-        archive.addfile(entry)
-    monkeypatch.setattr(
-        h, "git", lambda _repo, *a: CANDIDATE.encode() if a[0] == "rev-parse" else raw.getvalue()
-    )
-    with pytest.raises(h.Refusal, match="unsafe"):
-        h.snapshot(tmp_path, CANDIDATE, tmp_path / "snapshot")
-    assert not (tmp_path / "escape").exists()
-
-
-def test_existing_ci_keeps_live_evidence_on_alternate_merge_paths():
-    # Source-only package must not remove the check from manual PRs, push-to-main,
-    # or dispatch. It adds ac-ship protection, never authorizes retiring CI.
-    workflow = (ROOT / ".github/workflows/migration-safety.yml").read_text()
+def test_retained_ci_reference_keeps_live_evidence_on_alternate_merge_paths():
+    # Historical retained-CI contract, deliberately separate from the concurrent
+    # owner-directed workflow switch. This assertion is not current CI proof.
+    workflow = (
+        ROOT / "infra/release/trusted_rehearsal/required-migration-safety.yml.reference"
+    ).read_text()
     for text in [
         "pull_request:",
         "push:",
@@ -339,7 +315,7 @@ def test_candidate_pass_text_cannot_replace_exact_database_revision(tmp_path, mo
 
     def docker(*argv, **kw):
         calls.append(argv)
-        return b"schema-rehearsal: PASS (forged by candidate)"
+        return b"schema-rehearsal: PASS (forged by candidate)" if argv[0] == "run" else b""
 
     monkeypatch.setattr(h, "docker", docker)
     with pytest.raises(h.Refusal, match="exact requested revision"):
@@ -431,4 +407,367 @@ def test_real_container_adversarial_credential_and_socket_probe(tmp_path):
         assert b"fictional-isolation-probe: PASS" in output
         assert not (source / "owned").exists()
     finally:
-        h.docker("rm", "--force", "--volumes", name, timeout=30)
+        h.remove_container(name)
+
+
+OBJECTS = h.load_objects()
+
+
+def fixture_git(repo, *args, data=None):
+    # Only fictional temporary repositories. No shared checkout configuration.
+    return subprocess.run(  # noqa: S603 - literal Git plumbing on fictional fixtures
+        ["/usr/bin/git", "-C", str(repo), *args],
+        input=data,
+        env=OBJECTS.ENV
+        | {
+            "GIT_AUTHOR_NAME": "Fictional",
+            "GIT_AUTHOR_EMAIL": "fixture@example.invalid",
+            "GIT_COMMITTER_NAME": "Fictional",
+            "GIT_COMMITTER_EMAIL": "fixture@example.invalid",
+        },
+        check=True,
+        capture_output=True,
+    ).stdout
+
+
+def fictional_repo(tmp_path):
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    fixture_git(repo, "init", "--template=")
+
+    def revision(content, parent=None):
+        entries = []
+        for name, raw in sorted(content.items()):
+            oid = fixture_git(repo, "hash-object", "-w", "--stdin", data=raw).strip()
+            entries.append(b"100644 blob " + oid + b"\t" + name.encode() + b"\n")
+        tree = fixture_git(repo, "mktree", data=b"".join(entries)).strip().decode()
+        return (
+            fixture_git(
+                repo,
+                "commit-tree",
+                tree,
+                *(["-p", parent] if parent else []),
+                data=b"fictional commit\n",
+            )
+            .strip()
+            .decode()
+        )
+
+    base = revision({"payload.txt": b"base\n"})
+    candidate = revision(
+        {
+            "payload.txt": b"candidate raw $Id$\n",
+            ".gitattributes": b"payload.txt filter=evil export-subst\n",
+        },
+        base,
+    )
+    return repo, base, candidate, revision
+
+
+@pytest.mark.parametrize("packed", [False, True])
+def test_real_git_raw_objects_ignore_smudge_and_process_filter(tmp_path, packed):
+    import io
+
+    repo, base, candidate, _ = fictional_repo(tmp_path)
+    sentinel = tmp_path / "filter-executed"
+    # Real smudge sentinel: positive control proves Git would execute this config.
+    fixture_git(repo, "config", "filter.evil.smudge", f"touch {sentinel}; cat")
+    fixture_git(repo, "config", "filter.evil.required", "true")
+    (repo / ".gitattributes").write_text("payload.txt filter=evil\n")
+    fixture_git(repo, "cat-file", "--filters", f"{candidate}:payload.txt")
+    assert sentinel.exists()
+    sentinel.unlink()
+    # Process takes precedence over smudge. The failed protocol is intentional;
+    # the marker proves executable local configuration would run if consulted.
+    fixture_git(repo, "config", "filter.evil.process", f"touch {sentinel}; exit 1")
+    with pytest.raises(subprocess.CalledProcessError):
+        fixture_git(repo, "cat-file", "--filters", f"{candidate}:payload.txt")
+    assert sentinel.exists()
+    sentinel.unlink()
+    if packed:
+        # Pin fixture reachability without a branch or checkout.
+        fixture_git(repo, "update-ref", "refs/fixture/candidate", candidate)
+        fixture_git(repo, "repack", "-ad")
+    raw = io.BytesIO()
+    OBJECTS.export(repo / ".git/objects", candidate, base, raw)
+    objects = OBJECTS.read_bundle(raw.getvalue())
+    OBJECTS.ancestor(objects, candidate, base)
+    OBJECTS.snapshot(objects, candidate, tmp_path / "snapshot")
+    assert (tmp_path / "snapshot/payload.txt").read_bytes() == b"candidate raw $Id$\n"
+    assert not sentinel.exists()
+    # Independent interpreter exercises the exact installed reader entry point.
+    result = h.command(
+        [
+            sys.executable,
+            "-IB",
+            str(Path(OBJECTS.__file__)),
+            str(repo / ".git/objects"),
+            candidate,
+            base,
+        ]
+    )
+    assert OBJECTS.read_bundle(result) == objects
+    assert not sentinel.exists()
+
+
+def test_real_git_replacement_refs_config_grafts_and_alternates_are_not_source(tmp_path):
+    import io
+
+    repo, base, candidate, revision = fictional_repo(tmp_path)
+    evil = revision({"payload.txt": b"replacement must never reach snapshot"})
+    fixture_git(repo, "replace", candidate, evil)
+    # Normal Git follows the hostile replacement ref; the reader must not.
+    unsafe_env = OBJECTS.ENV.copy()
+    unsafe_env.pop("GIT_NO_REPLACE_OBJECTS")
+    actual = subprocess.run(  # noqa: S603 - fictional positive control
+        ["/usr/bin/git", "-C", str(repo), "show", f"{candidate}:payload.txt"],
+        env=unsafe_env,
+        capture_output=True,
+        check=True,
+    ).stdout
+    assert b"replacement" in actual
+    (repo / ".git/info").mkdir()
+    (repo / ".git/info/grafts").write_text(candidate + "\n")
+    (repo / ".git/objects/info/alternates").write_text("/fictional/never/read/objects\n")
+    fixture_git(repo, "config", "extensions.partialClone", "evil")
+    fixture_git(repo, "config", "remote.evil.url", "ext::touch /fictional/never/run")
+    raw = io.BytesIO()
+    OBJECTS.export(repo / ".git/objects", candidate, base, raw)
+    objects = OBJECTS.read_bundle(raw.getvalue())
+    OBJECTS.ancestor(objects, candidate, base)
+    OBJECTS.snapshot(objects, candidate, tmp_path / "snapshot")
+    assert (tmp_path / "snapshot/payload.txt").read_bytes() == b"candidate raw $Id$\n"
+    # A missing promised object is refused; no remote helper/lazy fetch is used.
+    with pytest.raises(OBJECTS.Invalid, match="missing"):
+        OBJECTS.export(repo / ".git/objects", "f" * 40, base, io.BytesIO())
+
+
+def test_raw_object_acquisition_refuses_declared_size_before_reading(tmp_path, monkeypatch):
+    import io
+
+    repo, base, candidate, _ = fictional_repo(tmp_path)
+    monkeypatch.setattr(OBJECTS, "MAX_OBJECT", 16)
+    with pytest.raises(OBJECTS.Invalid, match="acquisition"):
+        OBJECTS.export(repo / ".git/objects", candidate, base, io.BytesIO())
+
+
+@pytest.mark.parametrize(
+    "header,body",
+    [
+        (b"a" * 40 + b" blob 2\n", b"xx\n"),  # forged OID
+        (b"a" * 40 + b" blob 999999999\n", b""),  # limit before allocation
+        (b"a" * 40 + b" blob 2\n", b"x"),  # truncation
+    ],
+)
+def test_untrusted_reader_bytes_are_independently_refused(header, body):
+    with pytest.raises(OBJECTS.Invalid):
+        OBJECTS.read_bundle(header + body)
+
+
+@pytest.mark.parametrize(
+    "mode,name",
+    [
+        (b"120000", b"link"),
+        (b"160000", b"submodule"),
+        (b"100644", b".."),
+        (b"100644", b".git"),
+        (b"100644", b"x/y"),
+    ],
+)
+def test_raw_tree_rejects_links_git_metadata_and_unsafe_paths(mode, name):
+    with pytest.raises(OBJECTS.Invalid, match="unsafe"):
+        list(OBJECTS.tree(mode + b" " + name + b"\0" + b"x" * 20))
+
+
+def test_repeated_blob_materialization_is_bounded(tmp_path, monkeypatch):
+    import io
+
+    repo, base, _, revision = fictional_repo(tmp_path)
+    candidate = revision({f"file{i}": b"x" * 500 for i in range(10)}, base)
+    raw = io.BytesIO()
+    OBJECTS.export(repo / ".git/objects", candidate, base, raw)
+    objects = OBJECTS.read_bundle(raw.getvalue())
+    monkeypatch.setattr(OBJECTS, "MAX_BYTES", 1024)
+    with pytest.raises(OBJECTS.Invalid, match="materialized"):
+        OBJECTS.snapshot(objects, candidate, tmp_path / "snapshot")
+
+
+def test_workbench_only_enters_unprivileged_source_container(tmp_path, monkeypatch):
+    repo, root = tmp_path / "unreadable-workbench", tmp_path / "private-run"
+    config = CONFIG | {"bundle": str(tmp_path / "trusted-install")}
+    argv = h.source_reader_argv(repo, config, "fixture", CANDIDATE, BASE)
+    assert "--user=65534:65534" in argv and "--network=none" in argv
+    for flag in [
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges=true",
+        "--memory=512m",
+        "--log-driver=none",
+        "--pids-limit=32",
+    ]:
+        assert flag in argv
+    assert str(repo) not in argv  # only appears inside readonly mount argument
+    mounts = [argv[i + 1] for i, x in enumerate(argv) if x == "--mount"]
+    assert mounts == [
+        f"type=bind,src={repo}/.git/objects,dst=/source-objects,readonly",
+        f"type=bind,src={config['bundle']}/infra/release/trusted_rehearsal/objects.py,dst=/trusted-reader.py,readonly",
+    ]
+    assert argv[-5:] == ["-IB", "/trusted-reader.py", "/source-objects", CANDIDATE, BASE]
+    calls = []
+
+    def docker(*args, **kw):
+        calls.append((args, kw))
+        return b"forged objects" if args[0] == "run" else b""
+
+    monkeypatch.setattr(h, "docker", docker)
+    # No repo exists: controller never opens or queries it before the boundary.
+    with pytest.raises(OBJECTS.Invalid):
+        # load_objects creates a separate exception class, so use same verifier.
+        monkeypatch.setattr(h, "load_objects", lambda: OBJECTS)
+        h.acquire_sources(config, repo, CANDIDATE, BASE, root)
+    assert calls[0][1]["output_limit"] == OBJECTS.MAX_BYTES
+    assert calls[1][0][:2] == ("rm", "--force")
+    assert calls[2][0][:2] == ("ps", "--all")
+    assert not root.exists()
+
+
+@pytest.mark.parametrize("stage", ["source", "worker"])
+@pytest.mark.parametrize("stream", [1, 2])
+def test_real_flood_is_killed_cleaned_and_never_creates_pass_receipt(
+    tmp_path, monkeypatch, capsys, stream, stage
+):
+    from types import SimpleNamespace
+
+    pid = tmp_path / "pid"
+    code = (
+        f"import os,pathlib; pathlib.Path({str(pid)!r}).write_text(str(os.getpid())); "
+        f"exec('while True: os.write({stream}, b\"x\" * 4096)')"
+    )
+    calls = []
+    monkeypatch.setattr(OBJECTS, "MAX_BYTES", 1024)
+    monkeypatch.setattr(h, "load_objects", lambda: OBJECTS)
+    monkeypatch.setattr(h, "installation", lambda: CONFIG | {"bundle": str(tmp_path)})
+    monkeypatch.setattr(h, "signing_key", lambda: KEY)
+    monkeypatch.setattr(h, "protected", lambda *a, **kw: None)
+    # Emulate launch prerequisites only. Actual commands remain UID of builder.
+    monkeypatch.setattr(h.os, "geteuid", lambda: 0)
+    monkeypatch.setattr(h.sys, "flags", SimpleNamespace(isolated=1))
+    monkeypatch.setattr(h.sys, "dont_write_bytecode", True)
+    monkeypatch.setattr(h, "SCRATCH", tmp_path)
+    receipts = tmp_path / "receipts"
+    receipts.mkdir()
+    monkeypatch.setattr(h, "RECEIPTS", receipts)
+    if stage == "source":
+        monkeypatch.setattr(h, "rehearse", lambda *a: pytest.fail("must refuse before export"))
+    else:
+        real_command = h.command
+
+        def fictional_export(argv, **kw):
+            if argv[0] == sys.executable and "--output" in argv:
+                pair = Path(argv[argv.index("--output") + 1])
+                pair.mkdir()
+                (pair / "manifest.json").write_text("{}")
+                return b""
+            return real_command(argv, **kw)
+
+        fake = SimpleNamespace()
+        fake.rehearse = lambda _pair, _hash, _baseline, _chain, revision, source: fake.migrate(
+            object(), {}, source, "upgrade", revision
+        )
+        monkeypatch.setattr(h, "command", fictional_export)
+        monkeypatch.setattr(h, "acquire_sources", lambda *a: None)
+        monkeypatch.setattr(h, "load_gate", lambda _: fake)
+        monkeypatch.setattr(h, "migration_scope", lambda *a: ("0127", "0128", [object()]))
+
+    def docker(*args, **kw):
+        calls.append(args)
+        if args[0] == "run":
+            return h.command([sys.executable, "-IB", "-c", code], **(kw | {"output_limit": 1024}))
+        return b""
+
+    monkeypatch.setattr(h, "docker", docker)
+    assert (
+        h.main(
+            [
+                "rehearse",
+                "--workbench",
+                str(tmp_path / "repo"),
+                "--candidate",
+                CANDIDATE,
+                "--base",
+                BASE,
+            ]
+        )
+        == 1
+    )
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pid.read_text()), 0)
+    assert calls[1][:2] == ("rm", "--force")
+    assert calls[2][:2] == ("ps", "--all")
+    assert not list(tmp_path.glob("run-*")) and not list(receipts.iterdir())
+    assert "PASS" not in capsys.readouterr().out
+
+
+def test_combined_stdout_stderr_limit_and_cleanup_failure(tmp_path, monkeypatch):
+    with pytest.raises(h.Refusal, match="output exceeds"):
+        h.command(
+            [sys.executable, "-IB", "-c", "import os; os.write(1,b'x'*700); os.write(2,b'y'*700)"],
+            output_limit=1024,
+        )
+    calls = []
+
+    def docker(*args, **kw):
+        calls.append(args)
+        return b"still-running" if args[0] == "ps" else b""
+
+    monkeypatch.setattr(h, "docker", docker)
+    with pytest.raises(h.Refusal, match="cleanup not verified"):
+        h.remove_container("fictional")
+    assert len(calls) == 2
+
+
+def test_real_bounded_command_streams_input_and_caps_timeout(tmp_path):
+    data = b"x" * (1024 * 1024)
+    assert (
+        h.command(
+            [sys.executable, "-IB", "-c", "import sys; print(len(sys.stdin.buffer.read()))"],
+            data=data,
+        )
+        == b"1048576\n"
+    )
+    pid = tmp_path / "pid"
+    with pytest.raises(h.Refusal, match="timed out"):
+        h.command(
+            [
+                sys.executable,
+                "-IB",
+                "-c",
+                f"import os,pathlib,time; pathlib.Path({str(pid)!r})"
+                ".write_text(str(os.getpid())); time.sleep(20)",
+            ],
+            timeout=0.2,
+        )
+    with pytest.raises(ProcessLookupError):
+        os.kill(int(pid.read_text()), 0)
+
+
+def test_real_source_reader_container_with_fictional_git(tmp_path):
+    image = os.environ.get("AC_TRUSTED_REHEARSAL_TEST_IMAGE")
+    if not image:
+        pytest.skip("requires approved Docker source-reader executor and Git-capable offline image")
+    repo, base, candidate, _ = fictional_repo(tmp_path)
+    fixture_git(repo, "config", "filter.evil.process", "exit 99")
+    name = "ac-rehearsal-source-probe-" + h.uuid4().hex
+    try:
+        raw = h.docker(
+            *h.source_reader_argv(
+                repo, CONFIG | {"bundle": str(ROOT), "runner_image": image}, name, candidate, base
+            ),
+            output_limit=OBJECTS.MAX_BYTES,
+        )
+    finally:
+        h.remove_container(name)
+    objects = OBJECTS.read_bundle(raw)
+    OBJECTS.ancestor(objects, candidate, base)
+    OBJECTS.snapshot(objects, candidate, tmp_path / "snapshot")
+    assert (tmp_path / "snapshot/payload.txt").read_bytes() == b"candidate raw $Id$\n"

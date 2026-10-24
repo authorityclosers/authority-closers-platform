@@ -12,17 +12,17 @@ import argparse
 import hashlib
 import hmac
 import importlib.util
-import io
 import json
 import os
 import re
+import selectors
+import signal
 import stat
 import subprocess
 import sys
-import tarfile
 import tempfile
 import time
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
@@ -46,6 +46,7 @@ ENV = {
 TRUSTED = frozenset(
     {
         "infra/release/trusted_rehearsal/harness.py",
+        "infra/release/trusted_rehearsal/objects.py",
         "infra/release/trusted_rehearsal/runtime-requirements.txt",
         "scripts/ci/migration_schema_gate.py",
         "scripts/ops/migration_safety.py",
@@ -132,75 +133,178 @@ def installation() -> dict:
 
 
 def command(
-    argv: list[str], *, data: bytes | None = None, cwd: Path | None = None, timeout: int = 180
+    argv: list[str],
+    *,
+    data: bytes | None = None,
+    cwd: Path | None = None,
+    timeout: int = 180,
+    output_limit: int = 1024 * 1024,
 ) -> bytes:
+    """Cap stdout + stderr while reading, and reap the entire client process group.
+
+    Stderr is counted but discarded. Neither a pipe buffer nor capture_output can
+    allocate unbounded host memory. Input is streamed too (pg_restore uses stdin).
+    Container callers MUST also remove and verify their named container in finally:
+    killing the Docker client alone does not stop a daemon-managed worker.
+    """
+    if output_limit < 1 or timeout <= 0:
+        raise Refusal("invalid subprocess resource bound")
+    process = None
+    chunks, used = [], 0
     try:
-        return subprocess.run(  # noqa: S603 - trusted argv only; candidate code runs in worker
-            argv, input=data, cwd=cwd, env=ENV, capture_output=True, timeout=timeout, check=True
-        ).stdout
+        process = subprocess.Popen(  # noqa: S603 - trusted argv, isolated workers only
+            argv,
+            stdin=subprocess.PIPE if data else subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=cwd,
+            env=ENV,
+            start_new_session=True,
+        )
+        deadline = time.monotonic() + timeout
+        with selectors.DefaultSelector() as selector:
+            for pipe in (process.stdout, process.stderr):
+                os.set_blocking(pipe.fileno(), False)
+                selector.register(pipe, selectors.EVENT_READ)
+            position = 0
+            if data:
+                os.set_blocking(process.stdin.fileno(), False)
+                selector.register(process.stdin, selectors.EVENT_WRITE)
+            while selector.get_map():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise Refusal("trusted command timed out")
+                for item, _event in selector.select(remaining):
+                    pipe = item.fileobj
+                    if pipe is process.stdin:
+                        written = os.write(
+                            pipe.fileno(), memoryview(data)[position : position + 65536]
+                        )
+                        position += written
+                        if position == len(data):
+                            selector.unregister(pipe)
+                            pipe.close()
+                    else:
+                        # One extra byte detects overflow before retaining it.
+                        block = os.read(pipe.fileno(), min(65536, output_limit - used + 1))
+                        if not block:
+                            selector.unregister(pipe)
+                            pipe.close()
+                            continue
+                        used += len(block)
+                        if used > output_limit:
+                            raise Refusal("trusted command output exceeds bound")
+                        if pipe is process.stdout:
+                            chunks.append(block)
+            if process.wait(timeout=max(0.001, deadline - time.monotonic())) != 0:
+                raise Refusal("trusted command failed")
+        return b"".join(chunks)
     except (OSError, subprocess.SubprocessError) as exc:
         raise Refusal("trusted command failed or timed out") from exc
+    finally:
+        if process is not None:
+            with suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGKILL)
+            process.wait(timeout=5)
+            for pipe in (process.stdin, process.stdout, process.stderr):
+                if pipe is not None:
+                    pipe.close()
 
 
-def git(repo: Path, *args: str) -> bytes:
-    return command(
-        [
-            "/usr/bin/git",
-            "-c",
-            f"safe.directory={repo}",
-            "-c",
-            "core.fsmonitor=false",
-            "-c",
-            "core.hooksPath=/dev/null",
-            "-C",
-            str(repo),
-            *args,
-        ]
-    )
-
-
-def snapshot(repo: Path, sha: str, target: Path) -> None:
-    if not SHA.fullmatch(sha):
-        raise Refusal("commit must be a full SHA")
-    resolved = (
-        git(repo, "rev-parse", "--verify", "--end-of-options", sha + "^{commit}").decode().strip()
-    )
-    if resolved != sha:
-        raise Refusal("commit identity mismatch")
-    archive = git(repo, "archive", "--format=tar", sha)
-    target.mkdir(mode=0o755)
-    total = 0
-    with tarfile.open(fileobj=io.BytesIO(archive)) as tar:
-        for member in tar:
-            path = Path(member.name)
-            if (
-                path.is_absolute()
-                or ".." in path.parts
-                or ".git" in path.parts
-                or not (member.isfile() or member.isdir())
-            ):
-                raise Refusal("candidate archive contains an unsafe path or link")
-            total += member.size
-            if total > 128 * 1024 * 1024:
-                raise Refusal("candidate source exceeds bound")
-            out = target / path
-            if member.isdir():
-                out.mkdir(parents=True, exist_ok=True, mode=0o755)
-            else:
-                out.parent.mkdir(parents=True, exist_ok=True, mode=0o755)
-                with tar.extractfile(member) as source, out.open("xb") as dest:
-                    dest.write(source.read())
-                out.chmod(0o755 if member.mode & 0o111 else 0o644)
-
-
-def docker(*args: str, data: bytes | None = None, timeout: int = 180) -> bytes:
-    # The trusted control process alone has the host socket. No DOCKER_HOST/config
-    # or caller credentials can redirect it. Never forward this socket to workers.
+def docker(
+    *args: str,
+    data: bytes | None = None,
+    timeout: int = 180,
+    output_limit: int = 1024 * 1024,
+) -> bytes:
+    # The trusted control process alone has the host socket. Never forward it.
     return command(
         ["/usr/bin/docker", "--host", "unix:///var/run/docker.sock", *args],
         data=data,
         timeout=timeout,
+        output_limit=output_limit,
     )
+
+
+def remove_container(name: str) -> None:
+    docker("rm", "--force", "--volumes", name, timeout=30)
+    if docker(
+        "ps", "--all", "--filter", f"name=^/{name}$", "--format", "{{.ID}}", timeout=30
+    ).strip():
+        raise Refusal("container cleanup not verified")
+
+
+def load_objects():
+    spec = importlib.util.spec_from_file_location(
+        "ac_trusted_objects", Path(__file__).with_name("objects.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def source_reader_argv(repo: Path, config: dict, name: str, candidate: str, base: str) -> list[str]:
+    if (
+        not SHA.fullmatch(candidate)
+        or not SHA.fullmatch(base)
+        or not IMAGE.fullmatch(config["runner_image"])
+        or not repo.is_absolute()
+        or any(c in str(repo) for c in ",\n\r")
+    ):
+        raise Refusal("invalid source acquisition identity")
+    # Never stat/resolve/open the writable workbench or run Git against it on the
+    # host. Only its object store enters the non-root, network-none reader; no
+    # worktree files or .git/config are mounted. The installed script
+    # uses a fresh Git dir, raw cat-file, no source config/refs/info/attributes.
+    reader = Path(config["bundle"]) / "infra/release/trusted_rehearsal/objects.py"
+    return [
+        "run",
+        "--pull=never",
+        "--name",
+        name,
+        "--network=none",
+        "--user=65534:65534",
+        "--read-only",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges=true",
+        "--ipc=none",
+        "--pids-limit=32",
+        "--memory=512m",
+        "--memory-swap=512m",
+        "--cpus=1",
+        "--ulimit=nofile=128:128",
+        "--log-driver=none",
+        "--no-healthcheck",
+        "--tmpfs=/tmp:rw,nosuid,nodev,noexec,mode=1777,size=32m",
+        "--mount",
+        f"type=bind,src={repo}/.git/objects,dst=/source-objects,readonly",
+        "--mount",
+        f"type=bind,src={reader},dst=/trusted-reader.py,readonly",
+        "--entrypoint=/usr/local/bin/python",
+        config["runner_image"],
+        "-IB",
+        "/trusted-reader.py",
+        "/source-objects",
+        candidate,
+        base,
+    ]
+
+
+def acquire_sources(config: dict, repo: Path, candidate: str, base: str, root: Path) -> None:
+    objects = load_objects()
+    name = "ac-rehearsal-source-" + uuid4().hex
+    try:
+        raw = docker(
+            *source_reader_argv(repo, config, name, candidate, base),
+            timeout=180,
+            output_limit=objects.MAX_BYTES,
+        )
+    finally:
+        remove_container(name)
+    verified = objects.read_bundle(raw)
+    objects.ancestor(verified, candidate, base)
+    objects.snapshot(verified, candidate, root / "candidate")
+    objects.snapshot(verified, base, root / "base")
 
 
 def worker_argv(
@@ -326,7 +430,7 @@ def isolated_database(gate, sockets: Path):
                 connection.execute(f"CREATE ROLE {role} NOLOGIN")  # noqa: S608 - constant tuple
         yield database
     finally:
-        docker("rm", "--force", "--volumes", name, timeout=30)
+        remove_container(name)
 
 
 def migration_scope(gate, source: Path, base_source: Path):
@@ -387,7 +491,7 @@ def rehearse(config: dict, source: Path, base_source: Path, pair: Path, sockets:
                 timeout=600,
             )
         finally:
-            docker("rm", "--force", "--volumes", name, timeout=30)
+            remove_container(name)
         with database.connect() as connection:
             if connection.execute("SELECT version_num FROM alembic_version").fetchall() != [
                 (revision,)
@@ -491,9 +595,7 @@ def main(argv: list[str] | None = None) -> int:
             with tempfile.TemporaryDirectory(dir=SCRATCH, prefix="run-") as work:
                 root = Path(work)
                 source, base = root / "candidate", root / "base"
-                snapshot(args.workbench, args.candidate, source)
-                snapshot(args.workbench, args.base, base)
-                git(args.workbench, "merge-base", "--is-ancestor", args.base, args.candidate)
+                acquire_sources(config, args.workbench, args.candidate, args.base, root)
                 metadata = rehearse(config, source, base, root / "pair", root / "sockets")
                 record = metadata | {
                     "schema": "ac.schema_rehearsal/2",
