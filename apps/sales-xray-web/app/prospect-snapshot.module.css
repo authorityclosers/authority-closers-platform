@@ -68,8 +68,6 @@
   margin: 5px 0 8px;
   color: var(--lx-muted);
   font: 600 12px/1.4 var(--lx-font-ui, inherit);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
 }
 
 .observation {

@@ -140,8 +140,6 @@
 .facts dt {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .facts dd {

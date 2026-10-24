@@ -77,8 +77,6 @@
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .toc ul {
@@ -156,8 +154,6 @@
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
   font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .hero h1 {

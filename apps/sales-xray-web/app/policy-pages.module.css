@@ -44,8 +44,6 @@
   color: var(--lx-teal, #08776e);
   font-size: 12px;
   font-weight: 750;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .content h1 {

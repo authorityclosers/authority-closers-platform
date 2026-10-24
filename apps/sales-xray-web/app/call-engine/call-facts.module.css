@@ -69,8 +69,6 @@
   color: var(--sx-accent);
   font-size: var(--sx-text-xs);
   font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
 }
 
 .askQuestion {
@@ -173,8 +171,6 @@
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
 }
 
 .rows {
