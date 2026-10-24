@@ -9,9 +9,10 @@ numbers never pass through Google.
 Each assignment and each due time alerts once (``Lead.alerted_assigned_at`` and
 ``Lead.alerted_due_at``). A booked meeting reminds its seller before it starts, once per
 start time (``LeadMeeting.reminded_for``; Lead OS, 24 Oct 2026); it goes as a "due"
-alert, whose words say it is a meeting. Several alerts for one seller in one pass become one
-"3 leads to call now". Nothing older than two hours is sent, so a phone that
-registers late is not flooded.
+alert, whose words say it is a meeting. A task reminds once per due, through its ledger
+(``task_push``; work-memory engine), also as a "due" alert whose words name the task.
+Several alerts for one seller in one pass become one "3 leads to call now". Nothing older
+than two hours is sent, so a phone that registers late is not flooded.
 
 Off until the FCM settings exist (``AC_FCM_SERVICE_ACCOUNT`` and the app's client
 settings ``AC_FCM_APP_ID``, ``AC_FCM_API_KEY``, ``AC_FCM_SENDER_ID``). They live in
@@ -41,7 +42,7 @@ from fastapi import FastAPI
 from sqlalchemy import and_, delete, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ac_platform.lead_desk import hours
+from ac_platform.lead_desk import hours, task_push
 from ac_platform.lead_desk.contracts import PushConfig
 from ac_platform.lead_desk.meetings import REMIND_BEFORE
 from ac_platform.lead_desk.models import Lead, LeadDevice, LeadMeeting
@@ -266,9 +267,10 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
     for meeting, lead in meetings:
         meeting.reminded_for = meeting.starts_at
         reminded.append(lead)
+    promised = await task_push.collect(database, now)
     alerts: dict[tuple[UUID, UUID], Alert] = {}
     seen: set[UUID] = set()
-    for kind, leads in (("new", assigned), ("due", due), ("due", reminded)):
+    for kind, leads in (("new", assigned), ("due", due), ("due", reminded), ("due", promised)):
         for lead in leads:
             if kind == "new":
                 lead.alerted_assigned_at = lead.assigned_at
