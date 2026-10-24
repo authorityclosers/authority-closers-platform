@@ -13,6 +13,7 @@ import {
   AccountSettings,
   type SettingsBillingProps,
 } from "../account-settings";
+import { usePlayLink } from "../apps/play";
 import { ANDROID_APK_URL } from "../apps/release";
 import { CallAiSettingsSection } from "../call-ai/call-ai-settings";
 import { AlertsCard } from "../leads/alerts-card";
@@ -69,9 +70,24 @@ function Note({
 function AppPanel() {
   // The Google Play app updates only through Play: no APK link there (Play policy).
   const apkLinks = useApkLinksAllowed();
+  const playLink = usePlayLink();
   return (
     <Panel title="Sales X-Ray on your phone">
-      {apkLinks ? (
+      {apkLinks && playLink ? (
+        <Note
+          icon={<Download size={18} />}
+          title="Android app"
+          href={playLink}
+          action="Google Play"
+        >
+          Sales X-Ray is on Google Play. If you installed it from a download
+          link, uninstall that app first. No Play Store on this phone?{" "}
+          <Link className={styles.noteLink} href="/apps">
+            Get the app file
+          </Link>
+          .
+        </Note>
+      ) : apkLinks ? (
         <>
           <Note
             icon={<Download size={18} />}

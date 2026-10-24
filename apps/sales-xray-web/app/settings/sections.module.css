@@ -56,6 +56,12 @@
   text-decoration: underline;
 }
 
+/* A link inside a note's words (Google Play's "Get the app file"). */
+.noteLink {
+  color: var(--sx-accent);
+  font-weight: 650;
+}
+
 .download {
   display: inline-flex;
   align-items: center;

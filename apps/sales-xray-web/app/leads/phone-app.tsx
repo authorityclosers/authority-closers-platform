@@ -22,6 +22,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useState, useSyncExternalStore } from "react";
 
 import { Badge, Button, Dialog } from "../ui/kit";
+import { usePlayLink } from "../apps/play";
 import { inPhoneApp } from "./native-phone";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import styles from "./leads.module.css";
@@ -67,6 +68,56 @@ function CopyLink({ link }: { link: string }) {
   );
 }
 
+/** The file itself: for phones without Google Play, and accounts Play can't serve yet. */
+function DirectDownload({ android, link }: { android: boolean; link: string }) {
+  return (
+    <>
+      <div className={styles.appGet}>
+        {android ? null : (
+          <QRCodeSVG
+            value={link}
+            size={132}
+            marginSize={2}
+            className={styles.qr}
+            title="Scan with your Android phone's camera"
+          />
+        )}
+        <div className={styles.appGetText}>
+          {android ? null : (
+            <p className={styles.hint}>
+              Scan with your Android phone&apos;s camera, or open Sales X-Ray on
+              the phone and download it there.
+            </p>
+          )}
+          <a className={styles.downloadButton} href={link}>
+            <Download size={16} aria-hidden="true" />
+            Download for Android
+          </a>
+          <CopyLink link={link} />
+        </div>
+      </div>
+      <a className={styles.appsLink} href="/apps">
+        Install help with pictures, the file&apos;s SHA-256 and other platforms
+      </a>
+      <details className={styles.terms}>
+        <summary>How to install</summary>
+        <ol className={styles.steps}>
+          <li>Open the downloaded file.</li>
+          <li>If your phone asks, allow your browser to install apps.</li>
+          <li>
+            Open Sales X-Ray and sign in with the email code (Google sign-in
+            doesn&apos;t work inside apps).
+          </li>
+          <li>
+            On a lead, tap Call and allow Phone, Call history, and Music and
+            audio.
+          </li>
+        </ol>
+      </details>
+    </>
+  );
+}
+
 export function PhoneAppDialog({
   open,
   onClose,
@@ -77,6 +128,7 @@ export function PhoneAppDialog({
   const { android, app } = useDevice();
   // Only the real app is ever offered; the Dev build is never a download.
   const link = ANDROID_APP;
+  const playLink = usePlayLink();
   return (
     <Dialog
       open={open}
@@ -92,7 +144,11 @@ export function PhoneAppDialog({
             </span>
             <span>
               <strong>Android</strong>
-              <small>Test build, updated with every release</small>
+              <small>
+                {playLink
+                  ? "On Google Play"
+                  : "Test build, updated with every release"}
+              </small>
             </span>
             <Badge tone="accent">
               {ANDROID_DOWNLOAD_READY ? "New" : "Testing"}
@@ -102,59 +158,31 @@ export function PhoneAppDialog({
             <p className={styles.hint}>
               You&apos;re using the app. On any lead, tap Call.
             </p>
+          ) : playLink ? (
+            <>
+              {/* Google Play first (24 Oct 2026); the file waits behind a question. */}
+              <a className={styles.downloadButton} href={playLink}>
+                <Download size={16} aria-hidden="true" />
+                Get it on Google Play
+              </a>
+              <p className={styles.hint}>
+                Installed it from a download link before? Uninstall that app
+                first; your leads, calls and Reports stay in your account.
+              </p>
+              {ANDROID_DOWNLOAD_READY ? (
+                <details className={styles.terms}>
+                  <summary>No Play Store on this phone?</summary>
+                  <DirectDownload android={android} link={link} />
+                </details>
+              ) : null}
+            </>
           ) : !ANDROID_DOWNLOAD_READY ? (
             <p className={styles.hint}>
               The Android app is being tested by the Authority Closers team. The
               download appears here once it&apos;s signed for your phones.
             </p>
           ) : (
-            <>
-              <div className={styles.appGet}>
-                {android ? null : (
-                  <QRCodeSVG
-                    value={link}
-                    size={132}
-                    marginSize={2}
-                    className={styles.qr}
-                    title="Scan with your Android phone's camera"
-                  />
-                )}
-                <div className={styles.appGetText}>
-                  {android ? null : (
-                    <p className={styles.hint}>
-                      Scan with your Android phone&apos;s camera, or open Sales
-                      X-Ray on the phone and download it there.
-                    </p>
-                  )}
-                  <a className={styles.downloadButton} href={link}>
-                    <Download size={16} aria-hidden="true" />
-                    Download for Android
-                  </a>
-                  <CopyLink link={link} />
-                </div>
-              </div>
-              <a className={styles.appsLink} href="/apps">
-                Install help with pictures, the file&apos;s SHA-256 and other
-                platforms
-              </a>
-              <details className={styles.terms}>
-                <summary>How to install</summary>
-                <ol className={styles.steps}>
-                  <li>Open the downloaded file.</li>
-                  <li>
-                    If your phone asks, allow your browser to install apps.
-                  </li>
-                  <li>
-                    Open Sales X-Ray and sign in with the email code (Google
-                    sign-in doesn&apos;t work inside apps).
-                  </li>
-                  <li>
-                    On a lead, tap Call and allow Phone, Call history, and Music
-                    and audio.
-                  </li>
-                </ol>
-              </details>
-            </>
+            <DirectDownload android={android} link={link} />
           )}
           <p className={styles.hint}>
             Works on phones that record calls by themselves: Samsung, Xiaomi,

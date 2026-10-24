@@ -20,6 +20,7 @@ import { AcquisitionShell } from "./acquisition-shell";
 import { ConsentRenewal } from "./consent-renewal";
 import { PhoneOnboarding } from "./leads/phone-onboarding";
 import { PersistentShell } from "./shell/lightbox-shell";
+import { PlayMoveCard } from "./apps/play-move-card";
 import { useTheme } from "./lightbox/theme-provider";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
@@ -281,6 +282,7 @@ function AppFrame({
       <FirstCallGuide />
       <ConsentRenewal />
       <PhoneOnboarding />
+      <PlayMoveCard />
     </>
   );
 }

@@ -5,6 +5,7 @@ import {
   Bug,
   CheckCircle2,
   Copy,
+  ExternalLink,
   Info,
   RotateCw,
   X,
@@ -23,7 +24,12 @@ export type Notice = Readonly<{
   message?: string;
   /** A request reference the AC team can trace; shown short, copied in full. */
   reference?: string;
-  action?: Readonly<{ label: string; run: () => void }>;
+  /** "retry" by default; "open" for a way to another app or site. */
+  action?: Readonly<{
+    label: string;
+    run: () => void;
+    icon?: "retry" | "open";
+  }>;
   /** Milliseconds before it leaves by itself; errors stay until dismissed. */
   timeout?: number;
   /** Permanent dismissal: retain the card until the API acknowledges it. */
@@ -116,7 +122,11 @@ function NoticeCard({ notice }: { notice: Notice }) {
                   notice.action?.run();
                 }}
               >
-                <RotateCw size={13} aria-hidden="true" />
+                {notice.action.icon === "open" ? (
+                  <ExternalLink size={13} aria-hidden="true" />
+                ) : (
+                  <RotateCw size={13} aria-hidden="true" />
+                )}
                 {notice.action.label}
               </button>
             ) : null}
