@@ -202,6 +202,12 @@
   font-size: var(--sx-text-xs);
 }
 
+/* A seller's numbers take a second line on a phone rather than ending in
+   "..." (polish pass, 24 Oct 2026: nothing that matters cut short). */
+.list .rowMain small {
+  white-space: normal;
+}
+
 .rowEnd {
   display: grid;
   justify-items: end;
