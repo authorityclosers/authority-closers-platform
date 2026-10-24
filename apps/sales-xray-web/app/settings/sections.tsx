@@ -26,6 +26,7 @@ import { useApkLinksAllowed } from "../purchase-policy";
 import { Panel } from "../ui/kit";
 import { ConnectedApps } from "./connected-apps";
 import { DevelopersSection } from "./developers";
+import { ThemeControl } from "../lightbox/theme-provider";
 import { PhoneSetupPanel, VibrationPanel } from "./phone-panel";
 import { PrivacySettings } from "./privacy";
 import { SellingSettings } from "./selling";
@@ -103,6 +104,12 @@ function AppPanel() {
 function PhoneAndAlerts() {
   return (
     <div className={styles.stack}>
+      {/* Owner, 24 Oct 2026: the theme choice easy to find; System follows the phone. */}
+      <Panel title="Appearance">
+        <div className={styles.appearance}>
+          <ThemeControl />
+        </div>
+      </Panel>
       <PhoneSetupPanel />
       <AlertsCard />
       <VibrationPanel />

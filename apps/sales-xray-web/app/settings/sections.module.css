@@ -137,3 +137,8 @@
   flex: none;
   color: var(--sx-good);
 }
+
+/* Phone & alerts → Appearance: System, Light or Dark. */
+.appearance {
+  padding: 12px 16px 14px;
+}

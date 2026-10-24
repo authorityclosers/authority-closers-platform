@@ -77,6 +77,8 @@ export type NativeStatus = {
   nativeSignIn: NativeSignInProvider[];
   /** "direct" (download link) or "play" (Google Play), from app builds of 23 Oct 2026. */
   store?: "direct" | "play";
+  /** The app takes the theme pick (Android's night mode follows it), from 1.0.25. */
+  theme?: true;
 };
 
 export type NativeSignInProvider = "google" | "facebook";
@@ -314,9 +316,30 @@ export async function phoneStatus(): Promise<NativeStatus | null> {
       ...(raw.store === "play" || raw.store === "direct"
         ? { store: raw.store }
         : {}),
+      ...(typeof raw.theme === "string" ? { theme: true as const } : {}),
     };
   } catch {
     return null;
+  }
+}
+
+let themeTaken: Promise<boolean> | null = null;
+
+/**
+ * Tells the phone app the theme pick (System, Light or Dark), so Android's
+ * night mode, its own sheets and the ground behind the page match it from
+ * the next start's first frame. Builds before 1.0.25 don't take it.
+ */
+export async function setPhoneTheme(
+  mode: "system" | "light" | "dark",
+): Promise<void> {
+  if (!inPhoneApp()) return;
+  themeTaken ??= phoneStatus().then((status) => status?.theme === true);
+  if (!(await themeTaken)) return;
+  try {
+    await ask("theme", { mode }, 5_000);
+  } catch {
+    // The page still shows the pick; the app catches up at the next start.
   }
 }
 
