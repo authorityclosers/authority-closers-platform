@@ -160,7 +160,10 @@ it("ranks what to fix next with evidence, owner and the task text, and what impr
   expect(page.querySelectorAll("button")).toHaveLength(6);
   expect(page.textContent).toContain("suggested owner Lead OS");
   expect(page.textContent).toContain(
-    "by release v0.85 880 ms, v0.86 920 ms, v0.87 1.24 s",
+    "Release by release: v0.85 880 ms → v0.86 920 ms → v0.87 1.24 s",
+  );
+  expect(page.textContent).toContain(
+    "Release by release: v0.85 3.6 → v0.86 3.1 → v0.87 2.9 per 100 sessions",
   );
   expect(page.textContent).toContain("Switch tab is slow on A lead");
   expect(page.textContent).toContain("Gone");

@@ -171,6 +171,10 @@
   vertical-align: middle;
 }
 
+.barRow[data-gap] {
+  margin-bottom: 8px;
+}
+
 .barValue {
   color: var(--sx-ink);
   font-variant-numeric: tabular-nums;
@@ -189,6 +193,7 @@
 .speed {
   font-variant-numeric: tabular-nums;
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .speed[data-tone="good"] {

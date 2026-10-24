@@ -33,6 +33,7 @@ import {
   mixOf,
   severityTone,
   slowLimit,
+  trendWords,
   speedTone,
   verdictTone,
   type ActionTiming,
@@ -95,6 +96,8 @@ type Bar = {
   text: string;
   tone?: Tone;
   muted?: boolean;
+  /** A little room after this bar (the end of a before-and-after pair). */
+  gapAfter?: boolean;
 };
 
 /**
@@ -124,7 +127,11 @@ function Bars({
     <figure className={styles.chart}>
       <ol className={styles.bars} aria-label={label}>
         {rows.map((row) => (
-          <li key={row.key} className={styles.barRow}>
+          <li
+            key={row.key}
+            className={styles.barRow}
+            data-gap={row.gapAfter ? "" : undefined}
+          >
             <span className={styles.barLabel}>{row.label}</span>
             <span className={styles.barTrack}>
               <i
@@ -179,6 +186,11 @@ function Speed({
   );
 }
 
+const tierWords = (value: string) =>
+  value === "unknown"
+    ? "Unknown tier"
+    : `${value.charAt(0).toUpperCase()}${value.slice(1)}-${value === "mid" ? "range" : "end"}`;
+
 const countedWords = (items: Counted[], words?: (value: string) => string) =>
   items.length
     ? items
@@ -186,6 +198,9 @@ const countedWords = (items: Counted[], words?: (value: string) => string) =>
         .map((item) => (words ? words(item.value) : item.value))
         .join(", ")
     : "–";
+
+const plural = (count: number, one: string, many: string) =>
+  count ? `${count} ${count === 1 ? one : many}` : "";
 
 function issuesLine(item: {
   crashes: number;
@@ -195,11 +210,11 @@ function issuesLine(item: {
   killed: number;
 }) {
   const parts = [
-    item.crashes ? `${item.crashes} crashes` : "",
+    plural(item.crashes, "crash", "crashes"),
     item.killed ? `${item.killed} closed by Android` : "",
-    item.scriptErrors ? `${item.scriptErrors} script errors` : "",
-    item.rageTaps ? `${item.rageTaps} rage taps` : "",
-    item.deadTaps ? `${item.deadTaps} dead taps` : "",
+    plural(item.scriptErrors, "script error", "script errors"),
+    plural(item.rageTaps, "rage tap", "rage taps"),
+    plural(item.deadTaps, "dead tap", "dead taps"),
   ].filter(Boolean);
   return parts.length ? parts.join(" · ") : "No issues";
 }
@@ -553,7 +568,7 @@ function EveryDevice({ groups }: { groups: readonly DeviceGroup[] }) {
               <td>
                 {group.ram.length
                   ? countedWords(group.ram, RAM_WORDS)
-                  : countedWords(group.tiers)}
+                  : countedWords(group.tiers, tierWords)}
               </td>
               <td>
                 {countedWords(
@@ -668,6 +683,7 @@ export function ReleasesView({
                 },
                 {
                   key: `${item.key}-head`,
+                  gapAfter: true,
                   label: `${item.label}, after`,
                   value: item.head ?? 0,
                   text: `${msWords(item.head)} · ${VERDICT_WORDS[item.verdict].toLowerCase()}`,
@@ -850,15 +866,13 @@ export function FixNextView({ fixNext }: { fixNext: FixNext }) {
                     {item.before !== null
                       ? ` · the window before ${metricWords(item.unit, item.before)}`
                       : ""}
-                    {item.byRelease.length > 1
-                      ? ` · by release ${item.byRelease
-                          .map(
-                            (part) =>
-                              `${part.release} ${metricWords(item.unit, part.value)}`,
-                          )
-                          .join(", ")}`
-                      : ""}
                   </p>
+                  {item.byRelease.length > 1 ? (
+                    <p className={styles.muted}>
+                      Release by release:{" "}
+                      {trendWords(item.unit, item.byRelease)}
+                    </p>
+                  ) : null}
                 </div>
                 <CopyTask text={item.task} />
               </li>

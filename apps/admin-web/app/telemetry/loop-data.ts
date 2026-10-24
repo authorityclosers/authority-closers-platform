@@ -396,6 +396,26 @@ export function metricWords(unit: Metric["unit"], value: number | null) {
   return `${value % 1 ? value.toFixed(1) : value} per 100 sessions`;
 }
 
+/** "v0.85 880 ms → v0.86 920 ms"; rates say their unit once, at the end. */
+export function trendWords(
+  unit: Metric["unit"],
+  parts: ReadonlyArray<{ release: string; value: number | null }>,
+): string {
+  const line = parts
+    .map(
+      (part) =>
+        `${part.release} ${
+          unit === "per_100_sessions"
+            ? part.value === null
+              ? "–"
+              : String(part.value)
+            : metricWords(unit, part.value)
+        }`,
+    )
+    .join(" → ");
+  return unit === "per_100_sessions" ? `${line} per 100 sessions` : line;
+}
+
 export function changeWords(metric: Metric): string {
   if (metric.change === null) return "–";
   if (metric.unit === "share") {
