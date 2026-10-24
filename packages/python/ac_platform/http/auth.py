@@ -11,7 +11,7 @@ import logging
 import re
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Annotated, Literal, Protocol, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import UUID
@@ -51,6 +51,7 @@ from ac_platform.http.identity_provider import (
 from ac_platform.http.identity_provider_apple import apple_user_name
 from ac_platform.http.problem import problem_response
 from ac_platform.http.rate_limits import client_identity
+from ac_platform.http.sales_xray_home import sales_xray_home
 from ac_platform.identity.application import (
     AccountDeletionPrivacyHook,
     AsyncIdentityApplication,
@@ -253,6 +254,9 @@ class AuthenticatedTransaction:
 
 
 RequireActor = Callable[[Request], AsyncIterator[AuthenticatedTransaction]]
+# Requests that sign in with shared fences, and how often they advance last_seen_at.
+_READ_METHODS = frozenset({"GET", "HEAD"})
+_LAST_SEEN_EVERY = timedelta(minutes=1)
 
 # Staff keys (Admin CLI and MCP, 19 Oct 2026): "Authorization: Bearer ac_<env>_<token>".
 STAFF_KEY_PATTERN = re.compile(r"ac_[a-z]{2,8}_[A-Za-z0-9_-]{43,512}\Z")
@@ -1757,6 +1761,12 @@ def _learner_oauth_recovery_response(
     return response
 
 
+def _sales_xray_host(request: Request, settings: Settings) -> bool:
+    """A request made on Sales X-Ray's own address (its password sign-in has no surface)."""
+    app = settings.sales_xray_app_url
+    return app is not None and request.url.hostname == app.host
+
+
 def _require_surface_host(request: Request, settings: Settings, surface: str) -> None:
     if (
         settings.environment not in {"staging", "production"}
@@ -1894,9 +1904,15 @@ def install_identity_http(
             raise AuthenticationRequired("A valid Authority Closers session is required.")
         async with sessions() as database, database.begin():
             identity = _identity(database)
-            resolved = await _resolved_with_role_permissions(
-                database, await identity.resolve_actor(token)
-            )
+            if request.method in _READ_METHODS:
+                # A read signs in with shared fences and touches last_seen_at at
+                # most once a minute, never waiting: on 24 Oct 2026 a phone's first
+                # launch sent ~20 reads that each locked the person FOR UPDATE and
+                # wrote the session, so they ran one by one and all waited 14 s.
+                found = await identity.resolve_actor_read_only(token, touch_after=_LAST_SEEN_EVERY)
+            else:
+                found = await identity.resolve_actor(token)
+            resolved = await _resolved_with_role_permissions(database, found)
             yield AuthenticatedTransaction(
                 database=database,
                 identity=identity,
@@ -2090,7 +2106,7 @@ def install_identity_http(
                     tenant_id = None
                     if verified.learner_provisioning_required:
                         tenant_id = await ensure_public_learner(database, person.id)
-                    else:
+                    elif body.surface != "sales_xray":
                         candidate_tenant = settings.public_learner_tenant_id
                         membership = await database.scalar(
                             select(Membership).where(
@@ -2115,6 +2131,16 @@ def install_identity_http(
                             application.state, "internal_tester_policy", None
                         ),
                     )
+                    if body.surface == "sales_xray" and not verified.learner_provisioning_required:
+                        # The workspace last used, or the one with this person's
+                        # Sales X-Ray data, never an empty Personal (24 Oct 2026).
+                        # After the join, so a work address's organisation counts.
+                        tenant_id = await sales_xray_home(
+                            database,
+                            person.id,
+                            settings=settings,
+                            exclude_session_id=issued.metadata.id,
+                        )
                     if tenant_id is not None:
                         await identity.select_tenant(issued.token, tenant_id)
                     if verified.consent_audit_required:
@@ -2225,7 +2251,16 @@ def install_identity_http(
                     ip_address=request.client.host if request.client else None,
                 )
                 tenant_id = settings.public_learner_tenant_id
-                if tenant_id is not None:
+                if _sales_xray_host(request, settings):
+                    home = await sales_xray_home(
+                        database,
+                        person.id,
+                        settings=settings,
+                        exclude_session_id=issued.metadata.id,
+                    )
+                    if home is not None:
+                        await identity.select_tenant(issued.token, home)
+                elif tenant_id is not None:
                     membership = await database.scalar(
                         select(Membership).where(
                             Membership.tenant_id == tenant_id,
@@ -3903,9 +3938,23 @@ def install_identity_http(
                     # existing learner context just as password login does.
                     existing_learner_tenant_id = settings.public_learner_tenant_id
                     selected_learner_tenant_id: UUID | None = None
-                    if (
-                        transaction.surface in {"learner", "sales_xray"}
-                        and existing_learner_tenant_id is not None
+                    if transaction.surface == "sales_xray":
+                        # Sales X-Ray opens the workspace last used, or the one
+                        # with this person's data, never an empty Personal: a
+                        # tester's reinstall showed her none of her 383 leads
+                        # (24 Oct 2026).
+                        home = await sales_xray_home(
+                            database,
+                            issued.metadata.person_id,
+                            settings=settings,
+                            exclude_session_id=issued.metadata.id,
+                        )
+                        if home is not None:
+                            await identity.select_tenant(session_token, home)
+                            if home == existing_learner_tenant_id:
+                                selected_learner_tenant_id = home
+                    elif (
+                        transaction.surface == "learner" and existing_learner_tenant_id is not None
                     ):
                         membership = await database.scalar(
                             select(Membership).where(

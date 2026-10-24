@@ -11,6 +11,9 @@ permissions:
   contents: read
   actions: read
 
+env:
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
+
 concurrency:
   group: application-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   # Main pushes finish validation and packaging while newer main work queues.
@@ -283,7 +286,7 @@ jobs:
           name: python-test-shard-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/python-test-shard-${{ matrix.shard }}
           if-no-files-found: error
-          retention-days: 14
+          retention-days: 1
 
   validate-python-gates:
     needs: ci-prerequisites

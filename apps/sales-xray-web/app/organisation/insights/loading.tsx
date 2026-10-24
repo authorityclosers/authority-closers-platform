@@ -2,7 +2,7 @@
 
 import { AcquisitionShell } from "../../acquisition-shell";
 import { useWorkspaceAccess } from "../../workspace-access";
-import { InsightsSkeleton } from "./insights-view";
+import { InsightsSkeleton } from "./insights-skeleton";
 
 export default function InsightsLoading() {
   const access = useWorkspaceAccess();

@@ -14,6 +14,7 @@ import {
 } from "./hooks/upload-session";
 import { useWorkspaceAccess } from "./workspace-access";
 import { clearLegacySpeakerProfiles } from "./speaker-profiles";
+import { confirmLogOutWithUnsent } from "./sync/write-queue";
 
 const SIGN_OUT_ERROR = "We couldn’t confirm sign out. Try again.";
 const SIGN_OUT_UPLOAD_WARNING =
@@ -68,6 +69,8 @@ export function useSalesXraySignOut() {
 
   async function signOut() {
     if (inFlight.current) return;
+    // Changes not on the server yet: ask first (owner's P0, 24 Oct 2026).
+    if (!confirmLogOutWithUnsent()) return;
     const unresolved = upload?.requiresSignOutConfirmation() ?? false;
     if (unresolved && !window.confirm(SIGN_OUT_UPLOAD_WARNING)) return;
     inFlight.current = true;
@@ -101,6 +104,8 @@ export function AccountNavigation({ compact = false }: { compact?: boolean }) {
 
   async function signOut() {
     if (inFlight.current) return;
+    // Changes not on the server yet: ask first (owner's P0, 24 Oct 2026).
+    if (!confirmLogOutWithUnsent()) return;
     const unresolved = upload?.requiresSignOutConfirmation() ?? false;
     if (unresolved && !window.confirm(SIGN_OUT_UPLOAD_WARNING)) return;
     inFlight.current = true;

@@ -42,6 +42,8 @@ from ac_platform.lead_desk.models import (
     LeadMetaConversion,
     LeadSlaBreach,
     LeadSocialMessage,
+    LeadTask,
+    LeadTaskReminder,
     LeadWhatsAppMessage,
 )
 from ac_platform.partner_events.models import PartnerLeadEvent
@@ -231,6 +233,21 @@ async def remove(
             await db.execute(
                 delete(LeadChatRead).where(*mine(LeadChatRead)).execution_options(**_QUIET)
             )
+        ),
+        # The work-memory engine's reminders, then its tasks (migration 0129; their
+        # history was in the events above).
+        "task_reminders": _count(
+            await db.execute(
+                delete(LeadTaskReminder)
+                .where(
+                    LeadTaskReminder.tenant_id == tenant_id,
+                    LeadTaskReminder.task_id.in_(select(LeadTask.id).where(*mine(LeadTask))),
+                )
+                .execution_options(**_QUIET)
+            )
+        ),
+        "tasks": _count(
+            await db.execute(delete(LeadTask).where(*mine(LeadTask)).execution_options(**_QUIET))
         ),
         # Lead OS meetings (current state only; their history was in the events above).
         "meetings": _count(

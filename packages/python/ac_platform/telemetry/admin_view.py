@@ -453,7 +453,8 @@ def _people(rows: Iterable[Row], test: Callable[[Row], bool]) -> set[str]:
     return {row.person for row in rows if test(row)}
 
 
-def _funnels(rows: Sequence[Row]) -> list[dict[str, Any]]:
+def funnels(rows: Sequence[Row]) -> list[dict[str, Any]]:
+    """From a report to an outcome, and from Leads to an outcome (people at each step)."""
     report = _funnel(
         [
             ("opened", "Opened a report", _people(rows, lambda r: r.event == "sx.report_opened")),
@@ -688,7 +689,7 @@ def _mix(rows: Sequence[Row]) -> dict[str, Any]:
     }
 
 
-# The Android app's own signals (1.0.25): what each breakdown is called on the dashboard.
+# The Android app's own signals (1.0.26): what each breakdown is called on the dashboard.
 PHONE_BREAKDOWNS: tuple[tuple[str, str, str], ...] = (
     ("sx.device_profile", "android", "Android version"),
     ("sx.device_profile", "maker", "Phone make"),
@@ -722,6 +723,47 @@ def _latest(rows: Sequence[Row]) -> list[Row]:
         if row.person not in newest or row.at > newest[row.person].at:
             newest[row.person] = row
     return list(newest.values())
+
+
+def _unsent(rows: Sequence[Row]) -> dict[str, Any]:
+    """Phones holding a seller's changes the server doesn't have yet (sync/write-queue.ts).
+
+    Each person's newest report: how many changes wait, how many were refused when sent
+    again, and the oldest one's age. Counts only; what the changes say never leaves the phone.
+    """
+    holding: list[tuple[int, str, dict[str, Any]]] = []
+    waiting_total = refused_total = 0
+    for row in _latest(rows):
+        waiting = int(_number(row.payload, "waiting") or 0)
+        refused = int(_number(row.payload, "refused") or 0)
+        if waiting + refused == 0:
+            continue
+        oldest = int(_number(row.payload, "oldest_min") or 0)
+        waiting_total += waiting
+        refused_total += refused
+        holding.append(
+            (
+                oldest,
+                row.person,
+                {
+                    "person": row.person,
+                    "waiting": waiting,
+                    "refused": refused,
+                    "oldest_min": oldest,
+                    "reported_at": row.at.isoformat(),
+                    "app": str(row.payload.get("app", "web")),
+                    "app_version": row.payload.get("app_version"),
+                },
+            )
+        )
+    holding.sort(key=lambda entry: (-entry[0], entry[1]))
+    return {
+        "phones": len(holding),
+        "waiting": waiting_total,
+        "refused": refused_total,
+        "oldest_min": max((entry[0] for entry in holding), default=None),
+        "rows": [entry[2] for entry in holding[:20]],
+    }
 
 
 def _phone(by_event: Mapping[str, Sequence[Row]]) -> dict[str, Any]:
@@ -886,23 +928,27 @@ def overview(
         "vitals": _vitals(by_event.get("sx.web_vital", [])),
         "starts": _starts(by_event.get("sx.app_start", [])),
         "screens": _screens(by_event.get("sx.screen_viewed", []), since, now, window == "24h"),
-        "funnels": _funnels(rows),
+        "funnels": funnels(rows),
         "features": _features(rows),
         "errors": _errors(rows),
         "mix": _mix(rows),
         "releases": _releases(rows),
         "phone": _phone(by_event),
+        "unsent": _unsent(by_event.get("sx.writes_waiting", [])),
     }
 
 
 __all__ = [
+    "ACTION_LABELS",
     "DEFAULT_SLOW_MS",
     "SCHEMA",
     "SLOW_MS",
+    "VITAL_LIMITS",
     "WINDOWS",
     "Filters",
     "Read",
     "Row",
+    "funnels",
     "overview",
     "read_consent",
     "read_rows",

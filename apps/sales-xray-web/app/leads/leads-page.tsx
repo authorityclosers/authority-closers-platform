@@ -1155,6 +1155,7 @@ export function LeadsRoute() {
               }}
               canManage={can}
               onOpen={(leadId) => open(leadId)}
+              onCall={(leadId) => open(leadId, "call")}
               refreshKey={version}
             />
           ) : stageView ? (

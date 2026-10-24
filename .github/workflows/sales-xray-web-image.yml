@@ -28,6 +28,9 @@ permissions:
   actions: read
   contents: read
 
+env:
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
+
 concurrency:
   group: sales-xray-web-image-${{ inputs.frozen_sha || github.sha }}
   cancel-in-progress: false

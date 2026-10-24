@@ -333,8 +333,13 @@ class AsyncIdentityApplication:
         require_active: bool = True,
         require_email: bool = True,
         provider_email: str | None = None,
+        no_key_update: bool = False,
     ) -> PersonSnapshot:
-        person = await self._repository.get_person_for_update(person_id)
+        person = await (
+            self._repository.get_person_for_no_key_update
+            if no_key_update
+            else self._repository.get_person_for_update
+        )(person_id)
         if person is None:
             raise IdentityResolutionError("canonical person does not exist")
         if require_active and person.status != PersonStatus.ACTIVE.value:
@@ -349,6 +354,7 @@ class AsyncIdentityApplication:
         *,
         current_time: datetime,
         expected_audience: SessionAudience = SessionAudience.ACCOUNT,
+        no_key_update: bool = False,
     ) -> tuple[PersonSnapshot, StoredSession]:
         token_hash = self._token_hash(token)
         candidate = await self._repository.find_session_by_token_hash(token_hash)
@@ -356,8 +362,12 @@ class AsyncIdentityApplication:
             raise InvalidSessionTokenError("session token is invalid")
         # Person first is the global lock order. Re-read and lock the session
         # afterwards so revocation cannot be overwritten by a stale candidate.
-        person = await self._lock_person(candidate.person_id)
-        session = await self._repository.get_session_for_update(candidate.id)
+        person = await self._lock_person(candidate.person_id, no_key_update=no_key_update)
+        session = await (
+            self._repository.get_session_for_no_key_update
+            if no_key_update
+            else self._repository.get_session_for_update
+        )(candidate.id)
         if (
             session is None
             or session.person_id != person.id
@@ -468,7 +478,13 @@ class AsyncIdentityApplication:
         expected_audience: SessionAudience = SessionAudience.ACCOUNT,
         now: datetime | None = None,
     ) -> ResolvedActorContext:
-        """Resolve and lock the complete server-owned actor for this transaction."""
+        """Resolve and lock the complete server-owned actor for this transaction.
+
+        Person and Session FOR NO KEY UPDATE (24 Oct 2026): deletion, suspension,
+        revocation and workspace changes (FOR UPDATE) and the same person's other
+        writes still wait, but reads in flight and new rows that point at the
+        person or session no longer do.
+        """
 
         self._require_transaction()
         current_time = _now(now)
@@ -476,6 +492,7 @@ class AsyncIdentityApplication:
             token,
             current_time=current_time,
             expected_audience=expected_audience,
+            no_key_update=True,
         )
         tenant: Tenant | None = None
         membership: Membership | None = None
@@ -506,14 +523,20 @@ class AsyncIdentityApplication:
         require_tenant: bool = False,
         expected_audience: SessionAudience = SessionAudience.ACCOUNT,
         now: datetime | None = None,
+        touch_after: timedelta | None = None,
     ) -> ResolvedActorContext:
-        """Resolve an actor without updating session activity or taking write locks.
+        """Resolve an actor without taking write locks.
 
         Read-only surfaces use this while a long-lived source response retains
         shared identity/recording fences.  This method takes shared Person,
         Session, Tenant and Membership locks in the canonical order before
-        returning the actor; it avoids the normal authentication write that
-        advances ``last_seen_at``.
+        returning the actor (Person and Session FOR KEY SHARE, so one person's
+        reads never wait for each other); it avoids the normal authentication
+        write that advances ``last_seen_at``.
+
+        With ``touch_after``, ``last_seen_at`` still advances when it is older than
+        that, at most once in that time and never waiting (SKIP LOCKED): GET
+        requests sign in this way since 24 Oct 2026.
         """
 
         self._require_transaction()
@@ -552,6 +575,14 @@ class AsyncIdentityApplication:
             )
         elif require_tenant:
             raise TenantScopeDeniedError("an explicit active tenant context is required")
+        if touch_after is not None and (
+            session.last_seen_at is None or session.last_seen_at < current_time - touch_after
+        ):
+            revision = await self._repository.touch_session(
+                session.id, now=current_time, idle_before=current_time - touch_after
+            )
+            if revision is not None:
+                session = replace(session, last_seen_at=current_time, revision=revision)
         return self._resolved_actor(
             person,
             session,

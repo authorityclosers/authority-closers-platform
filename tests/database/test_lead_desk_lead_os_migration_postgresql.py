@@ -26,6 +26,8 @@ from tests.database.conversation_harness import conversation_harness
 ROOT = Path(__file__).resolve().parents[2]
 REVISION, DOWN = "20261024_0128", "20261023_0127"
 FILE = "20261024_0128_lead_os.py"
+# Migrations after this one that change its tables: unwound around it, then redone.
+LATER = ("20261024_0129_lead_desk_tasks.py",)
 
 
 @pytest.fixture(scope="module")
@@ -33,9 +35,9 @@ def postgres_harness() -> Iterator[Engine]:
     yield from conversation_harness(ROOT)
 
 
-def migration() -> Any:
-    path = ROOT / "db/migrations/versions" / FILE
-    spec = importlib.util.spec_from_file_location("lead_os_migration", path)
+def migration(file: str = FILE) -> Any:
+    path = ROOT / "db/migrations/versions" / file
+    spec = importlib.util.spec_from_file_location(f"lead_os_migration_{file[:13]}", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -58,12 +60,17 @@ def test_unused_migration_downgrades_reupgrades_and_matches_the_models(
     module = migration()
     with postgres_harness.begin() as connection:
         context = MigrationContext.configure(connection, opts={"target_metadata": model_metadata()})
+        later = [migration(file) for file in LATER]
         with Operations.context(context):
+            for step in reversed(later):
+                step.downgrade()
             module.downgrade()
             assert "lead_desk_meetings" not in inspect(connection).get_table_names()
             columns = {c["name"] for c in inspect(connection).get_columns("lead_desk_leads")}
             assert not {"stage_at", "outcome_reason"} & columns
             module.upgrade()
+            for step in later:
+                step.upgrade()
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []
 
 

@@ -17,9 +17,9 @@ from typing import Any, Literal
 from urllib.parse import parse_qsl
 from uuid import UUID
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
+from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import AwareDatetime, BaseModel, ConfigDict
 from sqlalchemy import select
 from starlette.requests import ClientDisconnect
 
@@ -33,6 +33,7 @@ from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import push, simulation
 from ac_platform.lead_desk.contracts import (
+    ActivityPage,
     AlertText,
     Badge,
     BulkDone,
@@ -51,10 +52,14 @@ from ac_platform.lead_desk.contracts import (
     ImportPreview,
     ImportResult,
     LeadDetail,
+    LeadDue,
     LeadEdit,
+    LeadMade,
     LeadMatch,
     LeadPage,
     LeadsDeleted,
+    LeadSince,
+    LeadSort,
     Me,
     MessageSent,
     MovePipeline,
@@ -79,6 +84,7 @@ from ac_platform.lead_desk.contracts import (
     SourceView,
     TakingLeads,
     Team,
+    WorkDay,
     WorkHoursCommand,
 )
 from ac_platform.lead_desk.intake import MAX_FILE_BYTES, Intake
@@ -220,10 +226,32 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         test: Literal["only"] | None = None,
         owner: UUID | None = None,
         pipeline: str | None = None,
+        sort: LeadSort | None = None,
+        order: Literal["asc", "desc"] | None = None,
+        source: str | None = Query(default=None, max_length=16),
+        due: LeadDue | None = None,
+        contact: LeadSince | None = None,
+        created: LeadMade | None = None,
     ) -> LeadPage:
         no_query(
             request,
-            frozenset({"scope", "stage", "search", "offset", "test", "owner", "pipeline"}),
+            frozenset(
+                {
+                    "scope",
+                    "stage",
+                    "search",
+                    "offset",
+                    "test",
+                    "owner",
+                    "pipeline",
+                    "sort",
+                    "order",
+                    "source",
+                    "due",
+                    "contact",
+                    "created",
+                }
+            ),
         )
         if pipeline is not None and not 0 < len(pipeline) <= 40:
             raise HTTPException(422, "Choose a pipeline.", headers=PRIVATE)
@@ -240,7 +268,26 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 test_only=test == "only",
                 owner=owner,
                 pipeline=pipeline,
+                sort=sort,
+                descending=None if order is None else order == "desc",
+                source=source,
+                due=due,
+                contact=contact,
+                created=created,
             )
+
+    @router.get("/activity", response_model=ActivityPage, response_model_by_alias=True)
+    async def activity(
+        request: Request,
+        response: Response,
+        day: WorkDay = "today",
+        before: AwareDatetime | None = None,
+        person: UUID | None = None,
+    ) -> ActivityPage:
+        """My work: what a seller did, newest first, today, yesterday or this week."""
+        no_query(request, frozenset({"day", "before", "person"}))
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.activity(day=day, before=before, person=person)
 
     @router.get("/leads/match", response_model=LeadMatch, response_model_by_alias=True)
     async def match_lead(request: Request, response: Response, phone: str = "") -> LeadMatch:
