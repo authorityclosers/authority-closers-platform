@@ -202,6 +202,8 @@ it("asks straight away after a call the phone logged with talk time", async () =
   await flush();
   const text = document.body.textContent ?? "";
   expect(text).toContain("Back from the call with Ravi. How did it go?");
-  expect(text).toContain("Your phone says you talked for 1 min 22 s.");
+  expect(text).toContain(
+    "Your phone says you talked for 1\u00a0min 22\u00a0s.",
+  );
   expect(tile("Log a call")).toBeUndefined();
 });

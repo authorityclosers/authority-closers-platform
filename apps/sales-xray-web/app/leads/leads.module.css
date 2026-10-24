@@ -2253,6 +2253,12 @@ a.repName {
   opacity: 0.92;
 }
 
+/* Placing the call: the tap shows at once, before the dialler opens. */
+.callButton[aria-busy] {
+  opacity: 0.72;
+  cursor: progress;
+}
+
 .callButton[data-empty] {
   border: 1px dashed var(--sx-line-strong);
   background: var(--sx-surface);

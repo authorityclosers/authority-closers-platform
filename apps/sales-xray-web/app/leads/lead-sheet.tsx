@@ -892,11 +892,13 @@ function usePendingRecording(leadId: string) {
   return { item, hidden, done };
 }
 
+// Each number keeps its unit on the same line ("1 min 22 s" never leaves "s." alone
+// at 390 px; builder, 24 Oct 2026).
 function talkTime(seconds: number): string {
   const whole = Math.max(0, Math.round(seconds));
   return whole < 60
-    ? `${whole} seconds`
-    : `${Math.floor(whole / 60)} min ${whole % 60} s`;
+    ? `${whole}\u00a0seconds`
+    : `${Math.floor(whole / 60)}\u00a0min ${whole % 60}\u00a0s`;
 }
 
 const HEARD_MISSED: Partial<Record<NativeCall["result"], string>> = {
@@ -2016,18 +2018,23 @@ export function LeadCard({
       }
     : null;
 
+  // Call access is checked once per sheet, and again after a call that failed
+  // (builder, 24 Oct 2026: a tap took about a second before the dialler opened).
+  const callAccess = useRef<boolean | null>(null);
   // Inside the phone app the call is placed and followed by the app.
   const callFromApp = async (askFirst: boolean) => {
     if (!detail.phone) return;
     setCalling(true);
     try {
-      if (askFirst) await askCallAccess();
-      else {
+      if (askFirst) callAccess.current = await askCallAccess();
+      else if (callAccess.current !== true) {
         const status = await phoneStatus();
         if (status && !status.callAccess) {
+          callAccess.current = false;
           setPermits(true);
           return;
         }
+        callAccess.current = status ? true : null;
       }
       setPermits(false);
       await startPhoneCall({
@@ -2036,6 +2043,7 @@ export function LeadCard({
         name: lead.name,
       });
     } catch {
+      callAccess.current = null;
       setPermits(false);
       rememberCall(lead.lead_id);
       window.location.href = `tel:${detail.phone}`;
@@ -2191,7 +2199,7 @@ export function LeadCard({
           >
             <Phone size={20} aria-hidden="true" />
             <span>
-              <strong>Call</strong>
+              <strong>{calling ? "Calling…" : "Call"}</strong>
               <small>{displayPhone(detail.phone)}</small>
             </span>
           </a>
