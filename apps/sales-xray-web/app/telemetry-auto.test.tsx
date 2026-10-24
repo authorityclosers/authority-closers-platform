@@ -6,6 +6,16 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const nav = vi.hoisted(() => ({ pathname: "/leads" }));
 vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
 vi.mock("next/web-vitals", () => ({ useReportWebVitals: () => undefined }));
+const phone = vi.hoisted(() => ({
+  drain: vi.fn(async () => [] as Array<{ name: string; fields: object }>),
+  tell: vi.fn(async (on: boolean) => {
+    void on;
+  }),
+}));
+vi.mock("./leads/native-phone", () => ({
+  drainPhoneTelemetry: phone.drain,
+  tellPhoneTelemetry: phone.tell,
+}));
 
 import { telemetry } from "./telemetry";
 import {
@@ -13,6 +23,7 @@ import {
   endpointOf,
   errorFacts,
   fingerprint,
+  syncPhone,
   targetOf,
   TelemetryAuto,
 } from "./telemetry-auto";
@@ -200,4 +211,36 @@ it("does nothing for a person the server records nothing for", async () => {
   expect(tracked(track, "sx.action_timing")).toEqual([]);
   expect(tracked(track, "sx.screen_viewed")).toEqual([]);
   await act(async () => root.unmount());
+});
+
+it("tells the phone app the switch once the server answers, and sends its events", async () => {
+  const collecting = vi.spyOn(telemetry, "collecting");
+  const track = vi.spyOn(telemetry, "track").mockImplementation(() => {});
+  phone.tell.mockClear();
+  phone.drain.mockClear();
+
+  // Not known yet (nobody signed in): the app is told nothing.
+  collecting.mockResolvedValue(null);
+  expect(await syncPhone()).toBeNull();
+  expect(phone.tell).not.toHaveBeenCalled();
+
+  // Off: the app is told, and nothing it holds is read.
+  collecting.mockResolvedValue(false);
+  expect(await syncPhone()).toBe(false);
+  expect(phone.tell).toHaveBeenLastCalledWith(false);
+  expect(phone.drain).not.toHaveBeenCalled();
+
+  // On: only the app's own events go on, under the page's switch.
+  collecting.mockResolvedValue(true);
+  phone.drain.mockResolvedValue([
+    { name: "sx.app_launch", fields: { start: "cold", ms: 2400 } },
+    { name: "sx.sign_out", fields: {} },
+    { name: "sx.permission_snapshot", fields: { calls: "granted" } },
+  ]);
+  expect(await syncPhone()).toBe(true);
+  expect(phone.tell).toHaveBeenLastCalledWith(true);
+  expect(track.mock.calls).toEqual([
+    ["sx.app_launch", { start: "cold", ms: 2400 }],
+    ["sx.permission_snapshot", { calls: "granted" }],
+  ]);
 });

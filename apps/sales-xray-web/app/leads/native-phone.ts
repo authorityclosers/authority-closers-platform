@@ -1043,3 +1043,52 @@ export async function openConnect(url: string): Promise<boolean> {
     return false;
   }
 }
+
+/** One event the phone app collected (app 1.0.25+): an sx.* name and its fields. */
+export type PhoneTelemetryEvent = {
+  name: string;
+  fields: Record<string, string | number | boolean>;
+};
+
+/**
+ * Takes what the phone app collected since the last read (at most 50 events,
+ * kept only in its memory; app 1.0.25+). The app never sends anything itself:
+ * the page sends these under the person's usage-analytics switch.
+ */
+export async function drainPhoneTelemetry(): Promise<PhoneTelemetryEvent[]> {
+  if (!inPhoneApp()) return [];
+  try {
+    const raw = await ask<{ events?: unknown }>("telemetry", {}, 3_000);
+    if (!Array.isArray(raw?.events)) return [];
+    return raw.events.slice(0, 50).flatMap((item: unknown) => {
+      const value = item as { name?: unknown; fields?: unknown } | null;
+      if (!value || typeof value.name !== "string") return [];
+      const fields: Record<string, string | number | boolean> = {};
+      if (value.fields && typeof value.fields === "object")
+        for (const [key, field] of Object.entries(value.fields))
+          if (
+            typeof field === "string" ||
+            typeof field === "boolean" ||
+            (typeof field === "number" && Number.isFinite(field))
+          )
+            fields[key] = field;
+      return [{ name: value.name, fields }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Tells the phone app whether usage analytics are on for this person. Off, it
+ * empties its buffer, stops collecting and stops Crashlytics (app 1.0.25+);
+ * older builds don't know the call and ignore it.
+ */
+export async function tellPhoneTelemetry(on: boolean): Promise<void> {
+  if (!inPhoneApp()) return;
+  try {
+    await ask("telemetryConsent", { on }, 3_000);
+  } catch {
+    // An older build: nothing to tell.
+  }
+}

@@ -10,6 +10,7 @@ import { Activity, Building2, FlaskConical } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
+import { tellPhoneTelemetry } from "../leads/native-phone";
 import { telemetry } from "../telemetry";
 import { Panel, Skeleton } from "../ui/kit";
 import { StateSwitch } from "../ui/state-switch";
@@ -84,8 +85,10 @@ export async function savePreference(
       body: JSON.stringify({ enabled }),
     }),
   );
-  // The page's telemetry asks the server again what it may send.
+  // The page's telemetry asks the server again what it may send, and the
+  // phone app (its crash reports too) follows the same switch.
   telemetry.refresh();
+  await tellPhoneTelemetry(saved.collecting);
   return saved;
 }
 

@@ -27,6 +27,7 @@ import { usePathname } from "next/navigation";
 import { useReportWebVitals } from "next/web-vitals";
 import { useEffect, useRef } from "react";
 
+import { drainPhoneTelemetry, tellPhoneTelemetry } from "./leads/native-phone";
 import {
   screenOf,
   telemetry,
@@ -34,6 +35,8 @@ import {
   type ErrorClass,
   type Screen,
   type TapTarget,
+  type TelemetryEventName,
+  type TelemetryEvents,
   type TimedAction,
 } from "./telemetry";
 
@@ -197,6 +200,36 @@ export function errorFacts(
   };
 }
 
+/** The Android app's own events the page sends for it (app 1.0.25+). */
+const PHONE_EVENTS = new Set<string>([
+  "sx.app_launch",
+  "sx.app_frames",
+  "sx.app_exit",
+  "sx.device_profile",
+  "sx.device_state",
+  "sx.network_state",
+  "sx.permission_snapshot",
+]);
+
+/**
+ * The phone app's side of the switch: tell it whether this person is recorded,
+ * then send what it collected. Null (nothing told, nothing sent) until the
+ * server has answered for someone signed in.
+ */
+export async function syncPhone(): Promise<boolean | null> {
+  const on = await telemetry.collecting();
+  if (on === null) return null;
+  await tellPhoneTelemetry(on);
+  if (!on) return false;
+  for (const event of await drainPhoneTelemetry())
+    if (PHONE_EVENTS.has(event.name)) {
+      const name = event.name as TelemetryEventName;
+      // The server checks every value against the event's definition.
+      track(name, event.fields as unknown as TelemetryEvents[typeof name]);
+    }
+  return true;
+}
+
 type Timing = {
   action: TimedAction;
   start: number;
@@ -249,6 +282,31 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
 
   listen("popstate", () => {
     page.current.backed = true;
+  });
+
+  // The phone app: once the server has answered for someone signed in (the
+  // session arrives a moment after the first paint), and on every return.
+  let phoneTimer: ReturnType<typeof setTimeout> | null = null;
+  const phone = (attempt = 0) => {
+    if (phoneTimer) clearTimeout(phoneTimer);
+    phoneTimer = null;
+    void syncPhone()
+      .then((result) => {
+        if (result === null && attempt < 4)
+          phoneTimer = setTimeout(() => phone(attempt + 1), 3_000);
+      })
+      .catch(() => {
+        // The phone app or the server didn't answer: next return.
+      });
+  };
+  phone();
+  const onVisible = () => {
+    if (document.visibilityState === "visible") phone();
+  };
+  document.addEventListener("visibilitychange", onVisible);
+  cleanups.push(() => {
+    document.removeEventListener("visibilitychange", onVisible);
+    if (phoneTimer) clearTimeout(phoneTimer);
   });
 
   // The app's start: page open to the first screen working (this effect).

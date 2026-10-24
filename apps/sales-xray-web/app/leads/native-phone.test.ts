@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
+  drainPhoneTelemetry,
   inPhoneApp,
   missedReason,
   onPhoneCall,
@@ -10,6 +11,7 @@ import {
   readPhoneRecording,
   signInOnPhone,
   startPhoneCall,
+  tellPhoneTelemetry,
 } from "./native-phone";
 
 type Listener = (event: { data: unknown }) => void;
@@ -248,5 +250,47 @@ describe("the phone's own sign-in (Google sheet, Facebook app)", () => {
     expect(await signInOnPhone({ provider: "google", nonce: "n" })).toEqual({
       error: "unavailable",
     });
+  });
+});
+
+describe("the phone app's own telemetry (app 1.0.25+)", () => {
+  it("takes what the app collected, keeping names and plain values only", async () => {
+    const { sent } = fakePhone(() => ({
+      on: true,
+      events: [
+        { name: "sx.app_launch", fields: { start: "cold", ms: 2400 } },
+        {
+          name: "sx.app_frames",
+          fields: { frames: 900, slow: Number.NaN, nested: { a: 1 } },
+        },
+        { fields: { start: "warm" } },
+        null,
+        ...Array.from({ length: 60 }, () => ({
+          name: "sx.device_state",
+          fields: { battery_saver: "no" },
+        })),
+      ],
+    }));
+    const events = await drainPhoneTelemetry();
+    expect(sent).toEqual([{ method: "telemetry", args: {} }]);
+    expect(events[0]).toEqual({
+      name: "sx.app_launch",
+      fields: { start: "cold", ms: 2400 },
+    });
+    expect(events[1]).toEqual({
+      name: "sx.app_frames",
+      fields: { frames: 900 },
+    });
+    // At most fifty are read at once; nameless ones are dropped.
+    expect(events).toHaveLength(48);
+  });
+
+  it("tells the app the switch, and an older app that can't answer changes nothing", async () => {
+    const { sent } = fakePhone(() => ({ ok: true }));
+    await tellPhoneTelemetry(false);
+    expect(sent).toEqual([{ method: "telemetryConsent", args: { on: false } }]);
+    vi.unstubAllGlobals();
+    expect(await drainPhoneTelemetry()).toEqual([]);
+    await expect(tellPhoneTelemetry(true)).resolves.toBeUndefined();
   });
 });

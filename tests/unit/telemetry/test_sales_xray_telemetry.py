@@ -20,6 +20,7 @@ from ac_platform.telemetry.ingest import (
 from ac_platform.telemetry.sales_xray import (
     MAX_DWELL_MS,
     NOTICE_EFFECTIVE_AT,
+    NOTICE_V1,
     NOTICE_VERSION,
     NOTICES,
     RETENTION_DAYS,
@@ -237,9 +238,66 @@ def test_the_privacy_page_shows_the_notice_of_the_version_recorded() -> None:
     for paragraph in NOTICES[NOTICE_VERSION]:
         assert f'"{paragraph}"' in page
     assert NOTICE_VERSION in page
-    assert NOTICE_VERSION == "sx-product-analytics-2026-10-24-v1"
-    # In force from midnight India time, 24 Oct 2026.
-    assert NOTICE_EFFECTIVE_AT.isoformat() == "2026-10-23T18:30:00+00:00"
+    assert NOTICE_VERSION == "sx-product-analytics-2026-10-24-v2"
+    # v2 (the Android app's signals and Crashlytics) is in force from 04:00 IST, 24 Oct 2026.
+    assert NOTICE_EFFECTIVE_AT.isoformat() == "2026-10-23T22:30:00+00:00"
     notice = " ".join(NOTICES[NOTICE_VERSION])
-    for never in ("call content", "lead names", "phone numbers", "180 days"):
+    for never in (
+        "call content",
+        "lead names",
+        "phone numbers",
+        "contacts or location",
+        "180 days",
+    ):
         assert never in notice
+    assert "Firebase Crashlytics" in notice
+    # v1 stays word for word (supersede, never overwrite).
+    assert NOTICES[NOTICE_V1][0].startswith("Sales X-Ray records how its app is used")
+    assert "Android" not in " ".join(NOTICES[NOTICE_V1])
+
+
+def test_android_app_events_take_tiers_and_codes_only() -> None:
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.device_profile"],
+        {
+            "android": 14,
+            "maker": "xiaomi",
+            "model_label": "m1906g7g",
+            "webview": "130",
+            "ram_tier": "4",
+            "memory_class": 256,
+            "low_ram": "no",
+            "storage_free": "4to16",
+            "app_version": "1.0.25",
+            "store": "play",
+        },
+    )
+    for bad in (
+        {"model_label": "M1906G7G"},
+        {"maker": "Xiaomi Inc"},
+        {"ram_tier": "5"},
+        {"android": 101},
+    ):
+        with pytest.raises(ValueError):
+            check_payload_values(SALES_XRAY_EVENTS["sx.device_profile"], bad)
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.app_launch"], {"start": "cold", "ms": 2_400, "pages": "app"}
+    )
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.app_frames"],
+        {"frames": 5_400, "slow": 120, "frozen": 2, "p90_ms": 24},
+    )
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.app_exit"], {"reason": "low_memory", "foreground": "no"}
+    )
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.network_state"],
+        {"transport": "cellular", "metered": "yes", "down_tier": "1to5", "cell_gen": "4g"},
+    )
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.permission_snapshot"],
+        {"calls": "granted", "rec_files": "denied", "mic": "not_in_build"},
+    )
+    # The intake's personal-data guard refuses these key names, so the app uses short ones.
+    assert "recordings" not in SALES_XRAY_EVENTS["sx.permission_snapshot"].allowed_payload_keys
+    assert "microphone" not in SALES_XRAY_EVENTS["sx.permission_snapshot"].allowed_payload_keys

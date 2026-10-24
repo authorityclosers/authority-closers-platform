@@ -198,6 +198,74 @@ export type TelemetryEvents = {
     first?: "call" | "message" | "move";
     wait_ms?: number;
   };
+  // The Android app's own signals (app 1.0.25): it collects them, the page sends
+  // them (telemetry-auto.tsx drains the phone channel) under the same switch.
+  "sx.app_launch": {
+    start: "cold" | "warm";
+    ms: number;
+    pages?: "app" | "live";
+  };
+  "sx.app_frames": {
+    frames: number;
+    slow?: number;
+    frozen?: number;
+    p90_ms?: number;
+  };
+  "sx.app_exit": {
+    reason:
+      | "anr"
+      | "crash"
+      | "crash_native"
+      | "low_memory"
+      | "excessive_resource"
+      | "killed_by_system"
+      | "other";
+    foreground?: "yes" | "no";
+  };
+  "sx.device_profile": {
+    android?: number;
+    maker?: string;
+    model_label?: string;
+    webview?: string;
+    ram_tier?: "2" | "3" | "4" | "6" | "8" | "12plus";
+    memory_class?: number;
+    low_ram?: "yes" | "no";
+    storage_free?: "lt1" | "1to4" | "4to16" | "16plus";
+    app_version?: string;
+    store?: "direct" | "play";
+  };
+  "sx.device_state": {
+    battery_saver?: "yes" | "no";
+    battery_unrestricted?: "yes" | "no";
+    standby_bucket?:
+      | "exempted"
+      | "active"
+      | "working_set"
+      | "frequent"
+      | "rare"
+      | "restricted"
+      | "unknown";
+    notifications?: "on" | "off";
+  };
+  "sx.network_state": {
+    transport?: "wifi" | "cellular" | "ethernet" | "vpn" | "other" | "none";
+    metered?: "yes" | "no";
+    validated?: "yes" | "no";
+    down_tier?: "unknown" | "lt1" | "1to5" | "5to20" | "20plus";
+    cell_gen?: "2g" | "3g" | "4g" | "5g" | "unknown";
+  };
+  "sx.permission_snapshot": Partial<
+    Record<
+      | "calls"
+      | "rec_files"
+      | "notifications"
+      | "mic"
+      | "all_files"
+      | "folder"
+      | "call_log",
+      "granted" | "denied" | "not_in_build"
+    >
+  >;
   "sx.lead_suggestion": {
     action: "shown" | "accepted" | "changed" | "dismissed";
     from?: "call" | "chat" | "rule";
@@ -311,6 +379,13 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.board_drag",
   "sx.lead_open_to_action",
   "sx.lead_suggestion",
+  "sx.app_launch",
+  "sx.app_frames",
+  "sx.app_exit",
+  "sx.device_profile",
+  "sx.device_state",
+  "sx.network_state",
+  "sx.permission_snapshot",
 ] as const satisfies readonly TelemetryEventName[];
 
 export type SizeBand = "under_5mb" | "5_to_20mb" | "over_20mb";
@@ -524,8 +599,9 @@ const VALUE = /^[a-z0-9_.-]{0,64}$/;
 /** True when a payload is short enums and finite numbers only. */
 export function safePayload(payload: Record<string, unknown>): boolean {
   const entries = Object.entries(payload);
-  // An event's own keys and where it ran (device, tier, network, link, app, version).
-  if (entries.length > 12) return false;
+  // An event's own keys and where it ran (device, tier, network, link, app, version):
+  // the phone's daily profile is the largest, at 15.
+  if (entries.length > 16) return false;
   return entries.every(
     ([key, value]) =>
       KEY.test(key) &&
@@ -649,6 +725,19 @@ export class TelemetryClient {
       !this.off &&
       (this.known === undefined || !!this.known?.size)
     );
+  }
+
+  /**
+   * Whether the server records this person's events (it lists them), or null
+   * while that is unknown: nobody signed in yet, or the server didn't answer.
+   * Only the server's answer decides it, never a dropped connection.
+   */
+  async collecting(): Promise<boolean | null> {
+    if (!this.enabled || !this.session) return null;
+    // A read that failed is tried again (the phone app waits for an answer).
+    if (this.known === null) this.accepted = null;
+    const accepted = await this.taxonomy();
+    return accepted ? accepted.size > 0 : null;
   }
 
   /** Read the server's list again (after a switch in Settings, Privacy). */
