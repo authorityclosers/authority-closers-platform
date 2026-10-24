@@ -1,0 +1,18 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "d64336638a928ad548141d2c6fcad453537d5a2f",
+  "full": false,
+  "checks": [
+    "web"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/app-session.tsx",
+    "apps/sales-xray-web/app/workspace-leads-prompt.test.tsx",
+    "apps/sales-xray-web/app/workspace-leads-prompt.tsx"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
