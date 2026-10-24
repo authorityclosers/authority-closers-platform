@@ -1,6 +1,11 @@
 import { expect, it } from "vitest";
 
-import { displayName, displayNameOf, withDisplayNames } from "./display-name";
+import {
+  displayName,
+  displayNameOf,
+  shortName,
+  withDisplayNames,
+} from "./display-name";
 
 // Owner, 22 Oct 2026: "Swamini Deshpande", not "swamini deshpande".
 it("shows names typed in one case with capitals", () => {
@@ -49,4 +54,12 @@ it("shows the listed keys with capitals at any depth and leaves the rest", () =>
   });
   // The answer itself is untouched.
   expect(answer.me.name).toBe("priya fictional");
+});
+
+// Polish pass, 24 Oct 2026: a short label instead of a name cut mid-word.
+it("shortens a name to the first name and last initial", () => {
+  expect(shortName("swamini fictional")).toBe("Swamini F.");
+  expect(shortName("Anne-Marie de Souza")).toBe("Anne-Marie S.");
+  expect(shortName("Ravi")).toBe("Ravi");
+  expect(shortName("asha@example.com")).toBe("asha@example.com");
 });

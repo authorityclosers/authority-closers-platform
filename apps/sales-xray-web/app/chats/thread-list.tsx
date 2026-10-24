@@ -19,6 +19,7 @@ import {
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { shortName } from "../display-name";
 import { useRowKeys } from "../ui/row-keys";
 import { ChannelMark, ChatAvatar } from "./channel-mark";
 import {
@@ -236,10 +237,13 @@ function ThreadRow({
               <span
                 className={styles.owner}
                 data-none={!thread.ownerId || undefined}
+                title={thread.ownerName ?? undefined}
               >
                 <UserRound size={11} aria-hidden="true" />
                 <span className={styles.ownerName}>
-                  {thread.ownerName ?? "Unassigned"}
+                  {thread.ownerName
+                    ? shortName(thread.ownerName)
+                    : "Unassigned"}
                 </span>
               </span>
             ) : null}
