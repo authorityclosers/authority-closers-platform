@@ -392,8 +392,14 @@ class ConversationApplication:
         await self._receipt(actor, key, "register", payload, recording.id, now)
         return self._view(recording)
 
-    async def get(self, actor: ConversationActor, recording_id: UUID) -> dict[str, Any]:
-        now = await self.admit(actor)
+    async def get(
+        self,
+        actor: ConversationActor,
+        recording_id: UUID,
+        *,
+        shared_identity_locks: bool = False,
+    ) -> dict[str, Any]:
+        now = await self.admit(actor, shared_identity_locks=shared_identity_locks)
         recording = await self._recording(actor, recording_id)
         if recording.state in {"deleting", "deleted"}:
             raise ConversationNotFound("Recording not found.")
