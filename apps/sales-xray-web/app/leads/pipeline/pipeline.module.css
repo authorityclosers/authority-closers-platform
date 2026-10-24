@@ -395,22 +395,50 @@
   justify-content: center;
 }
 
+/* Phones: a rail on the card's right edge, Call above Move, each a full
+   44 px target. */
+.cardRail {
+  display: grid;
+  flex: none;
+  grid-auto-rows: 1fr;
+  border-left: 1px solid var(--sx-hairline);
+}
+
+.cardCall,
 .cardMove {
   display: grid;
-  min-width: 44px;
+  min-width: 48px;
   min-height: 44px;
   place-items: center;
-  align-self: stretch;
   border: 0;
-  border-left: 1px solid var(--sx-hairline);
   background: none;
   color: var(--sx-muted);
   cursor: pointer;
   touch-action: manipulation;
 }
 
+.cardCall {
+  color: var(--sx-accent);
+}
+
+.cardCall:disabled {
+  color: var(--sx-muted);
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.cardCall + .cardMove {
+  border-top: 1px solid var(--sx-hairline);
+}
+
+.cardCall:active,
 .cardMove:active {
   background: var(--sx-fill-soft);
+}
+
+.cardCall:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
 }
 
 .cardSkeleton {
@@ -516,7 +544,18 @@
   }
 }
 
-@media (hover: hover) and (pointer: fine) {
+/* Computers with a mouse: the card is dragged; Call stays on the lead page. */
+@media (hover: hover) and (pointer: fine) and (min-width: 900px) {
+  .cardRail {
+    display: contents;
+  }
+
+  .cardCall {
+    display: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (min-width: 900px) {
   .cardOpen:hover {
     background: var(--sx-fill-soft);
   }

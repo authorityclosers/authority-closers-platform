@@ -167,3 +167,41 @@ def test_the_daily_export_takes_a_recent_india_day(setup: dict[str, Any]) -> Non
     assert setup["client"].get("/v1/admin/telemetry/daily?day=2020-01-01").status_code == 422
     future = (datetime.now(UTC) + timedelta(days=3)).date().isoformat()
     assert setup["client"].get(f"/v1/admin/telemetry/daily?day={future}").status_code == 422
+
+
+def test_the_improvement_loop_reads_devices_releases_the_gate_and_what_to_fix(
+    setup: dict[str, Any],
+) -> None:
+    client = setup["client"]
+    devices = client.get("/v1/admin/telemetry/devices?window=24h")
+    assert devices.status_code == 200, devices.text
+    assert devices.headers["cache-control"] == "private, no-store"
+    body = devices.json()
+    assert (body["schema"], body["environment"]) == (
+        "ac.sales-xray.telemetry-devices/1",
+        "development",
+    )
+    assert [group["key"] for group in body["groups"]] == ["class:web:unknown:low"]
+
+    compared = client.get("/v1/admin/telemetry/compare").json()
+    assert (compared["schema"], compared["head"], compared["base"]) == (
+        "ac.sales-xray.telemetry-compare/1",
+        "v0.86",
+        None,
+    )
+    gate = client.get("/v1/admin/telemetry/gate?release=v0.86").json()
+    assert (gate["schema"], gate["verdict"], gate["blocks_promotion"]) == (
+        "ac.sales-xray.telemetry-gate/1",
+        "not_enough_data",
+        False,
+    )
+    assert client.get("/v1/admin/telemetry/gate").status_code == 422
+    assert client.get(f"/v1/admin/telemetry/gate?release={'x' * 65}").status_code == 422
+
+    fixes = client.get("/v1/admin/telemetry/fix-next").json()
+    assert (fixes["schema"], fixes["items"], fixes["truncated"]) == (
+        "ac.sales-xray.telemetry-fix-next/1",
+        [],
+        False,
+    )
+    assert setup["outside"].get("/v1/admin/telemetry/gate?release=v0.86").status_code == 403

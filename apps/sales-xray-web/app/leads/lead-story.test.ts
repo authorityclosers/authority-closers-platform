@@ -103,7 +103,9 @@ describe("the story so far", () => {
     );
     expect(lines).not.toContain("Not called yet.");
     expect(lines[1]).toBe("Tried 1 time, talked once.");
-    expect(lines[2]).toMatch(/^Last talk .+: 1 min 22 s on the phone\.$/);
+    expect(lines[2]).toMatch(
+      /^Last talk .+: 1\u00a0min 22\u00a0s on the phone\.$/,
+    );
   });
 
   it("names the history's days", () => {

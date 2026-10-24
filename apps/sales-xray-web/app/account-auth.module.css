@@ -454,8 +454,6 @@
   margin: 0 0 12px;
   color: var(--lx-teal);
   font: var(--lx-text-eyebrow);
-  letter-spacing: var(--lx-tracking-eyebrow, 0.14em);
-  text-transform: uppercase;
 }
 .eyebrow::before {
   content: "";

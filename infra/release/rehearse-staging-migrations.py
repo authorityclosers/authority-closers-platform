@@ -196,7 +196,9 @@ def write_receipt(receipts: Path, receipt: dict[str, object]) -> Path:
     receipts.mkdir(mode=0o750, parents=True, exist_ok=True)
     stamp = str(receipt["finished_at"]).replace(":", "").replace("-", "")
     path = receipts / f"{receipt['candidate']}-{stamp}.json"
-    with os.fdopen(os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640), "w") as stream:
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o640)
+    os.fchmod(descriptor, 0o640)  # the receipt's mode must not depend on the caller's umask
+    with os.fdopen(descriptor, "w") as stream:
         json.dump(receipt, stream, sort_keys=True, indent=2)
         stream.write("\n")
     return path

@@ -621,8 +621,6 @@
   color: var(--sx-ink-2);
   font-size: var(--sx-text-xs);
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .disposeFields {
@@ -663,6 +661,13 @@
   padding: 0 0 12px 18px;
   border-left: 2px solid var(--sx-line);
   margin-left: 4px;
+}
+
+/* Opened from My work: the line the seller made, lit for a moment. */
+.history li[data-focus] {
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+  transition: background var(--sx-dur-fast, 150ms) ease;
 }
 
 .history li::before {
@@ -1325,8 +1330,6 @@ a.repName {
 .simulationTitle {
   color: var(--lx-focus-ink);
   font-size: var(--sx-text-xs);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .terms summary {
@@ -1479,8 +1482,6 @@ a.repName {
 .heroEyebrow {
   font-size: var(--sx-text-xs);
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
   opacity: 0.9;
 }
 
@@ -2251,6 +2252,12 @@ a.repName {
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
   opacity: 0.92;
+}
+
+/* Placing the call: the tap shows at once, before the dialler opens. */
+.callButton[aria-busy] {
+  opacity: 0.72;
+  cursor: progress;
 }
 
 .callButton[data-empty] {
@@ -4566,6 +4573,13 @@ a.repName {
 
 .filterGroup {
   display: grid;
+  gap: 8px;
+}
+
+/* One question's answers as chips that wrap (Any first). */
+.filterChoices {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

@@ -117,6 +117,10 @@ export async function emailCodeRequest(
  * waiting): every sign-in answers 403 "account_closed" until it is carried out.
  */
 export const ACCOUNT_CLOSED = "account-closed";
+/** Facebook in the phone app with no sign-in of its own yet: never Chrome (24 Oct 2026). */
+export const FACEBOOK_NOT_READY =
+  "Facebook sign-in isn’t ready on this phone yet. Use Google or email.";
+
 export const ACCOUNT_CLOSED_MESSAGE =
   "This account is closed because its deletion was asked for. If that was a mistake, write to admin@authorityclosers.com.";
 

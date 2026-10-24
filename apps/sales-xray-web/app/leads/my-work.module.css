@@ -1,0 +1,153 @@
+/* My work: the seller's own calls, notes and moves, newest first. Phones first:
+   one list, rows divided by hairlines; the time on the right. Tokens only. */
+
+.work,
+.work * {
+  box-sizing: border-box;
+}
+
+.work {
+  display: grid;
+  min-width: 0;
+  gap: 12px;
+}
+
+.work :is(ol, p) {
+  margin: 0;
+}
+
+.head {
+  display: grid;
+  gap: 8px;
+}
+
+.summary {
+  min-height: 20px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.list {
+  display: grid;
+  padding: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  list-style: none;
+  overflow: hidden;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--sx-hairline, var(--sx-line));
+}
+
+.day {
+  padding: 12px 16px 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.row {
+  display: grid;
+  width: 100%;
+  min-height: 56px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.row:active {
+  background: var(--sx-fill-soft);
+}
+
+.row:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.icon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+}
+
+.icon[data-kind="call"],
+.icon[data-kind="result"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.icon[data-kind="note"] {
+  background: color-mix(in srgb, var(--sx-warn) 18%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+.text {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.text strong {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.text span {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+/* A note or a reason: two lines at most here; the whole of it on the lead. */
+.text small {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.row time {
+  padding-top: 2px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.skeleton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+@media (min-width: 900px) {
+  .head {
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: center;
+  }
+
+  .summary {
+    text-align: right;
+  }
+}

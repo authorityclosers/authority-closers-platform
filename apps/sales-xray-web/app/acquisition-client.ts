@@ -1,4 +1,4 @@
-import { earlyFetch } from "./early-reads";
+import { earlyFetch, forgetSharedReads } from "./early-reads";
 import {
   callIdFromPath,
   callPath,
@@ -333,6 +333,8 @@ export async function acquisition(
   };
   // A plain GET may already be answered by the page's early reads.
   const plain = !init.headers && !init.body && !init.method;
+  // A write may change what was read: reads after it ask the server.
+  if (!plain) forgetSharedReads();
   const response = plain
     ? await earlyFetch(ACQUISITION + path, request)
     : await fetch(ACQUISITION + path, request);

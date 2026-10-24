@@ -34,9 +34,11 @@ import {
   type LeadPage,
   type LeadRow,
   type LeadsDeleted,
+  type ListMore,
+  type ListSort,
 } from "./leads-client";
 import { BulkSheet } from "./bulk-sheet";
-import { LeadsTable, useWideScreen } from "./leads-table";
+import { LeadsTable } from "./leads-table";
 import { QuickAddBar, type PasteRows } from "./quick-add";
 import styles from "./leads.module.css";
 
@@ -81,6 +83,8 @@ export function ListView({
   pipelineNames = null,
   me = null,
   onPasteRows,
+  more: refine = null,
+  onSort,
 }: {
   canManage: boolean;
   /** "open", a stage kind, or "test". */
@@ -115,16 +119,20 @@ export function ListView({
   me?: string | null;
   /** Rows pasted into quick add go to the import. */
   onPasteRows?: PasteRows;
+  /** Sort and filters over the whole list, answered by the server. */
+  more?: ListMore | null;
+  /** A table head tapped: sort the whole list by it. */
+  onSort?: (sort: ListSort, order: "asc" | "desc") => void;
 }) {
-  // Table on a computer (owner P0, 23 Oct 2026); phones keep the list.
-  const wide = useWideScreen();
+  // Table on phones and computers alike (owner, 24 Oct 2026: "we can't actually
+  // access table view ... on mobile"); the choice is remembered per person.
   const [layout, setLayout] = useState(() => ({
     owner: layoutOwner,
     value: storedLayout(layoutOwner),
   }));
   if (layout.owner !== layoutOwner)
     setLayout({ owner: layoutOwner, value: storedLayout(layoutOwner) });
-  const asTable = wide && layout.value === "table";
+  const asTable = layout.value === "table";
   const chooseLayout = (value: Layout) => {
     setLayout({ owner: layoutOwner, value });
     if (!layoutOwner) return;
@@ -170,8 +178,9 @@ export function ListView({
   // Results remember the question they answer; until the current one is
   // answered the list shows its skeleton. A refresh of the same question
   // (pull down, back in the app) keeps the rows on screen meanwhile.
-  const question = JSON.stringify([scope, stage, query, pipeline]);
-  const key = JSON.stringify([scope, stage, query, pipeline, version]);
+  const moreKey = JSON.stringify(refine ?? null);
+  const question = JSON.stringify([scope, stage, query, pipeline, moreKey]);
+  const key = JSON.stringify([scope, stage, query, pipeline, moreKey, version]);
   const page = loaded?.question === question ? loaded.page : null;
   const rows = loaded?.question === question ? loaded.rows : [];
   const error = failed?.key === key ? failed.message : null;
@@ -220,6 +229,7 @@ export function ListView({
     search: query,
     test: stage === TEST,
     pipeline,
+    more: refine,
   };
 
   useEffect(() => {
@@ -231,6 +241,8 @@ export function ListView({
         search: query,
         test: stage === TEST,
         pipeline,
+        // The filters as one string: the same filters never ask twice.
+        more: JSON.parse(moreKey) as ListMore | null,
       },
       controller.signal,
     )
@@ -250,7 +262,7 @@ export function ListView({
         });
       });
     return () => controller.abort();
-  }, [key, question, scope, stage, query, pipeline]);
+  }, [key, question, scope, stage, query, pipeline, moreKey]);
 
   const more = async () => {
     if (!page?.next_offset || loadingMore) return;
@@ -279,6 +291,29 @@ export function ListView({
       setLoadingMore(false);
     }
   };
+
+  // The next page loads by itself when the list's end comes into view; the
+  // button stays for keyboards and when scrolling can't be watched.
+  const end = useRef<HTMLDivElement>(null);
+  const loadMore = useRef(more);
+  useEffect(() => {
+    loadMore.current = more;
+  });
+  const hasMore = page?.next_offset != null;
+  useEffect(() => {
+    const target = end.current;
+    if (!hasMore || !target || typeof IntersectionObserver === "undefined")
+      return;
+    const seen = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting))
+          void loadMore.current();
+      },
+      { rootMargin: "600px 0px" },
+    );
+    seen.observe(target);
+    return () => seen.disconnect();
+  }, [hasMore, key]);
 
   // From the latest ticks, so quick taps in a row each count.
   const toggle = (row: LeadRow) =>
@@ -359,7 +394,7 @@ export function ListView({
           </span>
           <span className={styles.listTools}>
             {selecting ? null : tools}
-            {wide && rows.length ? (
+            {rows.length ? (
               <button
                 type="button"
                 className={styles.statusChip}
@@ -444,6 +479,15 @@ export function ListView({
                 onToggle={toggle}
                 keysRef={tableKeys}
                 quickAdd={selecting ? null : quickAdd}
+                serverSort={
+                  onSort
+                    ? {
+                        by: refine?.sort ?? null,
+                        down: refine?.order === "desc",
+                        onSort,
+                      }
+                    : null
+                }
                 edit={{
                   canManage,
                   me,
@@ -473,9 +517,11 @@ export function ListView({
               </ul>
             )}
             {page.next_offset !== null ? (
-              <div className={styles.more}>
+              <div className={styles.more} ref={end}>
                 <Button onClick={more} disabled={loadingMore}>
-                  {loadingMore ? "Loading…" : "Show more"}
+                  {loadingMore
+                    ? "Loading…"
+                    : `Show more (${rows.length} of ${page.total})`}
                 </Button>
               </div>
             ) : null}

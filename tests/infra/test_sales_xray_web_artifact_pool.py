@@ -268,7 +268,7 @@ def test_failed_inventory_is_not_treated_as_empty(harness: _Harness, step: str) 
     assert not any("DELETE" in call for call in harness.state()["calls"])
     assert "Verified web artifact" not in result.stdout
     assert "projected repository pool is" not in result.stdout
-    assert "attempt=3/3" in result.stderr
+    assert "attempt=5/5" in result.stderr
 
 
 def test_failed_delete_keeps_replacement_and_fails_cleanup(harness: _Harness) -> None:
@@ -337,8 +337,8 @@ def test_concurrent_unseen_uploads_cannot_pass_admission_ceiling(harness: _Harne
     harness.set_state(artifacts, list_results=[{"stdout": json.dumps(shifted)}])
     result = harness.run(ADMIT)
     assert result.returncode != 0
-    assert "attempt=1/3 rejected" in result.stderr
-    assert "attempt=2/3 complete pages=3 artifacts=203 bytes=2005000000" in result.stderr
+    assert "attempt=1/5 rejected" in result.stderr
+    assert "attempt=2/5 complete pages=3 artifacts=203 bytes=2005000000" in result.stderr
     assert "2405000000 bytes; refusing upload above 2000000000" in result.stderr
     assert "projected repository pool is 1405000000" not in result.stdout
     assert harness.state()["artifacts"] == artifacts
@@ -360,8 +360,8 @@ def test_known_expiry_recovers_the_workflow_inventory(harness: _Harness, step: s
     harness.set_state(live, list_results=[{"stdout": json.dumps(shifted)}])
     result = harness.run(step)
     assert result.returncode == 0, result.stderr
-    assert "attempt=1/3 rejected: incomplete inventory" in result.stderr
-    assert "attempt=2/3 complete pages=2 artifacts=200 bytes=1000000000" in result.stderr
+    assert "attempt=1/5 rejected: incomplete inventory" in result.stderr
+    assert "attempt=2/5 complete pages=2 artifacts=200 bytes=1000000000" in result.stderr
     assert harness.state()["artifacts"] == live
     assert not any("DELETE" in call for call in harness.state()["calls"])
     if step == ADMIT:
@@ -393,16 +393,16 @@ def test_incomplete_inventory_fails_closed_after_bounded_retries(
         invalid["id" if defect == "identity" else "size_in_bytes"] = "invalid"
         response = {"stdout": json.dumps(_pages([invalid]))}
     response["stderr"] = "fixture-private-response-must-not-appear"
-    harness.set_state(artifacts, list_results=[response] * 3)
+    harness.set_state(artifacts, list_results=[response] * 5)
     result = harness.run(step)
     assert result.returncode != 0
     state = harness.state()
     assert state["artifacts"] == artifacts
-    assert len([call for call in state["calls"] if "--paginate" in call]) == 3
+    assert len([call for call in state["calls"] if "--paginate" in call]) == 5
     assert not any("DELETE" in call for call in state["calls"])
     assert "Verified web artifact" not in result.stdout
     assert "projected repository pool is" not in result.stdout
-    assert "attempt=3/3" in result.stderr
+    assert "attempt=5/5" in result.stderr
     assert "fixture-private-response-must-not-appear" not in result.stdout + result.stderr
 
 
@@ -421,7 +421,7 @@ def test_transient_inventory_failures_discard_partial_attempts(
     )
     result = harness.run(step)
     assert result.returncode == 0, result.stderr
-    assert "attempt=3/3 complete" in result.stderr
+    assert "attempt=3/5 complete" in result.stderr
     assert harness.state()["artifacts"] == artifacts
     assert not any("DELETE" in call for call in harness.state()["calls"])
     if step == RECLAIM:
@@ -437,11 +437,11 @@ def test_failed_final_inventory_never_asserts_success(harness: _Harness) -> None
     ]
     harness.set_state(
         artifacts,
-        list_results=[{"stdout": json.dumps(_pages(artifacts))}] + [{"stdout": "[]"}] * 3,
+        list_results=[{"stdout": json.dumps(_pages(artifacts))}] + [{"stdout": "[]"}] * 5,
     )
     result = harness.run(RECLAIM)
     assert result.returncode != 0
-    assert "operation=final attempt=3/3" in result.stderr
+    assert "operation=final attempt=5/5" in result.stderr
     assert "Verified web artifact" not in result.stdout
     assert harness.state()["artifacts"] == [artifacts[0]]
 
@@ -517,12 +517,12 @@ def test_reader_timeout_is_bounded_and_discards_partial_output(
 
     monkeypatch.setattr(INVENTORY["subprocess"], "run", timeout)
     monkeypatch.setattr(INVENTORY["time"], "sleep", sleeps.append)
-    with pytest.raises(ValueError, match="exhausted 3 attempts"):
+    with pytest.raises(ValueError, match="exhausted 5 attempts"):
         INVENTORY["read_inventory"]("/fixture/gh", "fixture/repository", "admission")
-    assert len(calls) == 3
+    assert len(calls) == 5
     assert all(options["timeout"] == 120 for _, options in calls)
-    assert sleeps == [2, 4]
+    assert sleeps == [30, 60, 60, 60]
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert "attempt=3/3 rejected: timeout=120s" in captured.err
+    assert "attempt=5/5 rejected: timeout=120s" in captured.err
     assert "partial-private-response" not in captured.err

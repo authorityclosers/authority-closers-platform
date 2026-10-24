@@ -62,3 +62,11 @@ export function playWords(storeUrl: string | null): PlayWords {
 }
 
 export const PLAY = playWords(PLAY_STORE_URL);
+
+/**
+ * Changes this phone holds that the server doesn't have yet, said before an
+ * uninstall (which deletes them): orchestrator, 24 Oct 2026.
+ */
+export function unsentLine(count: number): string {
+  return `${count === 1 ? "1 change" : `${count} changes`} not sent yet — open Sales X-Ray online first.`;
+}

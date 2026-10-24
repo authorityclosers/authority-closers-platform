@@ -88,7 +88,7 @@ const SCENARIOS: Record<OutcomeKind, Scenario> = {
     icon: CalendarClock,
     status: "In Progress",
     valueLabel: "Potential Deal Value",
-    dateLabel: "Next Follow-up Date",
+    dateLabel: "Next follow-up date",
     datePill: "Follow-up Scheduled",
     dateTone: styles.purple,
     end: "Follow-up Set",
@@ -167,7 +167,7 @@ function Suggested({ text }: { text: string }) {
     <div className={styles.suggested}>
       <Lightbulb aria-hidden="true" />
       <div>
-        <div className={styles.suggestedTitle}>Suggested Next Action</div>
+        <div className={styles.suggestedTitle}>Suggested next action</div>
         <div className={styles.suggestedText}>{text}</div>
       </div>
       <ArrowRight aria-hidden="true" />
