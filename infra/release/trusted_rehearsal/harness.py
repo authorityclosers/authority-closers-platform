@@ -2,8 +2,8 @@
 """AUT-2216 inactive source proposal. Install only after native review and CEO approval.
 
 Run through a root-owned launcher using a separately installed Python with -I.
-No candidate module is imported by the privileged process. CI's existing governed
-staging-artifact check remains required on every release path.
+No candidate module is imported by the privileged process. Staging core deploys
+require this installed validator's exact candidate/current-staging-base receipt.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ from uuid import uuid4
 CONFIG = Path("/etc/ac-release/schema-rehearsal.json")
 # Runtime projection only; the canonical key stays in Infisical.
 KEY = Path("/run/ac-release/schema-rehearsal.key")
-RECEIPTS = Path("/var/lib/ac-release/schema-rehearsal-v2")
+RECEIPTS = Path("/var/lib/ac-release/schema-rehearsal")
 SCRATCH = Path("/var/lib/ac-release/schema-rehearsal-scratch")
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"[0-9a-f]{64}")
@@ -528,6 +528,7 @@ def validate_receipt(
     expected = {
         "candidate": candidate,
         "base": base,
+        "release_id": base,
         "result": "PASS",
         "bundle_sha256": config["bundle_sha256"],
         "runner_image": config["runner_image"],

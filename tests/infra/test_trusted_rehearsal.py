@@ -36,7 +36,7 @@ def record(**changes):
         "manifest_sha256": "e" * 64,
         "dump_sha256": "f" * 64,
         "alembic_revision": "20261023_0127",
-        "release_id": "1" * 40,
+        "release_id": BASE,
         **changes,
     }
 
@@ -64,6 +64,7 @@ def test_passing_receipt_is_exact_and_authenticated():
         {"schema": "ac.schema_rehearsal/1"},
         {"extra": True},
         {"release_id": "main"},
+        {"release_id": "1" * 40},
         {"alembic_revision": "head"},
     ],
 )

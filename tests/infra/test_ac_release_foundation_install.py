@@ -102,6 +102,9 @@ class FoundationRunner(FakeRunner):
 def setup(tmp_path, *, candidate_heads=(MIGRATION, PREVIOUS_MIGRATION), **kwargs):
     runner = FoundationRunner(candidate_heads, **kwargs)
     engine = make_engine(tmp_path, runner=runner)
+    # These fixtures exercise backup/native installation after admission. Actual
+    # staging receipt admission is covered with real Git in its dedicated suite.
+    engine.require_schema_rehearsal = lambda _candidate: None
     runner.engine = engine
     bundle = bundle_with_head(tmp_path, MIGRATION)
     for name in MODULE.CORE_FILES - {"release-images.env"}:

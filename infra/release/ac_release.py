@@ -140,6 +140,8 @@ RELEASE_RECORD_FIELDS = frozenset(
 DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
 IMAGE_REF_RE = re.compile(r"sha256:[0-9a-f]{64}")
 SAFE_PATH = "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+SCHEMA_REHEARSAL = "/usr/local/sbin/ac-schema-rehearsal"
+SCHEMA_REHEARSAL_SUCCESS = "schema-rehearsal: PASS (trusted exact candidate/base receipt)"
 EDGE = "http://127.0.0.1:8080"
 STATUS_MAX_BYTES = 256 * 1024
 STATUS_LIST_LIMIT = 20
@@ -2730,9 +2732,59 @@ class Engine:
 
     # -- core ------------------------------------------------------------------
 
+    def require_schema_rehearsal(self, candidate: str) -> None:
+        """Gate every staging core entry point before running candidate installers.
+
+        The mirror is engine-owned, never the writable workbench. Only the
+        separately installed validator may read/authenticate the fixed receipt
+        store; no validator or receipt path is taken from candidate source.
+        """
+        base = self.current_core("staging")
+        if not SHA_RE.fullmatch(candidate) or base is None or not SHA_RE.fullmatch(base):
+            raise ReleaseError("schema rehearsal requires an exact current staging base")
+        if candidate == base:
+            return
+        difference = self.run(
+            [
+                "git",
+                "--no-replace-objects",
+                f"--git-dir={self.paths.mirror}",
+                "diff",
+                "--no-ext-diff",
+                "--no-textconv",
+                "--quiet",
+                base,
+                candidate,
+                "--",
+                "db/migrations",
+            ],
+            check=False,
+            timeout=30,
+        )
+        if difference.returncode == 0:
+            return
+        if difference.returncode != 1:
+            raise ReleaseError("could not determine staging migration changes")
+        try:
+            verified = self.run(
+                [SCHEMA_REHEARSAL, "verify", "--candidate", candidate, "--base", base],
+                check=False,
+                timeout=30,
+            )
+        except (OSError, subprocess.SubprocessError):
+            raise ReleaseError("trusted schema rehearsal receipt unavailable") from None
+        if verified.returncode != 0 or verified.stdout.strip() != SCHEMA_REHEARSAL_SUCCESS:
+            raise ReleaseError(
+                "trusted schema rehearsal receipt rejected for staging candidate/base"
+            )
+        if self.current_core("staging") != base:
+            raise ReleaseError("staging base changed during schema receipt verification")
+
     def deploy_core(
         self, environment: str, build: Build, *, dry_run: bool = False, rollback_only: bool = False
     ) -> dict[str, Any]:
+        if environment == "staging" and not rollback_only:
+            self.require_schema_rehearsal(build.sha)
         log = self.new_log(environment, "core", build.sha)
         bundle = self.store_bundle(build, "core", CORE_FILES)
         blockers: list[str] = []
