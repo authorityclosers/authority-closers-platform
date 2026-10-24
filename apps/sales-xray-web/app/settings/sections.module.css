@@ -73,6 +73,27 @@
   text-decoration: underline;
 }
 
+/* A quiet action under a note: Refresh app data (24 Oct 2026). */
+.textButton {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: -8px 16px 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.textButton:hover,
+.textButton:focus-visible {
+  text-decoration: underline;
+}
+
 .download {
   display: inline-flex;
   align-items: center;

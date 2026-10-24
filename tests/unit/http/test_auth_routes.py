@@ -478,6 +478,10 @@ def test_context_route_uses_the_registered_organisation_permission_map(
         def __init__(self, _database: object, *, token_pepper: str) -> None:
             del token_pepper
 
+        async def resolve_actor_read_only(self, token: str, **_: object) -> ResolvedActorContext:
+            # GET routes sign in this way (shared fences); the fake answers alike.
+            return await self.resolve_actor(token)
+
         async def resolve_actor(self, token: str) -> ResolvedActorContext:
             assert token == VALID_SESSION_TOKEN
             return ResolvedActorContext(

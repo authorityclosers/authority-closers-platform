@@ -563,8 +563,6 @@
 .recentsTitle {
   font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--lx-muted);
   transition: color 140ms ease;
 }

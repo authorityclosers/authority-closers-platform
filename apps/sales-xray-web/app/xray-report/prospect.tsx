@@ -467,7 +467,7 @@ function ProspectView({
                 <CalendarClock />
               </span>
               <div className={styles.tileText}>
-                <span className={styles.tileLabel}>Next Follow-up</span>
+                <span className={styles.tileLabel}>Next follow-up</span>
                 {facts.followUp.when ? (
                   <>
                     <span className={styles.when}>{facts.followUp.when}</span>
@@ -499,7 +499,7 @@ function ProspectView({
               </span>
               <div className={styles.tileText}>
                 <span className={styles.tileLabel}>
-                  Suggested Next Action <span className={styles.aiTag}>AI</span>
+                  Suggested next action <span className={styles.aiTag}>AI</span>
                 </span>
                 <span
                   className={

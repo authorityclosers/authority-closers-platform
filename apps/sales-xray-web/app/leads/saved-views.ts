@@ -9,6 +9,7 @@
 
 import { useCallback, useMemo, useSyncExternalStore } from "react";
 
+import type { ListMore } from "./leads-client";
 import type { Scope } from "./list-view";
 
 export type ViewSpec = {
@@ -19,6 +20,8 @@ export type ViewSpec = {
   who: Scope;
   /** Search words; empty: no search. */
   q: string;
+  /** Sort and the other filters (owner, 24 Oct 2026). */
+  more?: ListMore;
 };
 
 export type SavedView = ViewSpec & { id: string; name: string };

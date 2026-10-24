@@ -208,8 +208,6 @@
 .libraryHead > span {
   color: var(--lx-muted);
   font: 700 11px/1 var(--lx-font-ui);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 .search {
   display: inline-flex;

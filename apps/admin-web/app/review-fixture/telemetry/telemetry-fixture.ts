@@ -41,6 +41,7 @@ export function telemetryFixture(now: Date, state: "live" | "empty" = "live") {
       features: { active_people: 0, rows: [] },
       errors: { scripts: [], apis: [], taps: [], shown: [] },
       mix: { device: [], tier: [], app: [], net: [] },
+      unsent: { phones: 0, waiting: 0, refused: 0, oldest_min: null, rows: [] },
       releases: [],
     };
   return {

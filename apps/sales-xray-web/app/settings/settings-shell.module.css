@@ -34,8 +34,6 @@
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .group ul {

@@ -346,3 +346,26 @@ def test_reads_only_live_sales_xray_rows_and_counts_who_turned_it_off(session: S
         )
     session.flush()
     assert read_consent(session) == {"people_off": 1, "workspaces_off": 0}
+
+
+def test_counts_phones_holding_unsent_changes_from_each_persons_latest_report() -> None:
+    rows = [
+        # Person a: waited earlier, then everything went.
+        _row("sx.writes_waiting", "a", minutes_ago=90, waiting=3, refused=0, oldest_min=40),
+        _row("sx.writes_waiting", "a", minutes_ago=5, waiting=0, refused=0, oldest_min=0),
+        # Person b: two waiting, one refused, the oldest 3 hours old.
+        _row("sx.writes_waiting", "b", waiting=2, refused=1, oldest_min=180, app="android"),
+        _row("sx.writes_waiting", "c", waiting=1, refused=0, oldest_min=12),
+    ]
+    unsent = _view(rows)["unsent"]
+    assert (unsent["phones"], unsent["waiting"], unsent["refused"]) == (2, 3, 1)
+    assert unsent["oldest_min"] == 180
+    assert [row["person"] for row in unsent["rows"]] == ["b", "c"]
+    assert unsent["rows"][0]["app"] == "android"
+    assert _view([])["unsent"] == {
+        "phones": 0,
+        "waiting": 0,
+        "refused": 0,
+        "oldest_min": None,
+        "rows": [],
+    }

@@ -89,8 +89,6 @@
   margin: 0 0 6px;
   color: var(--lx-muted);
   font: 700 11.5px/1 var(--lx-font-ui);
-  letter-spacing: var(--lx-tracking-eyebrow);
-  text-transform: uppercase;
 }
 
 .drawerBlock p {

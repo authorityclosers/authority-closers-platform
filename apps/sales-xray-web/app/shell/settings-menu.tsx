@@ -74,6 +74,7 @@ import { ActionList, ActionRow } from "../ui/kit";
 import { Sheet, SHEET_PHONE_QUERY } from "../ui/sheet";
 import { useShellUpdates } from "./updates-store";
 import { WorkspacePicker, type PickerWorkspace } from "./workspace-picker";
+import { accountInitials } from "./account-initials";
 import styles from "./settings-menu.module.css";
 import { useBackClose } from "../ui/back-close";
 
@@ -91,14 +92,8 @@ const DAY = new Intl.DateTimeFormat("en-IN", {
   timeZone: "UTC",
 });
 
-export function accountInitials(name: string | null, email: string | null) {
-  const source = name?.trim() || email?.split("@")[0] || "";
-  const parts = source.split(/\s+/).filter(Boolean);
-  const letters =
-    parts.length > 1 ? parts[0][0] + parts[1][0] : source.slice(0, 2);
-  // Nothing to take initials from: the caller shows a person instead.
-  return letters.toUpperCase();
-}
+// The frame shows initials before this menu's code loads (shell/quiet.ts).
+export { accountInitials };
 
 const noSubscription = () => () => {};
 const subscribePhone = (change: () => void) => {

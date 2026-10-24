@@ -22,7 +22,13 @@ import {
 } from "react";
 
 import { displayName } from "../display-name";
-import { ago, readLead, when, type LeadRow } from "./leads-client";
+import {
+  ago,
+  readLead,
+  when,
+  type LeadRow,
+  type ListSort,
+} from "./leads-client";
 import type { MoveOption } from "./pipeline/pipeline-client";
 import { StageSheet } from "./pipeline/stage-sheet";
 import { QuickAddRow, type PasteRows } from "./quick-add";
@@ -85,6 +91,14 @@ const LABELS: Record<Column, string> = {
   contact: "Last contact",
   reason: "Reason",
   created: "Added",
+};
+
+/** Heads whose sort the server answers over the whole list. */
+const SERVER_SORT: Partial<Record<Column, ListSort>> = {
+  name: "name",
+  next: "next_action",
+  contact: "last_contact",
+  created: "created",
 };
 
 /** Columns a person can show or hide (Name and Stage always show). */
@@ -205,6 +219,7 @@ export function LeadsTable({
   keysRef,
   quickAdd = null,
   edit = null,
+  serverSort = null,
 }: {
   rows: LeadRow[];
   onOpen: (leadId: string) => void;
@@ -226,6 +241,13 @@ export function LeadsTable({
   } | null;
   /** Who may change what in place; none while selecting. */
   edit?: EditRights | null;
+  /** Heads that sort the whole list on the server (name, next action, last
+   *  contact, added); the other heads sort the rows loaded. */
+  serverSort?: {
+    by: ListSort | null;
+    down: boolean;
+    onSort: (sort: ListSort, order: "asc" | "desc") => void;
+  } | null;
 }) {
   const [sort, setSort] = useState<{ by: Column; down: boolean } | null>(null);
   const grid = useRef<HTMLTableElement>(null);
@@ -500,32 +522,45 @@ export function LeadsTable({
               </th>
             ) : null}
             {columns.map((column) => {
-              const sorted = sort?.by === column;
+              const server = serverSort ? SERVER_SORT[column] : undefined;
+              const sorted = server
+                ? serverSort?.by === server
+                : sort?.by === column;
+              const down = server ? !!serverSort?.down : !!sort?.down;
               return (
                 <th
                   key={column}
                   scope="col"
                   data-column={column}
                   aria-sort={
-                    sorted ? (sort.down ? "descending" : "ascending") : "none"
+                    sorted ? (down ? "descending" : "ascending") : "none"
                   }
                 >
                   <button
                     type="button"
                     className={styles.sort}
-                    onClick={() =>
+                    onClick={() => {
+                      if (server && serverSort) {
+                        // The whole list, by the server: a second tap turns it round.
+                        setSort(null);
+                        serverSort.onSort(
+                          server,
+                          sorted ? (down ? "asc" : "desc") : "asc",
+                        );
+                        return;
+                      }
                       setSort((current) =>
                         current?.by === column
                           ? current.down
                             ? null
                             : { by: column, down: true }
                           : { by: column, down: false },
-                      )
-                    }
+                      );
+                    }}
                   >
                     {LABELS[column]}
                     {sorted ? (
-                      sort.down ? (
+                      down ? (
                         <ArrowDown size={13} aria-hidden="true" />
                       ) : (
                         <ArrowUp size={13} aria-hidden="true" />

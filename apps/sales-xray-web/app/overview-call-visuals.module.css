@@ -187,8 +187,6 @@
   color: var(--lx-muted);
   font-size: 11.5px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .quietTag {
@@ -337,8 +335,6 @@
   color: var(--lx-teal);
   font-size: 11px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
 }
 
 .verdictText {
@@ -408,7 +404,6 @@
   color: var(--lx-muted);
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
 }
 
 .keyVal b {
@@ -445,8 +440,6 @@
   border-radius: 99px;
   font-size: 10.5px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .signalTag[data-polarity="forward"] {
@@ -529,7 +522,6 @@
   color: var(--lx-muted);
   font-size: 10.5px;
   font-weight: 600;
-  text-transform: uppercase;
 }
 
 .addressedBox span {
@@ -600,7 +592,6 @@
   color: var(--lx-muted);
   font-size: 11px;
   font-weight: 600;
-  text-transform: uppercase;
 }
 
 .moneyValue {
@@ -663,7 +654,6 @@
   color: var(--lx-muted);
   font-size: 11.5px;
   font-weight: 600;
-  text-transform: uppercase;
 }
 
 .tagGroup {

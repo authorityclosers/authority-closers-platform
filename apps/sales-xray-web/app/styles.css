@@ -649,8 +649,6 @@ html:has(> body.sales-xray-document) {
     color: var(--lx-muted);
     font-size: 11.5px;
     font-weight: 750;
-    letter-spacing: 0.08em;
-    text-transform: uppercase;
   }
   .calls-library-items {
     display: grid;

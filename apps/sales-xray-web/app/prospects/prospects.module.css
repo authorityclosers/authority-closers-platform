@@ -582,8 +582,6 @@
 .missingItemLabel {
   font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--lx-muted);
 }
 
@@ -713,8 +711,6 @@
 .snapshotBoxTitle {
   font-size: 12px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--lx-focus-ink);
   display: flex;
   align-items: center;
@@ -743,7 +739,6 @@
   display: inline-block;
   font-size: 12px;
   font-weight: 600;
-  text-transform: uppercase;
   color: var(--lx-focus-ink);
   background: var(--lx-focus-soft);
   padding: 1px 6px;

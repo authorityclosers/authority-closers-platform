@@ -144,6 +144,7 @@ export function LeadPipelinePreview() {
         filters={{ pipeline: "main" }}
         canManage
         onOpen={() => undefined}
+        onCall={() => undefined}
       />
       {sheet !== null && sheet in SHEETS ? (
         <StageSheet
