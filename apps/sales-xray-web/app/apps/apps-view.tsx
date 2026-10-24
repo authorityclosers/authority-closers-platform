@@ -24,7 +24,7 @@ import { useState, useSyncExternalStore } from "react";
 import { Badge } from "../ui/kit";
 import { inPhoneApp } from "../leads/native-phone";
 import { useApkLinksAllowed } from "../purchase-policy";
-import { usePlayLink } from "./play";
+import { PLAY } from "./play";
 import { formatSize, type AndroidRelease } from "./release";
 import styles from "./apps.module.css";
 
@@ -305,7 +305,6 @@ const SOON = [
 export function AppsView({ android }: { android: AndroidRelease }) {
   const device = useDevice();
   const apkLinks = useApkLinksAllowed();
-  const playLink = usePlayLink();
   const facts = [
     android.version ? `Version ${android.version}` : null,
     formatSize(android.sizeBytes),
@@ -337,15 +336,7 @@ export function AppsView({ android }: { android: AndroidRelease }) {
           </span>
           <span>
             <strong>Android</strong>
-            <small>
-              {!apkLinks
-                ? "From Google Play"
-                : playLink
-                  ? "On Google Play"
-                  : facts.length
-                    ? facts.join(" · ")
-                    : "Newest build"}
-            </small>
+            <small>{!apkLinks ? "From Google Play" : PLAY.where}</small>
           </span>
           <Badge tone="good">Ready</Badge>
         </div>
@@ -355,159 +346,92 @@ export function AppsView({ android }: { android: AndroidRelease }) {
             You&apos;re using Sales X-Ray from Google Play. Updates come from
             Google Play.
           </p>
-        ) : device.app && !playLink ? (
-          <p className={styles.note} role="status">
-            You&apos;re already using the app. Updates download from here too.
-          </p>
         ) : null}
 
         {/* The Google Play app updates only through Play (Play policy): no file to download. */}
         {apkLinks ? (
-          playLink ? (
-            <>
-              {/* Google Play first (24 Oct 2026): Android won't update the file's
-                  app from Play, so the file waits behind a question. */}
-              <div className={styles.get}>
-                <a className={styles.download} href={playLink}>
-                  <Download size={20} aria-hidden="true" />
-                  Get it on Google Play
-                </a>
-              </div>
+          <>
+            {/* Google Play first (24 Oct 2026): Android won't update the file's
+                app from Play; the file stays for people without a Play invite. */}
+            <div className={styles.get}>
+              <a
+                className={`${styles.download} ${styles.play}`}
+                href={PLAY.url}
+              >
+                {PLAY.get}
+              </a>
+            </div>
+            <p className={styles.small}>{PLAY.switching}</p>
+            <details className={styles.fallback}>
+              <summary>{PLAY.file}</summary>
               <p className={styles.small}>
-                Installed it from this page before? Uninstall that app first;
-                your leads, calls and Reports stay in your account.
+                {facts.length ? facts.join(" · ") : "Newest build"}
               </p>
-              <details className={styles.fallback}>
-                <summary>No Play Store on this phone?</summary>
-                <>
-                  <div className={styles.get}>
-                    <a className={styles.download} href={android.url} download>
-                      <Download size={20} aria-hidden="true" />
-                      Download for Android
-                    </a>
-                    {device.android ? null : (
-                      <figure className={styles.qrBox}>
-                        <QRCodeSVG
-                          value={android.url}
-                          size={148}
-                          marginSize={2}
-                          className={styles.qr}
-                          title="Scan with your Android phone's camera"
-                        />
-                        <figcaption>
-                          Scan with your phone&apos;s camera
-                        </figcaption>
-                      </figure>
-                    )}
-                  </div>
+              <>
+                <div className={styles.get}>
+                  <a className={styles.download} href={android.url} download>
+                    <Download size={20} aria-hidden="true" />
+                    Download for Android
+                  </a>
+                  {device.android ? null : (
+                    <figure className={styles.qrBox}>
+                      <QRCodeSVG
+                        value={android.url}
+                        size={148}
+                        marginSize={2}
+                        className={styles.qr}
+                        title="Scan with your Android phone's camera"
+                      />
+                      <figcaption>
+                        Scan with your phone&apos;s camera
+                      </figcaption>
+                    </figure>
+                  )}
+                </div>
 
-                  {android.sha256 ? (
-                    <details className={styles.check}>
-                      <summary>Check the file (SHA-256)</summary>
-                      <p>
-                        <code>{android.sha256}</code>
-                        <CopyValue value={android.sha256} label="SHA-256" />
-                      </p>
-                    </details>
-                  ) : null}
+                {android.sha256 ? (
+                  <details className={styles.check}>
+                    <summary>Check the file (SHA-256)</summary>
+                    <p>
+                      <code>{android.sha256}</code>
+                      <CopyValue value={android.sha256} label="SHA-256" />
+                    </p>
+                  </details>
+                ) : null}
 
-                  <ol className={styles.steps} aria-label="Install on Android">
-                    <li>
-                      <OpenPrompt />
-                      <span>
-                        <strong>1. Download and open</strong>
-                        Tap Download, then Open when it finishes.
-                      </span>
-                    </li>
-                    <li>
-                      <AndroidPrompt />
-                      <span>
-                        <strong>2. Allow the install</strong>
-                        If the phone asks, tap Settings, turn on &ldquo;Allow
-                        from this source&rdquo;, go back and tap Install.
-                      </span>
-                    </li>
-                    <li>
-                      <SignInPrompt />
-                      <span>
-                        <strong>3. Sign in</strong>
-                        Open Sales X-Ray and sign in with the code we email you.
-                        On a lead, tap Call and allow Phone, Call history and
-                        Music and audio.
-                      </span>
-                    </li>
-                  </ol>
-                  <p className={styles.small}>
-                    Works best on phones that record calls by themselves:
-                    Samsung, Xiaomi, Redmi, POCO, OnePlus, Realme, Oppo, Vivo
-                    and Motorola.
-                  </p>
-                </>
-              </details>
-            </>
-          ) : (
-            <>
-              <div className={styles.get}>
-                <a className={styles.download} href={android.url} download>
-                  <Download size={20} aria-hidden="true" />
-                  Download for Android
-                </a>
-                {device.android ? null : (
-                  <figure className={styles.qrBox}>
-                    <QRCodeSVG
-                      value={android.url}
-                      size={148}
-                      marginSize={2}
-                      className={styles.qr}
-                      title="Scan with your Android phone's camera"
-                    />
-                    <figcaption>Scan with your phone&apos;s camera</figcaption>
-                  </figure>
-                )}
-              </div>
-
-              {android.sha256 ? (
-                <details className={styles.check}>
-                  <summary>Check the file (SHA-256)</summary>
-                  <p>
-                    <code>{android.sha256}</code>
-                    <CopyValue value={android.sha256} label="SHA-256" />
-                  </p>
-                </details>
-              ) : null}
-
-              <ol className={styles.steps} aria-label="Install on Android">
-                <li>
-                  <OpenPrompt />
-                  <span>
-                    <strong>1. Download and open</strong>
-                    Tap Download, then Open when it finishes.
-                  </span>
-                </li>
-                <li>
-                  <AndroidPrompt />
-                  <span>
-                    <strong>2. Allow the install</strong>
-                    If the phone asks, tap Settings, turn on &ldquo;Allow from
-                    this source&rdquo;, go back and tap Install.
-                  </span>
-                </li>
-                <li>
-                  <SignInPrompt />
-                  <span>
-                    <strong>3. Sign in</strong>
-                    Open Sales X-Ray and sign in with the code we email you. On
-                    a lead, tap Call and allow Phone, Call history and Music and
-                    audio.
-                  </span>
-                </li>
-              </ol>
-              <p className={styles.small}>
-                Works best on phones that record calls by themselves: Samsung,
-                Xiaomi, Redmi, POCO, OnePlus, Realme, Oppo, Vivo and Motorola.
-              </p>
-            </>
-          )
+                <ol className={styles.steps} aria-label="Install on Android">
+                  <li>
+                    <OpenPrompt />
+                    <span>
+                      <strong>1. Download and open</strong>
+                      Tap Download, then Open when it finishes.
+                    </span>
+                  </li>
+                  <li>
+                    <AndroidPrompt />
+                    <span>
+                      <strong>2. Allow the install</strong>
+                      If the phone asks, tap Settings, turn on &ldquo;Allow from
+                      this source&rdquo;, go back and tap Install.
+                    </span>
+                  </li>
+                  <li>
+                    <SignInPrompt />
+                    <span>
+                      <strong>3. Sign in</strong>
+                      Open Sales X-Ray and sign in with the code we email you.
+                      On a lead, tap Call and allow Phone, Call history and
+                      Music and audio.
+                    </span>
+                  </li>
+                </ol>
+                <p className={styles.small}>
+                  Works best on phones that record calls by themselves: Samsung,
+                  Xiaomi, Redmi, POCO, OnePlus, Realme, Oppo, Vivo and Motorola.
+                </p>
+              </>
+            </details>
+          </>
         ) : null}
       </section>
 

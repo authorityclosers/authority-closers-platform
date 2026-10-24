@@ -3,27 +3,60 @@
  * build are signed with different keys, so Android won't update one with the
  * other: a seller moves to Play by uninstalling the download-link app first.
  *
- * Until the public store page is live, Play's testing opt-in works only for
- * accounts on its tester list (anyone else sees "not available"), so the Play
- * link is offered to those accounts only: one constant to widen, or to swap
- * for the store page.
+ * Until the listing is public, Play's testing opt-in serves only people on its
+ * tester list (some on gmail), so the links and the download-link app's card
+ * speak to testers and keep the app file for everyone else (orchestrator,
+ * 24 Oct 2026). Set PLAY_STORE_URL once the store page is live: the links,
+ * the card and their words move to it together.
  */
-import { useShellProfile } from "../shell/profile-store";
 
-/** Play's testing opt-in (the AC team list); the store page replaces it once public. */
+/** Play's testing opt-in: testers only. */
 export const PLAY_OPT_IN_URL =
   "https://play.google.com/apps/internaltest/4701571889733710337";
 
-/** Accounts on Play's tester list, by email domain. */
-export const PLAY_TESTER_DOMAINS: readonly string[] = ["authorityclosers.com"];
+/** Play's public store page: null until the listing is public. */
+export const PLAY_STORE_URL: string | null = null;
 
-export function onPlayTesterList(email: string | null | undefined): boolean {
-  const domain = email?.split("@")[1]?.trim().toLowerCase();
-  return Boolean(domain && PLAY_TESTER_DOMAINS.includes(domain));
+export type PlayWords = Readonly<{
+  /** Where every Play button goes. */
+  url: string;
+  /** Under "Android" on /apps and in the Get the app dialog. */
+  where: string;
+  /** The main action. */
+  get: string;
+  /** For someone moving from the download-link app. */
+  switching: string;
+  /** The app file's way in, under the main action. */
+  file: string;
+  /** The download-link app's card. */
+  cardTitle: string;
+  cardMessage: string;
+}>;
+
+export function playWords(storeUrl: string | null): PlayWords {
+  const switching =
+    "Switching from the downloaded app? Uninstall it first; your calls and leads stay in your account.";
+  return storeUrl
+    ? {
+        url: storeUrl,
+        where: "On Google Play",
+        get: "Get it on Google Play",
+        switching,
+        file: "No Play Store on this phone? Download the app",
+        cardTitle: "Sales X-Ray is now on Google Play",
+        cardMessage:
+          "Switch now: uninstall this app, then install it from Google Play; your calls and leads stay in your account.",
+      }
+    : {
+        url: PLAY_OPT_IN_URL,
+        where: "Google Play, or the app file",
+        get: "Testers: install from Google Play",
+        switching,
+        file: "No Play invite? Download the app",
+        cardTitle: "Sales X-Ray is moving to Google Play",
+        cardMessage:
+          "Got a Play testing invite? Switch now: uninstall this app, then install from Play; your calls and leads stay in your account. No invite yet? Keep using this app; we'll tell you when Play is open for everyone.",
+      };
 }
 
-/** The Play link for the signed-in account, or null where Play can't serve it yet. */
-export function usePlayLink(): string | null {
-  const profile = useShellProfile(true, process.env.NODE_ENV !== "test");
-  return onPlayTesterList(profile?.email) ? PLAY_OPT_IN_URL : null;
-}
+export const PLAY = playWords(PLAY_STORE_URL);

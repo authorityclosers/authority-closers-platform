@@ -31,6 +31,7 @@ vi.mock("../purchase-policy", async (original) => {
   return { ...actual, useApkLinksAllowed: () => store.apkLinks };
 });
 
+import { PLAY_OPT_IN_URL } from "../apps/play";
 import { ANDROID_APK_URL } from "../apps/release";
 import { SettingsSectionView } from "./sections";
 
@@ -57,14 +58,18 @@ const apkLinks = () =>
       link.getAttribute("href") === "/apps",
   );
 
-it("offers the Android download on the web and in the download-link app", async () => {
+it("offers Google Play's tester link, then the app file, on the web and in the download-link app", async () => {
   store.apkLinks = true;
   await act(async () => root.render(<SettingsSectionView id="devices" />));
+  const links = Array.from(host.querySelectorAll("a"));
+  const play = links.findIndex(
+    (link) => link.getAttribute("href") === PLAY_OPT_IN_URL,
+  );
+  expect(links[play]?.textContent).toBe("Testers: install from Google Play");
   expect(apkLinks().map((link) => link.textContent)).toEqual([
-    "Get the app",
-    "Download for Android",
+    "No Play invite? Download the app",
   ]);
-  expect(host.textContent).not.toContain("Google Play");
+  expect(links.indexOf(apkLinks()[0])).toBeGreaterThan(play);
 });
 
 it("links to no APK inside the Google Play app", async () => {

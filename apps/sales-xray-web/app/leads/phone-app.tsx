@@ -22,7 +22,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useState, useSyncExternalStore } from "react";
 
 import { Badge, Button, Dialog } from "../ui/kit";
-import { usePlayLink } from "../apps/play";
+import { PLAY } from "../apps/play";
 import { inPhoneApp } from "./native-phone";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import styles from "./leads.module.css";
@@ -128,7 +128,6 @@ export function PhoneAppDialog({
   const { android, app } = useDevice();
   // Only the real app is ever offered; the Dev build is never a download.
   const link = ANDROID_APP;
-  const playLink = usePlayLink();
   return (
     <Dialog
       open={open}
@@ -144,11 +143,7 @@ export function PhoneAppDialog({
             </span>
             <span>
               <strong>Android</strong>
-              <small>
-                {playLink
-                  ? "On Google Play"
-                  : "Test build, updated with every release"}
-              </small>
+              <small>{PLAY.where}</small>
             </span>
             <Badge tone="accent">
               {ANDROID_DOWNLOAD_READY ? "New" : "Testing"}
@@ -158,31 +153,27 @@ export function PhoneAppDialog({
             <p className={styles.hint}>
               You&apos;re using the app. On any lead, tap Call.
             </p>
-          ) : playLink ? (
+          ) : (
             <>
-              {/* Google Play first (24 Oct 2026); the file waits behind a question. */}
-              <a className={styles.downloadButton} href={playLink}>
+              {/* Google Play first (24 Oct 2026); the file stays for people
+                  without a Play invite. */}
+              <a className={styles.downloadButton} href={PLAY.url}>
                 <Download size={16} aria-hidden="true" />
-                Get it on Google Play
+                {PLAY.get}
               </a>
-              <p className={styles.hint}>
-                Installed it from a download link before? Uninstall that app
-                first; your leads, calls and Reports stay in your account.
-              </p>
+              <p className={styles.hint}>{PLAY.switching}</p>
               {ANDROID_DOWNLOAD_READY ? (
                 <details className={styles.terms}>
-                  <summary>No Play Store on this phone?</summary>
+                  <summary>{PLAY.file}</summary>
                   <DirectDownload android={android} link={link} />
                 </details>
-              ) : null}
+              ) : (
+                <p className={styles.hint}>
+                  The app file appears here once it&apos;s signed for your
+                  phones.
+                </p>
+              )}
             </>
-          ) : !ANDROID_DOWNLOAD_READY ? (
-            <p className={styles.hint}>
-              The Android app is being tested by the Authority Closers team. The
-              download appears here once it&apos;s signed for your phones.
-            </p>
-          ) : (
-            <DirectDownload android={android} link={link} />
           )}
           <p className={styles.hint}>
             Works on phones that record calls by themselves: Samsung, Xiaomi,

@@ -1,28 +1,31 @@
 "use client";
 
 /**
- * Inside the download-link app only, once per phone: a corner card saying Sales
- * X-Ray is now on Google Play, and how to switch without losing a recording
- * (the Android session, 24 Oct 2026). That app has no updater of its own, so
- * the page it shows is how its users hear.
+ * Inside the download-link app, for everyone on it (orchestrator, 24 Oct
+ * 2026): a corner card saying Sales X-Ray is moving to Google Play, with
+ * "Switch to Play" and "Later" (a week). That app has no updater of its own,
+ * so the page it shows is how its users hear.
  */
 import { useEffect } from "react";
 
 import { inPhoneApp, phoneStatus } from "../leads/native-phone";
 import { notify } from "../notice-center";
-import { usePlayLink } from "./play";
+import { PLAY } from "./play";
 
 export const PLAY_MOVE_SEEN = "sx-play-move-card";
+/** "Later", the X or "Switch to Play" hide the card for a week. */
+export const PLAY_MOVE_AGAIN_MS = 7 * 24 * 60 * 60 * 1000;
 
-function seen(): boolean {
+function hidden(): boolean {
   try {
-    return window.localStorage.getItem(PLAY_MOVE_SEEN) !== null;
+    const at = Date.parse(window.localStorage.getItem(PLAY_MOVE_SEEN) ?? "");
+    return Number.isFinite(at) && Date.now() - at < PLAY_MOVE_AGAIN_MS;
   } catch {
     return true;
   }
 }
 
-function markSeen() {
+function hideForAWeek() {
   try {
     window.localStorage.setItem(PLAY_MOVE_SEEN, new Date().toISOString());
   } catch {
@@ -31,9 +34,8 @@ function markSeen() {
 }
 
 export function PlayMoveCard() {
-  const link = usePlayLink();
   useEffect(() => {
-    if (!link || !inPhoneApp() || seen()) return;
+    if (!inPhoneApp() || hidden()) return;
     let alive = true;
     void phoneStatus().then((status) => {
       // Builds that don't say their store are download-link builds too.
@@ -41,24 +43,24 @@ export function PlayMoveCard() {
       notify({
         id: "play-move",
         tone: "info",
-        title: "Sales X-Ray is now on Google Play",
-        message:
-          "To switch, first analyse any conversation you recorded in this app; those recordings stay on this phone. Then uninstall this app and install it from Google Play. Your leads, calls and Reports are safe in your account.",
+        title: PLAY.cardTitle,
+        message: PLAY.cardMessage,
         action: {
-          label: "Open Google Play",
+          label: "Switch to Play",
           icon: "open",
           run: () => {
-            markSeen();
-            window.location.href = link;
+            hideForAWeek();
+            window.location.href = PLAY.url;
           },
         },
-        // Stays until dismissed; dismissed once is enough.
-        onDismiss: async () => markSeen(),
+        dismissLabel: "Later",
+        // Stays until dismissed.
+        onDismiss: async () => hideForAWeek(),
       });
     });
     return () => {
       alive = false;
     };
-  }, [link]);
+  }, []);
   return null;
 }

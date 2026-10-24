@@ -13,7 +13,7 @@ import {
   AccountSettings,
   type SettingsBillingProps,
 } from "../account-settings";
-import { usePlayLink } from "../apps/play";
+import { PLAY } from "../apps/play";
 import { ANDROID_APK_URL } from "../apps/release";
 import { CallAiSettingsSection } from "../call-ai/call-ai-settings";
 import { AlertsCard } from "../leads/alerts-card";
@@ -70,36 +70,20 @@ function Note({
 function AppPanel() {
   // The Google Play app updates only through Play: no APK link there (Play policy).
   const apkLinks = useApkLinksAllowed();
-  const playLink = usePlayLink();
   return (
     <Panel title="Sales X-Ray on your phone">
-      {apkLinks && playLink ? (
-        <Note
-          icon={<Download size={18} />}
-          title="Android app"
-          href={playLink}
-          action="Google Play"
-        >
-          Sales X-Ray is on Google Play. If you installed it from a download
-          link, uninstall that app first. No Play Store on this phone?{" "}
-          <Link className={styles.noteLink} href="/apps">
-            Get the app file
-          </Link>
-          .
-        </Note>
-      ) : apkLinks ? (
+      {apkLinks ? (
         <>
-          <Note
-            icon={<Download size={18} />}
-            title="Android app"
-            href="/apps"
-            action="Get the app"
-          >
-            Calls, leads and alerts on your phone. It can also pick up your call
-            recordings for analysis.
+          <Note icon={<Download size={18} />} title="Android app">
+            Calls, leads and alerts on your phone. {PLAY.switching}
           </Note>
-          <a className={styles.download} href={ANDROID_APK_URL} rel="noopener">
-            Download for Android
+          {/* Google Play first (24 Oct 2026); the file stays for people
+              without a Play invite. */}
+          <a className={styles.download} href={PLAY.url} rel="noopener">
+            {PLAY.get}
+          </a>
+          <a className={styles.fileLink} href={ANDROID_APK_URL} rel="noopener">
+            {PLAY.file}
           </a>
         </>
       ) : (

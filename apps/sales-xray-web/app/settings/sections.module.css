@@ -56,10 +56,21 @@
   text-decoration: underline;
 }
 
-/* A link inside a note's words (Google Play's "Get the app file"). */
-.noteLink {
+/* The app file, under Google Play's button (24 Oct 2026). */
+.fileLink {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  margin: -8px 16px 8px;
   color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
   font-weight: 650;
+  text-decoration: none;
+}
+
+.fileLink:hover,
+.fileLink:focus-visible {
+  text-decoration: underline;
 }
 
 .download {

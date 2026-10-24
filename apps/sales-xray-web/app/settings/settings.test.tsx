@@ -2,6 +2,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { PLAY_OPT_IN_URL } from "../apps/play";
+import { ANDROID_APK_URL } from "../apps/release";
 
 const nav = vi.hoisted(() => ({ pathname: "/settings", replace: vi.fn() }));
 vi.mock("next/navigation", () => ({
@@ -202,7 +204,9 @@ it("builds each section from the existing screens, with only its own parts", asy
   expect(host.querySelector('[data-testid="connected-apps"]')).not.toBeNull();
   // Phone & alerts: your own switches on one screen; Apps & devices opens it too.
   await render("devices");
-  expect(host.querySelector('a[href="/apps"]')).not.toBeNull();
+  // Google Play first; the app file stays under it (24 Oct 2026).
+  expect(host.querySelector(`a[href="${PLAY_OPT_IN_URL}"]`)).not.toBeNull();
+  expect(host.querySelector(`a[href="${ANDROID_APK_URL}"]`)).not.toBeNull();
   expect(host.textContent).toContain("Usage analytics");
   await render("notifications");
   expect(host.textContent).toContain("Usage analytics");

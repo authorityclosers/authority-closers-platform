@@ -32,6 +32,8 @@ export type Notice = Readonly<{
   }>;
   /** Milliseconds before it leaves by itself; errors stay until dismissed. */
   timeout?: number;
+  /** A worded dismiss beside the action ("Later"); it dismisses like the X. */
+  dismissLabel?: string;
   /** Permanent dismissal: retain the card until the API acknowledges it. */
   onDismiss?: () => Promise<void>;
   /** Error cards offer "Report" (the bug reporter); not on the reporter's own. */
@@ -111,7 +113,7 @@ function NoticeCard({ notice }: { notice: Notice }) {
         {notice.message ? (
           <p className={styles.message}>{notice.message}</p>
         ) : null}
-        {notice.action || notice.reference || report ? (
+        {notice.action || notice.dismissLabel || notice.reference || report ? (
           <div className={styles.actions}>
             {notice.action ? (
               <button
@@ -128,6 +130,16 @@ function NoticeCard({ notice }: { notice: Notice }) {
                   <RotateCw size={13} aria-hidden="true" />
                 )}
                 {notice.action.label}
+              </button>
+            ) : null}
+            {notice.dismissLabel ? (
+              <button
+                type="button"
+                className={styles.reference}
+                disabled={dismissing}
+                onClick={() => void dismiss()}
+              >
+                {notice.dismissLabel}
               </button>
             ) : null}
             {notice.reference ? (

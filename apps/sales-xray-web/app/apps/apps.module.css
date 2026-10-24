@@ -127,6 +127,14 @@
   text-decoration: none;
 }
 
+/* Google Play's button: one line at 390 px (a label, no download arrow). */
+.play {
+  padding: 0 16px;
+  font-size: 16px;
+  text-align: center;
+  text-wrap: balance;
+}
+
 .download:focus-visible,
 .copy:focus-visible {
   outline: none;
