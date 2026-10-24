@@ -9,6 +9,7 @@
  */
 
 import { fromPhone, rememberCapture } from "../capture-source";
+import { hapticsOn } from "../ui/haptics";
 
 /**
  * Is anyone heard in a recording? The phone decodes it to tell (app 0.3.80+,
@@ -76,6 +77,8 @@ export type NativeStatus = {
   nativeSignIn: NativeSignInProvider[];
   /** "direct" (download link) or "play" (Google Play), from app builds of 23 Oct 2026. */
   store?: "direct" | "play";
+  /** The app takes the theme pick (Android's night mode follows it), from 1.0.25. */
+  theme?: true;
 };
 
 export type NativeSignInProvider = "google" | "facebook";
@@ -313,9 +316,30 @@ export async function phoneStatus(): Promise<NativeStatus | null> {
       ...(raw.store === "play" || raw.store === "direct"
         ? { store: raw.store }
         : {}),
+      ...(typeof raw.theme === "string" ? { theme: true as const } : {}),
     };
   } catch {
     return null;
+  }
+}
+
+let themeTaken: Promise<boolean> | null = null;
+
+/**
+ * Tells the phone app the theme pick (System, Light or Dark), so Android's
+ * night mode, its own sheets and the ground behind the page match it from
+ * the next start's first frame. Builds before 1.0.25 don't take it.
+ */
+export async function setPhoneTheme(
+  mode: "system" | "light" | "dark",
+): Promise<void> {
+  if (!inPhoneApp()) return;
+  themeTaken ??= phoneStatus().then((status) => status?.theme === true);
+  if (!(await themeTaken)) return;
+  try {
+    await ask("theme", { mode }, 5_000);
+  } catch {
+    // The page still shows the pick; the app catches up at the next start.
   }
 }
 
@@ -364,7 +388,8 @@ export async function startPhoneCall(lead: {
   number: string;
   name: string;
 }): Promise<void> {
-  await ask("call", lead);
+  // The app's own tick as it dials follows Settings, Vibration (1.0.25+).
+  await ask("call", { ...lead, vibrate: hapticsOn() });
 }
 
 /** The lead's last call from this phone, when it has ended. */
@@ -447,6 +472,8 @@ export function missedReason(result: NativeCallResult): string | null {
  * browser the page asks the browser; elsewhere nothing happens.
  */
 export function buzz(kind: "tick" | "press" | "done" = "tick"): void {
+  // Settings, Phone & alerts: Vibration off on this device.
+  if (!hapticsOn()) return;
   if (inPhoneApp()) {
     void ask("haptic", { kind }, 2_000).catch(() => undefined);
     return;
@@ -676,6 +703,16 @@ export type SetupStatus = {
   callLogSupported: boolean;
   /** "direct" (the download-link app) or "play" (Google Play). */
   store: "direct" | "play";
+  /**
+   * Permissions Android won't ask for again (denied twice, or "Don't ask
+   * again"): only the app's settings can allow them now (app 1.0.25+).
+   */
+  blocked: {
+    calls: boolean;
+    notifications: boolean;
+    recordings: boolean;
+    microphone: boolean;
+  };
 };
 
 /** This phone's call recorder as the app sees it (owner, 19 Oct: check, don't ask). */
@@ -727,6 +764,17 @@ export function parseRecorder(raw: unknown): RecorderProfile | null {
   };
 }
 
+function parseBlocked(raw: unknown): SetupStatus["blocked"] {
+  const value =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    calls: value.calls === true,
+    notifications: value.notifications === true,
+    recordings: value.recordings === true,
+    microphone: value.microphone === true,
+  };
+}
+
 export function parseSetup(raw: unknown): SetupStatus | null {
   if (!raw || typeof raw !== "object") return null;
   const value = raw as Record<string, unknown>;
@@ -750,6 +798,7 @@ export function parseSetup(raw: unknown): SetupStatus | null {
     // Apps before the two builds always had call history.
     callLogSupported: value.callLogSupported !== false,
     store: value.store === "play" ? "play" : "direct",
+    blocked: parseBlocked(value.blocked),
   };
 }
 
@@ -992,5 +1041,54 @@ export async function openConnect(url: string): Promise<boolean> {
     return raw.opened === true;
   } catch {
     return false;
+  }
+}
+
+/** One event the phone app collected (app 1.0.26+): an sx.* name and its fields. */
+export type PhoneTelemetryEvent = {
+  name: string;
+  fields: Record<string, string | number | boolean>;
+};
+
+/**
+ * Takes what the phone app collected since the last read (at most 50 events,
+ * kept only in its memory; app 1.0.26+). The app never sends anything itself:
+ * the page sends these under the person's usage-analytics switch.
+ */
+export async function drainPhoneTelemetry(): Promise<PhoneTelemetryEvent[]> {
+  if (!inPhoneApp()) return [];
+  try {
+    const raw = await ask<{ events?: unknown }>("telemetry", {}, 3_000);
+    if (!Array.isArray(raw?.events)) return [];
+    return raw.events.slice(0, 50).flatMap((item: unknown) => {
+      const value = item as { name?: unknown; fields?: unknown } | null;
+      if (!value || typeof value.name !== "string") return [];
+      const fields: Record<string, string | number | boolean> = {};
+      if (value.fields && typeof value.fields === "object")
+        for (const [key, field] of Object.entries(value.fields))
+          if (
+            typeof field === "string" ||
+            typeof field === "boolean" ||
+            (typeof field === "number" && Number.isFinite(field))
+          )
+            fields[key] = field;
+      return [{ name: value.name, fields }];
+    });
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Tells the phone app whether usage analytics are on for this person. Off, it
+ * empties its buffer, stops collecting and stops Crashlytics (app 1.0.26+);
+ * older builds don't know the call and ignore it.
+ */
+export async function tellPhoneTelemetry(on: boolean): Promise<void> {
+  if (!inPhoneApp()) return;
+  try {
+    await ask("telemetryConsent", { on }, 3_000);
+  } catch {
+    // An older build: nothing to tell.
   }
 }

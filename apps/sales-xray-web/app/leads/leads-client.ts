@@ -8,6 +8,7 @@
 
 import { withDisplayNames } from "../display-name";
 import { earlyFetch } from "../early-reads";
+import type { MeetingView, MoveOption } from "./pipeline/pipeline-client";
 
 export const LEADS_PATH = "/leads";
 const API = "/v1/lead-desk";
@@ -54,6 +55,15 @@ export type LeadRow = {
   /** They called, nobody picked up, and nobody has called back yet. */
   missed_at?: string | null;
   missed_calls?: number;
+  /** Lead OS: when it entered its stage (null: not moved since Lead OS). */
+  stage_at?: string | null;
+  group?: "active" | "won" | "lost" | "junk";
+  outcome_reason?: string | null;
+  outcome_reason_label?: string | null;
+  last_contact_at?: string | null;
+  next_action_note?: string | null;
+  /** An open lead past New with no follow-up set. */
+  no_next_action?: boolean;
 };
 
 export type MessageTemplate = { key: string; label: string; text: string };
@@ -64,7 +74,8 @@ export type Stage =
   | "follow_up"
   | "interested"
   | "won"
-  | "lost";
+  | "lost"
+  | "junk";
 
 export type Desk = {
   me: {
@@ -119,7 +130,9 @@ export type LeadEvent = {
     | "edited"
     | "message"
     | "scheduled"
-    | "stage";
+    | "stage"
+    | "meeting"
+    | "suggestion";
   at: string;
   actor_name: string | null;
   stage: string | null;
@@ -153,6 +166,17 @@ export type LeadEvent = {
   event_id?: string | null;
   can_hide?: boolean;
   private?: boolean;
+  /** A stage move (Lead OS): how, from where, by whom or what, and why. */
+  action?: "move" | "close" | "reopen" | "reclassify" | string | null;
+  from_label?: string | null;
+  move_source?: string | null;
+  outcome_reason?: string | null;
+  outcome_reason_label?: string | null;
+  /** A meeting's history: scheduled, rescheduled, done, missed, cancelled. */
+  meeting_action?: string | null;
+  starts_at?: string | null;
+  from_starts_at?: string | null;
+  mode_label?: string | null;
 };
 
 export type LeadDetail = {
@@ -178,6 +202,10 @@ export type LeadDetail = {
   stage_choices?: StageChoice[];
   /** Where the lead's last call says it got to, when further than its stage. */
   stage_suggestion?: StageSuggestion | null;
+  /** Lead OS: where it may go now, for this person, and what each asks. */
+  moves?: MoveOption[];
+  /** Its scheduled meeting, if one is booked. */
+  meeting?: MeetingView | null;
 };
 
 export type StageSuggestion = {
@@ -487,6 +515,9 @@ function json(method: string, body: unknown): RequestInit {
 }
 
 export const commandId = () => crypto.randomUUID();
+
+/** The same request and body helpers for the pipeline client (Lead OS). */
+export { request as deskRequest, json as deskJson };
 
 /** Overdue, then call now, then later today: the due-now list in sections. */
 export function deskSections(
@@ -1160,6 +1191,21 @@ export function minutesLabel(seconds: number): string {
   return minutes < 60
     ? `${minutes}m`
     : `${Math.floor(minutes / 60)}h ${minutes % 60}m`;
+}
+
+/** A wait in words: "45 min", "22 h 38 min", "2 d 4 h" (Redmi sweep, 24 Oct 2026:
+ *  "1358 min" read as a number, not a time). */
+export function waitWords(minutes: number): string {
+  const total = Math.max(0, Math.round(minutes));
+  if (total < 60) return `${total} min`;
+  const hours = Math.floor(total / 60);
+  if (hours < 24) {
+    const rest = total % 60;
+    return rest ? `${hours} h ${rest} min` : `${hours} h`;
+  }
+  const days = Math.floor(hours / 24);
+  const left = hours % 24;
+  return left ? `${days} d ${left} h` : `${days} d`;
 }
 
 export function ago(iso: string, now: Date = new Date()): string {

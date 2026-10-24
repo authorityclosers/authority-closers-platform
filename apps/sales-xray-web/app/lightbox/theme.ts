@@ -20,9 +20,11 @@ export function resolveTheme(
 }
 
 /**
- * The control and pre-paint script ship in development builds and in an explicit
- * theme preview. Production stays light until the P6 theme matrix passes
- * (INTEGRATION_DECISIONS.md decision 12).
+ * The control and pre-paint script ship everywhere (owner, 24 Oct 2026: "dark
+ * and light mode toggle is not visible, and the app does not follow the theme
+ * of the mobile"): System by default, following the phone live. Setting
+ * AC_SALES_XRAY_THEME_PREVIEW=0 holds a deployment light, as production was
+ * until then (INTEGRATION_DECISIONS.md decision 12).
  */
 export function themeControlEnabled(
   env: Readonly<{
@@ -30,9 +32,7 @@ export function themeControlEnabled(
     AC_SALES_XRAY_THEME_PREVIEW?: string;
   }>,
 ): boolean {
-  return (
-    env.NODE_ENV !== "production" || env.AC_SALES_XRAY_THEME_PREVIEW === "1"
-  );
+  return env.AC_SALES_XRAY_THEME_PREVIEW !== "0";
 }
 
 // A write that storage refuses still applies for this document.

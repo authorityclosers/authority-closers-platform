@@ -7,13 +7,18 @@ industry, never after a customer.
 Each stage has three parts:
 
 - its **label**, the business's own words ("Site visit booked");
-- its **kind**, what the desk does with it (one of the six desk stages: a new lead, a
-  lead that could not be reached, an open lead that needs a follow-up, a hot lead, won
-  or lost). The desk's follow-ups, queues and reports run on the kind, so a business's
-  own stages never break them;
+- its **kind**, what the desk does with it (one of the seven desk stages: a new lead, a
+  lead that could not be reached, an open lead that needs a follow-up, a hot lead, won,
+  lost, or junk: fake or unusable). The desk's follow-ups, queues and reports run on the
+  kind, so a business's own stages never break them;
 - its **milestone**, what it means for selling ("a meeting or visit is booked"). The
   ad-platform engine matches milestones to each platform's own events, so nobody has
   to match them by hand.
+
+A profile can also carry its moves (Lead OS, 24 Oct 2026): which stages a lead may go
+to from each stage, what a seller is asked on the way in, the reasons offered for Lost
+and Junk, and how long a lead may sit before its card shows its age
+(``journey/transitions.py``). A profile without them lets a lead go anywhere, as before.
 """
 
 from __future__ import annotations
@@ -22,7 +27,9 @@ import re
 from dataclasses import dataclass
 from typing import Final, Literal
 
-Kind = Literal["new", "not_connected", "follow_up", "interested", "won", "lost"]
+from ac_platform.lead_desk import vocabulary
+
+Kind = Literal["new", "not_connected", "follow_up", "interested", "won", "lost", "junk"]
 Milestone = Literal[
     "lead",
     "unreachable",
@@ -35,6 +42,7 @@ Milestone = Literal[
     "negotiation",
     "won",
     "lost",
+    "disqualified",
     "other",
 ]
 
@@ -45,6 +53,7 @@ KINDS: Final[tuple[Kind, ...]] = (
     "interested",
     "won",
     "lost",
+    "junk",
 )
 MILESTONES: Final[tuple[Milestone, ...]] = (
     "lead",
@@ -58,6 +67,7 @@ MILESTONES: Final[tuple[Milestone, ...]] = (
     "negotiation",
     "won",
     "lost",
+    "disqualified",
     "other",
 )
 # The order a lead moves through, for the milestones on the way to a sale.
@@ -81,6 +91,7 @@ KIND_WORDS: Final[dict[str, str]] = {
     "interested": "Hot",
     "won": "Won",
     "lost": "Lost",
+    "junk": "Junk",
 }
 MILESTONE_WORDS: Final[dict[str, str]] = {
     "lead": "A new enquiry",
@@ -94,6 +105,7 @@ MILESTONE_WORDS: Final[dict[str, str]] = {
     "negotiation": "Agreeing the final terms",
     "won": "They bought",
     "lost": "They won't buy",
+    "disqualified": "Fake or unusable",
     "other": "Something else",
 }
 # The desk kind a milestone usually means.
@@ -109,8 +121,12 @@ MILESTONE_KIND: Final[dict[str, Kind]] = {
     "negotiation": "interested",
     "won": "won",
     "lost": "lost",
+    "disqualified": "junk",
     "other": "follow_up",
 }
+
+# What a seller can be asked when a lead enters a stage (journey/transitions.py).
+NEEDS: Final[tuple[str, ...]] = ("next_action", "meeting", "reason", "nc_reason")
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +134,11 @@ class TemplateStage:
     key: str
     label: str
     milestone: Milestone
+    # Lead OS rules (journey/transitions.py); None: as before, anywhere and nothing asked.
+    moves: tuple[str, ...] | None = None
+    needs: tuple[str, ...] | None = None
+    reasons: tuple[tuple[str, str], ...] | None = None
+    rot_hours: int | None = None
 
     @property
     def kind(self) -> Kind:
@@ -137,7 +158,22 @@ def _t(key: str, label: str, milestone: Milestone) -> TemplateStage:
     return TemplateStage(key, label, milestone)
 
 
+def _r(
+    key: str,
+    label: str,
+    milestone: Milestone,
+    moves: tuple[str, ...],
+    needs: tuple[str, ...] = (),
+    *,
+    reasons: tuple[tuple[str, str], ...] | None = None,
+    rot_hours: int | None = None,
+) -> TemplateStage:
+    return TemplateStage(key, label, milestone, moves, needs, reasons, rot_hours)
+
+
 _NEW = _t("new", "New", "lead")
+# Where a seller works an open lead; Won, Lost and Junk close it.
+_WORKING = ("not_connected", "interested", "discussion_incomplete", "meeting_scheduled")
 _UNREACHED = _t("not_connected", "Couldn't reach", "unreachable")
 _LOST = _t("lost", "Lost", "lost")
 
@@ -154,6 +190,94 @@ TEMPLATES: Final[tuple[Template, ...]] = (
             _t("interested", "Interested", "qualified"),
             _t("won", "Won", "won"),
             _LOST,
+        ),
+    ),
+    # The sales team's nine stages (Lead OS, 24 Oct 2026): a lead moves straight to the
+    # stage that says where it stands, never through every stage, and Junk (fake or
+    # unusable) stays apart from Lost (a real lead who said no).
+    Template(
+        "inside_sales_demos",
+        "Inside sales with demos",
+        "Call, book a demo, close. Junk kept apart.",
+        "phone",
+        (
+            _r("new", "New Lead", "lead", (*_WORKING, "lost", "junk"), rot_hours=1),
+            _r(
+                "not_connected",
+                "Not Connected",
+                "unreachable",
+                ("interested", "discussion_incomplete", "meeting_scheduled", "lost", "junk"),
+                ("nc_reason",),
+                rot_hours=48,
+            ),
+            _r(
+                "interested",
+                "Interested (In Follow-Up)",
+                "qualified",
+                ("discussion_incomplete", "meeting_scheduled", "lost", "junk"),
+                ("next_action",),
+                rot_hours=72,
+            ),
+            _r(
+                "discussion_incomplete",
+                "Discussion Incomplete",
+                "contacted",
+                ("interested", "meeting_scheduled", "lost", "junk"),
+                ("next_action",),
+                rot_hours=24,
+            ),
+            _r(
+                "meeting_scheduled",
+                "Meeting / Demo Scheduled",
+                "appointment_booked",
+                (
+                    "demo_completed",
+                    "not_connected",
+                    "interested",
+                    "discussion_incomplete",
+                    "lost",
+                    "junk",
+                ),
+                ("meeting",),
+            ),
+            _r(
+                "demo_completed",
+                "Demo / Zoom Meeting Completed",
+                "appointment_done",
+                ("won", "lost", "junk"),
+                ("next_action",),
+                rot_hours=120,
+            ),
+            # A closed stage's moves are where it can be reopened to, and Junk for a
+            # manager who learns it was never a real lead.
+            _r(
+                "won",
+                "Closed / Won",
+                "won",
+                (
+                    "interested",
+                    "discussion_incomplete",
+                    "meeting_scheduled",
+                    "demo_completed",
+                    "junk",
+                ),
+            ),
+            _r(
+                "lost",
+                "Closed / Lost",
+                "lost",
+                (*_WORKING, "demo_completed", "junk"),
+                ("reason",),
+                reasons=vocabulary.LOST_REASONS,
+            ),
+            _r(
+                "junk",
+                "Junk Lead",
+                "disqualified",
+                ("new", "not_connected", "interested", "discussion_incomplete"),
+                ("reason",),
+                reasons=vocabulary.JUNK_REASONS,
+            ),
         ),
     ),
     Template(
@@ -346,8 +470,12 @@ _MEET = (
 )
 _RULES: Final[tuple[tuple[Milestone, re.Pattern[str]], ...]] = (
     (
+        "disqualified",
+        re.compile(r"\b(junk|spam|fake|invalid|wrong number|disqualif\w*)\b"),
+    ),
+    (
         "lost",
-        re.compile(r"\b(lost|not interested|dropped|reject|junk|dead|spam|closed lost|cold)\b"),
+        re.compile(r"\b(lost|not interested|dropped|reject|dead|closed lost|cold)\b"),
     ),
     (
         "unreachable",

@@ -43,7 +43,8 @@ export function SectionList({
           <h2>{group}</h2>
           <ul>
             {SETTINGS_SECTIONS.filter(
-              (item) => item.group === group && !hubAddress(item.id),
+              (item) =>
+                item.group === group && !hubAddress(item.id) && !item.within,
             ).map(({ id, label, hint, icon: Icon }) => (
               <li key={id}>
                 <Link

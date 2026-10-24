@@ -1,0 +1,99 @@
+/* Settings -> AI apps: connected AI apps, then how to connect one. Tokens only. */
+
+.page {
+  display: grid;
+  gap: 16px;
+}
+
+.outline {
+  display: grid;
+  gap: 4px;
+  padding: 6px 16px 10px;
+}
+
+.name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.disconnect {
+  gap: 6px;
+}
+
+/* Phones: the icon alone, so the row's words keep two lines. */
+@media (max-width: 600px) {
+  .disconnect {
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+
+  .disconnectWord {
+    display: none;
+  }
+}
+
+.check {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+.connect {
+  display: grid;
+  gap: 14px;
+  padding: 4px 16px 16px;
+}
+
+.address {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: linear-gradient(
+    120deg,
+    var(--sx-accent-soft),
+    var(--sx-surface) 70%
+  );
+}
+
+.addressWords {
+  display: grid;
+  flex: 1 1 240px;
+  gap: 2px;
+  min-width: 0;
+}
+
+.addressLabel {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.addressText {
+  color: var(--sx-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--sx-text-md);
+  overflow-wrap: anywhere;
+}
+
+.steps {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 22px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  line-height: 1.45;
+}
+
+.note {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}

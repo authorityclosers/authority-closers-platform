@@ -281,16 +281,17 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "Hosting and analysis service providers needed to operate Sales X-Ray. Before an analysis starts, the processing plan shows the analysis provider and purpose and asks you to accept that processing.",
         "Razorpay for payments made through its hosted checkout.",
         "Google (the Gemini API, provided by Google LLC), to draft replies to messages, only for a business that switches on AI replies. See AI replies to messages, below.",
+        "Google (Firebase Crashlytics, provided by Google LLC), for crash reports from the Android app. From app version 1.0.26 they follow the usage analytics switch. See Usage analytics, below.",
         "Sales X-Ray does not use your recordings or reports to target advertising.",
       ],
     },
     {
-      // The notice's words, version sx-product-analytics-2026-10-24-v1 (telemetry/sales_xray.py
+      // The notice's words, version sx-product-analytics-2026-10-24-v2 (telemetry/sales_xray.py
       // NOTICES; a test pins them). New words are a new version there.
       title: "Usage analytics",
       paragraphs: [
-        "Sales X-Ray records how its app is used and how fast it responds, to make it faster, easier to use and cheaper to run. It records the screens and report sections you open and for how long, taps and how quickly the app responds to them, errors, page speed, the app version and the type of device and network. It never records call content, transcripts, lead names, phone numbers or email addresses. Records are kept for 180 days and are never used to score you or to set your access, payments or plan.",
-        "This is on in every workspace unless it is turned off. You can turn it off for yourself at any time in Settings, Privacy; an owner or admin can turn it off for the whole workspace there. Sandbox workspaces never record it.",
+        "Sales X-Ray records how its app is used and how fast it responds, to make it faster, easier to use and cheaper to run. It records the screens and report sections you open and for how long, taps and how quickly the app responds to them, errors, page speed, the app version and the type of device and network. In the Android app it also records how the app itself runs (how fast it starts, how smoothly it draws and why it last closed), the phone's make, model, Android and WebView versions, its memory and free-storage tier, its battery-saver and notification settings, its network type and speed tier, and which of the app's permissions are on. It never records call content, transcripts, lead names, phone numbers, email addresses, contacts or location. Records are kept for 180 days and are never used to score you or to set your access, payments or plan.",
+        "This is on in every workspace unless it is turned off. You can turn it off for yourself at any time in Settings, Privacy; an owner or admin can turn it off for the whole workspace there. Sandbox workspaces never record it. Crash reports from the Android app go to Firebase Crashlytics (provided by Google); from app version 1.0.26 they stop too when this is turned off.",
       ],
     },
     {

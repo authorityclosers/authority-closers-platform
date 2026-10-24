@@ -313,3 +313,51 @@ it("carries where an event ran and stops automatic capture when nothing is recor
   off.refresh();
   expect(off.active()).toBe(true);
 });
+
+it("says whether this person is recorded only once the server has answered", async () => {
+  const telemetry = client(true);
+  // Nobody signed in yet: unknown, so the phone app is told nothing.
+  expect(await telemetry.collecting()).toBeNull();
+  telemetry.setSession(SESSION);
+  expect(await telemetry.collecting()).toBe(true);
+
+  taxonomy = [];
+  const off = client(true);
+  off.setSession(SESSION);
+  expect(await off.collecting()).toBe(false);
+
+  // No answer (an error, offline) decides nothing, and the next ask reads again.
+  taxonomy = null;
+  const failing = client(true);
+  failing.setSession(SESSION);
+  expect(await failing.collecting()).toBeNull();
+  taxonomy = ["sx.app_launch"];
+  expect(await failing.collecting()).toBe(true);
+  await expect(client(false).collecting()).resolves.toBeNull();
+});
+
+it("takes the phone app's daily profile, its largest event, with where it ran", async () => {
+  const telemetry = client(true, () => ({
+    route: "/leads",
+    device: "phone",
+    app: "android",
+    tier: "mid",
+    net: "4g",
+    link: "cellular",
+    appVersion: "1.0.26",
+  }));
+  telemetry.setSession(SESSION);
+  telemetry.track("sx.device_profile", {
+    android: 14,
+    maker: "xiaomi",
+    model_label: "m1906g7g",
+    webview: "130",
+    ram_tier: "4",
+    memory_class: 256,
+    low_ram: "no",
+    storage_free: "4to16",
+    store: "play",
+  });
+  await vi.runAllTimersAsync();
+  expect(Object.keys(sent()[0]?.payload as object)).toHaveLength(15);
+});

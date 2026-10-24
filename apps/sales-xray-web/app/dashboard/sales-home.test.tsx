@@ -159,7 +159,9 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
   expect(figures).toEqual(["Won", "Interested", "New leads", "Connected"]);
   expect(host.textContent).toContain("13% of 16 leads called");
   expect(host.textContent).toContain("Swamini Fictional");
-  expect(host.textContent).toContain("2 won · 3 interested · 12 calls");
+  expect(host.textContent).toContain(
+    "2\u00a0won · 3\u00a0interested · 12\u00a0calls",
+  );
   expect(host.textContent).toContain("Late follow-ups");
   expect(host.textContent).toContain("6 open now");
   const seller = host.querySelector<HTMLAnchorElement>(

@@ -295,7 +295,11 @@ class Reader:
         return await self._facts(call_id)
 
     async def leads(
-        self, stage: str | None = None, offset: int = 0, limit: int = 50
+        self,
+        stage: str | None = None,
+        offset: int = 0,
+        limit: int = 50,
+        search: str | None = None,
     ) -> dict[str, Any]:
         self.require("leads:read")
         if stage is not None and stage not in STAGES:
@@ -304,7 +308,7 @@ class Reader:
             page = await self._desk().leads(
                 scope="team" if self.caller.sees_team else "mine",
                 stage=stage,
-                search=None,
+                search=search,
                 offset=max(0, offset),
                 limit=max(1, min(50, limit)),
             )

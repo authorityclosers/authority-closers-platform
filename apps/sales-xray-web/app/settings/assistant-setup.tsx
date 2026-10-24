@@ -6,6 +6,8 @@
  * first the remote MCP server (/v1/mcp, 0370eb5a): add the address and sign
  * in, nothing to download. For assistants that can't reach a remote server,
  * the one-file stdio server (/developers/sx.py) with an API key.
+ * ChatGPT first (24 Oct 2026, the connector fixed in 6cecf226): it takes only
+ * the remote server, so the download stays hidden for it.
  */
 import { useState } from "react";
 import { Download } from "lucide-react";
@@ -15,15 +17,25 @@ import { CopyButton } from "./copy-button";
 import { useOrigin } from "./use-origin";
 import styles from "./developers.module.css";
 
-type Assistant = "claude-desktop" | "claude-code" | "cursor" | "vscode";
+type Assistant =
+  | "chatgpt"
+  | "claude-desktop"
+  | "claude-code"
+  | "cursor"
+  | "vscode";
 
 const PRODUCTION = "https://salesxray.authorityclosers.com";
 const KEY = "paste-your-key-here";
 
 const ASSISTANTS: { key: Assistant; label: string; where: string }[] = [
   {
+    key: "chatgpt",
+    label: "ChatGPT",
+    where: "ChatGPT connects only to the address above.",
+  },
+  {
     key: "claude-desktop",
-    label: "Claude Desktop",
+    label: "Claude",
     where:
       "In Claude Desktop: Settings → Developer → Edit config. Add this to claude_desktop_config.json, then restart Claude.",
   },
@@ -68,8 +80,10 @@ export function assistantSnippet(assistant: Assistant, origin: string): string {
 
 // Where to add the remote server in each assistant; it asks you to sign in.
 const REMOTE_WHERE: Record<Assistant, string> = {
+  chatgpt:
+    "In ChatGPT: Settings → Apps & Connectors → Advanced settings, turn on Developer mode, then Create. Paste the address and keep OAuth.",
   "claude-desktop":
-    "In Claude Desktop: Settings → Connectors → Add custom connector. Paste the address.",
+    "In Claude: Customize → Connectors → Add → Add custom connector. Paste the address, then Continue and Add.",
   "claude-code": "Run this once in a terminal, then /mcp to sign in.",
   cursor: "Add this to ~/.cursor/mcp.json.",
   vscode: "Add this to .vscode/mcp.json in your project.",
@@ -78,7 +92,7 @@ const REMOTE_WHERE: Record<Assistant, string> = {
 /** The remote server's setup for one assistant, at this site's address. */
 export function remoteSnippet(assistant: Assistant, origin: string): string {
   const url = `${origin || PRODUCTION}/v1/mcp`;
-  if (assistant === "claude-desktop") return url;
+  if (assistant === "claude-desktop" || assistant === "chatgpt") return url;
   if (assistant === "claude-code")
     return `claude mcp add --transport http sales-xray ${url}`;
   if (assistant === "vscode")
@@ -103,14 +117,11 @@ function Snippet({ code, label }: { code: string; label: string }) {
 
 export function AssistantSetup() {
   const origin = useOrigin();
-  const [assistant, setAssistant] = useState<Assistant>("claude-desktop");
+  const [assistant, setAssistant] = useState<Assistant>("chatgpt");
   const chosen =
     ASSISTANTS.find((item) => item.key === assistant) ?? ASSISTANTS[0];
   return (
-    <Panel
-      title="Connect your AI assistant"
-      sub="Let Claude, Cursor or VS Code read your calls and leads (MCP)"
-    >
+    <Panel title="Connect your AI assistant">
       <ol className={styles.steps} data-steps="remote">
         <li>
           <strong>Add Sales X-Ray to your assistant</strong>
@@ -145,44 +156,46 @@ export function AssistantSetup() {
           </span>
         </li>
       </ol>
-      <details className={styles.stdio}>
-        <summary>
-          Can&apos;t add a remote server? Run it on your computer
-        </summary>
-        <ol className={styles.steps} data-steps="stdio">
-          <li>
-            <strong>Make an API key</strong>
-            <span>
-              Use <b>New key</b> above with <code>calls:read</code>,{" "}
-              <code>reports:read</code> and <code>leads:read</code> (add{" "}
-              <code>leads:write</code> if it may add leads).
-            </span>
-          </li>
-          <li>
-            <strong>Download the Sales X-Ray MCP server</strong>
-            <span>
-              One file; it needs Python 3.10 or newer and nothing else.
-            </span>
-            <a className={styles.download} href="/developers/sx.py" download>
-              <Download size={14} aria-hidden="true" />
-              Download sx.py
-            </a>
-          </li>
-          <li>
-            <strong>Add it to {chosen.label}</strong>
-            <span>{chosen.where}</span>
-            <Snippet
-              code={assistantSnippet(assistant, origin)}
-              label={`${chosen.label} setup on your computer`}
-            />
-            <span className={styles.hint}>
-              Replace <code>/path/to/sx.py</code> with where you saved it and{" "}
-              <code>{KEY}</code> with your key. On Windows, use{" "}
-              <code>python</code> instead of <code>python3</code>.
-            </span>
-          </li>
-        </ol>
-      </details>
+      {assistant === "chatgpt" ? null : (
+        <details className={styles.stdio}>
+          <summary>
+            Can&apos;t add a remote server? Run it on your computer
+          </summary>
+          <ol className={styles.steps} data-steps="stdio">
+            <li>
+              <strong>Make an API key</strong>
+              <span>
+                Use <b>New key</b> above with <code>calls:read</code>,{" "}
+                <code>reports:read</code> and <code>leads:read</code> (add{" "}
+                <code>leads:write</code> if it may add leads).
+              </span>
+            </li>
+            <li>
+              <strong>Download the Sales X-Ray MCP server</strong>
+              <span>
+                One file; it needs Python 3.10 or newer and nothing else.
+              </span>
+              <a className={styles.download} href="/developers/sx.py" download>
+                <Download size={14} aria-hidden="true" />
+                Download sx.py
+              </a>
+            </li>
+            <li>
+              <strong>Add it to {chosen.label}</strong>
+              <span>{chosen.where}</span>
+              <Snippet
+                code={assistantSnippet(assistant, origin)}
+                label={`${chosen.label} setup on your computer`}
+              />
+              <span className={styles.hint}>
+                Replace <code>/path/to/sx.py</code> with where you saved it and{" "}
+                <code>{KEY}</code> with your key. On Windows, use{" "}
+                <code>python</code> instead of <code>python3</code>.
+              </span>
+            </li>
+          </ol>
+        </details>
+      )}
     </Panel>
   );
 }

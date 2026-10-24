@@ -977,10 +977,10 @@ function LightboxShellFrame({
         "Taking new leads, calling from your phone, alerts",
       ),
       setting(
-        "Notifications",
+        "Phone & alerts",
         "/settings/notifications",
         <Bell size={17} />,
-        "Lead alerts on your phone",
+        "Phone setup, alerts, vibration and usage analytics",
       ),
       ...(orgAdmin
         ? [

@@ -310,8 +310,10 @@ function TeamHome({ desk }: { desk: Desk | null }) {
                     <Avatar name={seller.name} size={34} />
                     <span className={styles.rowMain}>
                       <strong>{seller.name}</strong>
+                      {/* Each number keeps its word; the line breaks only
+                          between them (polish pass, 24 Oct 2026). */}
                       <small>
-                        {`${seller.won} won · ${seller.interested} interested · ${seller.calls} ${seller.calls === 1 ? "call" : "calls"}`}
+                        {`${seller.won}\u00a0won · ${seller.interested}\u00a0interested · ${seller.calls}\u00a0${seller.calls === 1 ? "call" : "calls"}`}
                       </small>
                     </span>
                     <span className={styles.rowEnd}>

@@ -12,6 +12,8 @@ retention policy, never an expired row):
 - Screens: views, people, time stayed, exits, the busiest transitions, and a heatmap by
   day (by hour over 24 hours).
 - Funnels (reports and leads), feature adoption, errors, slow APIs, rage and dead taps.
+- The Android app: launches, frames, why it closed, phones' make, versions and tiers,
+  battery and network settings, and which of its permissions people have on.
 - Who is recorded: the workspaces and people who turned it off.
 
 People and workspaces are only ever counted here, never named or listed.
@@ -553,6 +555,19 @@ FEATURES: tuple[tuple[str, str, Callable[[Row], bool]], ...] = (
         lambda r: r.event == "sx.screen_viewed" and r.payload.get("screen") == "chats",
     ),
     (
+        "pipeline_board",
+        "Pipeline board",
+        lambda r: (
+            r.event == "sx.board_drag"
+            or (r.event == "sx.lead_stage_moved" and r.payload.get("via") == "board")
+        ),
+    ),
+    (
+        "stage_suggestions",
+        "AI stage suggestions taken",
+        lambda r: r.event == "sx.lead_suggestion" and r.payload.get("action") == "accepted",
+    ),
+    (
         "prospects",
         "Prospects",
         lambda r: (
@@ -673,6 +688,141 @@ def _mix(rows: Sequence[Row]) -> dict[str, Any]:
     }
 
 
+# The Android app's own signals (1.0.25): what each breakdown is called on the dashboard.
+PHONE_BREAKDOWNS: tuple[tuple[str, str, str], ...] = (
+    ("sx.device_profile", "android", "Android version"),
+    ("sx.device_profile", "maker", "Phone make"),
+    ("sx.device_profile", "ram_tier", "Memory (GB)"),
+    ("sx.device_profile", "webview", "WebView version"),
+    ("sx.device_profile", "storage_free", "Free storage (GB)"),
+    ("sx.device_profile", "store", "Installed from"),
+    ("sx.device_state", "battery_saver", "Battery saver"),
+    ("sx.device_state", "battery_unrestricted", "Battery unrestricted"),
+    ("sx.device_state", "standby_bucket", "Standby bucket"),
+    ("sx.device_state", "notifications", "Notifications"),
+    ("sx.network_state", "transport", "Network"),
+    ("sx.network_state", "down_tier", "Download speed (Mbps)"),
+    ("sx.network_state", "cell_gen", "Mobile network"),
+)
+PERMISSIONS: tuple[tuple[str, str], ...] = (
+    ("calls", "Calls"),
+    ("rec_files", "Recordings"),
+    ("notifications", "Notifications"),
+    ("mic", "Microphone"),
+    ("all_files", "All files"),
+    ("folder", "Recordings folder"),
+    ("call_log", "Call log"),
+)
+
+
+def _latest(rows: Sequence[Row]) -> list[Row]:
+    """Each person's newest row (a phone reports its profile and state again and again)."""
+    newest: dict[str, Row] = {}
+    for row in rows:
+        if row.person not in newest or row.at > newest[row.person].at:
+            newest[row.person] = row
+    return list(newest.values())
+
+
+def _phone(by_event: Mapping[str, Sequence[Row]]) -> dict[str, Any]:
+    launches = []
+    for (start, pages), items in sorted(
+        _groups(
+            by_event.get("sx.app_launch", []),
+            lambda row: (
+                str(row.payload.get("start", "cold")),
+                str(row.payload.get("pages", "app")),
+            ),
+        ).items()
+    ):
+        values = [v for row in items if (v := _number(row.payload, "ms")) is not None]
+        launches.append(
+            {
+                "start": start,
+                "pages": pages,
+                "samples": len(values),
+                "p50": _percentile(values, 0.5),
+                "p75": _percentile(values, 0.75),
+            }
+        )
+    frames = by_event.get("sx.app_frames", [])
+    drawn = sum(_number(row.payload, "frames") or 0 for row in frames)
+    slow = sum(_number(row.payload, "slow") or 0 for row in frames)
+    frozen = sum(_number(row.payload, "frozen") or 0 for row in frames)
+    p90s = [v for row in frames if (v := _number(row.payload, "p90_ms")) is not None]
+    exits = by_event.get("sx.app_exit", [])
+    latest = {
+        event: _latest(by_event.get(event, []))
+        for event in ("sx.device_profile", "sx.device_state", "sx.permission_snapshot")
+    }
+    breakdowns = []
+    for event, key, label in PHONE_BREAKDOWNS:
+        source = latest.get(event) or by_event.get(event, [])
+        people: dict[str, set[str]] = defaultdict(set)
+        for row in source:
+            if key in row.payload:
+                people[str(row.payload[key])].add(row.person)
+        if people:
+            breakdowns.append(
+                {
+                    "key": key,
+                    "label": label,
+                    "rows": [
+                        {"value": value, "people": len(group)}
+                        for value, group in sorted(people.items(), key=lambda pair: -len(pair[1]))[
+                            :8
+                        ]
+                    ],
+                }
+            )
+    snapshots = latest["sx.permission_snapshot"]
+    permissions = []
+    for key, label in PERMISSIONS:
+        states = Counter(str(row.payload.get(key)) for row in snapshots if key in row.payload)
+        if states.get("granted") or states.get("denied"):
+            permissions.append(
+                {
+                    "permission": key,
+                    "label": label,
+                    "granted": states.get("granted", 0),
+                    "denied": states.get("denied", 0),
+                    "share": _share(
+                        states.get("granted", 0), states.get("granted", 0) + states.get("denied", 0)
+                    ),
+                }
+            )
+    return {
+        "phones": len(
+            {
+                row.person
+                for event in ("sx.device_profile", "sx.app_launch")
+                for row in by_event.get(event, [])
+            }
+        ),
+        "launches": launches,
+        "frames": {
+            "sessions": len(frames),
+            "slow_share": _share(int(slow), int(drawn)),
+            "frozen_share": _share(int(frozen), int(drawn)),
+            "p90_ms": _percentile(p90s, 0.5),
+        },
+        "exits": [
+            {
+                "reason": reason,
+                "count": len(items),
+                "foreground": sum(1 for row in items if row.payload.get("foreground") == "yes"),
+                "people": len({row.person for row in items}),
+            }
+            for reason, items in sorted(
+                _groups(exits, lambda row: str(row.payload.get("reason", "other"))).items(),
+                key=lambda pair: -len(pair[1]),
+            )
+        ],
+        "breakdowns": breakdowns,
+        "permissions": permissions,
+    }
+
+
 def _releases(rows: Sequence[Row]) -> list[dict[str, Any]]:
     out = []
     for release, items in sorted(
@@ -741,6 +891,7 @@ def overview(
         "errors": _errors(rows),
         "mix": _mix(rows),
         "releases": _releases(rows),
+        "phone": _phone(by_event),
     }
 
 

@@ -4,6 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { WorkspaceSwitcher } from "./workspace-switcher";
+import { workspaceLine, workspaceShortLine } from "./workspace-picker";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -169,4 +170,20 @@ it("offers each invitation as one Join, and Create only where the server can", a
   )!;
   expect(busy.disabled).toBe(true);
   expect(busy.textContent).toContain("Joining…");
+});
+
+// Polish pass, 24 Oct 2026: the rail kept "Organisation · O…"; its short
+// line is the role alone, the list keeps the whole line.
+it("keeps the role whole under the workspace's name", () => {
+  const owner = {
+    tenant_id: "t1",
+    kind: "organisation" as const,
+    name: "Fictional Homes",
+    role: "owner" as const,
+  };
+  expect(workspaceShortLine(owner)).toBe("Owner");
+  expect(workspaceLine(owner)).toBe("Organisation · Owner");
+  expect(
+    workspaceShortLine({ tenant_id: "", kind: "personal", name: "Asha" }),
+  ).toBe("Just you");
 });

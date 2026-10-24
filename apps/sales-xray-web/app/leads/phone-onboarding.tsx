@@ -1,71 +1,35 @@
 "use client";
 
 /**
- * First run in the Sales Xray phone app (owner's phone test, 19 Oct): once the
- * Terms are accepted and before the app, one screen per permission, each saying
- * why, then Android's own question. Calls, notifications, recordings, then the
- * optional call recorder. "Not now" moves on; nothing is asked twice in a row.
- * Afterwards the Phone setup bar leaves Leads (the checklist stays in More and
- * on Team). Nothing shows in a browser, in an older app, or to someone who
- * signed in on this phone before.
+ * First run in the Sales X-Ray phone app (owner's phone test, 19 Oct; one
+ * guided flow since 24 Oct 2026): once the Terms are accepted, before the
+ * app, "Set up this phone" (phone-setup-flow.tsx) asks for what this phone
+ * still needs, one screen each, and skips what it already allows. Finishing
+ * or closing it marks the phone onboarded, and the Phone setup bar leaves
+ * Leads (More and Settings keep every line one tap from its fix). Nothing
+ * shows in a browser, in an older app, or to someone who signed in on this
+ * phone before.
  */
 
-import {
-  Bell,
-  CheckCircle2,
-  Circle,
-  FileAudio,
-  Mic,
-  Phone,
-  type LucideIcon,
-} from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { readConsent } from "../consent-renewal-client";
-import { Button } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
-import {
-  askCallAccess,
-  askNotifications,
-  askRecordingAccess,
-  buzz,
-  callRecorderOpen,
-  callRecorderStart,
-  callRecorderStatus,
-  inPhoneApp,
-  pickRecordingsFolder,
-  recorderOpen,
-  setupOpen,
-  setupStatus,
-  type CallRecorderStatus,
-  type SetupStatus,
-} from "./native-phone";
-import {
-  ALL_FILES_EXPLAINER,
-  FOLDER_EXPLAINER,
-  explainerFor,
-  recorderSteps,
-} from "./phone-setup-words";
-import styles from "./phone-onboarding.module.css";
+import { callRecorderStatus, inPhoneApp, setupStatus } from "./native-phone";
+import { flowSteps, PhoneSetupFlow } from "./phone-setup-flow";
 
 export const ONBOARDED_KEY = "sx-phone-onboarded";
 const CHANGED = "sx-phone-onboarded";
+export const PHONE_SETUP_OPEN = "sx-phone-setup-open";
 
-export type OnboardingStep =
-  | "calls"
-  | "notifications"
-  | "recordings"
-  | "recorder";
-
-type Screen = {
-  icon: LucideIcon;
-  title: string;
-  lines: string[];
-  allow: string;
-  optional?: boolean;
-  /** Recorder steps to read before opening the phone's settings. */
-  steps?: string[];
-};
+/**
+ * Opens "Set up this phone" over whatever page is showing (the More sheet's
+ * Phone setup, Settings' Selling). A link to /leads#phone-setup did nothing
+ * while Leads was already open (Redmi sweep #2, 24 Oct 2026).
+ */
+export function openPhoneSetup() {
+  window.dispatchEvent(new Event(PHONE_SETUP_OPEN));
+}
 
 /** True once this phone went through the first run (or skipped it). */
 export function phoneOnboarded(): boolean {
@@ -97,123 +61,30 @@ export function usePhoneOnboarded(): boolean {
   return done;
 }
 
-/** The steps this phone still needs, in order; the recorder only where it helps. */
-export function onboardingSteps(
-  status: SetupStatus,
-  recorder: CallRecorderStatus | null,
-): OnboardingStep[] {
-  const steps: OnboardingStep[] = [];
-  if (!status.checks.calls) steps.push("calls");
-  if (!status.checks.notifications) steps.push("notifications");
-  if (!status.checks.recordings) steps.push("recordings");
-  const dialerOff =
-    status.recorder?.kind === "folder" && status.recorder.recording !== "on";
-  if (
-    (recorder?.available && !recorder.enabled) ||
-    (!recorder?.available && dialerOff)
-  )
-    steps.push("recorder");
-  return steps;
-}
-
-function screenFor(
-  step: OnboardingStep,
-  status: SetupStatus,
-  recorder: CallRecorderStatus | null,
-): Screen {
-  if (step === "recorder") {
-    if (recorder?.available)
-      return {
-        icon: Mic,
-        title: "Record your calls (optional)",
-        lines: [
-          "Sales X-Ray can record your work calls itself, on phones whose dialer doesn't.",
-          "Tell the other person the call is recorded. Recordings stay on this phone until you choose one to analyse.",
-          "Android asks you to switch it on in Accessibility. If it says the setting is restricted, open App info, tap ⋮ and Allow restricted settings, then try again.",
-        ],
-        allow: "Open Accessibility",
-        optional: true,
-      };
-    return {
-      icon: Mic,
-      title: "Turn on call recording (optional)",
-      lines: [
-        `${status.recorder?.dialerLabel ?? "Your Phone app"} can save every call. Sales X-Ray finds those recordings so a call can get its Report.`,
-      ],
-      steps: recorderSteps(status.family),
-      allow: "Open Phone settings",
-      optional: true,
-    };
-  }
-  // Xiaomi hides its recordings folder: All files access instead (Redmi audit #49).
-  const words =
-    step === "recordings" && hidesRecordings(status)
-      ? ALL_FILES_EXPLAINER
-      : step === "recordings" && picksRecordingsFolder(status)
-        ? FOLDER_EXPLAINER
-        : explainerFor(step, status.store);
-  const icon =
-    step === "calls" ? Phone : step === "notifications" ? Bell : FileAudio;
-  return {
-    icon,
-    title: words?.title ?? step,
-    lines: words
-      ? [words.why, `Reads: ${words.reads}`, `Leaves the phone: ${words.sends}`]
-      : [],
-    allow: words?.allow ?? "Allow",
-  };
-}
-
-/** MIUI and HyperOS show their recordings only with All files access (app 0.3.80+). */
-function hidesRecordings(status: SetupStatus): boolean {
-  return status.needsAllFiles && status.allFilesSupported;
-}
-
-/** The Play build has no All files access: the seller picks the recordings folder (S8). */
-function picksRecordingsFolder(status: SetupStatus): boolean {
-  return (
-    status.needsAllFiles &&
-    !status.allFilesSupported &&
-    status.folderPickSupported
-  );
-}
-
-async function allow(
-  step: OnboardingStep,
-  status: SetupStatus,
-  recorder: CallRecorderStatus | null,
-) {
-  if (step === "calls") await askCallAccess();
-  else if (step === "notifications") await askNotifications();
-  else if (step === "recordings" && hidesRecordings(status))
-    await setupOpen("allFiles");
-  else if (step === "recordings" && picksRecordingsFolder(status))
-    await pickRecordingsFolder();
-  else if (step === "recordings") await askRecordingAccess();
-  else if (recorder?.available) {
-    await callRecorderStart();
-    await callRecorderOpen("accessibility");
-  } else await recorderOpen("settings");
-}
-
 export function PhoneOnboarding() {
   const access = useWorkspaceAccess();
   const signedIn = access?.authenticated === true;
-  const [plan, setPlan] = useState<{
-    steps: OnboardingStep[];
-    status: SetupStatus;
-    recorder: CallRecorderStatus | null;
-  } | null>(null);
-  const [index, setIndex] = useState(0);
-  const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<SetupStatus | null>(null);
+  const [open, setOpen] = useState(false);
+
+  // Asked for from anywhere in the app (openPhoneSetup).
+  useEffect(() => {
+    const show = () => {
+      if (inPhoneApp()) setOpen(true);
+    };
+    window.addEventListener(PHONE_SETUP_OPEN, show);
+    return () => window.removeEventListener(PHONE_SETUP_OPEN, show);
+  }, []);
 
   // Waits for the Terms card: it covers the page while consent isn't current.
   useEffect(() => {
     if (!signedIn || !inPhoneApp() || phoneOnboarded()) return;
     let stopped = false;
     const start = async () => {
-      if (stopped || document.documentElement.hasAttribute("data-sx-consent"))
+      if (
+        stopped ||
+        phoneOnboarded() ||
+        document.documentElement.hasAttribute("data-sx-consent")
+      )
         return;
       try {
         if ((await readConsent()).status !== "current") return;
@@ -223,12 +94,12 @@ export function PhoneOnboarding() {
       const status = await setupStatus();
       if (stopped || !status) return; // an app too old to say
       const recorder = await callRecorderStatus();
-      const steps = onboardingSteps(status, recorder);
-      if (!steps.length) {
+      if (stopped) return;
+      if (!flowSteps(status, recorder).length) {
         markOnboarded();
         return;
       }
-      setPlan({ steps, status, recorder });
+      setOpen(true);
     };
     void start();
     const watch = new MutationObserver(() => void start());
@@ -242,124 +113,13 @@ export function PhoneOnboarding() {
     };
   }, [signedIn]);
 
-  const next = useCallback(async () => {
-    if (!plan) return;
-    if (index + 1 < plan.steps.length) {
-      setIndex(index + 1);
-      return;
-    }
-    setResult((await setupStatus()) ?? plan.status);
-    setIndex(plan.steps.length);
-  }, [plan, index]);
-
-  if (!plan) return null;
-  const finish = () => {
-    buzz("done");
-    markOnboarded();
-    setPlan(null);
-  };
-
-  if (index >= plan.steps.length) {
-    const checks = (result ?? plan.status).checks;
-    const rows: [string, boolean][] = [
-      ["Calls", !!checks.calls],
-      ["Notifications", !!checks.notifications],
-      ["Call recordings", !!checks.recordings],
-    ];
-    return (
-      <div
-        className={styles.page}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="sx-onboard-done"
-      >
-        <div className={styles.body}>
-          <span className={styles.icon} data-done="">
-            <CheckCircle2 size={28} aria-hidden="true" />
-          </span>
-          <h1 id="sx-onboard-done" className={styles.title}>
-            Your phone is ready
-          </h1>
-          <ul className={styles.summary}>
-            {rows.map(([label, on]) => (
-              <li key={label} data-on={on ? "" : undefined}>
-                {on ? (
-                  <CheckCircle2 size={18} aria-hidden="true" />
-                ) : (
-                  <Circle size={18} aria-hidden="true" />
-                )}
-                {label}
-                <span>{on ? "On" : "Off"}</span>
-              </li>
-            ))}
-          </ul>
-          <p className={styles.line}>
-            Anything left off can be turned on later in More, Phone setup.
-          </p>
-        </div>
-        <div className={styles.actions}>
-          <Button variant="primary" onClick={finish}>
-            Open Sales X-Ray
-          </Button>
-        </div>
-      </div>
-    );
-  }
-
-  const step = plan.steps[index];
-  const screen = screenFor(step, plan.status, plan.recorder);
-  const Icon = screen.icon;
+  if (!open) return null;
   return (
-    <div
-      className={styles.page}
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="sx-onboard-title"
-    >
-      <div className={styles.body}>
-        <p className={styles.progress}>
-          Step {index + 1} of {plan.steps.length}
-        </p>
-        <span className={styles.icon}>
-          <Icon size={28} aria-hidden="true" />
-        </span>
-        <h1 id="sx-onboard-title" className={styles.title}>
-          {screen.title}
-        </h1>
-        {screen.lines.map((line) => (
-          <p key={line} className={styles.line}>
-            {line}
-          </p>
-        ))}
-        {screen.steps ? (
-          <ol className={styles.steps}>
-            {screen.steps.map((line) => (
-              <li key={line}>{line}</li>
-            ))}
-          </ol>
-        ) : null}
-      </div>
-      <div className={styles.actions}>
-        <Button
-          variant="primary"
-          disabled={busy}
-          aria-busy={busy || undefined}
-          onClick={async () => {
-            setBusy(true);
-            try {
-              await allow(step, plan.status, plan.recorder);
-            } finally {
-              setBusy(false);
-              void next();
-            }
-          }}
-        >
-          {screen.allow}
-        </Button>
-        <Button variant="ghost" disabled={busy} onClick={() => void next()}>
-          {screen.optional ? "Skip" : "Not now"}
-        </Button>
-      </div>
-    </div>
+    <PhoneSetupFlow
+      onClose={() => {
+        markOnboarded();
+        setOpen(false);
+      }}
+    />
   );
 }

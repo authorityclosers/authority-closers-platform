@@ -13,14 +13,18 @@ import pytest
 
 from ac_platform.lead_desk.journey import engine, mapping
 from ac_platform.lead_desk.journey.model import (
+    JUNK,
     Journey,
     JourneyError,
     Stage,
     build,
     change_note,
     check,
+    check_places,
     default_journey,
     from_template,
+    landing,
+    place_choices,
 )
 from ac_platform.lead_desk.journey.providers import click_ids, event_id
 from ac_platform.lead_desk.journey.providers import meta as meta_provider
@@ -53,10 +57,14 @@ def test_every_profile_is_a_valid_list_and_named_by_industry() -> None:
 def test_the_default_profile_keeps_the_desks_own_six_stages() -> None:
     journey = default_journey()
     assert journey.version == 0
-    assert [stage.key for stage in journey.stages] == list(KINDS)
+    six = [kind for kind in KINDS if kind != "junk"]
+    assert [stage.key for stage in journey.stages] == six
     for kind in KINDS:
         stage = journey.resolve(kind, None)
         assert stage is not None and stage.key == kind
+    # Junk (Lead OS, 24 Oct 2026) is the desk's own stage in a list without one.
+    assert journey.resolve("junk", None) is JUNK
+    assert [stage.key for stage in journey.board()] == [*six, "junk"]
 
 
 @pytest.mark.parametrize(
@@ -70,6 +78,10 @@ def test_the_default_profile_keeps_the_desks_own_six_stages() -> None:
         ("Policy issued", "won"),
         ("Enrolled", "won"),
         ("Not interested", "lost"),
+        ("Junk", "disqualified"),
+        ("Spam", "disqualified"),
+        ("Fake enquiry", "disqualified"),
+        ("Wrong number", "disqualified"),
         ("Interested", "qualified"),
         ("Quote shared", "proposal"),
         ("Documents collected", "application"),
@@ -290,6 +302,45 @@ def test_the_stage_each_lead_desk_event_reaches() -> None:
         == "site_visit_done"
     )
     assert engine.reached(journey, "note", {}) is None
+    # A move the stage list made (the template's map) only renames: never a conversion.
+    renamed = {
+        "v": 2,
+        "source": "template",
+        "stage": "interested",
+        "step": "site_visit_done",
+        "from_step": "site_visit_booked",
+        "to_kind": "interested",
+        "to_key": "site_visit_done",
+    }
+    assert engine.reached(journey, "stage", renamed) is None
+    # A lead whose own source is called "template" still arrives.
+    assert engine.reached(journey, "captured", {"source": "template"}) == "new"
+
+
+def test_the_template_map_picks_where_todays_leads_go() -> None:
+    before = saved(from_template("simple", default_journey(), {}))
+    after = saved(from_template("inside_sales_demos", before, {"follow_up": 2}), version=2)
+    choices = place_choices(before, after)
+    # An open stage's leads may go to any open stage; Won and Lost keep their kind.
+    assert {"interested", "discussion_incomplete", "meeting_scheduled"} <= set(choices["follow_up"])
+    assert not {"won", "lost", "junk"} & set(choices["follow_up"])
+    assert (choices["won"], choices["lost"]) == (("won",), ("lost",))
+    assert "junk" not in choices
+    places = check_places(before, after, {"follow_up": "interested"})
+    # Picked: Follow-up's leads go to Interested (In Follow-Up). Left out: their kind's
+    # stage, Discussion Incomplete.
+    assert landing(before, after, places, "follow_up", "follow_up").key == "interested"
+    assert landing(before, after, {}, "follow_up", "follow_up").key == "discussion_incomplete"
+    assert landing(before, after, places, "new", None).key == "new"
+    for wrong in (
+        {"follow_up": "won"},
+        {"lost": "interested"},
+        {"junk": "new"},
+        {"nowhere": "new"},
+        {"follow_up": "nowhere"},
+    ):
+        with pytest.raises(JourneyError):
+            check_places(before, after, wrong)
 
 
 def test_every_milestone_has_a_desk_kind() -> None:

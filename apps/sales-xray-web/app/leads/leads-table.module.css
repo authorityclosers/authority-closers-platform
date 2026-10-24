@@ -385,3 +385,57 @@
     opacity: 1;
   }
 }
+
+/* Lead OS: the column picker. */
+.columnsBar {
+  position: relative;
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.columnsButton {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.columnsButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.columnsMenu {
+  position: absolute;
+  z-index: 5;
+  top: calc(100% + 4px);
+  right: 0;
+  display: grid;
+  gap: 6px;
+  min-width: 200px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-elevated);
+  box-shadow: var(--sx-shadow-2);
+}
+
+.columnsMenu label {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  gap: 8px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}

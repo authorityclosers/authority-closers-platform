@@ -99,6 +99,7 @@ it("shows each lead on one line, with names capitalised and the columns asked fo
     "Source",
     "Next action",
     "Last call",
+    "In stage",
   ]);
   const first = host.querySelector("tbody tr")!;
   expect(first.textContent).toContain("Meera Fictional");
@@ -132,7 +133,42 @@ it("leaves out Owner on my own leads and Pipeline with one pipeline", async () =
     "Source",
     "Next action",
     "Last call",
+    "In stage",
   ]);
+});
+
+// Lead OS: a column picker this browser remembers.
+it("shows and hides columns from the picker", async () => {
+  await act(async () =>
+    root.render(
+      <LeadsTable rows={[row(1)]} onOpen={() => undefined} showOwner={false} />,
+    ),
+  );
+  const pick = (label: string) =>
+    Array.from(host.querySelectorAll("label"))
+      .find((item) => item.textContent?.trim() === label)
+      ?.querySelector("input");
+  await act(async () =>
+    Array.from(host.querySelectorAll("button"))
+      .find((button) => button.textContent?.trim() === "Columns")
+      ?.click(),
+  );
+  await act(async () => pick("Phone")?.click());
+  await act(async () => pick("Reason")?.click());
+  expect(headers()).toEqual([
+    "Name",
+    "Stage",
+    "Source",
+    "Next action",
+    "Last call",
+    "In stage",
+    "Reason",
+  ]);
+  // Kept for this browser; the next test starts from the first columns.
+  expect(window.localStorage.getItem("sx-leads-table-columns")).toContain(
+    "reason",
+  );
+  window.localStorage.removeItem("sx-leads-table-columns");
 });
 
 it("sorts by a column, then the other way, then back to the list's order", async () => {

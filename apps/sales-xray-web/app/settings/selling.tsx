@@ -16,15 +16,24 @@ import {
   Sparkles,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import {
+  useEffect,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
 import { readCallAi, type CallAiSettings } from "../call-ai/call-ai-client";
 import { AlertsCard } from "../leads/alerts-card";
 import { readMe, type Desk } from "../leads/leads-client";
+import { inPhoneApp } from "../leads/native-phone";
+import { openPhoneSetup } from "../leads/phone-onboarding";
 import { PhoneLogCard } from "../leads/phone-log-card";
 import { TakingSwitch } from "../leads/taking-switch";
 import { Panel, Skeleton } from "../ui/kit";
 import styles from "./sections.module.css";
+
+const never = () => () => undefined;
 
 function Line({
   icon,
@@ -32,12 +41,15 @@ function Line({
   children,
   href,
   action,
+  onAction,
 }: {
   icon: ReactNode;
   title: string;
   children: ReactNode;
   href?: string;
   action?: string;
+  /** The action as a button, when it isn't a page. */
+  onAction?: () => void;
 }) {
   return (
     <div className={styles.note}>
@@ -48,7 +60,11 @@ function Line({
         <strong>{title}</strong>
         <span>{children}</span>
       </span>
-      {href && action ? (
+      {onAction && action ? (
+        <button type="button" className={styles.noteAction} onClick={onAction}>
+          {action}
+        </button>
+      ) : href && action ? (
         <Link href={href} className={styles.noteAction}>
           {action}
         </Link>
@@ -65,6 +81,8 @@ type Read<T> =
     };
 
 export function SellingSettings() {
+  // Phone setup opens over the page, inside the phone app only.
+  const phoneApp = useSyncExternalStore(never, inPhoneApp, () => false);
   const [me, setMe] = useState<Read<Desk["me"]>>({ status: "loading" });
   const [ai, setAi] = useState<Read<CallAiSettings>>({ status: "loading" });
   const [version, setVersion] = useState(0);
@@ -130,15 +148,17 @@ export function SellingSettings() {
       <Panel title="Calling from this phone">
         {/* Inside the Sales Xray phone app only; nothing shows in a browser. */}
         <PhoneLogCard />
-        <Line
-          icon={<PhoneCall size={18} />}
-          title="Phone setup"
-          href="/leads#phone-setup"
-          action="Set up"
-        >
-          Calls, recordings, alerts and battery, checked once so every call
-          lands on its lead.
-        </Line>
+        {phoneApp ? (
+          <Line
+            icon={<PhoneCall size={18} />}
+            title="Phone setup"
+            action="Set up"
+            onAction={openPhoneSetup}
+          >
+            Calls, recordings, alerts and battery, checked once so every call
+            lands on its lead.
+          </Line>
+        ) : null}
         <Line icon={<ShieldCheck size={18} />} title="Private calls">
           Only calls with your leads are logged; every other number stays on
           your phone. A logged call you mark private shows to you alone.

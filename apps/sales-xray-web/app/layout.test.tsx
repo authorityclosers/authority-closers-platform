@@ -24,12 +24,14 @@ it("marks the standalone document, starts light and runs the theme preview, then
   expect(html).toContain("<p>Workspace</p>");
 });
 
-it("keeps production light, with no theme script, until the theme is released", async () => {
+it("follows the phone's theme in production from the first paint, unless held light", async () => {
   vi.stubEnv("NODE_ENV", "production");
   vi.stubEnv("AC_SALES_XRAY_THEME_PREVIEW", "");
   const production = await markup();
-  expect(production).toContain('data-theme="light"');
-  expect(production).not.toContain("sales-xray-theme-init");
+  // Owner, 24 Oct 2026: System by default, set before the first paint.
+  expect(production).toContain(
+    `<script id="sales-xray-theme-init">${themeInitScript()}</script>`,
+  );
   // ?theme= is the dev server's only; low-memory phones' lighter glass is
   // everyone's.
   expect(production).not.toContain("sales-xray-theme-preview");
@@ -37,8 +39,10 @@ it("keeps production light, with no theme script, until the theme is released", 
     `<script id="sales-xray-glass-init">${glassInitScript()}</script>`,
   );
 
-  vi.stubEnv("AC_SALES_XRAY_THEME_PREVIEW", "1");
-  expect(await markup()).toContain('<script id="sales-xray-theme-init">');
+  vi.stubEnv("AC_SALES_XRAY_THEME_PREVIEW", "0");
+  const held = await markup();
+  expect(held).toContain('data-theme="light"');
+  expect(held).not.toContain("sales-xray-theme-init");
 });
 
 it("draws under phone notches and keeps zoom allowed (native-wrapper ready)", async () => {

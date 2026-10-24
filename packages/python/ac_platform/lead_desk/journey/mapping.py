@@ -195,7 +195,9 @@ def suggestions(provider: str, journey: Journey) -> dict[str, str | None]:
     out: dict[str, str | None] = {}
     used: set[str] = set()
     for stage in journey.live:
-        name = suggest(stage)
+        # Junk (fake or unusable) means nothing to an ad platform's buyers: never sent
+        # unless a manager picks an event for it.
+        name = None if stage.kind == "junk" else suggest(stage)
         # One event name per stage: a later stage with the same name is left out.
         if name is not None and name.casefold() in used:
             name = None

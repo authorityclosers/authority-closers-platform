@@ -180,7 +180,7 @@ def _ahead(journey: Journey, current: Stage | None, target: Stage) -> bool:
     if current is None or current.key == target.key:
         return current is None
     if target.kind == "won":
-        return current.kind not in ("won", "lost")
+        return current.kind not in ("won", "lost", "junk")
     keys = [stage.key for stage in journey.funnel()]
     if current.key in keys and target.key in keys:
         return keys.index(target.key) > keys.index(current.key)
@@ -216,6 +216,8 @@ async def lead_suggestion(
         target = next((stage for stage in journey.live if stage.milestone == milestone), None)
         if target is None or not _ahead(journey, current, target):
             continue
+        if current is not None and current.moves is not None and target.key not in current.moves:
+            continue  # not a move this stage list allows (Lead OS)
         return {
             "step": target.key,
             "label": target.label,

@@ -80,7 +80,14 @@ describe("theme preference", () => {
   it("releases the control in development and explicit previews, not production", () => {
     expect(themeControlEnabled({ NODE_ENV: "development" })).toBe(true);
     expect(themeControlEnabled({ NODE_ENV: "test" })).toBe(true);
-    expect(themeControlEnabled({ NODE_ENV: "production" })).toBe(false);
+    // Released everywhere (owner, 24 Oct 2026); "0" holds a deployment light.
+    expect(themeControlEnabled({ NODE_ENV: "production" })).toBe(true);
+    expect(
+      themeControlEnabled({
+        NODE_ENV: "production",
+        AC_SALES_XRAY_THEME_PREVIEW: "0",
+      }),
+    ).toBe(false);
     expect(
       themeControlEnabled({
         NODE_ENV: "production",

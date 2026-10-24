@@ -8,7 +8,9 @@
  * once when letting go would refresh; while the page reads again the bars
  * breathe, then the mark folds away. Reduced motion: it only fades.
  *
- * Moves are written straight to the mark's style, so a pull never re-renders
+ * The page moves down with the finger and the mark sits in the gap above it,
+ * never over the page's own chips (Redmi sweep, 24 Oct 2026). Moves are
+ * written straight to the styles, so a pull never re-renders
  * React. Only fingers count, at the very top of the page's scroller; a
  * sideways start, a scrolled page or an open dialog leave it alone.
  */
@@ -22,6 +24,8 @@ const PULL_TRIGGER = 64;
 const PULL_MAX = 96;
 /** How far above the page the mark waits (its height and a little more). */
 const MARK_HIDDEN = 40;
+/** Half the mark's height, to centre it in the gap. */
+const MARK_HALF = 14;
 
 /** The pull-to-refresh distance for a finger moved `dy` down (half speed, capped). */
 export function pullDistance(dy: number): number {
@@ -51,13 +55,31 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown> | void) {
     let pull = 0;
     let busy = false;
     let ready = false;
+    // What moves with the finger: the page's own blocks, not anything pinned.
+    let moving: HTMLElement[] = [];
+
+    const still = () =>
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches === true;
 
     const show = (distance: number, mode: "pull" | "busy" | "idle") => {
       const node = spinner.current;
       if (!node) return;
+      for (const block of moving) {
+        block.style.transition =
+          mode === "pull" || still()
+            ? "none"
+            : "transform var(--lx-dur-move) var(--lx-ease-move)";
+        block.style.transform =
+          distance > 0 ? `translate3d(0, ${distance}px, 0)` : "";
+      }
+      if (mode === "idle") moving = [];
       node.dataset.mode = mode;
       node.style.transition = mode === "pull" ? "none" : "";
-      node.style.transform = `translate3d(-50%, ${distance - MARK_HIDDEN}px, 0)`;
+      // In the middle of the gap the page leaves above itself.
+      node.style.transform =
+        mode === "idle"
+          ? `translate3d(-50%, ${-MARK_HIDDEN}px, 0)`
+          : `translate3d(-50%, ${distance / 2 - MARK_HALF}px, 0)`;
       node.style.opacity =
         mode === "idle" ? "0" : String(Math.min(1, distance / PULL_TRIGGER));
       node.style.setProperty(
@@ -89,6 +111,12 @@ export function usePullToRefresh(onRefresh: () => Promise<unknown> | void) {
       if (!scroller || scroller.scrollTop > 0) return;
       const touch = event.touches[0];
       start = { x: touch.clientX, y: touch.clientY, scroller };
+      moving = Array.from(host.children).filter(
+        (child): child is HTMLElement =>
+          child instanceof HTMLElement &&
+          child !== spinner.current &&
+          !/^(fixed|sticky)$/.test(getComputedStyle(child).position),
+      );
       pull = 0;
       ready = false;
     };

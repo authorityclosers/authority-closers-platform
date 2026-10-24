@@ -48,10 +48,12 @@ it("names the tabs by the business's own stages, with every stage's count", () =
     { key: "interested", label: "Interested", count: 3 },
     { key: "won", label: "Booked", count: 1 },
     { key: "lost", label: "Lost", count: 0 },
+    // Junk (Lead OS): fake or unusable, kept apart from Lost, always there.
+    { key: "junk", label: "Junk", count: 0 },
   ]);
 });
 
-it("falls back to the six kinds, without counts until they arrive", () => {
+it("falls back to the desk's kinds, without counts until they arrive", () => {
   expect(stageTabs(null, null)).toEqual([
     { key: "open", label: "All leads", count: undefined },
     { key: "new", label: "New", count: undefined },
@@ -60,6 +62,7 @@ it("falls back to the six kinds, without counts until they arrive", () => {
     { key: "interested", label: "Interested", count: undefined },
     { key: "won", label: "Won", count: undefined },
     { key: "lost", label: "Lost", count: undefined },
+    { key: "junk", label: "Junk", count: undefined },
   ]);
 });
 

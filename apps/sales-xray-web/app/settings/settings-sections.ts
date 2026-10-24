@@ -28,6 +28,7 @@ export type SettingsSectionId =
   | "profile"
   | "selling"
   | "security"
+  | "ai-apps"
   | "plan"
   | "privacy"
   | "organisation"
@@ -52,6 +53,8 @@ export type SettingsSection = {
   group: "Account" | "Organisation" | "Connections" | "This device";
   /** Shown to organisation owners and admins only (the API decides the rest). */
   managers?: true;
+  /** Opens inside that section's screen, so it isn't listed on its own (its address still works). */
+  within?: SettingsSectionId;
 };
 
 export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
@@ -78,6 +81,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     group: "Account",
   },
   {
+    // Owner via the orchestrator, 24 Oct 2026: the AI apps a person connected
+    // (Pulse, ChatGPT, Claude) had no screen; everyone, members too.
+    id: "ai-apps",
+    label: "AI apps",
+    hint: "ChatGPT, Claude and Pulse with your calls and leads",
+    icon: Sparkles,
+    group: "Account",
+  },
+  {
     id: "plan",
     label: "Plan & usage",
     hint: "Your plan and invoices",
@@ -91,6 +103,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "Usage analytics, for you and your workspace",
     icon: Activity,
     group: "Account",
+    // Owner, 24 Oct 2026: one screen for your own switches.
+    within: "notifications",
   },
   {
     id: "organisation",
@@ -164,8 +178,8 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
   },
   {
     id: "notifications",
-    label: "Notifications",
-    hint: "Lead alerts on your phone",
+    label: "Phone & alerts",
+    hint: "Phone setup, alerts, vibration and usage analytics",
     icon: BellRing,
     group: "This device",
   },
@@ -175,6 +189,7 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     hint: "The phone app and call recording",
     icon: Smartphone,
     group: "This device",
+    within: "notifications",
   },
   {
     id: "help",

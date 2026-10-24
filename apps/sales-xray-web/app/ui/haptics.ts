@@ -13,8 +13,31 @@ type HapticsWindow = Window & {
   };
 };
 
+const HAPTICS_KEY = "sx-haptics";
+
+/**
+ * Vibration (Settings, Phone & alerts, 24 Oct 2026): on unless turned off on
+ * this device; both this tick and the phone app's buzz follow it.
+ */
+export function hapticsOn(): boolean {
+  try {
+    return window.localStorage.getItem(HAPTICS_KEY) !== "off";
+  } catch {
+    return true;
+  }
+}
+
+export function setHaptics(on: boolean): void {
+  try {
+    if (on) window.localStorage.removeItem(HAPTICS_KEY);
+    else window.localStorage.setItem(HAPTICS_KEY, "off");
+  } catch {
+    // Storage blocked: the choice lasts until the page reloads.
+  }
+}
+
 export function tick() {
-  if (typeof window === "undefined") return;
+  if (typeof window === "undefined" || !hapticsOn()) return;
   try {
     if (!window.matchMedia?.("(pointer: coarse)").matches) return;
     const haptics = (window as HapticsWindow).Capacitor?.Plugins?.Haptics;

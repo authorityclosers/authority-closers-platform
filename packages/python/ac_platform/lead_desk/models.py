@@ -50,8 +50,13 @@ class Lead(Base):
             name="lead_desk_lead_source",
         ),
         CheckConstraint(
-            "stage IN ('new', 'not_connected', 'follow_up', 'interested', 'won', 'lost')",
+            "stage IN ('new', 'not_connected', 'follow_up', 'interested', 'won', 'lost', 'junk')",
             name="lead_desk_lead_stage",
+        ),
+        # The Lost or Junk reason stays only while the lead is Lost or Junk (Lead OS).
+        CheckConstraint(
+            "outcome_reason IS NULL OR stage IN ('lost', 'junk')",
+            name="lead_desk_lead_outcome_reason",
         ),
         CheckConstraint(
             "attempts >= 0 AND calls >= 0 AND repeats >= 0", name="lead_desk_lead_counts"
@@ -124,6 +129,11 @@ class Lead(Base):
     # Which of the organisation's pipelines the lead is in (migration 0121): its
     # step is one of that pipeline's stages. Null (every lead from before) is "main".
     pipeline_key: Mapped[str | None] = mapped_column(String(40), nullable=True, default="main")
+    # Lead OS (migration 0128): when the lead entered its current stage (its age there;
+    # null for a lead not moved since), and why it is Lost or Junk (a reason key; its
+    # history keeps every reason).
+    stage_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    outcome_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
 
 
 class LeadEvent(Base):
@@ -136,7 +146,7 @@ class LeadEvent(Base):
         ),
         CheckConstraint(
             "kind IN ('captured', 'repeat', 'assigned', 'reassigned', 'call', 'result', 'note',"
-            " 'edited', 'message', 'scheduled', 'stage')",
+            " 'edited', 'message', 'scheduled', 'stage', 'meeting', 'suggestion')",
             name="lead_desk_event_kind",
         ),
         Index("ix_lead_desk_event_lead", "tenant_id", "lead_id", "created_at"),
@@ -165,6 +175,73 @@ class LeadEvent(Base):
     command_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     data: Mapped[dict[str, Any]] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadMeeting(Base):
+    """A meeting or demo booked with a lead (Lead OS, migration 0128). The row is the
+    meeting as it stands now; every change to it is a ``meeting`` event in the lead's
+    history. A lead has one scheduled meeting at most: a postponed meeting moves, it
+    is never booked twice."""
+
+    __tablename__ = "lead_desk_meetings"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "lead_id"],
+            ["lead_desk_leads.tenant_id", "lead_desk_leads.id"],
+            name="fk_lead_desk_meeting_lead",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "host_person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_lead_desk_meeting_host",
+        ),
+        CheckConstraint("revision >= 1", name="lead_desk_meeting_revision"),
+        CheckConstraint(
+            "status IN ('scheduled', 'done', 'missed', 'cancelled')",
+            name="lead_desk_meeting_status",
+        ),
+        CheckConstraint(
+            "mode IN ('zoom', 'google_meet', 'phone', 'in_person', 'other')",
+            name="lead_desk_meeting_mode",
+        ),
+        CheckConstraint("duration_minutes BETWEEN 5 AND 480", name="lead_desk_meeting_duration"),
+        CheckConstraint(
+            "(status = 'scheduled') = (closed_at IS NULL)", name="lead_desk_meeting_closed"
+        ),
+        Index(
+            "uq_lead_desk_meeting_open",
+            "tenant_id",
+            "lead_id",
+            unique=True,
+            postgresql_where=text("status = 'scheduled'"),
+        ),
+        Index(
+            "ix_lead_desk_meeting_due",
+            "tenant_id",
+            "starts_at",
+            postgresql_where=text("status = 'scheduled'"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    revision: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(16))
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    duration_minutes: Mapped[int] = mapped_column(Integer)
+    mode: Mapped[str] = mapped_column(String(16))
+    link: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    agenda: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    outcome_note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    host_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    # The start time a reminder already went for: a moved meeting reminds again.
+    reminded_for: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class LeadRep(Base):

@@ -32,6 +32,7 @@ import {
   House,
   Landmark,
   MonitorSmartphone,
+  Phone,
   Plane,
   Plus,
   ShieldCheck,
@@ -98,6 +99,7 @@ const ICONS: Record<string, LucideIcon> = {
   screen: MonitorSmartphone,
   plane: Plane,
   bag: ShoppingBag,
+  phone: Phone,
 };
 
 export const KIND_WORDS: Record<Kind, string> = {
@@ -107,6 +109,7 @@ export const KIND_WORDS: Record<Kind, string> = {
   interested: "Hot",
   won: "Won",
   lost: "Lost",
+  junk: "Junk",
 };
 const KIND_HINT: Record<Kind, string> = {
   new: "Where every lead starts.",
@@ -115,6 +118,7 @@ const KIND_HINT: Record<Kind, string> = {
   interested: "Keen to buy. Needs a follow-up time.",
   won: "They bought. The lead closes.",
   lost: "They won't buy. The lead closes.",
+  junk: "Fake or unusable. Kept apart from Lost.",
 };
 
 const failed = (reason: unknown, title: string) =>
@@ -439,6 +443,12 @@ function TemplatePicker({
             Pick the closest one. You get stages that fit, and can rename, add
             or remove any of them later.
           </p>
+          {/* One quiet line, never over the list (P1 on a phone, 24 Oct 2026). */}
+          {!first && leads ? (
+            <p className={styles.pickerNote}>
+              {`Your ${leads} ${leads === 1 ? "lead stays" : "leads stay"} put; old stages are kept, so nothing is lost.`}
+            </p>
+          ) : null}
         </div>
       </header>
       <ul className={styles.templateGrid} aria-label="Kinds of business">
@@ -469,6 +479,17 @@ function TemplatePicker({
                         ) : null}
                       </strong>
                       <small>{item.blurb}</small>
+                      {/* Phones: the chosen kind's stages wrap inside its
+                          card (the footer keeps only the buttons). */}
+                      {on ? (
+                        <span className={styles.cardStages}>
+                          {item.stages.map((stage, index) => (
+                            <span key={index} data-kind={stage.kind}>
+                              {stage.label}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null}
                     </span>
                     {on ? (
                       <span className={styles.templateCheck} aria-hidden="true">
@@ -492,11 +513,6 @@ function TemplatePicker({
             ))}
       </ul>
       <div className={styles.pickerFoot}>
-        {!first && leads ? (
-          <p className={styles.pickerNote}>
-            {`Your ${leads} ${leads === 1 ? "lead stays" : "leads stay"} put; old stages are kept, so nothing is lost.`}
-          </p>
-        ) : null}
         <ol className={styles.preview} aria-label="Stages you get">
           {chosen ? (
             chosen.stages.map((stage, index) => (
@@ -738,7 +754,11 @@ function StageBuilder({
 
   const add = (draft: Draft) =>
     setList((items) => {
-      if (draft.kind === "won" || draft.kind === "lost")
+      if (
+        draft.kind === "won" ||
+        draft.kind === "lost" ||
+        draft.kind === "junk"
+      )
         return [...items, draft];
       // An open stage goes before the first Won stage: the sale comes last.
       const at = items.findIndex(

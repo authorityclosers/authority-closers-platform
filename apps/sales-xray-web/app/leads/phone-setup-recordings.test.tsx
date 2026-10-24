@@ -200,19 +200,25 @@ it("asks a Xiaomi phone for All files access on the Call recordings line", async
         : HYPEROS
       : {},
   );
+  window.history.replaceState(null, "", "/leads#phone-setup");
   await act(async () => root.render(<PhoneSetupBar />));
-  await act(async () => button("Phone setup")!.click());
+  for (let i = 0; i < 10; i++) await act(async () => await Promise.resolve());
   const recordings = lines()[1];
   expect(recordings.textContent).toContain(HIDDEN_TODO);
   await act(async () => recordings.querySelector("button")!.click());
+  for (let i = 0; i < 10; i++) await act(async () => await Promise.resolve());
+  // The flow's screen keeps Google Play's words before Android's screen opens.
   expect(document.body.textContent).toContain(ALL_FILES_EXPLAINER.reads);
   await act(async () => button("Open All files access")!.click());
+  for (let i = 0; i < 10; i++) await act(async () => await Promise.resolve());
   expect(
     sent.filter((item) => item.method === "setupOpen").map((item) => item.args),
   ).toEqual([{ what: "allFiles" }]);
   // Truecaller is on this phone: the checklist says how to get past its screen.
-  await act(async () => button("Not now")!.click());
+  await act(async () => button("Later")!.click());
+  for (let i = 0; i < 10; i++) await act(async () => await Promise.resolve());
   expect(document.body.textContent).toContain("Truecaller");
+  window.history.replaceState(null, "", "/leads");
 });
 
 const phoneCall = (extra: Partial<LeadEvent>): LeadEvent => ({

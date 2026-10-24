@@ -13,6 +13,15 @@ with no step is in the business's stage for its kind (see ``Journey.resolve``).
 An organisation can run several pipelines, each with its own list (``pipelines.py``); a
 lead's step is read in its own pipeline's list. Version numbers stay unique per
 organisation across its pipelines.
+
+A stage may carry its moves (Lead OS, 24 Oct 2026): ``moves`` (where a lead may go from
+it), ``needs`` (what a seller is asked on the way in), ``reasons`` (for Lost and Junk)
+and ``rot_hours`` (how long a lead may sit in it). They are written only when set, so a
+list saved before them reads back unchanged and lets a lead go anywhere
+(``journey/transitions.py``).
+
+Every list can mark a lead Junk, even one with no Junk stage of its own: such a lead
+sits in ``JUNK``, the desk's own Junk stage.
 """
 
 from __future__ import annotations
@@ -33,6 +42,7 @@ from ac_platform.lead_desk.journey.templates import (
     KINDS,
     MILESTONE_KIND,
     MILESTONES,
+    NEEDS,
     Kind,
     Milestone,
     guess_milestone,
@@ -50,6 +60,10 @@ ORIGINS: Final[frozenset[str]] = frozenset({"template", "custom", "pulse", "sugg
 OPEN_KINDS: Final[frozenset[str]] = frozenset({"follow_up", "interested"})
 # The desk stages a seller picks after a call that connected.
 CONNECTED_KINDS: Final[frozenset[str]] = frozenset({"follow_up", "interested", "won", "lost"})
+CLOSED_KINDS: Final[frozenset[str]] = frozenset({"won", "lost", "junk"})
+MAX_REASONS: Final[int] = 20
+MAX_REASON_LABEL: Final[int] = 60
+MAX_ROT_HOURS: Final[int] = 24 * 90
 
 
 class JourneyError(ValueError):
@@ -65,6 +79,11 @@ class Stage:
     archived: bool = False
     origin: str = "template"
     ref: str | None = None  # where it came from, e.g. a Pulse workflow step's id
+    # Lead OS rules; None: anywhere, nothing asked beyond the desk's own defaults.
+    moves: tuple[str, ...] | None = None
+    needs: tuple[str, ...] | None = None
+    reasons: tuple[tuple[str, str], ...] | None = None
+    rot_hours: int | None = None
 
     def as_json(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -77,7 +96,20 @@ class Stage:
         }
         if self.ref:
             out["ref"] = self.ref
+        if self.moves is not None:
+            out["moves"] = list(self.moves)
+        if self.needs is not None:
+            out["needs"] = list(self.needs)
+        if self.reasons is not None:
+            out["reasons"] = [{"key": key, "label": label} for key, label in self.reasons]
+        if self.rot_hours is not None:
+            out["rot_hours"] = self.rot_hours
         return out
+
+
+# The desk's own Junk stage, for a list without one (every organisation can mark a lead
+# Junk from the day Junk arrived).
+JUNK: Final[Stage] = Stage("junk", "Junk", "junk", "disqualified")
 
 
 @dataclass(frozen=True, slots=True)
@@ -104,7 +136,53 @@ class Journey:
         if kind in self.by_key and self.by_key[kind].kind == kind:
             return self.by_key[kind]
         live = next((s for s in self.live if s.kind == kind), None)
-        return live or next((s for s in self.stages if s.kind == kind), None)
+        found = live or next((s for s in self.stages if s.kind == kind), None)
+        if found is None and kind == "junk":
+            return JUNK
+        return found
+
+    def stage_for(self, step: str) -> Stage | None:
+        """A stage by its key; ``junk`` is the desk's Junk stage in a list without a live
+        Junk stage of its own."""
+        found = self.by_key.get(step)
+        if step == JUNK.key and not self.has_junk and (found is None or found.archived):
+            return JUNK
+        return found
+
+    @property
+    def has_junk(self) -> bool:
+        """Whether the list has a live Junk stage of its own."""
+        return any(stage.kind == "junk" and not stage.archived for stage in self.stages)
+
+    @property
+    def ruled(self) -> bool:
+        """Whether any stage carries its own moves (the stage list's graph is in force)."""
+        return any(stage.moves is not None for stage in self.live)
+
+    def board(self) -> tuple[Stage, ...]:
+        """The live stages as the pipeline board shows them: the open ones in the list's
+        order, then Won, Lost and Junk (the desk's own Junk when the list has none)."""
+        live = self.live
+        groups = (
+            [s for s in live if s.kind not in CLOSED_KINDS],
+            [s for s in live if s.kind == "won"],
+            [s for s in live if s.kind == "lost"],
+            [s for s in live if s.kind == "junk"] or ([] if self.has_junk else [JUNK]),
+        )
+        return tuple(stage for group in groups for stage in group)
+
+    def column(self, kind: str, step: str | None) -> Stage:
+        """The board column a lead sits in: its stage, or, when that stage is archived,
+        the live stage of its kind (each lead is in exactly one column)."""
+        board = self.board()
+        found = self.resolve(kind, step)
+        if found is not None and any(stage.key == found.key for stage in board):
+            return found
+        same = next((stage for stage in board if stage.kind == kind), None)
+        if same is not None:
+            return same
+        closed = kind in CLOSED_KINDS
+        return next((s for s in board if (s.kind in CLOSED_KINDS) == closed), board[0])
 
     def label(self, kind: str, step: str | None) -> str | None:
         stage = self.resolve(kind, step)
@@ -113,7 +191,7 @@ class Journey:
     def funnel(self) -> tuple[Stage, ...]:
         """The live stages a lead moves through towards a sale, in the business's order.
         Couldn't reach and Lost sit beside it."""
-        return tuple(s for s in self.live if s.kind not in ("not_connected", "lost"))
+        return tuple(s for s in self.live if s.kind not in ("not_connected", "lost", "junk"))
 
     def with_earlier(self, key: str) -> list[str]:
         """A funnel stage and every funnel stage before it; any other stage alone."""
@@ -142,6 +220,39 @@ def default_journey() -> Journey:
     )
 
 
+def _moves(value: Any) -> tuple[str, ...] | None:
+    if not isinstance(value, list):
+        return None
+    return tuple(dict.fromkeys(k for k in value if isinstance(k, str) and KEY.fullmatch(k)))
+
+
+def _needs(value: Any) -> tuple[str, ...] | None:
+    if not isinstance(value, list):
+        return None
+    return tuple(dict.fromkeys(need for need in value if need in NEEDS))
+
+
+def _reasons(value: Any) -> tuple[tuple[str, str], ...] | None:
+    if not isinstance(value, list):
+        return None
+    out: dict[str, str] = {}
+    for item in value[:MAX_REASONS]:
+        if not isinstance(item, Mapping):
+            continue
+        key, label = item.get("key"), item.get("label")
+        if isinstance(key, str) and KEY.fullmatch(key) and isinstance(label, str):
+            text = " ".join(label.split())[:MAX_REASON_LABEL]
+            if text:
+                out.setdefault(key, text)
+    return tuple(out.items())
+
+
+def _rot(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int):
+        return None
+    return value if 1 <= value <= MAX_ROT_HOURS else None
+
+
 def from_rows(stages: Iterable[Mapping[str, Any]]) -> tuple[Stage, ...]:
     """Stored stages back into objects; anything unreadable is skipped, never guessed."""
     out: list[Stage] = []
@@ -155,7 +266,19 @@ def from_rows(stages: Iterable[Mapping[str, Any]]) -> tuple[Stage, ...]:
         origin = item.get("origin") if item.get("origin") in ORIGINS else "custom"
         ref = item.get("ref") if isinstance(item.get("ref"), str) else None
         out.append(
-            Stage(key, label, kind, milestone, item.get("archived") is True, str(origin), ref)
+            Stage(
+                key,
+                label,
+                kind,
+                milestone,
+                item.get("archived") is True,
+                str(origin),
+                ref,
+                _moves(item.get("moves")),
+                _needs(item.get("needs")),
+                _reasons(item.get("reasons")),
+                _rot(item.get("rot_hours")),
+            )
         )
     return tuple(out)
 
@@ -211,6 +334,18 @@ async def lead_counts(db: AsyncSession, tenant_id: UUID, journey: Journey) -> di
     return counts
 
 
+async def lead_pairs(
+    db: AsyncSession, tenant_id: UUID, journey: Journey
+) -> dict[tuple[str, str | None], int]:
+    """How many of the pipeline's leads hold each (desk stage, step) pair now."""
+    rows = await db.execute(
+        select(Lead.stage, Lead.step, func.count())
+        .where(Lead.tenant_id == tenant_id, lead_in(journey.pipeline))
+        .group_by(Lead.stage, Lead.step)
+    )
+    return {(str(kind), step): int(count) for kind, step, count in rows.tuples()}
+
+
 # ----- checking a change ----------------------------------------------------------------
 
 
@@ -245,6 +380,7 @@ def build(
       from its words when not given, and its desk kind follows from its meaning.
     - A stage from before that the page left out stays, archived: history keeps it.
     - A stage that has leads keeps its desk kind, so those leads stay where they are.
+    - A stage keeps its moves, needs, reasons and age limit unless the page sent new ones.
     """
     taken: set[str] = set()
     out: list[Stage] = []
@@ -267,7 +403,19 @@ def build(
             kind = kind or MILESTONE_KIND[milestone]
             origin = str(item["origin"]) if item.get("origin") in ORIGINS else "custom"
             ref = item.get("ref") if isinstance(item.get("ref"), str) else None
-            stage = Stage(key, label, kind, milestone, item.get("archived") is True, origin, ref)
+            stage = Stage(
+                key,
+                label,
+                kind,
+                milestone,
+                item.get("archived") is True,
+                origin,
+                ref,
+                _moves(item.get("moves")),
+                _needs(item.get("needs")),
+                _reasons(item.get("reasons")),
+                _rot(item.get("rot_hours")),
+            )
         else:
             if key in taken:
                 raise JourneyError("Each stage can be in the list only once.")
@@ -285,6 +433,10 @@ def build(
                 item.get("archived") is True,
                 prior.origin,
                 prior.ref,
+                _moves(item["moves"]) if "moves" in item else prior.moves,
+                _needs(item["needs"]) if "needs" in item else prior.needs,
+                _reasons(item["reasons"]) if "reasons" in item else prior.reasons,
+                _rot(item["rot_hours"]) if "rot_hours" in item else prior.rot_hours,
             )
         taken.add(stage.key)
         out.append(stage)
@@ -309,6 +461,8 @@ def check(stages: tuple[Stage, ...]) -> tuple[Stage, ...]:
         found = [stage for stage in live if stage.kind == kind]
         if len(found) != 1:
             raise JourneyError(f"Keep exactly one stage as {words}.")
+    if sum(1 for stage in live if stage.kind == "junk") > 1:
+        raise JourneyError("Keep one Junk stage at most.")
     if live and live[0].kind != "new":
         raise JourneyError("The New stage comes first.")
     if not any(stage.kind == "won" for stage in live):
@@ -327,6 +481,7 @@ def from_template(
         raise JourneyError("Pick one of the listed kinds of business.")
     out: list[Stage] = []
     taken: set[str] = set()
+    renamed: dict[str, str] = {}
     for item in profile.stages:
         key = item.key
         prior = before.by_key.get(key)
@@ -334,14 +489,73 @@ def from_template(
             # Same key, another meaning, and leads in it: keep the old one, give this one
             # a fresh key.
             key = _unique_key(key, set(before.by_key) | taken)
-        stage = Stage(key, item.label, item.kind, item.milestone)
+            renamed[item.key] = key
+        stage = Stage(
+            key,
+            item.label,
+            item.kind,
+            item.milestone,
+            needs=item.needs,
+            reasons=item.reasons,
+            rot_hours=item.rot_hours,
+        )
         taken.add(stage.key)
         out.append(stage)
+    # The profile's moves name its own keys: follow any stage given a fresh key.
+    out = [
+        replace(stage, moves=tuple(renamed.get(k, k) for k in item.moves))
+        if item.moves is not None
+        else stage
+        for stage, item in zip(out, profile.stages, strict=True)
+    ]
     for prior in before.stages:
         if prior.key not in taken and (before.version > 0 or counts.get(prior.key, 0) > 0):
             out.append(replace(prior, archived=True))
             taken.add(prior.key)
     return check(tuple(out))
+
+
+def place_choices(before: Journey, after: Journey) -> dict[str, tuple[str, ...]]:
+    """Where a manager may put the leads of each of today's columns when a new list
+    replaces it: from an open stage to any open stage; Won and Lost only to a stage of
+    their own kind (closing needs a person's reason, reopening is a person's call). Junk
+    stays Junk."""
+    board = after.board()
+    choices: dict[str, tuple[str, ...]] = {}
+    for stage in before.board():
+        if stage.kind == "junk":
+            continue
+        if stage.kind in CLOSED_KINDS:
+            choices[stage.key] = tuple(s.key for s in board if s.kind == stage.kind)
+        else:
+            choices[stage.key] = tuple(s.key for s in board if s.kind not in CLOSED_KINDS)
+    return choices
+
+
+def check_places(before: Journey, after: Journey, wanted: Mapping[str, str]) -> dict[str, str]:
+    """The template's map (today's column -> the new list's stage), checked."""
+    choices = place_choices(before, after)
+    places: dict[str, str] = {}
+    for old, new in wanted.items():
+        allowed = choices.get(old)
+        if allowed is None:
+            raise JourneyError("Pick where leads go for one of today's stages.")
+        if new not in allowed:
+            raise JourneyError(
+                "Leads in an open stage go to an open stage; Won and Lost keep their kind."
+            )
+        places[old] = new
+    return places
+
+
+def landing(
+    before: Journey, after: Journey, places: Mapping[str, str], kind: str, step: str | None
+) -> Stage:
+    """The column a lead holds under a new list: the stage picked for its column today,
+    else its own stage or the live stage of its kind."""
+    picked = places.get(before.column(kind, step).key)
+    found = after.stage_for(picked) if picked else None
+    return found if found is not None else after.column(kind, step)
 
 
 async def save(

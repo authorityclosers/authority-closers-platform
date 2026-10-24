@@ -70,7 +70,8 @@ export type StateSwitchProps = {
   chipOff: string;
   on: boolean;
   hold?: SwitchHold | null;
-  confirmOff: SwitchConfirm;
+  /** Switches that matter ask before stopping; one without it turns off at once. */
+  confirmOff?: SwitchConfirm;
   /** Saves the new state; a rejection's message is shown. */
   onChange: (next: boolean) => Promise<void>;
   place?: "row" | "chip";
@@ -128,7 +129,8 @@ export function StateSwitch(props: StateSwitchProps) {
   };
 
   const flip = () => {
-    if (on) setStep("off");
+    if (on && confirmOff) setStep("off");
+    else if (on) void save(() => onChange(false), back);
     else void save(() => onChange(true), back);
   };
 
@@ -177,7 +179,7 @@ export function StateSwitch(props: StateSwitchProps) {
 
   const asking: SwitchConfirm | null =
     step === "off"
-      ? confirmOff
+      ? (confirmOff ?? null)
       : step === "override" && held?.override
         ? held.override.confirm
         : null;

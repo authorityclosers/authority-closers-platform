@@ -61,7 +61,8 @@ import { UpdateRating } from "../feedback/update-rating";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { phoneCallsOpener, useInApp } from "../in-app-client";
 import { inPhoneApp } from "../leads/native-phone";
-import { PHONE_SETUP_HASH } from "../leads/phone-setup";
+import { openPhoneSetup } from "../leads/phone-onboarding";
+import { ThemeControl } from "../lightbox/theme-provider";
 import {
   ANDROID_DOWNLOAD_READY,
   PHONE_APP_HREF,
@@ -427,16 +428,19 @@ export function SettingsMenu({
         </button>
       ) : null}
       {phoneApp ? (
-        <Link
-          href={`/leads${PHONE_SETUP_HASH}`}
+        <button
+          type="button"
           className={styles.tile}
-          onClick={onClose}
+          onClick={() => {
+            onClose();
+            openPhoneSetup();
+          }}
         >
           <span aria-hidden="true">
             <ListChecks size={20} />
           </span>
           Phone setup
-        </Link>
+        </button>
       ) : null}
     </nav>
   );
@@ -500,6 +504,13 @@ export function SettingsMenu({
               />
             ))}
           </ActionList>
+        </section>
+      ) : null}
+
+      {phone ? (
+        <section className={styles.group} aria-label="Appearance">
+          <h3 className={styles.heading}>Appearance</h3>
+          <ThemeControl />
         </section>
       ) : null}
 
