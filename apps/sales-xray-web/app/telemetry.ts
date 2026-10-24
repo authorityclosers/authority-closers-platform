@@ -270,6 +270,8 @@ export type TelemetryEvents = {
     action: "shown" | "accepted" | "changed" | "dismissed";
     from?: "call" | "chat" | "rule";
   };
+  /** Changes this device holds unsent (sync/write-queue.ts): counts only. */
+  "sx.writes_waiting": { waiting: number; refused: number; oldest_min: number };
 };
 
 /** The app's screens (the server's SCREENS); routeTemplate's pages, a lead open on Leads. */
@@ -386,6 +388,7 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.device_state",
   "sx.network_state",
   "sx.permission_snapshot",
+  "sx.writes_waiting",
 ] as const satisfies readonly TelemetryEventName[];
 
 export type SizeBand = "under_5mb" | "5_to_20mb" | "over_20mb";

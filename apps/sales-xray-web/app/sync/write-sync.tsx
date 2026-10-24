@@ -14,10 +14,12 @@
 import { useEffect, useRef } from "react";
 
 import { dismissNotice, notify } from "../notice-center";
+import { telemetry } from "../telemetry";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
   discardWrite,
   replayWrites,
+  retryStorage,
   setWriteIdentity,
   useWrites,
   writtenWords,
@@ -25,6 +27,7 @@ import {
 } from "./write-queue";
 
 export const WAITING_NOTICE = "writes-waiting";
+export const STORAGE_NOTICE = "writes-storage";
 
 /** The leads page opened on one lead (leads-client.ts leadLink). */
 const leadHref = (leadId: string) =>
@@ -70,7 +73,8 @@ export function WriteSync() {
     };
   }, []);
 
-  const { waiting, check, sending, nextAt, signIn } = useWrites();
+  const { waiting, check, sending, nextAt, signIn, storageFull, oldestAt } =
+    useWrites();
 
   // And when the next retry is due.
   useEffect(() => {
@@ -115,6 +119,47 @@ export function WriteSync() {
       });
     }
   }, [waiting, sending, signIn]);
+
+  // The phone's storage refused: say so, never lose it silently (orchestrator,
+  // 24 Oct 2026). The changes wait in the app while it runs; Try again stores them.
+  useEffect(() => {
+    if (!storageFull) {
+      dismissNotice(STORAGE_NOTICE);
+      return;
+    }
+    const count = waiting + check.length;
+    notify({
+      id: STORAGE_NOTICE,
+      tone: "error",
+      noReport: true,
+      title: "Couldn't save on this phone",
+      message: `${count === 1 ? "1 change waits" : `${count} changes wait`} only while Sales X-Ray stays open. Free some space on this phone, then try again.`,
+      action: { label: "Try again", run: () => void retryStorage() },
+      onDismiss: async () => undefined,
+    });
+  }, [storageFull, waiting, check.length]);
+
+  // Admin sees phones holding unsent work: counts and age only, never what
+  // the changes say (orchestrator, 24 Oct 2026).
+  const reported = useRef<string | null>(null);
+  useEffect(() => {
+    if (!who) return;
+    const key = `${who}:${waiting}:${check.length}`;
+    if (reported.current === key) return;
+    const first = reported.current === null;
+    reported.current = key;
+    if (first && !waiting && !check.length) return;
+    telemetry.track("sx.writes_waiting", {
+      waiting,
+      refused: check.length,
+      oldest_min: oldestAt
+        ? Math.min(
+            43_200,
+            Math.max(0, Math.round((Date.now() - oldestAt) / 60_000)),
+          )
+        : 0,
+    });
+  }, [who, waiting, check.length, oldestAt]);
 
   useEffect(() => {
     for (const item of check) {

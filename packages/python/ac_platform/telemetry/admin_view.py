@@ -725,6 +725,47 @@ def _latest(rows: Sequence[Row]) -> list[Row]:
     return list(newest.values())
 
 
+def _unsent(rows: Sequence[Row]) -> dict[str, Any]:
+    """Phones holding a seller's changes the server doesn't have yet (sync/write-queue.ts).
+
+    Each person's newest report: how many changes wait, how many were refused when sent
+    again, and the oldest one's age. Counts only; what the changes say never leaves the phone.
+    """
+    holding: list[tuple[int, str, dict[str, Any]]] = []
+    waiting_total = refused_total = 0
+    for row in _latest(rows):
+        waiting = int(_number(row.payload, "waiting") or 0)
+        refused = int(_number(row.payload, "refused") or 0)
+        if waiting + refused == 0:
+            continue
+        oldest = int(_number(row.payload, "oldest_min") or 0)
+        waiting_total += waiting
+        refused_total += refused
+        holding.append(
+            (
+                oldest,
+                row.person,
+                {
+                    "person": row.person,
+                    "waiting": waiting,
+                    "refused": refused,
+                    "oldest_min": oldest,
+                    "reported_at": row.at.isoformat(),
+                    "app": str(row.payload.get("app", "web")),
+                    "app_version": row.payload.get("app_version"),
+                },
+            )
+        )
+    holding.sort(key=lambda entry: (-entry[0], entry[1]))
+    return {
+        "phones": len(holding),
+        "waiting": waiting_total,
+        "refused": refused_total,
+        "oldest_min": max((entry[0] for entry in holding), default=None),
+        "rows": [entry[2] for entry in holding[:20]],
+    }
+
+
 def _phone(by_event: Mapping[str, Sequence[Row]]) -> dict[str, Any]:
     launches = []
     for (start, pages), items in sorted(
@@ -893,6 +934,7 @@ def overview(
         "mix": _mix(rows),
         "releases": _releases(rows),
         "phone": _phone(by_event),
+        "unsent": _unsent(by_event.get("sx.writes_waiting", [])),
     }
 
 

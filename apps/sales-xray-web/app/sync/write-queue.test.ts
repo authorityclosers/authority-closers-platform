@@ -7,8 +7,10 @@ import {
   replayWrites,
   resetWrites,
   sendWrite,
+  retryStorage,
   setWriteIdentity,
   unsentWrites,
+  writesNow,
   writeLabel,
 } from "./write-queue";
 
@@ -58,7 +60,10 @@ it("keeps a call result through a lost connection and sends it again with its co
     .mockRejectedValueOnce(new TypeError("Failed to fetch"))
     .mockResolvedValueOnce(ok());
   vi.stubGlobal("fetch", fetchMock);
-  expect(await sendWrite(DISPOSE, post("c-1"))).toEqual({ kind: "kept" });
+  expect(await sendWrite(DISPOSE, post("c-1"))).toEqual({
+    kind: "kept",
+    onDevice: true,
+  });
   expect(unsentWrites()).toHaveLength(1);
   expect(unsentWrites()[0]).toMatchObject({
     label: "A call result",
@@ -225,4 +230,29 @@ it("asks before logging out with changes waiting, and sends them when staying", 
   expect(confirmLogOutWithUnsent()).toBe(true);
   // Logging out keeps it for the next sign-in here.
   expect(unsentWrites()).toHaveLength(1);
+});
+
+it("holds a change the phone can't store, says so, and stores it when it can", async () => {
+  const full = vi
+    .spyOn(window.localStorage, "setItem")
+    .mockImplementation(() => {
+      throw new DOMException(
+        "The quota has been exceeded.",
+        "QuotaExceededError",
+      );
+    });
+  const fetchMock = vi.fn().mockRejectedValue(new TypeError("offline"));
+  vi.stubGlobal("fetch", fetchMock);
+  expect(await sendWrite(DISPOSE, post("c-1"))).toEqual({
+    kind: "kept",
+    onDevice: false,
+  });
+  // Not dropped: held while the app runs, and the state says the phone is full.
+  expect(unsentWrites().map((item) => item.id)).toEqual(["c-1"]);
+  expect(writesNow()).toMatchObject({ waiting: 1, storageFull: true });
+  full.mockRestore();
+  fetchMock.mockRejectedValue(new TypeError("still offline"));
+  await retryStorage();
+  expect(window.localStorage.getItem("sx-writes:v1")).toContain("c-1");
+  expect(writesNow().storageFull).toBe(false);
 });

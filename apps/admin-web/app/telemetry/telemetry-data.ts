@@ -201,6 +201,22 @@ export type ProductTelemetry = {
     "device" | "tier" | "app" | "net",
     Array<{ value: string; people: number }>
   >;
+  /** Phones holding a seller's changes the server doesn't have yet (counts only). */
+  unsent: {
+    phones: number;
+    waiting: number;
+    refused: number;
+    oldestMin: number | null;
+    rows: Array<{
+      person: string;
+      waiting: number;
+      refused: number;
+      oldestMin: number;
+      reportedAt: string;
+      app: string;
+      appVersion: string | null;
+    }>;
+  };
   releaseRows: Array<{
     release: string;
     events: number;
@@ -240,6 +256,7 @@ function timing(value: unknown): Timing {
 const RATINGS = ["good", "needs_improvement", "poor"] as const;
 
 export function normalizeTelemetry(raw: unknown): ProductTelemetry {
+  const unsent = object(object(raw).unsent);
   const body = object(raw);
   const filters = object(body.filters);
   const totals = object(body.totals);
@@ -447,6 +464,25 @@ export function normalizeTelemetry(raw: unknown): ProductTelemetry {
       app: mixOf("app"),
       net: mixOf("net"),
     },
+    unsent: {
+      phones: count(unsent.phones),
+      waiting: count(unsent.waiting),
+      refused: count(unsent.refused),
+      oldestMin: maybe(unsent.oldest_min),
+      rows: list(unsent.rows).map((item) => {
+        const row = object(item);
+        return {
+          person: text(row.person),
+          waiting: count(row.waiting),
+          refused: count(row.refused),
+          oldestMin: count(row.oldest_min),
+          reportedAt: text(row.reported_at),
+          app: text(row.app, "web"),
+          appVersion:
+            typeof row.app_version === "string" ? row.app_version : null,
+        };
+      }),
+    },
     releaseRows: list(body.releases).map((item) => {
       const row = object(item);
       return {
@@ -459,6 +495,15 @@ export function normalizeTelemetry(raw: unknown): ProductTelemetry {
       };
     }),
   };
+}
+
+/** 95 → "1 h 35 min"; 12 → "12 min". */
+export function ageWords(minutes: number | null): string {
+  if (minutes === null) return "–";
+  if (minutes < 60) return `${minutes} min`;
+  if (minutes < 48 * 60)
+    return `${Math.floor(minutes / 60)} h${minutes % 60 ? ` ${minutes % 60} min` : ""}`;
+  return `${Math.floor(minutes / (24 * 60))} days`;
 }
 
 /** 0.6 → "60%"; a share of nothing is a dash. */

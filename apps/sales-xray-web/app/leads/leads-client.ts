@@ -469,6 +469,10 @@ export function readNextAhead(pipeline?: string | null) {
 export const KEPT_MESSAGE =
   "Not sent yet: Sales X-Ray isn't answering. It's kept on this phone and goes as soon as it answers.";
 
+/** The same, when the phone's storage refused it: it waits while the app runs. */
+export const HELD_MESSAGE =
+  "Not sent yet, and this phone couldn't store it. Keep Sales X-Ray open: it goes as soon as Sales X-Ray answers.";
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const write = (init.method ?? "GET").toUpperCase() !== "GET";
   // A write may change any lead: nothing read ahead or shared is shown after it.
@@ -489,7 +493,12 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
       // A seller's entry stays on this phone until the server has it, and
       // goes again by itself (owner's P0, 24 Oct 2026: nothing lost).
       const sent = await sendWrite(`${API}${path}`, options);
-      if (sent.kind === "kept") throw new LeadsError(KEPT_MESSAGE, 0, true);
+      if (sent.kind === "kept")
+        throw new LeadsError(
+          sent.onDevice ? KEPT_MESSAGE : HELD_MESSAGE,
+          0,
+          true,
+        );
       response = sent.response;
     } else {
       // A read the Leads tab press already started (early-reads.ts) is

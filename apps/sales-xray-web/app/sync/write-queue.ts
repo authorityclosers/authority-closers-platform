@@ -65,10 +65,13 @@ export type QueuedWrite = Readonly<{
 
 export type WriteResult =
   | { kind: "sent"; response: Response }
-  | { kind: "kept" }
+  /** onDevice false: the phone's storage refused it; it waits only while the app runs. */
+  | { kind: "kept"; onDevice: boolean }
   | { kind: "refused"; response: Response };
 
 let identity: string | null = null;
+/** False after the phone's storage refused the list (full, or blocked). */
+let storageOk = true;
 let cache: QueuedWrite[] | null = null;
 let sending = false;
 let savedAt = 0;
@@ -117,6 +120,7 @@ function store(next: QueuedWrite[]): boolean {
   } catch {
     kept = false;
   }
+  storageOk = kept;
   emit();
   return kept;
 }
@@ -272,10 +276,11 @@ export async function sendWrite(
   let response: Response;
   try {
     response = await fetch(url, { ...init, body });
-  } catch (error) {
-    if (!kept) throw error;
+  } catch {
+    // Kept on the phone, or, when its storage refused, held while the app runs
+    // (a corner card says so, with Try again): never dropped.
     later(id, 0);
-    return { kind: "kept" };
+    return { kind: "kept", onDevice: kept };
   }
   if (response.ok) {
     remove(id);
@@ -283,9 +288,9 @@ export async function sendWrite(
     emit();
     return { kind: "sent", response };
   }
-  if (kept && keepFor(response.status)) {
+  if (keepFor(response.status)) {
     later(id, response.status);
-    return { kind: "kept" };
+    return { kind: "kept", onDevice: kept };
   }
   remove(id);
   return { kind: "refused", response };
@@ -355,6 +360,12 @@ export function replayWrites({ force = false } = {}): Promise<void> {
   return replaying;
 }
 
+/** Try storing on the phone again (Try again), then send what waits. */
+export function retryStorage(): Promise<void> {
+  store(items());
+  return replayWrites({ force: true });
+}
+
 /** The person closed a change that needs a look. */
 export function discardWrite(id: string) {
   remove(id);
@@ -410,6 +421,10 @@ export type WritesSnapshot = Readonly<{
   nextAt: number;
   /** A waiting change needs the person signed in again. */
   signIn: boolean;
+  /** The phone's storage refused the changes: they wait only while the app runs. */
+  storageFull: boolean;
+  /** When the oldest unsent change was made; 0 with none. */
+  oldestAt: number;
   savedAt: number;
 }>;
 
@@ -419,6 +434,8 @@ const NONE: WritesSnapshot = {
   sending: false,
   nextAt: 0,
   signIn: false,
+  storageFull: false,
+  oldestAt: 0,
   savedAt: 0,
 };
 
@@ -434,6 +451,8 @@ function read(): WritesSnapshot {
       ? Math.min(...waiting.map((item) => item.nextAt))
       : 0,
     signIn: waiting.some((item) => item.status === 401),
+    storageFull: !storageOk && mine.length > 0,
+    oldestAt: mine.length ? Math.min(...mine.map((item) => item.at)) : 0,
     savedAt,
   };
   return snapshot;
@@ -453,6 +472,9 @@ function subscribe(listener: () => void) {
   };
 }
 
+/** The same, outside React (tests). */
+export const writesNow = () => read();
+
 /** What waits, what needs a look, and whether a send is under way. */
 export function useWrites(): WritesSnapshot {
   return useSyncExternalStore(subscribe, read, () => NONE);
@@ -463,6 +485,7 @@ export function resetWrites() {
   cache = null;
   snapshot = null;
   identity = null;
+  storageOk = true;
   sending = false;
   savedAt = 0;
   replaying = null;
