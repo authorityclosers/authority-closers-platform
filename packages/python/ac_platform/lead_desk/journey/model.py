@@ -142,15 +142,17 @@ class Journey:
         return found
 
     def stage_for(self, step: str) -> Stage | None:
-        """A stage by its key; ``junk`` is the desk's Junk stage in a list without one."""
+        """A stage by its key; ``junk`` is the desk's Junk stage in a list without a live
+        Junk stage of its own."""
         found = self.by_key.get(step)
-        if found is None and step == JUNK.key and not self.has_junk:
+        if step == JUNK.key and not self.has_junk and (found is None or found.archived):
             return JUNK
         return found
 
     @property
     def has_junk(self) -> bool:
-        return any(stage.kind == "junk" for stage in self.stages)
+        """Whether the list has a live Junk stage of its own."""
+        return any(stage.kind == "junk" and not stage.archived for stage in self.stages)
 
     @property
     def ruled(self) -> bool:
@@ -168,6 +170,19 @@ class Journey:
             [s for s in live if s.kind == "junk"] or ([] if self.has_junk else [JUNK]),
         )
         return tuple(stage for group in groups for stage in group)
+
+    def column(self, kind: str, step: str | None) -> Stage:
+        """The board column a lead sits in: its stage, or, when that stage is archived,
+        the live stage of its kind (each lead is in exactly one column)."""
+        board = self.board()
+        found = self.resolve(kind, step)
+        if found is not None and any(stage.key == found.key for stage in board):
+            return found
+        same = next((stage for stage in board if stage.kind == kind), None)
+        if same is not None:
+            return same
+        closed = kind in CLOSED_KINDS
+        return next((s for s in board if (s.kind in CLOSED_KINDS) == closed), board[0])
 
     def label(self, kind: str, step: str | None) -> str | None:
         stage = self.resolve(kind, step)
@@ -317,6 +332,18 @@ async def lead_counts(db: AsyncSession, tenant_id: UUID, journey: Journey) -> di
         if stage is not None:
             counts[stage.key] = counts.get(stage.key, 0) + int(count)
     return counts
+
+
+async def lead_pairs(
+    db: AsyncSession, tenant_id: UUID, journey: Journey
+) -> dict[tuple[str, str | None], int]:
+    """How many of the pipeline's leads hold each (desk stage, step) pair now."""
+    rows = await db.execute(
+        select(Lead.stage, Lead.step, func.count())
+        .where(Lead.tenant_id == tenant_id, lead_in(journey.pipeline))
+        .group_by(Lead.stage, Lead.step)
+    )
+    return {(str(kind), step): int(count) for kind, step, count in rows.tuples()}
 
 
 # ----- checking a change ----------------------------------------------------------------

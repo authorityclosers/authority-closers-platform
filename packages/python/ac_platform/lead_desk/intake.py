@@ -267,12 +267,16 @@ class Intake:
             staged += 1
             now = journey.resolve(lead.stage, lead.step)
             if now is None or now.key != stage.key:
+                # The file says where the lead stands: the stage list's moves don't apply,
+                # and a Lost or Junk lead without a reason is "Imported" (Lead OS).
                 self.desk.to_stage(
                     lead,
                     journey,
                     stage,
                     note=None,
                     command_id=uuid5(command.command_id, f"import-stage:{index}"),
+                    source="import",
+                    via="api",
                 )
         await self.db.flush()
         return _result(outcomes, leads).model_copy(

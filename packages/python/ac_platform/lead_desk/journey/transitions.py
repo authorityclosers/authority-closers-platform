@@ -30,7 +30,12 @@ from dataclasses import dataclass
 from typing import Any, Final, Literal
 
 from ac_platform.lead_desk.journey.model import CLOSED_KINDS, Journey, Stage
-from ac_platform.lead_desk.vocabulary import JUNK_REASONS, LOST_REASONS, OTHER_REASON
+from ac_platform.lead_desk.vocabulary import (
+    IMPORTED_LOST,
+    JUNK_REASONS,
+    LOST_REASONS,
+    OTHER_REASON,
+)
 
 Group = Literal["active", "won", "lost", "junk"]
 Action = Literal["move", "close", "reopen", "reclassify"]
@@ -227,7 +232,7 @@ def check(
             else "Only an owner or admin can mark a closed lead as Junk.",
         )
     missing = [need for need in move.needs if not _has(need, given)]
-    if given.reason is not None:
+    if given.reason is not None and not (source == "import" and given.reason == IMPORTED_LOST):
         keys = {key for key, _ in move.reasons}
         if move.reasons and given.reason not in keys:
             raise MoveRefused(422, "Pick one of the listed reasons.", needs=(REASON,))
@@ -236,6 +241,14 @@ def check(
     if missing:
         raise MoveRefused(422, " ".join(NEED_WORDS[need] for need in missing), needs=tuple(missing))
     return move
+
+
+def forced(journey: Journey, current: Stage | None, target: Stage) -> Move:
+    """A move the desk itself makes, outside the stage list's moves: a lead that asks
+    again comes back from Lost (capture), or a merge. Never Junk, never from a rule."""
+    if target.kind == "junk":
+        raise MoveRefused(409, "Only a person marks a lead as Junk.")
+    return _move(current, target, ruled=False)
 
 
 def _has(need: str, given: Given) -> bool:
@@ -253,6 +266,8 @@ def _has(need: str, given: Given) -> bool:
 def reason_label(move: Move, reason: str | None) -> str | None:
     if reason is None:
         return None
+    if reason == IMPORTED_LOST:
+        return "Imported"
     return dict(move.reasons).get(reason)
 
 

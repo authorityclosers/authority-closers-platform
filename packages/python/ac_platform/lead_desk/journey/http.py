@@ -7,7 +7,16 @@
 - ``GET /journey/templates``: the industry profiles.
 - ``GET /journey/history``: the last saves, newest first.
 - ``POST /leads/{id}/stage``: move a lead to one of the business's stages without a
-  call ("Site visit done"); the lead's owner or a manager.
+  call ("Site visit done"); the lead's owner or a manager. Lead OS (24 Oct 2026): the
+  move goes through the stage list's moves (409 says where it can go), and gives what
+  the stage needs (422 says what): a Lost or Junk reason, why a call didn't connect,
+  the next follow-up, or the meeting.
+- ``POST /leads/{id}/reopen``: back to work from Won, Lost or Junk, on the same lead.
+- ``POST /leads/{id}/meetings`` books or moves the lead's meeting;
+  ``POST /meetings/{id}/done`` (it happened) and ``POST /meetings/{id}/not-held``
+  (missed or cancelled, and where the lead stands now).
+- ``GET /board`` (every live stage as a column, each lead once) and
+  ``GET /board/column`` (the next cards of one column).
 - ``GET /journey/ads``: every ad platform: set up or not, where stages go, each stage's
   match in plain words, and what went lately. ``PUT /journey/ads/{platform}`` sets
   where and whether; ``PUT /journey/ads/{platform}/matches`` confirms matches;
@@ -33,7 +42,7 @@ from uuid import UUID
 import httpx
 from fastapi import APIRouter, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import RedirectResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
@@ -41,6 +50,21 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
+from ac_platform.lead_desk import meetings as meeting_rows
+from ac_platform.lead_desk.contracts import (
+    Board,
+    Contact,
+    LeadDetail,
+    MeetingClosed,
+    MeetingCommand,
+    MeetingDone,
+    MeetingInput,
+    MeetingMode,
+    MoveVia,
+    PipelineReport,
+    Reopen,
+    StageMove,
+)
 from ac_platform.lead_desk.journey import catalogue, engine, mapping, pipelines, signals
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey.model import Journey, JourneyError
@@ -54,6 +78,7 @@ from ac_platform.lead_desk.journey.templates import (
 )
 from ac_platform.lead_desk.models import LeadDeskSettings, LeadJourneyVersion
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, owner_names, person_name
+from ac_platform.lead_desk.vocabulary import Reason
 from ac_platform.tenancy.models import Membership, Organisation
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
@@ -71,6 +96,11 @@ class _View(BaseModel):
 # ----- shapes -----------------------------------------------------------------------------
 
 
+class ReasonItem(_View):
+    key: str
+    label: str
+
+
 class StageView(_View):
     key: str
     label: str
@@ -81,6 +111,12 @@ class StageView(_View):
     archived: bool
     origin: str
     leads: int
+    # Lead OS: where a lead may go from it (None: anywhere), what it asks on the way
+    # in, its Lost or Junk reasons, and how long a lead may sit in it.
+    moves: list[str] | None = None
+    needs: list[str] | None = None
+    reasons: list[ReasonItem] | None = None
+    rot_hours: int | None = Field(default=None, alias="rotHours")
 
 
 class JourneyView(_View):
@@ -138,6 +174,11 @@ class TemplateView(_View):
     stages: list[TemplateStageView]
 
 
+class ReasonCommand(_Command):
+    key: str = Field(min_length=1, max_length=40)
+    label: str = Field(min_length=1, max_length=60)
+
+
 class StageCommand(_Command):
     key: str | None = Field(default=None, max_length=40)
     label: str = Field(max_length=60)
@@ -146,6 +187,11 @@ class StageCommand(_Command):
     archived: bool = False
     origin: str | None = Field(default=None, max_length=16)
     ref: str | None = Field(default=None, max_length=80)
+    # Lead OS rules; left out, a stage keeps what it had.
+    moves: list[str] | None = Field(default=None, max_length=journeys.MAX_LIVE)
+    needs: list[str] | None = Field(default=None, max_length=6)
+    reasons: list[ReasonCommand] | None = Field(default=None, max_length=journeys.MAX_REASONS)
+    rot_hours: int | None = Field(default=None, alias="rotHours", ge=1, le=journeys.MAX_ROT_HOURS)
 
 
 class JourneyCommand(_Command):
@@ -156,6 +202,21 @@ class JourneyCommand(_Command):
 class TemplateCommand(_Command):
     expected_version: int = Field(alias="expectedVersion", ge=0)
     template: str = Field(max_length=40)
+
+
+class TemplateLanding(_View):
+    """Where the leads of one current stage land under a new list (Lead OS, L4)."""
+
+    from_label: str = Field(alias="fromLabel")
+    to_label: str = Field(alias="toLabel")
+    to_key: str = Field(alias="toKey")
+    leads: int
+
+
+class TemplatePreview(_View):
+    template: str
+    stages: list[StageView]
+    landings: list[TemplateLanding]
 
 
 class GuessCommand(_Command):
@@ -176,11 +237,59 @@ class HistoryItem(_View):
     at: datetime
 
 
+class MeetingBody(_Command):
+    starts_at: AwareDatetime = Field(alias="startsAt")
+    duration_minutes: int = Field(default=30, alias="durationMinutes", ge=5, le=480)
+    mode: MeetingMode
+    link: str | None = Field(default=None, max_length=500)
+    location: str | None = Field(default=None, max_length=300)
+    agenda: str | None = Field(default=None, max_length=1000)
+
+    def as_input(self) -> MeetingInput:
+        return MeetingInput(
+            starts_at=self.starts_at,
+            duration_minutes=self.duration_minutes,
+            mode=self.mode,
+            link=self.link,
+            location=self.location,
+            agenda=self.agenda,
+        )
+
+
 class MoveCommand(_Command):
     command_id: UUID = Field(alias="commandId")
     expected_revision: int = Field(alias="expectedRevision", ge=1)
     step: str = Field(max_length=40)
     note: str | None = Field(default=None, max_length=500)
+    # Lead OS: what the stage asks for (only what it needs is required).
+    reason: str | None = Field(default=None, max_length=40)
+    reason_note: str | None = Field(default=None, alias="reasonNote", max_length=500)
+    nc_reason: Reason | None = Field(default=None, alias="ncReason")
+    next_action_at: AwareDatetime | None = Field(default=None, alias="nextActionAt")
+    next_action_note: str | None = Field(default=None, alias="nextActionNote", max_length=500)
+    meeting: MeetingBody | None = None
+    contact: Contact | None = None
+    source: Literal["seller", "ai_suggestion"] = "seller"
+    suggestion_ref: str | None = Field(default=None, alias="suggestionRef", max_length=120)
+    via: MoveVia | None = None
+
+    def as_move(self) -> StageMove:
+        return StageMove(
+            command_id=self.command_id,
+            expected_revision=self.expected_revision,
+            step=self.step,
+            note=self.note,
+            outcome_reason=self.reason,
+            reason_note=self.reason_note,
+            nc_reason=self.nc_reason,
+            next_action_at=self.next_action_at,
+            next_action_note=self.next_action_note,
+            meeting=self.meeting.as_input() if self.meeting else None,
+            contact=self.contact,
+            source=self.source,
+            suggestion_ref=self.suggestion_ref,
+            via=self.via,
+        )
 
 
 class MoveView(_View):
@@ -189,6 +298,8 @@ class MoveView(_View):
     stage: str
     step: str
     step_label: str = Field(alias="stepLabel")
+    stage_at: datetime | None = Field(default=None, alias="stageAt")
+    meeting_id: UUID | None = Field(default=None, alias="meetingId")
 
 
 class MatchView(_View):
@@ -370,6 +481,12 @@ def journey_view(journey: Journey, counts: dict[str, int], can_edit: bool) -> Jo
                 archived=stage.archived,
                 origin=stage.origin,
                 leads=counts.get(stage.key, 0),
+                moves=list(stage.moves) if stage.moves is not None else None,
+                needs=list(stage.needs) if stage.needs is not None else None,
+                reasons=[ReasonItem(key=key, label=label) for key, label in stage.reasons]
+                if stage.reasons is not None
+                else None,
+                rot_hours=stage.rot_hours,
             )
             for stage in journey.stages
         ],
@@ -649,6 +766,47 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
             )
             return await current(desk, key)
 
+    @router.post(
+        "/journey/template/preview",
+        response_model=TemplatePreview,
+        response_model_by_alias=True,
+    )
+    async def preview_template(
+        command: TemplateCommand,
+        request: Request,
+        response: Response,
+        pipeline: str = Query(default=journeys.MAIN_PIPELINE, max_length=40),
+    ) -> TemplatePreview:
+        """What a kind of business's stages would look like here, and where today's leads
+        would land, before anything is saved (the builder's Preview and Done steps)."""
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            key = await known(desk, pipeline)
+            before = await journeys.read(desk.db, desk.tenant_id, key)
+            counts = await journeys.lead_counts(desk.db, desk.tenant_id, before)
+            stages = journeys.from_template(command.template, before, counts)
+            after = Journey(before.version + 1, command.template, stages, pipeline=key)
+            landings: dict[tuple[str, str], int] = {}
+            for (kind, step), leads in (
+                await journeys.lead_pairs(desk.db, desk.tenant_id, before)
+            ).items():
+                old = before.column(kind, step)
+                new = after.column(kind, step)
+                pair = (old.label, new.key)
+                landings[pair] = landings.get(pair, 0) + leads
+            labels = {stage.key: stage.label for stage in after.board()}
+            view = journey_view(after, {}, True)
+            return TemplatePreview(
+                template=command.template,
+                stages=view.stages,
+                landings=[
+                    TemplateLanding(
+                        from_label=old, to_label=labels.get(new, new), to_key=new, leads=leads
+                    )
+                    for (old, new), leads in sorted(landings.items(), key=lambda item: -item[1])
+                ],
+            )
+
     @router.post("/journey/guess", response_model=GuessView, response_model_by_alias=True)
     async def guess(command: GuessCommand, request: Request, response: Response) -> GuessView:
         async with desk_for(request, response):
@@ -736,41 +894,118 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
     async def move(
         lead_id: UUID, command: MoveCommand, request: Request, response: Response
     ) -> MoveView:
-        """A lead moves to one of the business's stages without a call."""
+        """A lead moves to one of the business's stages without a call, through its
+        stage list's moves (Lead OS). The same lead, one history line."""
         async with desk_for(request, response, write=True) as desk:
-            seen = await desk._command_seen(command.command_id)
-            if seen is not None:
-                if seen.lead_id != lead_id:
-                    raise DeskError(409, "That request was already used for another lead.")
-                lead = await desk._lead(lead_id)
-                journey = await journeys.read(desk.db, desk.tenant_id, journeys.pipeline_of(lead))
-            else:
-                lead = await desk._lead(lead_id, lock=True)
-                # The lead's own pipeline's stages.
-                journey = await journeys.read(desk.db, desk.tenant_id, journeys.pipeline_of(lead))
-                if not (desk.viewer.can_manage or lead.owner_person_id == desk.viewer.person_id):
-                    raise DeskError(403, "Only the lead's owner or a manager can move it.")
-                if lead.revision != command.expected_revision:
-                    raise DeskError(409, "This lead changed. Check it and try again.")
-                stage = journey.by_key.get(command.step)
-                if stage is None or stage.archived:
-                    raise DeskError(422, "Pick one of your current stages.")
-                if stage.kind == "not_connected":
-                    raise DeskError(422, "Record a call that didn't connect from the call screen.")
-                before = journey.resolve(lead.stage, lead.step)
-                if before is not None and before.key == stage.key:
-                    raise DeskError(409, f"This lead is already in “{stage.label}”.")
-                desk.to_stage(
-                    lead, journey, stage, note=command.note, command_id=command.command_id
-                )
-                await desk.db.flush()
+            lead = await desk.move(lead_id, command.as_move())
+            # The lead's own pipeline's stages.
+            journey = await journeys.read(desk.db, desk.tenant_id, journeys.pipeline_of(lead))
             shown = journey.resolve(lead.stage, lead.step)
+            meeting = await meeting_rows.open_meeting(desk.db, desk.tenant_id, lead.id)
             return MoveView(
                 lead_id=lead.id,
                 revision=lead.revision,
                 stage=lead.stage,
                 step=shown.key if shown else lead.stage,
                 step_label=shown.label if shown else lead.stage,
+                stage_at=lead.stage_at,
+                meeting_id=meeting.id if meeting else None,
+            )
+
+    @router.post("/leads/{lead_id}/reopen", response_model=LeadDetail, response_model_by_alias=True)
+    async def reopen(
+        lead_id: UUID, command: Reopen, request: Request, response: Response
+    ) -> LeadDetail:
+        """Back to work from Won, Lost or Junk: the stage it was closed from unless another
+        is picked, with the next follow-up. Its history stays."""
+        async with desk_for(request, response, write=True) as desk:
+            lead = await desk.reopen(lead_id, command)
+            return await desk.detail(lead.id)
+
+    @router.post(
+        "/leads/{lead_id}/meetings", response_model=LeadDetail, response_model_by_alias=True
+    )
+    async def schedule_meeting(
+        lead_id: UUID, command: MeetingCommand, request: Request, response: Response
+    ) -> LeadDetail:
+        """Book the lead's meeting, or move the one booked (it stays one meeting)."""
+        async with desk_for(request, response, write=True) as desk:
+            lead = await desk.schedule_meeting(lead_id, command)
+            return await desk.detail(lead.id)
+
+    @router.post(
+        "/meetings/{meeting_id}/done", response_model=LeadDetail, response_model_by_alias=True
+    )
+    async def meeting_done(
+        meeting_id: UUID, command: MeetingDone, request: Request, response: Response
+    ) -> LeadDetail:
+        async with desk_for(request, response, write=True) as desk:
+            lead = await desk.meeting_done(meeting_id, command)
+            return await desk.detail(lead.id)
+
+    @router.post(
+        "/meetings/{meeting_id}/not-held",
+        response_model=LeadDetail,
+        response_model_by_alias=True,
+    )
+    async def meeting_not_held(
+        meeting_id: UUID, command: MeetingClosed, request: Request, response: Response
+    ) -> LeadDetail:
+        async with desk_for(request, response, write=True) as desk:
+            lead = await desk.meeting_not_held(meeting_id, command)
+            return await desk.detail(lead.id)
+
+    @router.get("/reports/pipeline", response_model=PipelineReport, response_model_by_alias=True)
+    async def pipeline_report(
+        request: Request,
+        response: Response,
+        days: int = Query(default=30),
+        pipeline: str = Query(default=journeys.MAIN_PIPELINE, min_length=1, max_length=40),
+        owner: UUID | None = None,
+        source: str | None = Query(default=None, max_length=16),
+    ) -> PipelineReport:
+        """The pipeline's numbers: each lead once; conversions from history, Junk left
+        out; Lost reasons, Junk by source, overdue and no next step; per seller and
+        source. A seller sees their own leads' numbers."""
+        async with desk_for(request, response) as desk:
+            return await desk.pipeline_report(
+                days=days, pipeline=pipeline, owner=owner, source=source
+            )
+
+    @router.get("/board", response_model=Board, response_model_by_alias=True)
+    async def board(
+        request: Request,
+        response: Response,
+        pipeline: str = Query(default=journeys.MAIN_PIPELINE, min_length=1, max_length=40),
+        owner: UUID | None = None,
+        source: str | None = Query(default=None, max_length=16),
+        q: str | None = Query(default=None, max_length=80),
+    ) -> Board:
+        """The pipeline board: every live stage a column, grouped Active, Won, Lost and
+        Junk, each lead in exactly one column; the first cards of each."""
+        async with desk_for(request, response) as desk:
+            return await desk.board(pipeline=pipeline, owner=owner, source=source, search=q)
+
+    @router.get("/board/column", response_model=Board, response_model_by_alias=True)
+    async def board_column(
+        request: Request,
+        response: Response,
+        step: str = Query(min_length=1, max_length=40),
+        cursor: int = Query(default=0, ge=0, le=100_000),
+        pipeline: str = Query(default=journeys.MAIN_PIPELINE, min_length=1, max_length=40),
+        owner: UUID | None = None,
+        source: str | None = Query(default=None, max_length=16),
+        q: str | None = Query(default=None, max_length=80),
+    ) -> Board:
+        """One column's next cards (the board's "Show more")."""
+        async with desk_for(request, response) as desk:
+            return await desk.board(
+                pipeline=pipeline,
+                owner=owner,
+                source=source,
+                search=q,
+                step=step,
+                cursor=cursor,
             )
 
     # ----- ad platforms -----------------------------------------------------------------
