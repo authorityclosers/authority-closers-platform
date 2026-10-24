@@ -45,6 +45,17 @@ export function workspaceLine(workspace: PickerWorkspace): string {
   return role ? `Organisation · ${role}` : "Organisation";
 }
 
+/**
+ * The short line under the current workspace's name in the narrow switcher:
+ * the role alone ("Owner"), since the name above says which organisation;
+ * "Organisation · Owner" was cut mid-word in the rail (polish pass, 24 Oct
+ * 2026). The picker's list keeps workspaceLine.
+ */
+export function workspaceShortLine(workspace: PickerWorkspace): string {
+  if (workspace.kind === "personal") return "Just you";
+  return (workspace.role ? ROLE[workspace.role] : null) ?? "Organisation";
+}
+
 /** Personal shows as "Personal", an organisation by its name. */
 export function workspaceName(workspace: PickerWorkspace): string {
   return workspace.kind === "personal" ? "Personal" : workspace.name;
