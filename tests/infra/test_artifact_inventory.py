@@ -156,11 +156,11 @@ def test_retry_rebases_count_after_an_unobserved_removal_before_the_new_sweep(
         fetch=lambda: json.dumps(next(responses)),
     )
     assert {item["id"] for item in items} == set(range(2, 102))
-    assert sleeps == [2]
+    assert sleeps == [30]
     output = capsys.readouterr()
     assert output.out == ""
-    assert "attempt=1/3 rejected" in output.err
-    assert "attempt=2/3 complete" in output.err
+    assert "attempt=1/5 rejected" in output.err
+    assert "attempt=2/5 complete" in output.err
 
 
 def test_retry_uses_a_fresh_boundary_before_fetching_each_attempt(
@@ -204,9 +204,9 @@ def test_fresh_count_cannot_hide_a_known_nonexpiring_removal(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     older = [artifact(identity) for identity in range(101, 0, -1)]
-    responses = iter([complete_pages(older)[:1], *([complete_pages(older[1:])] * 2)])
+    responses = iter([complete_pages(older)[:1], *([complete_pages(older[1:])] * 4)])
     monkeypatch.setattr(READER["time"], "sleep", lambda _: None)
-    with pytest.raises(ValueError, match="exhausted 3 attempts"):
+    with pytest.raises(ValueError, match="exhausted 5 attempts"):
         READER["read_inventory"](
             "/fixture/gh",
             "fixture/repository",
@@ -283,7 +283,7 @@ def test_reader_retries_transient_missing_page_then_accepts_upload_churn(
     )
     assert len(items) == 203
     assert {item["id"] for item in items} == set(range(1, 204))
-    assert sleeps == [2, 4]
+    assert sleeps == [30, 60]
 
 
 def test_unobserved_uploads_exhaust_retries_without_publishing_bytes(
@@ -297,14 +297,14 @@ def test_unobserved_uploads_exhaust_retries_without_publishing_bytes(
         return json.dumps(changing_pages())
 
     monkeypatch.setattr(READER["time"], "sleep", sleeps.append)
-    with pytest.raises(ValueError, match="exhausted 3 attempts"):
+    with pytest.raises(ValueError, match="exhausted 5 attempts"):
         READER["read_inventory"]("/fixture/gh", "fixture/repository", "admission", fetch=fetch)
-    assert len(calls) == 3
-    assert sleeps == [2, 4]
+    assert len(calls) == 5
+    assert sleeps == [30, 60, 60, 60]
     output = capsys.readouterr()
     assert output.out == ""
     assert "complete pages=" not in output.err
-    assert output.err.count("unobserved artifacts") == 3
+    assert output.err.count("unobserved artifacts") == 5
 
 
 @pytest.mark.parametrize("created", [None, "invalid", "2026-10-01T00:00:00", 1])
@@ -441,7 +441,7 @@ def test_expiry_between_pages_requires_retry_then_recovers_all_live_rows(
     )
     assert {item["id"] for item in items} == set(range(1, 201))
     assert sum(item["size_in_bytes"] for item in items) == 2000
-    assert sleeps == [2]
+    assert sleeps == [30]
 
 
 def test_expiry_cannot_hide_a_nonexpiring_loss_or_an_old_size_change() -> None:

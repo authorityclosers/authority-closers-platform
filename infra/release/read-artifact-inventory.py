@@ -15,7 +15,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-ATTEMPTS = 3
+ATTEMPTS = 5
 TIMEOUT_SECONDS = 120
 PAGE_SIZE = 100
 EXPIRY_MARGIN_SECONDS = 300
@@ -213,7 +213,8 @@ def read_inventory(
             reason = str(error)
         print(f"{prefix} rejected: {reason}; discarded attempt", file=sys.stderr)
         if attempt < ATTEMPTS:
-            time.sleep(2 * attempt)
+            # Spread retries over a few minutes so an expiry burst can finish.
+            time.sleep(min(60, 30 * attempt))
     raise ValueError(f"Artifact inventory operation={operation} exhausted {ATTEMPTS} attempts")
 
 
