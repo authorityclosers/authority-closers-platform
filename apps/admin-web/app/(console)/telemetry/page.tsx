@@ -8,6 +8,7 @@ import {
   normalizeTelemetry,
   telemetryQuery,
 } from "@/app/telemetry/telemetry-data";
+import { LOOP_HREFS, LoopTabs } from "@/app/telemetry/loop-view";
 import { TelemetryView } from "@/app/telemetry/telemetry-view";
 import { Page, PageHeader, QueryTabs, Unavailable } from "@/app/ui/kit";
 
@@ -50,6 +51,7 @@ export default async function ProductTelemetryPage({
           "How Sales X-Ray is used and how fast it responds, from this environment's apps: on unless a person or workspace turned it off, never call content. Kept 180 days.",
         ]}
       />
+      <LoopTabs current="overview" hrefs={LOOP_HREFS} />
       <QueryTabs
         base="/telemetry"
         param="window"

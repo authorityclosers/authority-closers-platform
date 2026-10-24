@@ -90,14 +90,21 @@ import {
   type LeadRow,
   type PickedContact,
   likelyNext,
+  moreParams,
   readLeadAhead,
   readNextAhead,
   setAheadScope,
+  type ListDue,
+  type ListMade,
+  type ListMore,
+  type ListSince,
+  type ListSort,
 } from "./leads-client";
 import { MessageSetup } from "./message-sheet";
 import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { LeadsSkeleton } from "./leads-skeleton";
 import { ListView, TEST, type Scope } from "./list-view";
+import { MyWork } from "./my-work";
 import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
 import { TakingSwitch } from "./taking-switch";
@@ -119,6 +126,7 @@ import {
   FilterChip,
   FilterSheet,
   filtersOn as countFilters,
+  moreWords,
   type LeadFilters,
 } from "./lead-filters";
 import styles from "./leads.module.css";
@@ -161,7 +169,7 @@ const onHashChange = (change: () => void) => {
 function viewHref(
   view: string,
   pipeline: string | null = null,
-  filters: { who?: Scope | null; q?: string } = {},
+  filters: { who?: Scope | null; q?: string; more?: ListMore } = {},
 ): string {
   const path = window.location.pathname || LEADS_PATH;
   if (view === "desk") return path;
@@ -180,13 +188,45 @@ function viewHref(
   const q = words ? `&q=${encodeURIComponent(words)}` : "";
   // The pipeline board (Lead OS): every stage at once, with the same filters.
   if (view === BOARD) return `${path}?tab=board${inPipeline}${who}${q}`;
-  return `${path}?tab=all&stage=${encodeURIComponent(view)}${inPipeline}${who}${q}`;
+  // My work: the seller's own calls, notes and moves.
+  if (view === WORK) return `${path}?tab=work`;
+  const more = moreParams(filters.more)
+    .map(([key, value]) => `&${key}=${encodeURIComponent(value)}`)
+    .join("");
+  return `${path}?tab=all&stage=${encodeURIComponent(view)}${inPipeline}${who}${q}${more}`;
+}
+
+const DUE = new Set(["late", "today", "week", "none"]);
+const SINCE = new Set(["today", "week", "month", "never"]);
+const MADE = new Set(["today", "week", "month"]);
+const SORTS = new Set(["next_action", "last_contact", "name", "created"]);
+
+/** The list's sort and filters from the address (a saved view, a shared link). */
+function moreFrom(params: { get: (key: string) => string | null }): ListMore {
+  const pick = (key: string, allowed: Set<string>) => {
+    const value = params.get(key);
+    return value && allowed.has(value) ? value : null;
+  };
+  const source = params.get("source");
+  const sort = pick("sort", SORTS) as ListSort | null;
+  const order = params.get("order");
+  return {
+    source: source && /^[a-z_]{1,16}$/.test(source) ? source : null,
+    due: pick("due", DUE) as ListDue | null,
+    contact: pick("contact", SINCE) as ListSince | null,
+    created: pick("created", MADE) as ListMade | null,
+    sort,
+    order: sort && (order === "asc" || order === "desc") ? order : null,
+  };
 }
 
 export { LeadsSkeleton };
 
 /** The pipeline board's view key (Lead OS, 24 Oct 2026). */
 const BOARD = "board";
+/** My work's view key (owner, 24 Oct 2026: "she has to see notes and work she has
+ * done recently"). */
+const WORK = "work";
 const PipelineBoard = dynamic(
   () => import("./pipeline/board").then((module) => module.PipelineBoard),
   { ssr: false },
@@ -303,6 +343,8 @@ export function LeadsRoute() {
   const [version, setVersion] = useState(0);
   const [openLead, setOpenLead] = useState<string | null>(null);
   const [intent, setIntent] = useState<LeadIntent | null>(null);
+  // Opened from My work: the history line to show.
+  const [focusAt, setFocusAt] = useState<string | null>(null);
   const [holding, setHolding] = useState<LeadRow | null>(null);
   // A swipe right asks once before it calls: a sloppy sideways scroll must
   // never ring a lead (Redmi audit #13, 22 Oct 2026).
@@ -339,6 +381,8 @@ export function LeadsRoute() {
     open: boolean;
   } | null>(null);
   const [search, setSearch] = useState(() => params.get("q") ?? "");
+  // Sort and the other filters, over the whole list (owner, 24 Oct 2026).
+  const [more, setMore] = useState<ListMore>(() => moreFrom(params));
   const [query, setQuery] = useState(() => (params.get("q") ?? "").trim());
   // Counts answer a question (who, search, pipeline); a refresh asks it again
   // and the last answer stays on the tabs meanwhile (Redmi, 22 Oct 2026: the
@@ -538,7 +582,7 @@ export function LeadsRoute() {
   const can = current && desk ? desk.me.can_manage : false;
   // Only owners and admins pick whose leads; a seller's are always their own.
   const scope: Scope = can ? (scopeChoice ?? "team") : "mine";
-  const filters = { who: can ? scopeChoice : null, q: query };
+  const filters = { who: can ? scopeChoice : null, q: query, more };
 
   // From the address: the desk, a stage, or one of the settings pages.
   const stageKeys = new Set<string>([
@@ -550,6 +594,7 @@ export function LeadsRoute() {
     requested === "stages" ||
     requested === "numbers" ||
     requested === BOARD ||
+    requested === WORK ||
     (can && (requested === "team" || requested === "sources"))
       ? requested
       : requested === "all"
@@ -566,7 +611,8 @@ export function LeadsRoute() {
       ? view
       : null;
   const board = view === BOARD;
-  const stageView = !manage && view !== "desk" && !board;
+  const work = view === WORK;
+  const stageView = !manage && view !== "desk" && !board && !work;
   // Several pipelines: a stage view shows one pipeline's leads, or all of them.
   const fromAddressPipeline =
     several(pipes) &&
@@ -579,12 +625,19 @@ export function LeadsRoute() {
         ? picked.pipeline
         : fromAddressPipeline
       : null;
-  const countsQuestion = JSON.stringify([contextKey, scope, query, pipeline]);
+  const countsQuestion = JSON.stringify([
+    contextKey,
+    scope,
+    query,
+    pipeline,
+    more,
+  ]);
   const countsKey = JSON.stringify([
     contextKey,
     scope,
     query,
     pipeline,
+    more,
     version,
   ]);
 
@@ -646,9 +699,13 @@ export function LeadsRoute() {
     window.history.replaceState(
       null,
       "",
-      viewHref(view, pipeline, { who: can ? scopeChoice : null, q: query }),
+      viewHref(view, pipeline, {
+        who: can ? scopeChoice : null,
+        q: query,
+        more,
+      }),
     );
-  }, [stageView, query, addressQuery, view, pipeline, can, scopeChoice]);
+  }, [stageView, query, addressQuery, view, pipeline, can, scopeChoice, more]);
 
   // The command bar (Ctrl K, the header's search) while Leads is open: Start
   // calling, Add lead, and each lead found to open or to call. A call asks
@@ -822,11 +879,16 @@ export function LeadsRoute() {
     : fromLink?.call
       ? "call"
       : null;
-  const open = (leadId: string, next: LeadIntent | null = null) => {
+  const open = (
+    leadId: string,
+    next: LeadIntent | null = null,
+    at: string | null = null,
+  ) => {
     setLinkDone(hash);
     leaveAddressLead();
     setHolding(null);
     setIntent(next);
+    setFocusAt(at);
     setOpenLead(leadId);
   };
   const rowActions: RowActions = {
@@ -865,21 +927,25 @@ export function LeadsRoute() {
   };
   // An empty list's "Clear filters": everyone's (or your own) leads, no search.
   const filtersOn =
-    !!query || (can && scopeChoice !== null && scopeChoice !== "team");
+    !!query ||
+    (can && scopeChoice !== null && scopeChoice !== "team") ||
+    !!(more.source || more.due || more.contact || more.created);
   const clearFilters = () => {
     setScopeChoice(null);
     setSearch("");
     setQuery("");
+    setMore({});
     window.history.replaceState(null, "", viewHref(view, pipeline));
   };
   const tabs = [
     { key: "desk", label: "To call", count: toCall },
     { key: BOARD, label: "Board" },
+    { key: WORK, label: "My work" },
     // On the board its own strip names every stage: one switcher, not two.
     ...stageTabs(
       journey?.key === journeyKey ? journey.view : null,
       haveCounts ? counts.value : null,
-    ).filter((tab) => !board || tab.key === "open"),
+    ).filter((tab) => !(board || work) || tab.key === "open"),
     ...(view === TEST ? [{ key: TEST, label: "Test leads" }] : []),
   ];
   const stageLabel =
@@ -889,10 +955,10 @@ export function LeadsRoute() {
   // Leads → Filter (stage lists only): whose leads, the pipeline, a name or number.
   const filterable = (stageView || board) && view !== TEST;
   const defaultWho: Scope = can ? "team" : "mine";
-  const shownFilters: LeadFilters = { who: scope, pipeline, q: query };
+  const shownFilters: LeadFilters = { who: scope, pipeline, q: query, more };
 
   // Saved views: what the list shows now, in words, and back in one tap.
-  const shown: ViewSpec = { stage: view, pipeline, who: scope, q: query };
+  const shown: ViewSpec = { stage: view, pipeline, who: scope, q: query, more };
   const describeView = (spec: ViewSpec) =>
     [
       tabs.find((tab) => tab.key === spec.stage)?.label ??
@@ -903,6 +969,7 @@ export function LeadsRoute() {
         : null,
       can ? WHO_WORDS[spec.who] : null,
       spec.q ? `“${spec.q}”` : null,
+      ...moreWords(spec.more),
     ]
       .filter(Boolean)
       .join(" · ");
@@ -912,6 +979,7 @@ export function LeadsRoute() {
       pipeline: next.pipeline,
       who: next.who,
       q: next.q,
+      more: next.more ?? {},
     });
   const applyView = (spec: ViewSpec) => {
     const stage = stageKeys.has(spec.stage) ? spec.stage : "open";
@@ -920,11 +988,12 @@ export function LeadsRoute() {
     setScopeChoice(who);
     setSearch(spec.q);
     setQuery(spec.q);
+    setMore(spec.more ?? {});
     setPicked({ view: stage, at: addressKey, pipeline: inPipeline });
     window.history.replaceState(
       null,
       "",
-      viewHref(stage, inPipeline, { who, q: spec.q }),
+      viewHref(stage, inPipeline, { who, q: spec.q, more: spec.more }),
     );
   };
 
@@ -1146,6 +1215,11 @@ export function LeadsRoute() {
               onChanged={refresh}
               onImport={() => begin("importing", setImporting)}
             />
+          ) : work ? (
+            <MyWork
+              onOpen={(leadId, at) => open(leadId, null, at)}
+              onStart={() => go("desk")}
+            />
           ) : board ? (
             <PipelineBoard
               filters={{
@@ -1155,6 +1229,7 @@ export function LeadsRoute() {
               }}
               canManage={can}
               onOpen={(leadId) => open(leadId)}
+              onCall={(leadId) => open(leadId, "call")}
               refreshKey={version}
             />
           ) : stageView ? (
@@ -1170,6 +1245,13 @@ export function LeadsRoute() {
               onChanged={refresh}
               onCounts={onCounts}
               pipeline={pipeline}
+              more={view === TEST ? null : more}
+              onSort={(sort, order) =>
+                applyFilters({
+                  ...shownFilters,
+                  more: { ...more, sort, order },
+                })
+              }
               filtered={filtersOn}
               onClearFilters={clearFilters}
               onAdd={() => begin("adding", setAdding)}
@@ -1253,11 +1335,13 @@ export function LeadsRoute() {
           leadId={shownLead}
           me={desk.me}
           intent={shownIntent}
+          focusAt={openLead ? focusAt : null}
           onClose={() => {
             setLinkDone(hash);
             leaveAddressLead();
             setOpenLead(null);
             setIntent(null);
+            setFocusAt(null);
           }}
           onChanged={refresh}
           onNext={(leadId) => open(leadId, "call")}

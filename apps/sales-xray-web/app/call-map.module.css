@@ -99,8 +99,6 @@
   background: color-mix(in srgb, var(--voice) 14%, transparent);
   color: color-mix(in srgb, var(--voice) 75%, var(--lx-ink));
   font: 700 12px/1.2 var(--lx-font-ui);
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
 }
 /* "Speaker 1 looks like you · Yes · No": one tap to confirm. */
 .ask {

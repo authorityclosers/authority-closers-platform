@@ -12,15 +12,7 @@ import {
   useInvites,
 } from "../../shell/invites-store";
 import { useShellProfile } from "../../shell/profile-store";
-import {
-  Button,
-  Empty,
-  List,
-  PageHeader,
-  Panel,
-  Row,
-  Skeleton,
-} from "../../ui/kit";
+import { Button, Empty, List, PageHeader, Panel, Row } from "../../ui/kit";
 import { useWorkspaceAccess } from "../../workspace-access";
 import {
   acceptInvite,
@@ -28,6 +20,7 @@ import {
   type PendingInvite,
 } from "../organisation-api";
 import styles from "./invites.module.css";
+import { InvitesSkeleton } from "./invites-skeleton";
 
 const day = (value: string | null) => {
   const time = value ? Date.parse(value) : NaN;
@@ -203,22 +196,4 @@ export function InvitesView({ inviteId }: { inviteId: string | null }) {
   );
 }
 
-/** The loaded page's outline, so nothing moves when it arrives. */
-export function InvitesSkeleton({ bare = false }: { bare?: boolean }) {
-  const rows = (
-    <div className={styles.skeleton} role="status" aria-busy="true">
-      <span className="visually-hidden">Loading your invitations</span>
-      <Skeleton width="38%" height={14} />
-      <Skeleton height={40} />
-    </div>
-  );
-  if (bare) return rows;
-  return (
-    <div className={styles.page}>
-      <div className={styles.skeletonHead}>
-        <Skeleton width={140} height={20} />
-      </div>
-      {rows}
-    </div>
-  );
-}
+export { InvitesSkeleton };

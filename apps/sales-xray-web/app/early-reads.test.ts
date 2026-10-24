@@ -9,6 +9,7 @@ import {
   earlyFetch,
   earlyReadsFor,
   earlyReadsScript,
+  forgetSharedReads,
 } from "./early-reads";
 
 type EarlyWindow = Window & { __sxEarly?: Record<string, unknown> };
@@ -32,6 +33,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  forgetSharedReads();
   delete (window as EarlyWindow).__sxEarly;
   window.sessionStorage.clear();
   vi.unstubAllGlobals();
@@ -145,9 +147,58 @@ it("answers the page's read from the early one, once", async () => {
   const first = await earlyFetch(url, { method: "GET" });
   expect(await first.json()).toEqual({ url });
   expect(network).toHaveBeenCalledTimes(3);
+  // Read again at once (another panel on the same screen): shared.
+  await earlyFetch(url, { method: "GET" });
+  expect(network).toHaveBeenCalledTimes(3);
   // A later read (a refresh) asks the server again.
+  const later = Date.now() + EARLY_READ_TTL_MS + 1;
+  vi.spyOn(Date, "now").mockReturnValue(later);
   await earlyFetch(url, { method: "GET" });
   expect(network).toHaveBeenCalledTimes(4);
+  vi.restoreAllMocks();
+});
+
+it("gives the early answer to every reader on the page, not a second request", async () => {
+  boot("/dashboard");
+  const url = `${A}/submissions/summary`;
+  const asked = network.mock.calls.length;
+  await earlyFetch(url);
+  // Another panel, a few seconds later on a slow phone.
+  vi.spyOn(Date, "now").mockReturnValue(Date.now() + 4_000);
+  expect(await (await earlyFetch(url)).json()).toEqual({ url });
+  expect(network).toHaveBeenCalledTimes(asked);
+  vi.restoreAllMocks();
+});
+
+it("asks the server again after the workspace changes", async () => {
+  boot("/dashboard");
+  const url = `${A}/session`;
+  const asked = network.mock.calls.length;
+  await earlyFetch(url);
+  await earlyFetch(url);
+  expect(network).toHaveBeenCalledTimes(asked);
+  dropEarlyReads();
+  await earlyFetch(url);
+  expect(network).toHaveBeenCalledTimes(asked + 1);
+});
+
+it("asks the server again after a write", async () => {
+  boot("/dashboard");
+  const url = `${A}/session`;
+  const asked = network.mock.calls.length;
+  await earlyFetch(url);
+  await earlyFetch(url);
+  expect(network).toHaveBeenCalledTimes(asked);
+  await earlyFetch(`${A}/submissions`, { method: "POST", body: "{}" });
+  await earlyFetch(url);
+  expect(network).toHaveBeenCalledTimes(asked + 2);
+});
+
+it("shares nothing but the page's early answers", async () => {
+  const url = `${A}/report-settings`;
+  await earlyFetch(url);
+  await earlyFetch(url);
+  expect(network).toHaveBeenCalledTimes(2);
 });
 
 it("keeps the answer for the next reader when the first is cancelled (double mount)", async () => {

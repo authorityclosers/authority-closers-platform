@@ -145,3 +145,59 @@ it("says nothing in the Play app or in a browser", async () => {
   await render("browser");
   expect(notices.list).toEqual([]);
 });
+
+const QUEUED = {
+  id: "c-fictional-1",
+  identity: "p-asha:t-homes",
+  url: "/v1/lead-desk/leads/11111111-1111-4111-8111-111111111111/dispose",
+  method: "POST",
+  body: JSON.stringify({ command_id: "c-fictional-1", connected: true }),
+  label: "A call result",
+  lead: "11111111-1111-4111-8111-111111111111",
+  at: Date.now() - 60_000,
+  attempts: 1,
+  nextAt: Date.now() + 60_000,
+  state: "waiting",
+  status: 0,
+};
+
+it("holds back Switch to Play while this phone has changes not sent yet", async () => {
+  const { resetWrites, setWriteIdentity } = await import("../sync/write-queue");
+  resetWrites();
+  localStorage.setItem("sx-writes:v1", JSON.stringify([QUEUED]));
+  setWriteIdentity("p-asha:t-homes");
+  fakePhone({ platform: "android", store: "direct" });
+  await render("unsent");
+  const waiting = notices.list.at(-1) as {
+    message: string;
+    action: { label: string; run: () => void };
+  };
+  expect(waiting.message).toContain(
+    "1 change not sent yet — open Sales X-Ray online first.",
+  );
+  expect(waiting.action.label).toBe("Send now");
+  // Sent: the card offers the switch again.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => new Response("{}", { status: 200 })),
+  );
+  await act(async () => waiting.action.run());
+  await settle();
+  const ready = notices.list.at(-1) as { action: { label: string } };
+  expect(ready.action.label).toBe("Switch to Play");
+  resetWrites();
+});
+
+it("says beside the uninstall step how many changes would be lost", async () => {
+  const { resetWrites } = await import("../sync/write-queue");
+  resetWrites();
+  localStorage.setItem(
+    "sx-writes:v1",
+    JSON.stringify([QUEUED, { ...QUEUED, id: "c-2" }]),
+  );
+  await act(async () => root.render(<AppsView android={UNKNOWN_RELEASE} />));
+  expect(host.textContent).toContain(
+    "2 changes not sent yet — open Sales X-Ray online first.",
+  );
+  resetWrites();
+});

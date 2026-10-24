@@ -12,6 +12,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ac_platform import __version__
+from ac_platform.application.loop_watchdog import LoopWatchdog
 from ac_platform.application.settings import Settings, get_settings
 from ac_platform.billing.compose import compose_billing
 from ac_platform.conversation_intelligence.hosted_runtime import compose_hosted_intake
@@ -122,7 +123,11 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     logger.info(
         "application_started", release_id=settings.release_id, environment=settings.environment
     )
+    # Say what blocks the event loop, and where (24 Oct 2026).
+    watchdog = LoopWatchdog()
+    watchdog.start()
     yield
+    await watchdog.stop()
     await engine.dispose()
 
 

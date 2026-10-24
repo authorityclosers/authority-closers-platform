@@ -109,3 +109,27 @@ it("a moved card leaves its column for the other, counts kept", () => {
   expect(columns[1].count).toBe(before[1].count + 1);
   expect(after.groups[0].count).toBe(board.groups[0].count);
 });
+
+it("calls in one tap from an open card; closed cards have no Call", async () => {
+  const called = vi.fn();
+  await act(async () => {
+    root.render(
+      <PipelineBoard
+        filters={{ pipeline: "main" }}
+        canManage
+        onOpen={() => {}}
+        onCall={called}
+      />,
+    );
+  });
+  const call = container.querySelector<HTMLButtonElement>(
+    "button[aria-label='Call Asha Fictional']",
+  )!;
+  await act(async () => call.click());
+  expect(called).toHaveBeenCalledWith(
+    expect.stringMatching(/^00000000-0000-4000-9000-/),
+  );
+  // Closed leads have no Call on the board.
+  const won = container.querySelector("section[data-step='won']")!;
+  expect(won.querySelector("button[aria-label^='Call ']")).toBeNull();
+});

@@ -7,6 +7,7 @@
  */
 import { Badge, Card, Kpi, Meter, Panel, Table, Tiles, Why } from "../ui/kit";
 import {
+  ageWords,
   heatLevel,
   msWords,
   ratingTone,
@@ -600,6 +601,78 @@ function Mix({ telemetry }: { telemetry: ProductTelemetry }) {
   );
 }
 
+/**
+ * Phones holding a seller's changes the server doesn't have yet (Sales X-Ray's
+ * write queue): counts and the oldest one's age, never what they say
+ * (orchestrator, 24 Oct 2026).
+ */
+function Unsent({ telemetry }: { telemetry: ProductTelemetry }) {
+  const { unsent } = telemetry;
+  return (
+    <Panel
+      title="Changes not sent yet"
+      sub="Phones holding a seller's changes the server doesn't have, from each one's latest report"
+    >
+      {unsent.phones ? (
+        <Table
+          label="Phones holding unsent changes"
+          cards={unsent.rows.map((row) => (
+            <Card key={row.person}>
+              <strong>
+                <code>{row.person}</code>
+              </strong>
+              <span>
+                {row.waiting} waiting · {row.refused} refused · oldest{" "}
+                {ageWords(row.oldestMin)}
+              </span>
+              <span>
+                {row.app}
+                {row.appVersion ? ` ${row.appVersion}` : ""}
+              </span>
+            </Card>
+          ))}
+        >
+          <thead>
+            <tr>
+              <th scope="col">Person</th>
+              <th scope="col" data-num="">
+                Waiting
+              </th>
+              <th scope="col" data-num="">
+                Refused
+              </th>
+              <th scope="col" data-num="">
+                Oldest
+              </th>
+              <th scope="col">App</th>
+            </tr>
+          </thead>
+          <tbody>
+            {unsent.rows.map((row) => (
+              <tr key={row.person}>
+                <td>
+                  <code>{row.person}</code>
+                </td>
+                <td data-num="">{row.waiting}</td>
+                <td data-num="">{row.refused}</td>
+                <td data-num="">{ageWords(row.oldestMin)}</td>
+                <td>
+                  {row.app}
+                  {row.appVersion ? ` ${row.appVersion}` : ""}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </Table>
+      ) : (
+        <p className={styles.line}>
+          No phone reported changes waiting in this window.
+        </p>
+      )}
+    </Panel>
+  );
+}
+
 export function TelemetryView({ telemetry }: { telemetry: ProductTelemetry }) {
   if (!telemetry.available)
     return (
@@ -636,6 +709,7 @@ export function TelemetryView({ telemetry }: { telemetry: ProductTelemetry }) {
       <Funnels telemetry={telemetry} />
       <Features telemetry={telemetry} />
       <Problems telemetry={telemetry} />
+      <Unsent telemetry={telemetry} />
       <Releases telemetry={telemetry} />
       <Mix telemetry={telemetry} />
     </>

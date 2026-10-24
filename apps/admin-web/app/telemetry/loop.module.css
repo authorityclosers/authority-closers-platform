@@ -1,0 +1,399 @@
+/* The improvement loop's pages: Devices, Releases, Fix next. Tokens only, so light and dark
+   share one layout; bars write their values, so colour never carries meaning alone. */
+
+.body {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px;
+  min-width: 0;
+}
+
+.muted,
+.line {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.line {
+  color: var(--sx-ink);
+}
+
+.headline {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md, 15px);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.group {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-align: left;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ---------- The pages' own tabs ---------- */
+
+.loopTabs {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--sx-line);
+  border-radius: 10px;
+  background: var(--sx-sunken);
+  scrollbar-width: none;
+}
+
+.loopTab {
+  flex: none;
+  padding: 6px 12px;
+  border-radius: 8px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.loopTab:hover {
+  color: var(--sx-ink);
+}
+
+.loopTab[aria-current="page"] {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--sx-ink) 12%, transparent);
+}
+
+.loopTab:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+/* ---------- Bars ---------- */
+
+.chart {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  min-width: 0;
+}
+
+.bars {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.barRow {
+  display: grid;
+  grid-template-columns: minmax(96px, 220px) minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  font-size: var(--sx-text-xs);
+}
+
+.barLabel {
+  overflow: hidden;
+  color: var(--sx-ink);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.barTrack {
+  position: relative;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+}
+
+.barTrack i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sx-accent);
+}
+
+.barTrack i[data-tone="good"] {
+  background: var(--sx-good);
+}
+
+.barTrack i[data-tone="warn"] {
+  background: var(--sx-warn);
+}
+
+.barTrack i[data-tone="bad"] {
+  background: var(--sx-bad);
+}
+
+.barTrack i[data-muted] {
+  background: color-mix(in srgb, var(--sx-muted) 55%, var(--sx-sunken));
+}
+
+/* The value an action should stay under. */
+.limit {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 0;
+  border-left: 2px dashed var(--sx-ink);
+  opacity: 0.55;
+}
+
+.limitKey {
+  display: inline-block;
+  width: 0;
+  height: 10px;
+  border-left: 2px dashed var(--sx-ink);
+  opacity: 0.55;
+  vertical-align: middle;
+}
+
+.barRow[data-gap] {
+  margin-bottom: 8px;
+}
+
+.barValue {
+  color: var(--sx-ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.caption {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.phoneOnly {
+  display: none;
+}
+
+.speed {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.speed[data-tone="good"] {
+  color: var(--sx-good);
+}
+
+.speed[data-tone="warn"] {
+  color: var(--sx-warn);
+}
+
+.speed[data-tone="bad"] {
+  color: var(--sx-bad);
+}
+
+.mixes {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 18px;
+}
+
+.mix {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  min-width: 0;
+}
+
+.mix .barRow {
+  grid-template-columns: minmax(64px, 120px) minmax(0, 1fr) auto;
+}
+
+/* ---------- Release check: cards, never a red banner ---------- */
+
+.corner {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.cornerCard {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-left: 4px solid var(--sx-accent);
+  border-radius: 12px;
+  background: var(--sx-surface);
+  font-size: var(--sx-text-sm);
+  min-width: 0;
+}
+
+.cornerCard[data-tone="pass"] {
+  border-left-color: var(--sx-good);
+}
+
+.cornerCard[data-tone="block"],
+.cornerCard[data-tone="worse"] {
+  border-left-color: var(--sx-warn);
+  background: color-mix(in srgb, var(--sx-warn) 7%, var(--sx-surface));
+}
+
+.cornerCard[data-tone="not_enough_data"] {
+  border-left-color: var(--sx-muted);
+}
+
+/* ---------- Fix next ---------- */
+
+.fixes,
+.improved {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fix {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 14px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.fix:first-child {
+  border-top: 0;
+}
+
+.rank {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.fixMain {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.fixTitle {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.improved li {
+  padding: 10px 14px;
+  border-top: 1px solid var(--sx-line);
+  font-size: var(--sx-text-sm);
+}
+
+.improved li:first-child {
+  border-top: 0;
+}
+
+.copy {
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.copyButton {
+  min-height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 8px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.copyButton:hover {
+  background: var(--sx-sunken);
+}
+
+.copyButton:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+.copyText {
+  width: min(320px, 70vw);
+  min-height: 120px;
+  font: inherit;
+  font-size: var(--sx-text-xs);
+}
+
+@media (max-width: 640px) {
+  .barRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "label value"
+      "track track";
+    gap: 4px 8px;
+  }
+
+  .barLabel {
+    grid-area: label;
+  }
+
+  .barValue {
+    grid-area: value;
+  }
+
+  .barTrack {
+    grid-area: track;
+  }
+
+  .mix .barRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  /* At most seven bars on a phone; the table has every one. */
+  .bars > .barRow:nth-child(n + 8) {
+    display: none;
+  }
+
+  .phoneOnly {
+    display: inline;
+  }
+
+  .fix {
+    grid-template-columns: 24px minmax(0, 1fr);
+  }
+
+  .fix .copy {
+    grid-column: 2;
+    justify-items: start;
+  }
+}

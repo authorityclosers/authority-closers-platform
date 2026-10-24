@@ -39,9 +39,7 @@
   color: var(--lx-muted);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.08em;
   line-height: 1.3;
-  text-transform: uppercase;
 }
 
 .label {
@@ -49,9 +47,7 @@
   color: var(--lx-muted);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.06em;
   line-height: 1.35;
-  text-transform: uppercase;
 }
 
 .empty {
@@ -272,9 +268,7 @@
   color: var(--row-ink);
   font-size: 12.5px;
   font-weight: 800;
-  letter-spacing: 0.08em;
   line-height: 1.3;
-  text-transform: uppercase;
 }
 
 .rowLabel svg {
@@ -613,9 +607,7 @@
   color: var(--lx-muted);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.08em;
   line-height: 1.3;
-  text-transform: uppercase;
 }
 
 .chapterRange {
@@ -1168,9 +1160,7 @@
   color: var(--lx-muted);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.06em;
   line-height: 1.35;
-  text-transform: uppercase;
 }
 
 .overview :global(.studio-finding-evidence-heading) strong {

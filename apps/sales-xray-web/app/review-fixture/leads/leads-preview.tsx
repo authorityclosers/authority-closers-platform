@@ -249,12 +249,75 @@ function rows(now: number) {
   }));
 }
 
+/** My work (?tab=work): a seller's fictional day, newest first. */
+function fixtureWork(now: number) {
+  const at = (minutes: number) =>
+    new Date(now - minutes * 60_000).toISOString();
+  const item = (
+    n: number,
+    name: string,
+    stage: string,
+    minutes: number,
+    event: Record<string, unknown>,
+  ) => ({
+    event_id: `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`,
+    lead_id: `00000000-0000-4000-9000-${String(n).padStart(12, "0")}`,
+    lead_name: name,
+    stage_label: stage,
+    event: { at: at(minutes), actor_name: "Kavya Fictional", ...event },
+  });
+  return {
+    items: [
+      item(1, "Asha Fictional", "Interested (In Follow-Up)", 12, {
+        kind: "result",
+        connected: true,
+        stage_label: "Interested (In Follow-Up)",
+        note: "Wants pricing for two people",
+      }),
+      item(1, "Asha Fictional", "Interested (In Follow-Up)", 14, {
+        kind: "call",
+        via: "phone",
+        direction: "outgoing",
+        duration_seconds: 186,
+      }),
+      item(2, "Rohan Sample", "Meeting / Demo Scheduled", 40, {
+        kind: "stage",
+        v: 2,
+        action: "move",
+        stage_label: "Meeting / Demo Scheduled",
+        from_label: "Interested (In Follow-Up)",
+      }),
+      item(3, "neha fictional", "Discussion Incomplete", 75, {
+        kind: "note",
+        note: "Driving; call after 7 pm. Asked for the brochure on WhatsApp first.",
+      }),
+      item(4, "Vikram Sample", "Not Connected", 130, {
+        kind: "result",
+        connected: false,
+        reason: "did_not_pick",
+        reason_label: "Didn't pick up",
+      }),
+      item(5, "Pooja Fictional", "Closed / Lost", 190, {
+        kind: "stage",
+        v: 2,
+        action: "close",
+        stage_label: "Closed / Lost",
+        from_label: "Discussion Incomplete",
+        outcome_reason_label: "Price or budget",
+      }),
+    ],
+    next_before: null,
+    counts: { result: 2, call: 1, stage: 2, note: 1 },
+  };
+}
+
 function answers(now: number, path: string): unknown {
   // To call's ?pipeline=: that pipeline's leads only, as the server answers.
   const [bare, query = ""] = path.split("?");
   // Lead OS: the board and Pipeline numbers (?tab=board, ?tab=numbers).
   if (bare.startsWith("/v1/lead-desk/board")) return fixtureBoard();
   if (bare === "/v1/lead-desk/reports/pipeline") return fixtureReport();
+  if (bare === "/v1/lead-desk/activity") return fixtureWork(now);
   const asked =
     bare === "/v1/lead-desk" || bare === "/v1/lead-desk/next"
       ? new URLSearchParams(query).get("pipeline")

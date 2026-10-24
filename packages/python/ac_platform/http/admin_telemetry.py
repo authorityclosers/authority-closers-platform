@@ -9,7 +9,21 @@ GET /v1/admin/telemetry/daily[?day=YYYY-MM-DD]
     One India day's export for the cost optimiser: each analysed call's cost joined to how
     its report was used, and per-workspace tallies (telemetry/daily_export.py).
 
-Both are content-free (counts, timings, pseudonyms), for AC control accounts in the
+The improvement loop (owner, 24 Oct 2026: "use in our recursive improvement pipeline each
+new update"; telemetry/improvement.py):
+
+GET /v1/admin/telemetry/devices?window=[&release=&app=]
+    Every phone model and device class, its make-up, speed on key actions and issues, and
+    the slowest 10% of devices.
+GET /v1/admin/telemetry/compare[?head=&base=&app=]
+    A release against the one before it (last 30 days).
+GET /v1/admin/telemetry/gate?release=[&baseline=]
+    The release train's input: pass, block (a key action regressed) or not_enough_data.
+GET /v1/admin/telemetry/fix-next?window=
+    What to fix next, ranked by people affected times severity, and what improved since the
+    window before.
+
+All are content-free (counts, timings, pseudonyms), for AC control accounts in the
 operations workspace, and readable with a staff key that has admin:read.
 """
 
@@ -28,7 +42,7 @@ from ac_platform.conversation_intelligence.cost_metrics import india_day, read_s
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.http.auth import AuthenticatedTransaction, require_admin_surface
 from ac_platform.http.routes import RouteContext
-from ac_platform.telemetry import admin_view, daily_export
+from ac_platform.telemetry import admin_view, daily_export, improvement
 from ac_platform.usage_people.pseudonyms import ensure_key
 
 PRIVATE = {"Cache-Control": "private, no-store"}
@@ -83,6 +97,107 @@ def install_admin_telemetry_http(application: FastAPI, ctx: RouteContext) -> Non
             consent=consent,
             environment=settings.environment,
         )
+
+    async def read_window(
+        auth: AuthenticatedTransaction, since: datetime, now: datetime
+    ) -> admin_view.Read:
+        return await auth.database.run_sync(
+            lambda connection: admin_view.read_rows(connection, since=since, until=now, now=now)
+        )
+
+    def release_name(value: str | None, field: str) -> str | None:
+        if value is not None and not (0 < len(value) <= 64):
+            raise HTTPException(422, f"Choose a {field} from the list.")
+        return value
+
+    @router.get("/devices")
+    async def devices(
+        request: Request,
+        response: Response,
+        window: Literal["24h", "7d", "30d"] = "7d",
+        release: str | None = None,
+        app: Literal["web", "android"] | None = None,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        await admit(request, response, auth)
+        now = datetime.now(UTC)
+        rows = await read_window(auth, now - admin_view.WINDOWS[window], now)
+        return {
+            **improvement.devices(
+                rows,
+                now=now,
+                window=window,
+                filters=admin_view.Filters(release=release_name(release, "release"), app=app),
+            ),
+            "environment": settings.environment,
+            "truncated": rows.truncated,
+        }
+
+    @router.get("/compare")
+    async def compare(
+        request: Request,
+        response: Response,
+        head: str | None = None,
+        base: str | None = None,
+        app: Literal["web", "android"] | None = None,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        await admit(request, response, auth)
+        now = datetime.now(UTC)
+        rows = await read_window(auth, now - admin_view.WINDOWS["30d"], now)
+        return {
+            **improvement.compare(
+                rows,
+                now=now,
+                head=release_name(head, "release"),
+                base=release_name(base, "release"),
+                filters=admin_view.Filters(app=app),
+            ),
+            "environment": settings.environment,
+        }
+
+    @router.get("/gate")
+    async def gate(
+        request: Request,
+        response: Response,
+        release: str,
+        baseline: str | None = None,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        await admit(request, response, auth)
+        now = datetime.now(UTC)
+        rows = await read_window(auth, now - admin_view.WINDOWS["30d"], now)
+        return improvement.gate(
+            rows,
+            now=now,
+            environment=settings.environment,
+            release=release_name(release, "release") or "",
+            baseline=release_name(baseline, "baseline"),
+        )
+
+    @router.get("/fix-next")
+    async def fix_next(
+        request: Request,
+        response: Response,
+        window: Literal["24h", "7d", "30d"] = "7d",
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        await admit(request, response, auth)
+        now = datetime.now(UTC)
+        span = admin_view.WINDOWS[window]
+        # This window and the one before it (what improved since).
+        rows = await read_window(auth, now - 2 * span, now)
+        since = now - span
+        return {
+            **improvement.fix_next(
+                [row for row in rows.rows if row.at >= since],
+                [row for row in rows.rows if row.at < since],
+                now=now,
+                window=window,
+                environment=settings.environment,
+            ),
+            "truncated": rows.truncated,
+        }
 
     @router.get("/daily")
     async def daily(

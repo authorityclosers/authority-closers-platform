@@ -149,6 +149,11 @@ async def test_http_source_reference_routing(tmp_path, monkeypatch, route, histo
     else:
         if route != "submission":
             assert db.get.await_args_list[0].args == (ConversationRecording, recording_id)
+        if route == "legacy":
+            # Shared identity locks, as its read-only sign-in took: FOR UPDATE here
+            # deadlocked two plays of one call (v0.88 browser proof, 24 Oct 2026).
+            get = ConversationApplication.get
+            assert get.await_args.kwargs == {"shared_identity_locks": True}  # type: ignore[attr-defined]
         if history in {"released", "missing"}:
             assert response.status_code == 409
             assert response.json() == {"detail": "The retained recording is unavailable."}

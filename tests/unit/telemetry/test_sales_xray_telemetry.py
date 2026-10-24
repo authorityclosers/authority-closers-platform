@@ -301,3 +301,12 @@ def test_android_app_events_take_tiers_and_codes_only() -> None:
     # The intake's personal-data guard refuses these key names, so the app uses short ones.
     assert "recordings" not in SALES_XRAY_EVENTS["sx.permission_snapshot"].allowed_payload_keys
     assert "microphone" not in SALES_XRAY_EVENTS["sx.permission_snapshot"].allowed_payload_keys
+
+
+def test_unsent_changes_are_reported_as_counts_only() -> None:
+    event = SALES_XRAY_EVENTS["sx.writes_waiting"]
+    check_payload_values(event, {"waiting": 2, "refused": 1, "oldest_min": 95, "app": "android"})
+    for bad in ({"waiting": 1_001}, {"oldest_min": 50_000}, {"waiting": "two"}):
+        with pytest.raises(ValueError):
+            check_payload_values(event, bad)
+    assert "note" not in event.allowed_payload_keys
