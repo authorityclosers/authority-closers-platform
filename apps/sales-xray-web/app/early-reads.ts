@@ -252,6 +252,7 @@ export function settleEarlyRead(url: string) {
 export function dropEarlyReads() {
   const early = store();
   if (early) for (const url of Object.keys(early)) delete early[url];
+  forgetSharedReads();
 }
 
 /** Only the session reads (for tests and the script's own rule). */
@@ -259,23 +260,61 @@ export const sessionOnly = (urls: readonly string[]) =>
   urls.filter(EARLY_SESSION_ONLY);
 
 /**
+ * The page's early answers go to every reader on the page, not just the
+ * first (24 Oct 2026: at the start Home's frame and its panels read the same
+ * call summary, allowance and activity, and the second reader went to the
+ * server again; on a busy server every extra read waits behind the person's
+ * others). Within the early read's lifetime (EARLY_READ_TTL_MS from page
+ * load) each later reader gets its own copy. A write, a workspace change or
+ * a person change forgets them, so nothing read before is served after.
+ */
+type Shared = { response: Response; until: number };
+const shared = new Map<string, Shared>();
+
+const cancelled = () =>
+  new DOMException("The read was cancelled.", "AbortError");
+
+/**
  * fetch() for a GET, served from the early answer when there is one. The
- * early answer is settled only for a reader that was not cancelled.
+ * early answer is settled only for a reader that was not cancelled, then
+ * shared with the page's other readers for the rest of its lifetime.
  */
 export async function earlyFetch(
   url: string,
   init: RequestInit = {},
 ): Promise<Response> {
+  const plain = (init.method ?? "GET").toUpperCase() === "GET" && !init.body;
+  // A write may change what was read: nothing shared is served after it.
+  if (!plain) {
+    shared.clear();
+    return fetch(url, init);
+  }
+  const reused = shared.get(url);
+  if (reused) {
+    if (Date.now() < reused.until) {
+      if (init.signal?.aborted) throw cancelled();
+      return reused.response.clone();
+    }
+    shared.delete(url);
+  }
+  const earlyAt = store()?.[url]?.at;
   const early = takeEarlyRead(url, init);
   if (early) {
     const response = await early;
-    if (init.signal?.aborted)
-      throw new DOMException("The read was cancelled.", "AbortError");
+    if (init.signal?.aborted) throw cancelled();
+    settleEarlyRead(url);
     if (response) {
-      settleEarlyRead(url);
+      shared.set(url, {
+        response: response.clone(),
+        until: (earlyAt ?? Date.now()) + EARLY_READ_TTL_MS,
+      });
       return response;
     }
-    settleEarlyRead(url);
   }
   return fetch(url, init);
+}
+
+/** A write was sent: reads after it ask the server (also for tests). */
+export function forgetSharedReads() {
+  shared.clear();
 }

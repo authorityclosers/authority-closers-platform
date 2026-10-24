@@ -8,7 +8,7 @@
 
 import { withDisplayNames } from "../display-name";
 import { sendWrite } from "../sync/write-queue";
-import { earlyFetch } from "../early-reads";
+import { earlyFetch, forgetSharedReads } from "../early-reads";
 import type { MeetingView, MoveOption } from "./pipeline/pipeline-client";
 
 export const LEADS_PATH = "/leads";
@@ -471,8 +471,11 @@ export const KEPT_MESSAGE =
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   const write = (init.method ?? "GET").toUpperCase() !== "GET";
-  // A write may change any lead: nothing read ahead is shown after it.
-  if (write) ahead.clear();
+  // A write may change any lead: nothing read ahead or shared is shown after it.
+  if (write) {
+    ahead.clear();
+    forgetSharedReads();
+  }
   const options: RequestInit = {
     credentials: "same-origin",
     cache: "no-store",
