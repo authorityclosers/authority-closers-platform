@@ -388,7 +388,8 @@ export async function startPhoneCall(lead: {
   number: string;
   name: string;
 }): Promise<void> {
-  await ask("call", lead);
+  // The app's own tick as it dials follows Settings, Vibration (1.0.25+).
+  await ask("call", { ...lead, vibrate: hapticsOn() });
 }
 
 /** The lead's last call from this phone, when it has ended. */
@@ -702,6 +703,16 @@ export type SetupStatus = {
   callLogSupported: boolean;
   /** "direct" (the download-link app) or "play" (Google Play). */
   store: "direct" | "play";
+  /**
+   * Permissions Android won't ask for again (denied twice, or "Don't ask
+   * again"): only the app's settings can allow them now (app 1.0.25+).
+   */
+  blocked: {
+    calls: boolean;
+    notifications: boolean;
+    recordings: boolean;
+    microphone: boolean;
+  };
 };
 
 /** This phone's call recorder as the app sees it (owner, 19 Oct: check, don't ask). */
@@ -753,6 +764,17 @@ export function parseRecorder(raw: unknown): RecorderProfile | null {
   };
 }
 
+function parseBlocked(raw: unknown): SetupStatus["blocked"] {
+  const value =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {};
+  return {
+    calls: value.calls === true,
+    notifications: value.notifications === true,
+    recordings: value.recordings === true,
+    microphone: value.microphone === true,
+  };
+}
+
 export function parseSetup(raw: unknown): SetupStatus | null {
   if (!raw || typeof raw !== "object") return null;
   const value = raw as Record<string, unknown>;
@@ -776,6 +798,7 @@ export function parseSetup(raw: unknown): SetupStatus | null {
     // Apps before the two builds always had call history.
     callLogSupported: value.callLogSupported !== false,
     store: value.store === "play" ? "play" : "direct",
+    blocked: parseBlocked(value.blocked),
   };
 }
 

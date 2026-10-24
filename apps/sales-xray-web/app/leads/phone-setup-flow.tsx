@@ -80,6 +80,15 @@ const folderPick = (status: SetupStatus) =>
   !status.allFilesSupported &&
   status.folderPickSupported;
 
+/** A permission Android no longer asks for: only the app's settings allow it now. */
+export const blocked = (step: FlowStep, status: SetupStatus) =>
+  (step === "calls" && status.blocked.calls) ||
+  (step === "notifications" && status.blocked.notifications) ||
+  (step === "recordings" &&
+    !allFiles(status) &&
+    !folderPick(status) &&
+    status.blocked.recordings);
+
 /** What this phone still needs, in the order the flow asks. */
 export function flowSteps(
   status: SetupStatus,
@@ -192,15 +201,19 @@ export function flowScreen(
       : step === "recordings" && folderPick(status)
         ? FOLDER_EXPLAINER
         : explainerFor(step, status.store);
+  // Android won't show its question again: the button opens the settings.
+  const stuck = blocked(step, status);
   return {
     icon:
       step === "calls" ? Phone : step === "notifications" ? Bell : FileAudio,
     title: words?.title ?? "Phone setup",
-    why: words?.why ?? "",
+    why: stuck
+      ? "Android won't ask again here. Allow it in Settings, then come back."
+      : (words?.why ?? ""),
     reads: nothing(words?.reads) ? undefined : words?.reads,
     sends: nothing(words?.sends) ? undefined : words?.sends,
-    action: words?.allow ?? "Allow",
-    away: step === "recordings" && allFiles(status),
+    action: stuck ? "Open settings" : (words?.allow ?? "Allow"),
+    away: stuck || (step === "recordings" && allFiles(status)),
   };
 }
 
@@ -210,6 +223,10 @@ async function act(
   recorder: CallRecorderStatus | null,
   sim: string,
 ): Promise<unknown> {
+  if (blocked(step, status))
+    return setupOpen(
+      step === "notifications" ? "notifications" : "appSettings",
+    );
   switch (step) {
     case "calls":
       return askCallAccess();

@@ -250,6 +250,34 @@ describe("PhoneSetupFlow", () => {
     expect(sent.map((item) => item.method)).not.toContain("callLogSetup");
   });
 
+  it("opens Settings for a permission Android won't ask for again, then waits for the way back", async () => {
+    const sent = fakePhone(({ method }) => {
+      if (method === "setupOpen")
+        return { opened: true, screen: "notifications" };
+      if (method === "callRecorderStatus")
+        return { available: false, enabled: false };
+      return setup(
+        { ...NONE, calls: true },
+        { blocked: { notifications: true } },
+      );
+    });
+    await act(async () =>
+      root.render(<PhoneSetupFlow only="notifications" onClose={() => {}} />),
+    );
+    await settle();
+    expect(host.textContent).toContain("Android won't ask again here");
+    await act(async () => button("Open settings").click());
+    await settle();
+    expect(sent).toContainEqual({
+      method: "setupOpen",
+      args: { what: "notifications" },
+    });
+    expect(sent.map((item) => item.method)).not.toContain(
+      "requestNotifications",
+    );
+    expect(button("Waiting").disabled).toBe(true);
+  });
+
   it("sets up one line only, for Settings' Fix, and Close keeps the rest for later", async () => {
     fakePhone(({ method }) =>
       method === "callRecorderStatus"
