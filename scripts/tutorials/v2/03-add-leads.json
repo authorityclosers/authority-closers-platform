@@ -1,0 +1,839 @@
+{
+  "id": "03-add-leads",
+  "number": "03",
+  "title": {
+    "en": "Add leads: one at a time or a whole list",
+    "hi": "Leads add kijiye: ek ek karke ya poori list",
+    "mr": "Leads add kara: ek ek karun kinva poorna list"
+  },
+  "description": {
+    "en": "Get your leads into Sales X-Ray: add one from any screen with plus, fill details from a pasted message, pick the owner, use the Leads table on a computer, and import a whole list from Excel, a CSV or rows pasted from a sheet.",
+    "hi": "Sales X-Ray mein leads daaliye: kisi bhi screen se plus dabake ek lead, paste kiye message se details, owner chunna, computer pe Leads table, aur Excel, CSV ya sheet se poori list import.",
+    "mr": "Sales X-Ray madhye leads taka: kuthlyahi screen varun plus dabun ek lead, paste kelelya message madhun details, owner nivadna, computer var Leads table, aani Excel, CSV kinva sheet madhun poorna list import."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "add leads",
+    "import leads",
+    "lead management",
+    "sales CRM India",
+    "Excel import",
+    "Hinglish",
+    "Marathi"
+  ],
+  "names": {
+    "Sales Xray": "Sales X-Ray"
+  },
+  "thumb": {
+    "beat": "form",
+    "text": {
+      "en": "Add leads in seconds",
+      "hi": "Leads add kijiye seconds mein",
+      "mr": "Leads add kara kahi seconds madhye"
+    },
+    "accent": {
+      "en": "in seconds",
+      "hi": "seconds mein",
+      "mr": "seconds madhye"
+    }
+  },
+  "next": {
+    "id": "04-call-a-lead",
+    "title": {
+      "en": "Call a lead and log how it went",
+      "hi": "Lead ko call karo, result log karo",
+      "mr": "Lead la call kara, result log kara"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "In this video: getting your leads into Sales X-Ray, one at a time, or a whole list at once.",
+      "hi": "इस video में: Sales X-Ray में leads कैसे डालें, एक एक करके, या पूरी list एक साथ.",
+      "mr": "या video मध्ये: Sales X-Ray मध्ये leads कसे टाकायचे, एक एक करून, किंवा पूर्ण list एकदम."
+    },
+    "latn": {
+      "hi": "Is video mein: Sales X-Ray mein leads kaise daalein, ek ek karke, ya poori list ek saath.",
+      "mr": "Ya video madhye: Sales X-Ray madhye leads kase takayche, ek ek karun, kinva poorna list ekdam."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "Leads in. Start calling.",
+      "hi": "Leads in. Start calling.",
+      "mr": "Leads in. Start calling."
+    },
+    "say": {
+      "en": "Next, call a lead and log how it went.",
+      "hi": "अगले video में: lead को call कीजिए और result log कीजिए.",
+      "mr": "पुढच्या video मध्ये: lead ला call करा आणि result log करा."
+    },
+    "latn": {
+      "hi": "Agle video mein: lead ko call kijiye aur result log kijiye.",
+      "mr": "Pudhchya video madhye: lead la call kara aani result log kara."
+    }
+  },
+  "chapters": [
+    {
+      "id": "one",
+      "title": {
+        "en": "Add one lead",
+        "hi": "Ek lead add kijiye",
+        "mr": "Ek lead add kara"
+      }
+    },
+    {
+      "id": "table",
+      "title": {
+        "en": "The Leads table",
+        "hi": "Leads table",
+        "mr": "Leads table"
+      }
+    },
+    {
+      "id": "list",
+      "title": {
+        "en": "Import a whole list",
+        "hi": "Poori list import kijiye",
+        "mr": "Poorna list import kara"
+      }
+    },
+    {
+      "id": "auto",
+      "title": {
+        "en": "Leads from your ads",
+        "hi": "Ads se leads",
+        "mr": "Ads madhun leads"
+      }
+    }
+  ],
+  "reel": {
+    "hook": {
+      "beat": "form",
+      "text": {
+        "en": "New enquiry? Add it in seconds",
+        "hi": "Nayi enquiry? Seconds mein add",
+        "mr": "Navin enquiry? Kahi seconds madhye add"
+      },
+      "accent": {
+        "en": "in seconds",
+        "hi": "Seconds mein",
+        "mr": "seconds madhye"
+      },
+      "say": {
+        "en": "New enquiry? Add it in seconds.",
+        "hi": "नई enquiry? Seconds में add कीजिए.",
+        "mr": "नवीन enquiry? काही seconds मध्ये add करा."
+      },
+      "latn": {
+        "hi": "Nayi enquiry? Seconds mein add kijiye.",
+        "mr": "Navin enquiry? Kahi seconds madhye add kara."
+      }
+    },
+    "beats": ["plus", "form", "name", "paste-msg", "more", "owner", "add"]
+  },
+  "shots": [
+    {
+      "id": "phone",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/home"
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "beats": [
+        {
+          "id": "plus",
+          "chapter": "one",
+          "sync": {
+            "en": "plus",
+            "hi": "plus",
+            "mr": "plus"
+          },
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Add a lead or a call"
+              },
+              "ms": 1300
+            }
+          ],
+          "say": {
+            "en": "Got a new enquiry? Tap plus, from any screen.",
+            "hi": "नई enquiry आई? किसी भी screen से plus दबाइए.",
+            "mr": "नवीन enquiry आली? कुठल्याही screen वरून plus दाबा."
+          },
+          "latn": {
+            "hi": "Nayi enquiry aayi? Kisi bhi screen se plus dabaiye.",
+            "mr": "Navin enquiry aali? Kuthlyahi screen varun plus daba."
+          },
+          "short": {
+            "say": {
+              "en": "Tap plus.",
+              "hi": "Plus दबाइए.",
+              "mr": "Plus दाबा."
+            },
+            "latn": {
+              "hi": "Plus dabaiye.",
+              "mr": "Plus daba."
+            }
+          }
+        },
+        {
+          "id": "form",
+          "chapter": "one",
+          "sync": {
+            "en": "Add lead",
+            "hi": "Add lead",
+            "mr": "Add lead"
+          },
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "text": "Add lead"
+              },
+              "ms": 1300
+            }
+          ],
+          "say": {
+            "en": "Then Add lead. A name and a number is all it needs.",
+            "hi": "फिर Add lead. बस नाम और number काफ़ी है.",
+            "mr": "मग Add lead. फक्त नाव आणि number पुरेसा आहे."
+          },
+          "latn": {
+            "hi": "Phir Add lead. Bas naam aur number kaafi hai.",
+            "mr": "Mag Add lead. Fakta naav aani number puresa aahe."
+          }
+        },
+        {
+          "id": "name",
+          "chapter": "one",
+          "actions": [
+            {
+              "do": "type",
+              "target": {
+                "label": "Name"
+              },
+              "text": "Rohan Kale",
+              "delay": 80,
+              "ms": 500
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "label": "Phone"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Type their name, then their phone number.",
+            "hi": "उनका नाम लिखिए, फिर phone number.",
+            "mr": "त्यांचं नाव लिहा, मग phone number."
+          },
+          "latn": {
+            "hi": "Unka naam likhiye, phir phone number.",
+            "mr": "Tyancha naav liha, mag phone number."
+          }
+        },
+        {
+          "id": "paste-msg",
+          "chapter": "one",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Paste a message"
+              },
+              "ms": 900
+            },
+            {
+              "do": "paste",
+              "target": {
+                "placeholder": "Paste a contact or message"
+              },
+              "text": "Hi, this is Rohan Kale from Baner. Looking for a 2 BHK.",
+              "ms": 900
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Fill in"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Got their details in a message? Tap Paste a message, paste it in, and tap Fill in.",
+            "hi": "Details किसी message में हैं? Paste a message दबाइए, message paste कीजिए, और Fill in.",
+            "mr": "Details एखाद्या message मध्ये आहेत? Paste a message दाबा, message paste करा, आणि Fill in."
+          },
+          "latn": {
+            "hi": "Details kisi message mein hain? Paste a message dabaiye, message paste kijiye, aur Fill in.",
+            "mr": "Details ekhadya message madhye aahet? Paste a message daba, message paste kara, aani Fill in."
+          },
+          "short": {
+            "say": {
+              "en": "Or paste their WhatsApp message.",
+              "hi": "या उनका WhatsApp message paste कीजिए.",
+              "mr": "किंवा त्यांचा WhatsApp message paste करा."
+            },
+            "latn": {
+              "hi": "Ya unka WhatsApp message paste kijiye.",
+              "mr": "Kinva tyancha WhatsApp message paste kara."
+            }
+          }
+        },
+        {
+          "id": "more",
+          "chapter": "one",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "More details"
+              },
+              "ms": 1000
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "label": "Interested in"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "More details adds what they're interested in, their city, email or company.",
+            "hi": "More details में डालिए वो किसमें interested हैं, उनका city, email या company.",
+            "mr": "More details मध्ये टाका ते कशात interested आहेत, त्यांचं city, email किंवा company."
+          },
+          "latn": {
+            "hi": "More details mein daaliye woh kismein interested hain, unka city, email ya company.",
+            "mr": "More details madhye taka te kashat interested aahet, tyancha city, email kinva company."
+          }
+        },
+        {
+          "id": "owner",
+          "chapter": "one",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Best fit by the rules"
+              },
+              "ms": 1400
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Me",
+                "exact": true
+              },
+              "ms": 1100
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Choose who handles the lead: you, or the best fit by your team's lead rules.",
+            "hi": "Lead कौन संभालेगा, ये चुनिए: आप, या team के lead rules के हिसाब से best fit.",
+            "mr": "Lead कोण सांभाळणार ते निवडा: तुम्ही, किंवा team च्या lead rules नुसार best fit."
+          },
+          "latn": {
+            "hi": "Lead kaun sambhalega, yeh chuniye: aap, ya team ke lead rules ke hisaab se best fit.",
+            "mr": "Lead kon sambhalnar te nivda: tumhi, kinva team chya lead rules nusar best fit."
+          },
+          "short": {
+            "say": {
+              "en": "Pick who handles it.",
+              "hi": "कौन संभालेगा, चुनिए.",
+              "mr": "कोण सांभाळणार, निवडा."
+            },
+            "latn": {
+              "hi": "Kaun sambhalega, chuniye.",
+              "mr": "Kon sambhalnar, nivda."
+            }
+          }
+        },
+        {
+          "id": "add",
+          "chapter": "one",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Add lead"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Tap Add lead, and they're in your list, ready to call.",
+            "hi": "Add lead दबाइए, और वो आपकी list में, call के लिए ready.",
+            "mr": "Add lead दाबा, आणि ते तुमच्या list मध्ये, call साठी ready."
+          },
+          "latn": {
+            "hi": "Add lead dabaiye, aur woh aapki list mein, call ke liye ready.",
+            "mr": "Add lead daba, aani te tumchya list madhye, call saathi ready."
+          }
+        }
+      ]
+    },
+    {
+      "id": "table",
+      "device": "wide",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=all&pipelines=2"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Table"
+          },
+          "ms": 1000,
+          "optional": true
+        },
+        {
+          "do": "wait",
+          "ms": 400
+        }
+      ],
+      "beats": [
+        {
+          "id": "table-view",
+          "chapter": "table",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Table"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "focus",
+              "target": {
+                "text": "Next action",
+                "exact": true
+              },
+              "zoom": false,
+              "ms": 900
+            }
+          ],
+          "say": {
+            "en": "On a computer, switch Leads to Table. Every lead sits on one line, with their stage, source, next action and last call.",
+            "hi": "Computer पे Leads को Table में switch कीजिए. हर lead एक line में: stage, source, next action और last call.",
+            "mr": "Computer वर Leads Table मध्ये switch करा. प्रत्येक lead एका line मध्ये: stage, source, next action आणि last call."
+          },
+          "latn": {
+            "hi": "Computer pe Leads ko Table mein switch kijiye. Har lead ek line mein: stage, source, next action aur last call.",
+            "mr": "Computer var Leads Table madhye switch kara. Pratyek lead eka line madhye: stage, source, next action aani last call."
+          }
+        },
+        {
+          "id": "inline",
+          "chapter": "table",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "New , change stage"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Rahul Kadam , change owner"
+              },
+              "ms": 1200
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Change a lead's stage, pipeline or owner right in the table, without opening it.",
+            "hi": "Lead का stage, pipeline या owner table में ही बदलिए, lead खोले बिना.",
+            "mr": "Lead चा stage, pipeline किंवा owner table मध्येच बदला, lead न उघडता."
+          },
+          "latn": {
+            "hi": "Lead ka stage, pipeline ya owner table mein hi badliye, lead khole bina.",
+            "mr": "Lead cha stage, pipeline kinva owner table madhyech badla, lead na ughadta."
+          }
+        },
+        {
+          "id": "find",
+          "chapter": "table",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Filter leads"
+              },
+              "ms": 1200
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Saved views"
+              },
+              "ms": 1200
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Select",
+                "exact": true
+              },
+              "ms": 1100
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Filter by stage, owner or source, save the views you use most, or select several leads to update them together.",
+            "hi": "Stage, owner या source से filter कीजिए, जो views ज़्यादा use होते हैं उन्हें save कीजिए, या कई leads select करके एक साथ update कीजिए.",
+            "mr": "Stage, owner किंवा source ने filter करा, जे views जास्त वापरता ते save करा, किंवा बरेच leads select करून एकदम update करा."
+          },
+          "latn": {
+            "hi": "Stage, owner ya source se filter kijiye, jo views zyaada use hote hain unhe save kijiye, ya kai leads select karke ek saath update kijiye.",
+            "mr": "Stage, owner kinva source ne filter kara, je views jaast vaparta te save kara, kinva bare leads select karun ekdam update kara."
+          }
+        },
+        {
+          "id": "quick-add",
+          "chapter": "table",
+          "actions": [
+            {
+              "do": "type",
+              "target": {
+                "placeholder": "New lead's name"
+              },
+              "text": "Rohan Kale",
+              "delay": 75,
+              "ms": 500
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Add",
+                "exact": true
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "To add one, type a name and number in the last row, and press Add.",
+            "hi": "एक lead add करना है? आख़िरी row में नाम और number डालिए, और Add दबाइए.",
+            "mr": "एक lead add करायचाय? शेवटच्या row मध्ये नाव आणि number टाका, आणि Add दाबा."
+          },
+          "latn": {
+            "hi": "Ek lead add karna hai? Aakhri row mein naam aur number daaliye, aur Add dabaiye.",
+            "mr": "Ek lead add karaychay? Shevatchya row madhye naav aani number taka, aani Add daba."
+          }
+        },
+        {
+          "id": "desk-start",
+          "chapter": "table",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Start calling"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Once your leads are in, Start calling takes you through them, one by one.",
+            "hi": "Leads आ गए? Start calling आपको एक एक करके सब तक ले जाता है.",
+            "mr": "Leads आले? Start calling तुम्हाला एक एक करून सगळ्यांपर्यंत नेतो."
+          },
+          "latn": {
+            "hi": "Leads aa gaye? Start calling aapko ek ek karke sab tak le jaata hai.",
+            "mr": "Leads aale? Start calling tumhala ek ek karun saglyanparyant neto."
+          }
+        }
+      ]
+    },
+    {
+      "id": "import",
+      "device": "wide",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=all&pipelines=2"
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Table"
+          },
+          "ms": 1000,
+          "optional": true
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Sample data only."
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 400
+        }
+      ],
+      "beats": [
+        {
+          "id": "add-leads-button",
+          "chapter": "list",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Add leads"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "For a whole list, use Add leads at the top, or simply paste rows into the table.",
+            "hi": "पूरी list के लिए ऊपर Add leads use कीजिए, या सीधे table में rows paste कीजिए.",
+            "mr": "पूर्ण list साठी वर Add leads वापरा, किंवा सरळ table मध्ये rows paste करा."
+          },
+          "latn": {
+            "hi": "Poori list ke liye upar Add leads use kijiye, ya seedhe table mein rows paste kijiye.",
+            "mr": "Poorna list saathi var Add leads vapra, kinva saral table madhye rows paste kara."
+          }
+        },
+        {
+          "id": "paste-rows",
+          "chapter": "list",
+          "actions": [
+            {
+              "do": "paste",
+              "target": {
+                "placeholder": "New lead's name"
+              },
+              "text": "Name\tCity\tInterested in\nPooja Patil\tPune\t2 BHK\nAmit Joshi\tNashik\t3 BHK\nKavya Rao\tThane\tOffice space\nSahil Shinde\tPune\tPlot",
+              "ms": 1500
+            }
+          ],
+          "say": {
+            "en": "Got a whole list in Google Sheets, Excel, or from ChatGPT? Copy the rows and paste them right here.",
+            "hi": "पूरी list Google Sheets, Excel या ChatGPT में है? Rows copy कीजिए और यहीं paste कर दीजिए.",
+            "mr": "पूर्ण list Google Sheets, Excel किंवा ChatGPT मध्ये आहे? Rows copy करा आणि इथेच paste करा."
+          },
+          "latn": {
+            "hi": "Poori list Google Sheets, Excel ya ChatGPT mein hai? Rows copy kijiye aur yahin paste kar dijiye.",
+            "mr": "Poorna list Google Sheets, Excel kinva ChatGPT madhye aahe? Rows copy kara aani ithech paste kara."
+          }
+        },
+        {
+          "id": "read-rows",
+          "chapter": "list",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Read rows"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Tap Read rows. Sales X-Ray matches the columns for you, up to two thousand leads at a time.",
+            "hi": "Read rows दबाइए. Sales X-Ray columns खुद match करता है, एक बार में दो हज़ार leads तक.",
+            "mr": "Read rows दाबा. Sales X-Ray columns स्वतः match करतो, एका वेळी दोन हजार leads पर्यंत."
+          },
+          "latn": {
+            "hi": "Read rows dabaiye. Sales X-Ray columns khud match karta hai, ek baar mein do hazaar leads tak.",
+            "mr": "Read rows daba. Sales X-Ray columns swatah match karto, eka veli don hajar leads paryant."
+          }
+        },
+        {
+          "id": "kept",
+          "chapter": "list",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "every column is kept on the lead"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Every column you paste is kept on the lead, so nothing gets lost.",
+            "hi": "जो भी column आप paste करते हैं, वो lead पे save रहता है. कुछ भी miss नहीं होता.",
+            "mr": "जो column तुम्ही paste करता, तो lead वर save राहतो. काहीच miss होत नाही."
+          },
+          "latn": {
+            "hi": "Jo bhi column aap paste karte hain, woh lead pe save rehta hai. Kuch bhi miss nahi hota.",
+            "mr": "Jo column tumhi paste karta, to lead var save rahto. Kaahich miss hot nahi."
+          }
+        },
+        {
+          "id": "file",
+          "chapter": "list",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Drop a file here"
+              },
+              "ms": 1400
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Download a sample file"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Or drop in an Excel or CSV file. Not sure about the format? Download the sample file.",
+            "hi": "या Excel या CSV file डाल दीजिए. Format पता नहीं? Sample file download कीजिए.",
+            "mr": "किंवा Excel किंवा CSV file टाका. Format माहीत नाही? Sample file download करा."
+          },
+          "latn": {
+            "hi": "Ya Excel ya CSV file daal dijiye. Format pata nahi? Sample file download kijiye.",
+            "mr": "Kinva Excel kinva CSV file taka. Format maahit nahi? Sample file download kara."
+          }
+        }
+      ]
+    },
+    {
+      "id": "sources",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/meta-connect"
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "ads",
+          "chapter": "auto",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Facebook & Instagram lead ads"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Google Ads lead forms"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Leads from your Facebook, Instagram and Google ads can come in on their own. Connect them once, in Connected apps.",
+            "hi": "Facebook, Instagram और Google ads के leads अपने आप आ सकते हैं. Connected apps में एक बार connect कीजिए.",
+            "mr": "Facebook, Instagram आणि Google ads चे leads आपोआप येऊ शकतात. Connected apps मध्ये एकदा connect करा."
+          },
+          "latn": {
+            "hi": "Facebook, Instagram aur Google ads ke leads apne aap aa sakte hain. Connected apps mein ek baar connect kijiye.",
+            "mr": "Facebook, Instagram aani Google ads che leads aapoaap yeu shaktat. Connected apps madhye ekda connect kara."
+          }
+        }
+      ]
+    }
+  ]
+}

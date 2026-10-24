@@ -9,7 +9,7 @@
     tutorials.py build   <which>  A (narrated), B (voice-over kit) and C (editor pack)
     tutorials.py fonts            caption font for burned-in subtitles (once per output folder)
     tutorials.py pack             READMEs into the A, B and C folders (then upload-to-drive)
-    tutorials.py v2 <step> <which>  v2, brand B: take | voice | build | all | index (v2/*.json)
+    tutorials.py v2 <step> <which>  v2, brand B: take|voice|build|all|index|pack (v2/*.json)
 
 <which> is a tutorial id, a comma-separated list, batch1, batch2 or all. `--langs en,hi,mr` limits
 languages. Outputs go to $SXTUT_OUT (default ~/sx-tutorials)/<date>. Only quota, samples and voice
@@ -324,6 +324,13 @@ def cmd_v2(args: argparse.Namespace) -> int:
         index = v2.library_index(root)
         print(f"index: {len(index['videos'])} video(s)")
         return 0
+    if args.step == "pack":
+        from sxtut import pack
+
+        day = day_dir(args)
+        rows = pack.export(REPO, root, day, [b for _, b in v2_boards(args.which)], args.langs)
+        print(f"pack: {len(rows)} video file(s) in {day}")
+        return 0
     cast = load("voices-v2.json")
     todo = v2_boards(args.which)
     if not todo:
@@ -430,12 +437,13 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("--date")
         c.set_defaults(fn=fn)
     w = sub.add_parser("v2", help="brand B reels and YouTube tutorials (see README, v2)")
-    w.add_argument("step", choices=["take", "voice", "build", "all", "index"])
+    w.add_argument("step", choices=["take", "voice", "build", "all", "index", "pack"])
     w.add_argument("which", nargs="?", default="all")
     w.add_argument("--langs", type=lambda v: v.split(","), default=list(LANGS))
     w.add_argument("--formats", type=lambda v: v.split(","), default=["reel", "youtube"])
     w.add_argument("--only", help="take: comma-separated shot ids to re-record")
     w.add_argument("--no-music", action="store_true")
+    w.add_argument("--date", help="pack: the dated delivery folder (default today)")
     w.set_defaults(fn=cmd_v2)
     f = sub.add_parser("fonts")
     f.set_defaults(fn=cmd_fonts)

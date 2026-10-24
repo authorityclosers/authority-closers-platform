@@ -1,0 +1,793 @@
+{
+  "id": "08-chats",
+  "number": "08",
+  "title": {
+    "en": "Chats: every lead message in one inbox",
+    "hi": "Chats: har lead ka message ek inbox mein",
+    "mr": "Chats: pratyek lead cha message eka inbox madhye"
+  },
+  "description": {
+    "en": "Reply to leads from WhatsApp, Messenger and Instagram in one Chats inbox in Sales X-Ray: see who is waiting, filter by owner or channel, search by name, open a conversation, reply, and jump to the lead's page.",
+    "hi": "Sales X-Ray ke Chats inbox mein WhatsApp, Messenger aur Instagram ke leads ko ek hi jagah reply kijiye: kaun wait kar raha hai, owner ya channel se filter, naam se search, chat kholna, reply karna, aur lead ke page pe jaana.",
+    "mr": "Sales X-Ray chya Chats inbox madhye WhatsApp, Messenger aani Instagram che leads eka thikani reply kara: kon wait kartay, owner kinva channel ne filter, naavane search, chat ughdna, reply karna, aani lead chya page var jaana."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "WhatsApp inbox",
+    "Instagram DM",
+    "Messenger",
+    "lead follow up",
+    "sales CRM India",
+    "shared inbox",
+    "Hinglish",
+    "Marathi"
+  ],
+  "thumb": {
+    "beat": "inbox-open",
+    "text": {
+      "en": "Every chat, one inbox",
+      "hi": "Har chat, ek inbox",
+      "mr": "Pratyek chat, ek inbox"
+    },
+    "accent": {
+      "en": "one inbox",
+      "hi": "ek inbox",
+      "mr": "ek inbox"
+    }
+  },
+  "next": {
+    "id": "09-team-organisation",
+    "title": {
+      "en": "Your team and organisation",
+      "hi": "Aapki team aur organisation",
+      "mr": "Tumchi team aani organisation"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "In this video: Chats. Every WhatsApp, Messenger and Instagram message from your leads lands in one inbox, so no enquiry is missed.",
+      "hi": "इस video में: Chats. आपके leads के सारे WhatsApp, Messenger और Instagram messages एक ही inbox में आते हैं, तो कोई enquiry miss नहीं होती.",
+      "mr": "या video मध्ये: Chats. तुमच्या leads चे सगळे WhatsApp, Messenger आणि Instagram messages एकाच inbox मध्ये येतात, म्हणजे कुठलीही enquiry miss होत नाही."
+    },
+    "latn": {
+      "hi": "Is video mein: Chats. Aapke leads ke saare WhatsApp, Messenger aur Instagram messages ek hi inbox mein aate hain, toh koi enquiry miss nahi hoti.",
+      "mr": "Ya video madhye: Chats. Tumchya leads che sagle WhatsApp, Messenger aani Instagram messages ekach inbox madhye yetat, mhanje kuthlihi enquiry miss hot nahi."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "Every chat, one inbox.",
+      "hi": "Har chat, ek inbox.",
+      "mr": "Pratyek chat, ek inbox."
+    },
+    "say": {
+      "en": "Next, see how to set up your team and organisation.",
+      "hi": "अगले video में देखेंगे, अपनी team और organisation कैसे set up करें.",
+      "mr": "पुढच्या video मध्ये बघूया, तुमची team आणि organisation कशी set up करायची."
+    },
+    "latn": {
+      "hi": "Agle video mein dekhenge, apni team aur organisation kaise set up karein.",
+      "mr": "Pudhchya video madhye baghuya, tumchi team aani organisation kashi set up karaychi."
+    }
+  },
+  "chapters": [
+    {
+      "id": "inbox",
+      "title": {
+        "en": "One inbox",
+        "hi": "Ek inbox",
+        "mr": "Ek inbox"
+      }
+    },
+    {
+      "id": "filter",
+      "title": {
+        "en": "Who's waiting",
+        "hi": "Kaun wait kar raha hai",
+        "mr": "Kon wait kartay"
+      }
+    },
+    {
+      "id": "reply",
+      "title": {
+        "en": "Open and reply",
+        "hi": "Chat kholiye, reply kijiye",
+        "mr": "Chat ughda, reply kara"
+      }
+    },
+    {
+      "id": "connect",
+      "title": {
+        "en": "Connect your channels",
+        "hi": "Channels connect kijiye",
+        "mr": "Channels connect kara"
+      }
+    }
+  ],
+  "reel": {
+    "hook": {
+      "beat": "inbox-open",
+      "text": {
+        "en": "WhatsApp, Instagram, Messenger: one inbox",
+        "hi": "WhatsApp, Instagram, Messenger: ek inbox",
+        "mr": "WhatsApp, Instagram, Messenger: ek inbox"
+      },
+      "accent": {
+        "en": "one inbox",
+        "hi": "ek inbox",
+        "mr": "ek inbox"
+      },
+      "say": {
+        "en": "WhatsApp, Instagram and Messenger leads, in one inbox.",
+        "hi": "WhatsApp, Instagram और Messenger के leads, एक ही inbox में.",
+        "mr": "WhatsApp, Instagram आणि Messenger चे leads, एकाच inbox मध्ये."
+      },
+      "latn": {
+        "hi": "WhatsApp, Instagram aur Messenger ke leads, ek hi inbox mein.",
+        "mr": "WhatsApp, Instagram aani Messenger che leads, ekach inbox madhye."
+      }
+    },
+    "beats": ["row", "waiting", "open-chat", "reply", "lead-link"]
+  },
+  "shots": [
+    {
+      "id": "inbox",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/chats"
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "inbox-open",
+          "chapter": "inbox",
+          "actions": [
+            {
+              "do": "wait",
+              "ms": 300
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "link",
+                "name": "Chats"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Tap Chats at the bottom. Messages from all your leads land here, whichever app they used.",
+            "hi": "नीचे Chats दबाइए. आपके सारे leads के messages यहीं आते हैं, चाहे वो कोई भी app use करें.",
+            "mr": "खाली Chats दाबा. तुमच्या सगळ्या leads चे messages इथेच येतात, ते कुठलंही app वापरोत."
+          },
+          "latn": {
+            "hi": "Neeche Chats dabaiye. Aapke saare leads ke messages yahin aate hain, chahe woh koi bhi app use karein.",
+            "mr": "Khali Chats daba. Tumchya saglya leads che messages ithech yetat, te kuthlahi app vaparot."
+          }
+        },
+        {
+          "id": "badge",
+          "chapter": "inbox",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "link",
+                "name": "Chats"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "The number on Chats shows how many messages are unread, from any screen in the app.",
+            "hi": "Chats पे जो number है, वो बताता है कितने messages unread हैं, app की किसी भी screen से.",
+            "mr": "Chats वरचा number सांगतो किती messages unread आहेत, app च्या कुठल्याही screen वरून."
+          },
+          "latn": {
+            "hi": "Chats pe jo number hai, woh batata hai kitne messages unread hain, app ki kisi bhi screen se.",
+            "mr": "Chats varcha number sangto kiti messages unread aahet, app chya kuthlyahi screen varun."
+          }
+        },
+        {
+          "id": "row",
+          "chapter": "inbox",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Is the 2 BHK still free"
+              },
+              "ms": 1800
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Each chat shows the latest message, how many are unread, the channel, and who on your team owns it.",
+            "hi": "हर chat में दिखता है last message, कितने unread हैं, कौन सा channel, और team में किसका lead है.",
+            "mr": "प्रत्येक chat मध्ये दिसतो शेवटचा message, किती unread आहेत, कुठला channel, आणि team मध्ये कोणाचा lead आहे."
+          },
+          "latn": {
+            "hi": "Har chat mein dikhta hai last message, kitne unread hain, kaun sa channel, aur team mein kiska lead hai.",
+            "mr": "Pratyek chat madhye disto shevatcha message, kiti unread aahet, kuthla channel, aani team madhye konacha lead aahe."
+          },
+          "short": {
+            "say": {
+              "en": "Unread count, channel and owner, at a glance.",
+              "hi": "Unread, channel और owner, एक नज़र में.",
+              "mr": "Unread, channel आणि owner, एका नजरेत."
+            },
+            "latn": {
+              "hi": "Unread, channel aur owner, ek nazar mein.",
+              "mr": "Unread, channel aani owner, eka najret."
+            }
+          }
+        },
+        {
+          "id": "new-contact",
+          "chapter": "inbox",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "New WhatsApp contact"
+              },
+              "ms": 1700
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "A new number writing in shows up too, so no enquiry slips through.",
+            "hi": "नया number message करे, तो वो भी यहाँ दिखता है. कोई भी enquiry miss नहीं होती.",
+            "mr": "नवीन number ने message केला, तरी तो इथे दिसतो. कुठलीही enquiry miss होत नाही."
+          },
+          "latn": {
+            "hi": "Naya number message kare, toh woh bhi yahan dikhta hai. Koi bhi enquiry miss nahi hoti.",
+            "mr": "Navin number ne message kela, tari to ithe disto. Kuthlihi enquiry miss hot nahi."
+          }
+        },
+        {
+          "id": "yours",
+          "chapter": "inbox",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Sharing the site visit slots"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "When you replied last, it says You, so you always know where you left off.",
+            "hi": "आखिरी reply आपका था, तो You लिखा आता है. पता रहता है बात कहाँ छोड़ी थी.",
+            "mr": "शेवटचा reply तुमचा होता, तर You लिहिलेलं येतं. कळतं बोलणं कुठे थांबवलं होतं."
+          },
+          "latn": {
+            "hi": "Aakhri reply aapka tha, toh You likha aata hai. Pata rehta hai baat kahan chhodi thi.",
+            "mr": "Shevatcha reply tumcha hota, tar You lihilela yeta. Kalta bolna kuthe thambavla hota."
+          }
+        },
+        {
+          "id": "whose",
+          "chapter": "filter",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "combobox",
+                "name": "Whose chats"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "combobox",
+                "name": "Channel"
+              },
+              "ms": 1400
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Filter by owner: everyone's chats, only yours, or the ones nobody has picked up yet. Or show one channel at a time.",
+            "hi": "Owner से filter कीजिए: सबके chats, सिर्फ आपके, या जो अभी किसी ने नहीं लिए. या एक बार में एक ही channel.",
+            "mr": "Owner ने filter करा: सगळ्यांचे chats, फक्त तुमचे, किंवा जे अजून कोणी घेतले नाहीत. किंवा एका वेळी एकच channel."
+          },
+          "latn": {
+            "hi": "Owner se filter kijiye: sabke chats, sirf aapke, ya jo abhi kisi ne nahi liye. Ya ek baar mein ek hi channel.",
+            "mr": "Owner ne filter kara: saglyanche chats, fakta tumche, kinva je ajun koni ghetle nahit. Kinva eka veli ekach channel."
+          }
+        },
+        {
+          "id": "mine",
+          "chapter": "filter",
+          "actions": [
+            {
+              "do": "select",
+              "target": {
+                "role": "combobox",
+                "name": "Whose chats"
+              },
+              "option": "Mine",
+              "ms": 1500
+            },
+            {
+              "do": "select",
+              "target": {
+                "role": "combobox",
+                "name": "Whose chats"
+              },
+              "option": "Everyone",
+              "ms": 900
+            }
+          ],
+          "say": {
+            "en": "Pick Mine, and you see only the chats you own. Switch back to Everyone any time.",
+            "hi": "Mine चुनिए, सिर्फ आपके chats दिखेंगे. कभी भी वापस Everyone पे आ जाइए.",
+            "mr": "Mine निवडा, फक्त तुमचे chats दिसतील. कधीही परत Everyone वर या."
+          },
+          "latn": {
+            "hi": "Mine chuniye, sirf aapke chats dikhenge. Kabhi bhi wapas Everyone pe aa jaaiye.",
+            "mr": "Mine nivda, fakta tumche chats distil. Kadhihi parat Everyone var ya."
+          }
+        },
+        {
+          "id": "search",
+          "chapter": "filter",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Filter chats by name"
+              },
+              "ms": 800
+            },
+            {
+              "do": "type",
+              "target": {
+                "placeholder": "Filter chats by name"
+              },
+              "text": "Meera",
+              "delay": 110,
+              "ms": 1200
+            }
+          ],
+          "say": {
+            "en": "Looking for someone? Search by name.",
+            "hi": "किसी को ढूंढ रहे हैं? नाम से search कीजिए.",
+            "mr": "कोणाला शोधताय? नावाने search करा."
+          },
+          "latn": {
+            "hi": "Kisi ko dhoondh rahe hain? Naam se search kijiye.",
+            "mr": "Konala shodhtay? Naavane search kara."
+          }
+        }
+      ]
+    },
+    {
+      "id": "waiting",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/chats"
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "waiting",
+          "chapter": "filter",
+          "sync": {
+            "en": "Waiting",
+            "hi": "Waiting",
+            "mr": "Waiting"
+          },
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Waiting"
+              },
+              "ms": 1100
+            },
+            {
+              "do": "unhighlight",
+              "ms": 100
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Waiting"
+              },
+              "ms": 1500,
+              "key": true
+            }
+          ],
+          "say": {
+            "en": "Tap Waiting to see only the people still waiting for a reply.",
+            "hi": "Waiting दबाइए, सिर्फ वो लोग दिखेंगे जो अभी भी reply का wait कर रहे हैं.",
+            "mr": "Waiting दाबा, फक्त ते लोक दिसतील जे अजूनही reply ची वाट बघतायत."
+          },
+          "latn": {
+            "hi": "Waiting dabaiye, sirf woh log dikhenge jo abhi bhi reply ka wait kar rahe hain.",
+            "mr": "Waiting daba, fakta te lok distil je ajunhi reply chi vaat baghtayat."
+          },
+          "short": {
+            "say": {
+              "en": "Tap Waiting: who still needs a reply.",
+              "hi": "Waiting दबाइए: किसे अभी reply चाहिए.",
+              "mr": "Waiting दाबा: कोणाला अजून reply हवाय."
+            },
+            "latn": {
+              "hi": "Waiting dabaiye: kise abhi reply chahiye.",
+              "mr": "Waiting daba: konala ajun reply havay."
+            }
+          }
+        },
+        {
+          "id": "timer",
+          "chapter": "filter",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "css": "button:has-text('Asha Kulkarni') >> text=/\\d+\\s?(min|h)/"
+              },
+              "ms": 1700,
+              "optional": true
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "The timer shows how long each one has waited. Reply to the oldest first.",
+            "hi": "Timer बताता है कि कौन कब से wait कर रहा है. सबसे पुराने को पहले reply कीजिए.",
+            "mr": "Timer सांगतो कोण किती वेळ वाट बघतोय. सगळ्यात जुन्याला आधी reply करा."
+          },
+          "latn": {
+            "hi": "Timer batata hai ki kaun kab se wait kar raha hai. Sabse purane ko pehle reply kijiye.",
+            "mr": "Timer sangto kon kiti vel vaat baghtoy. Saglyat junyala aadhi reply kara."
+          }
+        }
+      ]
+    },
+    {
+      "id": "thread",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/chats"
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "open-chat",
+          "chapter": "reply",
+          "sync": {
+            "en": "Tap",
+            "hi": "tap",
+            "mr": "tap"
+          },
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "text": "Is the 2 BHK still free"
+              },
+              "ms": 1600
+            }
+          ],
+          "say": {
+            "en": "Tap a chat to open the whole conversation.",
+            "hi": "पूरी बातचीत देखने के लिए chat पे tap कीजिए.",
+            "mr": "पूर्ण संभाषण बघायला chat वर tap करा."
+          },
+          "latn": {
+            "hi": "Poori baatcheet dekhne ke liye chat pe tap kijiye.",
+            "mr": "Poorna sambhashan baghayla chat var tap kara."
+          }
+        },
+        {
+          "id": "channel",
+          "chapter": "reply",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "WhatsApp · Skyline Realty"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "The top shows the channel, and which of your business numbers or pages they wrote to.",
+            "hi": "ऊपर दिखता है channel, और आपके किस business number या page पे message आया.",
+            "mr": "वर दिसतो channel, आणि तुमच्या कुठल्या business number किंवा page वर message आला."
+          },
+          "latn": {
+            "hi": "Upar dikhta hai channel, aur aapke kis business number ya page pe message aaya.",
+            "mr": "Var disto channel, aani tumchya kuthlya business number kinva page var message aala."
+          }
+        },
+        {
+          "id": "read",
+          "chapter": "reply",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Hi, I saw your ad"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "thanks for writing"
+              },
+              "ms": 1400
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "You see what they wrote, and what your team has already replied.",
+            "hi": "उन्होंने क्या लिखा, और आपकी team ने क्या reply किया, सब दिखता है.",
+            "mr": "त्यांनी काय लिहिलं, आणि तुमच्या team ने काय reply केलं, सगळं दिसतं."
+          },
+          "latn": {
+            "hi": "Unhone kya likha, aur aapki team ne kya reply kiya, sab dikhta hai.",
+            "mr": "Tyanni kay lihila, aani tumchya team ne kay reply kela, sagla dista."
+          }
+        },
+        {
+          "id": "reply",
+          "chapter": "reply",
+          "actions": [
+            {
+              "do": "type",
+              "target": {
+                "placeholder": "Write a reply"
+              },
+              "text": "Yes Asha, it's free on Saturday. Shall I book a visit?",
+              "delay": 40,
+              "ms": 600
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Send"
+              },
+              "ms": 1400
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Type your reply and tap Send, right from Sales X-Ray.",
+            "hi": "अपना reply लिखिए और Send दबाइए, सीधे Sales X-Ray से.",
+            "mr": "तुमचा reply लिहा आणि Send दाबा, थेट Sales X-Ray मधून."
+          },
+          "latn": {
+            "hi": "Apna reply likhiye aur Send dabaiye, seedhe Sales X-Ray se.",
+            "mr": "Tumcha reply liha aani Send daba, thet Sales X-Ray madhun."
+          },
+          "short": {
+            "say": {
+              "en": "Reply right here.",
+              "hi": "यहीं से reply कीजिए.",
+              "mr": "इथूनच reply करा."
+            },
+            "latn": {
+              "hi": "Yahin se reply kijiye.",
+              "mr": "Ithunach reply kara."
+            }
+          }
+        },
+        {
+          "id": "lead-link",
+          "chapter": "reply",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Lead"
+              },
+              "ms": 1800
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Tap Lead to jump to their page, with their calls, notes and stage.",
+            "hi": "Lead दबाइए, उनका page खुलेगा, calls, notes और stage के साथ.",
+            "mr": "Lead दाबा, त्यांचं page उघडेल, calls, notes आणि stage सकट."
+          },
+          "latn": {
+            "hi": "Lead dabaiye, unka page khulega, calls, notes aur stage ke saath.",
+            "mr": "Lead daba, tyancha page ughdel, calls, notes aani stage sakat."
+          },
+          "short": {
+            "say": {
+              "en": "One tap to their lead page.",
+              "hi": "एक tap में उनका lead page.",
+              "mr": "एका tap मध्ये त्यांचं lead page."
+            },
+            "latn": {
+              "hi": "Ek tap mein unka lead page.",
+              "mr": "Eka tap madhye tyancha lead page."
+            }
+          }
+        },
+        {
+          "id": "back",
+          "chapter": "reply",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Back to chats"
+              },
+              "ms": 1300
+            }
+          ],
+          "say": {
+            "en": "Tap back for the rest of your inbox, and keep going.",
+            "hi": "Back दबाइए, बाकी inbox पे जाइए, और reply करते रहिए.",
+            "mr": "Back दाबा, बाकीच्या inbox वर जा, आणि reply करत रहा."
+          },
+          "latn": {
+            "hi": "Back dabaiye, baaki inbox pe jaaiye, aur reply karte rahiye.",
+            "mr": "Back daba, baakichya inbox var ja, aani reply karat raha."
+          }
+        }
+      ]
+    },
+    {
+      "id": "connect",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/meta-connect"
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "connect-whatsapp",
+          "chapter": "connect",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "text": "MESSAGES"
+              },
+              "offset": 120,
+              "ms": 700
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "WhatsApp",
+                "exact": true
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "To bring your chats in, open Connected apps and connect WhatsApp, under Messages.",
+            "hi": "Chats लाने के लिए Connected apps खोलिए, और Messages में WhatsApp connect कीजिए.",
+            "mr": "Chats आणायला Connected apps उघडा, आणि Messages मध्ये WhatsApp connect करा."
+          },
+          "latn": {
+            "hi": "Chats laane ke liye Connected apps kholiye, aur Messages mein WhatsApp connect kijiye.",
+            "mr": "Chats aanayla Connected apps ughda, aani Messages madhye WhatsApp connect kara."
+          }
+        },
+        {
+          "id": "connect-ads",
+          "chapter": "connect",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "text": "LEADS AND ADS"
+              },
+              "offset": 120,
+              "ms": 700
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Facebook & Instagram lead ads"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Google Ads lead forms"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Your Facebook, Instagram and Google lead forms connect here too, so new leads arrive on their own.",
+            "hi": "Facebook, Instagram और Google के lead forms भी यहीं connect होते हैं, तो नए leads अपने आप आते हैं.",
+            "mr": "Facebook, Instagram आणि Google चे lead forms पण इथेच connect होतात, म्हणजे नवीन leads आपोआप येतात."
+          },
+          "latn": {
+            "hi": "Facebook, Instagram aur Google ke lead forms bhi yahin connect hote hain, toh naye leads apne aap aate hain.",
+            "mr": "Facebook, Instagram aani Google che lead forms pan ithech connect hotat, mhanje navin leads aapoaap yetat."
+          }
+        }
+      ]
+    }
+  ],
+  "names": {
+    "Sales Xray": "Sales X-Ray"
+  }
+}

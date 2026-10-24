@@ -32,11 +32,14 @@ def test_v2_storyboards_follow_the_owner_rules_and_have_every_language() -> None
         assert len(ids) == len(set(ids)), b["id"]
         chapters = {c["id"] for c in b["chapters"]}
         assert {beat["chapter"] for s in b["shots"] for beat in s["beats"]} <= chapters
-        assert b["reel"]["hook"]["beat"] in ids
-        assert set(b["reel"]["beats"]) <= set(ids)
+        hook = b["reel"]["hook"].get("beat")
+        assert hook is None or hook in ids
+        assert b["reel"].get("all") or set(b["reel"]["beats"]) <= set(ids)
         for s in b["shots"]:
-            assert s["device"] in ("reel", "wide")
-            for a in s["setup"] + [a for beat in s["beats"] for a in beat["actions"]]:
+            assert s["device"] in ("reel", "wide", "card")
+            for beat in s["beats"]:
+                assert ("card" in beat) == (s["device"] == "card"), beat["id"]
+            for a in s.get("setup", []) + [a for beat in s["beats"] for a in beat["actions"]]:
                 if a["do"] == "goto":
                     assert a["url"].startswith("/review-fixture/"), a
 
@@ -101,6 +104,8 @@ def _voice(spoken: str, seconds: float) -> v2.Voiced:
 def _fake_take(board: dict) -> dict:
     shots = []
     for s in board["shots"]:
+        if s["device"] == "card":
+            continue  # step cards are drawn, not recorded
         t, beats = 0.3, []
         for beat in s["beats"]:
             evs = []
@@ -152,13 +157,18 @@ def test_each_language_gets_its_own_tight_cut_and_reels_stay_short() -> None:
                     if it.voice:
                         # The voice fits inside its own item: no line runs into the next shot.
                         assert it.voice_at + it.voice.speech <= it.dur + 1e-6
-                    if it.kind not in v2.CARD:
+                    if it.kind not in v2.CARD and it.kind != "step":
                         assert it.src_in <= it.src_out
                         assert it.keys[0][0] == 0.0 and it.keys[-1][0] <= it.dur + 1e-6
+            # Tester how-tos go out on WhatsApp and feature videos are short; full tutorials run
+            # two minutes or more.
+            kind = b.get("kind", "tutorial")
             if fmt == "reel":
-                assert all(18 <= s <= 48 for s in totals.values()), (b["id"], totals)
+                low, high = (18, 48) if kind == "tutorial" else (15, 80)
+                assert all(low <= s <= high for s in totals.values()), (b["id"], totals)
             else:
-                assert all(s >= 90 for s in totals.values()), (b["id"], totals)
+                least = {"tester": 25, "feature": 40}.get(kind, 90)
+                assert all(s >= least for s in totals.values()), (b["id"], totals)
 
 
 def test_captions_follow_the_voice_in_every_track() -> None:
@@ -222,3 +232,36 @@ def test_resolved_storyboard_adds_store_names_and_filled_bars_to_every_screen() 
         dos = [a["do"] for a in s["setup"]]
         assert dos[-2:] == ["marketing", "frost"]
         assert r["shots"][0]["setup"][-2]["names"]["Asha Fictional"] == "Asha Kulkarni"
+
+
+def test_step_cards_need_no_recording_and_tester_reels_carry_every_step() -> None:
+    b = next(x for x in boards() if x["id"] == "t2-install-from-play")
+    take = _fake_take(b)
+    voices = {(id(o), "mr"): _voice(v2.text(o, "mr"), 3.0) for o in v2.spoken_lines(b)}
+    reel = v2.sequence(b, take, "reel")
+    assert reel[0].kind == "intro" and reel[-1].kind == "end"
+    steps = [it for it in reel if it.kind in ("step", "beat")]
+    assert len(steps) == sum(len(s["beats"]) for s in b["shots"])
+    v2.lay_out(reel, "reel", "mr", voices)
+    for it in reel:
+        if it.kind == "step":
+            assert it.shot is None and not it.keys and v2.art_key(it) == f"step-{it.spec['id']}"
+            assert it.voice_at + it.voice.speech <= it.dur
+
+
+def test_pack_script_rows_follow_the_cut() -> None:
+    from sxtut import pack
+
+    b = next(x for x in boards() if x["id"] == "t5-if-it-hangs")
+    cues = [
+        {"item": "intro", "in": "00:00:00.000"},
+        {"item": "dont", "in": "00:00:05.100"},
+        {"item": "refresh", "in": "00:00:12.000"},
+        {"item": "outro", "in": "00:00:40.000"},
+    ]
+    rows = pack.script_rows(b, "hi", cues)
+    assert [r["time"] for r in rows] == ["00:00", "00:05", "00:12", "00:40"]
+    assert rows[1]["on_screen"].startswith("Screen atki")
+    assert rows[2]["on_screen"].startswith("Show “Refresh app data”")
+    assert all(r["say"] and r["roman"] for r in rows)
+    assert pack.safe("T1 Join: the testers?") == "T1 Join the testers"

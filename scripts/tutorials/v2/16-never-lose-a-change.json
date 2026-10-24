@@ -1,0 +1,274 @@
+{
+  "id": "16-never-lose-a-change",
+  "number": "16",
+  "kind": "tester",
+  "title": {
+    "en": "Never lose a change: Not sent yet and All changes saved",
+    "hi": "Koi change na khoye: Not sent yet aur All changes saved",
+    "mr": "Kuthlahi change harvu naye: Not sent yet aani All changes saved"
+  },
+  "description": {
+    "en": "Sales X-Ray keeps every change on your phone until it reaches us, then says All changes saved. Not sent yet means it's still on the phone: wait, or tap Try again. Never reinstall.",
+    "hi": "Sales X-Ray har change aapke phone pe rakhta hai jab tak woh hum tak na pahunche, phir All changes saved dikhata hai. Not sent yet matlab abhi phone pe hai: rukiye, ya Try again dabaiye. Reinstall kabhi nahi.",
+    "mr": "Sales X-Ray pratyek change tumchya phone var thevto jo paryant to aamchyaparyant pohochat nahi, mag All changes saved dakhavto. Not sent yet mhanje ajun phone var aahe: thamba, kinva Try again daba. Reinstall kadhich nako."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "lead management",
+    "sales CRM India",
+    "Hindi",
+    "Marathi",
+    "offline",
+    "sync",
+    "Android app"
+  ],
+  "names": {
+    "Sales Xray": "Sales X-Ray",
+    "[the owner's one-line reason]": "a quick partnership idea",
+    "Can I show you in 10 minutes how": "Can I quickly show you how"
+  },
+  "next": {
+    "id": "04-call-a-lead",
+    "title": {
+      "en": "Call a lead and log how it went",
+      "hi": "Lead ko call karo, result log karo",
+      "mr": "Lead la call kara, result log kara"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "How Sales X-Ray keeps every change safe, even with a weak signal.",
+      "hi": "Sales X-Ray हर change को कैसे safe रखता है, signal कमज़ोर हो तब भी.",
+      "mr": "Sales X-Ray प्रत्येक change कसा safe ठेवतो, signal कमी असलं तरी."
+    },
+    "latn": {
+      "hi": "Sales X-Ray har change ko kaise safe rakhta hai, signal kamzor ho tab bhi.",
+      "mr": "Sales X-Ray pratyek change kasa safe thevto, signal kami asla tari."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "Nothing lost.",
+      "hi": "Kuch nahi khoya.",
+      "mr": "Kahich harvla nahi."
+    },
+    "say": {
+      "en": "Next: calling a lead and logging how it went.",
+      "hi": "अगले video में: lead को call करना और result log करना.",
+      "mr": "पुढच्या video मध्ये: lead ला call करणं आणि result log करणं."
+    },
+    "latn": {
+      "hi": "Agle video mein: lead ko call karna aur result log karna.",
+      "mr": "Pudhchya video madhye: lead la call karna aani result log karna."
+    }
+  },
+  "chapters": [
+    {
+      "id": "sync",
+      "title": {
+        "en": "Saved or not sent",
+        "hi": "Saved ya not sent",
+        "mr": "Saved kinva not sent"
+      }
+    },
+    {
+      "id": "fix",
+      "title": {
+        "en": "If it's stuck",
+        "hi": "Atak jaaye toh",
+        "mr": "Adakla tar"
+      }
+    }
+  ],
+  "reel": {
+    "all": true,
+    "hook": {
+      "text": {
+        "en": "Weak signal? Your work is safe",
+        "hi": "Signal kamzor? Kaam safe hai",
+        "mr": "Signal kami? Kaam safe aahe"
+      },
+      "say": {
+        "en": "Weak signal? Your work is still safe. Here's how.",
+        "hi": "Signal कमज़ोर? आपका काम फिर भी safe है. देखिए कैसे.",
+        "mr": "Signal कमी? तुमचं काम तरीही safe आहे. बघा कसं."
+      },
+      "latn": {
+        "hi": "Signal kamzor? Aapka kaam phir bhi safe hai. Dekhiye kaise.",
+        "mr": "Signal kami? Tumcha kaam tarihi safe aahe. Bagha kasa."
+      }
+    }
+  },
+  "shots": [
+    {
+      "id": "steps",
+      "device": "card",
+      "beats": [
+        {
+          "id": "phone-first",
+          "chapter": "sync",
+          "actions": [],
+          "card": {
+            "step": "How it works",
+            "title": {
+              "en": "Saved on your phone first",
+              "hi": "Pehle phone pe save",
+              "mr": "Aadhi phone var save"
+            },
+            "icon": "phone",
+            "chips": []
+          },
+          "say": {
+            "en": "Every change you make, a note, a stage, a call log, is kept on your phone first, then sent to us.",
+            "hi": "आप जो भी change करते हैं, note, stage, call log, वो पहले आपके phone पे रहता है, फिर हमें भेजा जाता है.",
+            "mr": "तुम्ही जो काही change करता, note, stage, call log, तो आधी तुमच्या phone वर राहतो, मग आम्हाला पाठवला जातो."
+          },
+          "latn": {
+            "hi": "Aap jo bhi change karte hain, note, stage, call log, woh pehle aapke phone pe rehta hai, phir humein bheja jaata hai.",
+            "mr": "Tumhi jo kahi change karta, note, stage, call log, to aadhi tumchya phone var rahto, mag aamhala pathavla jaato."
+          }
+        },
+        {
+          "id": "saved",
+          "chapter": "sync",
+          "actions": [],
+          "card": {
+            "step": "All good",
+            "title": {
+              "en": "All changes saved",
+              "hi": "All changes saved",
+              "mr": "All changes saved"
+            },
+            "icon": "saved",
+            "chips": ["All changes saved"]
+          },
+          "say": {
+            "en": "When it has reached us, you see All changes saved.",
+            "hi": "जब वो हम तक पहुँच जाता है, तो All changes saved दिखता है.",
+            "mr": "तो आमच्यापर्यंत पोहोचला की All changes saved दिसतं."
+          },
+          "latn": {
+            "hi": "Jab woh hum tak pahunch jaata hai, toh All changes saved dikhta hai.",
+            "mr": "To aamchyaparyant pohochla ki All changes saved dista."
+          }
+        },
+        {
+          "id": "not-sent",
+          "chapter": "sync",
+          "actions": [],
+          "card": {
+            "step": "Still on the phone",
+            "title": {
+              "en": "Not sent yet",
+              "hi": "Not sent yet",
+              "mr": "Not sent yet"
+            },
+            "icon": "refresh",
+            "chips": ["Not sent yet", "Try again"]
+          },
+          "say": {
+            "en": "Not sent yet means it's still on your phone. It goes again by itself. You can also tap Try again.",
+            "hi": "Not sent yet मतलब वो अभी आपके phone पे है. वो खुद दोबारा जाता है. आप Try again भी दबा सकते हैं.",
+            "mr": "Not sent yet म्हणजे तो अजून तुमच्या phone वर आहे. तो स्वतः पुन्हा जातो. तुम्ही Try again पण दाबू शकता."
+          },
+          "latn": {
+            "hi": "Not sent yet matlab woh abhi aapke phone pe hai. Woh khud dobara jaata hai. Aap Try again bhi daba sakte hain.",
+            "mr": "Not sent yet mhanje to ajun tumchya phone var aahe. To swatah punha jaato. Tumhi Try again pan dabu shakta."
+          }
+        },
+        {
+          "id": "never",
+          "chapter": "fix",
+          "actions": [],
+          "card": {
+            "step": "Important",
+            "title": {
+              "en": "Never reinstall",
+              "hi": "Reinstall kabhi nahi",
+              "mr": "Reinstall kadhich nako"
+            },
+            "icon": "warning",
+            "chips": []
+          },
+          "say": {
+            "en": "Never uninstall the app while something is Not sent yet. Uninstalling deletes what's still on the phone.",
+            "hi": "जब तक कुछ Not sent yet है, app कभी uninstall मत कीजिए. Uninstall करने से phone पे रखा काम मिट जाता है.",
+            "mr": "जोपर्यंत काही Not sent yet आहे, app कधीच uninstall करू नका. Uninstall केल्याने phone वरचं काम जातं."
+          },
+          "latn": {
+            "hi": "Jab tak kuch Not sent yet hai, app kabhi uninstall mat kijiye. Uninstall karne se phone pe rakha kaam mit jaata hai.",
+            "mr": "Joparyant kahi Not sent yet aahe, app kadhich uninstall karu naka. Uninstall kelyane phone varcha kaam jaata."
+          }
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/settings?section=notifications"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Sample data only."
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "refresh",
+          "chapter": "fix",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "role": "button",
+                "name": "Refresh app data"
+              },
+              "offset": 330,
+              "ms": 800
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Refresh app data"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "You stay signed in"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "If a screen ever hangs, use Settings, Phone and alerts, Refresh app data. You stay signed in, and changes not sent yet are kept.",
+            "hi": "अगर कोई screen अटक जाए, तो Settings, Phone and alerts में Refresh app data. आप signed in रहते हैं, और not sent yet वाले changes भी safe रहते हैं.",
+            "mr": "एखादी screen अडकली, तर Settings, Phone and alerts मध्ये Refresh app data. तुम्ही signed in राहता, आणि not sent yet वाले changes पण safe राहतात."
+          },
+          "latn": {
+            "hi": "Agar koi screen atak jaaye, toh Settings, Phone and alerts mein Refresh app data. Aap signed in rehte hain, aur not sent yet wale changes bhi safe rehte hain.",
+            "mr": "Ekhadi screen adakli, tar Settings, Phone and alerts madhye Refresh app data. Tumhi signed in rahta, aani not sent yet vale changes pan safe rahtat."
+          }
+        }
+      ]
+    }
+  ]
+}
