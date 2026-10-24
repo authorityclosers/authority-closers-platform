@@ -112,6 +112,9 @@ it("tells everyone on the download-link app, and Later hides it for a week", asy
   };
   expect(card.title).toBe("Sales X-Ray is moving to Google Play");
   expect(card.message).toContain("Got a Play testing invite? Switch now");
+  expect(card.message).toContain(
+    "Before you uninstall, open Calls and make sure every recording shows as sent.",
+  );
   expect(card.message).toContain("No invite yet? Keep using this app");
   expect(card.action.label).toBe("Switch to Play");
   expect(card.dismissLabel).toBe("Later");
