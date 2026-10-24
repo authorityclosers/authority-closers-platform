@@ -2106,11 +2106,7 @@ def install_identity_http(
                     tenant_id = None
                     if verified.learner_provisioning_required:
                         tenant_id = await ensure_public_learner(database, person.id)
-                    elif body.surface == "sales_xray":
-                        # The workspace last used, or the one with this person's
-                        # Sales X-Ray data, never an empty Personal (24 Oct 2026).
-                        tenant_id = await sales_xray_home(database, person.id, settings=settings)
-                    else:
+                    elif body.surface != "sales_xray":
                         candidate_tenant = settings.public_learner_tenant_id
                         membership = await database.scalar(
                             select(Membership).where(
@@ -2135,6 +2131,16 @@ def install_identity_http(
                             application.state, "internal_tester_policy", None
                         ),
                     )
+                    if body.surface == "sales_xray" and not verified.learner_provisioning_required:
+                        # The workspace last used, or the one with this person's
+                        # Sales X-Ray data, never an empty Personal (24 Oct 2026).
+                        # After the join, so a work address's organisation counts.
+                        tenant_id = await sales_xray_home(
+                            database,
+                            person.id,
+                            settings=settings,
+                            exclude_session_id=issued.metadata.id,
+                        )
                     if tenant_id is not None:
                         await identity.select_tenant(issued.token, tenant_id)
                     if verified.consent_audit_required:

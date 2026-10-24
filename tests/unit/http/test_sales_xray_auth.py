@@ -95,6 +95,20 @@ def _replace_identity_application(monkeypatch: pytest.MonkeyPatch) -> None:
         _LearnerProvisioningApplication,
     )
 
+    async def personal_only(
+        _database: Any,
+        _person_id: UUID,
+        *,
+        settings: Settings,
+        exclude_session_id: UUID | None = None,
+    ) -> UUID | None:
+        # These fakes model a learner whose only workspace is Personal; which
+        # workspace a real sign-in opens is tested on a database in
+        # test_sales_xray_home.py.
+        return settings.public_learner_tenant_id
+
+    monkeypatch.setattr(auth_module, "sales_xray_home", personal_only)
+
 
 def _sales_staging_settings() -> Settings:
     values = _deployment_values("staging")
