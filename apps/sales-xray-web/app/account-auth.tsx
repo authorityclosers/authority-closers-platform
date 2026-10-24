@@ -29,6 +29,7 @@ import { ThemeToggle } from "./shell/theme-toggle";
 import {
   ACCOUNT_CLOSED,
   ACCOUNT_CLOSED_MESSAGE,
+  FACEBOOK_NOT_READY,
   emailCodeRequest,
   isAuthCompleteMessage,
   maskedEmail,
@@ -932,6 +933,21 @@ export function AccountAuth({
       });
   }
 
+  /**
+   * Facebook with no sign-in of its own on this phone yet (the server isn't set
+   * up for it, or the Facebook SDK can't start): a calm line, never Chrome
+   * (owner via the orchestrator, 24 Oct 2026). Google still uses the browser.
+   */
+  function nativeUnavailable(
+    provider: NativeSignInProvider,
+  ): "stopped" | "fallback" {
+    if (provider !== "facebook") return "fallback";
+    inFlight.current = false;
+    setPending(false);
+    setError(FACEBOOK_NOT_READY);
+    return "stopped";
+  }
+
   /** The phone's own sign-in: Android's Google sheet or the Facebook app. */
   async function signInHere(
     provider: NativeSignInProvider,
@@ -949,7 +965,7 @@ export function AccountAuth({
       signal,
     );
     if (signal.aborted) return "stopped";
-    if (!started) return "fallback";
+    if (!started) return nativeUnavailable(provider);
     const outcome = await signInOnPhone({
       provider,
       nonce: started.nonce,
@@ -968,7 +984,7 @@ export function AccountAuth({
       submitNativeSignIn(provider, started.state, outcome.token);
       return "finishing";
     }
-    if (outcome.error === "unavailable") return "fallback";
+    if (outcome.error === "unavailable") return nativeUnavailable(provider);
     inFlight.current = false;
     setPending(false);
     if (outcome.error === "no_account")
