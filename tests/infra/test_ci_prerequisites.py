@@ -457,13 +457,12 @@ def test_each_job_runs_one_bounded_locked_prerequisite_step(
 def test_python_shards_coverage_and_evidence_are_unchanged() -> None:
     jobs = _jobs()
     shards = jobs["validate-python-tests"]
-    # Six measured-balance shards (release pipeline, 24 Oct 2026): ~11 min each, not up to 17.6.
-    assert shards["strategy"]["matrix"]["shard"] == [0, 1, 2, 3, 4, 5]
+    assert shards["strategy"]["matrix"]["shard"] == [0, 1, 2, 3]
     assert shards["strategy"]["fail-fast"] is False
     assert shards["timeout-minutes"] == 30
     names = [step.get("name") for step in shards["steps"]]
     run = shards["steps"][names.index("Run deterministic Python test shard")]
-    assert "--shard-count 6" in run["run"]
+    assert "--shard-count 4" in run["run"]
     evidence = shards["steps"][names.index("Retain Python shard evidence")]
     assert evidence["if"] == "always()"
     assert evidence["with"]["if-no-files-found"] == "error"
