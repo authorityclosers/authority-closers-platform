@@ -6,9 +6,12 @@
  * call, sortable by any column. The list's own rows, paging, Select and row keys
  * (J/K, Enter) carry over. Phones keep the two-line rows: nothing scrolls sideways.
  * Cells change in place (table-edit.tsx); arrow keys move between them.
+ * Lead OS (24 Oct 2026): how long each lead has sat in its stage, its last
+ * contact, its Lost or Junk reason and when it came in; a column picker that
+ * this browser remembers; a stage that asks for something opens the stage sheet.
  */
 
-import { ArrowDown, ArrowUp, Pencil } from "lucide-react";
+import { ArrowDown, ArrowUp, Columns3, Pencil } from "lucide-react";
 import {
   useMemo,
   useRef,
@@ -19,7 +22,9 @@ import {
 } from "react";
 
 import { displayName } from "../display-name";
-import { when, type LeadRow } from "./leads-client";
+import { ago, readLead, when, type LeadRow } from "./leads-client";
+import type { MoveOption } from "./pipeline/pipeline-client";
+import { StageSheet } from "./pipeline/stage-sheet";
 import { QuickAddRow, type PasteRows } from "./quick-add";
 import {
   EDIT_COLUMNS,
@@ -61,7 +66,11 @@ type Column =
   | "owner"
   | "source"
   | "next"
-  | "last";
+  | "last"
+  | "age"
+  | "contact"
+  | "reason"
+  | "created";
 
 const LABELS: Record<Column, string> = {
   name: "Name",
@@ -72,7 +81,63 @@ const LABELS: Record<Column, string> = {
   source: "Source",
   next: "Next action",
   last: "Last call",
+  age: "In stage",
+  contact: "Last contact",
+  reason: "Reason",
+  created: "Added",
 };
+
+/** Columns a person can show or hide (Name and Stage always show). */
+export const OPTIONAL: Column[] = [
+  "phone",
+  "source",
+  "next",
+  "last",
+  "age",
+  "contact",
+  "reason",
+  "created",
+];
+const SHOWN_AT_FIRST: ReadonlySet<Column> = new Set([
+  "phone",
+  "source",
+  "next",
+  "last",
+  "age",
+]);
+const COLUMNS_KEY = "sx-leads-table-columns";
+
+function readShown(): ReadonlySet<Column> {
+  try {
+    const raw = window.localStorage.getItem(COLUMNS_KEY);
+    const list = raw ? (JSON.parse(raw) as unknown) : null;
+    if (Array.isArray(list))
+      return new Set(
+        list.filter((item): item is Column =>
+          OPTIONAL.includes(item as Column),
+        ),
+      );
+  } catch {
+    /* private window: the first columns */
+  }
+  return SHOWN_AT_FIRST;
+}
+
+function keepShown(shown: ReadonlySet<Column>) {
+  try {
+    window.localStorage.setItem(COLUMNS_KEY, JSON.stringify([...shown]));
+  } catch {
+    /* not kept: this browser stores nothing */
+  }
+}
+
+/** How long a lead has sat in its stage, in words ("3 days"). */
+export function inStage(
+  row: Pick<LeadRow, "stage_at">,
+  now = new Date(),
+): string | null {
+  return row.stage_at ? ago(row.stage_at, now).replace(" ago", "") : null;
+}
 
 /** Stages in the order a lead moves through them, for sorting. */
 const STAGE_ORDER = [
@@ -115,6 +180,17 @@ function sortKey(row: LeadRow, by: Column): string | number {
         : Number.MAX_SAFE_INTEGER;
     case "last":
       return row.calls;
+    case "age":
+      // Longest in its stage first when sorted down; unknown last.
+      return row.stage_at
+        ? -new Date(row.stage_at).getTime()
+        : Number.MIN_SAFE_INTEGER;
+    case "contact":
+      return row.last_contact_at ? new Date(row.last_contact_at).getTime() : 0;
+    case "reason":
+      return (row.outcome_reason_label ?? "~").toLowerCase();
+    case "created":
+      return new Date(row.created_at).getTime();
   }
 }
 
@@ -153,16 +229,46 @@ export function LeadsTable({
 }) {
   const [sort, setSort] = useState<{ by: Column; down: boolean } | null>(null);
   const grid = useRef<HTMLTableElement>(null);
-  const edits = useLeadEdits(rows, selecting ? null : edit, pipelineNames);
+  // A stage that asks for something (a reason, a follow-up, the meeting).
+  const [asking, setAsking] = useState<{
+    lead: LeadRow;
+    moves: MoveOption[];
+    step: string;
+  } | null>(null);
+  const rights: EditRights | null = edit
+    ? {
+        ...edit,
+        onNeeds: (row: LeadRow, step: string) =>
+          void readLead(row.lead_id).then(
+            (detail) =>
+              setAsking({ lead: detail.lead, moves: detail.moves ?? [], step }),
+            () => undefined,
+          ),
+      }
+    : null;
+  const edits = useLeadEdits(rows, selecting ? null : rights, pipelineNames);
+  const [picking, setPicking] = useState(false);
+  const [chosenColumns, setChosenColumns] =
+    useState<ReadonlySet<Column> | null>(null);
+  const visible =
+    chosenColumns ??
+    (typeof window === "undefined" ? SHOWN_AT_FIRST : readShown());
+  const toggleColumn = (column: Column) => {
+    const next = new Set(visible);
+    if (next.has(column)) next.delete(column);
+    else next.add(column);
+    keepShown(next);
+    setChosenColumns(next);
+  };
   const columns: Column[] = [
     "name",
-    "phone",
+    ...(visible.has("phone") ? (["phone"] as const) : []),
     "stage",
     ...(pipelineNames ? (["pipeline"] as const) : []),
     ...(showOwner ? (["owner"] as const) : []),
-    "source",
-    "next",
-    "last",
+    ...(
+      ["source", "next", "last", "age", "contact", "reason", "created"] as const
+    ).filter((column) => visible.has(column)),
   ];
   const shown = useMemo(() => {
     if (!sort) return edits.shown;
@@ -335,11 +441,51 @@ export function LeadsTable({
         );
       case "last":
         return lastCall(row);
+      case "age":
+        return inStage(row, now) ?? <span className={styles.quiet}>–</span>;
+      case "contact":
+        return row.last_contact_at ? (
+          ago(row.last_contact_at, now)
+        ) : (
+          <span className={styles.quiet}>Never</span>
+        );
+      case "reason":
+        return (
+          row.outcome_reason_label ?? <span className={styles.quiet}>–</span>
+        );
+      case "created":
+        return when(row.created_at, now);
     }
   };
 
   return (
     <div className={styles.wrap} ref={keysRef}>
+      <div className={styles.columnsBar}>
+        <button
+          type="button"
+          className={styles.columnsButton}
+          aria-expanded={picking}
+          onClick={() => setPicking((open) => !open)}
+        >
+          <Columns3 size={14} aria-hidden="true" />
+          Columns
+        </button>
+        {picking ? (
+          <fieldset className={styles.columnsMenu}>
+            <legend className={styles.srOnly}>Columns to show</legend>
+            {OPTIONAL.map((column) => (
+              <label key={column}>
+                <input
+                  type="checkbox"
+                  checked={visible.has(column)}
+                  onChange={() => toggleColumn(column)}
+                />
+                {LABELS[column]}
+              </label>
+            ))}
+          </fieldset>
+        ) : null}
+      </div>
       <table
         ref={grid}
         className={styles.table}
@@ -468,6 +614,20 @@ export function LeadsTable({
           </tfoot>
         ) : null}
       </table>
+      {asking ? (
+        <StageSheet
+          open
+          lead={asking.lead}
+          moves={asking.moves}
+          initial={asking.step}
+          via="table"
+          onClose={() => setAsking(null)}
+          onMoved={() => {
+            setAsking(null);
+            edit?.onSaved();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

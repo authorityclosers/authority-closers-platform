@@ -32,6 +32,7 @@ import {
   House,
   Landmark,
   MonitorSmartphone,
+  Phone,
   Plane,
   Plus,
   ShieldCheck,
@@ -98,6 +99,7 @@ const ICONS: Record<string, LucideIcon> = {
   screen: MonitorSmartphone,
   plane: Plane,
   bag: ShoppingBag,
+  phone: Phone,
 };
 
 export const KIND_WORDS: Record<Kind, string> = {
@@ -107,6 +109,7 @@ export const KIND_WORDS: Record<Kind, string> = {
   interested: "Hot",
   won: "Won",
   lost: "Lost",
+  junk: "Junk",
 };
 const KIND_HINT: Record<Kind, string> = {
   new: "Where every lead starts.",
@@ -115,6 +118,7 @@ const KIND_HINT: Record<Kind, string> = {
   interested: "Keen to buy. Needs a follow-up time.",
   won: "They bought. The lead closes.",
   lost: "They won't buy. The lead closes.",
+  junk: "Fake or unusable. Kept apart from Lost.",
 };
 
 const failed = (reason: unknown, title: string) =>
@@ -738,7 +742,11 @@ function StageBuilder({
 
   const add = (draft: Draft) =>
     setList((items) => {
-      if (draft.kind === "won" || draft.kind === "lost")
+      if (
+        draft.kind === "won" ||
+        draft.kind === "lost" ||
+        draft.kind === "junk"
+      )
         return [...items, draft];
       // An open stage goes before the first Won stage: the sale comes last.
       const at = items.findIndex(

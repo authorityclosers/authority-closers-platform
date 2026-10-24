@@ -121,6 +121,16 @@ import {
   type SimulationStep,
 } from "./simulated-call";
 import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
+import { MeetingCard } from "./pipeline/meeting-card";
+import pipe from "./pipeline/pipeline.module.css";
+import { StageSheet } from "./pipeline/stage-sheet";
+import {
+  StagePath,
+  TimelineFilters,
+  shows,
+  sourceBadge,
+  type TimelineFilter,
+} from "./pipeline/timeline";
 import { askFeedback } from "../feedback/ask";
 import { DeleteLeadsSheet, type Doomed } from "./delete-leads";
 import { Sheet } from "./sheet-frame";
@@ -784,6 +794,37 @@ async function logWaitingCall(detail: LeadDetail): Promise<LeadDetail> {
   return logPhoneCall(detail.lead.lead_id, (Date.now() - pending.at) / 1000);
 }
 
+// The phone app's last call is asked about once, and only while it is fresh
+// (Redmi sweep, 24 Oct 2026: opening a lead asked about a call from days ago).
+const ASKED_CALLS = "sx-leads-asked-calls";
+const FRESH_CALL_MS = 30 * 60 * 1000;
+
+/** Whether this call ended lately and nobody has been asked about it on this phone. */
+export function askAboutCall(
+  // ("Pick" here is the follow-up time picker's type.)
+  call: { leadId: string; startedMs: number; endedMs: number | null },
+  now: number = Date.now(),
+): boolean {
+  if (!call.endedMs || now - call.endedMs > FRESH_CALL_MS) return false;
+  const key = `${call.leadId}:${call.startedMs}`;
+  try {
+    const asked = JSON.parse(
+      localStorage.getItem(ASKED_CALLS) ?? "[]",
+    ) as unknown;
+    const keys = Array.isArray(asked)
+      ? asked.filter((item) => typeof item === "string")
+      : [];
+    if (keys.includes(key)) return false;
+    localStorage.setItem(
+      ASKED_CALLS,
+      JSON.stringify([...keys, key].slice(-50)),
+    );
+  } catch {
+    // Storage blocked: freshness alone decides.
+  }
+  return true;
+}
+
 /** The phone app's call, once it has ended, for the open lead. */
 function usePhoneAppCall(
   leadId: string | null,
@@ -798,13 +839,19 @@ function usePhoneAppCall(
     const take = (call: NativeCall) => {
       if (call.leadId === leadId && call.endedMs) latest.current(call);
     };
+    // On opening or coming back: the last call only if it is new to this phone.
+    // The app's own call-ended events (again when the recording is final) pass.
     const check = () => {
       if (document.visibilityState !== "visible") return;
       void readLastCall(leadId).then((call) => {
-        if (call) take(call);
+        if (call && askAboutCall(call)) take(call);
       });
     };
-    const stop = onPhoneCall(take);
+    const stop = onPhoneCall((call) => {
+      // Marked as asked, so opening the lead again doesn't ask about it again.
+      if (call.leadId === leadId) askAboutCall(call);
+      take(call);
+    });
     check();
     document.addEventListener("visibilitychange", check);
     return () => {
@@ -902,7 +949,10 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
       return event.connected
         ? {
             title: `${who} talked to them: ${event.stage_label ?? ""}${next}`,
-            detail: event.note ?? undefined,
+            detail:
+              [event.outcome_reason_label, event.note]
+                .filter(Boolean)
+                .join(" · ") || undefined,
           }
         : {
             title: `${who}: not connected, ${(event.reason_label ?? "").toLowerCase()}${next}`,
@@ -939,11 +989,55 @@ function eventText(event: LeadEvent): { title: string; detail?: string } {
           event.template_label ? ` · ${event.template_label}` : ""
         }`,
       };
-    case "stage":
+    case "stage": {
+      // Lead OS: how it moved (reopen, close, Junk) and why.
+      const to = event.stage_label ?? "a new stage";
+      const why = event.outcome_reason_label ?? event.reason_label;
+      const title =
+        event.action === "reopen"
+          ? `${who} reopened them in ${to}`
+          : event.action === "close" || event.action === "reclassify"
+            ? `${who} closed them: ${to}`
+            : `${who} moved them to ${to}`;
       return {
-        title: `${who} moved them to ${event.stage_label ?? "a new stage"}`,
-        detail: event.note ?? undefined,
+        title: event.from_label ? `${title} (from ${event.from_label})` : title,
+        detail: [why, event.note].filter(Boolean).join(" · ") || undefined,
       };
+    }
+    case "meeting": {
+      const at = event.starts_at ? when(event.starts_at) : null;
+      const how = event.mode_label ? ` · ${event.mode_label}` : "";
+      switch (event.meeting_action) {
+        case "scheduled":
+          return {
+            title: `${who} booked a meeting for ${at ?? "later"}${how}`,
+          };
+        case "rescheduled":
+          return {
+            title: `${who} moved the meeting to ${at ?? "a new time"}${how}`,
+            detail: event.from_starts_at
+              ? `It was ${when(event.from_starts_at)}`
+              : undefined,
+          };
+        case "done":
+          return {
+            title: "The meeting happened",
+            detail: event.note ?? undefined,
+          };
+        case "missed":
+          return {
+            title: "They missed the meeting",
+            detail: event.note ?? undefined,
+          };
+        case "cancelled":
+          return {
+            title: "The meeting was called off",
+            detail: event.note ?? undefined,
+          };
+        default:
+          return { title: "Meeting updated" };
+      }
+    }
     case "scheduled":
       return {
         title: event.next_action_at
@@ -1076,6 +1170,12 @@ function StorySoFar({ detail }: { detail: LeadDetail }) {
 }
 
 /** "Today", "Yesterday" or "Mon 20 Oct": the history's day headers. */
+/** The stage chip's colour: Won good, Lost and Junk bad, open stages accent. */
+export function stageTone(stage: Stage): "good" | "bad" | "accent" {
+  if (stage === "won") return "good";
+  return stage === "lost" || stage === "junk" ? "bad" : "accent";
+}
+
 export function dayLabel(iso: string, now: Date = new Date()): string {
   const at = new Date(iso);
   const yesterday = new Date(now);
@@ -1094,6 +1194,7 @@ export function History({
   onChanged,
   chats = [],
   brief = null,
+  currentLabel = null,
 }: {
   events: LeadEvent[];
   onChanged?: (next: LeadDetail) => void;
@@ -1101,12 +1202,15 @@ export function History({
   chats?: ChatDay[];
   /** Under the newest call with a Report: what that call said. */
   brief?: ReactNode;
+  /** The lead's stage now: the path of stages so far ends there (Lead OS). */
+  currentLabel?: string | null;
 }) {
+  const [filter, setFilter] = useState<TimelineFilter>("all");
   const briefAt = events.findIndex(
     (event) => event.kind === "call" && event.submission_id,
   );
   // Newest first, calls and chats in one line of time.
-  const items: { at: string; index: number; chat?: ChatDay }[] = [
+  const all: { at: string; index: number; chat?: ChatDay }[] = [
     ...events.map((event, index) => ({ at: event.at, index })),
     ...chats.map((chat, index) => ({
       at: chat.at,
@@ -1114,95 +1218,109 @@ export function History({
       chat,
     })),
   ];
+  const items = all.filter((item) =>
+    shows(filter, item.chat ? "chat" : events[item.index]),
+  );
   if (chats.length)
     items.sort(
       (a, b) => Date.parse(b.at) - Date.parse(a.at) || a.index - b.index,
     );
   return (
-    <ol className={styles.history} aria-label="History">
-      {items.map((item, position) => {
-        const day = dayLabel(item.at);
-        const newDay =
-          position === 0 || dayLabel(items[position - 1].at) !== day;
-        const header = newDay ? (
-          <li className={styles.historyDay} aria-hidden="true">
-            {day}
-          </li>
-        ) : null;
-        if (item.chat)
+    <>
+      {currentLabel ? (
+        <StagePath events={events} currentLabel={currentLabel} />
+      ) : null}
+      {events.length > 3 ? (
+        <TimelineFilters value={filter} onChange={setFilter} />
+      ) : null}
+      <ol className={styles.history} aria-label="History">
+        {items.map((item, position) => {
+          const day = dayLabel(item.at);
+          const newDay =
+            position === 0 || dayLabel(items[position - 1].at) !== day;
+          const header = newDay ? (
+            <li className={styles.historyDay} aria-hidden="true">
+              {day}
+            </li>
+          ) : null;
+          if (item.chat)
+            return (
+              <Fragment key={item.chat.key}>
+                {header}
+                <li data-kind="chat">
+                  <span className={styles.historyTitle}>
+                    {chatDayTitle(item.chat)}
+                  </span>
+                  {item.chat.last ? (
+                    <span className={styles.historyDetail}>
+                      {item.chat.last.mine ? "You: " : ""}
+                      {item.chat.last.text}
+                    </span>
+                  ) : null}
+                  <Link
+                    className={styles.historyLink}
+                    href={item.chat.href}
+                    prefetch={false}
+                  >
+                    Open the chat
+                  </Link>
+                </li>
+              </Fragment>
+            );
+          const event = events[item.index];
+          const index = item.index;
+          const text = eventText(event);
           return (
-            <Fragment key={item.chat.key}>
+            <Fragment key={`${event.at}-${index}`}>
               {header}
-              <li data-kind="chat">
+              <li
+                key={`${event.at}-${index}`}
+                data-kind={event.kind}
+                data-missed={
+                  event.direction === "missed" || event.direction === "rejected"
+                    ? true
+                    : undefined
+                }
+              >
                 <span className={styles.historyTitle}>
-                  {chatDayTitle(item.chat)}
+                  {text.title}
+                  {event.private ? (
+                    <span className={styles.privateTag}>Private</span>
+                  ) : null}
+                  {sourceBadge(event) ? (
+                    <span className={pipe.badge}>{sourceBadge(event)}</span>
+                  ) : null}
                 </span>
-                {item.chat.last ? (
+                {text.detail ? (
                   <span className={styles.historyDetail}>
-                    {item.chat.last.mine ? "You: " : ""}
-                    {item.chat.last.text}
+                    {event.private
+                      ? "Only you see this call. It isn't counted."
+                      : text.detail}
                   </span>
                 ) : null}
-                <Link
-                  className={styles.historyLink}
-                  href={item.chat.href}
-                  prefetch={false}
-                >
-                  Open the chat
-                </Link>
+                {onChanged ? (
+                  <PrivacyButton event={event} onChanged={onChanged} />
+                ) : null}
+                {event.kind === "call" && event.submission_id ? (
+                  <Link
+                    className={styles.historyLink}
+                    href={callHref(event.submission_id)}
+                  >
+                    Open the call&apos;s Report
+                  </Link>
+                ) : null}
+                <time className={styles.historyTime} dateTime={event.at}>
+                  {when(event.at)}
+                </time>
               </li>
+              {index === briefAt && brief ? (
+                <li className={styles.historyBrief}>{brief}</li>
+              ) : null}
             </Fragment>
           );
-        const event = events[item.index];
-        const index = item.index;
-        const text = eventText(event);
-        return (
-          <Fragment key={`${event.at}-${index}`}>
-            {header}
-            <li
-              key={`${event.at}-${index}`}
-              data-kind={event.kind}
-              data-missed={
-                event.direction === "missed" || event.direction === "rejected"
-                  ? true
-                  : undefined
-              }
-            >
-              <span className={styles.historyTitle}>
-                {text.title}
-                {event.private ? (
-                  <span className={styles.privateTag}>Private</span>
-                ) : null}
-              </span>
-              {text.detail ? (
-                <span className={styles.historyDetail}>
-                  {event.private
-                    ? "Only you see this call. It isn't counted."
-                    : text.detail}
-                </span>
-              ) : null}
-              {onChanged ? (
-                <PrivacyButton event={event} onChanged={onChanged} />
-              ) : null}
-              {event.kind === "call" && event.submission_id ? (
-                <Link
-                  className={styles.historyLink}
-                  href={callHref(event.submission_id)}
-                >
-                  Open the call&apos;s Report
-                </Link>
-              ) : null}
-              <time className={styles.historyTime} dateTime={event.at}>
-                {when(event.at)}
-              </time>
-            </li>
-            {index === briefAt && brief ? (
-              <li className={styles.historyBrief}>{brief}</li>
-            ) : null}
-          </Fragment>
-        );
-      })}
-    </ol>
+        })}
+      </ol>
+    </>
   );
 }
 
@@ -1959,6 +2077,9 @@ export function LeadCard({
     ? others.filter((rep) => rep.name.toLocaleLowerCase().includes(needle))
     : others;
   const [moveError, setMoveError] = useState<string | null>(null);
+  // Lead OS: the stage chip opens the stage sheet (only the moves allowed).
+  const [staging, setStaging] = useState(false);
+  const canMove = detail.can_edit && (detail.moves?.length ?? 0) > 0;
   // The lead's chats, read once for the timeline and the chat sections.
   const conversations = useLeadConversations(lead.lead_id);
   const chats = chatDays(lead.lead_id, conversations.wa, conversations.social);
@@ -2022,17 +2143,18 @@ export function LeadCard({
           <h2>{lead.name}</h2>
           {sub ? <p>{sub}</p> : null}
           <div className={styles.cardBadges}>
-            <Badge
-              tone={
-                lead.stage === "won"
-                  ? "good"
-                  : lead.stage === "lost"
-                    ? "bad"
-                    : "accent"
-              }
-            >
-              {lead.stage_label}
-            </Badge>
+            {canMove ? (
+              <button
+                type="button"
+                className={pipe.stageButton}
+                aria-label={`Stage: ${lead.stage_label}. Move this lead`}
+                onClick={() => setStaging(true)}
+              >
+                <Badge tone={stageTone(lead.stage)}>{lead.stage_label}</Badge>
+              </button>
+            ) : (
+              <Badge tone={stageTone(lead.stage)}>{lead.stage_label}</Badge>
+            )}
             <Badge>{sourceText(lead)}</Badge>
             <CopyLeadLink leadId={lead.lead_id} />
           </div>
@@ -2040,6 +2162,16 @@ export function LeadCard({
       </header>
       <p className={styles.why}>{whyLine(lead)}</p>
       <SuggestedStage detail={detail} onChanged={onChanged} />
+      <MeetingCard detail={detail} onChanged={onChanged} />
+      {canMove ? (
+        <StageSheet
+          open={staging}
+          lead={lead}
+          moves={detail.moves ?? []}
+          onClose={() => setStaging(false)}
+          onMoved={onChanged}
+        />
+      ) : null}
       {detail.next_action_note ? (
         <p className={styles.nextNote}>Last note: {detail.next_action_note}</p>
       ) : null}
@@ -2220,6 +2352,7 @@ export function LeadCard({
           onChanged={onChanged}
           chats={chats}
           brief={<LastCallBrief detail={detail} onChanged={onChanged} />}
+          currentLabel={lead.stage_label}
         />
       </section>
 

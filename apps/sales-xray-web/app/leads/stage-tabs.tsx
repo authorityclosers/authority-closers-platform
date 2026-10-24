@@ -3,8 +3,8 @@
 /**
  * Leads by stage (owner, 22 Oct 2026: replace the Everyone / Mine / No owner
  * bar with stage tabs, from the organisation's own stages). One strip: To
- * call (the desk), Open, then each kind of stage the business uses, Won and
- * Lost last, each with its real count. On a phone the strip scrolls inside
+ * call (the desk), Open, then each kind of stage the business uses, Won,
+ * Lost and Junk last, each with its real count. On a phone the strip scrolls inside
  * itself and keeps the chosen tab in view.
  */
 
@@ -23,6 +23,7 @@ export const KIND_ORDER: Kind[] = [
   "interested",
   "won",
   "lost",
+  "junk",
 ];
 
 const OPEN_KINDS: Kind[] = ["new", "not_connected", "follow_up", "interested"];
@@ -35,12 +36,14 @@ export const KIND_WORDS: Record<Kind, string> = {
   interested: "Interested",
   won: "Won",
   lost: "Lost",
+  junk: "Junk",
 };
 
 /**
  * The tabs after To call: Open, then the kinds the business's stages use
  * (all six when it has no list yet), named by its own stage when only one
- * stage has that kind. Won and Lost are always there.
+ * stage has that kind. Won, Lost and Junk (Lead OS: fake or unusable, kept apart
+ * from Lost) are always there.
  */
 export function stageTabs(
   journey: Pick<JourneyView, "stages"> | null,
@@ -52,6 +55,7 @@ export function stageTabs(
         (kind) =>
           kind === "won" ||
           kind === "lost" ||
+          kind === "junk" ||
           live.some((stage) => stage.kind === kind),
       )
     : KIND_ORDER;

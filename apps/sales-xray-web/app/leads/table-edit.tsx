@@ -48,6 +48,8 @@ export type EditRights = {
   me: string | null;
   /** Saved: the list and its counts read again, once editing stops. */
   onSaved: () => void;
+  /** A stage that asks for something: the table opens the stage sheet (Lead OS). */
+  onNeeds?: (row: LeadRow, step: string) => void;
 };
 
 export const EDIT_COLUMNS: ReadonlySet<string> = new Set([
@@ -286,6 +288,17 @@ export function useLeadEdits(
         setSaved((now) => new Map(now).set(id, detail.lead));
       })
       .catch((reason: unknown) => {
+        // Lead OS: the stage asks for something (a reason, a follow-up, the
+        // meeting): the stage sheet asks for it instead of an error.
+        if (
+          column === "stage" &&
+          reason instanceof LeadsError &&
+          reason.status === 422 &&
+          latest.current.rights?.onNeeds
+        ) {
+          latest.current.rights.onNeeds(row, value);
+          return;
+        }
         const changed = reason instanceof LeadsError && reason.status === 409;
         notify({
           id: "lead-edit",
