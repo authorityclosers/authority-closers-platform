@@ -1865,3 +1865,9 @@
   flex: none;
   overflow: visible;
 }
+
+/* Where more chats join the list as it nears its end (24 Oct 2026). */
+.moreRows {
+  height: 1px;
+  list-style: none;
+}
