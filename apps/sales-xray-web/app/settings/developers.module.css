@@ -285,6 +285,11 @@
   overflow-x: auto;
 }
 
+/* One scroll strip on phones: each choice stays on one line (24 Oct 2026, 390 px). */
+.picker button {
+  white-space: nowrap;
+}
+
 /* A panel is a grid whose one column grows to its widest child: let each part shrink. */
 .steps,
 .stdio,

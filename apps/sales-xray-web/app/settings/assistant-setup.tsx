@@ -121,10 +121,7 @@ export function AssistantSetup() {
   const chosen =
     ASSISTANTS.find((item) => item.key === assistant) ?? ASSISTANTS[0];
   return (
-    <Panel
-      title="Connect your AI assistant"
-      sub="Let ChatGPT, Claude, Cursor or VS Code read your calls and leads (MCP)"
-    >
+    <Panel title="Connect your AI assistant">
       <ol className={styles.steps} data-steps="remote">
         <li>
           <strong>Add Sales X-Ray to your assistant</strong>
