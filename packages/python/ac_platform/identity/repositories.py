@@ -586,6 +586,27 @@ class AsyncSqlAlchemyIdentityRepository:
         )
         return None if row is None else _person_snapshot(row)
 
+    async def get_person_for_no_key_update(self, person_id: UUID) -> PersonSnapshot | None:
+        """Take the canonical-person fence for a write sign-in: FOR NO KEY UPDATE.
+
+        It still waits for and holds off what locks the person FOR UPDATE
+        (deletion, status and sign-in changes) and the same person's other
+        writes, but not reads (FOR KEY SHARE) or new rows that point at the
+        person (foreign-key checks take FOR KEY SHARE too), so a write no longer
+        queues behind the reads in flight and the reads behind it (24 Oct 2026).
+        """
+
+        row = cast(
+            Person | None,
+            await self._session.scalar(
+                select(Person)
+                .where(Person.id == person_id)
+                .with_for_update(key_share=True)
+                .execution_options(populate_existing=True)
+            ),
+        )
+        return None if row is None else _person_snapshot(row)
+
     async def get_person_for_share(self, person_id: UUID) -> PersonSnapshot | None:
         """Take the canonical-person fence for a read sign-in: FOR KEY SHARE.
 
@@ -1048,6 +1069,25 @@ class AsyncSqlAlchemyIdentityRepository:
                 select(SessionRow)
                 .where(SessionRow.id == session_id)
                 .with_for_update()
+                .execution_options(populate_existing=True)
+            ),
+        )
+        return None if row is None else _session_snapshot(row)
+
+    async def get_session_for_no_key_update(self, session_id: UUID) -> StoredSession | None:
+        """Take the session fence for a write sign-in: FOR NO KEY UPDATE.
+
+        Revocation, rotation and workspace changes (FOR UPDATE) and the same
+        session's other writes still wait for it; reads (FOR KEY SHARE) and rows
+        that point at the session do not.
+        """
+
+        row = cast(
+            SessionRow | None,
+            await self._session.scalar(
+                select(SessionRow)
+                .where(SessionRow.id == session_id)
+                .with_for_update(key_share=True)
                 .execution_options(populate_existing=True)
             ),
         )

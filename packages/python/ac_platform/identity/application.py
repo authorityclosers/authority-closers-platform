@@ -333,8 +333,13 @@ class AsyncIdentityApplication:
         require_active: bool = True,
         require_email: bool = True,
         provider_email: str | None = None,
+        no_key_update: bool = False,
     ) -> PersonSnapshot:
-        person = await self._repository.get_person_for_update(person_id)
+        person = await (
+            self._repository.get_person_for_no_key_update
+            if no_key_update
+            else self._repository.get_person_for_update
+        )(person_id)
         if person is None:
             raise IdentityResolutionError("canonical person does not exist")
         if require_active and person.status != PersonStatus.ACTIVE.value:
@@ -349,6 +354,7 @@ class AsyncIdentityApplication:
         *,
         current_time: datetime,
         expected_audience: SessionAudience = SessionAudience.ACCOUNT,
+        no_key_update: bool = False,
     ) -> tuple[PersonSnapshot, StoredSession]:
         token_hash = self._token_hash(token)
         candidate = await self._repository.find_session_by_token_hash(token_hash)
@@ -356,8 +362,12 @@ class AsyncIdentityApplication:
             raise InvalidSessionTokenError("session token is invalid")
         # Person first is the global lock order. Re-read and lock the session
         # afterwards so revocation cannot be overwritten by a stale candidate.
-        person = await self._lock_person(candidate.person_id)
-        session = await self._repository.get_session_for_update(candidate.id)
+        person = await self._lock_person(candidate.person_id, no_key_update=no_key_update)
+        session = await (
+            self._repository.get_session_for_no_key_update
+            if no_key_update
+            else self._repository.get_session_for_update
+        )(candidate.id)
         if (
             session is None
             or session.person_id != person.id
@@ -468,7 +478,13 @@ class AsyncIdentityApplication:
         expected_audience: SessionAudience = SessionAudience.ACCOUNT,
         now: datetime | None = None,
     ) -> ResolvedActorContext:
-        """Resolve and lock the complete server-owned actor for this transaction."""
+        """Resolve and lock the complete server-owned actor for this transaction.
+
+        Person and Session FOR NO KEY UPDATE (24 Oct 2026): deletion, suspension,
+        revocation and workspace changes (FOR UPDATE) and the same person's other
+        writes still wait, but reads in flight and new rows that point at the
+        person or session no longer do.
+        """
 
         self._require_transaction()
         current_time = _now(now)
@@ -476,6 +492,7 @@ class AsyncIdentityApplication:
             token,
             current_time=current_time,
             expected_audience=expected_audience,
+            no_key_update=True,
         )
         tenant: Tenant | None = None
         membership: Membership | None = None

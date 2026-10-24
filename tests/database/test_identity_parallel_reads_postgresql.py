@@ -5,6 +5,8 @@ Each signed in by locking the person and session rows FOR UPDATE and writing
 ``last_seen_at``, so they ran one by one and all waited about 14 seconds. Reads
 now sign in with FOR KEY SHARE fences and advance ``last_seen_at`` at most once
 a minute without waiting (SKIP LOCKED); revocation still waits for them.
+Writes sign in FOR NO KEY UPDATE, so reads and writes don't wait for each other;
+the same person's writes still go one at a time.
 """
 
 from __future__ import annotations
@@ -40,6 +42,16 @@ def postgres_harness() -> Any:
 def _install_read(setup: Any) -> None:
     @setup.app.get("/v1/test/first-launch-read")
     async def first_launch_read(request: Request) -> dict[str, float]:
+        started = time.monotonic()
+        async with asynccontextmanager(setup.require_actor)(request):
+            waited = time.monotonic() - started
+            await asyncio.sleep(HOLD)
+        return {"waited": waited}
+
+
+def _install_write(setup: Any) -> None:
+    @setup.app.post("/v1/test/write")
+    async def write(request: Request) -> dict[str, float]:
         started = time.monotonic()
         async with asynccontextmanager(setup.require_actor)(request):
             waited = time.monotonic() - started
@@ -134,6 +146,57 @@ def test_revocation_still_waits_for_reads_in_flight_and_then_ends_them(
                 assert revoke_wait > HOLD / 3, revoke_wait
                 after = await client.get("/v1/test/first-launch-read")
             assert after.status_code == 401
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_reads_and_writes_never_wait_for_each_other_but_writes_take_turns(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            # Seen just now, so no read touches the session.
+            async with setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(IdentitySession)
+                    .where(IdentitySession.id == setup.state.session_id)
+                    .values(last_seen_at=datetime.now(UTC))
+                )
+            _install_read(setup)
+            _install_write(setup)
+            transport = httpx.ASGITransport(app=setup.app)
+            async with httpx.AsyncClient(transport=transport, base_url=ORIGIN) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+
+                async def later(call: Any) -> httpx.Response:
+                    await asyncio.sleep(HOLD / 3)  # the first ones hold their fences by now
+                    return await call()
+
+                def read() -> Any:
+                    return client.get("/v1/test/first-launch-read")
+
+                def write() -> Any:
+                    return client.post("/v1/test/write", headers={"origin": ORIGIN})
+
+                # A write while five reads are in flight signs in at once (with
+                # FOR UPDATE it waited for all of them).
+                *reads, written = await asyncio.gather(*(read() for _ in range(5)), later(write))
+                assert [answer.status_code for answer in reads] == [200] * 5
+                assert written.status_code == 200, written.text
+                assert written.json()["waited"] < HOLD / 3, written.json()
+
+                # Reads while a write is in flight sign in at once too.
+                first, *after = await asyncio.gather(write(), *(later(read) for _ in range(5)))
+                assert first.status_code == 200, first.text
+                assert max(answer.json()["waited"] for answer in after) < HOLD / 3
+
+                # The same person's writes still go one at a time.
+                both = await asyncio.gather(write(), write())
+                assert [answer.status_code for answer in both] == [200, 200]
+                assert max(answer.json()["waited"] for answer in both) > HOLD / 2
         finally:
             await setup.engine.dispose()
 
