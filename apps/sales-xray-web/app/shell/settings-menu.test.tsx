@@ -390,25 +390,31 @@ it("keeps the phone pages and workspace list off the computer's card", async () 
   expect(menu.querySelector('[aria-label="Workspace"]')).toBeNull();
 });
 
-it("offers Phone setup in the More sheet inside the phone app only", async () => {
+it("offers Phone setup in the More sheet inside the phone app only, opening it over any page", async () => {
   asPhone(true);
   const bridge = window as Window & { SXPhone?: unknown };
-  const pages = async () => {
+  const tile = async () => {
     const sheet = await open({ organisation: false, insights: false });
     return [
-      ...sheet.querySelectorAll<HTMLAnchorElement>(
-        'nav[aria-label="More pages"] a',
+      ...sheet.querySelectorAll<HTMLButtonElement>(
+        'nav[aria-label="More pages"] button',
       ),
-    ].map((link) => link.getAttribute("href"));
+    ].find((item) => item.textContent?.includes("Phone setup"));
   };
-  expect(await pages()).not.toContain("/leads#phone-setup");
+  expect(await tile()).toBeUndefined();
   await act(async () => root.unmount());
   host.remove();
   bridge.SXPhone = { postMessage: () => {}, addEventListener: () => {} };
+  const opened = vi.fn();
+  window.addEventListener("sx-phone-setup-open", opened);
   try {
-    expect(await pages()).toContain("/leads#phone-setup");
-    expect(document.body.textContent).toContain("Phone setup");
+    const button = await tile();
+    expect(button).toBeDefined();
+    // Not a link to Leads: it did nothing while Leads was open (Redmi #2).
+    await act(async () => button!.click());
+    expect(opened).toHaveBeenCalledTimes(1);
   } finally {
+    window.removeEventListener("sx-phone-setup-open", opened);
     delete bridge.SXPhone;
   }
 });

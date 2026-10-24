@@ -2,7 +2,11 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { ONBOARDED_KEY, PhoneOnboarding } from "./phone-onboarding";
+import {
+  ONBOARDED_KEY,
+  openPhoneSetup,
+  PhoneOnboarding,
+} from "./phone-onboarding";
 import { PhoneSetupBar } from "./phone-setup";
 
 (
@@ -160,6 +164,25 @@ describe("PhoneOnboarding", () => {
     await settle();
     expect(host.textContent).toBe("");
     expect(localStorage.getItem(ONBOARDED_KEY)).not.toBeNull();
+  });
+});
+
+describe("Phone setup from anywhere", () => {
+  it("opens over the page that is showing, already onboarded or not (Redmi #2)", async () => {
+    localStorage.setItem(ONBOARDED_KEY, "2026-10-19T08:00:00.000Z");
+    fakePhone(({ method }) =>
+      method === "callRecorderStatus"
+        ? { available: false, enabled: false }
+        : setup({ ...ALL, calls: false }),
+    );
+    await act(async () => root.render(<PhoneOnboarding />));
+    await settle();
+    expect(host.textContent).toBe("");
+    await act(async () => openPhoneSetup());
+    await settle();
+    expect(host.querySelector("h1")?.textContent).toBe(
+      "Calls and call history",
+    );
   });
 });
 

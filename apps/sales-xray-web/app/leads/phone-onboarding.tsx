@@ -20,6 +20,16 @@ import { flowSteps, PhoneSetupFlow } from "./phone-setup-flow";
 
 export const ONBOARDED_KEY = "sx-phone-onboarded";
 const CHANGED = "sx-phone-onboarded";
+export const PHONE_SETUP_OPEN = "sx-phone-setup-open";
+
+/**
+ * Opens "Set up this phone" over whatever page is showing (the More sheet's
+ * Phone setup, Settings' Selling). A link to /leads#phone-setup did nothing
+ * while Leads was already open (Redmi sweep #2, 24 Oct 2026).
+ */
+export function openPhoneSetup() {
+  window.dispatchEvent(new Event(PHONE_SETUP_OPEN));
+}
 
 /** True once this phone went through the first run (or skipped it). */
 export function phoneOnboarded(): boolean {
@@ -55,6 +65,15 @@ export function PhoneOnboarding() {
   const access = useWorkspaceAccess();
   const signedIn = access?.authenticated === true;
   const [open, setOpen] = useState(false);
+
+  // Asked for from anywhere in the app (openPhoneSetup).
+  useEffect(() => {
+    const show = () => {
+      if (inPhoneApp()) setOpen(true);
+    };
+    window.addEventListener(PHONE_SETUP_OPEN, show);
+    return () => window.removeEventListener(PHONE_SETUP_OPEN, show);
+  }, []);
 
   // Waits for the Terms card: it covers the page while consent isn't current.
   useEffect(() => {
