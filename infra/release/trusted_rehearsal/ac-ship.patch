@@ -1,0 +1,37 @@
+--- a/ac-ship
++++ b/ac-ship
+@@ -223,6 +223,19 @@
+ fi
+ say "PR #$PR"
+ 
++# AUT-2216: supplementary trusted check. Keep existing staging-artifact CI.
++BASE=$(gh pr view "$PR" -R "$REPO" --json baseRefOid --jq .baseRefOid) || fail "cannot pin PR base"
++[[ "$BASE" =~ ^[0-9a-f]{40}$ ]] || fail "invalid PR base"
++REHEARSAL_PID=""
++if ! asacdev git -C "$WB" diff --no-ext-diff --no-textconv --quiet "$BASE" "$SHA" -- db/migrations; then
++  # Installed reviewed launcher only; no candidate-supplied exporter/validator.
++  # Do not print subprocess output or credentials; the launcher emits one bounded result.
++  /usr/local/sbin/ac-schema-rehearsal rehearse --workbench "$WB" --candidate "$SHA" --base "$BASE" &
++  REHEARSAL_PID=$!
++fi
++
++# No CI/workflow switch or alternate-release exemption is authorized by this patch.
++
+ # 3. Wait for the required checks (90 min max).
+ end=$(( $(date +%s) + 5400 ))
+ while :; do
+@@ -245,5 +258,14 @@
+ done
+ say "checks green"
+ 
++if [ -n "$REHEARSAL_PID" ]; then
++  wait "$REHEARSAL_PID" || fail "trusted staging rehearsal failed"
++  CURRENT_BASE=$(gh pr view "$PR" -R "$REPO" --json baseRefOid --jq .baseRefOid) || fail "cannot recheck base"
++  CURRENT_HEAD=$(gh pr view "$PR" -R "$REPO" --json headRefOid --jq .headRefOid) || fail "cannot recheck head"
++  [ "$CURRENT_BASE" = "$BASE" ] && [ "$CURRENT_HEAD" = "$SHA" ] || fail "candidate/base changed; rehearse again"
++  /usr/local/sbin/ac-schema-rehearsal verify --candidate "$SHA" --base "$BASE" || fail "trusted receipt rejected"
++fi
++# Existing live-staging CI remains mandatory for ac-ship AND other release paths.
++
+ # 4. Merge, then bring the merge back into the workbench.
+ gh pr merge "$PR" -R "$REPO" --squash --match-head-commit "$SHA" --subject "Release $VER ($TITLE)" >/dev/null || fail "merge of #$PR failed"
