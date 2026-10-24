@@ -71,9 +71,11 @@ it("shows all nine stages, grouped, with each lead in one column", async () => {
     container.querySelectorAll("li button[aria-label^='Open ']"),
   ).map((button) => button.getAttribute("aria-label"));
   expect(new Set(names).size).toBe(names.length);
-  // Names with capitals, numbers masked, late and no next step marked.
+  // Names with capitals; one line of where from and when; late and no next
+  // step marked. No phone number on a card (owner, 24 Oct 2026: less clutter).
   expect(container.textContent).toContain("Asha Fictional");
-  expect(container.textContent).toContain("••4301");
+  expect(container.textContent).toContain("Meta lead form");
+  expect(container.textContent).not.toContain("••4301");
   expect(container.textContent).toContain("No next step");
   expect(container.textContent).not.toMatch(/₹|price list/i);
 });

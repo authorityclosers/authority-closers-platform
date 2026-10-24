@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 
 import type { LeadEvent } from "../leads-client";
 import { shows, stagePath } from "./timeline";
-import { finalLine, lastContact, moveVerb, nextStep, rotting } from "./words";
+import {
+  cardTime,
+  finalLine,
+  lastContact,
+  moveVerb,
+  nextStep,
+  rotting,
+} from "./words";
 
 const NOW = new Date("2026-10-24T10:00:00+05:30");
 const hours = (value: number) =>
@@ -134,5 +141,33 @@ describe("waits in words", () => {
     expect(waitWords(1358)).toBe("22 h 38 min");
     expect(waitWords(120)).toBe("2 h");
     expect(waitWords(3120)).toBe("2 d 4 h");
+  });
+});
+
+describe("cardTime", () => {
+  const now = new Date("2026-10-24T10:00:00Z");
+  it("says when the lead was last heard from, or came in", () => {
+    const lead = {
+      created_at: "2026-10-22T10:00:00Z",
+      last_contact_at: null,
+      stage_at: "2026-10-24T09:00:00Z",
+      group: "active" as const,
+    };
+    expect(cardTime(lead, 72, now)).toEqual({ text: "2 days ago", old: false });
+    expect(
+      cardTime({ ...lead, last_contact_at: "2026-10-24T07:00:00Z" }, 72, now),
+    ).toEqual({ text: "3 h ago", old: false });
+  });
+  it("says how long a lead has sat in its stage once it is too long", () => {
+    const lead = {
+      created_at: "2026-10-18T10:00:00Z",
+      last_contact_at: "2026-10-23T10:00:00Z",
+      stage_at: "2026-10-21T10:00:00Z",
+      group: "active" as const,
+    };
+    expect(cardTime(lead, 24, now)).toEqual({
+      text: "3 days in stage",
+      old: true,
+    });
   });
 });

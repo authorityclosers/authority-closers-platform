@@ -48,6 +48,25 @@ export function lastContact(
   return `Came in ${ago(lead.created_at, now)}`;
 }
 
+/** The card's one time: when the lead was last heard from (or came in); once it has
+ *  sat in its stage longer than the stage allows, how long it has been there, in words
+ *  as well as in amber. */
+export function cardTime(
+  lead: Pick<LeadRow, "last_contact_at" | "created_at" | "stage_at" | "group">,
+  rotHours: number | null | undefined,
+  now: Date = new Date(),
+): { text: string; old: boolean } {
+  if (lead.stage_at && rotting(lead, rotHours, now))
+    return {
+      text: `${ago(lead.stage_at, now).replace(" ago", "")} in stage`,
+      old: true,
+    };
+  return {
+    text: ago(lead.last_contact_at ?? lead.created_at, now),
+    old: false,
+  };
+}
+
 /** Whether a lead has sat in its stage longer than the stage allows. */
 export function rotting(
   lead: Pick<LeadRow, "stage_at" | "group">,

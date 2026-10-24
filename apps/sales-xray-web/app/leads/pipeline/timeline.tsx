@@ -175,6 +175,7 @@ const SOURCE_WORDS: Record<string, string> = {
   import: "Import",
   merge: "Merged",
   capture: "Came again",
+  template: "Stages changed",
 };
 
 /** A small badge for how a move was made, when not by hand. */

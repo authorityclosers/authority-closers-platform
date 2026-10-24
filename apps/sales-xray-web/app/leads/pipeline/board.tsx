@@ -3,19 +3,22 @@
 /**
  * The pipeline board (Lead OS, 24 Oct 2026; the sales team's spec section 8):
  * every stage a column, grouped Active, Won, Lost and Junk, each lead in
- * exactly one column. A card shows the lead's name, its masked number, its
- * seller, the last contact, the next step (late in red, none in amber) and
- * how long it has sat there.
+ * exactly one column. A card says three things and nothing is cut mid-word
+ * (owner, 24 Oct 2026: "things inside the cards do not fit"): the name; one
+ * line with where the lead came from (or why it closed) and when we last heard
+ * from them, or how long it has sat in its stage; and the next step as its one
+ * chip (late in red, with a red edge; none in amber), beside the seller.
  *
  * Phones: a strip of stage chips with counts, one column at a time, swiped
- * sideways inside the board (never the page). Computers: the open columns side
- * by side and a rail of Won, Lost and Junk; drag a card and only the columns
+ * sideways inside the board (never the page). Computers: columns of one fixed
+ * width side by side, Won, Lost and Junk after the open ones; the edge fades
+ * and says how many stages are out of view. Drag a card and only the columns
  * it may go to light up. A move that needs nothing happens at once with Undo;
  * one that needs something opens the stage sheet. Every move is also on the
  * card's Move button and the lead page: no one has to drag.
  */
 
-import { ArrowRightLeft, Users } from "lucide-react";
+import { ArrowRightLeft, ChevronLeft, ChevronRight, Users } from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -40,7 +43,7 @@ import {
 } from "./pipeline-client";
 import styles from "./pipeline.module.css";
 import { StageSheet } from "./stage-sheet";
-import { lastContact, leadKind, maskedPhone, nextStep, rotting } from "./words";
+import { cardTime, leadKind, nextStep } from "./words";
 
 /** How long a move waits for Undo before it is sent. */
 export const UNDO_MS = 5000;
@@ -71,13 +74,9 @@ export function BoardCard({
   onDragEnd?: () => void;
 }) {
   const next = nextStep(lead, now);
-  const old = rotting(lead, column.rot_hours, now);
-  const phone = maskedPhone(lead.phone_last4);
-  // The latest note, or the reason; never the column's own name again.
-  const latest =
-    lead.outcome_reason_label ??
-    lead.next_action_note ??
-    (lead.why !== column.label ? lead.why : null);
+  const time = cardTime(lead, column.rot_hours, now);
+  // Why it closed, else where it came from; it gives way before the time does.
+  const context = lead.outcome_reason_label ?? lead.source_label ?? null;
   return (
     <li
       className={styles.card}
@@ -99,27 +98,31 @@ export function BoardCard({
         onClick={() => onOpen(lead.lead_id)}
         aria-label={`Open ${lead.name}`}
       >
-        <span className={styles.cardTop}>
-          <span className={styles.cardName}>{lead.name}</span>
-          {old ? (
-            <span className={styles.rot} title="Sitting here a while">
-              <span className={styles.srOnly}>Sitting here a while</span>
-            </span>
+        <span className={styles.cardName}>{lead.name}</span>
+        {/* The time comes first in the code and is drawn second: when both
+            don't fit, the context wraps out of sight whole, never cut. */}
+        <span className={styles.cardMeta}>
+          <span
+            className={styles.cardTime}
+            data-old={time.old ? "" : undefined}
+          >
+            {time.text}
+          </span>
+          {context ? (
+            <span className={styles.cardContext}>{context}</span>
           ) : null}
         </span>
-        <span className={styles.cardLine}>
-          {[phone, lastContact(lead, now)].filter(Boolean).join(" · ")}
-        </span>
-        {latest ? <span className={styles.cardLatest}>{latest}</span> : null}
         <span className={styles.cardFoot}>
           {next.text ? (
             <span className={styles.next} data-tone={next.tone}>
               {next.text}
             </span>
-          ) : null}
+          ) : (
+            <span />
+          )}
           {showOwner && lead.owner_name ? (
             <span className={styles.owner} title={lead.owner_name}>
-              <Avatar name={lead.owner_name} size={22} />
+              <Avatar name={lead.owner_name} size={24} />
               <span className={styles.srOnly}>{initials(lead.owner_name)}</span>
             </span>
           ) : null}
@@ -178,19 +181,19 @@ function ColumnView({
         if (drop === "allowed") onDrop(column);
       }}
     >
+      {/* Every head is the same height: the name takes up to two lines, the
+          count and the late badge sit on the right. Each card says its own
+          "No next step". */}
       <header className={styles.columnHead}>
-        <h3>{column.label}</h3>
-        <span className={styles.count}>{column.count}</span>
-        {column.overdue ? (
-          <span className={styles.flag} data-tone="late">
-            {column.overdue} late
-          </span>
-        ) : null}
-        {column.no_next ? (
-          <span className={styles.flag} data-tone="none">
-            {column.no_next} no next step
-          </span>
-        ) : null}
+        <h3 title={column.label}>{column.label}</h3>
+        <span className={styles.headBadges}>
+          {column.overdue ? (
+            <span className={styles.flag} data-tone="late">
+              {column.overdue} late
+            </span>
+          ) : null}
+          <span className={styles.headCount}>{column.count}</span>
+        </span>
       </header>
       {column.cards.length ? (
         <ul className={styles.cards}>
@@ -284,6 +287,30 @@ export function PipelineBoard({
   const [current, setCurrent] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
   const scroller = useRef<HTMLDivElement>(null);
+  // Computers: how many stages are out of view on each side of the columns.
+  const [edges, setEdges] = useState({ left: 0, right: 0 });
+  const measure = useCallback(() => {
+    const root = scroller.current;
+    if (!root) return;
+    const box = root.getBoundingClientRect();
+    let left = 0;
+    let right = 0;
+    root.querySelectorAll<HTMLElement>("[data-step]").forEach((element) => {
+      const rect = element.getBoundingClientRect();
+      if (rect.right > box.right + 1) right += 1;
+      else if (rect.left < box.left - 1) left += 1;
+    });
+    setEdges((value) =>
+      value.left === left && value.right === right ? value : { left, right },
+    );
+  }, []);
+  const page = (direction: 1 | -1) => {
+    const root = scroller.current;
+    root?.scrollBy?.({
+      left: direction * Math.max(240, root.clientWidth - 96),
+      behavior: "smooth",
+    });
+  };
   const pending = useRef(
     new Map<string, { timer: number; send: () => void }>(),
   );
@@ -372,6 +399,14 @@ export function PipelineBoard({
       .forEach((element) => seen.observe(element));
     return () => seen.disconnect();
   }, [board]);
+  // The edge counts: measured when the board draws and whenever it is resized.
+  useEffect(() => {
+    const root = scroller.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const sized = new ResizeObserver(() => measure());
+    sized.observe(root);
+    return () => sized.disconnect();
+  }, [board, measure]);
 
   const commit = (lead: LeadRow, from: BoardColumn, move: MoveOption) => {
     const before = board;
@@ -563,11 +598,39 @@ export function PipelineBoard({
           </div>
         ))}
       </nav>
-      <div className={styles.columns} ref={scroller}>
-        {active?.columns.map(column)}
-        <div className={styles.rail}>
-          {closed.map((group) => group.columns.map(column))}
+      <div
+        className={styles.columnsWrap}
+        data-fade-left={edges.left ? "" : undefined}
+        data-fade-right={edges.right ? "" : undefined}
+      >
+        <div className={styles.columns} ref={scroller} onScroll={measure}>
+          {active?.columns.map(column)}
+          <div className={styles.rail}>
+            {closed.map((group) => group.columns.map(column))}
+          </div>
         </div>
+        {edges.left ? (
+          <button
+            type="button"
+            className={styles.edgeButton}
+            data-side="left"
+            aria-label={`${edges.left} earlier ${edges.left === 1 ? "stage" : "stages"}`}
+            onClick={() => page(-1)}
+          >
+            <ChevronLeft size={16} aria-hidden="true" />
+          </button>
+        ) : null}
+        {edges.right ? (
+          <button
+            type="button"
+            className={styles.edgeButton}
+            data-side="right"
+            onClick={() => page(1)}
+          >
+            {edges.right} more
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
       {moving ? (
         <StageSheet

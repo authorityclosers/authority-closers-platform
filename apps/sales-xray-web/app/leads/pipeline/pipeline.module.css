@@ -145,7 +145,7 @@
   flex: 0 0 100%;
   flex-direction: column;
   gap: 8px;
-  padding: 10px;
+  padding: 12px 8px 8px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-lg);
   background: var(--sx-sunken);
@@ -173,27 +173,59 @@
   box-shadow: var(--sx-focus-ring);
 }
 
+/* One height for every head side by side: up to two lines of name, badges on
+   the right. */
 .columnHead {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 0 4px;
 }
 
 .columnHead h3 {
+  display: -webkit-box;
   min-width: 0;
   margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
   font-weight: 700;
-  overflow-wrap: anywhere;
+  line-height: 20px;
+  overflow-wrap: break-word;
+}
+
+.headBadges {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.headCount {
+  min-width: 24px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
 }
 
 .flag {
-  padding: 1px 8px;
+  height: 20px;
+  padding: 0 8px;
   border-radius: var(--sx-radius-pill);
   font-size: var(--sx-text-xs);
   font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
 }
 
 .flag[data-tone="late"] {
@@ -232,16 +264,25 @@
   box-shadow: var(--sx-shadow-1);
 }
 
-.card[data-late] {
-  border-left: 3px solid var(--sx-bad);
+/* Late: a red edge inside the card, so its text lines up with the others. */
+.card[data-late]::before {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--sx-bad);
+  content: "";
 }
 
 .cardOpen {
   display: grid;
   min-width: 0;
   flex: 1;
-  gap: 3px;
-  padding: 10px 6px 10px 12px;
+  gap: 4px;
+  padding: 16px;
+  border-radius: inherit;
   border: 0;
   background: none;
   color: inherit;
@@ -266,56 +307,61 @@
   box-shadow: var(--sx-focus-ring);
 }
 
-.cardTop {
-  display: flex;
-  min-width: 0;
-  align-items: center;
-  gap: 6px;
-}
-
 .cardName {
   min-width: 0;
   overflow: hidden;
   color: var(--sx-ink);
   font-size: var(--sx-text-md);
   font-weight: 700;
+  line-height: 20px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.rot {
-  width: 8px;
-  height: 8px;
-  flex: none;
-  border-radius: 50%;
-  background: var(--sx-warn);
-}
-
-.cardLine,
-.cardLatest {
+/* One line that fits: the context first, then the time. When both don't fit,
+   the context wraps to a hidden second line, whole, and the time stays. */
+.cardMeta {
+  display: flex;
+  height: 18px;
   min-width: 0;
+  flex-flow: row-reverse wrap;
+  justify-content: flex-end;
   overflow: hidden;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
-  text-overflow: ellipsis;
+  line-height: 18px;
   white-space: nowrap;
 }
 
-.cardLatest {
-  color: var(--sx-ink-2);
+.cardContext::after {
+  margin: 0 6px;
+  content: "·";
+}
+
+.cardTime {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.cardTime[data-old] {
+  color: color-mix(in srgb, var(--sx-warn) 55%, var(--sx-ink));
+  font-weight: 600;
 }
 
 .cardFoot {
   display: flex;
   min-width: 0;
+  height: 24px;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 8px;
 }
 
 .next {
-  padding: 2px 8px;
+  height: 24px;
+  padding: 0 10px;
+  line-height: 24px;
   border-radius: var(--sx-radius-pill);
   background: var(--sx-fill-soft);
   color: var(--sx-ink-2);
@@ -342,7 +388,11 @@
 
 .owner {
   display: inline-flex;
+  width: 24px;
+  height: 24px;
   flex: none;
+  align-items: center;
+  justify-content: center;
 }
 
 .cardMove {
@@ -364,15 +414,32 @@
 }
 
 .cardSkeleton {
-  height: 92px;
+  height: 104px;
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
 }
 
-/* ---------- computers: side by side, a closed rail ---------- */
+/* The columns' frame: on computers the edge fades and says how many stages
+   are out of view. */
+.columnsWrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  --fade-left: 0px;
+  --fade-right: 0px;
+}
+
+.edgeButton {
+  display: none;
+}
+
+/* ---------- computers: one width for every column, scrolled sideways ---------- */
 
 @media (min-width: 900px) {
-  /* Every column is in view: the strip would only repeat their heads. */
+  /* The column heads name every stage: the strip would only repeat them. */
   .strip {
     display: none;
   }
@@ -381,21 +448,71 @@
     scroll-snap-type: none;
   }
 
+  .columnsWrap[data-fade-left] .columns,
+  .columnsWrap[data-fade-right] .columns {
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--fade-left),
+      #000 calc(100% - var(--fade-right)),
+      transparent 100%
+    );
+  }
+
+  .columnsWrap[data-fade-left] {
+    --fade-left: 32px;
+  }
+
+  .columnsWrap[data-fade-right] {
+    --fade-right: 112px;
+  }
+
   .column {
-    flex: 1 1 0;
-    min-width: 188px;
+    flex: 0 0 248px;
   }
 
-  .rail {
-    display: flex;
-    flex: 0 0 220px;
-    flex-direction: column;
-    gap: 12px;
+  .columnHead {
+    min-height: 40px;
   }
 
-  .rail .column {
-    flex: 1 1 0;
-    min-height: 120px;
+  /* Won, Lost and Junk follow the open stages, a step apart. */
+  .rail > .column:first-child {
+    margin-left: 12px;
+  }
+
+  /* In the bottom corner, over the faded edge: never on a stage name or a
+     card's words. */
+  .edgeButton {
+    position: absolute;
+    bottom: 12px;
+    display: inline-flex;
+    min-height: 32px;
+    align-items: center;
+    gap: 4px;
+    padding: 0 10px;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--sx-radius-pill);
+    background: var(--sx-surface);
+    box-shadow: var(--sx-shadow-1);
+    color: var(--sx-ink);
+    font: inherit;
+    font-size: var(--sx-text-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .edgeButton[data-side="right"] {
+    right: 4px;
+  }
+
+  .edgeButton[data-side="left"] {
+    left: 4px;
+    padding: 0 6px;
+  }
+
+  .edgeButton:focus-visible {
+    outline: none;
+    box-shadow: var(--sx-focus-ring);
   }
 }
 
@@ -796,6 +913,25 @@
   --bar: var(--sx-accent);
 }
 
+/* Stage names are long ("Demo / Zoom Meeting Completed"): they wrap, never end in
+   "…", and in a narrow panel (a phone) each row puts the name and count above a
+   full-width bar (sales-xray-ux rule 4; Lead OS phone pass, 24 Oct 2026). */
+.bars {
+  container-type: inline-size;
+}
+
+@container (max-width: 440px) {
+  .bars li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 4px;
+  }
+
+  .barTrack {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
 .bars li[data-tone="won"] {
   --bar: var(--sx-good);
 }
@@ -806,11 +942,10 @@
 }
 
 .barLabel {
-  overflow: hidden;
+  min-width: 0;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .barTrack {
