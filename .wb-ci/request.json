@@ -1,0 +1,23 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "07638854a3965aa72a6cc87a3103312c44524044",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "packages/python/ac_platform/identity/application.py",
+    "packages/python/ac_platform/identity/repositories.py",
+    "tests/database/test_identity_parallel_reads_postgresql.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/database/test_identity_parallel_reads_postgresql.py",
+    "tests/unit/identity",
+    "tests/unit/http/test_auth_routes.py",
+    "tests/unit/http/test_sales_xray_auth.py"
+  ],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
