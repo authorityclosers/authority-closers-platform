@@ -768,7 +768,18 @@ TASKS_PARITY_TABLES = LEAD_OS_PARITY_TABLES + (
     "lead_desk_tasks",
     "lead_desk_task_reminders",
 )
+# 0130 adds the team engine's targets and nudge ledger (two tables).
+TEAM_PARITY_MIGRATION_HEAD = "20261025_0130"
+TEAM_PARITY_CONTRACT = "ac-postgres-parity-v97"
+TEAM_PARITY_TABLES = TASKS_PARITY_TABLES + (
+    "lead_desk_targets",
+    "lead_desk_nudges",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    TEAM_PARITY_MIGRATION_HEAD: (
+        TEAM_PARITY_CONTRACT,
+        TEAM_PARITY_TABLES,
+    ),
     TASKS_PARITY_MIGRATION_HEAD: (
         TASKS_PARITY_CONTRACT,
         TASKS_PARITY_TABLES,
