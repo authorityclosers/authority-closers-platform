@@ -3,7 +3,8 @@
 @@ -223,6 +223,19 @@
  fi
  say "PR #$PR"
- 
+-
++
 +# AUT-2216: supplementary trusted check. Keep existing staging-artifact CI.
 +BASE=$(gh pr view "$PR" -R "$REPO" --json baseRefOid --jq .baseRefOid) || fail "cannot pin PR base"
 +[[ "$BASE" =~ ^[0-9a-f]{40}$ ]] || fail "invalid PR base"
@@ -23,7 +24,8 @@
 @@ -245,5 +258,14 @@
  done
  say "checks green"
- 
+-
++
 +if [ -n "$REHEARSAL_PID" ]; then
 +  wait "$REHEARSAL_PID" || fail "trusted staging rehearsal failed"
 +  CURRENT_BASE=$(gh pr view "$PR" -R "$REPO" --json baseRefOid --jq .baseRefOid) || fail "cannot recheck base"
