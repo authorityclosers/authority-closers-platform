@@ -16,6 +16,7 @@ import {
   RefreshCw,
   ShieldCheck,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useId, useState, type ReactNode } from "react";
 
 import { notify } from "../notice-center";
@@ -29,6 +30,7 @@ import {
   readMetaPages,
   turnOnPage,
   type AppHealth,
+  type Blocker,
   type MetaForm,
   type MetaPage,
   type Review,
@@ -78,8 +80,15 @@ function pagesFrom(app: AppHealth): MetaPage[] {
   }));
 }
 
-/** Where Meta's review of Sales Xray stands, and what works meanwhile. */
-export function ReviewNote({ review }: { review: Review }) {
+/** Where Meta's review of Sales Xray stands, and what works meanwhile; with the
+ * link that brings ad leads in some other way until Meta approves, when there is one. */
+export function ReviewNote({
+  review,
+  fix = null,
+}: {
+  review: Review;
+  fix?: Blocker | null;
+}) {
   const pending = review.state === "pending";
   const Icon = pending ? Hourglass : ShieldCheck;
   return (
@@ -100,6 +109,11 @@ export function ReviewNote({ review }: { review: Review }) {
         </small>
         <p>{review.worksNow}</p>
         {review.after ? <p>{review.after}</p> : null}
+        {pending && fix?.page && fix.action ? (
+          <Link href={fix.page} className={styles.reviewFix}>
+            {fix.action} ›
+          </Link>
+        ) : null}
       </div>
     </section>
   );
@@ -468,7 +482,12 @@ export function MetaSetup({
 
   return (
     <div className={styles.setup}>
-      {app.review ? <ReviewNote review={app.review} /> : null}
+      {app.review ? (
+        <ReviewNote
+          review={app.review}
+          fix={app.blockers.find((item) => item.page) ?? null}
+        />
+      ) : null}
       <ol className={styles.steps} aria-label="Set up lead ads">
         <Step
           number={1}
