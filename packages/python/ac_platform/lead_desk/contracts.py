@@ -153,6 +153,37 @@ class Badge(Model):
     generated_at: datetime
 
 
+# Leads sorted and filtered on the server, so a long list sorts as a whole, not
+# one page at a time (owner, 24 Oct 2026).
+LeadSort = Literal["next_action", "last_contact", "name", "created"]
+LeadDue = Literal["late", "today", "week", "none"]
+LeadSince = Literal["today", "week", "month", "never"]
+LeadMade = Literal["today", "week", "month"]
+WorkDay = Literal["today", "yesterday", "week"]
+
+
+class ActivityItem(Model):
+    """One thing a seller did on a lead: a call, its outcome, a note, a stage move, a
+    meeting or a message."""
+
+    event_id: UUID
+    lead_id: UUID
+    lead_name: str
+    stage_label: str | None
+    event: LeadEventView
+
+
+class ActivityPage(Model):
+    """A seller's own work, newest first (My work)."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    items: tuple[ActivityItem, ...]
+    # The next page's upper bound, when there is more.
+    next_before: datetime | None
+    # How many of each kind in the whole window: "12 calls, 3 notes".
+    counts: dict[str, int] = Field(default_factory=dict)
+
+
 class LeadPage(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     leads: tuple[LeadRow, ...]

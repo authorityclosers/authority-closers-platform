@@ -38,6 +38,8 @@ from ac_platform.lead_desk.capture import (
 )
 from ac_platform.lead_desk.contracts import (
     PHONE_CHECKS,
+    ActivityItem,
+    ActivityPage,
     AlertText,
     Badge,
     Board,
@@ -58,12 +60,16 @@ from ac_platform.lead_desk.contracts import (
     FollowUp,
     GroupRow,
     LeadDetail,
+    LeadDue,
     LeadEdit,
     LeadEventView,
+    LeadMade,
     LeadMatch,
     LeadPage,
     LeadRow,
     LeadsDeleted,
+    LeadSince,
+    LeadSort,
     Me,
     MeetingClosed,
     MeetingCommand,
@@ -102,6 +108,7 @@ from ac_platform.lead_desk.contracts import (
     StageSuggestion,
     TakingLeads,
     Team,
+    WorkDay,
     WorkHoursCommand,
     WorkHoursView,
 )
@@ -143,6 +150,11 @@ SELLER_ROLES = ("owner", "admin", "member")
 QUEUE_LIMIT = 30
 UPCOMING_LIMIT = 20
 PAGE_SIZE = 50
+# My work: what a seller does on a lead (not imports, edits or assignments).
+WORK_KINDS = ("call", "result", "note", "stage", "meeting", "message", "scheduled")
+WORK_PAGE = 100
+# Days back from today's start for "this week" and "this month".
+BACK_DAYS: dict[str, int] = {"today": 0, "week": 6, "month": 29}
 DEVICES_PER_PERSON = 5
 DEFAULT_MAX_OPEN = 50
 # Calls the phone logged by itself (UX study item 5): the phone book is the leads
@@ -933,6 +945,12 @@ class LeadDesk:
         test_only: bool = False,
         owner: UUID | None = None,
         pipeline: str | None = None,
+        sort: LeadSort | None = None,
+        descending: bool | None = None,
+        source: str | None = None,
+        due: LeadDue | None = None,
+        contact: LeadSince | None = None,
+        created: LeadMade | None = None,
     ) -> LeadPage:
         limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_manage:
@@ -961,6 +979,7 @@ class LeadDesk:
             if len(digits) >= 4:
                 terms.append(Lead.phone.like(f"%{digits}%"))
             where.append(or_(*terms))
+        where.extend(self._list_filters(source=source, due=due, contact=contact, created=created))
         # Every stage's count for the same people and search, before the stage
         # filter: the stage tabs' numbers (owner, 22 Oct 2026).
         stage_counts = {
@@ -976,11 +995,13 @@ class LeadDesk:
         elif stage is not None:
             where.append(Lead.stage == stage)
         total = int(await self.db.scalar(select(func.count()).where(*where)) or 0)
-        order = (
+        order: tuple[Any, ...] = (
             (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at)
             if stage == "open" or stage in OPEN_STAGES
             else (Lead.updated_at.desc(),)
         )
+        if sort is not None:
+            order = self._list_order(sort, descending)
         leads = (
             await self.db.scalars(
                 select(Lead).where(*where).order_by(*order).offset(offset).limit(limit)
@@ -992,6 +1013,142 @@ class LeadDesk:
             total=total,
             next_offset=offset + limit if offset + limit < total else None,
             stage_counts=stage_counts,
+        )
+
+    def _list_filters(
+        self,
+        *,
+        source: str | None,
+        due: LeadDue | None,
+        contact: LeadSince | None,
+        created: LeadMade | None,
+    ) -> list[Any]:
+        """The list's filters, by the business's day (India time, as the desk counts days):
+        where the lead came from, its next follow-up, the last contact, when it came."""
+        day = self._day_start()
+        where: list[Any] = []
+        if source is not None:
+            where.append(Lead.source == source)
+        if due == "late":
+            where.append(and_(Lead.stage.in_(OPEN_STAGES), Lead.next_action_at < self.now))
+        elif due == "today":
+            where.append(
+                and_(Lead.next_action_at >= day, Lead.next_action_at < day + timedelta(days=1))
+            )
+        elif due == "week":
+            where.append(
+                and_(Lead.next_action_at >= day, Lead.next_action_at < day + timedelta(days=7))
+            )
+        elif due == "none":
+            # No next step: an open lead past New with nothing planned.
+            where.append(
+                and_(
+                    Lead.stage.in_(OPEN_STAGES),
+                    Lead.stage != "new",
+                    Lead.next_action_at.is_(None),
+                )
+            )
+        if contact == "never":
+            where.append(Lead.last_contact_at.is_(None))
+        elif contact is not None:
+            where.append(Lead.last_contact_at >= day - timedelta(days=BACK_DAYS[contact]))
+        if created is not None:
+            where.append(Lead.created_at >= day - timedelta(days=BACK_DAYS[created]))
+        return where
+
+    @staticmethod
+    def _list_order(sort: LeadSort, descending: bool | None) -> tuple[Any, ...]:
+        """A sort over the whole list. By default the next action and the name go up,
+        the last contact and the newest arrival come first; empty values go last."""
+        column: Any = {
+            "next_action": Lead.next_action_at,
+            "last_contact": Lead.last_contact_at,
+            "name": func.lower(Lead.name),
+            "created": Lead.created_at,
+        }[sort]
+        down = descending if descending is not None else sort in ("last_contact", "created")
+        primary = column.desc() if down else column.asc()
+        return (primary.nulls_last(), Lead.id)
+
+    async def activity(
+        self,
+        *,
+        day: WorkDay = "today",
+        before: datetime | None = None,
+        person: UUID | None = None,
+        limit: int = WORK_PAGE,
+    ) -> ActivityPage:
+        """What a seller did, newest first: calls, outcomes, notes, stage moves, meetings
+        and messages, on the leads the viewer can see. A seller sees their own work; an
+        owner or admin may look at a seller's (a private call stays private)."""
+        who = person or self.viewer.person_id
+        if who != self.viewer.person_id and not self.viewer.can_manage:
+            raise DeskError(403, "Only owners and admins see someone else's work.")
+        limit = max(1, min(WORK_PAGE, limit))
+        start = self._day_start()
+        if day == "yesterday":
+            after, upto = start - timedelta(days=1), start
+        elif day == "week":
+            after, upto = start - timedelta(days=6), self.now + timedelta(minutes=1)
+        else:
+            after, upto = start, self.now + timedelta(minutes=1)
+        window = [
+            LeadEvent.tenant_id == self.tenant_id,
+            LeadEvent.actor_person_id == who,
+            LeadEvent.kind.in_(WORK_KINDS),
+            LeadEvent.created_at >= after,
+            LeadEvent.created_at < upto,
+            self._visible(),
+        ]
+        joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
+        counts = {
+            str(kind): int(count)
+            for kind, count in (
+                await self.db.execute(
+                    select(LeadEvent.kind, func.count())
+                    .join(Lead, joined)
+                    .where(*window)
+                    .group_by(LeadEvent.kind)
+                )
+            ).all()
+        }
+        page = [*window]
+        if before is not None:
+            page.append(LeadEvent.created_at < before)
+        rows = (
+            await self.db.execute(
+                select(LeadEvent, Lead)
+                .join(Lead, joined)
+                .where(*page)
+                .order_by(LeadEvent.created_at.desc(), LeadEvent.id.desc())
+                .limit(limit + 1)
+            )
+        ).all()
+        more = len(rows) > limit
+        rows = rows[:limit]
+        hidden = await self._private_calls(after) if who != self.viewer.person_id else frozenset()
+        names = await self._names([who])
+        labels: dict[str, journeys.Journey] = {}
+        items: list[ActivityItem] = []
+        for event, lead in rows:
+            if str(event.id) in hidden:
+                continue
+            key = journeys.pipeline_of(lead)
+            if key not in labels:
+                labels[key] = await self._labels(key)
+            items.append(
+                ActivityItem(
+                    event_id=event.id,
+                    lead_id=lead.id,
+                    lead_name=lead.name,
+                    stage_label=labels[key].label(lead.stage, lead.step),
+                    event=self._event_view(event, names),
+                )
+            )
+        return ActivityPage(
+            items=tuple(items),
+            next_before=rows[-1][0].created_at if more and rows else None,
+            counts=counts,
         )
 
     async def detail(self, lead_id: UUID) -> LeadDetail:
