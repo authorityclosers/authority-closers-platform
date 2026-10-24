@@ -1,0 +1,12 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "4652ffc382b7ef34250e0e8422c6d074fdbb10fd",
+  "full": true,
+  "checks": [],
+  "changed_files": null,
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
