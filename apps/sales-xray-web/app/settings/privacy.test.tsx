@@ -2,6 +2,13 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+const phone = vi.hoisted(() => ({
+  tell: vi.fn(async (on: boolean) => {
+    void on;
+  }),
+}));
+vi.mock("../leads/native-phone", () => ({ tellPhoneTelemetry: phone.tell }));
+
 import { telemetry } from "../telemetry";
 import { PrivacySettings, type AnalyticsPreferences } from "./privacy";
 
@@ -113,6 +120,8 @@ it("turns yours off after asking, saves it and has the page ask again what it ma
     body: { enabled: false },
   });
   expect(refresh).toHaveBeenCalled();
+  // The phone app stops collecting, and its crash reports stop, too.
+  expect(phone.tell).toHaveBeenLastCalledWith(false);
   expect(switches()[0]?.getAttribute("aria-checked")).toBe("false");
   expect(host.textContent).toContain(
     "Off: nothing about how you use the app is recorded",

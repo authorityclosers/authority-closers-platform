@@ -9,7 +9,7 @@ import type { Branding } from "./branding-store";
 import {
   WorkspacePicker,
   WorkspaceTile,
-  workspaceLine,
+  workspaceShortLine,
   workspaceName,
   type PickerWorkspace,
 } from "./workspace-picker";
@@ -98,7 +98,7 @@ export function WorkspaceSwitcher({
         </span>
         <span className={styles.copy}>
           <b>{workspaceName(shown)}</b>
-          <small>{workspaceLine(shown)}</small>
+          <small>{workspaceShortLine(shown)}</small>
         </span>
         <ChevronsUpDown
           size={14}

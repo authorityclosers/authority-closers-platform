@@ -127,6 +127,14 @@
   text-decoration: none;
 }
 
+/* Google Play's button: one line at 390 px (a label, no download arrow). */
+.play {
+  padding: 0 16px;
+  font-size: 16px;
+  text-align: center;
+  text-wrap: balance;
+}
+
 .download:focus-visible,
 .copy:focus-visible {
   outline: none;
@@ -218,6 +226,19 @@
 .steps strong {
   color: var(--lx-ink);
   font-size: 15px;
+}
+
+/* The file, behind its question, once Google Play leads (24 Oct 2026). */
+.fallback {
+  margin-top: 16px;
+}
+
+.fallback > summary {
+  padding: 12px 0;
+  color: var(--lx-ink-2);
+  font-size: 14px;
+  font-weight: 650;
+  cursor: pointer;
 }
 
 .small {

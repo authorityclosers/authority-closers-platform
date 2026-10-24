@@ -12,7 +12,8 @@ export type Kind =
   | "follow_up"
   | "interested"
   | "won"
-  | "lost";
+  | "lost"
+  | "junk";
 
 export type StageView = {
   key: string;
@@ -399,6 +400,7 @@ export const KIND_ORDER: Kind[] = [
   "interested",
   "won",
   "lost",
+  "junk",
   "not_connected",
 ];
 

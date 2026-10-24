@@ -5,6 +5,9 @@
  * clear ... we might need a documentation"): the documentation first, then API
  * keys and a real request to try, your AI assistant step by step, the webhook,
  * hand-over and your own apps. Owners and admins only, as before.
+ * 24 Oct 2026 (orchestrator: "redo Settings → Connections / Developers"): the
+ * AI assistant comes first, ChatGPT included, and the docs are one quiet
+ * line, so "New key" is the screen's one filled button.
  */
 import Link from "next/link";
 import { useState } from "react";
@@ -36,6 +39,7 @@ export function DevelopersSection() {
           Read the docs
         </Link>
       </section>
+      <AssistantSetup />
       <OrganisationView
         embedded
         sections={["integrations"]}
@@ -45,13 +49,10 @@ export function DevelopersSection() {
           refresh,
           extras: {
             keys: (
-              <>
-                <TryApi
-                  freshKey={freshKey}
-                  onUsed={() => setRefresh((value) => value + 1)}
-                />
-                <AssistantSetup />
-              </>
+              <TryApi
+                freshKey={freshKey}
+                onUsed={() => setRefresh((value) => value + 1)}
+              />
             ),
           },
         }}

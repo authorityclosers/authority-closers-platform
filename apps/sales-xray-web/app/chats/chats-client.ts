@@ -691,30 +691,44 @@ export function waitTone(
   return "neutral";
 }
 
-const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+const sameDay = (a: Date, b: Date) =>
+  a.getFullYear() === b.getFullYear() &&
+  a.getMonth() === b.getMonth() &&
+  a.getDate() === b.getDate();
+
+// Each time format is made once: a phone takes a millisecond or more to make
+// one, and a long Chats list made several per row (24 Oct 2026: 150 chats
+// took 0.8-2.2 s to appear at a phone's speed).
+const formats = new Map<string, Intl.DateTimeFormat>();
+function formatted(at: Date, options: Intl.DateTimeFormatOptions): string {
+  const key = JSON.stringify(options);
+  let format = formats.get(key);
+  if (!format) {
+    format = new Intl.DateTimeFormat(undefined, options);
+    formats.set(key, format);
+  }
+  return format.format(at);
+}
+const HOUR_MINUTE: Intl.DateTimeFormatOptions = {
+  hour: "numeric",
+  minute: "2-digit",
+};
 
 /** The list's time: 14:05 today, Yesterday, Mon this week, else 12 Oct. */
 export function listTime(iso: string, now: Date = new Date()): string {
   const at = new Date(iso);
-  if (sameDay(at, now))
-    return at.toLocaleTimeString(undefined, {
-      hour: "numeric",
-      minute: "2-digit",
-    });
+  if (sameDay(at, now)) return formatted(at, HOUR_MINUTE);
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
   if (sameDay(at, yesterday)) return "Yesterday";
   if (now.getTime() - at.getTime() < 6 * 24 * 3600 * 1000)
-    return at.toLocaleDateString(undefined, { weekday: "short" });
-  return at.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+    return formatted(at, { weekday: "short" });
+  return formatted(at, { day: "numeric", month: "short" });
 }
 
 /** A bubble's time of day. */
 export function clockTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
+  return formatted(new Date(iso), HOUR_MINUTE);
 }
 
 /** The day separator between messages: Today, Yesterday, Monday, 12 October. */
@@ -725,8 +739,8 @@ export function dayLabel(iso: string, now: Date = new Date()): string {
   yesterday.setDate(now.getDate() - 1);
   if (sameDay(at, yesterday)) return "Yesterday";
   if (now.getTime() - at.getTime() < 6 * 24 * 3600 * 1000)
-    return at.toLocaleDateString(undefined, { weekday: "long" });
-  return at.toLocaleDateString(undefined, {
+    return formatted(at, { weekday: "long" });
+  return formatted(at, {
     day: "numeric",
     month: "long",
     ...(at.getFullYear() === now.getFullYear() ? {} : { year: "numeric" }),

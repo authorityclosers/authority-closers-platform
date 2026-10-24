@@ -1,6 +1,7 @@
-/* First run in the phone app: a full screen above the page, one permission at a
-   time. The app pads the page clear of the bars and the cut-out (SafeArea), so
-   only the gutter is added here. */
+/* "Set up this phone" (phone-setup-flow.tsx): a full screen above the page,
+   one thing at a time. A modal dialog, so it sits above Phone setup's own
+   sheet. The app pads the page clear of the bars and the cut-out
+   (SafeArea), so only the gutter is added here. Tokens only. */
 .page {
   position: fixed;
   inset: 0;
@@ -8,11 +9,69 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
   padding: var(--sx-gutter);
+  border: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   background: var(--sx-surface);
   color: var(--sx-ink);
+}
+
+.page::backdrop {
+  background: var(--sx-surface);
+}
+
+/* Progress dots on the left, close on the right. */
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(440px, 100%);
+  min-height: 44px;
+  margin: 0 auto;
+}
+
+.dots {
+  display: flex;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dots li {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sx-line);
+  transition: background-color var(--lx-dur-move) var(--lx-ease-move);
+}
+
+.dots li[data-on] {
+  background: var(--sx-accent);
+}
+
+.close {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin-right: -10px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.close:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
 }
 
 .body {
@@ -25,13 +84,6 @@
   margin: 0 auto;
 }
 
-.progress {
-  margin: 0;
-  color: var(--sx-muted);
-  font-size: 13px;
-  font-weight: 600;
-}
-
 .icon {
   display: grid;
   place-items: center;
@@ -42,63 +94,76 @@
   color: var(--sx-accent);
 }
 
-.icon[data-done] {
-  background: color-mix(in oklab, var(--sx-good) 14%, transparent);
-  color: var(--sx-good);
-}
-
 .title {
   margin: 4px 0 0;
   font-size: 22px;
   line-height: 1.25;
 }
 
+/* The one sentence on why. */
 .line {
   margin: 0;
-  color: var(--sx-muted);
-  font-size: 15px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-md);
   line-height: 1.5;
 }
 
 .steps {
-  margin: 0;
-  padding-left: 20px;
   display: grid;
   gap: 6px;
-  font-size: 15px;
+  margin: 0;
+  padding-left: 20px;
+  font-size: var(--sx-text-sm);
   line-height: 1.45;
 }
 
-.summary {
-  display: grid;
-  gap: 8px;
-  width: 100%;
-  margin: 4px 0;
-  padding: 0;
-  list-style: none;
-}
-
-.summary li {
+/* Which SIM is for work, as chips. */
+.sims {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.sims button {
+  min-height: 44px;
+  padding: 0 16px;
   border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-md);
-  color: var(--sx-muted);
-}
-
-.summary li[data-on] {
+  border-radius: 999px;
+  background: var(--sx-surface);
   color: var(--sx-ink);
+  font: inherit;
+  cursor: pointer;
 }
 
-.summary li[data-on] svg {
-  color: var(--sx-good);
+.sims button[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  font-weight: 600;
 }
 
-.summary li span {
-  margin-left: auto;
-  font-size: 13px;
+/* Google Play's wording on what is read and what leaves the phone: small,
+   but on the screen before Android asks. */
+.fine {
+  display: grid;
+  gap: 6px;
+  margin: 4px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.45;
+}
+
+.fine div {
+  display: grid;
+  gap: 1px;
+}
+
+.fine dt {
+  font-weight: 650;
+}
+
+.fine dd {
+  margin: 0;
 }
 
 .actions {
@@ -111,4 +176,10 @@
 .actions button {
   min-height: 48px;
   justify-content: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dots li {
+    transition: none;
+  }
 }

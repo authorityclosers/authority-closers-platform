@@ -1,6 +1,7 @@
 /* Report navigation colours come only from semantic Lightbox tokens, so the tab
    strip, section list and return control always match the surface they sit on.
-   The workspace is a light report surface (data-lx-surface, tokens.css). */
+   The workspace is a light report surface in light and follows the app in
+   dark (data-lx-surface, tokens.css). */
 .workspace {
   --report-ink: var(--lx-ink);
   --report-muted: var(--lx-muted);

@@ -10,6 +10,11 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, field_validato
 
 from ac_platform.lead_desk.vocabulary import Channel, ConnectedStage, Reason
 
+MeetingMode = Literal["zoom", "google_meet", "phone", "in_person", "other"]
+MoveVia = Literal["board", "sheet", "after_call", "table", "bulk", "meeting", "chat", "api"]
+# How the seller knows they spoke to the lead, for a move that says a talk happened.
+Contact = Literal["call", "reply", "seller_said"]
+
 SCHEMA: Literal["lead-desk/1"] = "lead-desk/1"
 # The phone setup checklist (UX study item 7), in the order the app shows it.
 PHONE_CHECKS: tuple[str, ...] = (
@@ -105,6 +110,16 @@ class LeadRow(Model):
     # (Salestrail's missed-call queue): the newest such call and how many.
     missed_at: datetime | None = None
     missed_calls: int = 0
+    # Lead OS (24 Oct 2026): the card's fields from the sales team's spec (section 8).
+    stage_at: datetime | None = None
+    group: Literal["active", "won", "lost", "junk"] = "active"
+    outcome_reason: str | None = None
+    outcome_reason_label: str | None = None
+    last_contact_at: datetime | None = None
+    next_action_note: str | None = None
+    # An open lead past New with no follow-up set (spec section 6: every active lead
+    # has a next action).
+    no_next_action: bool = False
 
 
 class MessageTemplate(Model):
@@ -214,6 +229,19 @@ class LeadEventView(Model):
     event_id: UUID | None = None
     can_hide: bool = False
     private: bool = False
+    # A stage move (Lead OS): from where, how (move, close, reopen, reclassify), who or
+    # what made it (seller, ai_suggestion, rule, import, merge, capture), and the Lost or
+    # Junk reason. A call that moved the lead carries these too.
+    action: str | None = None
+    from_label: str | None = None
+    move_source: str | None = None
+    outcome_reason: str | None = None
+    outcome_reason_label: str | None = None
+    # A meeting's history: scheduled, rescheduled, done, missed or cancelled.
+    meeting_action: str | None = None
+    starts_at: datetime | None = None
+    from_starts_at: datetime | None = None
+    mode_label: str | None = None
 
 
 class RepOption(Model):
@@ -232,6 +260,146 @@ class StageSuggestion(Model):
     kind: str
     why: str
     at: datetime
+
+
+class ReasonOption(Model):
+    key: str
+    label: str
+
+
+class MoveOption(Model):
+    """One stage this lead may go to now: what the server needs (``needs``) and what
+    the sheet also offers (``asks``), with the reasons for Lost and Junk."""
+
+    step: str
+    label: str
+    kind: str
+    milestone: str
+    group: Literal["active", "won", "lost", "junk"]
+    action: Literal["move", "close", "reopen", "reclassify"]
+    needs: tuple[str, ...]
+    asks: tuple[str, ...]
+    reasons: tuple[ReasonOption, ...] = ()
+
+
+class MeetingView(Model):
+    meeting_id: UUID
+    revision: int
+    status: Literal["scheduled", "done", "missed", "cancelled"]
+    starts_at: datetime
+    duration_minutes: int
+    mode: MeetingMode
+    mode_label: str
+    link: str | None
+    location: str | None
+    agenda: str | None
+    outcome_note: str | None
+    host_person_id: UUID | None
+    host_name: str | None = None
+
+
+class BoardColumn(Model):
+    step: str
+    label: str
+    kind: str
+    milestone: str
+    count: int
+    overdue: int
+    no_next: int
+    cards: tuple[LeadRow, ...]
+    next_cursor: str | None = None
+    rot_hours: int | None = None
+    # Where a lead in this column may go, for this person: the board lights these
+    # up while a card is dragged, and the stage sheet asks only what each needs.
+    moves: tuple[MoveOption, ...] = ()
+
+
+class BoardGroup(Model):
+    group: Literal["active", "won", "lost", "junk"]
+    label: str
+    count: int
+    columns: tuple[BoardColumn, ...]
+
+
+class Board(Model):
+    """The pipeline board (Lead OS): every live stage as a column, grouped Active, Won,
+    Lost and Junk. Each lead is in exactly one column."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    pipeline: str
+    version: int
+    total: int
+    groups: tuple[BoardGroup, ...]
+    generated_at: datetime
+
+
+class StageCount(Model):
+    step: str
+    label: str
+    kind: str
+    group: Literal["active", "won", "lost", "junk"]
+    count: int
+
+
+class ConversionView(Model):
+    key: str
+    label: str
+    entered: int
+    passed: int
+    rate: float | None
+
+
+class ReasonCount(Model):
+    label: str
+    count: int
+
+
+class GroupRow(Model):
+    """One seller's or one source's pipeline numbers (counts of leads)."""
+
+    key: str
+    label: str
+    leads: int
+    active: int
+    overdue: int
+    no_next: int
+    created: int
+    connected: int
+    junk: int
+    won: int
+    meetings: int
+    connect_rate: float | None
+    junk_rate: float | None
+    first_response_minutes: int | None
+
+
+class PipelineReport(Model):
+    """The pipeline's numbers (Lead OS; spec section 9): each lead counted once. Counts
+    only, never money."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    pipeline: str
+    days: int
+    generated_at: datetime
+    total: int
+    # Fewer leads than this and the page says the numbers will come.
+    enough: bool
+    groups: dict[str, int]
+    stages: tuple[StageCount, ...]
+    first_connect: ConversionView
+    first_connect_minutes: int | None
+    conversions: tuple[ConversionView, ...]
+    show_rate: float | None
+    lost_now: tuple[ReasonCount, ...]
+    lost_moves: tuple[ReasonCount, ...]
+    junk_now: int
+    junk_moves: int
+    overdue: int
+    no_next: int
+    sellers: tuple[GroupRow, ...]
+    sources: tuple[GroupRow, ...]
+    # Sellers see their own leads' numbers; owners and admins the team's.
+    mine: bool
 
 
 class StageChoice(Model):
@@ -260,6 +428,10 @@ class LeadDetail(Model):
     first_call_minutes: int | None = None
     stage_choices: tuple[StageChoice, ...] = ()
     stage_suggestion: StageSuggestion | None = None
+    # Lead OS: where this lead may go now, for this person (with what each asks), and
+    # its scheduled meeting.
+    moves: tuple[MoveOption, ...] = ()
+    meeting: MeetingView | None = None
 
 
 class PhoneHealth(Model):
@@ -443,6 +615,74 @@ class Sources(Model):
 # ----- commands ----------------------------------------------------------------
 
 
+class MeetingInput(Command):
+    """A meeting's date and time, its kind, and its link or place (spec section 2.5)."""
+
+    starts_at: AwareDatetime
+    duration_minutes: int = Field(default=30, ge=5, le=480)
+    mode: MeetingMode
+    link: str | None = Field(default=None, max_length=500)
+    location: str | None = Field(default=None, max_length=300)
+    agenda: str | None = Field(default=None, max_length=1000)
+
+
+class StageMove(Command):
+    """Move a lead to one of its pipeline's stages (board, stage sheet, table, API)."""
+
+    command_id: UUID
+    expected_revision: int = Field(ge=1)
+    step: str = Field(max_length=40)
+    note: str | None = Field(default=None, max_length=500)
+    outcome_reason: str | None = Field(default=None, max_length=40)
+    reason_note: str | None = Field(default=None, max_length=500)
+    nc_reason: Reason | None = None
+    next_action_at: AwareDatetime | None = None
+    next_action_note: str | None = Field(default=None, max_length=500)
+    meeting: MeetingInput | None = None
+    contact: Contact | None = None
+    source: Literal["seller", "ai_suggestion"] = "seller"
+    suggestion_ref: str | None = Field(default=None, max_length=120)
+    via: MoveVia | None = None
+
+
+class Reopen(Command):
+    """Back to work from Won, Lost or Junk, on the same lead (spec section 7)."""
+
+    command_id: UUID
+    expected_revision: int = Field(ge=1)
+    # None: the stage it was closed from.
+    step: str | None = Field(default=None, max_length=40)
+    next_action_at: AwareDatetime | None = None
+    note: str | None = Field(default=None, max_length=500)
+
+
+class MeetingCommand(Command):
+    """Book a meeting with a lead, or move it (the same meeting, its history kept)."""
+
+    command_id: UUID
+    expected_revision: int = Field(ge=1)
+    meeting: MeetingInput
+
+
+class MeetingDone(Command):
+    command_id: UUID
+    expected_revision: int = Field(ge=1)
+    note: str | None = Field(default=None, max_length=1000)
+    next_action_at: AwareDatetime | None = None
+
+
+class MeetingClosed(Command):
+    """The meeting didn't happen: missed or cancelled, and where the lead stands now."""
+
+    command_id: UUID
+    expected_revision: int = Field(ge=1)
+    status: Literal["missed", "cancelled"]
+    step: str = Field(max_length=40)
+    nc_reason: Reason | None = None
+    next_action_at: AwareDatetime | None = None
+    note: str | None = Field(default=None, max_length=1000)
+
+
 class NewLead(Command):
     command_id: UUID
     source: Literal["manual", "referral"] = "manual"
@@ -474,6 +714,12 @@ class Disposition(Command):
     follow_up_at: AwareDatetime | None = None
     remark: str | None = Field(default=None, max_length=1000)
     deal_value: str | None = Field(default=None, max_length=24)
+    # Lead OS: why it was lost or is junk, a note for "Other", the meeting the call booked,
+    # and the call-fact suggestion the seller took (its ref).
+    outcome_reason: str | None = Field(default=None, max_length=40)
+    reason_note: str | None = Field(default=None, max_length=500)
+    meeting: MeetingInput | None = None
+    suggestion_ref: str | None = Field(default=None, max_length=120)
 
     @field_validator("deal_value")
     @classmethod
@@ -538,6 +784,11 @@ class BulkLeads(Command):
     person_id: UUID | None = None
     step: str | None = Field(default=None, max_length=40)
     pipeline: str | None = Field(default=None, max_length=40)
+    # A move to Lost or Junk gives one reason for all; a move that needs a next action
+    # gives one time for all (Lead OS). A lead the move doesn't suit is skipped.
+    outcome_reason: str | None = Field(default=None, max_length=40)
+    reason_note: str | None = Field(default=None, max_length=500)
+    next_action_at: AwareDatetime | None = None
 
 
 class MovePipeline(Command):

@@ -19,32 +19,18 @@ import { Sheet } from "./sheet-frame";
 import { usePhoneOnboarded } from "./phone-onboarding";
 import { reportPhone } from "./leads-client";
 import {
-  askCallAccess,
-  askNotifications,
-  askRecordingAccess,
-  buzz,
-  callLogSetup,
-  callLogStatus,
   inPhoneApp,
   onPhoneSignal,
-  setupMark,
-  recorderOpen,
-  pickRecordingsFolder,
-  setupOpen,
   setupStatus,
-  type CallLogStatus,
   type SetupStatus,
 } from "./native-phone";
+import { PhoneSetupFlow, type FlowStep } from "./phone-setup-flow";
 import {
-  ALL_FILES_EXPLAINER,
-  FOLDER_EXPLAINER,
   FOLDER_TODO,
   CHECK_ORDER,
   CHECK_TODO,
   checkLabel,
-  explainerFor,
   HIDDEN_TODO,
-  recorderGuide,
   TRUECALLER_NOTE,
   type PhoneCheck,
 } from "./phone-setup-words";
@@ -52,15 +38,6 @@ import styles from "./leads.module.css";
 
 const REPORT_KEY = "sx-leads-phone-report";
 const REPORT_EVERY_MS = 6 * 60 * 60 * 1000;
-const ACTIONS = new Set<PhoneCheck>([
-  "calls",
-  "recordings",
-  "notifications",
-  "recorder",
-  "battery",
-  "autostart",
-  "callLog",
-]);
 
 /** Xiaomi's hidden recordings folder: the Call recordings line asks for All files access (#49). */
 export function needsAllFiles(status: SetupStatus): boolean {
@@ -146,6 +123,8 @@ export const PHONE_SETUP_HASH = "#phone-setup";
 export function PhoneSetupBar() {
   const [status, setStatus] = useState<SetupStatus | null>(null);
   const [open, setOpen] = useState(false);
+  // "Set up this phone": the bar starts the guided flow, at the first thing to do.
+  const [flow, setFlow] = useState(false);
   // The first run asked for each permission: the bar leaves Leads, the
   // checklist stays one tap away in More.
   const onboarded = usePhoneOnboarded();
@@ -177,14 +156,14 @@ export function PhoneSetupBar() {
 
   if (!status) return null;
   const { done, total } = setupProgress(status);
-  if ((done >= total || onboarded) && !open) return null;
+  if ((done >= total || onboarded) && !open && !flow) return null;
 
   return (
     <>
       <button
         type="button"
         className={styles.setupBar}
-        onClick={() => setOpen(true)}
+        onClick={() => setFlow(true)}
       >
         <Smartphone size={18} aria-hidden="true" />
         <span className={styles.setupBarText}>
@@ -198,6 +177,14 @@ export function PhoneSetupBar() {
         </span>
         <ChevronRight size={18} aria-hidden="true" />
       </button>
+      {flow ? (
+        <PhoneSetupFlow
+          onClose={(next) => {
+            setFlow(false);
+            take(next);
+          }}
+        />
+      ) : null}
       <PhoneSetupSheet
         open={open}
         status={status}
@@ -216,6 +203,22 @@ export function PhoneSetupBar() {
   );
 }
 
+/** The lines the guided flow can set up from the checklist. */
+export const FIXABLE = new Set<PhoneCheck>([
+  "calls",
+  "recordings",
+  "notifications",
+  "recorder",
+  "battery",
+  "autostart",
+  "callLog",
+]);
+
+/**
+ * The checklist: one line per need, ticked when done. A line's Set up opens
+ * the guided flow for that one thing (phone-setup-flow.tsx), which says what
+ * Sales X-Ray reads and why before Android asks.
+ */
 export function PhoneSetupSheet({
   open,
   status,
@@ -227,295 +230,71 @@ export function PhoneSetupSheet({
   onStatus: (next: SetupStatus | null) => void;
   onClose: () => void;
 }) {
-  const [view, setView] = useState<PhoneCheck | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [note, setNote] = useState<string | null>(null);
-  const [log, setLog] = useState<CallLogStatus | null>(null);
-  const [sim, setSim] = useState("");
+  const [fix, setFix] = useState<FlowStep | null>(null);
   const { done, total } = setupProgress(status);
-  const guide = recorderGuide(status.recorder, status.family);
 
-  // Back from Android's settings (All files access) with the line done: back to the list.
+  // Back from Android's settings with a line done: the list shows it.
   useEffect(() => {
     if (!open) return;
     return onPhoneSignal((event) => {
-      if (event !== "resume") return;
-      void setupStatus().then((next) => {
-        if (!next) return;
-        onStatus(next);
-        setView((current) =>
-          current && next.checks[current] ? null : current,
-        );
-      });
+      if (event === "resume") void setupStatus().then(onStatus);
     });
   }, [open, onStatus]);
 
-  const show = async (key: PhoneCheck) => {
-    setNote(null);
-    setView(key);
-    if (key === "callLog") {
-      const next = await callLogStatus();
-      setLog(next);
-      setSim(next?.sim || next?.sims[0]?.id || "");
-    }
-  };
-
-  /** Does the line's job, reads the checklist again and goes back to it. */
-  const run = async (key: PhoneCheck, job: () => Promise<unknown>) => {
-    setBusy(true);
-    setNote(null);
-    try {
-      await job();
-      const next = await setupStatus();
-      onStatus(next);
-      if (next?.checks[key]) {
-        buzz("done");
-        setView(null);
-      } else if (
-        key !== "battery" &&
-        key !== "recorder" &&
-        key !== "autostart" &&
-        !(
-          key === "recordings" &&
-          (needsAllFiles(status) || needsFolderPick(status))
-        )
-      )
-        setNote(
-          "Not allowed yet. You can allow it in your phone's settings for Sales X-Ray.",
-        );
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const allow = (key: PhoneCheck) => {
-    switch (key) {
-      case "calls":
-        return run(key, () => askCallAccess().catch(() => false));
-      case "recordings":
-        // Android's All files access screen opens; the line ticks when the seller comes back.
-        if (needsAllFiles(status)) return run(key, () => setupOpen("allFiles"));
-        // Android's folder picker opens at the recordings; the line ticks once it's picked.
-        if (needsFolderPick(status)) return run(key, pickRecordingsFolder);
-        return run(key, askRecordingAccess);
-      case "notifications":
-        return run(key, askNotifications);
-      case "battery":
-        // Android's own screen opens; the line ticks when the seller comes back.
-        return run(key, () => setupOpen("battery"));
-      default:
-        return Promise.resolve();
-    }
-  };
-
-  const explainer =
-    view === "recordings" && needsAllFiles(status)
-      ? ALL_FILES_EXPLAINER
-      : view === "recordings" && needsFolderPick(status)
-        ? FOLDER_EXPLAINER
-        : view
-          ? explainerFor(view, status.store)
-          : undefined;
-
   return (
-    <Sheet
-      open={open}
-      label="Phone setup"
-      onClose={() => {
-        setView(null);
-        onClose();
-      }}
-    >
-      <div className={styles.setupSheet}>
-        <header className={styles.setupHead}>
-          <h2>Phone setup</h2>
-          <p>
-            {done} of {total} done
-          </p>
-          <span className={styles.setupTrack} aria-hidden="true">
-            <i style={{ width: `${(done / total) * 100}%` }} />
-          </span>
-        </header>
-
-        {view === null ? (
-          <>
-            <ol className={styles.setupList} aria-label="Phone setup">
-              {setupLines(status).map((key) => {
-                const ok = status.checks[key] === true;
-                return (
-                  <li key={key} data-done={ok || undefined}>
-                    {ok ? (
-                      <CheckCircle2 size={20} aria-label="Done" />
-                    ) : (
-                      <Circle size={20} aria-label="To do" />
-                    )}
-                    <span>
-                      <strong>{checkLabel(key, status.store)}</strong>
-                      <small>{ok ? "Done" : lineTodo(key, status)}</small>
-                    </span>
-                    {!ok && ACTIONS.has(key) ? (
-                      <Button onClick={() => void show(key)}>Set up</Button>
-                    ) : null}
-                  </li>
-                );
-              })}
-            </ol>
-            {status.truecaller ? (
-              <p className={styles.hint}>{TRUECALLER_NOTE}</p>
-            ) : null}
-            <p className={styles.hint}>
-              Your manager sees which lines are done. Never your calls with
-              other numbers.
+    <>
+      <Sheet open={open} label="Phone setup" onClose={onClose}>
+        <div className={styles.setupSheet}>
+          <header className={styles.setupHead}>
+            <h2>Phone setup</h2>
+            <p>
+              {done} of {total} done
             </p>
-          </>
-        ) : (
-          <section
-            className={styles.setupView}
-            aria-label={checkLabel(view, status.store)}
-          >
-            <h3>{checkLabel(view, status.store)}</h3>
-            {explainer ? (
-              <dl>
-                <div>
-                  <dt>What Sales X-Ray reads</dt>
-                  <dd>{explainer.reads}</dd>
-                </div>
-                <div>
-                  <dt>What leaves your phone</dt>
-                  <dd>{explainer.sends}</dd>
-                </div>
-                <div>
-                  <dt>Why</dt>
-                  <dd>{explainer.why}</dd>
-                </div>
-              </dl>
-            ) : null}
-            {view === "recorder" ? (
-              <>
-                {guide.lead ? <p>{guide.lead}</p> : null}
-                <ol className={styles.setupSteps}>
-                  {guide.steps.map((step) => (
-                    <li key={step}>{step}</li>
-                  ))}
-                </ol>
-              </>
-            ) : null}
-            {view === "autostart" ? (
-              <p>
-                Your phone stops apps that start by themselves. Find Sales X-Ray
-                in the list and switch it on, then come back.
-              </p>
-            ) : null}
-            {view === "callLog" ? (
-              <>
-                <p>
-                  {CHECK_TODO.callLog} Other numbers never leave your phone.
-                </p>
-                {log && log.sims.length > 1 ? (
-                  <div
-                    className={styles.phoneLogSims}
-                    role="group"
-                    aria-label="Work SIM"
-                  >
-                    <span>Work SIM</span>
-                    {log.sims.map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        className={styles.chip}
-                        aria-pressed={sim === item.id}
-                        onClick={() => setSim(item.id)}
-                      >
-                        {item.label || "SIM"}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </>
-            ) : null}
-            {note ? (
-              <p className={styles.error} role="alert">
-                {note}
-              </p>
-            ) : null}
-            <div className={styles.row}>
-              {explainer ? (
-                <Button
-                  variant="primary"
-                  disabled={busy}
-                  onClick={() => void allow(view)}
-                >
-                  {explainer.allow}
-                </Button>
-              ) : null}
-              {view === "recorder" && guide.closed ? (
-                status.recorder?.switchTo ? (
-                  <Button
-                    variant="primary"
-                    disabled={busy}
-                    onClick={() => void recorderOpen("defaultDialer")}
-                  >
-                    Choose the Phone app
-                  </Button>
-                ) : null
-              ) : view === "recorder" ? (
-                <>
-                  <Button
-                    variant="primary"
-                    disabled={busy}
-                    onClick={() => void setupOpen("recorder")}
-                  >
-                    Open call recording settings
-                  </Button>
-                  {status.recorder?.recording === "on" ? null : (
-                    <Button
-                      disabled={busy}
-                      onClick={() =>
-                        void run("recorder", () => setupMark("recorder", true))
-                      }
-                    >
-                      It&apos;s on
-                    </Button>
+            <span className={styles.setupTrack} aria-hidden="true">
+              <i style={{ width: `${(done / total) * 100}%` }} />
+            </span>
+          </header>
+          <ol className={styles.setupList} aria-label="Phone setup">
+            {setupLines(status).map((key) => {
+              const ok = status.checks[key] === true;
+              return (
+                <li key={key} data-done={ok || undefined}>
+                  {ok ? (
+                    <CheckCircle2 size={20} aria-label="Done" />
+                  ) : (
+                    <Circle size={20} aria-label="To do" />
                   )}
-                </>
-              ) : null}
-              {view === "autostart" ? (
-                <>
-                  <Button
-                    variant="primary"
-                    disabled={busy}
-                    onClick={() => void setupOpen("autostart")}
-                  >
-                    Open Autostart
-                  </Button>
-                  <Button
-                    disabled={busy}
-                    onClick={() =>
-                      void run("autostart", () => setupMark("autostart", true))
-                    }
-                  >
-                    Done
-                  </Button>
-                </>
-              ) : null}
-              {view === "callLog" ? (
-                <Button
-                  variant="primary"
-                  disabled={busy}
-                  onClick={() =>
-                    void run("callLog", () => callLogSetup(true, sim))
-                  }
-                >
-                  Turn on
-                </Button>
-              ) : null}
-              <Button variant="ghost" onClick={() => setView(null)}>
-                Not now
-              </Button>
-            </div>
-          </section>
-        )}
-      </div>
-    </Sheet>
+                  <span>
+                    <strong>{checkLabel(key, status.store)}</strong>
+                    <small>{ok ? "Done" : lineTodo(key, status)}</small>
+                  </span>
+                  {!ok && FIXABLE.has(key) ? (
+                    <Button onClick={() => setFix(key as FlowStep)}>
+                      Set up
+                    </Button>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ol>
+          {status.truecaller ? (
+            <p className={styles.hint}>{TRUECALLER_NOTE}</p>
+          ) : null}
+          <p className={styles.hint}>
+            Your manager sees which lines are done. Never your calls with other
+            numbers.
+          </p>
+        </div>
+      </Sheet>
+      {fix ? (
+        <PhoneSetupFlow
+          only={fix}
+          onClose={(next) => {
+            setFix(null);
+            onStatus(next);
+          }}
+        />
+      ) : null}
+    </>
   );
 }

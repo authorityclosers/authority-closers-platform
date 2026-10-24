@@ -26,11 +26,24 @@ wb-ci --sha 1a2b3c4d --full             # a specific workbench commit
 |---|---|
 | `apps/`, `packages/typescript/` | lint (prettier + eslint on the changed files), tsc (affected packages), vitest (`vitest related`) |
 | `apps/sales-xray-web/`, `packages/typescript/ui/`, `packages/typescript/sales-xray-review-ui/` | the above, plus screenshots of the frames those paths affect |
-| `packages/python/`, `tests/`, `alembic`, `migrations/`, `scripts/*.py` | lint (ruff on the changed files, plus mypy) and all 17 Python shards |
+| `packages/python/`, `tests/`, `alembic`, `db/migrations/`, `scripts/*.py` | lint (ruff on the changed files, plus mypy) and all 17 Python shards |
+| `db/migrations/`, the schema gate, `scripts/ci/released_migrations.py` and their tests | **migrations**: released migrations unchanged against `origin/main`, the recovery policy, the gate's docker fixtures, and a rehearsal of the new revisions (upgrade, downgrade, schema comparison, re-upgrade) on a baseline the migrations build |
+| `infra/`, `*.sh`, `*.ps1`, `*.service`, `*.timer`, `scripts/validate-*`, shebang shell scripts under `scripts/` | **control-plane**: `scripts/validate-control-plane.sh` (shellcheck, bash -n, CRLF, pinned images, the infra tests, the PowerShell parse), as on the release PR |
 | workflow, `scripts/ci/wb*`, lockfiles, `package.json`, `pyproject.toml`, `tsconfig*` | everything, as `--full` |
 | docs only | nothing: the summary says so |
 
-`--web`, `--py` and `--visual` force those families.
+`--web`, `--py` and `--visual` force those families; the migrations and control-plane gates still run when their
+paths change. They exist because migration-safety and validate-control-plane used to run only on the release PR,
+so authors learned hours later (v0.86, 24 Oct 2026; docs/ops/migration-safety-root-causes-20261024.md). The release
+PR's migration-safety check rehearses on the same migrations-built baseline. Staging's live schema is rehearsed on the
+server by `ac-ship` (`infra/release/rehearse-staging-migrations.py`, AUT-2215), so no release waits for a published
+staging artifact.
+
+**Migration rules** (the gates enforce them):
+- A migration on `main` is history: never edit it, not even its docstring. Add a new revision.
+- Every new revision's downgrade uses the history guard: lock the tables, and if any history exists raise
+  `RuntimeError("... history requires forward recovery.")` before changing anything; otherwise roll back. Only the
+  revisions before 0088 are forward-only, and that list is frozen. A new revision needs no test-list edit.
 
 **What it prints:**
 - the run URL;

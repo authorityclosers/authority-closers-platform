@@ -39,6 +39,7 @@ from ac_platform.lead_desk.journey import mapping
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey.model import Journey
 from ac_platform.lead_desk.journey.providers import Answer, digest
+from ac_platform.lead_desk.journey.transitions import stages_changed
 from ac_platform.lead_desk.models import (
     Lead,
     LeadConversion,
@@ -71,7 +72,10 @@ def retry_delay(failures: int) -> timedelta:
 
 
 def reached(journey: Journey, kind: str, data: Mapping[str, Any]) -> str | None:
-    """The business's stage a Lead Desk event moves a lead to, or None."""
+    """The business's stage a Lead Desk event moves a lead to, or None. A move the stage
+    list itself made (the template's map) only renames a stage: never a conversion."""
+    if stages_changed(data):
+        return None
     if kind == "captured" or (kind == "repeat" and data.get("reopened") is True):
         stage = journey.resolve("new", None)
         return stage.key if stage else None

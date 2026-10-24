@@ -123,12 +123,13 @@ import {
 } from "./lead-filters";
 import styles from "./leads.module.css";
 
-type Manage = "team" | "sources" | "stages";
+type Manage = "team" | "sources" | "stages" | "numbers";
 
 const MANAGE_TITLE: Record<Manage, string> = {
   team: "Team",
   sources: "Lead sources",
   stages: "Lead stages",
+  numbers: "Pipeline numbers",
 };
 
 const WHO_WORDS: Record<Scope, string> = {
@@ -164,7 +165,12 @@ function viewHref(
 ): string {
   const path = window.location.pathname || LEADS_PATH;
   if (view === "desk") return path;
-  if (view === "team" || view === "sources" || view === "stages")
+  if (
+    view === "team" ||
+    view === "sources" ||
+    view === "stages" ||
+    view === "numbers"
+  )
     return `${path}?tab=${view}`;
   const inPipeline = pipeline
     ? `&pipeline=${encodeURIComponent(pipeline)}`
@@ -172,10 +178,24 @@ function viewHref(
   const who = filters.who ? `&who=${filters.who}` : "";
   const words = filters.q?.trim();
   const q = words ? `&q=${encodeURIComponent(words)}` : "";
+  // The pipeline board (Lead OS): every stage at once, with the same filters.
+  if (view === BOARD) return `${path}?tab=board${inPipeline}${who}${q}`;
   return `${path}?tab=all&stage=${encodeURIComponent(view)}${inPipeline}${who}${q}`;
 }
 
 export { LeadsSkeleton };
+
+/** The pipeline board's view key (Lead OS, 24 Oct 2026). */
+const BOARD = "board";
+const PipelineBoard = dynamic(
+  () => import("./pipeline/board").then((module) => module.PipelineBoard),
+  { ssr: false },
+);
+const PipelineDashboard = dynamic(
+  () =>
+    import("./pipeline/dashboard").then((module) => module.PipelineDashboard),
+  { ssr: false },
+);
 
 // Route splitting (launch readiness, 23 Oct 2026: /leads was 467 KB of
 // script before its first paint on a mid-range phone): the lead sheet and
@@ -528,6 +548,8 @@ export function LeadsRoute() {
   ]);
   const fromAddress: string =
     requested === "stages" ||
+    requested === "numbers" ||
+    requested === BOARD ||
     (can && (requested === "team" || requested === "sources"))
       ? requested
       : requested === "all"
@@ -537,8 +559,14 @@ export function LeadsRoute() {
         : "desk";
   const view = picked && picked.at === addressKey ? picked.view : fromAddress;
   const manage: Manage | null =
-    view === "team" || view === "sources" || view === "stages" ? view : null;
-  const stageView = !manage && view !== "desk";
+    view === "team" ||
+    view === "sources" ||
+    view === "stages" ||
+    view === "numbers"
+      ? view
+      : null;
+  const board = view === BOARD;
+  const stageView = !manage && view !== "desk" && !board;
   // Several pipelines: a stage view shows one pipeline's leads, or all of them.
   const fromAddressPipeline =
     several(pipes) &&
@@ -546,7 +574,7 @@ export function LeadsRoute() {
       ? requestedPipeline
       : null;
   const pipeline: string | null =
-    stageView && several(pipes) && view !== TEST
+    (stageView || board) && several(pipes) && view !== TEST
       ? picked && picked.at === addressKey && picked.pipeline !== undefined
         ? picked.pipeline
         : fromAddressPipeline
@@ -818,7 +846,12 @@ export function LeadsRoute() {
   const go = (next: string) => {
     const href = viewHref(next, pipeline, filters);
     setPicked({ view: next, at: addressKey, pipeline });
-    if (next === "team" || next === "sources" || next === "stages") {
+    if (
+      next === "team" ||
+      next === "sources" ||
+      next === "stages" ||
+      next === "numbers"
+    ) {
       pushedSettings.current = true;
       window.history.pushState(null, "", href);
     } else window.history.replaceState(null, "", href);
@@ -841,10 +874,12 @@ export function LeadsRoute() {
   };
   const tabs = [
     { key: "desk", label: "To call", count: toCall },
+    { key: BOARD, label: "Board" },
+    // On the board its own strip names every stage: one switcher, not two.
     ...stageTabs(
       journey?.key === journeyKey ? journey.view : null,
       haveCounts ? counts.value : null,
-    ),
+    ).filter((tab) => !board || tab.key === "open"),
     ...(view === TEST ? [{ key: TEST, label: "Test leads" }] : []),
   ];
   const stageLabel =
@@ -852,7 +887,7 @@ export function LeadsRoute() {
     (view === "open" ? "All leads" : "this stage");
 
   // Leads → Filter (stage lists only): whose leads, the pipeline, a name or number.
-  const filterable = stageView && view !== TEST;
+  const filterable = (stageView || board) && view !== TEST;
   const defaultWho: Scope = can ? "team" : "mine";
   const shownFilters: LeadFilters = { who: scope, pipeline, q: query };
 
@@ -921,6 +956,17 @@ export function LeadsRoute() {
           },
         ]
       : []),
+    {
+      key: "numbers",
+      label: "Pipeline numbers",
+      note: can
+        ? "Where every lead stands, what converts, why leads are lost"
+        : "Where your leads stand and what converts",
+      onPick: () => {
+        setSettingsOpen(false);
+        go("numbers");
+      },
+    },
     {
       key: "stages",
       label: "Lead stages",
@@ -1092,11 +1138,24 @@ export function LeadsRoute() {
             <TeamView onChanged={refresh} onOpen={(leadId) => open(leadId)} />
           ) : manage === "stages" ? (
             <JourneyTab canManage={can} />
+          ) : manage === "numbers" ? (
+            <PipelineDashboard pipeline={pipeline} />
           ) : manage === "sources" ? (
             <SourcesView
               sandbox={desk.sandbox}
               onChanged={refresh}
               onImport={() => begin("importing", setImporting)}
+            />
+          ) : board ? (
+            <PipelineBoard
+              filters={{
+                pipeline,
+                owner: can && scope === "mine" ? desk.me.person_id : null,
+                q: query,
+              }}
+              canManage={can}
+              onOpen={(leadId) => open(leadId)}
+              refreshKey={version}
             />
           ) : stageView ? (
             <ListView

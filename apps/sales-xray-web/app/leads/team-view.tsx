@@ -31,6 +31,7 @@ import {
   saveSettings,
   saveWorkHours,
   splitList,
+  waitWords,
   type RepView,
   type Team,
 } from "./leads-client";
@@ -542,8 +543,11 @@ export function TeamView({
         <Kpi label="Won" tone="good" value={team.by_stage.won ?? 0} />
         <Kpi
           label="First call"
-          value={team.first_call_minutes ?? "–"}
-          unit={team.first_call_minutes != null ? "min" : undefined}
+          value={
+            team.first_call_minutes != null
+              ? waitWords(team.first_call_minutes)
+              : "–"
+          }
           note="Median time to first call, last 7 days"
         />
       </Tiles>
@@ -615,7 +619,7 @@ export function TeamView({
                   <td data-num>{rep.connected_today}</td>
                   <td data-num>
                     {rep.first_call_minutes != null
-                      ? `${rep.first_call_minutes} min`
+                      ? waitWords(rep.first_call_minutes)
                       : "–"}
                   </td>
                   <td className={styles.rules}>
@@ -668,7 +672,7 @@ export function TeamView({
               <span>
                 {`${rep.open_leads}/${rep.max_open} open · ${rep.due_now} due · ${rep.calls_today} ${rep.calls_today === 1 ? "call" : "calls"} today · ${rep.connected_today} connected`}
                 {rep.first_call_minutes != null
-                  ? ` · first call ${rep.first_call_minutes} min`
+                  ? ` · first call ${waitWords(rep.first_call_minutes)}`
                   : ""}
               </span>
               <span>

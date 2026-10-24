@@ -5,30 +5,27 @@
   gap: 16px;
 }
 
+/* One quiet line: the docs are a reference, not the screen's main action. */
 .docs {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px 14px;
-  padding: 14px 16px;
+  gap: 10px 12px;
+  padding: 10px 12px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-md);
-  background: linear-gradient(
-    120deg,
-    var(--sx-accent-soft),
-    var(--sx-surface) 70%
-  );
+  background: var(--sx-surface);
 }
 
 .docsIcon {
   display: grid;
   flex: none;
   place-items: center;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
 }
 
 .docsText {
@@ -42,8 +39,8 @@
 
 .docsText strong {
   color: var(--sx-ink);
-  font-size: var(--sx-text-md);
-  font-weight: 700;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
 }
 
 .docsLink {
@@ -52,9 +49,10 @@
   align-items: center;
   min-height: var(--sx-control-h);
   padding: 0 14px;
+  border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-sm);
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
+  background: var(--sx-surface);
+  color: var(--sx-accent);
   font-size: var(--sx-text-sm);
   font-weight: 650;
   text-decoration: none;
@@ -285,6 +283,11 @@
 .picker {
   max-width: 100%;
   overflow-x: auto;
+}
+
+/* One scroll strip on phones: each choice stays on one line (24 Oct 2026, 390 px). */
+.picker button {
+  white-space: nowrap;
 }
 
 /* A panel is a grid whose one column grows to its widest child: let each part shrink. */

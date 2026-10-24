@@ -24,6 +24,19 @@ export function displayName(raw: string): string {
   );
 }
 
+/**
+ * A person's first name and last initial ("Swamini F."), for a row with room
+ * for a short label: a whole name cut mid-word reads worse (polish pass,
+ * 24 Oct 2026). One-word names and emails stay whole.
+ */
+export function shortName(raw: string): string {
+  const name = displayName(raw);
+  if (name.includes("@")) return name;
+  const [first, ...rest] = name.split(" ");
+  const last = rest.at(-1);
+  return last ? `${first} ${last[0]}.` : first;
+}
+
 /** displayName for a name that may be missing. */
 export function displayNameOf<T extends string | null | undefined>(raw: T): T {
   return (typeof raw === "string" ? displayName(raw) : raw) as T;

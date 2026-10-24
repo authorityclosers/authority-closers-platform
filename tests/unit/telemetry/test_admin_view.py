@@ -214,6 +214,43 @@ def test_funnels_features_errors_releases_and_mix() -> None:
     assert only["totals"]["events"] == 1
 
 
+def test_the_phone_app_panel_counts_launches_frames_exits_tiers_and_permissions() -> None:
+    rows = [
+        _row("sx.app_launch", "a", start="cold", ms=2_400, pages="app"),
+        _row("sx.app_launch", "b", start="cold", ms=4_000, pages="app"),
+        _row("sx.app_frames", "a", frames=1_000, slow=50, frozen=2, p90_ms=20),
+        _row("sx.app_frames", "b", frames=1_000, slow=150, frozen=8, p90_ms=40),
+        _row("sx.app_exit", "a", reason="low_memory", foreground="no"),
+        _row("sx.app_exit", "b", reason="low_memory", foreground="yes"),
+        # An older profile is superseded by the newer one for the same person.
+        _row("sx.device_profile", "a", minutes_ago=60, android=13, ram_tier="4", maker="xiaomi"),
+        _row("sx.device_profile", "a", minutes_ago=5, android=14, ram_tier="4", maker="xiaomi"),
+        _row("sx.device_profile", "b", android=14, ram_tier="2", maker="samsung"),
+        _row("sx.permission_snapshot", "a", calls="granted", mic="denied", rec_files="granted"),
+        _row("sx.permission_snapshot", "b", calls="granted", mic="not_in_build"),
+        _row("sx.network_state", "a", transport="cellular", down_tier="1to5"),
+    ]
+    phone = _view(rows)["phone"]
+    assert phone["phones"] == 2
+    [launch] = phone["launches"]
+    assert (launch["samples"], launch["p50"], launch["p75"]) == (2, 2_400, 4_000)
+    assert phone["frames"] == {
+        "sessions": 2,
+        "slow_share": 0.1,
+        "frozen_share": 0.005,
+        "p90_ms": 20,
+    }
+    assert phone["exits"] == [{"reason": "low_memory", "count": 2, "foreground": 1, "people": 2}]
+    breakdowns = {item["key"]: item["rows"] for item in phone["breakdowns"]}
+    assert breakdowns["android"] == [{"value": "14", "people": 2}]
+    assert {"value": "2", "people": 1} in breakdowns["ram_tier"]
+    assert breakdowns["transport"] == [{"value": "cellular", "people": 1}]
+    permissions = {item["permission"]: item for item in phone["permissions"]}
+    assert permissions["calls"]["share"] == 1.0
+    assert permissions["mic"]["share"] == 0.0
+    assert "folder" not in permissions
+
+
 @pytest.fixture
 def session() -> Iterator[Session]:
     engine = create_engine(

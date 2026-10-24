@@ -38,6 +38,7 @@ from ac_platform.lead_desk.models import (
     LeadAiReply,
     LeadConversion,
     LeadEvent,
+    LeadMeeting,
     LeadMetaConversion,
     LeadSlaBreach,
     LeadSocialMessage,
@@ -229,6 +230,12 @@ async def remove(
         "chat_reads": _count(
             await db.execute(
                 delete(LeadChatRead).where(*mine(LeadChatRead)).execution_options(**_QUIET)
+            )
+        ),
+        # Lead OS meetings (current state only; their history was in the events above).
+        "meetings": _count(
+            await db.execute(
+                delete(LeadMeeting).where(*mine(LeadMeeting)).execution_options(**_QUIET)
             )
         ),
         "leads": _count(

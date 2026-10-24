@@ -35,22 +35,35 @@ const failed = (reason: unknown, title: string) =>
         : "Check your connection and try again.",
   });
 
-/** Which new leads come into a pipeline, in a sentence. */
-export function takesWords(pipeline: PipelineView, all: PipelinesView): string {
-  const words = (keys: string[]) =>
-    keys.map((key) => all.sources[key] ?? key).join(", ");
+/** Which new leads come into a pipeline: a short line, and the sources by name
+ *  (shown as a list, not a wall of text: P1 on a phone, 24 Oct 2026). */
+export function takesParts(
+  pipeline: PipelineView,
+  all: PipelinesView,
+): { line: string; sources: string[] } {
+  const names = (keys: string[]) => keys.map((key) => all.sources[key] ?? key);
   if (!pipeline.main)
     return pipeline.sources.length
-      ? `New leads from ${words(pipeline.sources)}.`
-      : "No new leads come here by themselves. Move or import leads into it.";
-  if (all.pipelines.length < 2) return "Every new lead comes here.";
+      ? { line: "New leads from", sources: names(pipeline.sources) }
+      : {
+          line: "No new leads come here by themselves. Move or import leads into it.",
+          sources: [],
+        };
+  if (all.pipelines.length < 2)
+    return { line: "Every new lead comes here.", sources: [] };
   const taken = new Set(
     all.pipelines.flatMap((item) => (item.main ? [] : item.sources)),
   );
   const rest = Object.keys(all.sources).filter((key) => !taken.has(key));
   return rest.length
-    ? `Every other new lead: ${words(rest)}.`
-    : "New leads no other pipeline takes.";
+    ? { line: "Every other new lead:", sources: names(rest) }
+    : { line: "New leads no other pipeline takes.", sources: [] };
+}
+
+/** Which new leads come into a pipeline, in a sentence. */
+export function takesWords(pipeline: PipelineView, all: PipelinesView): string {
+  const { line, sources } = takesParts(pipeline, all);
+  return sources.length ? `${line} ${sources.join(", ")}.` : line;
 }
 
 export function PipelineBar({
@@ -109,6 +122,7 @@ export function PipelineCard({
   canEdit: boolean;
   onEdit: () => void;
 }) {
+  const takes = takesParts(pipeline, view);
   return (
     <section className={styles.card} aria-label="Leads that come in here">
       <span className={styles.icon} aria-hidden="true">
@@ -117,7 +131,6 @@ export function PipelineCard({
       <span className={styles.text}>
         <small>Leads that come in here</small>
         <strong>{pipeline.name}</strong>
-        <span>{takesWords(pipeline, view)}</span>
       </span>
       {canEdit ? (
         <Button onClick={onEdit}>
@@ -125,6 +138,16 @@ export function PipelineCard({
           Edit
         </Button>
       ) : null}
+      <div className={styles.takes}>
+        <p>{takes.line}</p>
+        {takes.sources.length ? (
+          <ul aria-label="Lead sources">
+            {takes.sources.map((source) => (
+              <li key={source}>{source}</li>
+            ))}
+          </ul>
+        ) : null}
+      </div>
     </section>
   );
 }

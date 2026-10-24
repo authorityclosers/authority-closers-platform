@@ -3613,41 +3613,6 @@ a.repName {
   font-size: var(--sx-text-md);
 }
 
-/* Pull to refresh: a round spinner drops in under the top bar. */
-.pullSpinner {
-  position: absolute;
-  top: 0;
-  left: 50%;
-  z-index: 3;
-  width: 36px;
-  height: 36px;
-  box-sizing: border-box;
-  border: 3px solid var(--sx-line);
-  border-top-color: var(--lx-teal);
-  border-radius: 50%;
-  background: var(--sx-surface);
-  box-shadow: var(--lx-shadow-2);
-  opacity: 0;
-  pointer-events: none;
-  transform: translate3d(-50%, -44px, 0);
-  transition:
-    transform var(--lx-dur-move) var(--lx-ease-move),
-    opacity var(--lx-dur-move) var(--lx-ease-move);
-}
-
-.pullSpinner[data-mode="busy"] {
-  animation: pullSpin 0.8s linear infinite;
-}
-
-@keyframes pullSpin {
-  from {
-    rotate: 0deg;
-  }
-  to {
-    rotate: 360deg;
-  }
-}
-
 /* The sheet that rises from the bottom: long-press menu and the composer. */
 .actionSheet {
   box-sizing: border-box;
@@ -4278,7 +4243,6 @@ a.repName {
 
 @media (prefers-reduced-motion: reduce) {
   .actionSheet[open],
-  .pullSpinner,
   .actionSheetBody {
     animation: none;
     transition: none;

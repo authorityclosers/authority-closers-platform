@@ -71,6 +71,9 @@ it("rises with the pull, refreshes past the line with one tick, then folds away"
   touch("touchstart", 100);
   touch("touchmove", 140);
   expect(mark().dataset.mode).toBe("pull");
+  // The page moves down with the finger; the mark sits in the gap above it.
+  const page = host.querySelector("p") as HTMLElement;
+  expect(page.style.transform).toBe("translate3d(0, 20px, 0)");
   expect(Number(mark().style.getPropertyValue("--pull"))).toBeCloseTo(
     20 / PULL_READY,
   );
@@ -84,6 +87,7 @@ it("rises with the pull, refreshes past the line with one tick, then folds away"
   await act(async () => finish());
   expect(mark().dataset.mode).toBe("idle");
   expect(mark().style.opacity).toBe("0");
+  expect(page.style.transform).toBe("");
 });
 
 it("ticks as the line is crossed inside the phone app, once", () => {

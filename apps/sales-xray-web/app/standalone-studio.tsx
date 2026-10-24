@@ -20,6 +20,8 @@ import { AcquisitionShell } from "./acquisition-shell";
 import { ConsentRenewal } from "./consent-renewal";
 import { PhoneOnboarding } from "./leads/phone-onboarding";
 import { PersistentShell } from "./shell/lightbox-shell";
+import { PlayMoveCard } from "./apps/play-move-card";
+import { useTheme } from "./lightbox/theme-provider";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
 import {
@@ -280,6 +282,7 @@ function AppFrame({
       <FirstCallGuide />
       <ConsentRenewal />
       <PhoneOnboarding />
+      <PlayMoveCard />
     </>
   );
 }
@@ -317,6 +320,8 @@ function StandaloneStudioView({
   const embedded = variant === "embedded";
   const Main = embedded ? "div" : "main";
   const pathname = usePathname();
+  // Sign-in, choosing a workspace: the app's theme, like every screen (24 Oct 2026).
+  const theme = useTheme();
   const activeFor = (
     path: string,
   ):
@@ -832,7 +837,7 @@ function StandaloneStudioView({
     <WorkspaceAccessProvider value={accessValue}>
       <Main
         className="xray-app simple-app"
-        data-theme="light"
+        data-theme={theme?.resolved ?? "light"}
         data-variant={variant}
         style={
           embedded

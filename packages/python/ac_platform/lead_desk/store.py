@@ -18,14 +18,15 @@ from typing import Any, Literal
 from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, delete, func, or_, select, true
+from sqlalchemy import and_, case, delete, func, or_, select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk import allocation, deletion
+from ac_platform.lead_desk import allocation, deletion, reports
 from ac_platform.lead_desk import hours as work_hours
+from ac_platform.lead_desk import meetings as meeting_rows
 from ac_platform.lead_desk.capture import (
     REFERENCE_KEYS,
     CaptureError,
@@ -39,10 +40,14 @@ from ac_platform.lead_desk.contracts import (
     PHONE_CHECKS,
     AlertText,
     Badge,
+    Board,
+    BoardColumn,
+    BoardGroup,
     BulkDone,
     BulkLeads,
     CallPrivacy,
     CallReport,
+    ConversionView,
     Counts,
     DayCalls,
     DeleteLeads,
@@ -51,6 +56,7 @@ from ac_platform.lead_desk.contracts import (
     Disposition,
     FieldValue,
     FollowUp,
+    GroupRow,
     LeadDetail,
     LeadEdit,
     LeadEventView,
@@ -59,8 +65,13 @@ from ac_platform.lead_desk.contracts import (
     LeadRow,
     LeadsDeleted,
     Me,
+    MeetingClosed,
+    MeetingCommand,
+    MeetingDone,
+    MeetingInput,
     MessageSent,
     MessageTemplate,
+    MoveOption,
     NewLead,
     NoteCommand,
     Numbers,
@@ -73,7 +84,11 @@ from ac_platform.lead_desk.contracts import (
     PhoneLogged,
     PhoneLogResult,
     PhoneReport,
+    PipelineReport,
+    ReasonCount,
+    ReasonOption,
     Reassign,
+    Reopen,
     RepOption,
     RepRules,
     RepView,
@@ -82,6 +97,8 @@ from ac_platform.lead_desk.contracts import (
     SettingsCommand,
     SettingsView,
     StageChoice,
+    StageCount,
+    StageMove,
     StageSuggestion,
     TakingLeads,
     Team,
@@ -89,12 +106,20 @@ from ac_platform.lead_desk.contracts import (
     WorkHoursView,
 )
 from ac_platform.lead_desk.journey import model as journeys
-from ac_platform.lead_desk.journey import pipelines, signals
+from ac_platform.lead_desk.journey import pipelines, signals, transitions
 from ac_platform.lead_desk.journey.templates import MILESTONE_WORDS
-from ac_platform.lead_desk.models import Lead, LeadDeskSettings, LeadDevice, LeadEvent, LeadRep
+from ac_platform.lead_desk.models import (
+    Lead,
+    LeadDeskSettings,
+    LeadDevice,
+    LeadEvent,
+    LeadMeeting,
+    LeadRep,
+)
 from ac_platform.lead_desk.vocabulary import (
     CHANNEL_LABELS,
     CLOSED_STAGES,
+    IMPORTED_LOST,
     MESSAGE_TEMPLATES,
     NEEDS_FOLLOW_UP,
     OPEN_STAGES,
@@ -143,6 +168,11 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "default_country": "91",
 }
 IST = ZoneInfo("Asia/Kolkata")
+# The pipeline board (Lead OS): cards per column per page.
+BOARD_CARDS = 25
+# Where a lead is reopened when its old stage is gone: a not-connected reason for a lead
+# reopened to Couldn't reach without one.
+REOPEN_NC_REASON = "other"
 # Meta's Lead Ads Testing Tool fills the answers with "<test lead: dummy data for …>".
 # Since 21 Oct 2026 capture files such leads as test data (connectors.meta.is_test_lead);
 # leads captured before that came in with test_data false, and the Test data filter
@@ -596,7 +626,27 @@ class LeadDesk:
             test_data=lead.test_data,
             overdue=lead.owner_person_id is not None
             and is_overdue(lead.stage, lead.next_action_at, lead.created_at, self.now),
+            stage_at=lead.stage_at,
+            group=transitions.group(lead.stage),
+            outcome_reason=lead.outcome_reason,
+            outcome_reason_label=self._reason_label(lead),
+            last_contact_at=lead.last_contact_at,
+            next_action_note=lead.next_action_note,
+            no_next_action=lead.stage in OPEN_STAGES
+            and lead.stage != "new"
+            and lead.next_action_at is None,
         )
+
+    def _reason_label(self, lead: Lead) -> str | None:
+        """The Lost or Junk reason in the pipeline's own words."""
+        if lead.outcome_reason is None:
+            return None
+        if lead.outcome_reason == IMPORTED_LOST:
+            return "Imported"
+        journey = self._journeys.get(journeys.pipeline_of(lead))
+        stage = journey.resolve(lead.stage, lead.step) if journey is not None else None
+        reasons = dict(transitions.reasons_of(stage)) if stage is not None else {}
+        return reasons.get(lead.outcome_reason, lead.outcome_reason.replace("_", " ").capitalize())
 
     async def _rows(self, leads: Sequence[Lead]) -> tuple[LeadRow, ...]:
         for key in {journeys.pipeline_of(lead) for lead in leads}:
@@ -984,6 +1034,18 @@ class LeadDesk:
                 )
                 for rep in await self._reps()
             )
+        current = journey.resolve(lead.stage, lead.step)
+        moves = (
+            tuple(
+                self._move_option(move)
+                for move in transitions.moves(journey, current, can_manage=self.viewer.can_manage)
+            )
+            if can_edit
+            else ()
+        )
+        meeting = await meeting_rows.open_meeting(self.db, self.tenant_id, lead.id)
+        if meeting is not None and meeting.host_person_id not in names:
+            names.update(await self._names([meeting.host_person_id]))
         fields = tuple(
             FieldValue(label=label, value=value)
             for label, value in (
@@ -1026,6 +1088,27 @@ class LeadDesk:
                 )
                 for stage in journey.pickable()
             ),
+            moves=moves,
+            meeting=meeting_rows.view(
+                meeting,
+                names.get(meeting.host_person_id) if meeting.host_person_id else None,
+            )
+            if meeting is not None
+            else None,
+        )
+
+    @staticmethod
+    def _move_option(move: transitions.Move) -> MoveOption:
+        return MoveOption(
+            step=move.stage.key,
+            label=move.stage.label,
+            kind=move.stage.kind,
+            milestone=move.stage.milestone,
+            group=move.group,
+            action=move.action,
+            needs=move.needs,
+            asks=move.asks,
+            reasons=tuple(ReasonOption(key=key, label=label) for key, label in move.reasons),
         )
 
     @staticmethod
@@ -1088,14 +1171,29 @@ class LeadDesk:
         stage = data.get("stage") if isinstance(data.get("stage"), str) else None
         reason = data.get("reason") if isinstance(data.get("reason"), str) else None
         follow = data.get("follow_up_at")
+        moved = data.get("v") == 2
+        meeting = event.kind == "meeting"
+
+        def text(key: str) -> str | None:
+            value = data.get(key)
+            return value if isinstance(value, str) else None
+
+        def when(key: str) -> datetime | None:
+            value = data.get(key)
+            if not isinstance(value, str):
+                return None
+            with contextlib.suppress(ValueError):
+                return datetime.fromisoformat(value)
+            return None
+
         return LeadEventView(
             kind=event.kind,
             at=event.created_at,
             actor_name=names.get(event.actor_person_id) if event.actor_person_id else None,
             stage=stage,
-            stage_label=data.get("step_label")
-            if isinstance(data.get("step_label"), str)
-            else (STAGE_LABELS.get(stage) if stage else None),
+            stage_label=text("step_label")
+            or (text("to_label") if moved else None)
+            or (STAGE_LABELS.get(stage) if stage else None),
             reason=reason,
             reason_label=REASON_LABELS.get(reason) if reason else None,
             connected=data.get("connected") if isinstance(data.get("connected"), bool) else None,
@@ -1125,6 +1223,15 @@ class LeadDesk:
             can_hide=phone_call and event.actor_person_id == self.viewer.person_id,
             private=str(event.id) in hidden,
             direction=data["direction"] if data.get("direction") in PHONE_DIRECTIONS else None,
+            action=text("action") if moved or meeting else None,
+            from_label=text("from_label") if moved else None,
+            move_source=text("source") if moved else None,
+            outcome_reason=text("outcome_reason") if moved else None,
+            outcome_reason_label=text("outcome_reason_label") if moved else None,
+            meeting_action=text("action") if meeting else None,
+            starts_at=when("starts_at") if meeting else None,
+            from_starts_at=when("from_starts_at") if meeting else None,
+            mode_label=meeting_rows.MODE_LABELS.get(text("mode") or "") if meeting else None,
         )
 
     # ----- capture ---------------------------------------------------------------
@@ -1302,6 +1409,160 @@ class LeadDesk:
             command_id=command_id,
         )
 
+    # ----- stage moves (Lead OS, 24 Oct 2026) ------------------------------------------
+
+    def _move(
+        self,
+        lead: Lead,
+        journey: journeys.Journey,
+        move: transitions.Move,
+        *,
+        source: str,
+        via: str | None = None,
+        command_id: UUID | None = None,
+        outcome_reason: str | None = None,
+        reason_note: str | None = None,
+        note: str | None = None,
+        next_action_at: datetime | None = None,
+        next_action_note: str | None = None,
+        contact: str | None = None,
+        meeting_id: UUID | None = None,
+        suggestion: str | None = None,
+        rule_id: str | None = None,
+        nc_reason: str | None = None,
+        carrier: tuple[str, dict[str, Any]] | None = None,
+        desk_step: bool = False,
+        actor: UUID | None | Literal["viewer"] = "viewer",
+    ) -> LeadEvent:
+        """The one place a lead's stage changes (Lead OS). Every move goes through
+        ``transitions.check`` (or ``transitions.forced`` for the desk's own) first.
+
+        It changes the same record, never a copy: the stage, when the lead entered it,
+        the Lost or Junk reason while it is there, and no next action once it closes. It
+        writes exactly one history line: a ``stage`` event, or the event that carried
+        the move (``carrier``: a call's ``result``, a capture's ``repeat``), with the
+        move's fields beside that event's own keys."""
+        target = move.stage
+        before = journey.resolve(lead.stage, lead.step)
+        previous_kind, previous_step = lead.stage, lead.step
+        lead.stage = target.kind
+        lead.step = None if desk_step or target is journeys.JUNK else target.key
+        lead.stage_at = self.now
+        lead.outcome_reason = outcome_reason if target.kind in ("lost", "junk") else None
+        if target.kind in CLOSED_STAGES:
+            lead.next_action_at = None
+            lead.next_action_note = None
+        elif next_action_at is not None:
+            lead.next_action_at = next_action_at
+            lead.next_action_note = next_action_note
+        lead.revision += 1
+        lead.updated_at = self.now
+        moved: dict[str, Any] = {
+            "v": 2,
+            "action": move.action,
+            "from_kind": previous_kind,
+            "from_key": before.key if before else previous_step,
+            "from_label": before.label if before else STAGE_LABELS.get(previous_kind),
+            "to_kind": target.kind,
+            "to_key": target.key,
+            "to_label": target.label,
+            "outcome_reason": lead.outcome_reason,
+            "outcome_reason_label": transitions.reason_label(move, lead.outcome_reason),
+            "reason_note": (reason_note or "").strip() or None,
+            "source": source,
+            "via": via,
+            "contact": contact,
+            "meeting_id": str(meeting_id) if meeting_id else None,
+            "next_action_at": lead.next_action_at.isoformat() if lead.next_action_at else None,
+            "suggestion": suggestion,
+            "rule_id": rule_id,
+            "pipeline": journeys.pipeline_of(lead),
+        }
+        if carrier is not None:
+            kind, data = carrier[0], {**carrier[1], **moved}
+        else:
+            kind = "stage"
+            data = {
+                "stage": target.kind,
+                "from_stage": previous_kind,
+                "step": target.key,
+                "from_step": before.key if before else previous_step,
+                "step_label": target.label,
+                "remark": note,
+                **({"reason": nc_reason} if nc_reason else {}),
+                **moved,
+            }
+        return self._event(
+            lead,
+            kind,
+            data,
+            actor=self.viewer.person_id if isinstance(actor, str) else actor,
+            command_id=command_id,
+        )
+
+    async def place_leads(
+        self,
+        before: journeys.Journey,
+        after: journeys.Journey,
+        places: Mapping[str, str],
+    ) -> int:
+        """Put the leads of the columns a manager picked into the new list's stages (the
+        template's map), each with one history line. These moves only rename where a lead
+        stood: ad platforms and the pipeline's numbers skip them. How many moved."""
+        if not places:
+            return 0
+        rows = (
+            await self.db.scalars(
+                select(Lead)
+                .where(Lead.tenant_id == self.tenant_id, journeys.lead_in(after.pipeline))
+                .order_by(Lead.id)
+                .with_for_update()
+            )
+        ).all()
+        moved = 0
+        for lead in rows:
+            column = before.column(lead.stage, lead.step)
+            if column.key not in places:
+                continue
+            target = after.stage_for(places[column.key])
+            current = after.resolve(lead.stage, lead.step)
+            if target is None or (
+                lead.stage == target.kind and current is not None and current.key == target.key
+            ):
+                continue
+            move = transitions.forced(after, current, target)
+            self._move(
+                lead,
+                after,
+                move,
+                source=transitions.STAGES_CHANGED,
+                outcome_reason=lead.outcome_reason,
+            )
+            moved += 1
+        await self.db.flush()
+        return moved
+
+    def _check(
+        self,
+        journey: journeys.Journey,
+        lead: Lead,
+        step: str,
+        given: transitions.Given,
+        *,
+        source: str = "seller",
+    ) -> transitions.Move:
+        try:
+            return transitions.check(
+                journey,
+                journey.resolve(lead.stage, lead.step),
+                step,
+                given,
+                can_manage=self.viewer.can_manage,
+                source=source,
+            )
+        except transitions.MoveRefused as refused:
+            raise DeskError(refused.status, str(refused)) from None
+
     def to_stage(
         self,
         lead: Lead,
@@ -1310,30 +1571,608 @@ class LeadDesk:
         *,
         note: str | None,
         command_id: UUID,
-    ) -> None:
-        """Move a lead to one of its pipeline's stages without a call ("Site visit done")."""
-        before = journey.resolve(lead.stage, lead.step)
-        previous_kind, previous_step = lead.stage, lead.step
-        lead.stage = stage.kind
-        lead.step = stage.key
-        if stage.kind in ("won", "lost"):
-            lead.next_action_at = None
-            lead.next_action_note = None
-        lead.revision += 1
-        lead.updated_at = self.now
-        self._event(
+        source: str = "seller",
+        via: str | None = None,
+        outcome_reason: str | None = None,
+        next_action_at: datetime | None = None,
+    ) -> LeadEvent:
+        """Move a lead to one of its pipeline's stages without a call ("Site visit done"),
+        through the stage list's moves. Imports skip the moves; a Lost or Junk lead
+        imported without a reason is "Imported"."""
+        if source == "import" and outcome_reason is None and stage.kind in ("lost", "junk"):
+            outcome_reason = IMPORTED_LOST
+        move = self._check(
+            journey,
             lead,
-            "stage",
-            {
-                "stage": stage.kind,
-                "from_stage": previous_kind,
-                "step": stage.key,
-                "from_step": before.key if before else previous_step,
-                "step_label": stage.label,
-                "remark": note,
-            },
-            actor=self.viewer.person_id,
+            stage.key,
+            transitions.Given(reason=outcome_reason, next_action=next_action_at is not None),
+            source=source,
+        )
+        return self._move(
+            lead,
+            journey,
+            move,
+            source=source,
+            via=via,
             command_id=command_id,
+            outcome_reason=outcome_reason,
+            note=note,
+            next_action_at=next_action_at,
+        )
+
+    async def _meeting_for(
+        self,
+        lead: Lead,
+        move: transitions.Move,
+        meeting: MeetingInput | None,
+        *,
+        note: str | None,
+    ) -> tuple[UUID | None, datetime | None]:
+        """The meeting side of a move: book or move the lead's meeting when the seller gave
+        one; leaving the meeting stage closes the open one (held when the lead goes to the
+        meeting-held stage, else called off). Returns the meeting and its start."""
+        open_row = await meeting_rows.open_meeting(self.db, self.tenant_id, lead.id, lock=True)
+        if meeting is not None:
+            try:
+                fields = meeting_rows.checked(meeting, self.now)
+            except meeting_rows.MeetingError as error:
+                raise DeskError(422, str(error)) from None
+            if open_row is not None:
+                meeting_rows.move(self, lead, open_row, fields, command_id=None)
+                return open_row.id, open_row.starts_at
+            row = meeting_rows.book(self, lead, fields, command_id=None)
+            return row.id, row.starts_at
+        if open_row is not None and move.stage.milestone != "appointment_booked":
+            held = move.stage.milestone == "appointment_done"
+            meeting_rows.close(self, lead, open_row, "done" if held else "cancelled", note=note)
+            return open_row.id, None
+        return None, None
+
+    async def _apply_move(
+        self,
+        lead: Lead,
+        journey: journeys.Journey,
+        step: str,
+        *,
+        source: str,
+        via: str | None,
+        command_id: UUID | None,
+        note: str | None = None,
+        outcome_reason: str | None = None,
+        reason_note: str | None = None,
+        nc_reason: str | None = None,
+        next_action_at: datetime | None = None,
+        next_action_note: str | None = None,
+        meeting: MeetingInput | None = None,
+        contact: str | None = None,
+        suggestion: str | None = None,
+    ) -> LeadEvent:
+        """A move a person asked for: checked, with its meeting and next action."""
+        if next_action_at is not None and not (
+            self.now - timedelta(minutes=5) <= next_action_at <= self.now + timedelta(days=366)
+        ):
+            raise DeskError(422, "Pick a follow-up time in the next year that's still ahead.")
+        target = journey.stage_for(step)
+        if target is not None and target.kind == "not_connected" and nc_reason:
+            # Couldn't reach without a call: the retry rule sets the next try.
+            lead.last_result = nc_reason
+            if next_action_at is None:
+                gap = retry_after(nc_reason, max(1, lead.attempts))
+                next_action_at = self.now + gap if gap else None
+        given = transitions.Given(
+            reason=outcome_reason,
+            reason_note=reason_note,
+            nc_reason=nc_reason,
+            next_action=next_action_at is not None or meeting is not None,
+            meeting=meeting is not None,
+        )
+        move = self._check(journey, lead, step, given, source=source)
+        meeting_id, starts = await self._meeting_for(lead, move, meeting, note=note)
+        return self._move(
+            lead,
+            journey,
+            move,
+            source=source,
+            via=via,
+            command_id=command_id,
+            outcome_reason=outcome_reason,
+            reason_note=reason_note,
+            note=note,
+            next_action_at=starts or next_action_at,
+            next_action_note=lead.next_action_note if starts else next_action_note,
+            contact=contact,
+            meeting_id=meeting_id,
+            suggestion=suggestion,
+            nc_reason=nc_reason,
+        )
+
+    async def _writable(self, lead_id: UUID, command_id: UUID, revision: int) -> Lead | None:
+        """The lead for a write, locked; None when this request was already done."""
+        seen = await self._command_seen(command_id)
+        if seen is not None:
+            if seen.lead_id != lead_id:
+                raise DeskError(409, "That request was already used for another lead.")
+            return None
+        lead = await self._lead(lead_id, lock=True)
+        if not (self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id):
+            raise DeskError(403, "Only the lead's owner or a manager can move it.")
+        if lead.revision != revision:
+            raise DeskError(409, "This lead changed. Check it and try again.")
+        return lead
+
+    async def move(self, lead_id: UUID, command: StageMove) -> Lead:
+        """The board, the stage sheet, the table and the API move a lead here."""
+        lead = await self._writable(lead_id, command.command_id, command.expected_revision)
+        if lead is None:
+            return await self._lead(lead_id)
+        journey = await self._labels(journeys.pipeline_of(lead))
+        await self._apply_move(
+            lead,
+            journey,
+            command.step,
+            source=command.source,
+            via=command.via,
+            command_id=command.command_id,
+            note=command.note,
+            outcome_reason=command.outcome_reason,
+            reason_note=command.reason_note,
+            nc_reason=command.nc_reason,
+            next_action_at=command.next_action_at,
+            next_action_note=command.next_action_note,
+            meeting=command.meeting,
+            contact=command.contact,
+            suggestion=command.suggestion_ref,
+        )
+        await self.db.flush()
+        return lead
+
+    async def _closed_from(self, lead: Lead, journey: journeys.Journey) -> str | None:
+        """The stage a closed lead was closed from, when it may still go back there."""
+        events = (
+            await self.db.scalars(
+                select(LeadEvent)
+                .where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.lead_id == lead.id,
+                    LeadEvent.kind.in_(("stage", "result")),
+                )
+                .order_by(LeadEvent.created_at.desc())
+                .limit(50)
+            )
+        ).all()
+        current = journey.resolve(lead.stage, lead.step)
+        # Every way back, whoever asks: the move's own check says who may make it.
+        options = [
+            move.stage
+            for move in transitions.moves(journey, current, can_manage=True)
+            if move.group == "active"
+        ]
+        allowed = [stage.key for stage in options]
+        for event in events:
+            data = event.data
+            if data.get("stage") != lead.stage or data.get("from_stage") == lead.stage:
+                continue
+            came = data.get("from_key") or data.get("from_step")
+            if not isinstance(came, str):
+                found = journey.resolve(str(data.get("from_stage") or ""), None)
+                came = found.key if found else None
+            if came in allowed:
+                return came
+            break
+        # Gone back to work: a lead who re-engages is interested again.
+        keen = next((stage.key for stage in options if stage.milestone == "qualified"), None)
+        return keen or (allowed[0] if allowed else None)
+
+    async def reopen(self, lead_id: UUID, command: Reopen) -> Lead:
+        """Back to work from Won, Lost or Junk, on the same lead: its history stays."""
+        lead = await self._writable(lead_id, command.command_id, command.expected_revision)
+        if lead is None:
+            return await self._lead(lead_id)
+        if lead.stage not in CLOSED_STAGES:
+            raise DeskError(409, "This lead is open already.")
+        journey = await self._labels(journeys.pipeline_of(lead))
+        step = command.step or await self._closed_from(lead, journey)
+        target = journey.stage_for(step) if step else None
+        if target is None:
+            raise DeskError(422, "Pick the stage to reopen it in.")
+        if target.kind != "new" and command.next_action_at is None:
+            raise DeskError(422, "Pick when to follow up.")
+        await self._apply_move(
+            lead,
+            journey,
+            target.key,
+            source="seller",
+            via="sheet",
+            command_id=command.command_id,
+            note=command.note,
+            nc_reason=REOPEN_NC_REASON if target.kind == "not_connected" else None,
+            next_action_at=command.next_action_at,
+        )
+        await self.db.flush()
+        return lead
+
+    # ----- meetings ----------------------------------------------------------------------
+
+    async def schedule_meeting(self, lead_id: UUID, command: MeetingCommand) -> Lead:
+        """Book a meeting, or move the one booked: the lead goes to its pipeline's
+        meeting-booked stage when it isn't there yet and may go there."""
+        lead = await self._writable(lead_id, command.command_id, command.expected_revision)
+        if lead is None:
+            return await self._lead(lead_id)
+        if lead.stage in CLOSED_STAGES:
+            raise DeskError(409, "This lead is closed. Reopen it first.")
+        journey = await self._labels(journeys.pipeline_of(lead))
+        booked = meeting_rows.booked_stage(journey)
+        current = journey.resolve(lead.stage, lead.step)
+        if booked is not None and (current is None or current.key != booked.key):
+            await self._apply_move(
+                lead,
+                journey,
+                booked.key,
+                source="seller",
+                via="meeting",
+                command_id=command.command_id,
+                meeting=command.meeting,
+            )
+        else:
+            try:
+                fields = meeting_rows.checked(command.meeting, self.now)
+            except meeting_rows.MeetingError as error:
+                raise DeskError(422, str(error)) from None
+            row = await meeting_rows.open_meeting(self.db, self.tenant_id, lead.id, lock=True)
+            if row is None:
+                meeting_rows.book(self, lead, fields, command_id=command.command_id)
+            else:
+                meeting_rows.move(self, lead, row, fields, command_id=command.command_id)
+            lead.revision += 1
+            lead.updated_at = self.now
+        await self.db.flush()
+        return lead
+
+    async def _meeting_lead(
+        self, meeting_id: UUID, command_id: UUID, revision: int
+    ) -> tuple[Lead, LeadMeeting] | Lead:
+        row = await self.db.scalar(
+            select(LeadMeeting)
+            .where(LeadMeeting.tenant_id == self.tenant_id, LeadMeeting.id == meeting_id)
+            .with_for_update()
+        )
+        if row is None:
+            raise DeskError(404, "This meeting isn't on your desk.")
+        lead = await self._writable(row.lead_id, command_id, revision)
+        if lead is None:
+            return await self._lead(row.lead_id)
+        if row.status != "scheduled":
+            raise DeskError(409, "This meeting is over already.")
+        return lead, row
+
+    async def meeting_done(self, meeting_id: UUID, command: MeetingDone) -> Lead:
+        """It happened: the lead goes to the meeting-held stage (spec: Demo / Zoom Meeting
+        Completed), with the next follow-up while the deal is under consideration."""
+        found = await self._meeting_lead(meeting_id, command.command_id, command.expected_revision)
+        if isinstance(found, Lead):
+            return found
+        lead, row = found
+        journey = await self._labels(journeys.pipeline_of(lead))
+        held = meeting_rows.held_stage(journey)
+        current = journey.resolve(lead.stage, lead.step)
+        move = (
+            self._check(
+                journey,
+                lead,
+                held.key,
+                transitions.Given(next_action=command.next_action_at is not None),
+            )
+            if held is not None and (current is None or current.key != held.key)
+            else None
+        )
+        meeting_rows.close(
+            self, lead, row, "done", note=command.note, command_id=command.command_id
+        )
+        if move is not None:
+            self._move(
+                lead,
+                journey,
+                move,
+                source="seller",
+                via="meeting",
+                note=command.note,
+                next_action_at=command.next_action_at,
+                meeting_id=row.id,
+            )
+        else:
+            lead.next_action_at = command.next_action_at
+            lead.revision += 1
+            lead.updated_at = self.now
+        await self.db.flush()
+        return lead
+
+    async def meeting_not_held(self, meeting_id: UUID, command: MeetingClosed) -> Lead:
+        """Missed or cancelled without a new time: the seller says where the lead stands."""
+        found = await self._meeting_lead(meeting_id, command.command_id, command.expected_revision)
+        if isinstance(found, Lead):
+            return found
+        lead, row = found
+        journey = await self._labels(journeys.pipeline_of(lead))
+        meeting_rows.close(
+            self, lead, row, command.status, note=command.note, command_id=command.command_id
+        )
+        await self._apply_move(
+            lead,
+            journey,
+            command.step,
+            source="seller",
+            via="meeting",
+            command_id=None,
+            note=command.note,
+            nc_reason=command.nc_reason,
+            next_action_at=command.next_action_at,
+        )
+        await self.db.flush()
+        return lead
+
+    # ----- the pipeline's numbers (Lead OS, spec section 9) --------------------------------
+
+    async def pipeline_report(
+        self,
+        *,
+        days: int = 30,
+        pipeline: str | None = None,
+        owner: UUID | None = None,
+        source: str | None = None,
+    ) -> PipelineReport:
+        """Each lead counted once; conversions from history; Junk left out of them. A
+        seller sees their own leads' numbers."""
+        if days not in reports.PERIODS:
+            raise DeskError(422, "Pick 7, 30 or 90 days.")
+        mine = not self.viewer.can_manage
+        if mine:
+            owner = self.viewer.person_id
+        key = (await self._pipeline(pipeline or journeys.MAIN_PIPELINE)).key
+        journey = await self._labels(key)
+        found = await reports.pipeline_report(
+            self.db,
+            self.tenant_id,
+            journey,
+            now=self.now,
+            days=days,
+            owner=owner,
+            source=source,
+            reasons=reports.reason_words(journey),
+        )
+        names = await self._names(person for person in found.sellers if person)
+
+        def conversion(item: reports.Conversion) -> ConversionView:
+            return ConversionView(
+                key=item.key,
+                label=reports.CONVERSION_WORDS[item.key],
+                entered=item.entered,
+                passed=item.passed,
+                rate=item.rate,
+            )
+
+        def row(key: str, label: str, tally: reports.Group) -> GroupRow:
+            genuine = tally.created - tally.junk
+            return GroupRow(
+                key=key,
+                label=label,
+                leads=tally.leads,
+                active=tally.active,
+                overdue=tally.overdue,
+                no_next=tally.no_next,
+                created=tally.created,
+                connected=tally.connected,
+                junk=tally.junk,
+                won=tally.won,
+                meetings=tally.meetings,
+                connect_rate=round(tally.connected / genuine, 3) if genuine > 0 else None,
+                junk_rate=round(tally.junk / tally.created, 3) if tally.created else None,
+                first_response_minutes=median(tally.first_minutes),
+            )
+
+        sellers = [
+            row(
+                str(person) if person else "none",
+                names.get(person, "A teammate") if person else "No owner",
+                tally,
+            )
+            for person, tally in found.sellers.items()
+        ]
+        sources = [row(label, label, tally) for label, tally in found.sources.items()]
+        return PipelineReport(
+            pipeline=key,
+            days=days,
+            generated_at=self.now,
+            total=found.total,
+            enough=found.total >= 10,
+            groups=found.groups,
+            stages=tuple(
+                StageCount(
+                    step=stage.key,
+                    label=stage.label,
+                    kind=stage.kind,
+                    group=transitions.group(stage.kind),
+                    count=count,
+                )
+                for stage, count in found.by_stage
+            ),
+            first_connect=conversion(found.first_connect),
+            first_connect_minutes=found.first_connect_minutes,
+            conversions=tuple(conversion(item) for item in found.steps),
+            show_rate=found.show_rate,
+            lost_now=tuple(ReasonCount(label=a, count=b) for a, b in found.lost_now),
+            lost_moves=tuple(ReasonCount(label=a, count=b) for a, b in found.lost_moves),
+            junk_now=found.junk_now,
+            junk_moves=found.junk_moves,
+            overdue=found.overdue,
+            no_next=found.no_next,
+            sellers=tuple(sorted(sellers, key=lambda item: (-item.won, -item.active, item.label))),
+            sources=tuple(sorted(sources, key=lambda item: -item.created)),
+            mine=mine,
+        )
+
+    # ----- the pipeline board ------------------------------------------------------------
+
+    def _board_where(
+        self,
+        pipeline: str,
+        owner: UUID | None,
+        source: str | None,
+        search: str | None,
+    ) -> list[Any]:
+        where: list[Any] = [self._visible(), journeys.lead_in(pipeline)]
+        if owner is not None:
+            if not self.viewer.can_manage:
+                raise DeskError(403, "Only owners and admins see another seller's leads.")
+            where.append(Lead.owner_person_id == owner)
+        if source is not None:
+            where.append(Lead.source == source)
+        if search:
+            needle = f"%{search.strip()[:80]}%"
+            digits = "".join(ch for ch in search if ch.isdigit())
+            terms = [Lead.name.ilike(needle), Lead.company.ilike(needle), Lead.city.ilike(needle)]
+            if len(digits) >= 4:
+                terms.append(Lead.phone.like(f"%{digits}%"))
+            where.append(or_(*terms))
+        return where
+
+    def _no_next(self) -> Any:
+        return and_(Lead.stage.in_(OPEN_STAGES), Lead.stage != "new", Lead.next_action_at.is_(None))
+
+    async def _column_cards(
+        self,
+        where: Sequence[Any],
+        pairs: Sequence[tuple[str, str | None]],
+        closed: bool,
+        offset: int,
+        limit: int,
+    ) -> list[Lead]:
+        """One column's cards: overdue first, then no next step, then by when they're due
+        (Pipedrive's order); a closed column shows the newest first."""
+        inside = or_(
+            *(
+                and_(
+                    Lead.stage == kind,
+                    Lead.step == step if step is not None else Lead.step.is_(None),
+                )
+                for kind, step in pairs
+            )
+        )
+        if closed:
+            order: tuple[Any, ...] = (
+                func.coalesce(Lead.stage_at, Lead.updated_at).desc(),
+                Lead.id,
+            )
+        else:
+            bucket = case(
+                (overdue_filter(self.now), 0),
+                (self._no_next(), 1),
+                else_=2,
+            )
+            order = (bucket, func.coalesce(Lead.next_action_at, Lead.created_at), Lead.id)
+        return list(
+            (
+                await self.db.scalars(
+                    select(Lead).where(*where, inside).order_by(*order).offset(offset).limit(limit)
+                )
+            ).all()
+        )
+
+    async def board(
+        self,
+        *,
+        pipeline: str | None = None,
+        owner: UUID | None = None,
+        source: str | None = None,
+        search: str | None = None,
+        step: str | None = None,
+        cursor: int = 0,
+        limit: int = BOARD_CARDS,
+    ) -> Board:
+        """Every live stage as a column, each lead in exactly one (spec section 4). With
+        ``step``, that column alone, from ``cursor``."""
+        key = (await self._pipeline(pipeline or journeys.MAIN_PIPELINE)).key
+        journey = await self._labels(key)
+        where = self._board_where(key, owner, source, search)
+        rows = (
+            await self.db.execute(
+                select(
+                    Lead.stage,
+                    Lead.step,
+                    func.count(),
+                    func.count().filter(
+                        and_(
+                            Lead.owner_person_id.is_not(None),
+                            overdue_filter(self.now),
+                            Lead.stage.in_(OPEN_STAGES),
+                        )
+                    ),
+                    func.count().filter(self._no_next()),
+                )
+                .where(*where)
+                .group_by(Lead.stage, Lead.step)
+            )
+        ).all()
+        per: dict[str, dict[str, Any]] = {}
+        for kind, lead_step, count, overdue, no_next in rows:
+            column = journey.column(str(kind), lead_step)
+            slot = per.setdefault(column.key, {"pairs": [], "count": 0, "overdue": 0, "no": 0})
+            slot["pairs"].append((str(kind), lead_step))
+            slot["count"] += int(count)
+            slot["overdue"] += int(overdue)
+            slot["no"] += int(no_next)
+        limit = max(1, min(100, limit))
+        groups: dict[str, list[BoardColumn]] = {"active": [], "won": [], "lost": [], "junk": []}
+        total = 0
+        for stage in journey.board():
+            if step is not None and stage.key != step:
+                continue
+            slot = per.get(stage.key, {"pairs": [], "count": 0, "overdue": 0, "no": 0})
+            total += slot["count"]
+            closed = stage.kind in CLOSED_STAGES
+            start = cursor if step is not None else 0
+            leads = (
+                await self._column_cards(where, slot["pairs"], closed, start, limit)
+                if slot["pairs"]
+                else []
+            )
+            more = start + len(leads) < slot["count"]
+            groups[transitions.group(stage.kind)].append(
+                BoardColumn(
+                    step=stage.key,
+                    label=stage.label,
+                    kind=stage.kind,
+                    milestone=stage.milestone,
+                    count=slot["count"],
+                    overdue=slot["overdue"],
+                    no_next=slot["no"],
+                    cards=await self._rows(leads),
+                    next_cursor=str(start + len(leads)) if more else None,
+                    rot_hours=stage.rot_hours,
+                    moves=tuple(
+                        self._move_option(move)
+                        for move in transitions.moves(
+                            journey, stage, can_manage=self.viewer.can_manage
+                        )
+                    ),
+                )
+            )
+        words = {"active": "Active", "won": "Won", "lost": "Lost", "junk": "Junk"}
+        return Board(
+            pipeline=key,
+            version=journey.version,
+            total=total,
+            groups=tuple(
+                BoardGroup(
+                    group=name,
+                    label=words[name],
+                    count=sum(column.count for column in columns),
+                    columns=tuple(columns),
+                )
+                for name, columns in groups.items()
+                if columns
+            ),
+            generated_at=self.now,
         )
 
     async def bulk(self, command: BulkLeads) -> BulkDone:
@@ -1352,6 +2191,7 @@ class LeadDesk:
             raise DeskError(422, "Pick a stage.")
         done = skipped = 0
         label = ""
+        why: dict[str, int] = {}
         for lead_id in dict.fromkeys(command.lead_ids):
             one = uuid5(command.command_id, str(lead_id))
             if await self._command_seen(one) is not None:
@@ -1395,7 +2235,7 @@ class LeadDesk:
                 label = target.name
             else:
                 journey = await self._labels(journeys.pipeline_of(lead))
-                stage = journey.by_key.get(command.step or "")
+                stage = journey.stage_for(command.step or "")
                 now = journey.resolve(lead.stage, lead.step)
                 if (
                     stage is None
@@ -1405,7 +2245,23 @@ class LeadDesk:
                 ):
                     skipped += 1
                     continue
-                self.to_stage(lead, journey, stage, note=None, command_id=one)
+                try:
+                    self.to_stage(
+                        lead,
+                        journey,
+                        stage,
+                        note=command.reason_note,
+                        command_id=one,
+                        via="bulk",
+                        outcome_reason=command.outcome_reason,
+                        next_action_at=command.next_action_at,
+                    )
+                except DeskError as refused:
+                    # Not a move from this lead's stage, or it needs something this
+                    # request didn't give: left as it was, and said why.
+                    skipped += 1
+                    why[str(refused)] = why.get(str(refused), 0) + 1
+                    continue
                 label = stage.label
             done += 1
         await self.db.flush()
@@ -1419,6 +2275,10 @@ class LeadDesk:
             words = f"{leads} moved to {label}" if done else "Nothing moved"
         if skipped:
             words += f"; {skipped} skipped (already there, or not on this desk)"
+        if why:
+            words += ". " + " ".join(
+                f"{count} not moved: {reason}" for reason, count in sorted(why.items())
+            ).rstrip(".")
         return BulkDone(done=done, skipped=skipped, words=words + ".")
 
     async def match(self, phone: str) -> LeadMatch:
@@ -1470,30 +2330,43 @@ class LeadDesk:
         reps: list[_Rep] | None,
         command_id: UUID | None = None,
     ) -> None:
-        reopened = lead.stage in CLOSED_STAGES
+        # A Lost lead who asks again is back to work, on the same record. Won and Junk
+        # stay as they are (Lead OS, 24 Oct 2026): the history says they came again.
+        reopened = lead.stage == "lost"
         lead.repeats += 1
-        lead.revision += 1
         lead.updated_at = self.now
         for name in ("email", "company", "city", "language", "interest"):
             if getattr(lead, name) is None and getattr(found, name) is not None:
                 setattr(lead, name, getattr(found, name))
-        if reopened:
-            lead.stage = "new"
-            lead.step = None
-        if lead.next_action_at is None or lead.next_action_at > self.now:
+        if (lead.stage not in CLOSED_STAGES or reopened) and (
+            lead.next_action_at is None or lead.next_action_at > self.now
+        ):
             lead.next_action_at = self.now
-        self._event(
-            lead,
-            "repeat",
-            {
-                "source": source,
-                "source_label": source_label or SOURCE_LABELS.get(source, source),
-                "reopened": reopened,
-                "payload": payload,
-            },
-            actor=actor,
-            command_id=command_id,
-        )
+        repeat = {
+            "source": source,
+            "source_label": source_label or SOURCE_LABELS.get(source, source),
+            "reopened": reopened,
+            "payload": payload,
+        }
+        if reopened:
+            journey = await self._labels(journeys.pipeline_of(lead))
+            target = journey.resolve("new", None)
+            assert target is not None  # every list keeps one New stage
+            move = transitions.forced(journey, journey.resolve(lead.stage, lead.step), target)
+            self._move(
+                lead,
+                journey,
+                move,
+                source="capture",
+                command_id=command_id,
+                next_action_at=self.now,
+                carrier=("repeat", repeat),
+                desk_step=True,
+                actor=actor,
+            )
+        else:
+            lead.revision += 1
+            self._event(lead, "repeat", repeat, actor=actor, command_id=command_id)
         if reopened or lead.owner_person_id is None:
             previous = lead.owner_person_id
             await self._allocate(lead, previous_owner=previous, reps=reps)
@@ -1669,23 +2542,49 @@ class LeadDesk:
         previous_stage = lead.stage
         previous_step = lead.step
         chosen: journeys.Stage | None = None
+        journey = await self._labels(journeys.pipeline_of(lead))
+        current = journey.resolve(lead.stage, lead.step)
         lead.attempts += 1
         follow = command.follow_up_at
         if follow is not None and follow < self.now - timedelta(minutes=5):
             raise DeskError(422, "Pick a follow-up time that's still ahead.")
+        move: transitions.Move | None = None
         if command.connected:
             if command.step is not None:
-                # One of the business's own stages: its kind is the desk's stage.
-                chosen = (await self._labels(journeys.pipeline_of(lead))).by_key.get(command.step)
-                if chosen is None or chosen.archived or chosen.kind not in journeys.CONNECTED_KINDS:
+                # One of the business's own stages: its kind is the desk's stage. A call
+                # with the wrong person can mark the lead Junk (Lead OS).
+                chosen = journey.stage_for(command.step)
+                if (
+                    chosen is None
+                    or chosen.archived
+                    or chosen.kind not in (*journeys.CONNECTED_KINDS, "junk")
+                ):
                     raise DeskError(422, "Pick one of your current stages.")
                 if command.stage is not None and command.stage != chosen.kind:
                     raise DeskError(422, "That stage changed. Reload the lead and try again.")
             elif command.stage is None:
                 raise DeskError(422, "Choose the lead's stage: Follow-up, Interested, Won or Lost.")
-            stage = stage_after_connected(chosen.kind if chosen else str(command.stage))
+            stage = (
+                "junk"
+                if chosen is not None and chosen.kind == "junk"
+                else stage_after_connected(chosen.kind if chosen else str(command.stage))
+            )
             if stage in NEEDS_FOLLOW_UP and follow is None:
                 raise DeskError(422, "Pick when to follow up: in one hour, tomorrow or next week.")
+            target = chosen or journey.resolve(stage, None)
+            if target is not None and (current is None or target.key != current.key):
+                move = self._check(
+                    journey,
+                    lead,
+                    target.key,
+                    transitions.Given(
+                        reason=command.outcome_reason,
+                        reason_note=command.reason_note,
+                        next_action=follow is not None,
+                        meeting=command.meeting is not None,
+                    ),
+                    source="ai_suggestion" if command.suggestion_ref else "seller",
+                )
             lead.stage = stage
             lead.step = chosen.key if chosen else None
             lead.last_result = stage
@@ -1694,7 +2593,22 @@ class LeadDesk:
         else:
             if command.reason is None:
                 raise DeskError(422, "Choose why the call didn't connect.")
-            lead.stage = stage_after_not_connected(lead.stage)
+            after = stage_after_not_connected(lead.stage)
+            if after != previous_stage:
+                target = journey.resolve(after, None)
+                if target is not None:
+                    try:
+                        move = transitions.check(
+                            journey,
+                            current,
+                            target.key,
+                            transitions.Given(nc_reason=command.reason, next_action=True),
+                            can_manage=self.viewer.can_manage,
+                        )
+                    except transitions.MoveRefused:
+                        # Not a move this list allows: the call is logged, the stage stays.
+                        after = previous_stage
+            lead.stage = after
             if lead.stage != previous_stage:
                 lead.step = None
             lead.last_result = command.reason
@@ -1703,27 +2617,59 @@ class LeadDesk:
             lead.next_action_note = command.remark
         lead.last_contact_at = self.now
         lead.first_contact_at = lead.first_contact_at or self.now
-        lead.revision += 1
-        lead.updated_at = self.now
-        self._event(
-            lead,
-            "result",
-            {
-                "connected": command.connected,
-                "stage": lead.stage,
-                "from_stage": previous_stage,
-                "step": lead.step,
-                "from_step": previous_step,
-                "step_label": chosen.label if chosen else None,
-                "reason": command.reason,
-                "follow_up_at": lead.next_action_at.isoformat() if lead.next_action_at else None,
-                "remark": command.remark,
-                "deal_value": command.deal_value,
-                "was_due": was_due,
-            },
-            actor=self.viewer.person_id,
-            command_id=command.command_id,
-        )
+        call = {
+            "connected": command.connected,
+            "stage": lead.stage,
+            "from_stage": previous_stage,
+            "step": lead.step,
+            "from_step": previous_step,
+            "step_label": chosen.label if chosen else None,
+            "reason": command.reason,
+            "follow_up_at": lead.next_action_at.isoformat() if lead.next_action_at else None,
+            "remark": command.remark,
+            "deal_value": command.deal_value,
+            "was_due": was_due,
+        }
+        if move is not None:
+            # The call moved the lead: the same record, one history line (the result).
+            step_now, follow_now, note_now = lead.step, lead.next_action_at, lead.next_action_note
+            lead.stage, lead.step = previous_stage, previous_step
+            meeting_id, starts = await self._meeting_for(
+                lead, move, command.meeting, note=command.remark
+            )
+            if starts is not None:
+                follow_now = starts
+                call["follow_up_at"] = starts.isoformat()
+            self._move(
+                lead,
+                journey,
+                move,
+                source="ai_suggestion" if command.suggestion_ref else "seller",
+                via="after_call",
+                command_id=command.command_id,
+                outcome_reason=command.outcome_reason,
+                reason_note=command.reason_note,
+                contact="call" if command.connected else None,
+                meeting_id=meeting_id,
+                suggestion=command.suggestion_ref,
+                carrier=("result", call),
+                desk_step=chosen is None,
+            )
+            if lead.stage not in CLOSED_STAGES:
+                lead.next_action_at, lead.next_action_note = follow_now, note_now
+            lead.step = step_now if chosen is not None else lead.step
+        else:
+            if command.meeting is not None:
+                raise DeskError(422, "Book the meeting from the lead's Meeting button.")
+            lead.revision += 1
+            lead.updated_at = self.now
+            self._event(
+                lead,
+                "result",
+                call,
+                actor=self.viewer.person_id,
+                command_id=command.command_id,
+            )
         await self.db.flush()
         return await self.detail(lead.id)
 
@@ -1866,6 +2812,15 @@ class LeadDesk:
             raise DeskError(404, "This lead isn't waiting on you.")
         name = _short(lead.name)
         source = lead.source_label or SOURCE_LABELS.get(lead.source, lead.source)
+        meeting = await meeting_rows.open_meeting(self.db, self.tenant_id, lead.id)
+        if meeting is not None and meeting.starts_at - self.now <= 2 * meeting_rows.REMIND_BEFORE:
+            mode = meeting_rows.MODE_LABELS.get(meeting.mode, "Meeting")
+            return AlertText(
+                title=f"Meeting with {name} at {clock_text(meeting.starts_at)}"[:120],
+                body=" · ".join(part for part in (mode, meeting.agenda, source) if part)[:240],
+                lead_id=lead.id,
+                url=f"/leads#lead={lead.id}",
+            )
         if lead.stage == "new" and lead.next_action_at is None:
             body = " · ".join(
                 part

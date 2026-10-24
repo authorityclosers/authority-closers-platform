@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import importlib.util
 import json
@@ -1216,72 +1217,169 @@ def test_post_migration_held_probe_requires_same_generation_and_zero_provider_ca
         restore_drill._validate_held_probe(payload, expected_generation=5)
 
 
-def test_checked_in_migrations_preserve_forward_only_recovery_policy() -> None:
-    migration_dir = ROOT / "db" / "migrations" / "versions"
-    migrations = sorted(
-        path for path in migration_dir.glob("*.py") if not path.name.startswith("_")
-    )
-    assert migrations
-    for index, migration_path in enumerate(migrations):
-        spec = importlib.util.spec_from_file_location(
-            f"forward_only_migration_{index}", migration_path
+# Revisions shipped before 20261012_0088 are forward-only: their downgrade always raises.
+# This list is frozen history (owner, 24 Oct 2026: fix the root cause of the v0.86 migration
+# failures). Nothing is ever added to it: every later revision, including each new one, must
+# use the history guard instead, which needs no edit here.
+LEGACY_FORWARD_ONLY_REVISIONS = frozenset(
+    {
+        "20260830_0001",
+        "20260830_0002",
+        "20260830_0003",
+        "20260830_0004",
+        "20260830_0005",
+        "20260830_0006",
+        "20260830_0007",
+        "20260830_0008",
+        "20260830_0009",
+        "20260830_0010",
+        "20260830_0011",
+        "20260901_0012",
+        "20260902_0013",
+        "20260902_0014",
+        "20260903_0015",
+        "20260903_0016",
+        "20260904_0017",
+        "20260904_0018",
+        "20260907_0019",
+        "20260908_0020",
+        "20260908_0021",
+        "20260908_0022",
+        "20260909_0023",
+        "20260909_0024",
+        "20260909_0025",
+        "20260910_0026",
+        "20260910_0027",
+        "20260910_0028",
+        "20260910_0029",
+        "20260913_0030",
+        "20260913_0031",
+        "20260913_0032",
+        "20260913_0033",
+        "20260913_0034",
+        "20260913_0035",
+        "20260914_0036",
+        "20260914_0037",
+        "20260914_0038",
+        "20260914_0039",
+        "20260914_0040",
+        "20260914_0041",
+        "20260915_0042",
+        "20260915_0043",
+        "20260923_0044",
+        "20260923_0045",
+        "20260923_0046",
+        "20260924_0047",
+        "20260924_0048",
+        "20260925_0049",
+        "20260925_0050",
+        "20260928_0051",
+        "20260929_0052",
+        "20260930_0053",
+        "20260930_0054",
+        "20260930_0060",
+        "20260930_0061",
+        "20261001_0062",
+        "20261001_0063",
+        "20261001_0064",
+        "20261002_0065",
+        "20261002_0066",
+        "20261002_0067",
+        "20261003_0068",
+        "20261003_0069",
+        "20261003_0070",
+        "20261003_0071",
+        "20261003_0072",
+        "20261003_0073",
+        "20261004_0074",
+        "20261004_0075",
+        "20261005_0076",
+        "20261007_0077",
+        "20261008_0078",
+        "20261009_0079",
+        "20261010_0080",
+        "20261011_0081",
+        "20261011_0082",
+        "20261011_0083",
+        "20261011_0084",
+        "20261011_0085",
+        "20261011_0086",
+        "20261011_0087",
+    }
+)
+FIRST_HISTORY_GUARDED_SEQUENCE = 88
+MIGRATIONS = sorted(
+    path
+    for path in (ROOT / "db" / "migrations" / "versions").glob("*.py")
+    if not path.name.startswith("_")
+)
+
+
+def _load_migration(path: Path) -> Any:
+    spec = importlib.util.spec_from_file_location(f"recovery_policy_{path.stem}", path)
+    assert spec is not None and spec.loader is not None
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+    return migration
+
+
+class _RecordingOp:
+    """Stands in for alembic.op: history reads return ``history``; schema calls are recorded."""
+
+    def __init__(self, history: int) -> None:
+        self.history = history
+        self.changes: list[str] = []
+
+    def get_bind(self) -> SimpleNamespace:
+        return SimpleNamespace(scalar=lambda statement: self.history)
+
+    def get_context(self) -> SimpleNamespace:
+        return SimpleNamespace(autocommit_block=contextlib.nullcontext)
+
+    def execute(self, statement: Any, *args: Any, **kwargs: Any) -> None:
+        return None  # locks and fences, not schema changes
+
+    def f(self, name: str) -> str:
+        return name
+
+    def __getattr__(self, name: str) -> Any:
+        def record(*args: Any, **kwargs: Any) -> None:
+            self.changes.append(name)
+
+        return record
+
+
+def test_legacy_forward_only_revisions_are_frozen_history() -> None:
+    revisions = {_load_migration(path).revision: path for path in MIGRATIONS}
+    assert revisions.keys() >= LEGACY_FORWARD_ONLY_REVISIONS
+    assert len(LEGACY_FORWARD_ONLY_REVISIONS) == 82
+    for revision in LEGACY_FORWARD_ONLY_REVISIONS:
+        sequence = int(revisions[revision].name.split("_")[1])
+        assert sequence < FIRST_HISTORY_GUARDED_SEQUENCE, (
+            f"{revision}: only revisions before 0088 may be forward-only; "
+            "use the history guard (roll back while empty, raise when history exists)"
         )
-        assert spec is not None and spec.loader is not None
-        migration = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(migration)
-        if migration.revision in {
-            "20261012_0088",
-            "20261013_0089",
-            "20261013_0090",
-            "20261016_0091",
-            "20261016_0092",
-            "20261016_0093",
-            "20261016_0094",
-            "20261017_0095",
-            "20261018_0096",
-            "20261019_0097",
-            "20261019_0098",
-            "20261019_0099",
-            "20261019_0100",
-            "20261019_0101",
-            "20261019_0102",
-            "20261019_0103",
-            "20261019_0104",
-            "20261019_0105",
-            "20261019_0106",
-            "20261019_0107",
-            "20261019_0108",
-            "20261019_0109",
-            "20261019_0110",
-            "20261020_0111",
-            "20261020_0112",
-            "20261020_0113",
-            "20261020_0114",
-            "20261020_0115",
-            "20261021_0116",
-            "20261021_0117",
-            "20261021_0118",
-            "20261021_0119",
-            "20261021_0120",
-            "20261022_0121",
-            "20261022_0122",
-            "20261023_0123",
-            "20261023_0124",
-            "20261023_0125",
-            "20261023_0126",
-            "20261023_0127",
-        }:
-            # These constraint-only migrations permit compatible rollback, but
-            # unsupported retained history must force forward recovery.
-            migration.op = SimpleNamespace(
-                execute=lambda statement: None,
-                get_bind=lambda: SimpleNamespace(scalar=lambda statement: 1),
-            )
-            with pytest.raises(RuntimeError, match="history requires forward recovery"):
-                migration.downgrade()
-            continue
+
+
+@pytest.mark.parametrize("path", MIGRATIONS, ids=lambda path: path.name)
+def test_checked_in_migrations_preserve_forward_only_recovery_policy(path: Path) -> None:
+    migration = _load_migration(path)
+    if migration.revision in LEGACY_FORWARD_ONLY_REVISIONS:
         with pytest.raises(RuntimeError, match="forward-only"):
             migration.downgrade()
+        return
+    # The history guard (0088 on): migration-safety rehearses upgrade, downgrade and
+    # re-upgrade on an empty schema, so the downgrade must roll back while the history is
+    # empty and must refuse, before changing anything, once history exists.
+    used = _RecordingOp(history=1)
+    migration.op = used
+    with pytest.raises(RuntimeError, match="history requires forward recovery"):
+        migration.downgrade()
+    assert not used.changes, f"{path.name} changed the schema before refusing retained history"
+    empty = _RecordingOp(history=0)
+    migration.op = empty
+    migration.downgrade()
+    assert empty.changes, f"{path.name} did not roll back an empty history"
 
 
 def test_empty_terminal_failure_migration_can_reverse_without_touching_history() -> None:

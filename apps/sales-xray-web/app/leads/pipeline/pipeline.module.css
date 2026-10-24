@@ -1,0 +1,1050 @@
+/* Lead OS: the pipeline board, the stage sheet and the meeting card.
+   Phones first: one column at a time, swiped inside the board; computers:
+   the open columns side by side and a rail of Won, Lost and Junk. Tokens only
+   (--sx-*); light and dark share one layout. */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.board,
+.board *,
+.sheetBody,
+.sheetBody *,
+.dashboard,
+.dashboard * {
+  box-sizing: border-box;
+}
+
+.board {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--sx-gap);
+}
+
+/* ---------- the stage strip ---------- */
+
+.strip {
+  display: flex;
+  min-width: 0;
+  gap: 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  padding: 2px 2px 6px;
+  scroll-snap-type: x proximity;
+  scrollbar-width: none;
+}
+
+.strip::-webkit-scrollbar {
+  display: none;
+}
+
+.stripGroup {
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.stripGroup + .stripGroup {
+  padding-left: 12px;
+  border-left: 1px solid var(--sx-line);
+}
+
+.stripChip {
+  position: relative;
+  display: inline-flex;
+  min-height: var(--sx-control-h);
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  scroll-snap-align: start;
+  touch-action: manipulation;
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.stripChip:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+.stripChip[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+}
+
+.stripChip[data-group="won"][aria-pressed="true"] {
+  border-color: var(--sx-good);
+}
+
+.stripChip[data-group="lost"][aria-pressed="true"],
+.stripChip[data-group="junk"][aria-pressed="true"] {
+  border-color: var(--sx-bad);
+}
+
+.count {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sx-bad);
+}
+
+.chipSkeleton {
+  width: 96px;
+  height: var(--sx-control-h);
+  flex: none;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-sunken);
+}
+
+/* ---------- columns ---------- */
+
+.columns {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  gap: 12px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: thin;
+}
+
+.rail {
+  display: contents;
+}
+
+.column {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 0 0 100%;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 8px 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-sunken);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scroll-snap-align: start;
+  transition: opacity var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.column[data-kind="won"] {
+  border-color: color-mix(in srgb, var(--sx-good) 40%, var(--sx-line));
+}
+
+.column[data-kind="lost"],
+.column[data-kind="junk"] {
+  border-color: color-mix(in srgb, var(--sx-bad) 30%, var(--sx-line));
+}
+
+.board[data-dragging] .column[data-drop="blocked"] {
+  opacity: 0.45;
+}
+
+.board[data-dragging] .column[data-drop="allowed"] {
+  border-color: var(--sx-accent);
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* One height for every head side by side: up to two lines of name, badges on
+   the right. */
+.columnHead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+  padding: 0 4px;
+}
+
+.columnHead h3 {
+  display: -webkit-box;
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: 20px;
+  overflow-wrap: break-word;
+}
+
+.headBadges {
+  display: inline-flex;
+  height: 20px;
+  align-items: center;
+  gap: 6px;
+}
+
+.headCount {
+  min-width: 24px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+.flag {
+  height: 20px;
+  padding: 0 8px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.flag[data-tone="late"] {
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+}
+
+.flag[data-tone="none"] {
+  background: color-mix(in srgb, var(--sx-warn) 16%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+.columnEmpty {
+  margin: 8px 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.cards {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* ---------- a card ---------- */
+
+.card {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+/* Late: a red edge inside the card, so its text lines up with the others. */
+.card[data-late]::before {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--sx-bad);
+  content: "";
+}
+
+.cardOpen {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 4px;
+  padding: 16px;
+  border-radius: inherit;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.cardOpen:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+.cardOpen:focus-visible,
+.cardMove:focus-visible,
+.stripChip:focus-visible,
+.target:focus-visible,
+.chip:focus-visible,
+.backStep:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.cardName {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One line that fits: the context first, then the time. When both don't fit,
+   the context wraps to a hidden second line, whole, and the time stays. */
+.cardMeta {
+  display: flex;
+  height: 18px;
+  min-width: 0;
+  flex-flow: row-reverse wrap;
+  justify-content: flex-end;
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.cardContext::after {
+  margin: 0 6px;
+  content: "·";
+}
+
+.cardTime {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.cardTime[data-old] {
+  color: color-mix(in srgb, var(--sx-warn) 55%, var(--sx-ink));
+  font-weight: 600;
+}
+
+.cardFoot {
+  display: flex;
+  min-width: 0;
+  height: 24px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.next {
+  height: 24px;
+  padding: 0 10px;
+  line-height: 24px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.next[data-tone="late"] {
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+}
+
+.next[data-tone="none"] {
+  background: color-mix(in srgb, var(--sx-warn) 18%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+.next[data-tone="today"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+}
+
+.owner {
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+}
+
+.cardMove {
+  display: grid;
+  min-width: 44px;
+  min-height: 44px;
+  place-items: center;
+  align-self: stretch;
+  border: 0;
+  border-left: 1px solid var(--sx-hairline);
+  background: none;
+  color: var(--sx-muted);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.cardMove:active {
+  background: var(--sx-fill-soft);
+}
+
+.cardSkeleton {
+  height: 104px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+/* The columns' frame: on computers the edge fades and says how many stages
+   are out of view. */
+.columnsWrap {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  --fade-left: 0px;
+  --fade-right: 0px;
+}
+
+.edgeButton {
+  display: none;
+}
+
+/* ---------- computers: one width for every column, scrolled sideways ---------- */
+
+@media (min-width: 900px) {
+  /* The column heads name every stage: the strip would only repeat them. */
+  .strip {
+    display: none;
+  }
+
+  .columns {
+    scroll-snap-type: none;
+  }
+
+  .columnsWrap[data-fade-left] .columns,
+  .columnsWrap[data-fade-right] .columns {
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      var(--sx-ink) var(--fade-left),
+      var(--sx-ink) calc(100% - var(--fade-right)),
+      transparent 100%
+    );
+  }
+
+  .columnsWrap[data-fade-left] {
+    --fade-left: 32px;
+  }
+
+  .columnsWrap[data-fade-right] {
+    --fade-right: 112px;
+  }
+
+  .column {
+    flex: 0 0 248px;
+  }
+
+  .columnHead {
+    min-height: 40px;
+  }
+
+  /* Won, Lost and Junk follow the open stages, a step apart. */
+  .rail > .column:first-child {
+    margin-left: 12px;
+  }
+
+  /* In the bottom corner, over the faded edge: never on a stage name or a
+     card's words. */
+  .edgeButton {
+    position: absolute;
+    bottom: 12px;
+    display: inline-flex;
+    min-height: 32px;
+    align-items: center;
+    gap: 4px;
+    padding: 0 10px;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--sx-radius-pill);
+    background: var(--sx-surface);
+    box-shadow: var(--sx-shadow-1);
+    color: var(--sx-ink);
+    font: inherit;
+    font-size: var(--sx-text-sm);
+    font-weight: 600;
+    cursor: pointer;
+  }
+
+  .edgeButton[data-side="right"] {
+    right: 4px;
+  }
+
+  .edgeButton[data-side="left"] {
+    left: 4px;
+    padding: 0 6px;
+  }
+
+  .edgeButton:focus-visible {
+    outline: none;
+    box-shadow: var(--sx-focus-ring);
+  }
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .cardOpen:hover {
+    background: var(--sx-fill-soft);
+  }
+
+  .card[draggable="true"] {
+    cursor: grab;
+  }
+
+  /* With a mouse the card is dragged; Move floats in its corner on hover or
+     focus, so the name keeps the card's whole width. */
+  .cardMove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    min-width: 32px;
+    min-height: 32px;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--sx-radius-sm);
+    background: var(--sx-surface);
+    opacity: 0;
+    transition: opacity var(--sx-dur-fast) var(--sx-ease-out);
+  }
+
+  .card:hover .cardMove,
+  .card:focus-within .cardMove {
+    opacity: 1;
+  }
+}
+
+/* ---------- sheets ---------- */
+
+.sheetBody {
+  display: grid;
+  gap: 16px;
+}
+
+.sheetFooter {
+  display: grid;
+  width: 100%;
+  flex: 1;
+  gap: 8px;
+}
+
+.sheetEmpty {
+  color: var(--sx-muted);
+}
+
+.finalLine {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.fromTo {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  color: var(--sx-ink-2);
+}
+
+.fromTo strong {
+  color: var(--sx-ink);
+}
+
+.backStep {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+  cursor: pointer;
+}
+
+.groupLabel {
+  margin: 0 0 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.targets {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.target {
+  display: grid;
+  width: 100%;
+  min-height: 52px;
+  gap: 2px;
+  padding: 10px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.target[data-group="won"] {
+  border-left: 3px solid var(--sx-good);
+}
+
+.target[data-group="lost"],
+.target[data-group="junk"] {
+  border-left: 3px solid var(--sx-bad);
+}
+
+.targetLabel {
+  font-weight: 700;
+}
+
+.targetHint {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.block {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.blockLabel {
+  padding: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.optional {
+  color: var(--sx-muted);
+  font-weight: 500;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  min-height: var(--sx-control-h);
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.field input,
+.field textarea {
+  min-height: var(--sx-control-h);
+  padding: 8px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 16px;
+}
+
+.hint {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+/* ---------- the meeting card ---------- */
+
+.meetingCard {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--sx-accent) 35%, var(--sx-line));
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-accent-soft);
+}
+
+.meetingHead {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  color: var(--sx-ink);
+}
+
+.meetingText {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+}
+
+.meetingText span {
+  overflow: hidden;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- the timeline's stage path ---------- */
+
+.path {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.path li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.path li + li::before {
+  color: var(--sx-muted);
+  content: "→";
+}
+
+.path [data-now] {
+  color: var(--sx-ink);
+  font-weight: 700;
+}
+
+.pathAge {
+  color: var(--sx-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.filters {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.badge {
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stripChip,
+  .cardOpen,
+  .column {
+    transition: none;
+  }
+}
+
+/* The lead page's stage chip: a button that opens the stage sheet. */
+.stageButton {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.stageButton:focus-visible {
+  border-radius: var(--sx-radius-pill);
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.wide {
+  width: 100%;
+  min-height: 48px;
+}
+
+/* ---------- pipeline numbers ---------- */
+
+.dashboard {
+  display: grid;
+  min-width: 0;
+  gap: var(--sx-gap);
+}
+
+.dashHead {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.kpi {
+  display: grid;
+  gap: 2px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.kpi[data-tone="bad"] .kpiValue {
+  color: var(--sx-bad);
+}
+
+.kpiValue {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-kpi);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.kpiLabel {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.panel {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.panel h3 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+}
+
+.bars,
+.conversions,
+.tableRows {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.bars li {
+  display: grid;
+  grid-template-columns: minmax(0, 9fr) minmax(0, 10fr) 3ch;
+  align-items: center;
+  gap: 8px;
+  --bar: var(--sx-accent);
+}
+
+/* Stage names are long ("Demo / Zoom Meeting Completed"): they wrap, never end in
+   "…", and in a narrow panel (a phone) each row puts the name and count above a
+   full-width bar (sales-xray-ux rule 4; Lead OS phone pass, 24 Oct 2026). */
+.bars {
+  container-type: inline-size;
+}
+
+@container (max-width: 440px) {
+  .bars li {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 4px;
+  }
+
+  .barTrack {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+.bars li[data-tone="won"] {
+  --bar: var(--sx-good);
+}
+
+.bars li[data-tone="lost"],
+.bars li[data-tone="junk"] {
+  --bar: var(--sx-bad);
+}
+
+.barLabel {
+  min-width: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.barTrack {
+  height: 10px;
+  overflow: hidden;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+}
+
+.barFill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--bar);
+}
+
+.barValue {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.conversions li {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 12px;
+}
+
+.convRate {
+  min-width: 4ch;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-title);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.convText {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.convText strong {
+  color: var(--sx-ink);
+}
+
+.tableRows li {
+  display: flex;
+  min-width: 0;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 0;
+  border-top: 1px solid var(--sx-hairline);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.tableRows li:first-child {
+  border-top: 0;
+}
+
+.tableRows [data-tone="bad"] {
+  color: var(--sx-bad);
+  font-weight: 600;
+}
+
+.tableRows [data-tone="warn"] {
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.rowName {
+  flex: 1 0 100%;
+  color: var(--sx-ink);
+  font-weight: 700;
+}
+
+@media (min-width: 900px) {
+  .kpis {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .dashboard {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dashHead,
+  .kpis,
+  .dashboard > .hint {
+    grid-column: 1 / -1;
+  }
+
+  .rowName {
+    flex: 1 0 12rem;
+  }
+}

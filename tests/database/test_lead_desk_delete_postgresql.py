@@ -489,6 +489,7 @@ def test_owners_and_admins_delete_chosen_leads_for_good(
                     "events": 3,
                     "sla_breaches": 1,
                     "chat_reads": 1,
+                    "meetings": 0,
                     "leads": 1,
                 }
                 assert single.payload["emptied"] == {

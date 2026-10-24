@@ -8,6 +8,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { setPhoneTheme } from "../leads/native-phone";
 import { Segmented } from "./segmented";
 import {
   DARK_SCHEME_QUERY,
@@ -64,6 +65,10 @@ function EnabledThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     applyTheme(document.documentElement, preference, resolved);
   }, [preference, resolved]);
+  // The phone app keeps the same pick for Android (once on load, then on change).
+  useEffect(() => {
+    void setPhoneTheme(preference);
+  }, [preference]);
   return (
     <ThemeContext.Provider
       value={{ preference, resolved, setPreference: writeThemePreference }}

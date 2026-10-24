@@ -9,6 +9,7 @@
  * `?tab=stages&tap=change` the kinds of business. `&pipelines=2` gives the
  * organisation two pipelines (enquiries and partner outreach; `&pipeline=`
  * picks one), and `?tab=stages&pipelines=2&tap=new` opens New pipeline.
+ * `?tab=board` shows the pipeline board and `?tab=numbers` Pipeline numbers (Lead OS).
  * `?after-call=1` opens the first lead just after a call to it that the phone
  * logged with 1 min 22 s of talk, so "How did it go?" shows (Redmi #47: Save
  * says what it still needs); `&tap=next` then saves "Didn't get through" and
@@ -31,6 +32,10 @@
 import { Suspense, useEffect, useState, type ReactNode } from "react";
 
 import { rememberCall } from "../../leads/leads-client";
+import {
+  fixtureBoard,
+  fixtureReport,
+} from "../lead-pipeline/lead-pipeline-data";
 import { LeadsRoute } from "../../leads/leads-page";
 import { WorkspaceAccessContext } from "../../workspace-access";
 
@@ -247,6 +252,9 @@ function rows(now: number) {
 function answers(now: number, path: string): unknown {
   // To call's ?pipeline=: that pipeline's leads only, as the server answers.
   const [bare, query = ""] = path.split("?");
+  // Lead OS: the board and Pipeline numbers (?tab=board, ?tab=numbers).
+  if (bare.startsWith("/v1/lead-desk/board")) return fixtureBoard();
+  if (bare === "/v1/lead-desk/reports/pipeline") return fixtureReport();
   const asked =
     bare === "/v1/lead-desk" || bare === "/v1/lead-desk/next"
       ? new URLSearchParams(query).get("pipeline")

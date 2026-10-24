@@ -7,7 +7,9 @@ the seller's own session (``GET /v1/lead-desk/leads/{id}/alert``), so names and
 numbers never pass through Google.
 
 Each assignment and each due time alerts once (``Lead.alerted_assigned_at`` and
-``Lead.alerted_due_at``). Several alerts for one seller in one pass become one
+``Lead.alerted_due_at``). A booked meeting reminds its seller before it starts, once per
+start time (``LeadMeeting.reminded_for``; Lead OS, 24 Oct 2026); it goes as a "due"
+alert, whose words say it is a meeting. Several alerts for one seller in one pass become one
 "3 leads to call now". Nothing older than two hours is sent, so a phone that
 registers late is not flooded.
 
@@ -41,7 +43,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.lead_desk import hours
 from ac_platform.lead_desk.contracts import PushConfig
-from ac_platform.lead_desk.models import Lead, LeadDevice
+from ac_platform.lead_desk.meetings import REMIND_BEFORE
+from ac_platform.lead_desk.models import Lead, LeadDevice, LeadMeeting
 from ac_platform.lead_desk.store import LeadDesk, Viewer
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 
@@ -237,9 +240,35 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
             .with_for_update(skip_locked=True)
         )
     ).all()
+    meetings = (
+        await database.execute(
+            select(LeadMeeting, Lead)
+            .join(
+                Lead,
+                and_(Lead.tenant_id == LeadMeeting.tenant_id, Lead.id == LeadMeeting.lead_id),
+            )
+            .where(
+                owned,
+                LeadMeeting.status == "scheduled",
+                LeadMeeting.starts_at > now,
+                LeadMeeting.starts_at <= now + REMIND_BEFORE,
+                or_(
+                    LeadMeeting.reminded_for.is_(None),
+                    LeadMeeting.reminded_for != LeadMeeting.starts_at,
+                ),
+            )
+            .order_by(LeadMeeting.starts_at)
+            .limit(BATCH)
+            .with_for_update(of=LeadMeeting, skip_locked=True)
+        )
+    ).all()
+    reminded: list[Lead] = []
+    for meeting, lead in meetings:
+        meeting.reminded_for = meeting.starts_at
+        reminded.append(lead)
     alerts: dict[tuple[UUID, UUID], Alert] = {}
     seen: set[UUID] = set()
-    for kind, leads in (("new", assigned), ("due", due)):
+    for kind, leads in (("new", assigned), ("due", due), ("due", reminded)):
         for lead in leads:
             if kind == "new":
                 lead.alerted_assigned_at = lead.assigned_at

@@ -46,6 +46,24 @@ it("retains the card until permanent dismissal is acknowledged", async () => {
   await act(async () => resolve());
   expect(host.textContent).not.toContain("Fictional update");
 });
+it("dismisses from a worded button the same way as the X", async () => {
+  const onDismiss = vi.fn(async () => {});
+  await act(async () =>
+    notify({
+      id: "fictional",
+      tone: "info",
+      title: "Fictional update",
+      dismissLabel: "Later",
+      onDismiss,
+    }),
+  );
+  const later = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Later",
+  )!;
+  await act(async () => later.click());
+  expect(onDismiss).toHaveBeenCalledTimes(1);
+  expect(host.textContent).not.toContain("Fictional update");
+});
 it("keeps a failed acknowledgement actionable and retries", async () => {
   const onDismiss = vi
     .fn()

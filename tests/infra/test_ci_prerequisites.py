@@ -494,7 +494,7 @@ def test_workbench_routes_action_changes_and_overlays_action_for_historical_sour
             "changed_files": [".github/actions/ci-prerequisites/action.yml"],
         }
     )
-    assert families == {"py", "web", "visual"} and full
+    assert families == {"py", "web", "visual", "migrations", "control"} and full
     script = (ROOT / "scripts/ci/wb-ci").read_text()
     # Read only the shell array, not incidental mentions elsewhere in the tool.
     overlays = script.split("CI_FILES=(", 1)[1].split(")", 1)[0].split()

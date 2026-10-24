@@ -13,7 +13,8 @@ scripts/ci/python_test_shard.py (an exclusion file adds the other family's files
 
 Full runs every job. Otherwise only the families the changed paths touch run (explicit `checks` force families), and
 lint, tsc, vitest and ruff are scoped to the changed files. Python tests always run every shard when Python changed
-(or the given `py_tests` only).
+(or the given `py_tests` only). Two gates run whenever their paths change, even with explicit `checks`: migrations
+(released history, recovery policy, gate fixtures, rehearsal) and control (validate-control-plane.sh).
 
 Subcommands (from the repository root on the runner):
   plan                 job switches and matrices to $GITHUB_OUTPUT
@@ -44,7 +45,15 @@ EVERYTHING = re.compile(r"^(\.github/(workflows/workbench-checks\.yml|actions/(c
                         r"|uv\.lock|tsconfig[^/]*\.json)")
 WEB = re.compile(r"^(apps/|packages/typescript/)")
 VISUAL = re.compile(r"^(apps/sales-xray-web/|packages/typescript/(ui|sales-xray-review-ui)/)")
-PY = re.compile(r"^(packages/python/|tests/|alembic|migrations/|infra/local/postgres/|scripts/[^/]+\.py$)")
+PY = re.compile(r"^(packages/python/|tests/|alembic|db/migrations/|infra/local/postgres/|scripts/[^/]+\.py$)")
+# v0.86 root causes (owner, 24 Oct 2026: migration and shell failures surfaced only on the release PR, hours later):
+# migration commits run migration-safety and the released-history check, and shell, PowerShell, systemd and infra
+# changes run the control-plane validation (shellcheck and the infra tests), here at commit time.
+MIGRATIONS = re.compile(r"^(db/migrations/|alembic\.ini$|scripts/ci/(migration_schema_gate|released_migrations)\.py$"
+                        r"|scripts/ops/migration_safety\.py$|tests/infra/test_(migration_schema_gate|released_migrations)"
+                        r"\.py$)")
+CONTROL = re.compile(r"^(infra/|scripts/validate-|tests/infra/[^/]+\.sh$)|\.(sh|ps1|service|timer)$")
+SHELL_SHEBANG = re.compile(rb"^#!.*\b(ba)?sh\b")
 # Test files whose source mentions these may need ffmpeg, Playwright Chromium or the native build. A miss is not silent:
 # python_test_shard.py fails a shard (exit 3) when a required runtime is skipped.
 NEEDS_PREREQ = re.compile(r"playwright|chromium|ffmpeg|ffprobe|audioatlas|build_native|_native_executable|codec",
@@ -125,13 +134,27 @@ def changed_packages(files: list[str]) -> dict[str, list[str]]:
     return packages
 
 
+def is_shell_script(path: str) -> bool:
+    """A changed control-plane script without an extension (e.g. scripts/ci/wb-ci) is found by its shebang."""
+    try:
+        with open(path, "rb") as handle:
+            return bool(SHELL_SHEBANG.match(handle.readline()))
+    except OSError:
+        return False
+
+
+# Safety gates run whenever their paths change, even when a request names its families (--py, --web, ...).
+GATES = {"migrations", "control"}
+FULL = ["web", "py", "visual", "migrations", "control"]
+
+
 def families(req: dict) -> tuple[set[str], bool]:
     """(families to run, full scope)."""
     if req["full"]:
-        return set(req["checks"] or ["web", "py", "visual"]), True
+        return set(req["checks"] or FULL), True
     files = req["changed_files"] or []
     if any(EVERYTHING.match(p) for p in files):
-        return set(req["checks"] or ["web", "py", "visual"]), True
+        return set(req["checks"] or FULL), True
     found = set()
     if any(WEB.match(p) for p in files):
         found.add("web")
@@ -139,8 +162,12 @@ def families(req: dict) -> tuple[set[str], bool]:
         found.add("visual")
     if any(PY.match(p) for p in files) or req["py_tests"]:
         found.add("py")
+    if any(MIGRATIONS.match(p) for p in files):
+        found.add("migrations")
+    if any(CONTROL.search(p) or (p.startswith("scripts/") and is_shell_script(p)) for p in files):
+        found.add("control")
     if req["checks"]:
-        found = set(req["checks"])
+        found = set(req["checks"]) | (found & GATES)
     return found, False
 
 
@@ -202,7 +229,8 @@ def cmd_plan() -> int:
     # A full run does tsc inside the lint job, so 17 Python shards fit GitHub Free's 20 concurrent jobs.
     web_tasks = ["vitest"] if full else ["tsc", "vitest"]
     out(web=str("web" in fams).lower(), py=str("py" in fams).lower(), visual=str("visual" in fams).lower(),
-        e2e=str("e2e" in fams).lower(),
+        e2e=str("e2e" in fams).lower(), migrations=str("migrations" in fams).lower(),
+        control=str("control" in fams).lower(),
         lint=str(bool(fams & {"web", "py"})).lower(), web_matrix=json.dumps(web_tasks),
         py_matrix=json.dumps({"include": py_matrix if "py" in fams else []}),
         py_count_a=str(count_a), py_count_b=str(count_b), scope="full" if full else "changed")

@@ -22,6 +22,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { useState, useSyncExternalStore } from "react";
 
 import { Badge, Button, Dialog } from "../ui/kit";
+import { PLAY } from "../apps/play";
 import { inPhoneApp } from "./native-phone";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import styles from "./leads.module.css";
@@ -67,6 +68,56 @@ function CopyLink({ link }: { link: string }) {
   );
 }
 
+/** The file itself: for phones without Google Play, and accounts Play can't serve yet. */
+function DirectDownload({ android, link }: { android: boolean; link: string }) {
+  return (
+    <>
+      <div className={styles.appGet}>
+        {android ? null : (
+          <QRCodeSVG
+            value={link}
+            size={132}
+            marginSize={2}
+            className={styles.qr}
+            title="Scan with your Android phone's camera"
+          />
+        )}
+        <div className={styles.appGetText}>
+          {android ? null : (
+            <p className={styles.hint}>
+              Scan with your Android phone&apos;s camera, or open Sales X-Ray on
+              the phone and download it there.
+            </p>
+          )}
+          <a className={styles.downloadButton} href={link}>
+            <Download size={16} aria-hidden="true" />
+            Download for Android
+          </a>
+          <CopyLink link={link} />
+        </div>
+      </div>
+      <a className={styles.appsLink} href="/apps">
+        Install help with pictures, the file&apos;s SHA-256 and other platforms
+      </a>
+      <details className={styles.terms}>
+        <summary>How to install</summary>
+        <ol className={styles.steps}>
+          <li>Open the downloaded file.</li>
+          <li>If your phone asks, allow your browser to install apps.</li>
+          <li>
+            Open Sales X-Ray and sign in with the email code (Google sign-in
+            doesn&apos;t work inside apps).
+          </li>
+          <li>
+            On a lead, tap Call and allow Phone, Call history, and Music and
+            audio.
+          </li>
+        </ol>
+      </details>
+    </>
+  );
+}
+
 export function PhoneAppDialog({
   open,
   onClose,
@@ -92,7 +143,7 @@ export function PhoneAppDialog({
             </span>
             <span>
               <strong>Android</strong>
-              <small>Test build, updated with every release</small>
+              <small>{PLAY.where}</small>
             </span>
             <Badge tone="accent">
               {ANDROID_DOWNLOAD_READY ? "New" : "Testing"}
@@ -102,58 +153,26 @@ export function PhoneAppDialog({
             <p className={styles.hint}>
               You&apos;re using the app. On any lead, tap Call.
             </p>
-          ) : !ANDROID_DOWNLOAD_READY ? (
-            <p className={styles.hint}>
-              The Android app is being tested by the Authority Closers team. The
-              download appears here once it&apos;s signed for your phones.
-            </p>
           ) : (
             <>
-              <div className={styles.appGet}>
-                {android ? null : (
-                  <QRCodeSVG
-                    value={link}
-                    size={132}
-                    marginSize={2}
-                    className={styles.qr}
-                    title="Scan with your Android phone's camera"
-                  />
-                )}
-                <div className={styles.appGetText}>
-                  {android ? null : (
-                    <p className={styles.hint}>
-                      Scan with your Android phone&apos;s camera, or open Sales
-                      X-Ray on the phone and download it there.
-                    </p>
-                  )}
-                  <a className={styles.downloadButton} href={link}>
-                    <Download size={16} aria-hidden="true" />
-                    Download for Android
-                  </a>
-                  <CopyLink link={link} />
-                </div>
-              </div>
-              <a className={styles.appsLink} href="/apps">
-                Install help with pictures, the file&apos;s SHA-256 and other
-                platforms
+              {/* Google Play first (24 Oct 2026); the file stays for people
+                  without a Play invite. */}
+              <a className={styles.downloadButton} href={PLAY.url}>
+                <Download size={16} aria-hidden="true" />
+                {PLAY.get}
               </a>
-              <details className={styles.terms}>
-                <summary>How to install</summary>
-                <ol className={styles.steps}>
-                  <li>Open the downloaded file.</li>
-                  <li>
-                    If your phone asks, allow your browser to install apps.
-                  </li>
-                  <li>
-                    Open Sales X-Ray and sign in with the email code (Google
-                    sign-in doesn&apos;t work inside apps).
-                  </li>
-                  <li>
-                    On a lead, tap Call and allow Phone, Call history, and Music
-                    and audio.
-                  </li>
-                </ol>
-              </details>
+              <p className={styles.hint}>{PLAY.switching}</p>
+              {ANDROID_DOWNLOAD_READY ? (
+                <details className={styles.terms}>
+                  <summary>{PLAY.file}</summary>
+                  <DirectDownload android={android} link={link} />
+                </details>
+              ) : (
+                <p className={styles.hint}>
+                  The app file appears here once it&apos;s signed for your
+                  phones.
+                </p>
+              )}
             </>
           )}
           <p className={styles.hint}>

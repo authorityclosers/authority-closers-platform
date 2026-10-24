@@ -21,6 +21,7 @@
 .kindChip[data-kind="new"],
 .kindPicker button[data-kind="new"],
 .preview li[data-kind="new"],
+.cardStages > [data-kind="new"],
 .matchStage[data-kind="new"],
 .fromApp[data-kind="new"] {
   --tone: var(--lx-info);
@@ -30,6 +31,7 @@
 .kindChip[data-kind="follow_up"],
 .kindPicker button[data-kind="follow_up"],
 .preview li[data-kind="follow_up"],
+.cardStages > [data-kind="follow_up"],
 .matchStage[data-kind="follow_up"],
 .fromApp[data-kind="follow_up"] {
   --tone: var(--lx-teal);
@@ -39,6 +41,7 @@
 .kindChip[data-kind="interested"],
 .kindPicker button[data-kind="interested"],
 .preview li[data-kind="interested"],
+.cardStages > [data-kind="interested"],
 .matchStage[data-kind="interested"],
 .fromApp[data-kind="interested"] {
   --tone: var(--lx-warning);
@@ -48,6 +51,7 @@
 .kindChip[data-kind="won"],
 .kindPicker button[data-kind="won"],
 .preview li[data-kind="won"],
+.cardStages > [data-kind="won"],
 .matchStage[data-kind="won"],
 .fromApp[data-kind="won"] {
   --tone: var(--lx-success);
@@ -57,6 +61,7 @@
 .kindChip[data-kind="lost"],
 .kindPicker button[data-kind="lost"],
 .preview li[data-kind="lost"],
+.cardStages > [data-kind="lost"],
 .matchStage[data-kind="lost"],
 .fromApp[data-kind="lost"] {
   --tone: var(--lx-danger);
@@ -66,6 +71,7 @@
 .kindChip[data-kind="not_connected"],
 .kindPicker button[data-kind="not_connected"],
 .preview li[data-kind="not_connected"],
+.cardStages > [data-kind="not_connected"],
 .matchStage[data-kind="not_connected"],
 .stage[data-kind="skeleton"],
 .kindChip[data-kind="skeleton"],
@@ -76,7 +82,9 @@
 .kindChip[data-kind="hint"],
 .kindPicker button[data-kind="hint"],
 .preview li[data-kind="hint"],
-.matchStage[data-kind="hint"] {
+.matchStage[data-kind="hint"],
+.preview li[data-kind="junk"],
+.cardStages > [data-kind="junk"] {
   --tone: var(--sx-muted);
 }
 
@@ -833,7 +841,8 @@ button.templateCard:focus-visible {
   counter-reset: stage;
 }
 
-.preview li {
+.preview li,
+.cardStages > span {
   display: inline-flex;
   align-items: center;
   height: 24px;
@@ -1508,14 +1517,48 @@ button.templateCard:focus-visible {
   font-weight: 700;
 }
 
-.pickerNote {
-  flex-basis: 100%;
-  margin: 0;
+/* The note about the leads: one quiet line under the title. In the footer it
+   was sticky on phones and pushed the stages and buttons off the screen (P1,
+   owner on production, 24 Oct 2026). */
+.pickerHead .pickerNote {
+  margin-top: 6px;
   color: var(--sx-ink-2);
   font-size: var(--sx-text-sm);
 }
 
-/* The note about the leads takes its own line above the preview. */
-.pickerFoot {
-  flex-wrap: wrap;
+/* The chosen kind's stages: in its own card on phones, in the footer on
+   computers. */
+.cardStages {
+  display: none;
+}
+
+@media (max-width: 599.98px) {
+  /* The sticky footer holds the buttons only: it never covers the list. */
+  .pickerFoot {
+    flex-direction: row;
+    align-items: center;
+    min-height: 0;
+    padding: 8px;
+  }
+
+  .pickerFoot .preview {
+    display: none;
+  }
+
+  .pickerActions {
+    flex: 1;
+  }
+
+  .cardStages {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 8px;
+  }
+
+  .cardStages > span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
 }

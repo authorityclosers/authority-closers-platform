@@ -17,8 +17,9 @@ import {
   X,
 } from "lucide-react";
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
+import { shortName } from "../display-name";
 import { useRowKeys } from "../ui/row-keys";
 import { ChannelMark, ChatAvatar } from "./channel-mark";
 import {
@@ -236,10 +237,13 @@ function ThreadRow({
               <span
                 className={styles.owner}
                 data-none={!thread.ownerId || undefined}
+                title={thread.ownerName ?? undefined}
               >
                 <UserRound size={11} aria-hidden="true" />
                 <span className={styles.ownerName}>
-                  {thread.ownerName ?? "Unassigned"}
+                  {thread.ownerName
+                    ? shortName(thread.ownerName)
+                    : "Unassigned"}
                 </span>
               </span>
             ) : null}
@@ -258,6 +262,44 @@ function ThreadRow({
       </button>
     </li>
   );
+}
+
+/**
+ * Rows painted with the screen; more as the list nears its end, so a long
+ * list doesn't hold up the tap and nothing keeps changing after it (24 Oct
+ * 2026: 150 chats took 0.8-2.2 s to appear at a phone's speed, against 0.3 s
+ * for 24). Without IntersectionObserver every row shows.
+ */
+export const FIRST_ROWS = 30;
+const MORE_ROWS = 60;
+
+/** The nearest box that scrolls (the list scrolls inside the frame on phones). */
+function scrollerOf(element: Element): Element | null {
+  for (let node = element.parentElement; node; node = node.parentElement) {
+    const overflow = getComputedStyle(node).overflowY;
+    if (overflow === "auto" || overflow === "scroll") return node;
+  }
+  return null;
+}
+
+function useRowsShown(total: number) {
+  const [rows, setRows] = useState(FIRST_ROWS);
+  const more = useRef<HTMLLIElement>(null);
+  const watching = typeof IntersectionObserver !== "undefined";
+  useEffect(() => {
+    const target = more.current;
+    if (!watching || !target || rows >= total) return;
+    const seen = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting))
+          setRows((shown) => shown + MORE_ROWS);
+      },
+      { root: scrollerOf(target), rootMargin: "0px 0px 800px 0px" },
+    );
+    seen.observe(target);
+    return () => seen.disconnect();
+  }, [rows, total, watching]);
+  return { limit: watching ? rows : total, more };
 }
 
 export function ThreadList({
@@ -287,6 +329,7 @@ export function ThreadList({
   canConnect?: boolean;
 }) {
   const shown = filterThreads(threads, filter, me);
+  const { limit, more } = useRowsShown(shown.length);
   // Keys on a computer (J/K, Enter): the next chat without the mouse.
   const list = useRef<HTMLUListElement>(null);
   useRowKeys(list, {
@@ -328,7 +371,7 @@ export function ThreadList({
     );
   return (
     <ul className={styles.listBody} aria-label="Chats" ref={list}>
-      {shown.map((thread) => (
+      {shown.slice(0, limit).map((thread) => (
         <ThreadRow
           key={thread.key}
           thread={thread}
@@ -340,6 +383,9 @@ export function ThreadList({
           onOpen={onOpen}
         />
       ))}
+      {limit < shown.length ? (
+        <li ref={more} className={styles.moreRows} aria-hidden="true" />
+      ) : null}
     </ul>
   );
 }

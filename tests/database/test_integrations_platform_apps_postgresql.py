@@ -223,12 +223,13 @@ def test_a_member_connects_a_platform_app_for_their_own_account(
                 assert "/.well-known/oauth-protected-resource/v1/mcp" in challenge
                 assert 'scope="calls:read reports:read leads:read"' in challenge
                 assert (await server.get("/v1/mcp", headers=bearer)).status_code == 405
-                evil = await server.post(
+                # AI hosts call from their own web origin; the bearer token is what counts.
+                elsewhere = await server.post(
                     "/v1/mcp",
-                    headers={**bearer, "Origin": "https://evil.example"},
+                    headers={**bearer, "Origin": "https://chatgpt.com"},
                     json={"jsonrpc": "2.0", "id": 1, "method": "ping"},
                 )
-                assert evil.status_code == 403
+                assert elsewhere.status_code == 200, elsewhere.text
                 hello = await server.post(
                     "/v1/mcp",
                     headers=bearer,
@@ -256,6 +257,7 @@ def test_a_member_connects_a_platform_app_for_their_own_account(
                 names = [tool["name"] for tool in tools.json()["result"]["tools"]]
                 assert "list_calls" in names and "list_leads" in names
                 assert "add_lead" not in names  # leads:write was not approved
+                assert "search" in names and "fetch" in names  # what ChatGPT asks for
                 who = await server.post(
                     "/v1/mcp",
                     headers=bearer,
@@ -280,6 +282,18 @@ def test_a_member_connects_a_platform_app_for_their_own_account(
                     },
                 )
                 assert listed.json()["result"]["structuredContent"]["calls"] == []
+                found = await server.post(
+                    "/v1/mcp",
+                    headers=bearer,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 7,
+                        "method": "tools/call",
+                        "params": {"name": "search", "arguments": {"query": "Fictional"}},
+                    },
+                )
+                assert found.json()["result"]["isError"] is False, found.text
+                assert found.json()["result"]["structuredContent"] == {"results": []}
                 bad = await server.post(
                     "/v1/mcp",
                     headers=bearer,
@@ -330,6 +344,8 @@ def test_a_member_connects_a_platform_app_for_their_own_account(
                 mine = (await person.get("/v1/me/connected-apps")).json()["apps"]
                 live = [app for app in mine if app["revoked_at"] is None]
                 assert [app["app"] for app in live] == ["Fictional MCP Host"]
+                # Settings → AI apps shows the consent screen's checked mark, or its absence.
+                assert live[0]["verified"] is False and live[0]["maker"] is None
                 removed = await person.post(
                     f"/v1/me/connected-apps/{live[0]['id']}/revoke", headers=WRITE
                 )
@@ -344,6 +360,14 @@ def test_a_member_connects_a_platform_app_for_their_own_account(
                 # Leaving the organisation stops a live connection at once.
                 _, fresh, _ = await _connect(person, server, pulse, PULSE_RETURN, "calls:read")
                 fresh_bearer = {"Authorization": f"Bearer {fresh['access_token']}"}
+                pulse_now = [
+                    app
+                    for app in (await person.get("/v1/me/connected-apps")).json()["apps"]
+                    if app["revoked_at"] is None and app["app"] == "Pulse"
+                ]
+                assert [(app["verified"], app["maker"]) for app in pulse_now] == [
+                    (True, "Estate Autopilots")
+                ]
                 assert (await server.get("/v1/api/me", headers=fresh_bearer)).status_code == 200
                 async with setup.sessions() as db, db.begin():
                     await db.execute(
@@ -395,6 +419,19 @@ def test_a_personal_workspace_connection_reads_calls_but_has_no_leads(
                 leads = await server.get("/v1/api/leads", headers=bearer)
                 assert leads.status_code == 403
                 assert leads.json()["error"]["code"] == "organisation_only"
+                # ChatGPT's search still answers: calls only, no leads and no refusal.
+                found = await server.post(
+                    "/v1/mcp",
+                    headers=bearer,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": 1,
+                        "method": "tools/call",
+                        "params": {"name": "search", "arguments": {"query": "Fictional"}},
+                    },
+                )
+                assert found.json()["result"]["isError"] is False, found.text
+                assert found.json()["result"]["structuredContent"] == {"results": []}
         finally:
             await setup.engine.dispose()
 
