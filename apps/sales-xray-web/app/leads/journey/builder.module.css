@@ -1,0 +1,403 @@
+/* Lead OS L4: setting up lead stages in short steps. Phones first: one card, rows
+   divided by hairlines (no cards inside cards), the step's buttons in a sticky
+   bar at the bottom. Tokens only (--sx-*, --lx-*); light and dark share one
+   layout. */
+
+.builder,
+.builder * {
+  box-sizing: border-box;
+}
+
+.builder {
+  display: grid;
+  min-width: 0;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.builder :is(h2, h3, p, ol, ul) {
+  margin: 0;
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ---------- where you are ---------- */
+
+.progress {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 4px;
+  padding: 0;
+  list-style: none;
+}
+
+.progress li {
+  height: 4px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+}
+
+.progress li[data-done] {
+  background: var(--sx-accent);
+}
+
+.head {
+  display: grid;
+  gap: 4px;
+}
+
+.head small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.head h2 {
+  scroll-margin-top: 96px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-lg, 20px);
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.head p {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+/* ---------- 1. the kind of business ---------- */
+
+.kinds,
+.stages,
+.landings,
+.summary {
+  display: grid;
+  padding: 0;
+  list-style: none;
+}
+
+.kinds > li + li,
+.stages > li + li,
+.landings > li + li {
+  border-top: 1px solid var(--sx-hairline, var(--sx-line));
+}
+
+.kind {
+  display: grid;
+  width: 100%;
+  min-height: 56px;
+  grid-template-columns: 36px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+  border: 0;
+  border-radius: var(--sx-radius-md);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.kind[aria-pressed="true"] {
+  background: var(--sx-accent-soft);
+}
+
+.kind:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.kindIcon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+}
+
+.kind[aria-pressed="true"] .kindIcon {
+  background: var(--sx-accent);
+  color: var(--lx-on-teal);
+}
+
+.kindText {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.kindText strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+}
+
+.kindText small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.now {
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-strong, var(--sx-fill-soft));
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  vertical-align: 1px;
+}
+
+.kindCheck {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--sx-accent);
+}
+
+.kind[aria-pressed="true"] .kindCheck {
+  background: var(--sx-accent);
+  color: var(--lx-on-teal);
+}
+
+.kindSkeleton {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 8px;
+}
+
+/* ---------- 2. the stages ---------- */
+
+.stageGroups {
+  display: grid;
+  gap: 8px;
+}
+
+.groupTitle {
+  margin-top: 8px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.stage {
+  --tone: var(--sx-muted);
+}
+
+.stageButton {
+  display: grid;
+  width: 100%;
+  min-height: 48px;
+  grid-template-columns: 12px minmax(0, 1fr) 16px;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.stageButton {
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+button.stageButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.chevron {
+  margin-top: 3px;
+  color: var(--sx-muted);
+  transition: transform var(--sx-dur-fast, 150ms) ease;
+}
+
+.stageButton[aria-expanded="true"] .chevron {
+  transform: rotate(180deg);
+}
+
+.stage[data-kind="new"] {
+  --tone: var(--lx-info, var(--sx-accent));
+}
+
+.stage[data-kind="follow_up"] {
+  --tone: var(--lx-teal, var(--sx-accent));
+}
+
+.stage[data-kind="interested"] {
+  --tone: var(--lx-warning, var(--sx-warn));
+}
+
+.stage[data-kind="won"] {
+  --tone: var(--lx-success, var(--sx-good));
+}
+
+.stage[data-kind="lost"] {
+  --tone: var(--lx-danger, var(--sx-bad));
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--tone);
+}
+
+.stageText {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.stageText strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+}
+
+.stageText small {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.stageText .then {
+  color: var(--sx-muted);
+}
+
+/* ---------- 3. today's leads ---------- */
+
+.landing {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.landingFrom {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.landingFrom strong {
+  min-width: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.landingFrom small {
+  flex: none;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.landingTo select {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+}
+
+.landingTo select:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.landingNote {
+  padding: 12px 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+/* ---------- 4. check and save ---------- */
+
+.summary {
+  gap: 12px;
+}
+
+.summary li {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+}
+
+.summary svg {
+  margin-top: 3px;
+  color: var(--sx-accent);
+}
+
+/* ---------- the step's buttons ---------- */
+
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+@media (max-width: 599.98px) {
+  /* The buttons stay in reach above the tab bar; nothing else rides along. */
+  .foot {
+    position: sticky;
+    z-index: 2;
+    bottom: calc(var(--lx-bottom-nav-h, 68px) + 12px);
+    padding: 8px;
+    border-radius: var(--sx-radius-lg);
+    background: var(--sx-elevated, var(--sx-surface));
+    box-shadow: var(--sx-shadow-2, var(--sx-shadow-1));
+  }
+
+  .foot > * {
+    flex: 1;
+  }
+}
+
+@media (min-width: 600px) {
+  .builder {
+    padding: 24px;
+  }
+
+  .landing {
+    grid-template-columns: minmax(0, 1fr) minmax(240px, 340px);
+    align-items: center;
+  }
+
+  .foot {
+    justify-content: flex-end;
+  }
+}
