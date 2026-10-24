@@ -202,15 +202,28 @@ class JourneyCommand(_Command):
 class TemplateCommand(_Command):
     expected_version: int = Field(alias="expectedVersion", ge=0)
     template: str = Field(max_length=40)
+    # Where the leads of today's columns go (today's stage key -> the new list's stage
+    # key); a column left out keeps its leads where they stand (Lead OS, L4).
+    places: dict[str, str] = Field(default_factory=dict, alias="map")
 
 
 class TemplateLanding(_View):
     """Where the leads of one current stage land under a new list (Lead OS, L4)."""
 
+    from_key: str = Field(alias="fromKey")
     from_label: str = Field(alias="fromLabel")
     to_label: str = Field(alias="toLabel")
     to_key: str = Field(alias="toKey")
     leads: int
+    # The new list's stages these leads may be put in instead (the install's map).
+    choices: list[str]
+
+
+def wanted(command: TemplateCommand) -> dict[str, str]:
+    """The install's map, bounded: one entry per stage of today's list at most."""
+    if len(command.places) > journeys.MAX_ALL:
+        raise JourneyError("Pick where leads go for fewer stages.")
+    return dict(command.places)
 
 
 class TemplatePreview(_View):
@@ -753,7 +766,9 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
             counts = await journeys.lead_counts(desk.db, desk.tenant_id, before)
             stages = journeys.from_template(command.template, before, counts)
             profile = next(item for item in TEMPLATES if item.id == command.template)
-            await journeys.save(
+            draft = Journey(before.version + 1, command.template, stages, pipeline=key)
+            places = journeys.check_places(before, draft, wanted(command))
+            after = await journeys.save(
                 desk.db,
                 desk.tenant_id,
                 stages=stages,
@@ -764,6 +779,7 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                 now=desk.now,
                 pipeline=key,
             )
+            await desk.place_leads(before, after, places)
             return await current(desk, key)
 
     @router.post(
@@ -786,14 +802,17 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
             counts = await journeys.lead_counts(desk.db, desk.tenant_id, before)
             stages = journeys.from_template(command.template, before, counts)
             after = Journey(before.version + 1, command.template, stages, pipeline=key)
+            places = journeys.check_places(before, after, wanted(command))
+            choices = journeys.place_choices(before, after)
             landings: dict[tuple[str, str], int] = {}
             for (kind, step), leads in (
                 await journeys.lead_pairs(desk.db, desk.tenant_id, before)
             ).items():
                 old = before.column(kind, step)
-                new = after.column(kind, step)
-                pair = (old.label, new.key)
+                new = journeys.landing(before, after, places, kind, step)
+                pair = (old.key, new.key)
                 landings[pair] = landings.get(pair, 0) + leads
+            old_labels = {stage.key: stage.label for stage in before.board()}
             labels = {stage.key: stage.label for stage in after.board()}
             view = journey_view(after, {}, True)
             return TemplatePreview(
@@ -801,7 +820,12 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                 stages=view.stages,
                 landings=[
                     TemplateLanding(
-                        from_label=old, to_label=labels.get(new, new), to_key=new, leads=leads
+                        from_key=old,
+                        from_label=old_labels.get(old, old),
+                        to_label=labels.get(new, new),
+                        to_key=new,
+                        leads=leads,
+                        choices=list(choices.get(old, ())),
                     )
                     for (old, new), leads in sorted(landings.items(), key=lambda item: -item[1])
                 ],

@@ -44,6 +44,11 @@ NEXT_ACTION: Final[str] = "next_action"
 MEETING: Final[str] = "meeting"
 REASON: Final[str] = "reason"
 NC_REASON: Final[str] = "nc_reason"
+# A move made because the stage list changed (the template's map): it puts a lead
+# where it already stood, under the new list's names. Ad platforms and the
+# pipeline's numbers never count it as progress.
+STAGES_CHANGED: Final[str] = "template"
+
 # Asked by the sheet when the reason is "Other"; the server refuses Other without it.
 REASON_NOTE: Final[str] = "reason_note"
 # Offered by the sheet; never required.
@@ -61,6 +66,11 @@ NEED_WORDS: Final[dict[str, str]] = {
 SOURCES: Final[frozenset[str]] = frozenset(
     {"seller", "ai_suggestion", "rule", "import", "merge", "capture", "template"}
 )
+
+
+def stages_changed(data: Any) -> bool:
+    """Whether a history line is a move the stage list itself made."""
+    return isinstance(data, dict) and data.get("v") == 2 and data.get("source") == STAGES_CHANGED
 
 
 class MoveRefused(Exception):

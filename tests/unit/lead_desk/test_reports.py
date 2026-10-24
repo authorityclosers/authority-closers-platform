@@ -175,6 +175,13 @@ def test_history_reads_v2_moves_and_legacy_results() -> None:
             at + timedelta(hours=2),
         ),
         (lead_id, "note", {"note": "hello"}, at + timedelta(hours=3)),
+        # The stage list changed under the lead (the template's map): not progress.
+        (
+            lead_id,
+            "stage",
+            {"v": 2, "source": "template", "to_kind": "won", "to_key": "won"},
+            at + timedelta(hours=4),
+        ),
     ]
     found = reports.history(journey, rows)
     assert [item.milestone for item in found] == ["unreachable", "appointment_booked", None]

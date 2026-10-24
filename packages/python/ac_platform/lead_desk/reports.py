@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.lead_desk.journey.model import Journey, Stage, lead_in
 from ac_platform.lead_desk.journey.templates import FUNNEL_ORDER
-from ac_platform.lead_desk.journey.transitions import reasons_of
+from ac_platform.lead_desk.journey.transitions import reasons_of, stages_changed
 from ac_platform.lead_desk.models import Lead, LeadEvent, LeadMeeting
 from ac_platform.lead_desk.vocabulary import IMPORTED_LOST, OPEN_STAGES, OVERDUE_AFTER
 
@@ -174,7 +174,7 @@ def history(
     """Moves and first conversations from Lead Desk events, oldest first."""
     out: list[Moved] = []
     for lead_id, kind, data, at in sorted(rows, key=lambda row: row[3]):
-        if not isinstance(data, Mapping):
+        if not isinstance(data, Mapping) or stages_changed(data):
             continue
         to_kind, to_key = moves_of(journey, kind, data)
         spoke = (kind == "result" and data.get("connected") is True) or (

@@ -515,6 +515,49 @@ def from_template(
     return check(tuple(out))
 
 
+def place_choices(before: Journey, after: Journey) -> dict[str, tuple[str, ...]]:
+    """Where a manager may put the leads of each of today's columns when a new list
+    replaces it: from an open stage to any open stage; Won and Lost only to a stage of
+    their own kind (closing needs a person's reason, reopening is a person's call). Junk
+    stays Junk."""
+    board = after.board()
+    choices: dict[str, tuple[str, ...]] = {}
+    for stage in before.board():
+        if stage.kind == "junk":
+            continue
+        if stage.kind in CLOSED_KINDS:
+            choices[stage.key] = tuple(s.key for s in board if s.kind == stage.kind)
+        else:
+            choices[stage.key] = tuple(s.key for s in board if s.kind not in CLOSED_KINDS)
+    return choices
+
+
+def check_places(before: Journey, after: Journey, wanted: Mapping[str, str]) -> dict[str, str]:
+    """The template's map (today's column -> the new list's stage), checked."""
+    choices = place_choices(before, after)
+    places: dict[str, str] = {}
+    for old, new in wanted.items():
+        allowed = choices.get(old)
+        if allowed is None:
+            raise JourneyError("Pick where leads go for one of today's stages.")
+        if new not in allowed:
+            raise JourneyError(
+                "Leads in an open stage go to an open stage; Won and Lost keep their kind."
+            )
+        places[old] = new
+    return places
+
+
+def landing(
+    before: Journey, after: Journey, places: Mapping[str, str], kind: str, step: str | None
+) -> Stage:
+    """The column a lead holds under a new list: the stage picked for its column today,
+    else its own stage or the live stage of its kind."""
+    picked = places.get(before.column(kind, step).key)
+    found = after.stage_for(picked) if picked else None
+    return found if found is not None else after.column(kind, step)
+
+
 async def save(
     db: AsyncSession,
     tenant_id: UUID,

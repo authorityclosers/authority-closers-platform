@@ -1500,6 +1500,48 @@ class LeadDesk:
             command_id=command_id,
         )
 
+    async def place_leads(
+        self,
+        before: journeys.Journey,
+        after: journeys.Journey,
+        places: Mapping[str, str],
+    ) -> int:
+        """Put the leads of the columns a manager picked into the new list's stages (the
+        template's map), each with one history line. These moves only rename where a lead
+        stood: ad platforms and the pipeline's numbers skip them. How many moved."""
+        if not places:
+            return 0
+        rows = (
+            await self.db.scalars(
+                select(Lead)
+                .where(Lead.tenant_id == self.tenant_id, journeys.lead_in(after.pipeline))
+                .order_by(Lead.id)
+                .with_for_update()
+            )
+        ).all()
+        moved = 0
+        for lead in rows:
+            column = before.column(lead.stage, lead.step)
+            if column.key not in places:
+                continue
+            target = after.stage_for(places[column.key])
+            current = after.resolve(lead.stage, lead.step)
+            if target is None or (
+                lead.stage == target.kind and current is not None and current.key == target.key
+            ):
+                continue
+            move = transitions.forced(after, current, target)
+            self._move(
+                lead,
+                after,
+                move,
+                source=transitions.STAGES_CHANGED,
+                outcome_reason=lead.outcome_reason,
+            )
+            moved += 1
+        await self.db.flush()
+        return moved
+
     def _check(
         self,
         journey: journeys.Journey,
