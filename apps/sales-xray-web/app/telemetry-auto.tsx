@@ -200,7 +200,7 @@ export function errorFacts(
   };
 }
 
-/** The Android app's own events the page sends for it (app 1.0.25+). */
+/** The Android app's own events the page sends for it (app 1.0.26+). */
 const PHONE_EVENTS = new Set<string>([
   "sx.app_launch",
   "sx.app_frames",

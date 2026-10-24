@@ -48,7 +48,7 @@ def test_devices_are_phone_models_or_classes_with_speed_issues_and_the_slowest_t
             webview="130",
             ram_tier="4",
             app="android",
-            app_version="1.0.25",
+            app_version="1.0.26",
         ),
         _row(
             "sx.device_profile",
@@ -59,7 +59,7 @@ def test_devices_are_phone_models_or_classes_with_speed_issues_and_the_slowest_t
             ram_tier="6",
             app="android",
         ),
-        *[_tap("a", 2_000, app_version="1.0.25", net="4g") for _ in range(5)],
+        *[_tap("a", 2_000, app_version="1.0.26", net="4g") for _ in range(5)],
         *[_tap("b", 400) for _ in range(5)],
         *[_tap("c", 300, app="web", device="desktop", tier="high") for _ in range(5)],
         # An older app build sends no profile: its device is a class.
@@ -80,7 +80,7 @@ def test_devices_are_phone_models_or_classes_with_speed_issues_and_the_slowest_t
     assert (xiaomi["maker"], xiaomi["model"], xiaomi["people"]) == ("xiaomi", "m1906g7g", 1)
     assert xiaomi["android"] == [{"value": "13", "people": 1}]
     assert xiaomi["ram"] == [{"value": "4", "people": 1}]
-    assert xiaomi["app_versions"] == [{"value": "1.0.25", "people": 1}]
+    assert xiaomi["app_versions"] == [{"value": "1.0.26", "people": 1}]
     assert xiaomi["networks"] == [{"value": "4g", "people": 1}]
     assert xiaomi["actions"]["lead_open"]["p75"] == 2_000
     assert xiaomi["actions"]["lead_open"]["slow_share"] == 1.0
@@ -106,7 +106,7 @@ def test_devices_are_phone_models_or_classes_with_speed_issues_and_the_slowest_t
         13,
         "4",
     )
-    assert slowest["app_version"] == "1.0.25"
+    assert slowest["app_version"] == "1.0.26"
     assert "person" not in str(slowest)
     # A filter keeps the app's rows only.
     android = devices(Read(rows=rows), now=NOW, window="7d", filters=Filters(app="web"))

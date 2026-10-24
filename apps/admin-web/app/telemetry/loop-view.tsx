@@ -285,7 +285,7 @@ export function DevicesView({
         sub="75% of taps settle within"
         tools={
           <Why
-            detail="From the tap to the screen settling, per device: a phone model where the Android app says which (1.0.25 and later), or else the kind of device, app and speed tier."
+            detail="From the tap to the screen settling, per device: a phone model where the Android app says which (1.0.26 and later), or else the kind of device, app and speed tier."
             more="Bars are sorted slowest first; the line is the action's slow limit."
           />
         }
@@ -467,7 +467,7 @@ function MakeUp({ groups }: { groups: readonly DeviceGroup[] }) {
     <Panel
       title="What the devices are"
       tools={
-        <Why detail="People per value; Android, WebView and memory come from the Android app's daily profile (1.0.25 and later), speed tiers from the browser." />
+        <Why detail="People per value; Android, WebView and memory come from the Android app's daily profile (1.0.26 and later), speed tiers from the browser." />
       }
     >
       <div className={`${styles.body} ${styles.mixes}`}>

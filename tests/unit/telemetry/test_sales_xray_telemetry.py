@@ -268,7 +268,7 @@ def test_android_app_events_take_tiers_and_codes_only() -> None:
             "memory_class": 256,
             "low_ram": "no",
             "storage_free": "4to16",
-            "app_version": "1.0.25",
+            "app_version": "1.0.26",
             "store": "play",
         },
     )

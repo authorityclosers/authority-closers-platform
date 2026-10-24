@@ -689,7 +689,7 @@ def _mix(rows: Sequence[Row]) -> dict[str, Any]:
     }
 
 
-# The Android app's own signals (1.0.25): what each breakdown is called on the dashboard.
+# The Android app's own signals (1.0.26): what each breakdown is called on the dashboard.
 PHONE_BREAKDOWNS: tuple[tuple[str, str, str], ...] = (
     ("sx.device_profile", "android", "Android version"),
     ("sx.device_profile", "maker", "Phone make"),

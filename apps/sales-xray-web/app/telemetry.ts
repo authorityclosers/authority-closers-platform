@@ -198,7 +198,7 @@ export type TelemetryEvents = {
     first?: "call" | "message" | "move";
     wait_ms?: number;
   };
-  // The Android app's own signals (app 1.0.25): it collects them, the page sends
+  // The Android app's own signals (app 1.0.26): it collects them, the page sends
   // them (telemetry-auto.tsx drains the phone channel) under the same switch.
   "sx.app_launch": {
     start: "cold" | "warm";

@@ -60,7 +60,7 @@ it("names phone models and device kinds in words, never by a person", () => {
   expect(devices.slowest[0]).toMatchObject({
     label: "Phone, Android app, low-end",
     speedIndex: 2.9,
-    appVersion: "1.0.24",
+    appVersion: "1.0.25",
   });
   // Bars are slowest first; people add up across models.
   expect(actionBars(devices.groups, "lead_open").map((bar) => bar.p75)).toEqual(

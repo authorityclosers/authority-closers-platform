@@ -253,7 +253,7 @@ describe("the phone's own sign-in (Google sheet, Facebook app)", () => {
   });
 });
 
-describe("the phone app's own telemetry (app 1.0.25+)", () => {
+describe("the phone app's own telemetry (app 1.0.26+)", () => {
   it("takes what the app collected, keeping names and plain values only", async () => {
     const { sent } = fakePhone(() => ({
       on: true,

@@ -1044,7 +1044,7 @@ export async function openConnect(url: string): Promise<boolean> {
   }
 }
 
-/** One event the phone app collected (app 1.0.25+): an sx.* name and its fields. */
+/** One event the phone app collected (app 1.0.26+): an sx.* name and its fields. */
 export type PhoneTelemetryEvent = {
   name: string;
   fields: Record<string, string | number | boolean>;
@@ -1052,7 +1052,7 @@ export type PhoneTelemetryEvent = {
 
 /**
  * Takes what the phone app collected since the last read (at most 50 events,
- * kept only in its memory; app 1.0.25+). The app never sends anything itself:
+ * kept only in its memory; app 1.0.26+). The app never sends anything itself:
  * the page sends these under the person's usage-analytics switch.
  */
 export async function drainPhoneTelemetry(): Promise<PhoneTelemetryEvent[]> {
@@ -1081,7 +1081,7 @@ export async function drainPhoneTelemetry(): Promise<PhoneTelemetryEvent[]> {
 
 /**
  * Tells the phone app whether usage analytics are on for this person. Off, it
- * empties its buffer, stops collecting and stops Crashlytics (app 1.0.25+);
+ * empties its buffer, stops collecting and stops Crashlytics (app 1.0.26+);
  * older builds don't know the call and ignore it.
  */
 export async function tellPhoneTelemetry(on: boolean): Promise<void> {

@@ -53,7 +53,7 @@ The data is counts, timings, tiers and codes only:
 - rage and dead taps;
 - named features.
 
-**Android app** (1.0.25 and later, sent by the page through the phone bridge) records:
+**Android app** (1.0.26 and later, sent by the page through the phone bridge) records:
 
 - launch time;
 - frames, with slow and frozen counts;
@@ -64,7 +64,7 @@ The data is counts, timings, tiers and codes only:
 
 ## Devices (`/telemetry/devices`, `GET /v1/admin/telemetry/devices`)
 
-A **device** is one person's phone model, which the Android app reports from 1.0.25. Without
+A **device** is one person's phone model, which the Android app reports from 1.0.26. Without
 that, a device is the device kind: app, class (phone, tablet or computer) and speed tier. Devices
 are grouped by model or kind. For each group, the page shows:
 

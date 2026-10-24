@@ -344,7 +344,7 @@ it("takes the phone app's daily profile, its largest event, with where it ran", 
     tier: "mid",
     net: "4g",
     link: "cellular",
-    appVersion: "1.0.25",
+    appVersion: "1.0.26",
   }));
   telemetry.setSession(SESSION);
   telemetry.track("sx.device_profile", {

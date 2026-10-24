@@ -361,7 +361,7 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
             numbers={"wait_ms": MAX_WAIT_MS},
             required=("wait",),
         ),
-        # The Android app (1.0.25, asked by the Android session): collected by the app,
+        # The Android app (1.0.26, asked by the Android session): collected by the app,
         # sent by the page under the same switch (telemetry-auto.tsx drains the bridge).
         # Launch: process start or resume to first paint, and whether the app pages or
         # the live site were shown.
@@ -452,7 +452,9 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
 # event and every opt-out or opt-in records the version. A change of words is a new version,
 # never an edit (supersede, never overwrite).
 # v1 (24 Oct 2026, 00:00 IST) was the web app's alone; v2 adds what the Android app records
-# (1.0.25) and Firebase Crashlytics, so its words change and so does the version.
+# (1.0.26) and Firebase Crashlytics, so its words change and so does the version.
+# v2 named app 1.0.25 until 24 Oct, corrected to 1.0.26 (1.0.25 is the review build with no
+# telemetry) before it shipped or anything was recorded under it.
 NOTICE_V1 = "sx-product-analytics-2026-10-24-v1"
 NOTICE_VERSION = "sx-product-analytics-2026-10-24-v2"
 # v2 is in force from 22:30 UTC on 23 Oct 2026 (04:00 IST, 24 Oct).
@@ -486,7 +488,7 @@ NOTICES: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "This is on in every workspace unless it is turned off. You can turn it off for "
             "yourself at any time in Settings, Privacy; an owner or admin can turn it off for the "
             "whole workspace there. Sandbox workspaces never record it. Crash reports from the "
-            "Android app go to Firebase Crashlytics (provided by Google); from app version 1.0.25 "
+            "Android app go to Firebase Crashlytics (provided by Google); from app version 1.0.26 "
             "they stop too when this is turned off.",
         ),
     }
