@@ -70,6 +70,12 @@ READS: tuple[re.Pattern[str], ...] = tuple(
         # optimiser reads the daily export with a key).
         r"^/v1/admin/telemetry/overview$",
         r"^/v1/admin/telemetry/daily$",
+        # The improvement loop: devices, release comparison, the release gate (Align 3's
+        # train reads it with a key) and what to fix next.
+        r"^/v1/admin/telemetry/devices$",
+        r"^/v1/admin/telemetry/compare$",
+        r"^/v1/admin/telemetry/gate$",
+        r"^/v1/admin/telemetry/fix-next$",
     )
 )
 MAX_ACTIVE = 2

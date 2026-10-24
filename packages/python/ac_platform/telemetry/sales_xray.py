@@ -437,6 +437,13 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
         "sx.permission_snapshot": _event(
             values={permission: PERMISSION_STATES for permission in APP_PERMISSIONS}
         ),
+        # A seller's changes this device holds that the server doesn't have yet
+        # (sync/write-queue.ts): how many wait, how many the server refused when sent
+        # again, and the oldest one's age in minutes. Counts only, never what they say.
+        "sx.writes_waiting": _event(
+            numbers={"waiting": 1_000, "refused": 1_000, "oldest_min": 43_200},
+            required=("waiting",),
+        ),
         "sx.lead_suggestion": _event(
             values={
                 "action": ("shown", "accepted", "changed", "dismissed"),

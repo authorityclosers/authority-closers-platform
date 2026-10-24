@@ -11,12 +11,19 @@
  * phone before.
  */
 
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { readConsent } from "../consent-renewal-client";
 import { useWorkspaceAccess } from "../workspace-access";
 import { callRecorderStatus, inPhoneApp, setupStatus } from "./native-phone";
-import { flowSteps, PhoneSetupFlow } from "./phone-setup-flow";
+import { flowSteps } from "./phone-setup-steps";
+
+// "Set up this phone" loads when it opens: most starts never show it.
+const PhoneSetupFlow = dynamic(
+  () => import("./phone-setup-flow").then((module) => module.PhoneSetupFlow),
+  { ssr: false },
+);
 
 export const ONBOARDED_KEY = "sx-phone-onboarded";
 const CHANGED = "sx-phone-onboarded";

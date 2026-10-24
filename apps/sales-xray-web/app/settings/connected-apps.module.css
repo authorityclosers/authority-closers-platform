@@ -59,8 +59,6 @@
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .grid {
@@ -394,8 +392,6 @@
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .connections {

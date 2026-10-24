@@ -58,60 +58,17 @@ import {
   recorderGuide,
 } from "./phone-setup-words";
 import styles from "./phone-onboarding.module.css";
+import {
+  allFiles,
+  blocked,
+  done,
+  flowSteps,
+  folderPick,
+  type FlowStep,
+} from "./phone-setup-steps";
 
-export type FlowStep =
-  | "calls"
-  | "notifications"
-  | "recordings"
-  | "battery"
-  | "autostart"
-  | "callLog"
-  | "recorder";
-
-const done = (status: SetupStatus, key: string) => status.checks[key] === true;
-
-/** MIUI and HyperOS show their recordings only with All files access (download builds). */
-const allFiles = (status: SetupStatus) =>
-  status.needsAllFiles && status.allFilesSupported;
-
-/** The Play build picks the recordings folder instead (S8). */
-const folderPick = (status: SetupStatus) =>
-  status.needsAllFiles &&
-  !status.allFilesSupported &&
-  status.folderPickSupported;
-
-/** A permission Android no longer asks for: only the app's settings allow it now. */
-export const blocked = (step: FlowStep, status: SetupStatus) =>
-  (step === "calls" && status.blocked.calls) ||
-  (step === "notifications" && status.blocked.notifications) ||
-  (step === "recordings" &&
-    !allFiles(status) &&
-    !folderPick(status) &&
-    status.blocked.recordings);
-
-/** What this phone still needs, in the order the flow asks. */
-export function flowSteps(
-  status: SetupStatus,
-  recorder: CallRecorderStatus | null,
-): FlowStep[] {
-  const steps: FlowStep[] = [];
-  if (!done(status, "calls")) steps.push("calls");
-  if (!done(status, "notifications")) steps.push("notifications");
-  if (!done(status, "recordings")) steps.push("recordings");
-  if (!done(status, "battery")) steps.push("battery");
-  if (status.autostartNeeded && !done(status, "autostart"))
-    steps.push("autostart");
-  if (status.callLogSupported && !done(status, "callLog"))
-    steps.push("callLog");
-  const dialerOff =
-    status.recorder?.kind === "folder" && status.recorder.recording !== "on";
-  if (
-    (recorder?.available && !recorder.enabled) ||
-    (!recorder?.available && dialerOff && !done(status, "recorder"))
-  )
-    steps.push("recorder");
-  return steps;
-}
+export { blocked, flowSteps } from "./phone-setup-steps";
+export type { FlowStep } from "./phone-setup-steps";
 
 export type FlowScreen = {
   icon: LucideIcon;

@@ -48,8 +48,6 @@ import {
 
 import { useBranding } from "./branding-store";
 import { AddSheet } from "./add-sheet";
-import { BugReportHost } from "../bug-report/bug-report-sheet";
-import { FeedbackHost } from "../feedback/feedback-prompt";
 import { useAppRouter } from "./app-router";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
@@ -107,14 +105,15 @@ import { GuestSwitcher, WorkspaceSwitcher } from "./workspace-switcher";
 import { WorkspacePicker } from "./workspace-picker";
 import { Sheet } from "../ui/sheet";
 import { allowEarlyConversationReads, dropEarlyReads } from "../early-reads";
-import { CreateOrganisationDialog } from "./create-organisation-dialog";
 import { dropInvite, refreshInvites, useInvites } from "./invites-store";
 import {
   acceptInvite,
   OrgApiError,
   type PendingInvite,
 } from "../organisation/organisation-api";
-import { accountInitials, SettingsMenu } from "./settings-menu";
+import { accountInitials } from "./account-initials";
+import { useQuiet } from "./quiet";
+import { useReportWaiting } from "../bug-report/open";
 import { LocalSettingsButton } from "../live-data-banner";
 import { AccountAvatarImage } from "../speaker-avatar";
 import { useShellUpdates } from "./updates-store";
@@ -125,7 +124,7 @@ import {
   type UpdateNotification,
 } from "./updates-client";
 import { ChatsTabIcon } from "../chats/chats-badge";
-import { CommandBar, type Command } from "../ui/command-bar";
+import type { Command } from "../ui/command-bar";
 import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
 import { leavingOverlay } from "../ui/back-close";
@@ -249,6 +248,36 @@ const HUB = {
  * first wanted, not with every page (launch readiness, 23 Oct 2026); opening
  * + or choosing "Add a lead" fetches it first, so the form still opens at once.
  */
+// Out of the start: each loads once the page is quiet, or when first opened
+// (orchestrator, 24 Oct 2026: mid-tier phones took ~4.7 s to show Home).
+const BugReportHost = dynamic(
+  () =>
+    import("../bug-report/bug-report-sheet").then(
+      (module) => module.BugReportHost,
+    ),
+  { ssr: false },
+);
+const FeedbackHost = dynamic(
+  () =>
+    import("../feedback/feedback-prompt").then((module) => module.FeedbackHost),
+  { ssr: false },
+);
+const SettingsMenu = dynamic(
+  () => import("./settings-menu").then((module) => module.SettingsMenu),
+  { ssr: false },
+);
+const CommandBar = dynamic(
+  () => import("../ui/command-bar").then((module) => module.CommandBar),
+  { ssr: false },
+);
+const CreateOrganisationDialog = dynamic(
+  () =>
+    import("./create-organisation-dialog").then(
+      (module) => module.CreateOrganisationDialog,
+    ),
+  { ssr: false },
+);
+
 const loadCaptureDialogs = () => import("../leads/capture-dialogs");
 const AddLeadDialog = dynamic(
   () => loadCaptureDialogs().then((module) => module.AddLeadDialog),
@@ -493,6 +522,9 @@ function LightboxShellFrame({
   // Ctrl K or ⌘K opens the command bar from anywhere (slice 9 of the new
   // map): places, actions, settings, leads and calls in one search.
   const [commandOpen, setCommandOpen] = useState(false);
+  const quiet = useQuiet();
+  // Report a problem before the reporter loaded: load it now.
+  const reportWaiting = useReportWaiting();
   const signedIn = authenticated && !loading;
   useEffect(() => {
     if (!signedIn) return;
@@ -1917,8 +1949,9 @@ function LightboxShellFrame({
           />
         </Sheet>
       ) : null}
-      {/* Mounted while signed in, so the phone sheet can slide away. */}
-      {authenticated ? (
+      {/* Mounted while signed in (once quiet, or at the first open), so
+          the phone sheet can slide away. */}
+      {authenticated && (quiet || accountCardOpen) ? (
         <SettingsMenu
           initialView={accountView}
           open={accountCardOpen}
@@ -1941,7 +1974,7 @@ function LightboxShellFrame({
           }
         />
       ) : null}
-      {guest ? null : (
+      {guest || !(quiet || commandOpen) ? null : (
         <CommandBar
           open={commandOpen}
           onClose={() => setCommandOpen(false)}
@@ -1949,8 +1982,8 @@ function LightboxShellFrame({
           search={searchEverything}
         />
       )}
-      {guest ? null : <BugReportHost />}
-      {guest ? null : <FeedbackHost />}
+      {guest || !(quiet || reportWaiting) ? null : <BugReportHost />}
+      {guest || !quiet ? null : <FeedbackHost />}
       {guest ? null : (
         <AddSheet
           open={addOpen}

@@ -153,6 +153,37 @@ class Badge(Model):
     generated_at: datetime
 
 
+# Leads sorted and filtered on the server, so a long list sorts as a whole, not
+# one page at a time (owner, 24 Oct 2026).
+LeadSort = Literal["next_action", "last_contact", "name", "created"]
+LeadDue = Literal["late", "today", "week", "none"]
+LeadSince = Literal["today", "week", "month", "never"]
+LeadMade = Literal["today", "week", "month"]
+WorkDay = Literal["today", "yesterday", "week"]
+
+
+class ActivityItem(Model):
+    """One thing a seller did on a lead: a call, its outcome, a note, a stage move, a
+    meeting or a message."""
+
+    event_id: UUID
+    lead_id: UUID
+    lead_name: str
+    stage_label: str | None
+    event: LeadEventView
+
+
+class ActivityPage(Model):
+    """A seller's own work, newest first (My work)."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    items: tuple[ActivityItem, ...]
+    # The next page's upper bound, when there is more.
+    next_before: datetime | None
+    # How many of each kind in the whole window: "12 calls, 3 notes".
+    counts: dict[str, int] = Field(default_factory=dict)
+
+
 class LeadPage(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     leads: tuple[LeadRow, ...]
@@ -242,6 +273,12 @@ class LeadEventView(Model):
     starts_at: datetime | None = None
     from_starts_at: datetime | None = None
     mode_label: str | None = None
+    # A task's history (work-memory engine): created, changed, snoozed, done, undone,
+    # cancelled, reassigned, rolled over, or superseded by a later change.
+    task_id: UUID | None = None
+    task_action: str | None = None
+    task_kind: str | None = None
+    due_at: datetime | None = None
 
 
 class RepOption(Model):
@@ -411,6 +448,44 @@ class StageChoice(Model):
     meaning: str
 
 
+TaskKind = Literal["call_back", "whatsapp", "email", "send_file", "meeting", "other"]
+TaskSource = Literal["seller", "after_call", "note", "message", "commitment"]
+TaskSnoozeChoice = Literal["15m", "1h", "evening", "tomorrow"]
+TaskBucket = Literal["overdue", "today", "upcoming"]
+
+
+class TaskView(Model):
+    """A task as it stands (work-memory engine, migration 0129)."""
+
+    task_id: UUID
+    lead_id: UUID
+    lead_name: str
+    kind: TaskKind
+    title: str
+    note: str | None
+    starts_at: datetime
+    ends_at: datetime | None
+    location: str | None
+    status: Literal["open", "done", "cancelled"]
+    done_at: datetime | None
+    original_due_at: datetime
+    snoozes: int
+    rollovers: int
+    source: str
+    revision: int
+    owner_person_id: UUID | None
+    # Open and a minute past its due.
+    overdue: bool
+    # Overdue, today or upcoming, for an open task.
+    bucket: TaskBucket | None
+
+
+class TaskList(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    tasks: tuple[TaskView, ...]
+    counts: dict[str, int] = Field(default_factory=dict)
+
+
 class LeadDetail(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     lead: LeadRow
@@ -432,6 +507,8 @@ class LeadDetail(Model):
     # its scheduled meeting.
     moves: tuple[MoveOption, ...] = ()
     meeting: MeetingView | None = None
+    # The lead's open tasks, the next one first (work-memory engine).
+    tasks: tuple[TaskView, ...] = ()
 
 
 class PhoneHealth(Model):
@@ -744,6 +821,47 @@ class LeadEdit(Command):
     city: str | None = Field(default=None, max_length=120)
     language: str | None = Field(default=None, max_length=40)
     interest: str | None = _Short
+
+
+class TaskCommand(Command):
+    """A new task on a lead: from the seller, after a call, from a note or a message, or
+    a promise the rules read (``commitment``, with the event it came from)."""
+
+    command_id: UUID
+    kind: TaskKind
+    starts_at: AwareDatetime
+    ends_at: AwareDatetime | None = None
+    location: str | None = Field(default=None, max_length=300)
+    note: str | None = Field(default=None, max_length=1000)
+    title: str | None = Field(default=None, max_length=200)
+    source: TaskSource = "seller"
+    source_event_id: UUID | None = None
+    remind_before_minutes: int | None = Field(default=None, ge=0, le=1440)
+    # When it was made on the device (offline: the later change wins).
+    client_at: AwareDatetime | None = None
+
+
+class TaskAction(Command):
+    """Done, undo or cancel, on the revision the device saw."""
+
+    command_id: UUID
+    expected_revision: int = Field(ge=1)
+    client_at: AwareDatetime | None = None
+
+
+class TaskSnooze(TaskAction):
+    choice: TaskSnoozeChoice
+
+
+class TaskChange(TaskAction):
+    """A new due, end, place, note, title or kind; fields left out stay."""
+
+    kind: TaskKind | None = None
+    starts_at: AwareDatetime | None = None
+    ends_at: AwareDatetime | None = None
+    location: str | None = Field(default=None, max_length=300)
+    note: str | None = Field(default=None, max_length=1000)
+    title: str | None = Field(default=None, max_length=200)
 
 
 class NoteCommand(Command):

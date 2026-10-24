@@ -208,9 +208,10 @@ def _make_backend(
         oauth_transaction_secret=uuid4().hex + uuid4().hex,
         email_challenge_secret=uuid4().hex + uuid4().hex,
     )
-    # Keep this legacy multi-workspace login explicit. Enabling the public
-    # learner tenant on identity also selects that workspace during login.
-    # The real profile router still enforces its own public-tenant boundary.
+    # Identity and the Sales Xray routes share the public learner tenant, as in
+    # production: a Sales Xray sign-in opens the person's workspace with their
+    # data (24 Oct 2026), here Personal, where the account's call is. The
+    # conversation routes keep the base settings.
     profile_settings = Settings.model_validate(
         {**settings.model_dump(), "public_learner_tenant_id": account.own_tenant_id}
     )
@@ -223,7 +224,9 @@ def _make_backend(
         try:
             application = FastAPI(docs_url=None, redoc_url=None)
             register_problem_handlers(application)
-            require_actor = install_identity_http(application, settings=settings, sessions=sessions)
+            require_actor = install_identity_http(
+                application, settings=profile_settings, sessions=sessions
+            )
             install_sales_xray_profile_http(
                 application, settings=profile_settings, require_actor=require_actor
             )
@@ -583,8 +586,8 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 page.wait_for_load_state("networkidle")
             checks.append("Correct password login navigates the standalone host to /dashboard/.")
 
-            # Identity leaves selection null; the Sales Xray directory supplies
-            # Personal and the registered organisation, then the UI selects Personal.
+            # Sign-in opens Personal, the workspace with the account's call; the
+            # Sales Xray directory supplies Personal and the registered organisation.
             switcher = page.get_by_role("button", name="Current workspace: Personal", exact=True)
             expect(switcher).to_be_visible()
             switcher.click()
@@ -600,7 +603,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             switcher.click()
             checks.append(
                 "The Sales Xray directory supplies Personal + an organisation; "
-                "null selection activates Personal."
+                "sign-in opens Personal, where the account's call is."
             )
 
             switcher.click()

@@ -21,6 +21,8 @@ import { ConsentRenewal } from "./consent-renewal";
 import { PhoneOnboarding } from "./leads/phone-onboarding";
 import { PersistentShell } from "./shell/lightbox-shell";
 import { PlayMoveCard } from "./apps/play-move-card";
+import { WriteSync } from "./sync/write-sync";
+import { StuckWatch } from "./shell/stuck-watch";
 import { useTheme } from "./lightbox/theme-provider";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
@@ -38,8 +40,8 @@ import { CallsSkeleton } from "./calls-skeleton";
 import { OrganisationPageSkeleton } from "./organisation/organisation-skeleton";
 import { CoachingSkeleton } from "./coaching/coaching-skeleton";
 import { PersonSkeleton } from "./organisation/people/person-skeleton";
-import { InvitesSkeleton } from "./organisation/invites/invites-view";
-import { InsightsSkeleton } from "./organisation/insights/insights-view";
+import { InvitesSkeleton } from "./organisation/invites/invites-skeleton";
+import { InsightsSkeleton } from "./organisation/insights/insights-skeleton";
 import { SettingsSkeleton } from "./settings/settings-skeleton";
 import { ConnectionNotice } from "./connection-notice";
 import {
@@ -283,6 +285,8 @@ function AppFrame({
       <ConsentRenewal />
       <PhoneOnboarding />
       <PlayMoveCard />
+      <WriteSync />
+      <StuckWatch />
     </>
   );
 }

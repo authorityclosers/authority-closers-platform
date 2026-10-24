@@ -95,6 +95,20 @@ def _replace_identity_application(monkeypatch: pytest.MonkeyPatch) -> None:
         _LearnerProvisioningApplication,
     )
 
+    async def personal_only(
+        _database: Any,
+        _person_id: UUID,
+        *,
+        settings: Settings,
+        exclude_session_id: UUID | None = None,
+    ) -> UUID | None:
+        # These fakes model a learner whose only workspace is Personal; which
+        # workspace a real sign-in opens is tested on a database in
+        # test_sales_xray_home.py.
+        return settings.public_learner_tenant_id
+
+    monkeypatch.setattr(auth_module, "sales_xray_home", personal_only)
+
 
 def _sales_staging_settings() -> Settings:
     values = _deployment_values("staging")
@@ -1422,7 +1436,13 @@ def test_sales_xray_app_exchange_sets_a_fresh_session_and_revokes_the_sealed_one
     assert _AppExchangeIdentityApplication.issued == [
         {"person_id": APP_PERSON_ID, "user_agent": APP_USER_AGENT}
     ]
-    assert _AppExchangeIdentityApplication.selected == [(SECOND_VALID_SESSION_TOKEN, APP_TENANT_ID)]
+    # The apps fresh session gets the browser sessions workspace (the browser
+    # session chose its own at the callback).
+    assert [
+        chosen
+        for chosen in _AppExchangeIdentityApplication.selected
+        if chosen[0] == SECOND_VALID_SESSION_TOKEN
+    ] == [(SECOND_VALID_SESSION_TOKEN, APP_TENANT_ID)]
     # The same code a second time finds its session revoked: it works only once.
     assert replayed.status_code == 303
     assert replayed.headers["location"].endswith(f"flow={flow_id}&auth_result=failed")

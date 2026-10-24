@@ -25,7 +25,6 @@ import {
   Briefcase,
   Building2,
   Car,
-  Check,
   GraduationCap,
   GripVertical,
   HeartPulse,
@@ -55,10 +54,10 @@ import { Button, Segmented, Skeleton } from "../../ui/kit";
 import { SaveBar } from "../app-card";
 import { LeadsError } from "../leads-client";
 import { AdPlatforms } from "./ad-platforms";
+import { TemplateBuilder } from "./builder";
 import {
   ADDABLE,
   MAIN_PIPELINE,
-  applyTemplate,
   changed,
   drafts,
   guess,
@@ -282,31 +281,23 @@ export function JourneyTab({ canManage }: { canManage: boolean }) {
     return (
       <div className={styles.root}>
         {pipelineParts}
-        <TemplatePicker
+        <TemplateBuilder
+          view={view}
           templates={templates}
-          current={view.industry}
           first={view.version === 0}
+          iconFor={(icon) => ICONS[icon] ?? Sparkles}
           onCancel={view.version === 0 ? undefined : () => setChoosing(false)}
-          leads={view.stages.reduce((sum, stage) => sum + stage.leads, 0)}
-          onUse={async (template) => {
-            try {
-              const next = await applyTemplate(
-                view.version,
-                template,
-                view.pipeline,
-              );
-              setView(next);
-              setChoosing(false);
-              notify({
-                id: "journey-saved",
-                tone: "success",
-                title: "Your lead stages are ready",
-                message: "Sellers see them after their next call.",
-                timeout: 4000,
-              });
-            } catch (reason) {
-              failed(reason, "Those stages weren't saved");
-            }
+          onFailed={failed}
+          onSaved={(next) => {
+            setView(next);
+            setChoosing(false);
+            notify({
+              id: "journey-saved",
+              tone: "success",
+              title: "Your lead stages are ready",
+              message: "Sellers see them after their next call.",
+              timeout: 4000,
+            });
           }}
         />
       </div>
@@ -402,148 +393,6 @@ function BusinessCard({
         </span>
       </span>
       <Button onClick={onChange}>Change</Button>
-    </section>
-  );
-}
-
-/* ---------- picking a kind of business ---------- */
-
-function TemplatePicker({
-  templates,
-  current,
-  first,
-  leads,
-  onUse,
-  onCancel,
-}: {
-  templates: TemplateView[] | null;
-  current: string | null;
-  first: boolean;
-  /** Leads on the stages now: changing kind keeps them where they are. */
-  leads: number;
-  onUse: (template: string) => Promise<void>;
-  onCancel?: () => void;
-}) {
-  const [picked, setPicked] = useState<string | null>(current);
-  const [busy, setBusy] = useState(false);
-  const chosen = templates?.find((item) => item.id === picked) ?? null;
-  return (
-    <section className={styles.picker} aria-labelledby="journey-picker-title">
-      <header className={styles.pickerHead}>
-        <span className={styles.pickerMark} aria-hidden="true">
-          <Sparkles size={18} />
-        </span>
-        <div>
-          <h2 id="journey-picker-title">
-            {first
-              ? "What does your business sell?"
-              : "Change your kind of business"}
-          </h2>
-          <p>
-            Pick the closest one. You get stages that fit, and can rename, add
-            or remove any of them later.
-          </p>
-          {/* One quiet line, never over the list (P1 on a phone, 24 Oct 2026). */}
-          {!first && leads ? (
-            <p className={styles.pickerNote}>
-              {`Your ${leads} ${leads === 1 ? "lead stays" : "leads stay"} put; old stages are kept, so nothing is lost.`}
-            </p>
-          ) : null}
-        </div>
-      </header>
-      <ul className={styles.templateGrid} aria-label="Kinds of business">
-        {templates
-          ? templates.map((item) => {
-              const Icon = ICONS[item.icon] ?? Sparkles;
-              const on = item.id === picked;
-              return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className={styles.templateCard}
-                    aria-pressed={on}
-                    onClick={() => setPicked(item.id)}
-                  >
-                    <span
-                      className={styles.templateIcon}
-                      data-icon={item.icon}
-                      aria-hidden="true"
-                    >
-                      <Icon size={18} strokeWidth={1.9} />
-                    </span>
-                    <span className={styles.templateText}>
-                      <strong>
-                        {item.name}
-                        {item.id === current && !first ? (
-                          <span className={styles.templateNow}>Now</span>
-                        ) : null}
-                      </strong>
-                      <small>{item.blurb}</small>
-                      {/* Phones: the chosen kind's stages wrap inside its
-                          card (the footer keeps only the buttons). */}
-                      {on ? (
-                        <span className={styles.cardStages}>
-                          {item.stages.map((stage, index) => (
-                            <span key={index} data-kind={stage.kind}>
-                              {stage.label}
-                            </span>
-                          ))}
-                        </span>
-                      ) : null}
-                    </span>
-                    {on ? (
-                      <span className={styles.templateCheck} aria-hidden="true">
-                        <Check size={13} strokeWidth={2.6} />
-                      </span>
-                    ) : null}
-                  </button>
-                </li>
-              );
-            })
-          : Array.from({ length: 12 }, (_, index) => (
-              <li key={index} aria-hidden="true">
-                <span className={styles.templateCard}>
-                  <Skeleton width={34} height={34} />
-                  <span className={styles.templateText}>
-                    <Skeleton width="70%" height={13} />
-                    <Skeleton width="90%" height={11} />
-                  </span>
-                </span>
-              </li>
-            ))}
-      </ul>
-      <div className={styles.pickerFoot}>
-        <ol className={styles.preview} aria-label="Stages you get">
-          {chosen ? (
-            chosen.stages.map((stage, index) => (
-              <li key={index} data-kind={stage.kind}>
-                {stage.label}
-              </li>
-            ))
-          ) : (
-            <li data-kind="hint">Pick one to see its stages</li>
-          )}
-        </ol>
-        <span className={styles.pickerActions}>
-          {onCancel ? (
-            <Button variant="ghost" onClick={onCancel} disabled={busy}>
-              Cancel
-            </Button>
-          ) : null}
-          <Button
-            variant="primary"
-            disabled={!chosen || busy}
-            onClick={async () => {
-              if (!chosen) return;
-              setBusy(true);
-              await onUse(chosen.id);
-              setBusy(false);
-            }}
-          >
-            {busy ? "Setting up…" : "Use these stages"}
-          </Button>
-        </span>
-      </div>
     </section>
   );
 }

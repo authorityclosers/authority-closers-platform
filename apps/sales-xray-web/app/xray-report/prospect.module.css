@@ -212,8 +212,6 @@
   color: var(--tone);
   font-size: 12px;
   font-weight: 700;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
 }
 .when {
   font-size: 20px;

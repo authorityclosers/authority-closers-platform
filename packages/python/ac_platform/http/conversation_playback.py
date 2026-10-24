@@ -103,8 +103,11 @@ def install_playback_route(
 
     async def _open(recording_id: UUID, request: Request, auth: Any) -> StreamingResponse:
         try:
+            # Shared identity locks, as the read-only sign-in took: two plays of
+            # the same call each held a shared person lock and then asked for
+            # FOR UPDATE, and deadlocked (v0.88 browser proof, 24 Oct 2026).
             recording = await ConversationApplication(auth.database).get(
-                auth.resolved.actor, recording_id
+                auth.resolved.actor, recording_id, shared_identity_locks=True
             )
         except ConversationError as error:
             raise HTTPException(error.status, str(error)) from None
