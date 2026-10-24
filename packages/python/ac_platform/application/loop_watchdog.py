@@ -47,11 +47,14 @@ def _short(filename: str) -> str:
     return path.rsplit("/", 1)[-1]
 
 
-def blocking_location(frame: FrameType | None, *, ours: int = 3) -> str:
-    """The innermost frame, then up to ``ours`` of the platform's own callers.
+def blocking_location(frame: FrameType | None, *, inner: int = 3, ours: int = 3) -> str:
+    """The ``inner`` innermost frames, then up to ``ours`` of the platform's own callers.
 
-    For example ``json/encoder.py:257 in iterencode < ac_platform/http/x.py:88 in
-    answer``. File, line and function names only.
+    For example ``copy.py:270 in _reconstruct < copy.py:146 in deepcopy <
+    fastapi/routing.py:301 in app < ac_platform/http/x.py:88 in answer``: what was
+    running, which library call it was in, and which of our code led there (on
+    dev, 24 Oct 2026, the innermost frame and our middleware alone didn't say).
+    File, line and function names only.
     """
 
     if frame is None:
@@ -59,13 +62,14 @@ def blocking_location(frame: FrameType | None, *, ours: int = 3) -> str:
     stack = traceback.extract_stack(frame)  # outermost first
     if not stack:
         return "unknown"
-    innermost = stack[-1]
-    places = [innermost]
-    for entry in reversed(stack[:-1]):
-        if len(places) > ours:
+    places = list(reversed(stack[-inner:]))
+    found = 0
+    for entry in reversed(stack[:-inner]):
+        if found >= ours:
             break
         if "/ac_platform/" in entry.filename.replace("\\", "/"):
             places.append(entry)
+            found += 1
     return " < ".join(
         f"{_short(entry.filename)}:{entry.lineno} in {entry.name}" for entry in places
     )

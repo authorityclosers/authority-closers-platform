@@ -43,6 +43,8 @@ def test_a_block_over_the_threshold_is_named_by_file_line_and_function() -> None
     where = str(warning["where"])
     assert where.startswith("tests/unit/application/test_loop_watchdog.py:"), where
     assert "in _block_the_loop" in where
+    # Then the frames around it: which call led there.
+    assert where.split(" < ")[1].endswith("in _run"), where
     assert warning["held_back"] == 0
 
 
