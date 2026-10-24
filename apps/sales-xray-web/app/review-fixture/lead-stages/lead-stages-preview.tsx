@@ -7,7 +7,7 @@
  * `?first=1` shows the first visit (pick a kind of business).
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { JourneyTab } from "../../leads/journey/journey-view";
 import styles from "../../leads/leads.module.css";
@@ -362,7 +362,41 @@ function answer(body: unknown) {
   });
 }
 
-function install(first: boolean) {
+// ?choose=1: changing the kind of business with leads on the stages and two
+// pipelines (the owner's phone screen, P1 of 24 Oct 2026).
+const PIPES = {
+  pipelines: [
+    {
+      key: "main",
+      name: "Main pipeline",
+      position: 0,
+      main: true,
+      sources: [],
+      industry: "real_estate",
+      leads: 47,
+    },
+    {
+      key: "resale",
+      name: "Resale",
+      position: 1,
+      main: false,
+      sources: ["csv"],
+      industry: "real_estate",
+      leads: 6,
+    },
+  ],
+  sources: {
+    meta: "Facebook and Instagram lead ads",
+    webhook: "Website forms and other apps",
+    sheets: "Google Sheets",
+    csv: "File imports",
+    manual: "Added by hand",
+    referral: "Referrals",
+  },
+  canEdit: true,
+};
+
+function install(first: boolean, choose = false) {
   if (typeof window === "undefined") return true;
   const real = window.fetch.bind(window);
   let journey = first ? { ...JOURNEY, version: 0, industry: null } : JOURNEY;
@@ -370,6 +404,8 @@ function install(first: boolean) {
     const url = String(input instanceof Request ? input.url : input);
     if (!url.includes("/v1/lead-desk/")) return real(input, init);
     const method = init?.method ?? "GET";
+    if (choose && method === "GET" && url.endsWith("/pipelines"))
+      return answer(PIPES);
     if (url.endsWith("/journey/templates")) return answer(TEMPLATES);
     if (url.endsWith("/journey/suggestions"))
       return answer([
@@ -436,13 +472,25 @@ function install(first: boolean) {
   return true;
 }
 
+const asked = (name: string) =>
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get(name) === "1";
+
 export function LeadStagesPreview() {
-  useState(() =>
-    install(
-      typeof window !== "undefined" &&
-        new URLSearchParams(window.location.search).get("first") === "1",
-    ),
-  );
+  useState(() => install(asked("first"), asked("choose")));
+  // ?choose=1 opens "Change your kind of business", as the Change button does.
+  useEffect(() => {
+    if (!asked("choose")) return;
+    const timer = window.setInterval(() => {
+      const change = [...document.querySelectorAll("button")].find(
+        (button) => button.textContent?.trim() === "Change",
+      );
+      if (!change) return;
+      change.click();
+      window.clearInterval(timer);
+    }, 100);
+    return () => window.clearInterval(timer);
+  }, []);
   return (
     <div className={styles.root}>
       <JourneyTab canManage />
