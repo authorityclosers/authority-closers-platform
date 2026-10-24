@@ -22,6 +22,11 @@ GET /v1/admin/telemetry/gate?release=[&baseline=]
 GET /v1/admin/telemetry/fix-next?window=
     What to fix next, ranked by people affected times severity, and what improved since the
     window before.
+GET /v1/admin/telemetry/friction[?week=YYYY-MM-DD][&format=markdown]
+    Where people get stuck in one India week (default: the last that has ended): screens,
+    flows, permission prompts and workspace switching, findings ranked with their evidence
+    against the week before (telemetry/friction.py). As markdown, the file the weekly job
+    writes (owner, 25 Oct 2026).
 
 All are content-free (counts, timings, pseudonyms), for AC control accounts in the
 operations workspace, and readable with a staff key that has admin:read.
@@ -32,7 +37,8 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response
+from fastapi.responses import PlainTextResponse
 
 from ac_platform.conversation_intelligence.application import (
     ConversationApplication,
@@ -42,7 +48,7 @@ from ac_platform.conversation_intelligence.cost_metrics import india_day, read_s
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.http.auth import AuthenticatedTransaction, require_admin_surface
 from ac_platform.http.routes import RouteContext
-from ac_platform.telemetry import admin_view, daily_export, improvement
+from ac_platform.telemetry import admin_view, daily_export, friction, improvement
 from ac_platform.usage_people.pseudonyms import ensure_key
 
 PRIVATE = {"Cache-Control": "private, no-store"}
@@ -198,6 +204,57 @@ def install_admin_telemetry_http(application: FastAPI, ctx: RouteContext) -> Non
             ),
             "truncated": rows.truncated,
         }
+
+    @router.get("/friction", response_model=None)
+    async def friction_report(
+        request: Request,
+        response: Response,
+        week: date | None = None,
+        as_format: Literal["json", "markdown"] = Query("json", alias="format"),
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any] | PlainTextResponse:
+        await admit(request, response, auth)
+        now = datetime.now(UTC)
+        latest = friction.monday(now.astimezone(friction.INDIA).date())
+        wanted = friction.monday(week) if week else friction.last_full_week(now)
+        if wanted > latest or wanted < latest - timedelta(weeks=25):
+            raise HTTPException(422, "Choose a week in the last six months.")
+        start, end = friction.week_window(wanted)
+        earlier, _ = friction.week_window(wanted - friction.WEEK)
+        rows = await auth.database.run_sync(
+            lambda connection: admin_view.read_rows(
+                connection, since=earlier, until=min(end, now), now=now
+            )
+        )
+        kinds = {
+            str(tenant): kind
+            for tenant, kind in (
+                (settings.public_learner_tenant_id, "personal"),
+                (settings.operations_tenant_id, "operations"),
+            )
+            if tenant is not None
+        }
+        data = friction.report(
+            [row for row in rows.rows if row.at >= start],
+            [row for row in rows.rows if row.at < start],
+            week=wanted,
+            now=now,
+            environment=settings.environment,
+            kinds=kinds,
+            truncated=rows.truncated,
+        )
+        if as_format == "markdown":
+            return PlainTextResponse(
+                friction.to_markdown(data),
+                media_type="text/markdown; charset=utf-8",
+                headers={
+                    **PRIVATE,
+                    "Content-Disposition": (
+                        f'attachment; filename="sales-xray-friction-{data["week"]}.md"'
+                    ),
+                },
+            )
+        return data
 
     @router.get("/daily")
     async def daily(

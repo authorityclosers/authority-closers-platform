@@ -28,6 +28,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { notify } from "../notice-center";
+import { useFlow } from "../telemetry-flows";
 import { useBackClose } from "../ui/back-close";
 import { Button } from "../ui/kit";
 import {
@@ -66,6 +67,12 @@ import {
   folderPick,
   type FlowStep,
 } from "./phone-setup-steps";
+import {
+  startAsk,
+  telemetryStep,
+  trackPrompt,
+  type Ask,
+} from "./phone-setup-telemetry";
 
 export { blocked, flowSteps } from "./phone-setup-steps";
 export type { FlowStep } from "./phone-setup-steps";
@@ -239,6 +246,23 @@ export function PhoneSetupFlow({
   useEffect(() => {
     onCloseRef.current = onClose;
   });
+  // Where people stop and what Android answered (the weekly friction report).
+  const flow = useFlow("phone_setup", { via: only ? "fix" : "all" });
+  const asked = useRef<Ask | null>(null);
+  const answered = useCallback(
+    (step: FlowStep, after: SetupStatus | null) => {
+      const ask = asked.current;
+      if (!ask || ask.step !== step) return;
+      asked.current = null;
+      trackPrompt({
+        ...ask,
+        after,
+        fix: Boolean(only),
+        ms: performance.now() - ask.at,
+      });
+    },
+    [only],
+  );
 
   const end = useCallback((status: SetupStatus | null, steps: FlowStep[]) => {
     if (closed.current) return;
@@ -291,6 +315,10 @@ export function PhoneSetupFlow({
 
   const step = plan ? plan.steps[index] : undefined;
 
+  useEffect(() => {
+    if (plan && step) flow.step(telemetryStep(step), index, plan.steps.length);
+  }, [flow, plan, step, index]);
+
   // Logging work calls on a phone with two SIMs: which one is for work.
   useEffect(() => {
     if (step !== "callLog") return;
@@ -307,14 +335,17 @@ export function PhoneSetupFlow({
 
   const advance = useCallback(async () => {
     if (!plan) return;
-    const status = (await setupStatus()) ?? plan.status;
+    const read = await setupStatus();
+    answered(plan.steps[index], read);
+    const status = read ?? plan.status;
     if (index + 1 >= plan.steps.length) {
+      flow.done({ left: flowSteps(status, null).length });
       end(status, plan.steps);
       return;
     }
     setPlan({ ...plan, status });
     setIndex(index + 1);
-  }, [plan, index, end]);
+  }, [plan, index, end, answered, flow]);
 
   // Back from one of Android's settings screens: on to the next step.
   useEffect(() => {
@@ -340,10 +371,11 @@ export function PhoneSetupFlow({
   }, [plan]);
 
   const close = useCallback(() => {
+    flow.cancel();
     void setupStatus().then((status) =>
       end(status ?? plan?.status ?? null, plan?.steps ?? []),
     );
-  }, [end, plan]);
+  }, [end, plan, flow]);
   useBackClose(plan !== null, close);
 
   if (!plan || !step) return null;
@@ -351,12 +383,19 @@ export function PhoneSetupFlow({
   const Icon = screen.icon;
   const go = async () => {
     setBusy(true);
+    const ask = startAsk(
+      step,
+      plan.status,
+      screen.away || blocked(step, plan.status),
+    );
+    asked.current = ask;
     let opened: unknown = null;
     try {
       opened = await act(step, plan.status, plan.recorder, sim);
     } catch {
       // Android said no, or the phone didn't answer: the step stays to do.
     }
+    ask.opened = opened;
     setBusy(false);
     // A settings screen that didn't open has no way back to wait for.
     if (screen.away && opened !== false) setAway(step);

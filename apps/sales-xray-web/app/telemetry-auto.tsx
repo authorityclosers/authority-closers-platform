@@ -7,7 +7,9 @@
  * server lists it for this person (on unless they or their workspace turned it
  * off in Settings, Privacy). What it measures:
  *
- * - Screens and the flow between them (sx.screen_viewed, with time on the last).
+ * - Screens and the flow between them (sx.screen_viewed, with time on the last,
+ *   and since 25 Oct how long it was on view), the app going to the background
+ *   and the page closing on a screen (sx.screen_hidden).
  * - Tap to response for key actions (sx.action_timing): from the tap to the
  *   screen settling (no change for 150 ms, at most 10 s), and the browser's own
  *   input-to-paint time for that tap. The action is the element's
@@ -18,7 +20,9 @@
  *   never the message.
  * - API calls slower than 1.5 s or failed, with every id taken out of the path.
  * - Rage taps (three in a second on one spot) and dead taps (a tap on
- *   something that looks tappable and changes nothing).
+ *   something that looks tappable and changes nothing), with the screen zone
+ *   and the element as the code names it (its data-sx-action or
+ *   data-sx-feature, or its style's name), never its words.
  * - Features named with `data-sx-feature`.
  *
  * Never text, names, numbers or ids from the page.
@@ -35,6 +39,7 @@ import {
   type ErrorClass,
   type Screen,
   type TapTarget,
+  type TapZone,
   type TelemetryEventName,
   type TelemetryEvents,
   type TimedAction,
@@ -167,6 +172,87 @@ export function fingerprint(text: string): string {
   return hash.toString(16).padStart(8, "0");
 }
 
+/** Where a tap landed: the viewport in 4 rows of 3 ("r1c1" top left). */
+export function zoneOf(
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+): TapZone | null {
+  if (!(width > 0 && height > 0) || !Number.isFinite(x + y)) return null;
+  const row = Math.min(4, Math.max(1, Math.floor((y / height) * 4) + 1));
+  const column = Math.min(3, Math.max(1, Math.floor((x / width) * 3) + 1));
+  return `r${row}c${column}` as TapZone;
+}
+
+const LABEL = /^[a-z0-9][a-z0-9._-]{0,31}$/;
+// A CSS module's class as the build names it: "leads-table-module__x1Y2z__row"
+// (Turbopack) or "leads-table_row__x1Y2z" (webpack); the file and the style.
+const MODULE_CLASS = [
+  /^([A-Za-z0-9-]+?)(?:-module)?__[A-Za-z0-9_-]+?__([A-Za-z][A-Za-z0-9-]*)$/,
+  /^([A-Za-z0-9-]+?)(?:-module)?_([A-Za-z][A-Za-z0-9-]*)__[A-Za-z0-9_-]{5}$/,
+];
+
+/** An element's style as code names it ("leads-table.stagechip"), or null. */
+export function styleOf(element: Element): string | null {
+  for (const name of Array.from(element.classList ?? [])) {
+    for (const pattern of MODULE_CLASS) {
+      const found = pattern.exec(name);
+      if (!found) continue;
+      const label = `${found[1]}.${found[2]}`.toLowerCase().slice(0, 32);
+      if (LABEL.test(label)) return label;
+    }
+  }
+  return null;
+}
+
+/**
+ * The element a tap landed on as the code names it: its data-sx-feature or
+ * data-sx-action, else the nearest style's name within four levels. Never its
+ * text, label or link.
+ */
+export function elementOf(target: Element): string | null {
+  const named = target.closest("[data-sx-feature], [data-sx-action]");
+  const code =
+    named?.getAttribute("data-sx-feature") ??
+    named?.getAttribute("data-sx-action");
+  if (code && LABEL.test(code)) return code;
+  let node: Element | null = target;
+  for (let depth = 0; node && depth < 4; depth += 1) {
+    const style = styleOf(node);
+    if (style) return style;
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/** A fingerprint of an element's place: the tags and styles above it. */
+export function placeOf(target: Element): string {
+  const parts: string[] = [];
+  let node: Element | null = target;
+  for (let depth = 0; node && depth < 6; depth += 1) {
+    parts.push(`${node.tagName.toLowerCase()}:${styleOf(node) ?? ""}`);
+    node = node.parentElement;
+  }
+  return fingerprint(parts.join(">"));
+}
+
+/** A rage or dead tap's place: zone, element and fingerprint. */
+function tapPlace(event: MouseEvent, target: Element) {
+  const zone = zoneOf(
+    event.clientX,
+    event.clientY,
+    window.innerWidth,
+    window.innerHeight,
+  );
+  const element = elementOf(target);
+  return {
+    ...(zone ? { zone } : {}),
+    ...(element ? { element } : {}),
+    where: placeOf(target),
+  };
+}
+
 /** An error's class, where it was thrown (a fingerprint) and whose code threw it. */
 export function errorFacts(
   error: unknown,
@@ -240,12 +326,34 @@ type Timing = {
   observer: MutationObserver;
 };
 
-/** The last screen shown and whether the last navigation was Back. */
+/**
+ * The last screen shown, how long it has been on view (seen, plus the time
+ * since it last came into view), and whether the last navigation was Back.
+ */
 type PageState = {
-  screen: { name: Screen; since: number } | null;
+  screen: {
+    name: Screen;
+    since: number;
+    seen: number;
+    visibleSince: number | null;
+  } | null;
   backed: boolean;
 };
 type Page = { current: PageState };
+
+/** How long the screen has been on view so far, at `now`. */
+export function seenSoFar(
+  screen: { seen: number; visibleSince: number | null },
+  now: number,
+): number {
+  return ms(
+    screen.seen +
+      (screen.visibleSince === null ? 0 : now - screen.visibleSince),
+  );
+}
+
+const visible = () =>
+  typeof document === "undefined" || document.visibilityState !== "hidden";
 
 function showScreen(page: Page, pathname: string | null) {
   if (!pathname || !telemetry.active()) return;
@@ -264,10 +372,62 @@ function showScreen(page: Page, pathname: string | null) {
       : page.current.backed
         ? "back"
         : "push",
-    ...(previous ? { stay_ms: ms(now - previous.since) } : {}),
+    ...(previous
+      ? {
+          stay_ms: ms(now - previous.since),
+          seen_ms: seenSoFar(previous, now),
+        }
+      : {}),
   });
   page.current.backed = false;
-  page.current.screen = { name, since: now };
+  page.current.screen = {
+    name,
+    since: now,
+    seen: 0,
+    visibleSince: visible() ? now : null,
+  };
+}
+
+// At most one "went to the background" a half minute: a seller calling from
+// the app leaves for the dialler on every call.
+const BACKGROUND_EVERY_MS = 30_000;
+
+/** The page going out of view, coming back, and closing, on the current screen. */
+function watchVisibility(page: Page, cleanups: Array<() => void>) {
+  let lastBackground = -Infinity;
+  const onVisibility = () => {
+    const screen = page.current.screen;
+    if (!screen) return;
+    const now = performance.now();
+    if (visible()) {
+      screen.visibleSince ??= now;
+      return;
+    }
+    screen.seen = seenSoFar(screen, now);
+    screen.visibleSince = null;
+    if (!telemetry.active() || now - lastBackground < BACKGROUND_EVERY_MS)
+      return;
+    lastBackground = now;
+    track("sx.screen_hidden", { screen: screen.name, kind: "background" });
+  };
+  // The page closing: the screen it ended on and how long that was seen.
+  const onLeave = () => {
+    const screen = page.current.screen;
+    if (!screen || !telemetry.active()) return;
+    track("sx.screen_hidden", {
+      screen: screen.name,
+      kind: "exit",
+      seen_ms: seenSoFar(screen, performance.now()),
+    });
+    // telemetry.ts flushed on this pagehide already, before this was queued.
+    void telemetry.flush(true);
+  };
+  document.addEventListener("visibilitychange", onVisibility);
+  window.addEventListener("pagehide", onLeave);
+  cleanups.push(() => {
+    document.removeEventListener("visibilitychange", onVisibility);
+    window.removeEventListener("pagehide", onLeave);
+  });
 }
 
 function listenAll(page: Page, cleanups: Array<() => void>) {
@@ -283,6 +443,8 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
   listen("popstate", () => {
     page.current.backed = true;
   });
+
+  watchVisibility(page, cleanups);
 
   // The phone app: once the server has answered for someone signed in (the
   // session arrives a moment after the first paint), and on every return.
@@ -541,6 +703,7 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
         target: targetOf(target),
         ...(action ? { action } : {}),
         screen: here(),
+        ...tapPlace(event, target),
       });
       return;
     }
@@ -551,6 +714,7 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
     )
       return;
     const path = window.location.href;
+    const place = tapPlace(event, target);
     let changed = false;
     const observer = new MutationObserver(() => {
       changed = true;
@@ -568,6 +732,7 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
           kind: "dead",
           target: targetOf(target),
           screen: here(),
+          ...place,
         });
     }, 700);
   };

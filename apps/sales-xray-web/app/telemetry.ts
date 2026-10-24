@@ -137,6 +137,14 @@ export type TelemetryEvents = {
     from?: Screen | "none";
     nav: "first" | "push" | "back" | "reload";
     stay_ms?: number;
+    /** How long the screen before was on view (a call in the dialer doesn't count). */
+    seen_ms?: number;
+  };
+  /** The page went to the background or closed: the screen and how long it was seen. */
+  "sx.screen_hidden": {
+    screen: Screen;
+    kind: "background" | "exit";
+    seen_ms?: number;
   };
   /** Tap to the screen settling, and the browser's own input-to-paint time. */
   "sx.action_timing": {
@@ -177,6 +185,12 @@ export type TelemetryEvents = {
     target: TapTarget;
     action?: TimedAction;
     screen?: Screen;
+    /** Where on the screen: the viewport in 4 rows of 3 ("r1c1" to "r4c3"). */
+    zone?: TapZone;
+    /** The element as the code names it, never its words (telemetry-auto elementOf). */
+    element?: string;
+    /** A fingerprint of its place on the page. */
+    where?: string;
   };
   "sx.feature_used": { feature: string; screen?: Screen };
   // Lead OS (24 Oct 2026): the pipeline board, stage sheet and lead sheet.
@@ -272,7 +286,82 @@ export type TelemetryEvents = {
   };
   /** Changes this device holds unsent (sync/write-queue.ts): counts only. */
   "sx.writes_waiting": { waiting: number; refused: number; oldest_min: number };
+  // Where people get stuck (owner, 25 Oct 2026); telemetry-flows.ts sends these.
+  /** A journey of several steps: started, a step reached, Save refused, how it ended. */
+  "sx.flow": {
+    flow: FlowName;
+    outcome: FlowOutcome;
+    step?: FlowStep;
+    via?: FlowVia;
+    /** The step's place (0 first), the number of steps, what was left to do. */
+    index?: number;
+    steps?: number;
+    left?: number;
+    /** Since the flow started. */
+    ms?: number;
+  };
+  /** One Android permission or settings screen asked for in phone setup. */
+  "sx.permission_prompt": {
+    permission: PromptPermission;
+    outcome: "granted" | "denied" | "blocked" | "not_opened" | "unknown";
+    via?: "prompt" | "settings";
+    from?: "setup" | "fix";
+    ms?: number;
+  };
 };
+
+export type FlowName = "onboarding" | "phone_setup" | "add_lead" | "log_result";
+export type FlowOutcome =
+  | "start"
+  | "step"
+  | "blocked"
+  | "done"
+  | "skip"
+  | "cancel"
+  | "abandon"
+  | "fail";
+/** Every flow's steps (the server's FLOW_STEPS). */
+export type FlowStep =
+  | "start"
+  | "name"
+  | "business"
+  | "team"
+  | "first"
+  | "calls"
+  | "notifications"
+  | "recordings"
+  | "battery"
+  | "autostart"
+  | "call_log"
+  | "recorder"
+  | "form"
+  | "duplicate"
+  | "talk"
+  | "reason"
+  | "stage"
+  | "next"
+  | "save";
+export type FlowVia =
+  | "business"
+  | "solo"
+  | "join"
+  | "all"
+  | "fix"
+  | "quick"
+  | "sheet"
+  | "after_call"
+  | "lead";
+export type PromptPermission =
+  | "calls"
+  | "notifications"
+  | "rec_files"
+  | "all_files"
+  | "folder"
+  | "battery"
+  | "autostart"
+  | "call_log"
+  | "recorder";
+export type TapZone = `r${1 | 2 | 3 | 4}c${1 | 2 | 3}`;
 
 /** The app's screens (the server's SCREENS); routeTemplate's pages, a lead open on Leads. */
 export type Screen =
@@ -301,6 +390,7 @@ export type Screen =
   | "apps"
   | "developers"
   | "review"
+  | "welcome"
   | "other";
 
 /** Key actions whose tap-to-response time is measured (the server's ACTIONS). */
@@ -389,6 +479,9 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.network_state",
   "sx.permission_snapshot",
   "sx.writes_waiting",
+  "sx.screen_hidden",
+  "sx.flow",
+  "sx.permission_prompt",
 ] as const satisfies readonly TelemetryEventName[];
 
 export type SizeBand = "under_5mb" | "5_to_20mb" | "over_20mb";
@@ -540,6 +633,7 @@ const STATIC_ROUTES = new Set([
   "/apps",
   "/developers",
   "/review",
+  "/welcome",
 ]);
 const ROUTE_PATTERNS: ReadonlyArray<readonly [RegExp, string]> = [
   [/^\/analysis\/calls\/[^/]+$/, "/analysis/calls/[callId]"],
@@ -581,6 +675,7 @@ const SCREENS: Record<string, Screen> = {
   "/apps": "apps",
   "/developers": "developers",
   "/review": "review",
+  "/welcome": "welcome",
 };
 
 /** The screen a page is (the server's SCREENS); a lead open on Leads is "lead". */

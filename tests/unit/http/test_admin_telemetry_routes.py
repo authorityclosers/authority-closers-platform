@@ -205,3 +205,37 @@ def test_the_improvement_loop_reads_devices_releases_the_gate_and_what_to_fix(
         False,
     )
     assert setup["outside"].get("/v1/admin/telemetry/gate?release=v0.86").status_code == 403
+
+
+def test_the_friction_report_reads_one_india_week_as_json_or_markdown(
+    setup: dict[str, Any],
+) -> None:
+    client = setup["client"]
+    # This week so far: the hour-old event is in it.
+    india = datetime.now(UTC) + timedelta(hours=5, minutes=30)
+    this_week = (india - timedelta(days=india.weekday())).date()
+    response = client.get(f"/v1/admin/telemetry/friction?week={this_week.isoformat()}")
+    assert response.status_code == 200, response.text
+    assert response.headers["cache-control"] == "private, no-store"
+    body = response.json()
+    assert (body["schema"], body["environment"], body["week"], body["complete"]) == (
+        "ac.sales-xray.telemetry-friction/1",
+        "development",
+        this_week.isoformat(),
+        False,
+    )
+    assert body["coverage"]["events"] in (0, 1)
+    assert body["findings"] == [] and body["truncated"] is False
+    # Any day names its week's Monday; the default is the last week that has ended.
+    assert client.get("/v1/admin/telemetry/friction").json()["complete"] is True
+    markdown = client.get(f"/v1/admin/telemetry/friction?week={this_week}&format=markdown")
+    assert markdown.status_code == 200
+    assert markdown.headers["content-type"].startswith("text/markdown")
+    assert markdown.headers["cache-control"] == "private, no-store"
+    assert "attachment" in markdown.headers["content-disposition"]
+    assert markdown.text.startswith("# Sales X-Ray friction report: week of ")
+    future = (this_week + timedelta(days=14)).isoformat()
+    assert client.get(f"/v1/admin/telemetry/friction?week={future}").status_code == 422
+    assert client.get("/v1/admin/telemetry/friction?week=2020-01-06").status_code == 422
+    assert client.get("/v1/admin/telemetry/friction?format=pdf").status_code == 422
+    assert setup["outside"].get("/v1/admin/telemetry/friction").status_code == 403
