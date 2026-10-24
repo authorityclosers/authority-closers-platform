@@ -62,13 +62,24 @@ def run(
         raise RehearsalError(f"{Path(command[0]).name} could not run or timed out") from exc
 
 
+# Root trusts exactly the workbench, which acdev owns: its path and its .git, never "*". Git drops
+# command-line (-c) config for the upload-pack that a local clone starts, so the trust lives in a
+# private global config file for this run only.
+TRUST: dict[str, str] = {}
+
+
+def trust_workbench(workbench: Path, directory: Path) -> Path:
+    handle, name = tempfile.mkstemp(prefix="ac-schema-rehearsal-trust-", dir=directory)
+    with os.fdopen(handle, "w") as stream:
+        stream.write(f"[safe]\n\tdirectory = {workbench}\n\tdirectory = {workbench}/.git\n")
+    TRUST["GIT_CONFIG_GLOBAL"] = name
+    return Path(name)
+
+
 def git(
     repo: Path, *arguments: str, timeout: int = TIMEOUTS["git"]
 ) -> subprocess.CompletedProcess[str]:
-    # The workbench belongs to acdev; root reads it with an exact safe.directory, never "*".
-    return run(
-        ["git", "-c", f"safe.directory={repo}", "-C", str(repo), *arguments], timeout=timeout
-    )
+    return run(["git", "-C", str(repo), *arguments], env={**os.environ, **TRUST}, timeout=timeout)
 
 
 def commit(repo: Path, revision: str) -> str:
@@ -209,12 +220,14 @@ def main(argv: list[str] | None = None) -> int:
         "started_at": started.isoformat(),
     }
     work: Path | None = None
+    trust: Path | None = None
     try:
         if os.geteuid() != 0:
             raise RehearsalError(
                 "run as root (the staging export uses the governed backup operator)"
             )
         workbench = args.workbench.resolve(strict=True)
+        trust = trust_workbench(workbench, args.scratch)
         candidate, base = commit(workbench, args.candidate), commit(workbench, args.base)
         if git(workbench, "merge-base", "--is-ancestor", base, candidate).returncode != 0:
             raise RehearsalError("the release commit does not contain its base")
@@ -236,6 +249,9 @@ def main(argv: list[str] | None = None) -> int:
     finally:
         if work is not None:
             shutil.rmtree(work, ignore_errors=True)
+        if trust is not None:
+            trust.unlink(missing_ok=True)
+        TRUST.clear()
     receipt.update(
         result=result,
         reason=reason,

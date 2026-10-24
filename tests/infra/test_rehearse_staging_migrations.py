@@ -69,9 +69,15 @@ class FakeTools:
     ):
         self.export_ok, self.gate = export_ok, gate
         self.calls: list[tuple[list[str], dict[str, str] | None]] = []
+        self.trusted: list[str] = []
 
     def __call__(self, command, *, cwd=None, env=None, timeout):
         if command[0] == "git":
+            if "clone" in command:
+                # Root clones acdev's workbench: git drops -c config for the local clone's
+                # upload-pack, so the run's private global config must trust both paths.
+                assert "-c" not in command
+                self.trusted = Path(env["GIT_CONFIG_GLOBAL"]).read_text().splitlines()
             return REAL_RUN(command, cwd=cwd, env=env, timeout=timeout)
         self.calls.append((list(command), env))
         if "sync" in command:
@@ -180,6 +186,14 @@ def test_new_migration_rehearses_the_live_staging_export_with_its_manifest_hash(
         "release_id",
         "manifest_sha256",
     }
+    workbench_path = repo.resolve()
+    assert tools.trusted == [
+        "[safe]",
+        f"\tdirectory = {workbench_path}",
+        f"\tdirectory = {workbench_path}/.git",
+    ]
+    assert "GIT_CONFIG_GLOBAL" not in environment
+    # The clone, the export and the run's trust file are all gone.
     assert list((tmp_path / "scratch").iterdir()) == []
 
 
