@@ -32,6 +32,9 @@ from tests.database.test_conversation_submission_http_postgresql import ORIGIN, 
 # Each read keeps its transaction open this long, as a real read does while it works.
 HOLD = 0.3
 READS = 20
+# Reads and writes together: long enough that a real lock wait (about two
+# thirds of this) stands well clear of a busy runner's jitter.
+LONG_HOLD = 0.6
 
 
 @pytest.fixture
@@ -39,23 +42,23 @@ def postgres_harness() -> Any:
     yield from cast(Any, _postgres_harness).__wrapped__()
 
 
-def _install_read(setup: Any) -> None:
+def _install_read(setup: Any, hold: float = HOLD) -> None:
     @setup.app.get("/v1/test/first-launch-read")
     async def first_launch_read(request: Request) -> dict[str, float]:
         started = time.monotonic()
         async with asynccontextmanager(setup.require_actor)(request):
             waited = time.monotonic() - started
-            await asyncio.sleep(HOLD)
+            await asyncio.sleep(hold)
         return {"waited": waited}
 
 
-def _install_write(setup: Any) -> None:
+def _install_write(setup: Any, hold: float) -> None:
     @setup.app.post("/v1/test/write")
     async def write(request: Request) -> dict[str, float]:
         started = time.monotonic()
         async with asynccontextmanager(setup.require_actor)(request):
             waited = time.monotonic() - started
-            await asyncio.sleep(HOLD)
+            await asyncio.sleep(hold)
         return {"waited": waited}
 
 
@@ -165,14 +168,14 @@ def test_reads_and_writes_never_wait_for_each_other_but_writes_take_turns(
                     .where(IdentitySession.id == setup.state.session_id)
                     .values(last_seen_at=datetime.now(UTC))
                 )
-            _install_read(setup)
-            _install_write(setup)
+            _install_read(setup, LONG_HOLD)
+            _install_write(setup, LONG_HOLD)
             transport = httpx.ASGITransport(app=setup.app)
             async with httpx.AsyncClient(transport=transport, base_url=ORIGIN) as client:
                 client.cookies.set(setup.settings.session_cookie_name, setup.token)
 
                 async def later(call: Any) -> httpx.Response:
-                    await asyncio.sleep(HOLD / 3)  # the first ones hold their fences by now
+                    await asyncio.sleep(LONG_HOLD / 3)  # the first ones hold their fences
                     return await call()
 
                 def read() -> Any:
@@ -186,17 +189,18 @@ def test_reads_and_writes_never_wait_for_each_other_but_writes_take_turns(
                 *reads, written = await asyncio.gather(*(read() for _ in range(5)), later(write))
                 assert [answer.status_code for answer in reads] == [200] * 5
                 assert written.status_code == 200, written.text
-                assert written.json()["waited"] < HOLD / 3, written.json()
+                assert written.json()["waited"] < LONG_HOLD / 3, written.json()
 
                 # Reads while a write is in flight sign in at once too.
                 first, *after = await asyncio.gather(write(), *(later(read) for _ in range(5)))
                 assert first.status_code == 200, first.text
-                assert max(answer.json()["waited"] for answer in after) < HOLD / 3
+                waits = [answer.json()["waited"] for answer in after]
+                assert max(waits) < LONG_HOLD / 3, waits
 
                 # The same person's writes still go one at a time.
                 both = await asyncio.gather(write(), write())
                 assert [answer.status_code for answer in both] == [200, 200]
-                assert max(answer.json()["waited"] for answer in both) > HOLD / 2
+                assert max(answer.json()["waited"] for answer in both) > LONG_HOLD / 2
         finally:
             await setup.engine.dispose()
 

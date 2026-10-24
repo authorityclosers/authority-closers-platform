@@ -1436,7 +1436,13 @@ def test_sales_xray_app_exchange_sets_a_fresh_session_and_revokes_the_sealed_one
     assert _AppExchangeIdentityApplication.issued == [
         {"person_id": APP_PERSON_ID, "user_agent": APP_USER_AGENT}
     ]
-    assert _AppExchangeIdentityApplication.selected == [(SECOND_VALID_SESSION_TOKEN, APP_TENANT_ID)]
+    # The apps fresh session gets the browser sessions workspace (the browser
+    # session chose its own at the callback).
+    assert [
+        chosen
+        for chosen in _AppExchangeIdentityApplication.selected
+        if chosen[0] == SECOND_VALID_SESSION_TOKEN
+    ] == [(SECOND_VALID_SESSION_TOKEN, APP_TENANT_ID)]
     # The same code a second time finds its session revoked: it works only once.
     assert replayed.status_code == 303
     assert replayed.headers["location"].endswith(f"flow={flow_id}&auth_result=failed")
