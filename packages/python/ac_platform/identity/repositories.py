@@ -15,7 +15,7 @@ from datetime import UTC, datetime
 from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -587,14 +587,20 @@ class AsyncSqlAlchemyIdentityRepository:
         return None if row is None else _person_snapshot(row)
 
     async def get_person_for_share(self, person_id: UUID) -> PersonSnapshot | None:
-        """Take the shared canonical-person fence for read-only auth."""
+        """Take the canonical-person fence for a read sign-in: FOR KEY SHARE.
+
+        It holds off what locks the person FOR UPDATE (deletion, status and
+        sign-in changes) but never another reader or an ordinary write, so one
+        person's parallel reads don't queue (first launch after an app update,
+        24 Oct 2026: ~20 reads waited 14 s together).
+        """
 
         row = cast(
             Person | None,
             await self._session.scalar(
                 select(Person)
                 .where(Person.id == person_id)
-                .with_for_update(read=True)
+                .with_for_update(read=True, key_share=True)
                 .execution_options(populate_existing=True)
             ),
         )
@@ -1048,18 +1054,49 @@ class AsyncSqlAlchemyIdentityRepository:
         return None if row is None else _session_snapshot(row)
 
     async def get_session_for_share(self, session_id: UUID) -> StoredSession | None:
-        """Take the shared session fence for read-only auth."""
+        """Take the session fence for a read sign-in: FOR KEY SHARE.
+
+        Revocation, rotation and workspace changes lock the session FOR UPDATE and
+        still wait for it; parallel reads and the activity touch do not.
+        """
 
         row = cast(
             SessionRow | None,
             await self._session.scalar(
                 select(SessionRow)
                 .where(SessionRow.id == session_id)
-                .with_for_update(read=True)
+                .with_for_update(read=True, key_share=True)
                 .execution_options(populate_existing=True)
             ),
         )
         return None if row is None else _session_snapshot(row)
+
+    async def touch_session(
+        self, session_id: UUID, *, now: datetime, idle_before: datetime
+    ) -> int | None:
+        """Advance ``last_seen_at`` if it is older than ``idle_before``, never waiting.
+
+        FOR NO KEY UPDATE SKIP LOCKED: if another request is touching or changing
+        the session right now, this one skips it. Returns the new revision, or
+        None when nothing was written.
+        """
+
+        revision = await self._session.scalar(
+            select(SessionRow.revision)
+            .where(
+                SessionRow.id == session_id,
+                or_(SessionRow.last_seen_at.is_(None), SessionRow.last_seen_at < idle_before),
+            )
+            .with_for_update(key_share=True, skip_locked=True)
+        )
+        if revision is None:
+            return None
+        await self._session.execute(
+            update(SessionRow)
+            .where(SessionRow.id == session_id, SessionRow.revision == revision)
+            .values(last_seen_at=now, revision=revision + 1)
+        )
+        return int(revision) + 1
 
     async def get_sessions_for_update(self, session_ids: Sequence[UUID]) -> Sequence[StoredSession]:
         """Lock a session set in UUID order to prevent cross-session deadlocks."""
