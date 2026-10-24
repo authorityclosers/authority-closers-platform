@@ -73,7 +73,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@types/node@24.10.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@24.10.1))
+        version: 4.1.11(@types/node@24.10.1)(happy-dom@21.0.4)(vite@8.2.2(@types/node@24.10.1))
 
   apps/coach-web:
     dependencies:
@@ -116,7 +116,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@types/node@24.10.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@24.10.1))
+        version: 4.1.11(@types/node@24.10.1)(happy-dom@21.0.4)(vite@8.2.2(@types/node@24.10.1))
 
   apps/learner-web:
     dependencies:
@@ -158,14 +158,14 @@ importers:
         specifier: 16.3.3
         version: 16.3.3(@typescript-eslint/parser@8.68.0(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
       happy-dom:
-        specifier: 20.14.0
-        version: 20.14.0
+        specifier: 21.0.4
+        version: 21.0.4
       typescript:
         specifier: 5.9.3
         version: 5.9.3
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@types/node@24.10.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@24.10.1))
+        version: 4.1.11(@types/node@24.10.1)(happy-dom@21.0.4)(vite@8.2.2(@types/node@24.10.1))
 
   apps/sales-xray-web:
     dependencies:
@@ -228,8 +228,8 @@ importers:
         specifier: 16.3.3
         version: 16.3.3(@typescript-eslint/parser@8.68.0(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3))(eslint@9.39.5(supports-color@8.1.1))(supports-color@8.1.1)(typescript@5.9.3)
       happy-dom:
-        specifier: 20.14.0
-        version: 20.14.0
+        specifier: 21.0.4
+        version: 21.0.4
       jsqr:
         specifier: 1.4.0
         version: 1.4.0
@@ -238,7 +238,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@types/node@24.10.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@24.10.1))
+        version: 4.1.11(@types/node@24.10.1)(happy-dom@21.0.4)(vite@8.2.2(@types/node@24.10.1))
 
   packages/typescript/config: {}
 
@@ -277,7 +277,7 @@ importers:
         version: 5.9.3
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@types/node@24.10.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@24.10.1))
+        version: 4.1.11(@types/node@24.10.1)(happy-dom@21.0.4)(vite@8.2.2(@types/node@24.10.1))
 
   packages/typescript/sales-xray-review-ui:
     dependencies:
@@ -295,14 +295,14 @@ importers:
         specifier: 19.2.3
         version: 19.2.3(@types/react@19.2.14)
       happy-dom:
-        specifier: 20.14.0
-        version: 20.14.0
+        specifier: 21.0.4
+        version: 21.0.4
       typescript:
         specifier: 5.9.3
         version: 5.9.3
       vitest:
         specifier: 4.1.11
-        version: 4.1.11(@types/node@24.10.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@24.10.1))
+        version: 4.1.11(@types/node@24.10.1)(happy-dom@21.0.4)(vite@8.2.2(@types/node@24.10.1))
 
   packages/typescript/ui:
     dependencies:
@@ -1648,8 +1648,8 @@ packages:
     resolution: {integrity: sha512-ZUKRh6/kUFoAiTAtTYPZJ3hw9wNxx+BIBOijnlG9PnrJsCcSjs1wyyD6vJpaYtgnzDrKYRSqf3OO6Rfa93xsRg==}
     engines: {node: '>= 0.4'}
 
-  happy-dom@20.14.0:
-    resolution: {integrity: sha512-4bRh1KzRvKDnFNTlLhzT1RZTpkKhQbQDl9j+7GXszWsvuspYdo29k6OHRf4PwiM6oLb8r/pMWeYiJjkfod5AvQ==}
+  happy-dom@21.0.4:
+    resolution: {integrity: sha512-tFm+GaLBgo6o0awHnvHaNoraVo27qJ+2tZEtZ+cIa08hXbeitrxAJajLI05hsUy/2/YTKcUjQYzHe5mCcraLBw==}
     engines: {node: '>=20.0.0'}
 
   has-bigints@1.1.0:
@@ -4090,7 +4090,7 @@ snapshots:
 
   gopd@1.2.0: {}
 
-  happy-dom@20.14.0:
+  happy-dom@21.0.4:
     dependencies:
       '@types/node': 24.10.1
       '@types/whatwg-mimetype': 3.0.2
@@ -5057,7 +5057,7 @@ snapshots:
       '@types/node': 24.10.1
       fsevents: 2.3.3
 
-  vitest@4.1.11(@types/node@24.10.1)(happy-dom@20.14.0)(vite@8.2.2(@types/node@24.10.1)):
+  vitest@4.1.11(@types/node@24.10.1)(happy-dom@21.0.4)(vite@8.2.2(@types/node@24.10.1)):
     dependencies:
       '@vitest/expect': 4.1.11
       '@vitest/mocker': 4.1.11(vite@8.2.2(@types/node@24.10.1))
@@ -5081,7 +5081,7 @@ snapshots:
       why-is-node-running: 2.3.0
     optionalDependencies:
       '@types/node': 24.10.1
-      happy-dom: 20.14.0
+      happy-dom: 21.0.4
     transitivePeerDependencies:
       - msw
 
