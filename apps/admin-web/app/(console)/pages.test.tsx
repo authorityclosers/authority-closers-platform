@@ -72,6 +72,7 @@ const params = () =>
     assignmentId: UUID,
     runId: UUID,
     bugId: UUID,
+    personId: UUID,
   });
 const searchParams = Promise.resolve({ recording: UUID, tab: "billing" });
 

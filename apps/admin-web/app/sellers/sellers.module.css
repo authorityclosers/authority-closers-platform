@@ -1,0 +1,187 @@
+/* Sellers → What happened (owner, 24 Oct 2026). Tokens only. */
+
+.layout {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.summary {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-left: 4px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.summary[data-tone="bad"] {
+  border-left-color: var(--sx-bad);
+}
+
+.summary[data-tone="warn"] {
+  border-left-color: var(--sx-warn);
+}
+
+.summary[data-tone="good"] {
+  border-left-color: var(--sx-good);
+}
+
+.summary p {
+  margin: 0;
+}
+
+.summaryWords {
+  font: var(--sx-text-title);
+  overflow-wrap: anywhere;
+}
+
+/* Panels don't pad their bodies; lists and text here do. */
+.body {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px 14px;
+}
+
+.body p {
+  margin: 0;
+}
+
+.detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  gap: 16px;
+  align-items: start;
+}
+
+.main,
+.side {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.days {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 12px 14px 14px;
+  list-style: none;
+}
+
+.day {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+}
+
+.dayHead {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.dayHead h3 {
+  margin: 0;
+  font-size: var(--sx-text-md);
+}
+
+.lines {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+}
+
+.lines div {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.lines dt {
+  color: var(--sx-muted);
+}
+
+.lines dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.flags {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flags li {
+  padding: 6px 10px;
+  border-left: 3px solid var(--sx-warn);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  overflow-wrap: anywhere;
+}
+
+.flags li[data-tone="bad"] {
+  border-left-color: var(--sx-bad);
+  font-weight: 600;
+}
+
+.moments {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--sx-text-sm);
+}
+
+.moments li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.moments time {
+  color: var(--sx-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.facts {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.facts li {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.find {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: end;
+}
+
+.find input {
+  min-width: min(320px, 100%);
+}
+
+@media (max-width: 960px) {
+  .detail {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

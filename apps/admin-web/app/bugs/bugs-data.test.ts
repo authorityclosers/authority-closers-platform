@@ -154,3 +154,11 @@ it("reads a page and one report, with defaults for anything odd", () => {
   expect(detail.history[2].actorName).toBe("team@example.test");
   expect(normalizeDetail(null).history).toEqual([]);
 });
+
+it("keeps the reporter's id, so the bug opens their days", () => {
+  const person = normalizeDetail({
+    person: { id: ORG, name: "Asha Fictional", email: null },
+  }).person;
+  expect(person).toEqual({ id: ORG, name: "Asha Fictional", email: null });
+  expect(normalizeDetail({}).person.id).toBeNull();
+});

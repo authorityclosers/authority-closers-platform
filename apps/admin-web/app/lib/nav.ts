@@ -62,7 +62,8 @@ export type NavIcon =
   | "catalogue"
   | "offers"
   | "bugs"
-  | "feedback";
+  | "feedback"
+  | "sellers";
 
 type Need =
   | { kind: "console" }
@@ -281,6 +282,14 @@ export const NAVIGATION: readonly NavGroup[] = [
         label: "People",
         icon: "people",
         need: { kind: "permission", any: ["learner_diagnose"] },
+      },
+      // One seller's days: what reached the server beside what the phone did
+      // (owner, 24 Oct 2026).
+      {
+        href: "/sellers",
+        label: "Sellers",
+        icon: "sellers",
+        need: { kind: "salesXray" },
       },
       {
         href: "/platform/organisations",
