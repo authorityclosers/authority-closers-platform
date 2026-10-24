@@ -875,10 +875,11 @@ export function LeadsRoute() {
   const tabs = [
     { key: "desk", label: "To call", count: toCall },
     { key: BOARD, label: "Board" },
+    // On the board its own strip names every stage: one switcher, not two.
     ...stageTabs(
       journey?.key === journeyKey ? journey.view : null,
       haveCounts ? counts.value : null,
-    ),
+    ).filter((tab) => !board || tab.key === "open"),
     ...(view === TEST ? [{ key: TEST, label: "Test leads" }] : []),
   ];
   const stageLabel =
