@@ -53,7 +53,7 @@ export function parseAiApps(value: unknown): AiApp[] | null {
 
 const READS: readonly [string, string][] = [
   ["calls:read", "calls"],
-  ["reports:read", "call reports"],
+  ["reports:read", "reports"],
   ["leads:read", "leads"],
 ];
 
@@ -62,12 +62,12 @@ const joined = (words: string[]) =>
     ? words.join("")
     : `${words.slice(0, -1).join(", ")} and ${words[words.length - 1]}`;
 
-/** "Reads your calls, call reports and leads · adds leads". */
+/** "Reads calls, reports and leads · adds leads": short, for a two-line row. */
 export function accessWords(scopes: readonly string[]): string {
   const reads = READS.filter(([scope]) => scopes.includes(scope)).map(
     ([, word]) => word,
   );
-  const parts = reads.length ? [`Reads your ${joined(reads)}`] : [];
+  const parts = reads.length ? [`Reads ${joined(reads)}`] : [];
   if (scopes.includes("leads:write"))
     parts.push(parts.length ? "adds leads" : "Adds leads");
   if (scopes.includes("webhooks:manage"))

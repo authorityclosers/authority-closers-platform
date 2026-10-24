@@ -18,6 +18,24 @@
   min-width: 0;
 }
 
+.disconnect {
+  gap: 6px;
+}
+
+/* Phones: the icon alone, so the row's words keep two lines. */
+@media (max-width: 600px) {
+  .disconnect {
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+  }
+
+  .disconnectWord {
+    display: none;
+  }
+}
+
 .check {
   flex: none;
   color: var(--sx-accent);

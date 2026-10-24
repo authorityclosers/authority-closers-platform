@@ -9,7 +9,7 @@
  * app that speaks MCP.
  */
 import { useEffect, useState } from "react";
-import { BadgeCheck, Sparkles } from "lucide-react";
+import { BadgeCheck, Sparkles, Unplug } from "lucide-react";
 
 import { dismissNotice, notify } from "../notice-center";
 import { readSalesXrayWorkspaces } from "../sales-xray-workspaces";
@@ -79,10 +79,7 @@ function ConnectPanel() {
   const address = origin ? `${origin}/v1/mcp` : "";
   const guide = STEPS[host];
   return (
-    <Panel
-      title="Connect an AI app"
-      sub="Ask about your calls and leads in your own words"
-    >
+    <Panel title="Connect an AI app">
       <div className={styles.connect}>
         <div className={styles.address}>
           <span className={styles.addressWords}>
@@ -243,8 +240,15 @@ export function AiAppsSection() {
                   places.get(app.workspaceId),
                 ]}
                 end={
-                  <Button variant="secondary" onClick={() => setLeaving(app)}>
-                    Disconnect
+                  <Button
+                    variant="secondary"
+                    className={styles.disconnect}
+                    aria-label={`Disconnect ${app.name}`}
+                    title={`Disconnect ${app.name}`}
+                    onClick={() => setLeaving(app)}
+                  >
+                    <Unplug size={16} aria-hidden="true" />
+                    <span className={styles.disconnectWord}>Disconnect</span>
                   </Button>
                 }
               />

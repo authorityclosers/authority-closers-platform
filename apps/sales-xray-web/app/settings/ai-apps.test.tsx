@@ -139,16 +139,14 @@ it("lists the live AI apps with what each may do, and the checked mark", async (
   const text = rows.map((item) => item.textContent ?? "");
   expect(text).toHaveLength(2); // the revoked one is history, not shown
   expect(text[0]).toContain("Pulse");
-  expect(text[0]).toContain("Reads your calls and leads");
+  expect(text[0]).toContain("Reads calls and leads");
   expect(text[0]).toContain("Not used yet");
   expect(text[0]).toContain("Fictional Homes"); // more than one workspace: named
   expect(
     host.querySelector('[aria-label="Checked: made by Estate Autopilots"]'),
   ).not.toBeNull();
   expect(text[1]).toContain("ChatGPT");
-  expect(text[1]).toContain(
-    "Reads your calls, call reports and leads · adds leads",
-  );
+  expect(text[1]).toContain("Reads calls, reports and leads · adds leads");
   expect(text[1]).toContain("Used today");
   expect(text[1]).toContain("Personal");
   expect(host.querySelectorAll('[aria-label^="Checked"]')).toHaveLength(1);
