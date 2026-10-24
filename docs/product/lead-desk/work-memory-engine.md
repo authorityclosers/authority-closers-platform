@@ -185,10 +185,13 @@ is not proposed again.
 
 ## 5. Scheduler and reminders (`lead_desk/scheduler.py`, pure planner plus a sender loop)
 
-For each open task the planner yields reminders `[(kind, at)]`:
-- `before` at `starts_at - remind_before` (when that is above 0);
-- `due` at `starts_at`;
-- `overdue` at `starts_at + 30 min`, once.
+Each due of an open task reminds **once** (orchestrator, 24 Oct 2026: "a promise at 5:30
+makes a reminder at 5:25, overdue at 5:31, one notification only"):
+- `before` at `starts_at - remind_before` when the kind has a lead time (a call back, a
+  meeting);
+- else `due` at `starts_at`;
+- `overdue` when quiet hours push the reminder past the due (it is sent at the start of
+  work, saying it is overdue).
 
 Rules:
 - **Snooze** moves `starts_at` (by 15 min, 1 h, this evening or tomorrow), records
@@ -197,7 +200,7 @@ Rules:
   next start of work (`deferred_to`). A meeting inside quiet hours still reminds; its time
   was agreed.
 - **Overdue** shows from `starts_at + 1 min` in every window (rows, the board, Tasks, My
-  work). The push for it goes once, at +30 min.
+  work), with no extra push. A missed due is visible, not nagged.
 - **Rollover:** at the seller's day start, yesterday's open overdue tasks show in Today as
   "from yesterday" (`rollovers + 1`, one `rolled_over` event each). They are never copied.
 - **Escalation (per business, off by default):** a task more than N hours overdue appears
@@ -285,8 +288,8 @@ Score = Σ wᵢ · fᵢ, each fᵢ between 0 and 1, each with its words:
 ## 10. Acceptance list: the seller's 22 (pytest on PostgreSQL unless marked)
 
 1. "Call back at 5:30" in an after-call note at 16:10 proposes a Call back today at 17:30.
-   One tap makes it. A push comes at 17:25; it shows overdue from 17:31; an overdue push
-   comes at 18:00; nothing else for that due.
+   One tap makes it. One push comes at 17:25; it shows overdue from 17:31; nothing else
+   for that due.
 2. "Call tomorrow evening" typed at 21:00 proposes tomorrow at 18:00.
 3. "उद्या सकाळी 11 वाजता फोन करा" proposes a Call back tomorrow at 11:00. (unit)
 4. "kal shaam 6 baje whatsapp bhejna" proposes a WhatsApp task tomorrow at 18:00. (unit)
