@@ -18,6 +18,7 @@ import { telemetry } from "../telemetry";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
   discardWrite,
+  loadWriteMirror,
   replayWrites,
   retryStorage,
   setWriteIdentity,
@@ -56,7 +57,8 @@ export function WriteSync() {
   // At the start and after signing in: what waits for this person goes now.
   useEffect(() => {
     setWriteIdentity(who);
-    if (who) void replayWrites({ force: true });
+    // Copies only IndexedDB kept (an app closed right after a save) join first.
+    if (who) void loadWriteMirror().then(() => replayWrites({ force: true }));
   }, [who]);
 
   // Again on reconnect and on return to the app.
@@ -112,13 +114,15 @@ export function WriteSync() {
     if (shown.current > 0) {
       shown.current = 0;
       dismissNotice(WAITING_NOTICE);
-      notify({
-        id: "writes-sent",
-        tone: "success",
-        title: "All changes saved",
-      });
+      // Saved only when nothing is left: a refused change has its own card.
+      if (!check.length)
+        notify({
+          id: "writes-sent",
+          tone: "success",
+          title: "All changes saved",
+        });
     }
-  }, [waiting, sending, signIn]);
+  }, [waiting, sending, signIn, check.length]);
 
   // The phone's storage refused: say so, never lose it silently (orchestrator,
   // 24 Oct 2026). The changes wait in the app while it runs; Try again stores them.
@@ -173,6 +177,7 @@ export function WriteSync() {
         action: item.lead
           ? {
               label: "Open lead",
+              icon: "open",
               run: () => {
                 discardWrite(item.id);
                 dismissNotice(id);

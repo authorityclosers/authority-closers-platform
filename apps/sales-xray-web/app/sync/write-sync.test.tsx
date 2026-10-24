@@ -116,4 +116,6 @@ it("shows a change the server refused, with the words typed and the way back to 
   );
   expect(refused.message).toContain("Wants a site visit");
   expect(refused.action.label).toBe("Open lead");
+  // Not "saved": the change is still waiting for a look.
+  expect(titles()).not.toContain("All changes saved");
 });

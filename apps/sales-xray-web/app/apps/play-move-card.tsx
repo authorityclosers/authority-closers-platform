@@ -6,11 +6,12 @@
  * "Switch to Play" and "Later" (a week). That app has no updater of its own,
  * so the page it shows is how its users hear.
  */
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 import { inPhoneApp, phoneStatus } from "../leads/native-phone";
 import { notify } from "../notice-center";
-import { PLAY } from "./play";
+import { replayWrites, useWrites } from "../sync/write-queue";
+import { PLAY, unsentLine } from "./play";
 
 export const PLAY_MOVE_SEEN = "sx-play-move-card";
 /** "Later", the X or "Switch to Play" hide the card for a week. */
@@ -34,33 +35,60 @@ function hideForAWeek() {
 }
 
 export function PlayMoveCard() {
+  const [shown, setShown] = useState(false);
+  const { deviceTotal } = useWrites();
   useEffect(() => {
     if (!inPhoneApp() || hidden()) return;
     let alive = true;
     void phoneStatus().then((status) => {
       // Builds that don't say their store are download-link builds too.
-      if (!alive || !status || status.store === "play") return;
-      notify({
-        id: "play-move",
-        tone: "info",
-        title: PLAY.cardTitle,
-        message: PLAY.cardMessage,
-        action: {
-          label: "Switch to Play",
-          icon: "open",
-          run: () => {
-            hideForAWeek();
-            window.location.href = PLAY.url;
-          },
-        },
-        dismissLabel: "Later",
-        // Stays until dismissed.
-        onDismiss: async () => hideForAWeek(),
-      });
+      if (alive && status && status.store !== "play") setShown(true);
     });
     return () => {
       alive = false;
     };
   }, []);
+  useEffect(() => {
+    if (!shown) return;
+    const later = async () => {
+      hideForAWeek();
+      setShown(false);
+    };
+    // An uninstall deletes changes not sent yet: no Switch until they're sent.
+    if (deviceTotal > 0) {
+      notify({
+        id: "play-move",
+        tone: "info",
+        title: PLAY.cardTitle,
+        message: `${unsentLine(deviceTotal)} Uninstalling this app now would delete ${
+          deviceTotal === 1 ? "it" : "them"
+        }; you can switch once ${deviceTotal === 1 ? "it's" : "they're"} sent.`,
+        action: {
+          label: "Send now",
+          run: () => void replayWrites({ force: true }),
+        },
+        dismissLabel: "Later",
+        onDismiss: later,
+      });
+      return;
+    }
+    notify({
+      id: "play-move",
+      tone: "info",
+      title: PLAY.cardTitle,
+      message: PLAY.cardMessage,
+      action: {
+        label: "Switch to Play",
+        icon: "open",
+        run: () => {
+          hideForAWeek();
+          window.location.href = PLAY.url;
+        },
+      },
+      dismissLabel: "Later",
+      // Stays until dismissed.
+      onDismiss: later,
+    });
+  }, [shown, deviceTotal]);
   return null;
 }

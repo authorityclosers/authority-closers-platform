@@ -14,6 +14,7 @@ import {
   type SettingsBillingProps,
 } from "../account-settings";
 import { PLAY } from "../apps/play";
+import { UnsentBeforeSwitch } from "../apps/unsent-before-switch";
 import { refreshAppData } from "../shell/refresh-app";
 import { ANDROID_APK_URL } from "../apps/release";
 import { CallAiSettingsSection } from "../call-ai/call-ai-settings";
@@ -77,6 +78,7 @@ function AppPanel() {
         <>
           <Note icon={<Download size={18} />} title="Android app">
             Calls, leads and alerts on your phone. {PLAY.switching}
+            <UnsentBeforeSwitch />
           </Note>
           {/* Google Play first (24 Oct 2026); the file stays for people
               without a Play invite. */}

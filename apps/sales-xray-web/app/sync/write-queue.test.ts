@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { dispose, LeadsError } from "../leads/leads-client";
 import {
@@ -7,7 +7,12 @@ import {
   replayWrites,
   resetWrites,
   sendWrite,
+  loadWriteMirror,
   retryStorage,
+  setWriteMirror,
+  writesMirrored,
+  type QueuedWrite,
+  type WriteMirror,
   setWriteIdentity,
   unsentWrites,
   writesNow,
@@ -255,4 +260,68 @@ it("holds a change the phone can't store, says so, and stores it when it can", a
   await retryStorage();
   expect(window.localStorage.getItem("sx-writes:v1")).toContain("c-1");
   expect(writesNow().storageFull).toBe(false);
+});
+
+describe("the IndexedDB copy", () => {
+  let disk: QueuedWrite[] | null;
+  let previous: WriteMirror;
+  const memoryDisk: WriteMirror = {
+    read: async () => disk,
+    write: async (list) => {
+      disk = list;
+    },
+  };
+  beforeEach(() => {
+    disk = null;
+    previous = setWriteMirror(memoryDisk);
+  });
+  afterEach(() => {
+    setWriteMirror(previous);
+  });
+
+  it("keeps a change saved just before the app was swiped away, and sends it once", async () => {
+    const fetchMock = vi.fn().mockRejectedValue(new TypeError("offline"));
+    vi.stubGlobal("fetch", fetchMock);
+    await sendWrite(DISPOSE, post("c-1"));
+    await writesMirrored();
+    // Swiped away before localStorage reached the disk: it starts empty.
+    resetWrites();
+    setWriteIdentity(ME);
+    expect(unsentWrites()).toEqual([]);
+    await loadWriteMirror();
+    expect(unsentWrites().map((item) => item.id)).toEqual(["c-1"]);
+    fetchMock.mockReset().mockResolvedValue(ok());
+    await replayWrites({ force: true });
+    expect(sentBodies(fetchMock).map((body) => body.command_id)).toEqual([
+      "c-1",
+    ]);
+    expect(unsentWrites()).toEqual([]);
+  });
+
+  it("keeps a change in both copies as one change", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+    await sendWrite(DISPOSE, post("c-1"));
+    await writesMirrored();
+    await loadWriteMirror();
+    expect(unsentWrites().map((item) => item.id)).toEqual(["c-1"]);
+  });
+
+  it("carries on with localStorage alone when IndexedDB fails", async () => {
+    setWriteMirror({
+      read: async () => {
+        throw new Error("IndexedDB is blocked");
+      },
+      write: async () => {
+        throw new Error("IndexedDB is blocked");
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("offline")));
+    expect(await sendWrite(DISPOSE, post("c-1"))).toEqual({
+      kind: "kept",
+      onDevice: true,
+    });
+    await writesMirrored();
+    await expect(loadWriteMirror()).resolves.toBeUndefined();
+    expect(unsentWrites().map((item) => item.id)).toEqual(["c-1"]);
+  });
 });

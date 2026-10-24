@@ -110,6 +110,120 @@ function items(): QueuedWrite[] {
   return cache;
 }
 
+/**
+ * A second copy in IndexedDB, written with durability "strict" so it reaches
+ * the disk at once (Android session's test on the Note 8 Pro, 24 Oct 2026:
+ * Chromium puts localStorage on disk a few seconds late, so a change saved
+ * offline just before the app is swiped away could be lost). It survives app
+ * updates and restarts like localStorage; read at the start and merged by
+ * command id (loadWriteMirror). Without IndexedDB, or when it fails,
+ * localStorage alone, quietly.
+ */
+export type WriteMirror = Readonly<{
+  read(): Promise<QueuedWrite[] | null>;
+  write(list: QueuedWrite[]): Promise<void>;
+}>;
+
+const MIRROR_DB = "sx-writes";
+const MIRROR_STORE = "queue";
+const MIRROR_KEY = "list";
+let mirrorDb: Promise<IDBDatabase | null> | null = null;
+
+function openMirror(): Promise<IDBDatabase | null> {
+  mirrorDb ??= new Promise((resolve) => {
+    if (typeof indexedDB === "undefined") return resolve(null);
+    try {
+      const request = indexedDB.open(MIRROR_DB, 1);
+      request.onupgradeneeded = () =>
+        request.result.createObjectStore(MIRROR_STORE);
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+      request.onblocked = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+  return mirrorDb;
+}
+
+export const INDEXED_MIRROR: WriteMirror = {
+  async read() {
+    const db = await openMirror();
+    if (!db) return null;
+    return new Promise((resolve) => {
+      try {
+        const request = db
+          .transaction(MIRROR_STORE, "readonly")
+          .objectStore(MIRROR_STORE)
+          .get(MIRROR_KEY);
+        request.onsuccess = () => {
+          const value: unknown = request.result;
+          resolve(Array.isArray(value) ? value.filter(isWrite) : null);
+        };
+        request.onerror = () => resolve(null);
+      } catch {
+        resolve(null);
+      }
+    });
+  },
+  async write(list) {
+    const db = await openMirror();
+    if (!db) return;
+    await new Promise<void>((resolve) => {
+      try {
+        const tx = db.transaction(MIRROR_STORE, "readwrite", {
+          durability: "strict",
+        });
+        tx.objectStore(MIRROR_STORE).put(list, MIRROR_KEY);
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => resolve();
+        tx.onabort = () => resolve();
+      } catch {
+        resolve();
+      }
+    });
+  },
+};
+
+let mirror: WriteMirror = INDEXED_MIRROR;
+let mirrored: Promise<void> = Promise.resolve();
+
+/** Which mirror to keep (tests); returns the one it replaces. */
+export function setWriteMirror(next: WriteMirror): WriteMirror {
+  const previous = mirror;
+  mirror = next;
+  return previous;
+}
+
+/** Settles once every copy asked for so far is written (tests). */
+export const writesMirrored = () => mirrored;
+
+function mirrorList(list: QueuedWrite[]) {
+  // One at a time, in order; a failure leaves localStorage as the copy.
+  const target = mirror;
+  mirrored = mirrored.then(() => target.write(list)).catch(() => undefined);
+}
+
+/**
+ * At the start: copies only the mirror holds (localStorage hadn't reached
+ * the disk when the app was closed) join the list, one per command id. A
+ * change sent meanwhile may come back once; the server applies a command
+ * id once, so sending it again is harmless.
+ */
+export async function loadWriteMirror(): Promise<void> {
+  let copy: QueuedWrite[] | null = null;
+  try {
+    copy = await mirror.read();
+  } catch {
+    copy = null;
+  }
+  if (!copy?.length) return;
+  const mine = items();
+  const known = new Set(mine.map((item) => item.id));
+  const missing = copy.filter((item) => !known.has(item.id));
+  if (missing.length) store([...mine, ...missing]);
+}
+
 /** True when the list is safely on the device. */
 function store(next: QueuedWrite[]): boolean {
   cache = next;
@@ -121,6 +235,7 @@ function store(next: QueuedWrite[]): boolean {
     kept = false;
   }
   storageOk = kept;
+  mirrorList(next);
   emit();
   return kept;
 }
@@ -425,6 +540,8 @@ export type WritesSnapshot = Readonly<{
   storageFull: boolean;
   /** When the oldest unsent change was made; 0 with none. */
   oldestAt: number;
+  /** Every change on this phone not yet on the server, whoever made it (an uninstall deletes them all). */
+  deviceTotal: number;
   savedAt: number;
 }>;
 
@@ -436,6 +553,7 @@ const NONE: WritesSnapshot = {
   signIn: false,
   storageFull: false,
   oldestAt: 0,
+  deviceTotal: 0,
   savedAt: 0,
 };
 
@@ -453,6 +571,7 @@ function read(): WritesSnapshot {
     signIn: waiting.some((item) => item.status === 401),
     storageFull: !storageOk && mine.length > 0,
     oldestAt: mine.length ? Math.min(...mine.map((item) => item.at)) : 0,
+    deviceTotal: items().length,
     savedAt,
   };
   return snapshot;
