@@ -1043,7 +1043,7 @@ def to_markdown(data: Mapping[str, Any]) -> str:
         ]
     lines += ["", "## Flows: where people stop", ""]
     if not data["flows"]:
-        lines.append("No flow events yet (they start with the release that carries them).")
+        lines += ["No flow events yet (they start with the release that carries them).", ""]
     for flow in data["flows"]:
         lines += [
             f"**{flow['label']}**: {flow['started']} started by {flow['people']} people; "

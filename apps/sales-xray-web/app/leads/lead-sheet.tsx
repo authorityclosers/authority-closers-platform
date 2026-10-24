@@ -41,6 +41,7 @@ import {
 
 import { callHref, type UploadPolicy } from "../acquisition-client";
 import { notify } from "../notice-center";
+import { useFlow } from "../telemetry-flows";
 import { CallFacts } from "../call-engine/call-facts";
 import { Avatar, Badge, Button, Empty, Field } from "../ui/kit";
 import {
@@ -358,6 +359,27 @@ export function CallOutcome({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // "How did it go?" in the weekly friction report: started when the seller
+  // is back from a call (or answers), where they stop, Save refused for
+  // something missing. Closing the lead without saving is left half way.
+  const flow = useFlow("log_result", {
+    active: attention,
+    via: attention ? "after_call" : "lead",
+  });
+  const formStep =
+    talk === null
+      ? null
+      : talk === "missed"
+        ? reason === null
+          ? "talk"
+          : "reason"
+        : stage === null
+          ? "talk"
+          : "stage";
+  useEffect(() => {
+    if (formStep) flow.step(formStep);
+  }, [flow, formStep]);
+
   useEffect(() => {
     const box = ref.current;
     if (!box || (!attention && !ask)) return;
@@ -426,6 +448,7 @@ export function CallOutcome({
         deal_value: deal.trim() || undefined,
       });
       buzz("done");
+      flow.done({ step: "save" });
       after(saved);
       // Reviews engine (owner, 23 Oct 2026): asks later, when nothing is in the way.
       askFeedback("call_outcome");
@@ -446,6 +469,15 @@ export function CallOutcome({
       void submit(after);
       return;
     }
+    flow.blocked(
+      talk === "missed"
+        ? reason === null
+          ? "reason"
+          : "next"
+        : stage === null
+          ? "stage"
+          : "next",
+    );
     setNudges((count) => count + 1);
     stepRef.current?.scrollIntoView?.({
       block: "center",
