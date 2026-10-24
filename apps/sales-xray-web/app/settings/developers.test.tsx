@@ -209,6 +209,7 @@ it("writes each assistant's setup, naming the API address only off production", 
 
 it("writes the remote server's setup for each assistant at this site's address", () => {
   const dev = "https://salesxray-dev.authorityclosers.com";
+  expect(remoteSnippet("chatgpt", dev)).toBe(`${dev}/v1/mcp`);
   expect(remoteSnippet("claude-desktop", dev)).toBe(`${dev}/v1/mcp`);
   expect(remoteSnippet("claude-code", dev)).toBe(
     `claude mcp add --transport http sales-xray ${dev}/v1/mcp`,
@@ -230,6 +231,12 @@ it("walks through connecting an assistant, remote first, with the download folde
   vi.stubGlobal("navigator", { ...navigator, clipboard: { writeText } });
   await act(async () => root.render(<AssistantSetup />));
   expect(host.querySelectorAll('[data-steps="remote"] > li')).toHaveLength(3);
+  // ChatGPT first: it takes only the address, so there is nothing to download.
+  expect(
+    host.querySelector('[aria-label="ChatGPT setup"] code')?.textContent,
+  ).toMatch(/\/v1\/mcp$/);
+  expect(host.querySelector("details")).toBeNull();
+  await act(async () => button("Claude")!.click());
   expect(host.querySelectorAll('[data-steps="stdio"] > li')).toHaveLength(3);
   expect(host.querySelector("details")?.hasAttribute("open")).toBe(false);
   expect(
@@ -267,7 +274,12 @@ it("puts the docs first, and hands a new key to Try it without saving it", async
   expect(
     host.querySelector('[data-testid="integrations"]')?.textContent,
   ).toContain("Try the API");
-  expect(host.textContent).toContain("Connect your AI assistant");
+  // The AI assistant first, before keys and Try it.
+  const words = host.textContent!;
+  expect(words.indexOf("Connect your AI assistant")).toBeGreaterThan(-1);
+  expect(words.indexOf("Connect your AI assistant")).toBeLessThan(
+    words.indexOf("Try the API"),
+  );
   expect(host.textContent).not.toContain("Using the key you just made");
   await act(async () => seen.options!.onKeyMade("sxk_test_fresh"));
   expect(host.textContent).toContain("Using the key you just made");
