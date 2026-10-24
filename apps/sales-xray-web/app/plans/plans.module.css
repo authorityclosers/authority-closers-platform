@@ -276,8 +276,6 @@
   padding: 4px 10px;
   border-radius: 999px;
   font: 700 12px/1.2 var(--lx-font-ui);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
 }
@@ -1133,8 +1131,6 @@
 
 .segLabel {
   font: 600 12px/1 var(--lx-font-ui);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   color: var(--lx-muted);
 }
 

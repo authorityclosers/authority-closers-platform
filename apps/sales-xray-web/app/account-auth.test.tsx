@@ -3,6 +3,7 @@ import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AccountAuth } from "./account-auth";
+import { FACEBOOK_NOT_READY } from "./account-auth-client";
 import { AUTH_COMPLETE_MESSAGE } from "./account-auth-client";
 import { ThemeProvider } from "./lightbox/theme-provider";
 
@@ -1285,6 +1286,50 @@ describe("inside the Sales X-Ray phone app", () => {
     await signIn("Google");
 
     expect(host.textContent).toContain("Add a Google account to this phone");
+  });
+
+  // Owner via the orchestrator, 24 Oct 2026: Facebook never jumps to Chrome.
+  it("says Facebook isn't ready on this phone, and never opens the browser, when the server can't start it", async () => {
+    server(() => new Response(null, { status: 503 }));
+    const asked = phoneApp(() => ({ ok: true, result: { token: "unused" } }));
+    const navigate = vi
+      .spyOn(window.location, "assign")
+      .mockImplementation(() => {});
+    const open = vi.fn();
+    vi.stubGlobal("open", open);
+
+    await signIn("Facebook");
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(open).not.toHaveBeenCalled();
+    expect(asked.some((message) => message.method === "nativeSignIn")).toBe(
+      false,
+    );
+    expect(host.textContent).toContain(FACEBOOK_NOT_READY);
+    const facebook = Array.from(host.querySelectorAll("button")).find(
+      (button) => button.textContent?.includes("Continue with Facebook"),
+    )!;
+    expect(facebook.disabled).toBe(false);
+  });
+
+  it("says the same when the Facebook SDK can't start on the phone", async () => {
+    server(
+      Response.json({
+        state: STATE,
+        nonce: "n",
+        app_id: "1514054053884522",
+        client_token: "client-token",
+      }),
+    );
+    phoneApp(() => ({ ok: false, error: "unavailable" }));
+    const navigate = vi
+      .spyOn(window.location, "assign")
+      .mockImplementation(() => {});
+
+    await signIn("Facebook");
+
+    expect(navigate).not.toHaveBeenCalled();
+    expect(host.textContent).toContain(FACEBOOK_NOT_READY);
   });
 
   it("uses the phone's browser as before where this environment can't sign in on the phone", async () => {

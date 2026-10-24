@@ -13,6 +13,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.sales_xray_tenants import sales_xray_served_tenant_ids
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
+from ac_platform.http.sales_xray_home import lead_counts
 from ac_platform.kernel.errors import DomainError
 
 
@@ -31,6 +32,19 @@ class SalesXrayWorkspacesResponse(BaseModel):
 
     selected_tenant_id: UUID | None
     workspaces: list[SalesXrayWorkspaceResponse]
+
+
+class SalesXrayWorkspaceLeadsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    tenant_id: UUID
+    leads: int
+
+
+class SalesXrayLeadsResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    workspaces: list[SalesXrayWorkspaceLeadsResponse]
 
 
 class SalesXrayCallWorkspaceResponse(BaseModel):
@@ -114,6 +128,31 @@ def install_sales_xray_workspaces_http(
         return SalesXrayWorkspacesResponse(
             selected_tenant_id=selected if selected in {c.tenant_id for c in choices} else None,
             workspaces=choices,
+        )
+
+    @router.get("/leads", response_model=SalesXrayLeadsResponse)
+    async def workspace_leads(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = read_actor_dependency,
+    ) -> SalesXrayLeadsResponse:
+        """How many leads the person has in each workspace (24 Oct 2026).
+
+        Their own leads, or all of them where they are an owner or admin. The app
+        asks when the open workspace is empty, so a person who lands there sees
+        "You have 383 leads in <organisation>" and one tap to switch, never what
+        looks like lost work. A separate route, so the directory's exact shape
+        (read strictly by installed apps) never changes.
+        """
+        if request.query_params:
+            raise DomainError("Workspaces are resolved only for the authenticated person.")
+        private(response)
+        counts = await lead_counts(auth.database, auth.resolved.actor.person_id, settings)
+        return SalesXrayLeadsResponse(
+            workspaces=[
+                SalesXrayWorkspaceLeadsResponse(tenant_id=tenant_id, leads=count)
+                for tenant_id, count in counts.items()
+            ]
         )
 
     @router.get("/call/{submission_id}", response_model=SalesXrayCallWorkspaceResponse)

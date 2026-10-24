@@ -133,6 +133,149 @@ const TEMPLATES = [
     .map(({ label, kind, milestone }) => ({ label, kind, milestone })),
 }));
 
+// The sales team's nine stages (the "Inside sales with demos" kind): its moves and
+// what each asks, as the server's preview gives them (Lead OS L4 builder).
+const NINE: [string, string, string, string, string[], string[]][] = [
+  [
+    "new",
+    "New Lead",
+    "new",
+    "lead",
+    [
+      "not_connected",
+      "interested",
+      "discussion_incomplete",
+      "meeting_scheduled",
+      "lost",
+      "junk",
+    ],
+    [],
+  ],
+  [
+    "not_connected",
+    "Not Connected",
+    "not_connected",
+    "unreachable",
+    [
+      "interested",
+      "discussion_incomplete",
+      "meeting_scheduled",
+      "lost",
+      "junk",
+    ],
+    ["nc_reason"],
+  ],
+  [
+    "interested",
+    "Interested (In Follow-Up)",
+    "interested",
+    "qualified",
+    ["discussion_incomplete", "meeting_scheduled", "lost", "junk"],
+    ["next_action"],
+  ],
+  [
+    "discussion_incomplete",
+    "Discussion Incomplete",
+    "follow_up",
+    "contacted",
+    ["interested", "meeting_scheduled", "lost", "junk"],
+    ["next_action"],
+  ],
+  [
+    "meeting_scheduled",
+    "Meeting / Demo Scheduled",
+    "interested",
+    "appointment_booked",
+    ["demo_completed", "interested", "discussion_incomplete", "lost", "junk"],
+    ["meeting"],
+  ],
+  [
+    "demo_completed",
+    "Demo / Zoom Meeting Completed",
+    "interested",
+    "appointment_done",
+    ["won", "lost", "junk"],
+    ["next_action"],
+  ],
+  ["won", "Closed / Won", "won", "won", ["interested", "junk"], []],
+  [
+    "lost",
+    "Closed / Lost",
+    "lost",
+    "lost",
+    ["new", "interested", "junk"],
+    ["reason"],
+  ],
+  [
+    "junk",
+    "Junk Lead",
+    "junk",
+    "disqualified",
+    ["new", "interested"],
+    ["reason"],
+  ],
+];
+
+TEMPLATES.splice(1, 0, {
+  id: "inside_sales_demos",
+  name: "Inside sales with demos",
+  blurb: "Call, book a demo, close. Junk kept apart.",
+  icon: "phone",
+  stages: NINE.map(([, label, kind, milestone]) => ({
+    label,
+    kind,
+    milestone,
+  })),
+});
+
+const CLOSED = new Set(["won", "lost", "junk"]);
+
+/** The builder's preview: a kind's stages, and where today's leads would land. */
+function previewOf(id: string, journey: { stages: typeof JOURNEY.stages }) {
+  const stages: (ReturnType<typeof stage> & {
+    moves?: string[];
+    needs?: string[];
+  })[] =
+    id === "inside_sales_demos"
+      ? NINE.map(([key, label, kind, milestone, moves, needs]) => ({
+          ...stage(key, label, kind, milestone, 0),
+          moves,
+          needs,
+        }))
+      : journey.stages
+          .filter((item) => !item.archived)
+          .map((item) => ({ ...item, leads: 0 }));
+  const open = stages.filter((item) => !CLOSED.has(item.kind));
+  return {
+    template: id,
+    stages,
+    landings: journey.stages
+      .filter((item) => item.leads > 0 && !item.archived)
+      .map((item) => {
+        const to =
+          stages.find(
+            (one) => one.key === item.key && one.kind === item.kind,
+          ) ??
+          stages.find((one) => one.kind === item.kind) ??
+          stages[0];
+        return {
+          fromKey: item.key,
+          fromLabel: item.label,
+          toKey: to.key,
+          toLabel: to.label,
+          leads: item.leads,
+          choices:
+            item.kind === "junk"
+              ? []
+              : (CLOSED.has(item.kind)
+                  ? stages.filter((one) => one.kind === item.kind)
+                  : open
+                ).map((one) => one.key),
+        };
+      }),
+  };
+}
+
 const match = (
   key: string,
   label: string,
@@ -462,6 +605,12 @@ function install(first: boolean, choose = false) {
         kind: "interested",
         kindWords: "Hot",
       });
+    if (url.endsWith("/journey/template/preview") && method === "POST") {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        template?: string;
+      };
+      return answer(previewOf(body.template ?? "simple", journey));
+    }
     if (url.endsWith("/journey/template") && method === "POST") {
       journey = JOURNEY;
       return answer(journey);
@@ -478,17 +627,44 @@ const asked = (name: string) =>
 
 export function LeadStagesPreview() {
   useState(() => install(asked("first"), asked("choose")));
-  // ?choose=1 opens "Change your kind of business", as the Change button does.
+  // ?choose=1 opens "Change your kind of business", as the Change button does;
+  // &step=2|3|4 picks "Inside sales with demos" and walks the builder to that step.
   useEffect(() => {
     if (!asked("choose")) return;
+    const step = Number(
+      new URLSearchParams(window.location.search).get("step") ?? "1",
+    );
+    let phase: "open" | "pick" | "next" = "open";
+    let pressed = 0;
     const timer = window.setInterval(() => {
-      const change = [...document.querySelectorAll("button")].find(
-        (button) => button.textContent?.trim() === "Change",
+      const buttons = [...document.querySelectorAll("button")];
+      if (phase === "open") {
+        const change = buttons.find(
+          (button) => button.textContent?.trim() === "Change",
+        );
+        if (!change) return;
+        change.click();
+        if (step <= 1) window.clearInterval(timer);
+        phase = "pick";
+        return;
+      }
+      if (phase === "pick") {
+        const kind = buttons.find((button) =>
+          button.textContent?.includes("Inside sales with demos"),
+        );
+        if (!kind) return;
+        kind.click();
+        phase = "next";
+        return;
+      }
+      const next = document.querySelector<HTMLButtonElement>(
+        "[data-builder-next]",
       );
-      if (!change) return;
-      change.click();
-      window.clearInterval(timer);
-    }, 100);
+      if (!next || next.disabled) return;
+      next.click();
+      pressed += 1;
+      if (pressed >= step - 1) window.clearInterval(timer);
+    }, 150);
     return () => window.clearInterval(timer);
   }, []);
   return (

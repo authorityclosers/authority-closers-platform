@@ -2,7 +2,7 @@
 
 import { AcquisitionShell } from "../../acquisition-shell";
 import { useWorkspaceAccess } from "../../workspace-access";
-import { InvitesSkeleton } from "./invites-view";
+import { InvitesSkeleton } from "./invites-skeleton";
 
 export default function InvitesLoading() {
   const access = useWorkspaceAccess();

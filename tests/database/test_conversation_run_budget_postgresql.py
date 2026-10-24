@@ -142,7 +142,7 @@ def test_coordinator_failure_is_terminal_after_partial_work_rolls_back(
                     )
                 )
 
-            async def admission(self: Any, actor: Any) -> datetime:
+            async def admission(self: Any, actor: Any, **_: Any) -> datetime:
                 return datetime.now(UTC)
 
             async def fail(self: Any, actor: Any, row: Any) -> None:

@@ -333,8 +333,6 @@
   color: var(--lx-ink-3);
   font-size: 11px;
   font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 
 .phases li > span {
@@ -1000,8 +998,6 @@
   color: var(--lx-muted);
   font-size: 10.5px;
   font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 
 .phaseHead b {

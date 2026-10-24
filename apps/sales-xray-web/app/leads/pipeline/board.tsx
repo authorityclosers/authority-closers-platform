@@ -18,7 +18,13 @@
  * card's Move button and the lead page: no one has to drag.
  */
 
-import { ArrowRightLeft, ChevronLeft, ChevronRight, Users } from "lucide-react";
+import {
+  ArrowRightLeft,
+  ChevronLeft,
+  ChevronRight,
+  Phone,
+  Users,
+} from "lucide-react";
 import {
   useCallback,
   useEffect,
@@ -60,6 +66,7 @@ export function BoardCard({
   showOwner,
   now,
   onOpen,
+  onCall,
   onMove,
   onDragStart,
   onDragEnd,
@@ -69,10 +76,13 @@ export function BoardCard({
   showOwner: boolean;
   now: Date;
   onOpen: (leadId: string) => void;
+  /** Phones: one tap calls, through the lead page's own Call. */
+  onCall?: (leadId: string) => void;
   onMove: (lead: LeadRow, column: BoardColumn) => void;
   onDragStart?: (lead: LeadRow, column: BoardColumn) => void;
   onDragEnd?: () => void;
 }) {
+  const callable = !!onCall && (!lead.group || lead.group === "active");
   const next = nextStep(lead, now);
   const time = cardTime(lead, column.rot_hours, now);
   // Why it closed, else where it came from; it gives way before the time does.
@@ -128,15 +138,35 @@ export function BoardCard({
           ) : null}
         </span>
       </button>
-      {column.moves.length ? (
-        <button
-          type="button"
-          className={styles.cardMove}
-          aria-label={`Move ${lead.name}`}
-          onClick={() => onMove(lead, column)}
-        >
-          <ArrowRightLeft size={16} aria-hidden="true" />
-        </button>
+      {callable || column.moves.length ? (
+        <span className={styles.cardRail}>
+          {callable ? (
+            // A lead with no number shows Call greyed, with why, not hidden.
+            <button
+              type="button"
+              className={styles.cardCall}
+              aria-label={
+                lead.phone_last4
+                  ? `Call ${lead.name}`
+                  : `No number to call ${lead.name}`
+              }
+              disabled={!lead.phone_last4}
+              onClick={() => onCall?.(lead.lead_id)}
+            >
+              <Phone size={18} aria-hidden="true" />
+            </button>
+          ) : null}
+          {column.moves.length ? (
+            <button
+              type="button"
+              className={styles.cardMove}
+              aria-label={`Move ${lead.name}`}
+              onClick={() => onMove(lead, column)}
+            >
+              <ArrowRightLeft size={16} aria-hidden="true" />
+            </button>
+          ) : null}
+        </span>
       ) : null}
     </li>
   );
@@ -148,6 +178,7 @@ function ColumnView({
   now,
   drop,
   onOpen,
+  onCall,
   onMove,
   onDragStart,
   onDragEnd,
@@ -160,6 +191,7 @@ function ColumnView({
   /** While a card is dragged: whether it may land here. */
   drop: "allowed" | "blocked" | "source" | null;
   onOpen: (leadId: string) => void;
+  onCall?: (leadId: string) => void;
   onMove: (lead: LeadRow, column: BoardColumn) => void;
   onDragStart: (lead: LeadRow, column: BoardColumn) => void;
   onDragEnd: () => void;
@@ -205,6 +237,7 @@ function ColumnView({
               showOwner={showOwner}
               now={now}
               onOpen={onOpen}
+              onCall={onCall}
               onMove={onMove}
               onDragStart={onDragStart}
               onDragEnd={onDragEnd}
@@ -264,12 +297,15 @@ export function PipelineBoard({
   filters,
   canManage,
   onOpen,
+  onCall,
   refreshKey = 0,
   initialBoard = null,
 }: {
   filters: BoardFilters;
   canManage: boolean;
   onOpen: (leadId: string) => void;
+  /** Opens the lead and calls, as a list row's Call does (phones). */
+  onCall?: (leadId: string) => void;
   /** Changes when something else changed a lead (a call, the lead sheet). */
   refreshKey?: number;
   /** A board already read (review fixtures). */
@@ -429,6 +465,16 @@ export function PipelineBoard({
             });
         },
         (reason: unknown) => {
+          if (reason instanceof LeadsError && reason.kept) {
+            // Kept on this phone: the card stays where it was dropped.
+            notify({
+              id: `board-move-${lead.lead_id}`,
+              tone: "info",
+              title: `${lead.name}: saved on this phone`,
+              message: "It's sent as soon as Sales X-Ray answers.",
+            });
+            return;
+          }
           track("sx.board_drag", { result: "refused" });
           setBoard(before);
           notify({
@@ -559,6 +605,7 @@ export function PipelineBoard({
       now={now}
       drop={dropState(item)}
       onOpen={onOpen}
+      onCall={onCall}
       onMove={(lead, from) => setMoving({ lead, from, initial: null })}
       onDragStart={(lead, from) => setDragging({ lead, from })}
       onDragEnd={() => setDragging(null)}
