@@ -89,6 +89,18 @@ export function MeetingCard({
       tick();
       setMode(null);
     } catch (reason) {
+      if (reason instanceof LeadsError && reason.kept) {
+        // Kept on this phone and sent when Sales X-Ray answers: saved, not failed
+        // (durable sync, 41b2e08d), so nobody taps Save again.
+        notify({
+          id: `meeting-${meeting.meeting_id}`,
+          tone: "info",
+          title: "Saved on this phone",
+          message: "It's sent as soon as Sales X-Ray answers.",
+        });
+        setMode(null);
+        return;
+      }
       notify({
         id: `meeting-${meeting.meeting_id}`,
         tone: "error",

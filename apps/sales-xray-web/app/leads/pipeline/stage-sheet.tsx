@@ -210,6 +210,18 @@ export function StageSheet({
       });
       onClose();
     } catch (reason) {
+      if (reason instanceof LeadsError && reason.kept) {
+        // Kept on this phone and sent when Sales X-Ray answers: saved, not failed
+        // (durable sync, 41b2e08d), so nobody taps Save again.
+        notify({
+          id: `moved-${lead.lead_id}`,
+          tone: "info",
+          title: "Saved on this phone",
+          message: "It's sent as soon as Sales X-Ray answers.",
+        });
+        onClose();
+        return;
+      }
       notify({
         id: `move-failed-${lead.lead_id}`,
         tone: "error",

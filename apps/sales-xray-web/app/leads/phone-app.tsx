@@ -23,6 +23,7 @@ import { useState, useSyncExternalStore } from "react";
 
 import { Badge, Button, Dialog } from "../ui/kit";
 import { PLAY } from "../apps/play";
+import { UnsentBeforeSwitch } from "../apps/unsent-before-switch";
 import { inPhoneApp } from "./native-phone";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import styles from "./leads.module.css";
@@ -161,7 +162,10 @@ export function PhoneAppDialog({
                 <Download size={16} aria-hidden="true" />
                 {PLAY.get}
               </a>
-              <p className={styles.hint}>{PLAY.switching}</p>
+              <p className={styles.hint}>
+                {PLAY.switching}
+                <UnsentBeforeSwitch />
+              </p>
               {ANDROID_DOWNLOAD_READY ? (
                 <details className={styles.terms}>
                   <summary>{PLAY.file}</summary>

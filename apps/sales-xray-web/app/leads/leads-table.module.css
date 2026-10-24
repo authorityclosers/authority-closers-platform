@@ -68,6 +68,48 @@
   white-space: nowrap;
 }
 
+/* Phones and narrow windows (owner, 24 Oct 2026: the table on a phone): the
+   table scrolls sideways inside its frame, rows are compact, and the name stays
+   in view on the left. */
+@media (max-width: 899.98px) {
+  .wrap {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .table {
+    width: max-content;
+    min-width: 100%;
+    table-layout: auto;
+  }
+
+  .table td {
+    height: 44px;
+    max-width: 220px;
+    padding: 0 10px;
+  }
+
+  .sort {
+    min-height: 40px;
+    padding: 0 10px;
+    white-space: nowrap;
+  }
+
+  .table [data-column="name"] {
+    position: sticky;
+    z-index: 1;
+    left: 0;
+    min-width: 132px;
+    max-width: 168px;
+    background: var(--sx-surface);
+    box-shadow: 1px 0 0 var(--sx-line);
+  }
+
+  .table thead [data-column="name"] {
+    z-index: 2;
+  }
+}
+
 .table tbody tr:last-child td {
   border-bottom: 0;
 }

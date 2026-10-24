@@ -146,7 +146,8 @@ class LeadEvent(Base):
         ),
         CheckConstraint(
             "kind IN ('captured', 'repeat', 'assigned', 'reassigned', 'call', 'result', 'note',"
-            " 'edited', 'message', 'scheduled', 'stage', 'meeting', 'suggestion')",
+            " 'edited', 'message', 'scheduled', 'stage', 'meeting', 'suggestion', 'task',"
+            " 'email')",
             name="lead_desk_event_kind",
         ),
         Index("ix_lead_desk_event_lead", "tenant_id", "lead_id", "created_at"),
@@ -242,6 +243,116 @@ class LeadMeeting(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The task this meeting belongs to (migration 0129): a meeting is a task of kind
+    # "meeting", and keeps its own rules (one scheduled meeting per lead).
+    task_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+
+
+class LeadTask(Base):
+    """What a seller must do for a lead, as it stands now (the work-memory engine,
+    migration 0129; docs/product/lead-desk/work-memory-engine.md, 2.2). Every change to
+    it is a ``task`` event in the lead's history. Its command id is unique in the
+    workspace, so a retried command never makes a second task."""
+
+    __tablename__ = "lead_desk_tasks"
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "id", name="uq_lead_desk_task_tenant"),
+        ForeignKeyConstraint(
+            ["tenant_id", "lead_id"],
+            ["lead_desk_leads.tenant_id", "lead_desk_leads.id"],
+            name="fk_lead_desk_task_lead",
+        ),
+        ForeignKeyConstraint(
+            ["tenant_id", "owner_person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_lead_desk_task_owner",
+        ),
+        CheckConstraint("revision >= 1", name="lead_desk_task_revision"),
+        CheckConstraint(
+            "kind IN ('call_back', 'whatsapp', 'email', 'send_file', 'meeting', 'other')",
+            name="lead_desk_task_kind",
+        ),
+        CheckConstraint("status IN ('open', 'done', 'cancelled')", name="lead_desk_task_status"),
+        CheckConstraint("(status = 'done') = (done_at IS NOT NULL)", name="lead_desk_task_done"),
+        CheckConstraint("ends_at IS NULL OR ends_at > starts_at", name="lead_desk_task_ends"),
+        CheckConstraint("snoozes >= 0 AND rollovers >= 0", name="lead_desk_task_moves"),
+        CheckConstraint(
+            "remind_before_minutes IS NULL OR remind_before_minutes BETWEEN 0 AND 1440",
+            name="lead_desk_task_remind_before",
+        ),
+        CheckConstraint(
+            "source IN ('seller', 'after_call', 'note', 'message', 'commitment', 'report',"
+            " 'meeting', 'adopted', 'rule')",
+            name="lead_desk_task_source",
+        ),
+        CheckConstraint("length(trim(title)) > 0", name="lead_desk_task_title"),
+        Index("uq_lead_desk_task_command", "tenant_id", "command_id", unique=True),
+        Index(
+            "ix_lead_desk_task_open",
+            "tenant_id",
+            "owner_person_id",
+            "starts_at",
+            postgresql_where=text("status = 'open'"),
+        ),
+        Index("ix_lead_desk_task_lead", "tenant_id", "lead_id", "status"),
+        Index("ix_lead_desk_task_updated", "tenant_id", "updated_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    owner_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    command_id: Mapped[UUID] = mapped_column(Uuid)
+    revision: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(16))
+    title: Mapped[str] = mapped_column(String(200))
+    note: Mapped[str | None] = mapped_column(String(1000), nullable=True)
+    starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    location: Mapped[str | None] = mapped_column(String(300), nullable=True)
+    status: Mapped[str] = mapped_column(String(16))
+    done_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    done_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    original_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    snoozes: Mapped[int] = mapped_column(Integer)
+    rollovers: Mapped[int] = mapped_column(Integer)
+    source: Mapped[str] = mapped_column(String(16))
+    source_event_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    remind_before_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # When the change was made on the device (offline edits: the later one wins).
+    client_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadTaskReminder(Base):
+    """The reminder ledger (migration 0129): one row per task, kind and the due it is
+    for. A sender records the row before it sends, so a reminder goes once."""
+
+    __tablename__ = "lead_desk_task_reminders"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "task_id"],
+            ["lead_desk_tasks.tenant_id", "lead_desk_tasks.id"],
+            name="fk_lead_desk_task_reminder_task",
+        ),
+        CheckConstraint(
+            "kind IN ('before', 'due', 'overdue')", name="lead_desk_task_reminder_kind"
+        ),
+        Index("uq_lead_desk_task_reminder", "task_id", "kind", "for_due_at", unique=True),
+        Index("ix_lead_desk_task_reminder_task", "tenant_id", "task_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    task_id: Mapped[UUID] = mapped_column(Uuid)
+    kind: Mapped[str] = mapped_column(String(16))
+    for_due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    send_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    deferred: Mapped[bool] = mapped_column(Boolean)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class LeadRep(Base):

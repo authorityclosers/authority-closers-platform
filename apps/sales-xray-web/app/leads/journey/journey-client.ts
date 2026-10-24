@@ -25,6 +25,12 @@ export type StageView = {
   archived: boolean;
   origin: string;
   leads: number;
+  /** Lead OS: where a lead may go from it (null: anywhere), what it asks on the way
+   *  in, its Lost or Junk reasons, and how long a lead may sit in it. */
+  moves?: string[] | null;
+  needs?: string[] | null;
+  reasons?: { key: string; label: string }[] | null;
+  rotHours?: number | null;
 };
 
 export type JourneyView = {
@@ -304,14 +310,52 @@ export const saveJourney = (
     }),
   });
 
+/** Where the leads of one of today's stages land under a new list (Lead OS, L4). */
+export type TemplateLanding = {
+  fromKey: string;
+  fromLabel: string;
+  toKey: string;
+  toLabel: string;
+  leads: number;
+  /** The new list's stages they may be put in instead. */
+  choices: string[];
+};
+
+export type TemplatePreview = {
+  template: string;
+  stages: StageView[];
+  landings: TemplateLanding[];
+};
+
+/** A kind of business's stages here, and where today's leads would land; saves
+ *  nothing. */
+export const previewTemplate = (
+  expectedVersion: number,
+  template: string,
+  pipeline?: string,
+  map: Record<string, string> = {},
+) =>
+  call<TemplatePreview>(`/journey/template/preview${inPipeline(pipeline)}`, {
+    method: "POST",
+    body: JSON.stringify({ expectedVersion, template, map }),
+  });
+
+/** Use a kind of business's stages; `map` puts the leads of today's stages in the
+ *  new ones picked for them. */
 export const applyTemplate = (
   expectedVersion: number,
   template: string,
   pipeline?: string,
+  map: Record<string, string> = {},
 ) =>
   call<JourneyView>(`/journey/template${inPipeline(pipeline)}`, {
     method: "POST",
-    body: JSON.stringify({ expectedVersion, template }),
+    // No map: the body as before (the welcome set-up sends none).
+    body: JSON.stringify({
+      expectedVersion,
+      template,
+      ...(Object.keys(map).length ? { map } : {}),
+    }),
   });
 
 export const guess = (label: string) =>

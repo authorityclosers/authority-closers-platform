@@ -137,27 +137,82 @@ def test_duplicate_older_size_change_fails_closed() -> None:
         READER["validate_inventory"](json.dumps(pages), snapshot=snapshot())
 
 
-def test_retry_keeps_original_boundary_and_does_not_accept_a_shrunk_inventory(
-    monkeypatch: pytest.MonkeyPatch,
+def test_retry_rebases_count_after_an_unobserved_removal_before_the_new_sweep(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     older = [artifact(identity) for identity in range(101, 0, -1)]
     responses = iter(
         [
             [{"total_count": 101, "artifacts": older[:100]}],
             [{"total_count": 100, "artifacts": older[:100]}],
-            [{"total_count": 100, "artifacts": older[:100]}],
         ]
     )
     sleeps = []
     monkeypatch.setattr(READER["time"], "sleep", sleeps.append)
-    with pytest.raises(ValueError, match="exhausted 3 attempts"):
+    items = READER["read_inventory"](
+        "/fixture/gh",
+        "fixture/repository",
+        "admission",
+        fetch=lambda: json.dumps(next(responses)),
+    )
+    assert {item["id"] for item in items} == set(range(2, 102))
+    assert sleeps == [30]
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "attempt=1/5 rejected" in output.err
+    assert "attempt=2/5 complete" in output.err
+
+
+def test_retry_uses_a_fresh_boundary_before_fetching_each_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clock = START
+    boundaries = []
+    original_validate = READER["validate_inventory"]
+
+    class Clock(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return clock
+
+    def validate(raw, *, snapshot):
+        boundaries.append(snapshot.started_at)
+        return original_validate(raw, snapshot=snapshot)
+
+    older = [artifact(identity) for identity in range(101, 0, -1)]
+    uploaded = {**artifact(102), "created_at": (START + timedelta(seconds=5)).isoformat()}
+    calls = 0
+
+    def fetch():
+        nonlocal clock, calls
+        calls += 1
+        if calls == 1:
+            clock = START + timedelta(seconds=10)
+            return json.dumps(complete_pages(older)[:1])
+        return json.dumps(complete_pages([uploaded, *older]))
+
+    reader_globals = READER["read_inventory"].__globals__
+    monkeypatch.setitem(reader_globals, "datetime", Clock)
+    monkeypatch.setitem(reader_globals, "validate_inventory", validate)
+    monkeypatch.setattr(READER["time"], "sleep", lambda _: None)
+    items = READER["read_inventory"]("/fixture/gh", "fixture/repository", "admission", fetch=fetch)
+    assert boundaries == [START, START + timedelta(seconds=10)]
+    assert {item["id"] for item in items} == set(range(1, 103))
+
+
+def test_fresh_count_cannot_hide_a_known_nonexpiring_removal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    older = [artifact(identity) for identity in range(101, 0, -1)]
+    responses = iter([complete_pages(older)[:1], *([complete_pages(older[1:])] * 4)])
+    monkeypatch.setattr(READER["time"], "sleep", lambda _: None)
+    with pytest.raises(ValueError, match="exhausted 5 attempts"):
         READER["read_inventory"](
             "/fixture/gh",
             "fixture/repository",
             "admission",
             fetch=lambda: json.dumps(next(responses)),
         )
-    assert sleeps == [2, 4]
 
 
 def test_retry_rechecks_sizes_seen_in_an_incomplete_attempt(
@@ -228,7 +283,7 @@ def test_reader_retries_transient_missing_page_then_accepts_upload_churn(
     )
     assert len(items) == 203
     assert {item["id"] for item in items} == set(range(1, 204))
-    assert sleeps == [2, 4]
+    assert sleeps == [30, 60]
 
 
 def test_unobserved_uploads_exhaust_retries_without_publishing_bytes(
@@ -242,14 +297,14 @@ def test_unobserved_uploads_exhaust_retries_without_publishing_bytes(
         return json.dumps(changing_pages())
 
     monkeypatch.setattr(READER["time"], "sleep", sleeps.append)
-    with pytest.raises(ValueError, match="exhausted 3 attempts"):
+    with pytest.raises(ValueError, match="exhausted 5 attempts"):
         READER["read_inventory"]("/fixture/gh", "fixture/repository", "admission", fetch=fetch)
-    assert len(calls) == 3
-    assert sleeps == [2, 4]
+    assert len(calls) == 5
+    assert sleeps == [30, 60, 60, 60]
     output = capsys.readouterr()
     assert output.out == ""
     assert "complete pages=" not in output.err
-    assert output.err.count("unobserved artifacts") == 3
+    assert output.err.count("unobserved artifacts") == 5
 
 
 @pytest.mark.parametrize("created", [None, "invalid", "2026-10-01T00:00:00", 1])
@@ -291,8 +346,27 @@ def test_only_diagnostic_retention_changes() -> None:
     }
     assert len(uploads) == 4
     for name, days in uploads.items():
-        # The reduction belongs to the ordered follow-up after #442 and #437.
-        assert days == (1 if name.startswith("ac-application-") else 14)
+        assert days == (1 if name.startswith(("ac-application-", "python-test-shard-")) else 14)
+
+
+def test_all_image_builds_disable_automatic_docker_record_uploads() -> None:
+    count = 0
+    for path in (ROOT / ".github/workflows").glob("*.yml"):
+        if path.name == "sales-xray-native-image.yml":
+            continue  # v0.88 hold: native workflow stays at main
+        workflow = yaml.safe_load(path.read_text())
+        for job in workflow["jobs"].values():
+            for step in job.get("steps", []):
+                if not step.get("uses", "").startswith("docker/build-push-action@"):
+                    continue
+                effective = {
+                    **workflow.get("env", {}),
+                    **job.get("env", {}),
+                    **step.get("env", {}),
+                }
+                assert effective["DOCKER_BUILD_RECORD_UPLOAD"] == "false"
+                count += 1
+    assert count == 5
 
 
 @pytest.mark.parametrize("expiry", ["expired", "past", "margin"])
@@ -316,7 +390,7 @@ def test_known_expiry_reconciles_a_smaller_complete_retry(expiry: str) -> None:
     assert pages == 1
     assert {item["id"] for item in items} == set(range(1, 101))
     assert sum(item["size_in_bytes"] for item in items) == 1000
-    assert state.expected_count == 101
+    assert state.expected_count == 100
 
 
 @pytest.mark.parametrize("expiry", [None, "invalid", 1, "2026-10-11T00:00:00", "future"])
@@ -338,14 +412,14 @@ def test_nonexpiring_or_invalid_expiry_disappearance_is_refused(expiry: object) 
         )
 
 
-def test_expiry_does_not_explain_an_unobserved_older_removal() -> None:
+def test_complete_new_sweep_does_not_reuse_an_unobserved_older_count() -> None:
     older = [artifact(identity) for identity in range(101, 0, -1)]
     older[-1]["expired"] = True
     state = snapshot()
     with pytest.raises(ValueError, match="incomplete inventory"):
         READER["validate_inventory"](json.dumps(complete_pages(older)[:1]), snapshot=state)
-    with pytest.raises(ValueError, match="older artifact count changed"):
-        READER["validate_inventory"](json.dumps(complete_pages(older[:-1])), snapshot=state)
+    items, _ = READER["validate_inventory"](json.dumps(complete_pages(older[:-1])), snapshot=state)
+    assert len(items) == state.expected_count == 100
 
 
 def test_expiry_between_pages_requires_retry_then_recovers_all_live_rows(
@@ -369,7 +443,7 @@ def test_expiry_between_pages_requires_retry_then_recovers_all_live_rows(
     )
     assert {item["id"] for item in items} == set(range(1, 201))
     assert sum(item["size_in_bytes"] for item in items) == 2000
-    assert sleeps == [2]
+    assert sleeps == [30]
 
 
 def test_expiry_cannot_hide_a_nonexpiring_loss_or_an_old_size_change() -> None:

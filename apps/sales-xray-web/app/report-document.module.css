@@ -118,8 +118,6 @@
   margin: 0 0 8px;
   color: var(--sx-accent);
   font: 700 var(--sx-text-xs) / 1.2 var(--lx-font-ui);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
 }
 .title {
   margin: 0;
@@ -161,8 +159,6 @@
   margin: 0 0 4px;
   color: var(--sx-muted);
   font: 700 var(--sx-text-xs) / 1.4 var(--lx-font-ui);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .contents ol {
   display: grid;
@@ -192,8 +188,6 @@
   margin: 0;
   color: var(--sx-ink);
   font: 700 calc(22px * var(--doc-scale)) / 1.25 var(--lx-font-ui);
-  text-transform: uppercase;
-  letter-spacing: 0.01em;
   scroll-margin-top: var(--report-scroll-target-offset, 80px);
 }
 .pillar:focus {
@@ -258,8 +252,6 @@
 .status {
   color: var(--sx-ink);
   font: 800 calc(20px * var(--doc-scale)) / 1.2 var(--lx-font-ui);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 .status[data-tone="good"] {
   color: var(--sx-good);
@@ -356,8 +348,6 @@
   margin: 0 0 2px;
   color: var(--sx-muted);
   font: 800 var(--sx-text-xs) / 1.4 var(--lx-font-ui);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 .card[data-tone="good"] .kicker {
   color: var(--sx-good);
@@ -527,8 +517,6 @@
 .stepLabel {
   color: var(--sx-ink);
   font: 800 var(--sx-text-xs) / 1.4 var(--lx-font-ui);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 /* Your skills: compact rows, everything open (a document can't be clicked) */
@@ -601,8 +589,6 @@
 .summary dt {
   color: var(--sx-muted);
   font: 700 var(--sx-text-xs) / 1.4 var(--lx-font-ui);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
 }
 .summary dd {
   margin: 2px 0 0;

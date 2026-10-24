@@ -15,7 +15,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-ATTEMPTS = 3
+ATTEMPTS = 5
 TIMEOUT_SECONDS = 120
 PAGE_SIZE = 100
 EXPIRY_MARGIN_SECONDS = 300
@@ -35,7 +35,7 @@ class SnapshotChanged(ValueError):
 
 
 class InventorySnapshot:
-    """Keep the original boundary, older identities and recent byte bounds."""
+    """Keep each sweep's boundary and cross-sweep identity and byte bounds."""
 
     def __init__(self, started_at: datetime | None = None) -> None:
         # GitHub timestamps have second precision. Exclude the boundary second
@@ -138,19 +138,17 @@ def validate_inventory(
             # behind a whole page of concurrent uploads, do not guess its count.
             if len(recent) == PAGE_SIZE and page["total_count"] > PAGE_SIZE:
                 raise ValueError("inventory snapshot boundary is not visible")
-            expected = page["total_count"] - len(recent)
-            if snapshot.expected_count is None:
-                snapshot.expected_count = expected
+            snapshot.expected_count = page["total_count"] - len(recent)
     # Pagination can skip a still-live row when an earlier row expires. Retry
-    # that sweep; only a complete later sweep plus known expiry identities can
-    # reconcile a smaller count. Never infer the identity of an unseen removal.
+    # that sweep with a fresh count. Known identities may disappear only with
+    # expiry evidence; the new sweep must independently cover its reported count.
     missing = snapshot.known.keys() - older.keys()
     expired_missing = {
         identity for identity in missing if expiry_can_remove(snapshot.known[identity], now)
     }
     if missing != expired_missing:
         raise ValueError("incomplete inventory")
-    if len(older) + len(expired_missing) != snapshot.expected_count:
+    if len(older) != snapshot.expected_count:
         raise ValueError("incomplete inventory: older artifact count changed during inventory")
     # Older completeness alone cannot bound unseen uploads at the front of
     # already-read pages. Require this sweep to account for every reported row;
@@ -182,6 +180,9 @@ def read_inventory(
     ]
     snapshot = InventorySnapshot()
     for attempt in range(1, ATTEMPTS + 1):
+        # Expiry may shrink the repository between attempts. Rebase the count
+        # and boundary, retaining known identities and conservative byte bounds.
+        snapshot.started_at = datetime.now(UTC).replace(microsecond=0)
         prefix = f"Artifact inventory operation={operation} attempt={attempt}/{ATTEMPTS}"
         try:
             # Each invocation starts at page one. Capture/suppress CLI diagnostics
@@ -212,7 +213,8 @@ def read_inventory(
             reason = str(error)
         print(f"{prefix} rejected: {reason}; discarded attempt", file=sys.stderr)
         if attempt < ATTEMPTS:
-            time.sleep(2 * attempt)
+            # Spread retries over a few minutes so an expiry burst can finish.
+            time.sleep(min(60, 30 * attempt))
     raise ValueError(f"Artifact inventory operation={operation} exhausted {ATTEMPTS} attempts")
 
 

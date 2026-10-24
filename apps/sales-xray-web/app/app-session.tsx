@@ -7,11 +7,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import { callIdFromPath } from "./analysis-routes";
 import { ConsentRenewal } from "./consent-renewal";
 import { PhoneOnboarding } from "./leads/phone-onboarding";
-import { UUID_RE } from "./prospects-client";
+import { UUID_RE } from "./uuid";
 import { PurchaseShell } from "./plans/purchase-shell";
 import styles from "./plans/plans.module.css";
 import { readSalesXrayWorkspaces } from "./sales-xray-workspaces";
 import { parseWorkspaceChoices, StandaloneStudio } from "./standalone-studio";
+import { WorkspaceLeadsPrompt } from "./workspace-leads-prompt";
 import {
   WorkspaceAccessProvider,
   type WorkspaceAccessValue,
@@ -163,7 +164,13 @@ export function AppSession({ children }: { children: ReactNode }) {
     return <PurchaseSession>{children}</PurchaseSession>;
   }
   if (isShellRoute(pathname)) {
-    return <StandaloneStudio>{children}</StandaloneStudio>;
+    return (
+      <StandaloneStudio>
+        {children}
+        {/* Inside the frame, once signed in: an empty workspace while another holds her leads offers the switch (24 Oct 2026). */}
+        <WorkspaceLeadsPrompt />
+      </StandaloneStudio>
+    );
   }
   return <>{children}</>;
 }

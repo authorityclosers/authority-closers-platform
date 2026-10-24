@@ -77,6 +77,10 @@ class _IdentityApplication:
         self.repository = _Repository(type(self).linked_rows)
         type(self).instances.append(self)
 
+    async def resolve_actor_read_only(self, token: str, **_: object) -> ResolvedActorContext:
+        # GET routes sign in this way (shared fences); the fake answers alike.
+        return await self.resolve_actor(token)
+
     async def resolve_actor(self, token: str) -> ResolvedActorContext:
         assert token == SESSION_TOKEN
         return ResolvedActorContext(

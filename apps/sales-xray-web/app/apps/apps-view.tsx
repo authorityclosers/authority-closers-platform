@@ -25,6 +25,7 @@ import { Badge } from "../ui/kit";
 import { inPhoneApp } from "../leads/native-phone";
 import { useApkLinksAllowed } from "../purchase-policy";
 import { PLAY } from "./play";
+import { UnsentBeforeSwitch } from "./unsent-before-switch";
 import { formatSize, type AndroidRelease } from "./release";
 import styles from "./apps.module.css";
 
@@ -361,7 +362,10 @@ export function AppsView({ android }: { android: AndroidRelease }) {
                 {PLAY.get}
               </a>
             </div>
-            <p className={styles.small}>{PLAY.switching}</p>
+            <p className={styles.small}>
+              {PLAY.switching}
+              <UnsentBeforeSwitch />
+            </p>
             <details className={styles.fallback}>
               <summary>{PLAY.file}</summary>
               <p className={styles.small}>

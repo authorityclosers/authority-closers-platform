@@ -7,13 +7,15 @@
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Download, Smartphone } from "lucide-react";
+import { Download, RefreshCw, Smartphone } from "lucide-react";
 
 import {
   AccountSettings,
   type SettingsBillingProps,
 } from "../account-settings";
 import { PLAY } from "../apps/play";
+import { UnsentBeforeSwitch } from "../apps/unsent-before-switch";
+import { refreshAppData } from "../shell/refresh-app";
 import { ANDROID_APK_URL } from "../apps/release";
 import { CallAiSettingsSection } from "../call-ai/call-ai-settings";
 import { AlertsCard } from "../leads/alerts-card";
@@ -76,6 +78,7 @@ function AppPanel() {
         <>
           <Note icon={<Download size={18} />} title="Android app">
             Calls, leads and alerts on your phone. {PLAY.switching}
+            <UnsentBeforeSwitch />
           </Note>
           {/* Google Play first (24 Oct 2026); the file stays for people
               without a Play invite. */}
@@ -92,6 +95,18 @@ function AppPanel() {
           Google Play.
         </Note>
       )}
+      {/* Orchestrator, 24 Oct 2026: never reinstall to recover. */}
+      <Note icon={<RefreshCw size={18} />} title="Refresh app data">
+        If a screen hangs, this starts Sales X-Ray afresh. You stay signed in,
+        and changes not sent yet are kept.
+      </Note>
+      <button
+        type="button"
+        className={styles.textButton}
+        onClick={() => void refreshAppData()}
+      >
+        Refresh app data
+      </button>
     </Panel>
   );
 }

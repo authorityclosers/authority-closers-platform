@@ -6,8 +6,9 @@ import {
 } from "./prospect-profile-contract";
 export const PROSPECTS_PATH = "/prospects";
 export const PROSPECTS_API = "/v1/conversation/prospects";
-export const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+import { UUID_RE } from "./uuid";
+
+export { UUID_RE };
 
 export class ProspectsContractError extends Error {
   constructor(field: string) {

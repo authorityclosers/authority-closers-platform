@@ -449,6 +449,19 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
           persist-credentials: false
+      # Release pipeline (owner, 24 Oct 2026): 17 one-day shard manifests per run, at ~85 runs a day, were a quarter
+      # of the 2 GB artifact pool and expired about once a minute, so Root's complete-inventory read kept seeing the
+      # count move (AUT-2185, AUT-2214). One artifact per run now; the shard folders keep their names inside it.
+      - name: Fold this attempt's shard manifests into one artifact
+        if: needs.py-tests.result != 'skipped' && !contains(needs.plan.outputs.py_matrix, 'targeted')
+        continue-on-error: true
+        uses: actions/upload-artifact/merge@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-py-shards-${{ github.sha }}-${{ github.run_attempt }}
+          pattern: wb-py-[ab]-${{ github.sha }}-${{ github.run_attempt }}-*
+          separate-directories: true
+          delete-merged: true
+          retention-days: 1
       - name: Download Python shard evidence
         if: needs.py-tests.result != 'skipped' && !contains(needs.plan.outputs.py_matrix, 'targeted')
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
@@ -468,7 +481,8 @@ jobs:
             count=COUNT_${fam^^}
             dir="$RUNNER_TEMP/verify-$fam"
             mkdir -p "$dir"
-            for src in "$RUNNER_TEMP"/wb-py/wb-py-"$fam"-*; do
+            # Folded shards sit one level down (wb-py-shards-*/); a fold that failed leaves them at the top.
+            for src in "$RUNNER_TEMP"/wb-py/wb-py-"$fam"-* "$RUNNER_TEMP"/wb-py/wb-py-shards-*/wb-py-"$fam"-*; do
               [ -d "$src" ] && mv "$src" "$dir/python-test-shard-${src##*/wb-py-$fam-}"
             done
             python3 scripts/ci/wb_checks.py py-family --fam "$fam" --out "$RUNNER_TEMP/exclusions-$fam.txt"

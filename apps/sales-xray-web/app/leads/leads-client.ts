@@ -7,7 +7,8 @@
  */
 
 import { withDisplayNames } from "../display-name";
-import { earlyFetch } from "../early-reads";
+import { sendWrite } from "../sync/write-queue";
+import { earlyFetch, forgetSharedReads } from "../early-reads";
 import type { MeetingView, MoveOption } from "./pipeline/pipeline-client";
 
 export const LEADS_PATH = "/leads";
@@ -380,6 +381,8 @@ export class LeadsError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    /** Not on the server yet, but kept on this phone and sent again (sync/write-queue.ts). */
+    readonly kept = false,
   ) {
     super(message);
     this.name = "LeadsError";
@@ -462,21 +465,48 @@ export function readNextAhead(pipeline?: string | null) {
   readAhead(nextPath(undefined, pipeline));
 }
 
+/** A seller's entry that didn't arrive yet but waits on this phone. */
+export const KEPT_MESSAGE =
+  "Not sent yet: Sales X-Ray isn't answering. It's kept on this phone and goes as soon as it answers.";
+
+/** The same, when the phone's storage refused it: it waits while the app runs. */
+export const HELD_MESSAGE =
+  "Not sent yet, and this phone couldn't store it. Keep Sales X-Ray open: it goes as soon as Sales X-Ray answers.";
+
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-  // A write may change any lead: nothing read ahead is shown after it.
-  if ((init.method ?? "GET").toUpperCase() !== "GET") ahead.clear();
+  const write = (init.method ?? "GET").toUpperCase() !== "GET";
+  // A write may change any lead: nothing read ahead or shared is shown after it.
+  if (write) {
+    ahead.clear();
+    forgetSharedReads();
+  }
+  const options: RequestInit = {
+    credentials: "same-origin",
+    cache: "no-store",
+    redirect: "error",
+    ...init,
+    headers: { accept: "application/json", ...(init.headers ?? {}) },
+  };
   let response: Response;
   try {
-    // A read the Leads tab press already started (early-reads.ts) is
-    // taken as it lands; anything else goes to the network.
-    response = await earlyFetch(`${API}${path}`, {
-      credentials: "same-origin",
-      cache: "no-store",
-      redirect: "error",
-      ...init,
-      headers: { accept: "application/json", ...(init.headers ?? {}) },
-    });
+    if (write) {
+      // A seller's entry stays on this phone until the server has it, and
+      // goes again by itself (owner's P0, 24 Oct 2026: nothing lost).
+      const sent = await sendWrite(`${API}${path}`, options);
+      if (sent.kind === "kept")
+        throw new LeadsError(
+          sent.onDevice ? KEPT_MESSAGE : HELD_MESSAGE,
+          0,
+          true,
+        );
+      response = sent.response;
+    } else {
+      // A read the Leads tab press already started (early-reads.ts) is
+      // taken as it lands; anything else goes to the network.
+      response = await earlyFetch(`${API}${path}`, options);
+    }
   } catch (error) {
+    if (error instanceof LeadsError) throw error;
     if (error instanceof DOMException && error.name === "AbortError")
       throw error;
     throw new LeadsError("Sales X-Ray isn't answering. Try again.", 0);
@@ -602,6 +632,38 @@ export function readNext(
   );
 }
 
+/** The list's sort and filters, answered by the server over every lead, not one
+ *  page (owner, 24 Oct 2026: "filters and sorting both on mobile as well as PC"). */
+export type ListSort = "next_action" | "last_contact" | "name" | "created";
+export type ListDue = "late" | "today" | "week" | "none";
+export type ListSince = "today" | "week" | "month" | "never";
+export type ListMade = "today" | "week" | "month";
+export type ListMore = {
+  source?: string | null;
+  due?: ListDue | null;
+  contact?: ListSince | null;
+  created?: ListMade | null;
+  sort?: ListSort | null;
+  order?: "asc" | "desc" | null;
+};
+
+/** The address parameters of the list's sort and filters, in a fixed order. */
+export function moreParams(
+  more: ListMore | null | undefined,
+): [string, string][] {
+  if (!more) return [];
+  return (
+    [
+      ["source", more.source],
+      ["due", more.due],
+      ["contact", more.contact],
+      ["created", more.created],
+      ["sort", more.sort],
+      ["order", more.sort ? more.order : null],
+    ] as [string, string | null | undefined][]
+  ).filter((pair): pair is [string, string] => !!pair[1]);
+}
+
 export function readLeads(
   {
     scope,
@@ -611,6 +673,7 @@ export function readLeads(
     test = false,
     owner,
     pipeline,
+    more,
   }: {
     scope: "mine" | "team" | "unassigned";
     stage?: string | null;
@@ -622,10 +685,13 @@ export function readLeads(
     owner?: string;
     /** One pipeline's leads; none: every pipeline's. */
     pipeline?: string | null;
+    /** Sort and filters over the whole list. */
+    more?: ListMore | null;
   },
   signal?: AbortSignal,
 ) {
   const params = new URLSearchParams({ scope });
+  for (const [key, value] of moreParams(more)) params.set(key, value);
   if (owner) params.set("owner", owner);
   if (pipeline) params.set("pipeline", pipeline);
   if (stage) params.set("stage", stage);
@@ -633,6 +699,31 @@ export function readLeads(
   if (offset) params.set("offset", String(offset));
   if (test) params.set("test", "only");
   return request<LeadPage>(`/leads?${params}`, { signal });
+}
+
+/** My work: what the seller did, today, yesterday or this week. */
+export type WorkDay = "today" | "yesterday" | "week";
+export type ActivityItem = {
+  event_id: string;
+  lead_id: string;
+  lead_name: string;
+  stage_label: string | null;
+  event: LeadEvent;
+};
+export type ActivityPage = {
+  items: ActivityItem[];
+  next_before: string | null;
+  counts: Record<string, number>;
+};
+
+export function readActivity(
+  day: WorkDay,
+  before: string | null = null,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({ day });
+  if (before) params.set("before", before);
+  return request<ActivityPage>(`/activity?${params}`, { signal });
 }
 
 /** At most this many leads go in one delete. */

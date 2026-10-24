@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -255,3 +256,14 @@ def test_refuses_without_root(tmp_path, monkeypatch, capsys):
     assert invoke(tmp_path, repo, base, candidate) == 1
     assert "run as root" in capsys.readouterr().out
     assert tools.calls == []
+
+
+def test_receipt_mode_ignores_the_callers_umask(tmp_path):
+    # A strict umask left by another test must not narrow the receipt (24 Oct 2026).
+    previous = os.umask(0o077)
+    try:
+        receipt = {"candidate": "c" * 40, "finished_at": "2026-10-24T15:00:00"}
+        path = rehearsal.write_receipt(tmp_path / "receipts", receipt)
+    finally:
+        os.umask(previous)
+    assert path.stat().st_mode & 0o777 == 0o640
