@@ -11,7 +11,7 @@ import logging
 import re
 from collections.abc import AsyncIterator, Callable, Mapping
 from dataclasses import dataclass, replace
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Annotated, Literal, Protocol, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import UUID
@@ -254,9 +254,6 @@ class AuthenticatedTransaction:
 
 
 RequireActor = Callable[[Request], AsyncIterator[AuthenticatedTransaction]]
-# Requests that sign in with shared fences, and how often they advance last_seen_at.
-_READ_METHODS = frozenset({"GET", "HEAD"})
-_LAST_SEEN_EVERY = timedelta(minutes=1)
 
 # Staff keys (Admin CLI and MCP, 19 Oct 2026): "Authorization: Bearer ac_<env>_<token>".
 STAFF_KEY_PATTERN = re.compile(r"ac_[a-z]{2,8}_[A-Za-z0-9_-]{43,512}\Z")
@@ -1904,15 +1901,9 @@ def install_identity_http(
             raise AuthenticationRequired("A valid Authority Closers session is required.")
         async with sessions() as database, database.begin():
             identity = _identity(database)
-            if request.method in _READ_METHODS:
-                # A read signs in with shared fences and touches last_seen_at at
-                # most once a minute, never waiting: on 24 Oct 2026 a phone's first
-                # launch sent ~20 reads that each locked the person FOR UPDATE and
-                # wrote the session, so they ran one by one and all waited 14 s.
-                found = await identity.resolve_actor_read_only(token, touch_after=_LAST_SEEN_EVERY)
-            else:
-                found = await identity.resolve_actor(token)
-            resolved = await _resolved_with_role_permissions(database, found)
+            resolved = await _resolved_with_role_permissions(
+                database, await identity.resolve_actor(token)
+            )
             yield AuthenticatedTransaction(
                 database=database,
                 identity=identity,
