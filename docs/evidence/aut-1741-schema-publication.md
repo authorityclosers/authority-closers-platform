@@ -1,5 +1,11 @@
 # AUT-1741 item 1: schema publication source handoff
 
+**Releases no longer need this publication (AUT-2215, 24 Oct 2026).** `ac-ship` runs the same exporter and the
+same gate on the server against staging's live schema while the release PR's CI runs
+(`infra/release/rehearse-staging-migrations.py`). The PR check, `migration-safety`, rehearses on the baseline that the
+migrations build, so no `AC_MIGRATION_SCHEMA_*` variable or artifact gates a release. This runbook stays until
+phase 2 of AUT-2215 retires the workflow and the variables.
+
 Continuation baseline: 3f3093b1be3a7a11595687414f8f39085560a2c5.
 Architecture: AUT-1741 decision 83bcefc8-8d1b-49f6-8099-77ca165fb682.
 Transport: AUT-1816 decision 67ffb4e6-bd71-4a9e-8dcb-cae2ea60d4ac.

@@ -35,7 +35,9 @@ wb-ci --sha 1a2b3c4d --full             # a specific workbench commit
 `--web`, `--py` and `--visual` force those families; the migrations and control-plane gates still run when their
 paths change. They exist because migration-safety and validate-control-plane used to run only on the release PR,
 so authors learned hours later (v0.86, 24 Oct 2026; docs/ops/migration-safety-root-causes-20261024.md). The release
-PR still rehearses migrations on staging's schema export, which wb-ci does not need.
+PR's migration-safety check rehearses on the same migrations-built baseline. Staging's live schema is rehearsed on the
+server by `ac-ship` (`infra/release/rehearse-staging-migrations.py`, AUT-2215), so no release waits for a published
+staging artifact.
 
 **Migration rules** (the gates enforce them):
 - A migration on `main` is history: never edit it, not even its docstring. Add a new revision.

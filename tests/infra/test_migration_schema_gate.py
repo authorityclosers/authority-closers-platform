@@ -344,6 +344,9 @@ def test_workflow_always_names_and_summarizes_check_without_staging_secrets():
     assert "GITHUB_STEP_SUMMARY" in source
     assert "paths:" not in source and "paths-ignore:" not in source
     assert "AC_REQUIRE_SCHEMA_GATE_DOCKER_TEST" in source
-    assert "artifact-ids: ${{ vars.AC_MIGRATION_SCHEMA_ARTIFACT_ID }}" in source
-    assert "run-id: ${{ steps.artifact.outputs.run-id }}" in source
     assert "secrets." not in source and "pull_request_target" not in source
+    # AUT-2215: a hand-published staging artifact no longer gates releases. ac-ship rehearses
+    # staging's live schema on the server; this check rehearses on the migrations' own baseline.
+    assert "--baseline-from-migrations" in source
+    assert "vars." not in source and "download-artifact" not in source
+    assert "actions: read" not in source

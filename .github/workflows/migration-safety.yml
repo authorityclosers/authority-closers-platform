@@ -8,7 +8,6 @@ on:
 
 permissions:
   contents: read
-  actions: read
 
 concurrency:
   group: migration-safety-${{ github.event.pull_request.number || github.ref }}
@@ -21,7 +20,6 @@ jobs:
     timeout-minutes: 15
     env:
       BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || github.sha }}
-      SCHEMA_MANIFEST_SHA256: ${{ vars.AC_MIGRATION_SCHEMA_MANIFEST_SHA256 }}
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
         with:
@@ -48,36 +46,14 @@ jobs:
           relevant="$(uv run --frozen python scripts/ci/migration_schema_gate.py --base-ref "$BASE_SHA" --scope-only)"
           [[ "$relevant" == true || "$relevant" == false ]]
           printf 'relevant=%s\n' "$relevant" >> "$GITHUB_OUTPUT"
-      - name: Require governed schema artifact identity
-        id: artifact
-        if: steps.scope.outputs.relevant == 'true'
-        env:
-          SCHEMA_ARTIFACT_ID: ${{ vars.AC_MIGRATION_SCHEMA_ARTIFACT_ID }}
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          [[ "$SCHEMA_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
-          [[ "$SCHEMA_MANIFEST_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          metadata="$(gh api "repos/${GITHUB_REPOSITORY}/actions/artifacts/${SCHEMA_ARTIFACT_ID}")"
-          run_id="$(jq --exit-status --raw-output --argjson id "$SCHEMA_ARTIFACT_ID" \
-            'select(.id == $id and .expired == false) | .workflow_run.id | select(type == "number" and . > 0)' <<< "$metadata")"
-          [[ "$run_id" =~ ^[1-9][0-9]*$ ]]
-          printf 'run-id=%s\n' "$run_id" >> "$GITHUB_OUTPUT"
-      - name: Download only the governed schema bundle
-        if: steps.scope.outputs.relevant == 'true'
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
-        with:
-          artifact-ids: ${{ vars.AC_MIGRATION_SCHEMA_ARTIFACT_ID }}
-          github-token: ${{ github.token }}
-          run-id: ${{ steps.artifact.outputs.run-id }}
-          path: ${{ runner.temp }}/migration-schema
-          merge-multiple: true
+      # Staging's live schema is rehearsed where it lives: ac-ship runs the same gate on a fresh staging
+      # export on the server while this CI runs (infra/release/rehearse-staging-migrations.py, AUT-2215).
+      # This check needs no published artifact: it rehearses on the baseline the migrations build.
       - name: Rehearse candidate migrations
         run: >-
           uv run --frozen python scripts/ci/migration_schema_gate.py
           --base-ref "$BASE_SHA"
-          --artifact-dir "${{ runner.temp }}/migration-schema"
-          --manifest-sha256 "$SCHEMA_MANIFEST_SHA256"
+          --baseline-from-migrations
       - name: Publish one-line required-check summary
         if: always()
         env:
