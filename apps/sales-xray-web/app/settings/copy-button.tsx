@@ -7,7 +7,16 @@ import { notify } from "../notice-center";
 import { Button } from "../ui/kit";
 
 /** Copies a command or snippet, and says so for two seconds. */
-export function CopyButton({ text, label }: { text: string; label: string }) {
+export function CopyButton({
+  text,
+  label,
+  variant = "secondary",
+}: {
+  text: string;
+  label: string;
+  /** "primary" when copying is the screen's one main action. */
+  variant?: "primary" | "secondary";
+}) {
   const [copied, setCopied] = useState(false);
   useEffect(() => {
     if (!copied) return;
@@ -16,7 +25,7 @@ export function CopyButton({ text, label }: { text: string; label: string }) {
   }, [copied]);
   return (
     <Button
-      variant="secondary"
+      variant={variant}
       aria-label={copied ? `${label}: copied` : label}
       onClick={() => {
         const done = navigator.clipboard?.writeText(text);

@@ -344,6 +344,8 @@ def test_a_member_connects_a_platform_app_for_their_own_account(
                 mine = (await person.get("/v1/me/connected-apps")).json()["apps"]
                 live = [app for app in mine if app["revoked_at"] is None]
                 assert [app["app"] for app in live] == ["Fictional MCP Host"]
+                # Settings → AI apps shows the consent screen's checked mark, or its absence.
+                assert live[0]["verified"] is False and live[0]["maker"] is None
                 removed = await person.post(
                     f"/v1/me/connected-apps/{live[0]['id']}/revoke", headers=WRITE
                 )
@@ -358,6 +360,14 @@ def test_a_member_connects_a_platform_app_for_their_own_account(
                 # Leaving the organisation stops a live connection at once.
                 _, fresh, _ = await _connect(person, server, pulse, PULSE_RETURN, "calls:read")
                 fresh_bearer = {"Authorization": f"Bearer {fresh['access_token']}"}
+                pulse_now = [
+                    app
+                    for app in (await person.get("/v1/me/connected-apps")).json()["apps"]
+                    if app["revoked_at"] is None and app["app"] == "Pulse"
+                ]
+                assert [(app["verified"], app["maker"]) for app in pulse_now] == [
+                    (True, "Estate Autopilots")
+                ]
                 assert (await server.get("/v1/api/me", headers=fresh_bearer)).status_code == 200
                 async with setup.sessions() as db, db.begin():
                     await db.execute(

@@ -523,7 +523,9 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
             async with asynccontextmanager(read_actor)(request) as auth:
                 person = auth.resolved.actor.person_id
                 apps = await auth.database.run_sync(
-                    lambda session: oauth.person_connections(session.connection(), person)
+                    lambda session: oauth.person_connections(
+                        session.connection(), person, settings.environment
+                    )
                 )
                 return {"apps": apps}
         except DomainError:
@@ -561,7 +563,9 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
                         payload={"by": "person"},
                     )
                 apps = await auth.database.run_sync(
-                    lambda session: oauth.person_connections(session.connection(), actor.person_id)
+                    lambda session: oauth.person_connections(
+                        session.connection(), actor.person_id, settings.environment
+                    )
                 )
                 return {"apps": apps}
         except DomainError:

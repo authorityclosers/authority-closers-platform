@@ -24,6 +24,7 @@ import {
 import { OrganisationView } from "../organisation/organisation-view";
 import { useApkLinksAllowed } from "../purchase-policy";
 import { Panel } from "../ui/kit";
+import { AiAppsSection } from "./ai-apps";
 import { ConnectedApps } from "./connected-apps";
 import { DevelopersSection } from "./developers";
 import { ThemeControl } from "../lightbox/theme-provider";
@@ -141,6 +142,8 @@ export function SettingsSectionView({
       return <SellingSettings />;
     case "security":
       return <AccountSettings only={["security"]} />;
+    case "ai-apps":
+      return <AiAppsSection />;
     case "plan":
       return <AccountSettings only={["usage", "billing"]} billing={billing} />;
     case "privacy":

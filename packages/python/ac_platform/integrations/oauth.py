@@ -43,6 +43,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import Table, insert, or_, select, update
 
+from ac_platform.integrations import first_party
 from ac_platform.integrations import scopes as scope_rules
 from ac_platform.integrations.errors import IntegrationError
 from ac_platform.integrations.models import (
@@ -586,16 +587,28 @@ def connection_row(connection: Any, grant_id: UUID) -> dict[str, Any] | None:
     return None if row is None else {**_connection_view(row), "tenant_id": str(row.tenant_id)}
 
 
-def person_connections(connection: Any, person_id: UUID) -> list[dict[str, Any]]:
-    """The apps one person connected for themself (platform apps), newest first."""
+def person_connections(connection: Any, person_id: UUID, environment: str) -> list[dict[str, Any]]:
+    """The apps one person connected for themself (platform apps), newest first, each
+    with the consent screen's checked mark: ``verified`` and its ``maker``."""
     rows = connection.execute(
-        select(GRANTS, CLIENTS.c.name)
+        select(GRANTS, CLIENTS.c.name, CLIENTS.c.redirect_uris)
         .join(CLIENTS, CLIENTS.c.client_id == GRANTS.c.client_id)
         .where(GRANTS.c.person_id == person_id, CLIENTS.c.tenant_id.is_(None))
         .order_by(GRANTS.c.created_at.desc())
         .limit(200)
     ).all()
-    return [{**_connection_view(row), "tenant_id": str(row.tenant_id)} for row in rows]
+    answer = []
+    for row in rows:
+        known = first_party.verified(row.name, row.redirect_uris or (), environment)
+        answer.append(
+            {
+                **_connection_view(row),
+                "tenant_id": str(row.tenant_id),
+                "verified": known is not None,
+                "maker": known.maker if known else None,
+            }
+        )
+    return answer
 
 
 def revoke_person_grant(connection: Any, *, person_id: UUID, grant_id: UUID, now: datetime) -> bool:

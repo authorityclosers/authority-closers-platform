@@ -28,6 +28,7 @@ export type SettingsSectionId =
   | "profile"
   | "selling"
   | "security"
+  | "ai-apps"
   | "plan"
   | "privacy"
   | "organisation"
@@ -77,6 +78,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     label: "Sign-in & security",
     hint: "Google, Facebook and Apple sign-in, signing out",
     icon: ShieldCheck,
+    group: "Account",
+  },
+  {
+    // Owner via the orchestrator, 24 Oct 2026: the AI apps a person connected
+    // (Pulse, ChatGPT, Claude) had no screen; everyone, members too.
+    id: "ai-apps",
+    label: "AI apps",
+    hint: "ChatGPT, Claude and Pulse with your calls and leads",
+    icon: Sparkles,
     group: "Account",
   },
   {

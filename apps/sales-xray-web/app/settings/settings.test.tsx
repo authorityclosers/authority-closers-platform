@@ -43,6 +43,9 @@ vi.mock("./developers", () => ({
 vi.mock("./connected-apps", () => ({
   ConnectedApps: () => <p data-testid="connected-apps">apps grid</p>,
 }));
+vi.mock("./ai-apps", () => ({
+  AiAppsSection: () => <p data-testid="ai-apps">ai apps</p>,
+}));
 
 import { SettingsSectionView } from "./sections";
 import { SettingsSkeleton } from "./settings-skeleton";
@@ -82,6 +85,7 @@ it("maps every section, and the old account sections, to an address of its own",
     "profile",
     "selling",
     "security",
+    "ai-apps",
     "plan",
     "privacy",
     "organisation",
