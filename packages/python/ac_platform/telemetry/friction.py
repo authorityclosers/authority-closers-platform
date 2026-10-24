@@ -299,7 +299,7 @@ def screens(rows: Sequence[Row], visits: Mapping[str, Sequence[Row]]) -> dict[st
     def per_100(count: int, views: int) -> float | None:
         return round(count * 100 / views, 1) if views else None
 
-    listed = [
+    listed: list[dict[str, Any]] = [
         {
             "screen": name,
             "label": _screen(name),
@@ -404,7 +404,7 @@ def _runs(visits: Mapping[str, Sequence[Row]]) -> list[_Run]:
 
 
 def flows(runs: Sequence[_Run]) -> list[dict[str, Any]]:
-    listed = []
+    listed: list[dict[str, Any]] = []
     for flow, label in FLOW_LABELS.items():
         mine = [run for run in runs if run.flow == flow]
         if not mine:
@@ -412,7 +412,7 @@ def flows(runs: Sequence[_Run]) -> list[dict[str, Any]]:
         ends = Counter(run.end for run in mine)
         order = list(FLOW_ORDER[flow])
         order += sorted({step for run in mine for step in run.steps} - set(order))
-        steps = []
+        steps: list[dict[str, Any]] = []
         for step in order:
             reached = [run for run in mine if step in run.steps]
             if not reached:
@@ -470,7 +470,7 @@ def permissions(rows: Sequence[Row]) -> list[dict[str, Any]]:
     for row in rows:
         if row.event == "sx.permission_prompt":
             asked[str(row.payload.get("permission", "other"))].append(row)
-    listed = []
+    listed: list[dict[str, Any]] = []
     for permission, items in asked.items():
         outcomes = Counter(str(row.payload.get("outcome", "unknown")) for row in items)
         answered = outcomes["granted"] + outcomes["denied"] + outcomes["blocked"]
