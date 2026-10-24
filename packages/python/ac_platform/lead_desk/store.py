@@ -27,6 +27,7 @@ from ac_platform.identity.models import Person
 from ac_platform.lead_desk import allocation, deletion, reports
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk import meetings as meeting_rows
+from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk.capture import (
     REFERENCE_KEYS,
     CaptureError,
@@ -112,6 +113,9 @@ from ac_platform.lead_desk.contracts import (
     WorkHoursCommand,
     WorkHoursView,
 )
+
+# Re-exported: many modules import DeskError from here.
+from ac_platform.lead_desk.errors import DeskError as DeskError
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey import pipelines, signals, transitions
 from ac_platform.lead_desk.journey.templates import MILESTONE_WORDS
@@ -190,14 +194,6 @@ REOPEN_NC_REASON = "other"
 # leads captured before that came in with test_data false, and the Test data filter
 # still finds them by this name.
 META_TEST_LEAD = "<test lead:%"
-
-
-class DeskError(Exception):
-    """A refusal the person can act on; the message is shown as is."""
-
-    def __init__(self, status: int, message: str) -> None:
-        super().__init__(message)
-        self.status = status
 
 
 @dataclass(frozen=True, slots=True)
@@ -1252,6 +1248,10 @@ class LeadDesk:
             )
             if meeting is not None
             else None,
+            tasks=tuple(
+                task_book.view(task, lead.name, self.now)
+                for task in await task_book.TaskBook(self).open_for(lead.id)
+            ),
         )
 
     @staticmethod
@@ -1386,6 +1386,10 @@ class LeadDesk:
             outcome_reason=text("outcome_reason") if moved else None,
             outcome_reason_label=text("outcome_reason_label") if moved else None,
             meeting_action=text("action") if meeting else None,
+            task_id=self._uuid(data.get("task_id")) if event.kind == "task" else None,
+            task_action=text("action") if event.kind == "task" else None,
+            task_kind=text("kind") if event.kind == "task" else None,
+            due_at=when("due_at") if event.kind == "task" else None,
             starts_at=when("starts_at") if meeting else None,
             from_starts_at=when("from_starts_at") if meeting else None,
             mode_label=meeting_rows.MODE_LABELS.get(text("mode") or "") if meeting else None,
@@ -2570,6 +2574,10 @@ class LeadDesk:
             actor=actor,
             command_id=command_id,
         )
+        # Its open tasks go with it (work-memory engine). Last: the update below flushes
+        # the lead, which must be whole by then.
+        if previous != person_id:
+            await task_book.follow_owner(self, lead, person_id)
 
     async def _allocate(
         self,

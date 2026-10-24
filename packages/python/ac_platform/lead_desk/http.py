@@ -32,6 +32,7 @@ from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import push, simulation
+from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk.contracts import (
     ActivityPage,
     AlertText,
@@ -83,6 +84,13 @@ from ac_platform.lead_desk.contracts import (
     Sources,
     SourceView,
     TakingLeads,
+    TaskAction,
+    TaskBucket,
+    TaskChange,
+    TaskCommand,
+    TaskList,
+    TaskSnooze,
+    TaskView,
     Team,
     WorkDay,
     WorkHoursCommand,
@@ -355,6 +363,63 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.edit(lead_id, command)
+
+    # ----- tasks (work-memory engine) ------------------------------------------------
+
+    @router.post("/leads/{lead_id}/tasks", response_model=TaskView, response_model_by_alias=True)
+    async def add_task(
+        lead_id: UUID, command: TaskCommand, request: Request, response: Response
+    ) -> TaskView:
+        """A task on a lead: call back, WhatsApp, email, send a file, a meeting or other."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await task_book.TaskBook(lead_desk).create(lead_id, command)
+
+    @router.get("/tasks", response_model=TaskList, response_model_by_alias=True)
+    async def list_tasks(
+        request: Request,
+        response: Response,
+        view: TaskBucket = "today",
+        person: UUID | None = None,
+    ) -> TaskList:
+        """A seller's open tasks: overdue, today or upcoming, and how many of each."""
+        no_query(request, frozenset({"view", "person"}))
+        async with desk_for(request, response) as lead_desk:
+            return await task_book.TaskBook(lead_desk).listing(view, person)
+
+    @router.patch("/tasks/{task_id}", response_model=TaskView, response_model_by_alias=True)
+    async def change_task(
+        task_id: UUID, command: TaskChange, request: Request, response: Response
+    ) -> TaskView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await task_book.TaskBook(lead_desk).change(task_id, command)
+
+    @router.post("/tasks/{task_id}/snooze", response_model=TaskView, response_model_by_alias=True)
+    async def snooze_task(
+        task_id: UUID, command: TaskSnooze, request: Request, response: Response
+    ) -> TaskView:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await task_book.TaskBook(lead_desk).snooze(task_id, command)
+
+    @router.post("/tasks/{task_id}/{action}", response_model=TaskView, response_model_by_alias=True)
+    async def act_on_task(
+        task_id: UUID,
+        action: Literal["done", "undo", "cancel"],
+        command: TaskAction,
+        request: Request,
+        response: Response,
+    ) -> TaskView:
+        """Done in one tap; undo; cancel."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            book = task_book.TaskBook(lead_desk)
+            if action == "done":
+                return await book.done(task_id, command)
+            if action == "undo":
+                return await book.undo(task_id, command)
+            return await book.cancel(task_id, command)
 
     @router.post("/leads/{lead_id}/notes", response_model=LeadDetail, response_model_by_alias=True)
     async def add_note(
