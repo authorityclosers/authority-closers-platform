@@ -246,6 +246,8 @@ function rows(now: number) {
     test_data: false,
     overdue: index === 1,
     pipeline: index % 2 ? "main" : "partner_outreach",
+    // One-tap Email on the cards that have an address.
+    has_email: index % 3 === 0,
   }));
 }
 
@@ -321,6 +323,10 @@ const tasksOn = () =>
   typeof window !== "undefined" &&
   new URLSearchParams(window.location.search).get("tasks") === "1";
 
+/** A fictional event's note, when it has one. */
+const noteOf = (item: { event: object }) =>
+  (item.event as { note?: unknown }).note;
+
 /** My work (?tab=work): a seller's fictional day, newest first. */
 function fixtureWork(now: number) {
   const at = (minutes: number) =>
@@ -390,6 +396,37 @@ function answers(now: number, path: string): unknown {
   if (bare.startsWith("/v1/lead-desk/board")) return fixtureBoard();
   if (bare === "/v1/lead-desk/reports/pipeline") return fixtureReport();
   if (bare === "/v1/lead-desk/activity") return fixtureWork(now);
+  // Notes (?tab=notes): the notes and outcome remarks of the same fictional day;
+  // with words, those that say them.
+  if (bare === "/v1/lead-desk/notes") {
+    const words = (new URLSearchParams(query).get("q") ?? "").toLowerCase();
+    const written = fixtureWork(now).items.filter((item) => {
+      const note = noteOf(item);
+      return (
+        typeof note === "string" &&
+        (!words || `${note} ${item.lead_name}`.toLowerCase().includes(words))
+      );
+    });
+    return {
+      items: written,
+      next_before: null,
+      counts: { note: written.length },
+    };
+  }
+  if (bare === "/v1/lead-desk/search") {
+    const words = (new URLSearchParams(query).get("q") ?? "").toLowerCase();
+    const says = (text: unknown) =>
+      typeof text === "string" && text.toLowerCase().includes(words);
+    return {
+      leads: rows(now)
+        .filter((row) => says(row.name))
+        .slice(0, 8),
+      notes: fixtureWork(now).items.filter((item) => says(noteOf(item))),
+      tasks: ["overdue", "today", "upcoming"]
+        .flatMap((view) => fixtureTasks(now, view).tasks)
+        .filter((task) => says(task.title) || says(task.note)),
+    };
+  }
   if (bare === "/v1/lead-desk/tasks")
     return fixtureTasks(now, new URLSearchParams(query).get("view") ?? "today");
   const asked =

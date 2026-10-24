@@ -26,6 +26,8 @@ import {
   Building2,
   ChevronDown,
   Ellipsis,
+  ListTodo,
+  NotebookPen,
   Phone,
   PhoneCall,
   Plus,
@@ -86,6 +88,7 @@ import {
   pickContacts,
   readDesk,
   readLeads,
+  searchDesk,
   sharedLead,
   type Desk,
   type LeadRow,
@@ -106,6 +109,8 @@ import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { LeadsSkeleton } from "./leads-skeleton";
 import { ListView, TEST, type Scope } from "./list-view";
 import { MyWork } from "./my-work";
+import { NewLeadCard, useArrival } from "./new-lead-card";
+import { dueWords } from "./task-words";
 import { TasksView } from "./tasks-view";
 import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
@@ -194,6 +199,8 @@ function viewHref(
   if (view === WORK) return `${path}?tab=work`;
   // Tasks: the seller's promises, overdue, today and upcoming.
   if (view === TASKS) return `${path}?tab=tasks`;
+  // Notes has its own route (owner, 25 Oct 2026): the tab leads there.
+  if (view === NOTES) return `${LEADS_PATH}/notes`;
   const more = moreParams(filters.more)
     .map(([key, value]) => `&${key}=${encodeURIComponent(value)}`)
     .join("");
@@ -233,6 +240,8 @@ const BOARD = "board";
 const WORK = "work";
 /** Tasks' view key (owner, 24 Oct 2026; work-memory engine). */
 const TASKS = "tasks";
+/** Notes' tab: it opens /leads/notes, Notes' own place (owner, 25 Oct 2026). */
+const NOTES = "notes";
 const PipelineBoard = dynamic(
   () => import("./pipeline/board").then((module) => module.PipelineBoard),
   { ssr: false },
@@ -586,6 +595,11 @@ export function LeadsRoute() {
   }, [authenticated, refresh]);
 
   const current = deskKey === contextKey;
+  // A new lead while the page is open: one card with Call, WhatsApp and Later.
+  const arrival = useArrival(
+    current && desk ? desk.queue : null,
+    current && desk ? desk.me.person_id : null,
+  );
   const can = current && desk ? desk.me.can_manage : false;
   // Only owners and admins pick whose leads; a seller's are always their own.
   const scope: Scope = can ? (scopeChoice ?? "team") : "mine";
@@ -722,9 +736,14 @@ export function LeadsRoute() {
   const canStart = current && !!desk && desk.counts.open > 0;
   const commands = useMemo<CommandSource | null>(() => {
     if (!authenticated) return null;
-    const openLead = (leadId: string, next: LeadIntent | null = null) => {
+    const openLead = (
+      leadId: string,
+      next: LeadIntent | null = null,
+      at: string | null = null,
+    ) => {
       setHolding(null);
       setIntent(next);
+      setFocusAt(at);
       setOpenLead(leadId);
     };
     const round = (which: "calling" | "adding") =>
@@ -757,12 +776,27 @@ export function LeadsRoute() {
           },
         },
       ],
+      // Leads, then what was written on them and their open tasks (v0.89).
       search: async (text, signal) => {
-        const page = await readLeads(
-          { scope: can ? "team" : "mine", search: text },
-          signal,
-        );
-        return page.leads.slice(0, 6).flatMap((row) => [
+        if (text.trim().length < 2) return [];
+        const found = await searchDesk(text, signal);
+        const written = found.notes.slice(0, 4).map((item) => ({
+          id: `leads:note:${item.event_id}`,
+          group: "Notes",
+          label: item.lead_name,
+          hint: item.event.note ?? "",
+          icon: <NotebookPen size={16} aria-hidden="true" />,
+          run: () => openLead(item.lead_id, null, item.event.at),
+        }));
+        const promised = found.tasks.slice(0, 4).map((task) => ({
+          id: `leads:task:${task.task_id}`,
+          group: "Tasks",
+          label: task.title,
+          hint: dueWords(task),
+          icon: <ListTodo size={16} aria-hidden="true" />,
+          run: () => openLead(task.lead_id),
+        }));
+        const leads = found.leads.slice(0, 6).flatMap((row) => [
           {
             id: `leads:open:${row.lead_id}`,
             group: "Leads",
@@ -784,9 +818,10 @@ export function LeadsRoute() {
               ]
             : []),
         ]);
+        return [...leads, ...written, ...promised];
       },
     };
-  }, [authenticated, can, canStart]);
+  }, [authenticated, canStart]);
   useCommandSource("leads", commands);
 
   if (!authenticated) {
@@ -896,6 +931,7 @@ export function LeadsRoute() {
     setLinkDone(hash);
     leaveAddressLead();
     setHolding(null);
+    arrival.know(leadId);
     setIntent(next);
     setFocusAt(at);
     setOpenLead(leadId);
@@ -905,6 +941,16 @@ export function LeadsRoute() {
     onMessage: (row) => open(row.lead_id, "message"),
     onHold: (row) => setHolding(row),
     onLog: (row) => open(row.lead_id, "log"),
+    // The card's own buttons: one tap, no confirm (owner, 24 Oct 2026).
+    onTap: (row, channel) =>
+      open(
+        row.lead_id,
+        channel === "whatsapp"
+          ? "message"
+          : channel === "email"
+            ? "email"
+            : "call",
+      ),
   };
   const org =
     access?.workspaces?.find(
@@ -915,6 +961,10 @@ export function LeadsRoute() {
   // Tabs and filters change the address in place, so Back never steps
   // through them; a settings page is a step of its own, so Back returns.
   const go = (next: string) => {
+    if (next === NOTES) {
+      router.push(viewHref(NOTES));
+      return;
+    }
     const href = viewHref(next, pipeline, filters);
     setPicked({ view: next, at: addressKey, pipeline });
     if (
@@ -951,6 +1001,7 @@ export function LeadsRoute() {
     { key: BOARD, label: "Board" },
     { key: WORK, label: "My work" },
     { key: TASKS, label: "Tasks" },
+    { key: NOTES, label: "Notes" },
     // On the board its own strip names every stage: one switcher, not two.
     ...stageTabs(
       journey?.key === journeyKey ? journey.view : null,
@@ -1358,6 +1409,20 @@ export function LeadsRoute() {
           onChanged={refresh}
           onNext={(leadId) => open(leadId, "call")}
           pipeline={toCallPipeline}
+        />
+        <NewLeadCard
+          lead={arrival.lead}
+          count={arrival.count}
+          open={!openLead && !dialling && !holding}
+          onCall={(row) => {
+            arrival.putBy();
+            open(row.lead_id, "call");
+          }}
+          onMessage={(row) => {
+            arrival.putBy();
+            open(row.lead_id, "message");
+          }}
+          onLater={arrival.putBy}
         />
         <ActionSheet
           open={!!dialling}

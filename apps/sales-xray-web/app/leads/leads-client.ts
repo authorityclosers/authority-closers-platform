@@ -65,6 +65,8 @@ export type LeadRow = {
   next_action_note?: string | null;
   /** An open lead past New with no follow-up set. */
   no_next_action?: boolean;
+  /** It has an email address: the card offers one-tap Email. */
+  has_email?: boolean;
 };
 
 export type MessageTemplate = { key: string; label: string; text: string };
@@ -793,6 +795,34 @@ export function addTask(leadId: string, task: NewTask, command = commandId()) {
       ...body,
     }),
   );
+}
+
+/** Notes: what people wrote on your leads, newest first; with words, what says
+ *  them (v0.89). A note on its own and the remark saved with a call's outcome. */
+export function readNotes(
+  q: string | null = null,
+  before: string | null = null,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams();
+  if (q?.trim()) params.set("q", q.trim().slice(0, 80));
+  if (before) params.set("before", before);
+  const query = params.toString();
+  return request<ActivityPage>(`/notes${query ? `?${query}` : ""}`, {
+    signal,
+  });
+}
+
+export type SearchResult = {
+  leads: LeadRow[];
+  notes: ActivityItem[];
+  tasks: TaskView[];
+};
+
+/** A few words (two letters at least) across leads, notes and open tasks. */
+export function searchDesk(q: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({ q: q.trim().slice(0, 80) });
+  return request<SearchResult>(`/search?${params}`, { signal });
 }
 
 /** Done, undo or cancel, on the revision this device saw. */

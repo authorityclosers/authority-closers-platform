@@ -646,6 +646,7 @@ class LeadDesk:
             no_next_action=lead.stage in OPEN_STAGES
             and lead.stage != "new"
             and lead.next_action_at is None,
+            has_email=bool(lead.email),
         )
 
     def _reason_label(self, lead: Lead) -> str | None:
