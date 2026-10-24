@@ -21,7 +21,7 @@ from typing import Any, cast
 import httpx
 import pytest
 from fastapi import Request
-from sqlalchemy import select, update
+from sqlalchemy import select, text, update
 
 from ac_platform.identity.application import AsyncIdentityApplication
 from ac_platform.identity.models import Session as IdentitySession
@@ -189,9 +189,38 @@ def test_reads_and_writes_never_wait_for_each_other_but_writes_take_turns(
                 assert written.json()["waited"] < HOLD / 3, written.json()
 
                 # Reads while a write is in flight sign in at once too.
-                first, *after = await asyncio.gather(write(), *(later(read) for _ in range(5)))
+                async def spy() -> list[Any]:
+                    await asyncio.sleep(HOLD * 0.6)
+                    async with setup.engine.connect() as conn:
+                        act = (
+                            await conn.execute(
+                                text(
+                                    "select pid, state, wait_event_type, wait_event, "
+                                    "left(query, 200) from pg_stat_activity "
+                                    "where datname = current_database() "
+                                    "and pid <> pg_backend_pid()"
+                                )
+                            )
+                        ).all()
+                        locks = (
+                            await conn.execute(
+                                text(
+                                    "select l.pid, l.locktype, l.relation::regclass::text, "
+                                    "l.mode, l.granted, pg_blocking_pids(l.pid) "
+                                    "from pg_locks l where not l.granted"
+                                )
+                            )
+                        ).all()
+                    return [list(map(str, r)) for r in act] + [
+                        ["LOCK", *map(str, r)] for r in locks
+                    ]
+
+                first, seen, *after = await asyncio.gather(
+                    write(), spy(), *(later(read) for _ in range(5))
+                )
                 assert first.status_code == 200, first.text
-                assert max(answer.json()["waited"] for answer in after) < HOLD / 3
+                waits = [answer.json()["waited"] for answer in after]
+                assert max(waits) < HOLD / 3, (waits, seen)
 
                 # The same person's writes still go one at a time.
                 both = await asyncio.gather(write(), write())
