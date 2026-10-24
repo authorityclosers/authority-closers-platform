@@ -453,7 +453,8 @@ def _people(rows: Iterable[Row], test: Callable[[Row], bool]) -> set[str]:
     return {row.person for row in rows if test(row)}
 
 
-def _funnels(rows: Sequence[Row]) -> list[dict[str, Any]]:
+def funnels(rows: Sequence[Row]) -> list[dict[str, Any]]:
+    """From a report to an outcome, and from Leads to an outcome (people at each step)."""
     report = _funnel(
         [
             ("opened", "Opened a report", _people(rows, lambda r: r.event == "sx.report_opened")),
@@ -886,7 +887,7 @@ def overview(
         "vitals": _vitals(by_event.get("sx.web_vital", [])),
         "starts": _starts(by_event.get("sx.app_start", [])),
         "screens": _screens(by_event.get("sx.screen_viewed", []), since, now, window == "24h"),
-        "funnels": _funnels(rows),
+        "funnels": funnels(rows),
         "features": _features(rows),
         "errors": _errors(rows),
         "mix": _mix(rows),
@@ -896,13 +897,16 @@ def overview(
 
 
 __all__ = [
+    "ACTION_LABELS",
     "DEFAULT_SLOW_MS",
     "SCHEMA",
     "SLOW_MS",
+    "VITAL_LIMITS",
     "WINDOWS",
     "Filters",
     "Read",
     "Row",
+    "funnels",
     "overview",
     "read_consent",
     "read_rows",
