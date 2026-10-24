@@ -14,6 +14,10 @@ import pytest
 from fastapi import FastAPI
 from sqlalchemy.orm import Session
 
+from ac_platform.conversation_intelligence.models import (
+    ConversationPermission,
+    ConversationRecording,
+)
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.http.sales_xray_home import lead_counts, sales_xray_home
@@ -85,6 +89,40 @@ def _lead(tenant: UUID, owner: UUID | None, updated: datetime) -> Lead:
     )
 
 
+def _call(world, tenant: UUID, state: str = "ready") -> list[object]:
+    """A call she recorded in this workspace (a permission and its recording)."""
+    permission = uuid4()
+    return [
+        ConversationPermission(
+            id=permission,
+            tenant_id=tenant,
+            person_id=world.person,
+            source_sha256="a" * 64,
+            provider="local",
+            permission_reference="synthetic-permission",
+            retention_reference="synthetic-retention",
+            created_at=NOW - timedelta(hours=2),
+            expires_at=NOW + timedelta(days=1),
+            retention_until=NOW + timedelta(days=30),
+        ),
+        ConversationRecording(
+            id=uuid4(),
+            tenant_id=tenant,
+            person_id=world.person,
+            permission_id=permission,
+            request_key=uuid4().hex,
+            intent_sha256="b" * 64,
+            source_sha256="a" * 64,
+            source_bytes=1024,
+            content_type="audio/wav",
+            source_revision=1,
+            generation=1,
+            state=state,
+            created_at=NOW - timedelta(hours=2),
+        ),
+    ]
+
+
 def _add(world, *rows) -> None:
     with Session(world.engine) as db, db.begin():
         db.add_all(rows)
@@ -136,6 +174,17 @@ async def test_without_an_earlier_choice_the_newest_data_decides(world):
         _lead(world.tenants["Alpha"], None, NOW),
     )
     assert await _home(world) == world.tenants["Alpha"]
+
+
+async def test_a_call_she_recorded_counts_as_her_data(world):
+    # Her only data is a call in Personal; her organisations are empty.
+    _add(world, *_call(world, world.tenants["Beta"]))
+    assert await _home(world) == world.tenants["Beta"]
+
+
+async def test_a_deleted_call_does_not_count(world):
+    _add(world, *_call(world, world.tenants["Beta"], state="deleted"))
+    assert await _home(world) in {world.tenants["Alpha"], world.tenants["Gamma"]}
 
 
 async def test_with_no_data_anywhere_the_newest_organisation_then_personal(world):

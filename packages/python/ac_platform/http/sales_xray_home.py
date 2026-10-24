@@ -9,8 +9,8 @@ opens, in order:
 1. the workspace the person last had open: the one selected on their most
    recently active earlier session, unless it holds none of their Sales X-Ray
    data while another workspace does;
-2. else the workspace with their most recent Sales X-Ray data: leads they own
-   or calls they analysed, and for an owner or admin anything there;
+2. else the workspace with their most recent Sales X-Ray data: leads they own,
+   calls they recorded or analysed, and for an owner or admin anything there;
 3. else their newest organisation;
 4. else Personal.
 
@@ -34,6 +34,7 @@ from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.acquisition_models import (
     ConversationAcquisitionUsage as Usage,
 )
+from ac_platform.conversation_intelligence.models import ConversationRecording as Recording
 from ac_platform.identity.models import Session as SessionRow
 from ac_platform.lead_desk.models import Lead
 from ac_platform.tenancy.models import (
@@ -132,15 +133,24 @@ async def sales_xray_home(
         return None
     tenants = list(places)
     latest: dict[UUID, datetime] = {}
-    for tenant_column, owner_column, when in (
+    for tenant_column, owner_column, when, *kept in (
         (Lead.tenant_id, Lead.owner_person_id, Lead.updated_at),
         (Usage.tenant_id, Usage.person_id, Usage.created_at),
+        # Calls they recorded, deleted ones aside (the e2e account's only data is
+        # a call in Personal, 24 Oct 2026).
+        (
+            Recording.tenant_id,
+            Recording.person_id,
+            Recording.created_at,
+            Recording.state.not_in(("deleting", "deleted")),
+        ),
     ):
         rows = await database.execute(
             select(tenant_column, func.max(when))
             .where(
                 tenant_column.in_(tenants),
                 _mine(places, person_id, tenant_column, owner_column),
+                *kept,
             )
             .group_by(tenant_column)
         )
