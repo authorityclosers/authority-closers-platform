@@ -7,13 +7,14 @@
  */
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { Download, Smartphone } from "lucide-react";
+import { Download, RefreshCw, Smartphone } from "lucide-react";
 
 import {
   AccountSettings,
   type SettingsBillingProps,
 } from "../account-settings";
 import { PLAY } from "../apps/play";
+import { refreshAppData } from "../shell/refresh-app";
 import { ANDROID_APK_URL } from "../apps/release";
 import { CallAiSettingsSection } from "../call-ai/call-ai-settings";
 import { AlertsCard } from "../leads/alerts-card";
@@ -92,6 +93,18 @@ function AppPanel() {
           Google Play.
         </Note>
       )}
+      {/* Orchestrator, 24 Oct 2026: never reinstall to recover. */}
+      <Note icon={<RefreshCw size={18} />} title="Refresh app data">
+        If a screen hangs, this starts Sales X-Ray afresh. You stay signed in,
+        and changes not sent yet are kept.
+      </Note>
+      <button
+        type="button"
+        className={styles.textButton}
+        onClick={() => void refreshAppData()}
+      >
+        Refresh app data
+      </button>
     </Panel>
   );
 }

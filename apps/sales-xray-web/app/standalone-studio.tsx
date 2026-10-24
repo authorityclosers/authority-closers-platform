@@ -22,6 +22,7 @@ import { PhoneOnboarding } from "./leads/phone-onboarding";
 import { PersistentShell } from "./shell/lightbox-shell";
 import { PlayMoveCard } from "./apps/play-move-card";
 import { WriteSync } from "./sync/write-sync";
+import { StuckWatch } from "./shell/stuck-watch";
 import { useTheme } from "./lightbox/theme-provider";
 import { PageSkeleton } from "./shell/page-skeleton";
 import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
@@ -285,6 +286,7 @@ function AppFrame({
       <PhoneOnboarding />
       <PlayMoveCard />
       <WriteSync />
+      <StuckWatch />
     </>
   );
 }
