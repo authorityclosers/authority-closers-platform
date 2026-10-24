@@ -418,11 +418,44 @@ async function act(page, a, device, stills) {
               /(\+91[\s-]?)?\b([6-9]\d)(\d{3})[\s-]?(\d{2})(\d{3})\b/g,
               (_m, cc, a, _b, _c, d) => `${cc || ""}${a}XXX XX${d}`,
             );
+          // Fixture people the map doesn't name ("Rohan Sample", "Pooja Fictional") get a realistic
+          // surname, the same one every time for the same first name.
+          const surnames = [
+            "Kale",
+            "Jadhav",
+            "Pawar",
+            "Shinde",
+            "Deshpande",
+            "Gaikwad",
+            "More",
+            "Salunkhe",
+            "Chavan",
+            "Sawant",
+            "Pande",
+            "Kamat",
+            "Rane",
+            "Wagh",
+            "Bapat",
+          ];
+          const surname = (first) =>
+            surnames[
+              [...first].reduce(
+                (h, c) => (h * 31 + c.charCodeAt(0)) % 9973,
+                7,
+              ) % surnames.length
+            ];
+          const people = (s) =>
+            s.replace(
+              /\b([A-Z][a-z]{2,}) (?:Sample|Fictional|Example)\b/g,
+              (_m, first) => `${first} ${surname(first)}`,
+            );
           const swap = (s) => {
             const hit = initials.find(([from]) => s.trim() === from);
             if (hit) return s.replace(hit[0], hit[1]);
             return mask(
-              words.reduce((t, [from, to]) => t.split(from).join(to), s),
+              people(
+                words.reduce((t, [from, to]) => t.split(from).join(to), s),
+              ),
             );
           };
           const round = (el) => {
@@ -448,6 +481,10 @@ async function act(page, a, device, stills) {
             for (const el of document.querySelectorAll("input, textarea")) {
               const next = swap(el.value || "");
               if (next !== el.value) el.value = next;
+              // Sample numbers in empty fields are masked too (an attribute change; no loop).
+              const hint = el.getAttribute("placeholder");
+              if (hint && swap(hint) !== hint)
+                el.setAttribute("placeholder", swap(hint));
             }
             for (const el of document.querySelectorAll("body *")) {
               if (el.dataset.sxAvatar || !round(el)) continue;
@@ -593,7 +630,11 @@ async function startRecording(page, dir, device) {
   cdp.on("Page.screencastFrame", async (f) => {
     const n = frames.length;
     const file = path.join(dir, `f${String(n).padStart(5, "0")}.jpg`);
-    fs.writeFileSync(file, Buffer.from(f.data, "base64"));
+    try {
+      fs.writeFileSync(file, Buffer.from(f.data, "base64"));
+    } catch {
+      return; // the shot failed and its folder is gone; late frames are dropped
+    }
     frames.push({ file, t: f.metadata.timestamp });
     try {
       await cdp.send("Page.screencastFrameAck", { sessionId: f.sessionId });
@@ -840,6 +881,7 @@ async function take(boardFile, out, only) {
   const shots = new Map(previous.map((s) => [s.id, s]));
   let failed = 0;
   for (const shot of board.shots) {
+    if (!DEVICES[shot.device]) continue; // step cards are drawn, not recorded
     if (only && !only.includes(shot.id)) continue;
     const dir = path.join(out, "frames", shot.id);
     fs.rmSync(dir, { recursive: true, force: true });
@@ -866,6 +908,7 @@ async function take(boardFile, out, only) {
         base: BASE,
         taken_at: new Date().toISOString(),
         shots: board.shots
+          .filter((s) => DEVICES[s.device])
           .map((s) => s.id)
           .filter((id) => shots.has(id))
           .map((id) => shots.get(id)),

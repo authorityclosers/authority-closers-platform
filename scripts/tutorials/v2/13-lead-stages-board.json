@@ -1,0 +1,642 @@
+{
+  "id": "13-lead-stages-board",
+  "number": "13",
+  "kind": "feature",
+  "title": {
+    "en": "Lead stages and the Board",
+    "hi": "Lead stages aur Board",
+    "mr": "Lead stages aani Board"
+  },
+  "description": {
+    "en": "The Board in Sales X-Ray shows every lead in one of nine stages, from New Lead to Closed. See who's late, call in one tap, move a lead to its next stage, and read Pipeline numbers.",
+    "hi": "Sales X-Ray ka Board har lead ko nau stages mein dikhata hai, New Lead se Closed tak. Kaun late hai dekhiye, ek tap mein call kijiye, lead ko agle stage pe le jaaiye, aur Pipeline numbers padhiye.",
+    "mr": "Sales X-Ray cha Board pratyek lead nau stages madhye dakhavto, New Lead pasun Closed paryant. Kon late aahe bagha, eka tap madhye call kara, lead la pudhchya stage var nya, aani Pipeline numbers vacha."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "lead management",
+    "sales CRM India",
+    "Hindi",
+    "Marathi",
+    "pipeline",
+    "Kanban board",
+    "Lead OS"
+  ],
+  "names": {
+    "Sales Xray": "Sales X-Ray",
+    "[the owner's one-line reason]": "a quick partnership idea",
+    "Can I show you in 10 minutes how": "Can I quickly show you how"
+  },
+  "next": {
+    "id": "15-all-leads-filter",
+    "title": {
+      "en": "All leads: filter, sort, views",
+      "hi": "All leads: filter, sort, views",
+      "mr": "All leads: filter, sort, views"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "In this video: the Board, where every lead sits in one of nine stages.",
+      "hi": "इस video में: Board, जहाँ हर lead नौ में से किसी एक stage में होता है.",
+      "mr": "या video मध्ये: Board, जिथे प्रत्येक lead नऊ पैकी एका stage मध्ये असतो."
+    },
+    "latn": {
+      "hi": "Is video mein: Board, jahan har lead nau mein se kisi ek stage mein hota hai.",
+      "mr": "Ya video madhye: Board, jithe pratyek lead nau paiki eka stage madhye asto."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "Every lead, one stage.",
+      "hi": "Har lead, ek stage.",
+      "mr": "Pratyek lead, ek stage."
+    },
+    "say": {
+      "en": "Next: All leads, with filter, sort and saved views.",
+      "hi": "अगले video में: All leads, filter, sort और saved views के साथ.",
+      "mr": "पुढच्या video मध्ये: All leads, filter, sort आणि saved views सकट."
+    },
+    "latn": {
+      "hi": "Agle video mein: All leads, filter, sort aur saved views ke saath.",
+      "mr": "Pudhchya video madhye: All leads, filter, sort aani saved views sakat."
+    }
+  },
+  "chapters": [
+    {
+      "id": "board",
+      "title": {
+        "en": "The Board",
+        "hi": "Board",
+        "mr": "Board"
+      }
+    },
+    {
+      "id": "move",
+      "title": {
+        "en": "Moving a lead",
+        "hi": "Lead ko aage badhaiye",
+        "mr": "Lead pudhe nya"
+      }
+    },
+    {
+      "id": "numbers",
+      "title": {
+        "en": "Pipeline numbers",
+        "hi": "Pipeline numbers",
+        "mr": "Pipeline numbers"
+      }
+    }
+  ],
+  "reel": {
+    "hook": {
+      "beat": "strip",
+      "text": {
+        "en": "9 stages, one Board",
+        "hi": "9 stages, ek Board",
+        "mr": "9 stages, ek Board"
+      },
+      "accent": {
+        "en": "one Board",
+        "hi": "ek Board",
+        "mr": "ek Board"
+      },
+      "say": {
+        "en": "Every lead, in one of nine stages. On one Board.",
+        "hi": "हर lead, नौ में से एक stage में. एक ही Board पे.",
+        "mr": "प्रत्येक lead, नऊ पैकी एका stage मध्ये. एकाच Board वर."
+      },
+      "latn": {
+        "hi": "Har lead, nau mein se ek stage mein. Ek hi Board pe.",
+        "mr": "Pratyek lead, nau paiki eka stage madhye. Ekach Board var."
+      }
+    },
+    "beats": ["strip", "card", "one-tap", "move", "jump", "closed", "numbers"]
+  },
+  "shots": [
+    {
+      "id": "board",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=board"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Deal value"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "beats": [
+        {
+          "id": "board-tab",
+          "chapter": "board",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "tab",
+                "name": "Board"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "In Leads, tap Board. Every lead sits in one of nine stages, from New Lead to Closed.",
+            "hi": "Leads में Board दबाइए. हर lead नौ में से एक stage में होता है, New Lead से Closed तक.",
+            "mr": "Leads मध्ये Board दाबा. प्रत्येक lead नऊ पैकी एका stage मध्ये असतो, New Lead पासून Closed पर्यंत."
+          },
+          "latn": {
+            "hi": "Leads mein Board dabaiye. Har lead nau mein se ek stage mein hota hai, New Lead se Closed tak.",
+            "mr": "Leads madhye Board daba. Pratyek lead nau paiki eka stage madhye asto, New Lead pasun Closed paryant."
+          }
+        },
+        {
+          "id": "strip",
+          "chapter": "board",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "New Lead"
+              },
+              "ms": 1200
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Not Connected"
+              },
+              "ms": 1200
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "The strip on top shows every stage, and how many leads are in it. A red dot means someone there is waiting.",
+            "hi": "ऊपर की strip में हर stage है, और उसमें कितने leads हैं. Red dot मतलब वहाँ कोई wait कर रहा है.",
+            "mr": "वरच्या strip मध्ये प्रत्येक stage आहे, आणि त्यात किती leads आहेत. Red dot म्हणजे तिथे कोणीतरी वाट बघतंय."
+          },
+          "latn": {
+            "hi": "Upar ki strip mein har stage hai, aur usmein kitne leads hain. Red dot matlab wahan koi wait kar raha hai.",
+            "mr": "Varchya strip madhye pratyek stage aahe, aani tyat kiti leads aahet. Red dot mhanje tithe konitari vaat baghtay."
+          },
+          "short": {
+            "say": {
+              "en": "Nine stages, with a count on each.",
+              "hi": "नौ stages, हर एक पे गिनती.",
+              "mr": "नऊ stages, प्रत्येकावर संख्या."
+            },
+            "latn": {
+              "hi": "Nau stages, har ek pe ginti.",
+              "mr": "Nau stages, pratyekavar sankhya."
+            }
+          }
+        },
+        {
+          "id": "card",
+          "chapter": "board",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Open Asha Fictional"
+              },
+              "ms": 1800
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "1 late"
+              },
+              "ms": 1200
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Each card shows where the lead came from, how long it's been in this stage, and what to do next. Late ones are marked.",
+            "hi": "हर card बताता है lead कहाँ से आया, इस stage में कब से है, और आगे क्या करना है. Late वाले mark रहते हैं.",
+            "mr": "प्रत्येक card सांगतो lead कुठून आला, या stage मध्ये किती वेळ आहे, आणि पुढे काय करायचं. Late वाले mark असतात."
+          },
+          "latn": {
+            "hi": "Har card batata hai lead kahan se aaya, is stage mein kab se hai, aur aage kya karna hai. Late wale mark rehte hain.",
+            "mr": "Pratyek card sangto lead kuthun aala, ya stage madhye kiti vel aahe, aani pudhe kay karaycha. Late vale mark astat."
+          },
+          "short": {
+            "say": {
+              "en": "Source, time in stage, next step.",
+              "hi": "Source, stage में कब से, अगला step.",
+              "mr": "Source, stage मध्ये किती वेळ, पुढचा step."
+            },
+            "latn": {
+              "hi": "Source, stage mein kab se, agla step.",
+              "mr": "Source, stage madhye kiti vel, pudhcha step."
+            }
+          }
+        },
+        {
+          "id": "one-tap",
+          "chapter": "board",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Call Asha Fictional"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Tap the phone button to call in one tap, right from the Board.",
+            "hi": "Phone वाला button दबाइए, Board से ही एक tap में call.",
+            "mr": "Phone चं button दाबा, Board वरूनच एका tap मध्ये call."
+          },
+          "latn": {
+            "hi": "Phone wala button dabaiye, Board se hi ek tap mein call.",
+            "mr": "Phone cha button daba, Board varunach eka tap madhye call."
+          },
+          "short": {
+            "say": {
+              "en": "One tap to call.",
+              "hi": "एक tap में call.",
+              "mr": "एका tap मध्ये call."
+            },
+            "latn": {
+              "hi": "Ek tap mein call.",
+              "mr": "Eka tap madhye call."
+            }
+          }
+        },
+        {
+          "id": "move",
+          "chapter": "move",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Move Asha Fictional"
+              },
+              "ms": 1700
+            }
+          ],
+          "say": {
+            "en": "Tap the arrows to move a lead to its next stage. Every move is saved on the lead's history.",
+            "hi": "Arrows दबाइए और lead को अगले stage पे ले जाइए. हर move lead की history में save होता है.",
+            "mr": "Arrows दाबा आणि lead ला पुढच्या stage वर न्या. प्रत्येक move lead च्या history मध्ये save होतो."
+          },
+          "latn": {
+            "hi": "Arrows dabaiye aur lead ko agle stage pe le jaaiye. Har move lead ki history mein save hota hai.",
+            "mr": "Arrows daba aani lead la pudhchya stage var nya. Pratyek move lead chya history madhye save hoto."
+          },
+          "short": {
+            "say": {
+              "en": "Move it to the next stage.",
+              "hi": "अगले stage पे ले जाइए.",
+              "mr": "पुढच्या stage वर न्या."
+            },
+            "latn": {
+              "hi": "Agle stage pe le jaaiye.",
+              "mr": "Pudhchya stage var nya."
+            }
+          }
+        },
+        {
+          "id": "jump",
+          "chapter": "move",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Meeting / Demo Scheduled"
+              },
+              "ms": 1500
+            }
+          ],
+          "say": {
+            "en": "Tap any stage in the strip to jump straight to it, like Meeting or Demo Scheduled.",
+            "hi": "Strip में किसी भी stage पे tap कीजिए, सीधे वहाँ पहुँचिए, जैसे Meeting या Demo Scheduled.",
+            "mr": "Strip मधल्या कुठल्याही stage वर tap करा, थेट तिथे पोहोचा, जसं Meeting किंवा Demo Scheduled."
+          },
+          "latn": {
+            "hi": "Strip mein kisi bhi stage pe tap kijiye, seedhe wahan pahunchiye, jaise Meeting ya Demo Scheduled.",
+            "mr": "Strip madhlya kuthlyahi stage var tap kara, thet tithe pohocha, jasa Meeting kinva Demo Scheduled."
+          },
+          "short": {
+            "say": {
+              "en": "Jump to any stage.",
+              "hi": "किसी भी stage पे जाइए.",
+              "mr": "कुठल्याही stage वर जा."
+            },
+            "latn": {
+              "hi": "Kisi bhi stage pe jaaiye.",
+              "mr": "Kuthlyahi stage var ja."
+            }
+          }
+        },
+        {
+          "id": "closed",
+          "chapter": "move",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Closed / Lost"
+              },
+              "ms": 1500
+            }
+          ],
+          "say": {
+            "en": "Closed Won, Closed Lost and Junk keep finished leads out of your way. Lost and Junk always ask for a reason.",
+            "hi": "Closed Won, Closed Lost और Junk, ख़त्म हुए leads को अलग रखते हैं. Lost और Junk हमेशा reason माँगते हैं.",
+            "mr": "Closed Won, Closed Lost आणि Junk, संपलेले leads बाजूला ठेवतात. Lost आणि Junk नेहमी reason मागतात."
+          },
+          "latn": {
+            "hi": "Closed Won, Closed Lost aur Junk, khatam hue leads ko alag rakhte hain. Lost aur Junk hamesha reason maangte hain.",
+            "mr": "Closed Won, Closed Lost aani Junk, samplele leads bajula thevtat. Lost aani Junk nehmi reason maagtat."
+          }
+        }
+      ]
+    },
+    {
+      "id": "stage-history",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?hub=1&after-call=1"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Deal value"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "beats": [
+        {
+          "id": "stage-history",
+          "chapter": "move",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "text": "History",
+                "exact": true
+              },
+              "offset": 150,
+              "ms": 800
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Stages",
+                "exact": true
+              },
+              "ms": 1500
+            }
+          ],
+          "say": {
+            "en": "Every stage change is kept on the lead's History. Tap Stages to see its whole path.",
+            "hi": "हर stage change lead की History में रहता है. Stages दबाइए, पूरा रास्ता दिखेगा.",
+            "mr": "प्रत्येक stage change lead च्या History मध्ये राहतो. Stages दाबा, पूर्ण प्रवास दिसेल."
+          },
+          "latn": {
+            "hi": "Har stage change lead ki History mein rehta hai. Stages dabaiye, poora raasta dikhega.",
+            "mr": "Pratyek stage change lead chya History madhye rahto. Stages daba, poorna pravas disel."
+          }
+        }
+      ]
+    },
+    {
+      "id": "numbers",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=numbers"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Deal value"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "beats": [
+        {
+          "id": "numbers",
+          "chapter": "numbers",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Being worked"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Won in 30 days"
+              },
+              "ms": 1200
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Pipeline numbers show how your leads are moving: being worked, won, meetings booked, and late follow-ups.",
+            "hi": "Pipeline numbers बताते हैं leads कैसे आगे बढ़ रहे हैं: जिन पे काम चल रहा है, won, meetings booked, और late follow-ups.",
+            "mr": "Pipeline numbers सांगतात leads कसे पुढे जातायत: ज्यांच्यावर काम चालू आहे, won, meetings booked, आणि late follow-ups."
+          },
+          "latn": {
+            "hi": "Pipeline numbers batate hain leads kaise aage badh rahe hain: jin pe kaam chal raha hai, won, meetings booked, aur late follow-ups.",
+            "mr": "Pipeline numbers sangtat leads kase pudhe jaatayat: jyanchyavar kaam chalu aahe, won, meetings booked, aani late follow-ups."
+          },
+          "short": {
+            "say": {
+              "en": "And your numbers, at a glance.",
+              "hi": "और आपके numbers, एक नज़र में.",
+              "mr": "आणि तुमचे numbers, एका नजरेत."
+            },
+            "latn": {
+              "hi": "Aur aapke numbers, ek nazar mein.",
+              "mr": "Aani tumche numbers, eka najret."
+            }
+          }
+        },
+        {
+          "id": "bars",
+          "chapter": "numbers",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "text": "still being worked"
+              },
+              "offset": 140,
+              "ms": 700
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "still being worked"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Below, you see how many leads sit in each stage.",
+            "hi": "नीचे दिखता है हर stage में कितने leads हैं.",
+            "mr": "खाली दिसतं प्रत्येक stage मध्ये किती leads आहेत."
+          },
+          "latn": {
+            "hi": "Neeche dikhta hai har stage mein kitne leads hain.",
+            "mr": "Khali dista pratyek stage madhye kiti leads aahet."
+          }
+        },
+        {
+          "id": "period",
+          "chapter": "numbers",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "text": "7 days",
+                "exact": true
+              },
+              "ms": 1300
+            }
+          ],
+          "say": {
+            "en": "Switch between seven, thirty and ninety days.",
+            "hi": "सात, तीस और नब्बे दिनों के बीच switch कीजिए.",
+            "mr": "सात, तीस आणि नव्वद दिवसांमध्ये switch करा."
+          },
+          "latn": {
+            "hi": "Saat, tees aur nabbe dinon ke beech switch kijiye.",
+            "mr": "Saat, tees aani navvad divasanmadhye switch kara."
+          }
+        }
+      ]
+    },
+    {
+      "id": "board-wide",
+      "device": "wide",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=board"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Deal value"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "beats": [
+        {
+          "id": "wide",
+          "chapter": "board",
+          "actions": [
+            {
+              "do": "focus",
+              "target": {
+                "text": "Interested (In Follow-Up)",
+                "nth": 1
+              },
+              "zoom": false,
+              "ms": 1500
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Discussion Incomplete",
+                "nth": 1
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "On a computer, you see the stages side by side, so the whole pipeline fits on one screen.",
+            "hi": "Computer पे सारे stages एक साथ दिखते हैं, पूरी pipeline एक ही screen पे.",
+            "mr": "Computer वर सगळे stages शेजारी शेजारी दिसतात, पूर्ण pipeline एकाच screen वर."
+          },
+          "latn": {
+            "hi": "Computer pe saare stages ek saath dikhte hain, poori pipeline ek hi screen pe.",
+            "mr": "Computer var sagle stages shejari shejari distat, poorna pipeline ekach screen var."
+          }
+        }
+      ]
+    }
+  ],
+  "thumb": {
+    "beat": "strip",
+    "text": {
+      "en": "9 stages, one Board",
+      "hi": "9 stages, ek Board",
+      "mr": "9 stages, ek Board"
+    },
+    "accent": {
+      "en": "one Board",
+      "hi": "ek Board",
+      "mr": "ek Board"
+    }
+  }
+}

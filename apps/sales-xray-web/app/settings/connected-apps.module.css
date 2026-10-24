@@ -403,6 +403,42 @@
   list-style: none;
 }
 
+/* Why an app can't do its whole job yet: the reason, then what to do now. */
+.blockers {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.blockers li {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border-radius: var(--sx-radius-sm);
+  background: color-mix(in oklab, var(--sx-warn) 10%, transparent);
+}
+
+.blockerReason {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.blockerFix {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.blockers li .more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
 .connection {
   display: flex;
   flex-wrap: wrap;

@@ -61,6 +61,7 @@ import { RecordedCallsCard } from "./recorded-calls";
 import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
+import { IN_APP_CALL, InAppCallHint, useInPhoneApp } from "./call-hint";
 import { cachedDesk, rememberDesk } from "./desk-cache";
 import { DeskView, toCallNow, whyLine, type RowActions } from "./desk-view";
 import { PullMark, usePullToRefresh } from "../shell/pull-refresh";
@@ -105,6 +106,7 @@ import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { LeadsSkeleton } from "./leads-skeleton";
 import { ListView, TEST, type Scope } from "./list-view";
 import { MyWork } from "./my-work";
+import { TasksView } from "./tasks-view";
 import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
 import { TakingSwitch } from "./taking-switch";
@@ -190,6 +192,8 @@ function viewHref(
   if (view === BOARD) return `${path}?tab=board${inPipeline}${who}${q}`;
   // My work: the seller's own calls, notes and moves.
   if (view === WORK) return `${path}?tab=work`;
+  // Tasks: the seller's promises, overdue, today and upcoming.
+  if (view === TASKS) return `${path}?tab=tasks`;
   const more = moreParams(filters.more)
     .map(([key, value]) => `&${key}=${encodeURIComponent(value)}`)
     .join("");
@@ -227,6 +231,8 @@ const BOARD = "board";
 /** My work's view key (owner, 24 Oct 2026: "she has to see notes and work she has
  * done recently"). */
 const WORK = "work";
+/** Tasks' view key (owner, 24 Oct 2026; work-memory engine). */
+const TASKS = "tasks";
 const PipelineBoard = dynamic(
   () => import("./pipeline/board").then((module) => module.PipelineBoard),
   { ssr: false },
@@ -349,6 +355,7 @@ export function LeadsRoute() {
   // A swipe right asks once before it calls: a sloppy sideways scroll must
   // never ring a lead (Redmi audit #13, 22 Oct 2026).
   const [dialling, setDialling] = useState<LeadRow | null>(null);
+  const inApp = useInPhoneApp();
   const waiters = useRef<(() => void)[]>([]);
   const readAhead = useRef(false);
   const lastRead = useRef(0);
@@ -595,6 +602,7 @@ export function LeadsRoute() {
     requested === "numbers" ||
     requested === BOARD ||
     requested === WORK ||
+    requested === TASKS ||
     (can && (requested === "team" || requested === "sources"))
       ? requested
       : requested === "all"
@@ -612,7 +620,8 @@ export function LeadsRoute() {
       : null;
   const board = view === BOARD;
   const work = view === WORK;
-  const stageView = !manage && view !== "desk" && !board && !work;
+  const tasks = view === TASKS;
+  const stageView = !manage && view !== "desk" && !board && !work && !tasks;
   // Several pipelines: a stage view shows one pipeline's leads, or all of them.
   const fromAddressPipeline =
     several(pipes) &&
@@ -941,11 +950,12 @@ export function LeadsRoute() {
     { key: "desk", label: "To call", count: toCall },
     { key: BOARD, label: "Board" },
     { key: WORK, label: "My work" },
+    { key: TASKS, label: "Tasks" },
     // On the board its own strip names every stage: one switcher, not two.
     ...stageTabs(
       journey?.key === journeyKey ? journey.view : null,
       haveCounts ? counts.value : null,
-    ).filter((tab) => !(board || work) || tab.key === "open"),
+    ).filter((tab) => !(board || work || tasks) || tab.key === "open"),
     ...(view === TEST ? [{ key: TEST, label: "Test leads" }] : []),
   ];
   const stageLabel =
@@ -1215,6 +1225,8 @@ export function LeadsRoute() {
               onChanged={refresh}
               onImport={() => begin("importing", setImporting)}
             />
+          ) : tasks ? (
+            <TasksView onOpen={(leadId) => open(leadId)} />
           ) : work ? (
             <MyWork
               onOpen={(leadId, at) => open(leadId, null, at)}
@@ -1364,8 +1376,9 @@ export function LeadsRoute() {
               }}
             >
               <PhoneCall size={18} aria-hidden="true" />
-              Call now
+              {inApp ? IN_APP_CALL : "Call now"}
             </button>
+            <InAppCallHint />
           </div>
         </ActionSheet>
         {holding ? (

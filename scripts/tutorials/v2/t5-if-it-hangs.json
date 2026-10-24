@@ -1,0 +1,301 @@
+{
+  "id": "t5-if-it-hangs",
+  "number": "T5",
+  "kind": "tester",
+  "title": {
+    "en": "If something hangs: Reload or Refresh app data",
+    "hi": "Kuch atak jaaye toh: Reload ya Refresh app data",
+    "mr": "Kahi adakla tar: Reload kinva Refresh app data"
+  },
+  "description": {
+    "en": "A screen stuck? Never reinstall. Tap Reload on the corner card, or use Settings, Phone and alerts, Refresh app data. You stay signed in and unsent changes are kept.",
+    "hi": "Screen atak gayi? Reinstall kabhi mat kijiye. Corner card pe Reload dabaiye, ya Settings, Phone and alerts mein Refresh app data. Aap signed in rehte hain aur unsent changes safe rehte hain.",
+    "mr": "Screen adakli? Kadhihi reinstall karu naka. Corner card var Reload daba, kinva Settings, Phone and alerts madhye Refresh app data. Tumhi signed in rahta aani unsent changes safe rahtat."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "tester",
+    "Google Play",
+    "how to",
+    "Hindi",
+    "Marathi",
+    "troubleshooting",
+    "help",
+    "Android app"
+  ],
+  "names": {
+    "Asha Example": "Asha Kulkarni",
+    "fictional-homes.example": "skyline.example",
+    "Sales Xray": "Sales X-Ray"
+  },
+  "next": {
+    "id": "04-call-a-lead",
+    "title": {
+      "en": "Call a lead and log how it went",
+      "hi": "Lead ko call karo, result log karo",
+      "mr": "Lead la call kara, result log kara"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "What to do if a screen in Sales X-Ray ever hangs, without losing anything.",
+      "hi": "Sales X-Ray में कोई screen अटक जाए तो क्या करें, बिना कुछ खोए.",
+      "mr": "Sales X-Ray मध्ये एखादी screen अडकली तर काय करायचं, काहीही न गमावता."
+    },
+    "latn": {
+      "hi": "Sales X-Ray mein koi screen atak jaaye toh kya karein, bina kuch khoye.",
+      "mr": "Sales X-Ray madhye ekhadi screen adakli tar kay karaycha, kaahihi na gamavta."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "Back on track.",
+      "hi": "Sab theek.",
+      "mr": "Sagla theek."
+    },
+    "say": {
+      "en": "Next: calling a lead and logging how it went.",
+      "hi": "अगले video में: lead को call करना और result log करना.",
+      "mr": "पुढच्या video मध्ये: lead ला call करणं आणि result log करणं."
+    },
+    "latn": {
+      "hi": "Agle video mein: lead ko call karna aur result log karna.",
+      "mr": "Pudhchya video madhye: lead la call karna aani result log karna."
+    }
+  },
+  "chapters": [
+    {
+      "id": "first",
+      "title": {
+        "en": "First, don't reinstall",
+        "hi": "Pehle: reinstall nahi",
+        "mr": "Aadhi: reinstall nako"
+      }
+    },
+    {
+      "id": "refresh",
+      "title": {
+        "en": "Refresh app data",
+        "hi": "Refresh app data",
+        "mr": "Refresh app data"
+      }
+    }
+  ],
+  "reel": {
+    "all": true,
+    "hook": {
+      "text": {
+        "en": "App stuck? Don't reinstall",
+        "hi": "App atka? Reinstall mat kijiye",
+        "mr": "App adakla? Reinstall karu naka"
+      },
+      "say": {
+        "en": "App stuck? Don't reinstall. Do this instead.",
+        "hi": "App अटक गया? Reinstall मत कीजिए. ये कीजिए.",
+        "mr": "App अडकला? Reinstall करू नका. हे करा."
+      },
+      "latn": {
+        "hi": "App atak gaya? Reinstall mat kijiye. Yeh kijiye.",
+        "mr": "App adakla? Reinstall karu naka. He kara."
+      }
+    }
+  },
+  "shots": [
+    {
+      "id": "steps",
+      "device": "card",
+      "beats": [
+        {
+          "id": "dont",
+          "chapter": "first",
+          "actions": [],
+          "card": {
+            "step": "Important",
+            "title": {
+              "en": "Screen stuck? Don't reinstall",
+              "hi": "Screen atki? Reinstall nahi",
+              "mr": "Screen adakli? Reinstall nako"
+            },
+            "icon": "warning",
+            "chips": []
+          },
+          "say": {
+            "en": "If a screen ever gets stuck, please don't uninstall or reinstall the app. There's a faster and safer fix.",
+            "hi": "अगर कभी कोई screen अटक जाए, तो app uninstall या reinstall मत कीजिए. इससे आसान और safe तरीका है.",
+            "mr": "कधी एखादी screen अडकली, तर app uninstall किंवा reinstall करू नका. याहून सोपा आणि safe मार्ग आहे."
+          },
+          "latn": {
+            "hi": "Agar kabhi koi screen atak jaaye, toh app uninstall ya reinstall mat kijiye. Isse aasaan aur safe tareeka hai.",
+            "mr": "Kadhi ekhadi screen adakli, tar app uninstall kinva reinstall karu naka. Yahun sopa aani safe marg aahe."
+          }
+        },
+        {
+          "id": "reload",
+          "chapter": "first",
+          "actions": [],
+          "card": {
+            "step": "Step 1",
+            "title": {
+              "en": "Tap Reload",
+              "hi": "Reload dabaiye",
+              "mr": "Reload daba"
+            },
+            "icon": "refresh",
+            "chips": ["Reload"]
+          },
+          "say": {
+            "en": "If a screen keeps loading for a while, a card in the corner offers Reload. Tap it.",
+            "hi": "अगर कोई screen काफ़ी देर तक loading दिखाए, तो कोने में एक card Reload देता है. उसे दबाइए.",
+            "mr": "एखादी screen बराच वेळ loading दाखवत राहिली, तर कोपऱ्यात एक card Reload देतो. तो दाबा."
+          },
+          "latn": {
+            "hi": "Agar koi screen kaafi der tak loading dikhaye, toh kone mein ek card Reload deta hai. Use dabaiye.",
+            "mr": "Ekhadi screen barach vel loading dakhvat rahili, tar koparyat ek card Reload deto. To daba."
+          }
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/settings?section=notifications"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Sample data only."
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "refresh",
+          "chapter": "refresh",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "role": "button",
+                "name": "Refresh app data"
+              },
+              "offset": 330,
+              "ms": 800
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Refresh app data"
+              },
+              "ms": 1700
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Still stuck? Open Settings, Phone and alerts, and tap Refresh app data.",
+            "hi": "फिर भी अटका है? Settings खोलिए, Phone and alerts में Refresh app data दबाइए.",
+            "mr": "तरीही अडकलंय? Settings उघडा, Phone and alerts मध्ये Refresh app data दाबा."
+          },
+          "latn": {
+            "hi": "Phir bhi atka hai? Settings kholiye, Phone and alerts mein Refresh app data dabaiye.",
+            "mr": "Tarihi adaklay? Settings ughda, Phone and alerts madhye Refresh app data daba."
+          },
+          "sync": {
+            "en": "Refresh app data",
+            "hi": "Refresh app data",
+            "mr": "Refresh app data"
+          }
+        },
+        {
+          "id": "kept",
+          "chapter": "refresh",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "You stay signed in"
+              },
+              "ms": 1800
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "It starts Sales X-Ray afresh. You stay signed in, and changes not sent yet are kept.",
+            "hi": "ये Sales X-Ray को नए सिरे से चालू करता है. आप signed in रहते हैं, और जो changes अभी नहीं गए, वो भी safe रहते हैं.",
+            "mr": "हे Sales X-Ray नव्याने सुरू करतो. तुम्ही signed in राहता, आणि जे changes अजून गेले नाहीत, तेही safe राहतात."
+          },
+          "latn": {
+            "hi": "Yeh Sales X-Ray ko naye sire se chaalu karta hai. Aap signed in rehte hain, aur jo changes abhi nahi gaye, woh bhi safe rehte hain.",
+            "mr": "He Sales X-Ray navyane suru karto. Tumhi signed in rahta, aani je changes ajun gele nahit, tehi safe rahtat."
+          }
+        }
+      ]
+    },
+    {
+      "id": "steps-2",
+      "device": "card",
+      "beats": [
+        {
+          "id": "why-not",
+          "chapter": "refresh",
+          "actions": [],
+          "card": {
+            "step": "Why?",
+            "title": {
+              "en": "Not sent yet stays on your phone",
+              "hi": "Not sent yet phone pe hi rehta hai",
+              "mr": "Not sent yet phone varach rahta"
+            },
+            "icon": "saved",
+            "chips": ["Not sent yet", "Try again"]
+          },
+          "say": {
+            "en": "Reinstalling deletes changes that haven't reached us yet. If you see Not sent yet, give it a moment, or tap Try again.",
+            "hi": "Reinstall करने से वो changes मिट जाते हैं जो अभी हम तक नहीं पहुँचे. Not sent yet दिखे, तो थोड़ा रुकिए, या Try again दबाइए.",
+            "mr": "Reinstall केल्याने ते changes जातात जे अजून आमच्यापर्यंत पोहोचले नाहीत. Not sent yet दिसलं, तर थोडं थांबा, किंवा Try again दाबा."
+          },
+          "latn": {
+            "hi": "Reinstall karne se woh changes mit jaate hain jo abhi hum tak nahi pahunche. Not sent yet dikhe, toh thoda rukiye, ya Try again dabaiye.",
+            "mr": "Reinstall kelyane te changes jaatat je ajun aamchyaparyant pohochle nahit. Not sent yet disla, tar thoda thamba, kinva Try again daba."
+          }
+        },
+        {
+          "id": "report",
+          "chapter": "refresh",
+          "actions": [],
+          "card": {
+            "step": "Tell us",
+            "title": {
+              "en": "Tap Report a problem",
+              "hi": "Report a problem dabaiye",
+              "mr": "Report a problem daba"
+            },
+            "icon": "report",
+            "chips": ["Report a problem"]
+          },
+          "say": {
+            "en": "And if it happens again, tap Report a problem, so we can fix it for good.",
+            "hi": "और अगर ऐसा फिर हो, तो Report a problem दबाइए, ताकि हम इसे हमेशा के लिए ठीक कर सकें.",
+            "mr": "आणि असं पुन्हा झालं, तर Report a problem दाबा, म्हणजे आम्ही ते कायमचं ठीक करू."
+          },
+          "latn": {
+            "hi": "Aur agar aisa phir ho, toh Report a problem dabaiye, taaki hum ise hamesha ke liye theek kar sakein.",
+            "mr": "Aani asa punha jhala, tar Report a problem daba, mhanje aamhi te kaymcha theek karu."
+          }
+        }
+      ]
+    }
+  ]
+}

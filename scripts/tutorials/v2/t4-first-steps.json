@@ -1,0 +1,280 @@
+{
+  "id": "t4-first-steps",
+  "number": "T4",
+  "kind": "tester",
+  "title": {
+    "en": "First steps: permissions, phone setup, theme",
+    "hi": "Pehle steps: permissions, phone setup, theme",
+    "mr": "Pahile steps: permissions, phone setup, theme"
+  },
+  "description": {
+    "en": "Your first steps in the Sales X-Ray app: allow notifications, set up this phone, and pick a theme in Settings, Phone and alerts.",
+    "hi": "Sales X-Ray app mein shuruaat: notifications allow kijiye, phone set up kijiye, aur Settings ke Phone and alerts mein theme chuniye.",
+    "mr": "Sales X-Ray app madhli suruvaat: notifications allow kara, phone set up kara, aani Settings chya Phone and alerts madhye theme nivda."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "tester",
+    "Google Play",
+    "how to",
+    "Hindi",
+    "Marathi",
+    "setup",
+    "dark mode",
+    "notifications"
+  ],
+  "names": {
+    "Asha Example": "Asha Kulkarni",
+    "fictional-homes.example": "skyline.example",
+    "Sales Xray": "Sales X-Ray"
+  },
+  "next": {
+    "id": "t5-if-it-hangs",
+    "title": {
+      "en": "If something hangs",
+      "hi": "Kuch atak jaaye toh",
+      "mr": "Kahi adakla tar"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "Your first steps in the app: permissions, setting up this phone, and choosing a theme.",
+      "hi": "App में आपके पहले steps: permissions, phone setup, और theme चुनना.",
+      "mr": "App मधले तुमचे पहिले steps: permissions, phone setup, आणि theme निवडणं."
+    },
+    "latn": {
+      "hi": "App mein aapke pehle steps: permissions, phone setup, aur theme chunna.",
+      "mr": "App madhle tumche pahile steps: permissions, phone setup, aani theme nivadna."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "All set.",
+      "hi": "Sab set.",
+      "mr": "Sagla set."
+    },
+    "say": {
+      "en": "Next: what to do if a screen ever hangs.",
+      "hi": "अगले video में: अगर कोई screen अटक जाए तो क्या करें.",
+      "mr": "पुढच्या video मध्ये: एखादी screen अडकली तर काय करायचं."
+    },
+    "latn": {
+      "hi": "Agle video mein: agar koi screen atak jaaye toh kya karein.",
+      "mr": "Pudhchya video madhye: ekhadi screen adakli tar kay karaycha."
+    }
+  },
+  "chapters": [
+    {
+      "id": "permissions",
+      "title": {
+        "en": "Permissions",
+        "hi": "Permissions",
+        "mr": "Permissions"
+      }
+    },
+    {
+      "id": "settings",
+      "title": {
+        "en": "Phone and alerts",
+        "hi": "Phone and alerts",
+        "mr": "Phone and alerts"
+      }
+    }
+  ],
+  "reel": {
+    "all": true,
+    "hook": {
+      "text": {
+        "en": "New app? Do these 3 things first",
+        "hi": "Naya app? Pehle yeh 3 kaam",
+        "mr": "Navin app? Aadhi he 3 kaam"
+      },
+      "say": {
+        "en": "Just installed Sales X-Ray? Do these three things first.",
+        "hi": "Sales X-Ray अभी install किया? पहले ये तीन काम कीजिए.",
+        "mr": "Sales X-Ray आत्ताच install केलं? आधी ही तीन कामं करा."
+      },
+      "latn": {
+        "hi": "Sales X-Ray abhi install kiya? Pehle yeh teen kaam kijiye.",
+        "mr": "Sales X-Ray aattach install kela? Aadhi hi teen kaama kara."
+      }
+    }
+  },
+  "shots": [
+    {
+      "id": "steps",
+      "device": "card",
+      "beats": [
+        {
+          "id": "allow",
+          "chapter": "permissions",
+          "actions": [],
+          "card": {
+            "step": "Step 1",
+            "title": {
+              "en": "Allow notifications",
+              "hi": "Notifications allow kijiye",
+              "mr": "Notifications allow kara"
+            },
+            "icon": "bell",
+            "chips": ["Allow"]
+          },
+          "say": {
+            "en": "When you first open the app, Android asks to send you notifications. Tap Allow, so you hear about new leads and replies.",
+            "hi": "पहली बार app खोलते ही Android notifications की permission माँगता है. Allow दबाइए, ताकि नए leads और replies की ख़बर मिले.",
+            "mr": "पहिल्यांदा app उघडल्यावर Android notifications ची permission मागतो. Allow दाबा, म्हणजे नवीन leads आणि replies ची खबर मिळेल."
+          },
+          "latn": {
+            "hi": "Pehli baar app kholte hi Android notifications ki permission maangta hai. Allow dabaiye, taaki naye leads aur replies ki khabar mile.",
+            "mr": "Pahilyanda app ughdlyavar Android notifications chi permission maagto. Allow daba, mhanje navin leads aani replies chi khabar milel."
+          }
+        },
+        {
+          "id": "setup",
+          "chapter": "permissions",
+          "actions": [],
+          "card": {
+            "step": "Step 2",
+            "title": {
+              "en": "Set up this phone",
+              "hi": "Phone set up kijiye",
+              "mr": "Phone set up kara"
+            },
+            "icon": "phone",
+            "chips": ["Set up this phone"]
+          },
+          "say": {
+            "en": "Then Set up this phone walks you through the rest, one line at a time. Each line's fix is one tap away.",
+            "hi": "फिर Set up this phone बाकी सब एक एक line करके करवाता है. हर line का fix बस एक tap दूर है.",
+            "mr": "मग Set up this phone बाकी सगळं एक एक line करून करून घेतो. प्रत्येक line चा fix फक्त एका tap वर आहे."
+          },
+          "latn": {
+            "hi": "Phir Set up this phone baaki sab ek ek line karke karwata hai. Har line ka fix bas ek tap door hai.",
+            "mr": "Mag Set up this phone baaki sagla ek ek line karun karun gheto. Pratyek line cha fix fakta eka tap var aahe."
+          }
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/settings?section=notifications"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Sample data only."
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "theme",
+          "chapter": "settings",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "radio",
+                "name": "Dark"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "radio",
+                "name": "Light"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "radio",
+                "name": "System"
+              },
+              "ms": 1000
+            }
+          ],
+          "say": {
+            "en": "Pick a theme in Settings, under Phone and alerts. System follows your phone, or choose Light or Dark.",
+            "hi": "Settings में, Phone and alerts के अंदर theme चुनिए. System आपके phone जैसा रहता है, या Light या Dark चुनिए.",
+            "mr": "Settings मध्ये, Phone and alerts मध्ये theme निवडा. System तुमच्या phone सारखा राहतो, किंवा Light किंवा Dark निवडा."
+          },
+          "latn": {
+            "hi": "Settings mein, Phone and alerts ke andar theme chuniye. System aapke phone jaisa rehta hai, ya Light ya Dark chuniye.",
+            "mr": "Settings madhye, Phone and alerts madhye theme nivda. System tumchya phone sarkha rahto, kinva Light kinva Dark nivda."
+          }
+        },
+        {
+          "id": "vibration",
+          "chapter": "settings",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "switch",
+                "name": "Vibration"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Turn vibration on or off here. Alert sounds follow your phone's own settings.",
+            "hi": "Vibration यहीं on या off कीजिए. Alert sounds आपके phone की settings के हिसाब से चलते हैं.",
+            "mr": "Vibration इथेच on किंवा off करा. Alert sounds तुमच्या phone च्या settings प्रमाणे चालतात."
+          },
+          "latn": {
+            "hi": "Vibration yahin on ya off kijiye. Alert sounds aapke phone ki settings ke hisaab se chalte hain.",
+            "mr": "Vibration ithech on kinva off kara. Alert sounds tumchya phone chya settings pramane chaltat."
+          }
+        },
+        {
+          "id": "phone-section",
+          "chapter": "settings",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "text": "Sales X-Ray on your phone"
+              },
+              "offset": 120,
+              "ms": 800
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Sales X-Ray on your phone"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "And everything about the app on this phone sits right here, in one place.",
+            "hi": "और इस phone पे app से जुड़ी हर चीज़ यहीं है, एक ही जगह.",
+            "mr": "आणि या phone वरच्या app बद्दल सगळं इथेच आहे, एकाच ठिकाणी."
+          },
+          "latn": {
+            "hi": "Aur is phone pe app se judi har cheez yahin hai, ek hi jagah.",
+            "mr": "Aani ya phone varchya app baddal sagla ithech aahe, ekach thikani."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -343,3 +343,14 @@ it("guards duplicate submit and aborts a pending write on unmount", async () => 
   disposed = true;
   expect(writeSignal?.aborted).toBe(true);
 });
+
+it("opens a member's days from their name; an invitation has none", async () => {
+  await openMembers();
+  const links = [
+    ...container.querySelectorAll<HTMLAnchorElement>('a[href^="/sellers/"]'),
+  ].map((link) => [link.getAttribute("href"), link.textContent]);
+  expect(links).toEqual([
+    [`/sellers/${ownerId}`, "Robin Example"],
+    [`/sellers/${person}`, "Avery Example"],
+  ]);
+});

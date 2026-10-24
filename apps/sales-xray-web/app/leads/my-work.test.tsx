@@ -16,7 +16,7 @@ const event = (kind: LeadEvent["kind"], at: string, extra = {}): LeadEvent =>
   ({
     kind,
     at,
-    actor_name: "Swamini Fictional",
+    actor_name: "Meera Fictional",
     ...extra,
   }) as LeadEvent;
 
@@ -89,7 +89,7 @@ it("lists the seller's own work newest first, and opens the lead at that line", 
   // Names with capitals; the seller is "You".
   expect(rows[0].textContent).toContain("Ravi Sample");
   expect(rows[0].textContent).toContain("Wants the brochure on WhatsApp");
-  expect(container.textContent).not.toContain("Swamini");
+  expect(container.textContent).not.toContain("Meera");
   await act(async () => (rows[1] as HTMLButtonElement).click());
   expect(opened).toHaveBeenCalledWith("lead-1", "2026-10-24T08:00:00Z");
 

@@ -50,6 +50,7 @@ import {
   type AppHealth,
   type AppKey,
   type AppState,
+  type Blocker,
   type Connection,
   type MetaForm,
   type TestOffer,
@@ -118,7 +119,9 @@ const CARD_NAMES: Record<string, string> = {
 const RETURN_WORDS: Record<string, string> = {
   cancelled: "You stopped before it finished. Connect again when you’re ready.",
   in_use: "That Page or account is already connected to another organisation.",
-  no_pages: "No Pages were shared. Connect again and tick the Pages to use.",
+  // Meta shares only Pages the person ticks and fully controls (or advertises for).
+  no_pages:
+    "No Pages were shared. Connect again, tick the Pages to use, and sign in to Facebook as someone with full control of them.",
   no_accounts:
     "No accounts were shared. Connect again and choose the accounts to use.",
   no_numbers:
@@ -315,10 +318,12 @@ function AppCard({
         </div>
       </div>
       <p className={styles.words}>{cardWords(app)}</p>
-      {app.review?.state === "pending" ? (
+      {app.blockers.length ? (
+        // Why it can't do its whole job yet: one quiet line; the sheet says why
+        // and what to do.
         <p className={styles.reviewLine}>
           <Hourglass size={13} aria-hidden="true" />
-          Meta approval pending: testers’ Pages only for now
+          {app.blockers[0].short}
         </p>
       ) : null}
       <div className={styles.actions}>
@@ -638,6 +643,29 @@ function ConnectionRow({
   );
 }
 
+/** Why an app can't do its whole job yet, each with the one thing to do now. */
+export function Blockers({ blockers }: { blockers: Blocker[] }) {
+  if (!blockers.length) return null;
+  return (
+    <section className={styles.sheetPart} aria-label="Not working fully yet">
+      <h3>Not working fully yet</h3>
+      <ul className={styles.blockers}>
+        {blockers.map((item) => (
+          <li key={item.reason}>
+            <p className={styles.blockerReason}>{item.reason}</p>
+            <p className={styles.blockerFix}>{item.fix}</p>
+            {item.page && item.action ? (
+              <Link href={item.page} className={styles.more}>
+                {item.action} ›
+              </Link>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function Fact({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className={styles.fact}>
@@ -764,6 +792,7 @@ function ManageSheet({
               ) : null}
             </p>
           ) : null}
+          <Blockers blockers={app.blockers} />
           <dl className={styles.facts}>
             {app.lastEvent ? (
               <Fact label="Last activity">
