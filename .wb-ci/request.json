@@ -1,0 +1,22 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "8fd24351268dee9391406d807dd6503f9ad12b52",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "packages/python/ac_platform/application/loop_watchdog.py",
+    "packages/python/ac_platform/http/app.py",
+    "tests/unit/application/test_loop_watchdog.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/unit/application/test_loop_watchdog.py",
+    "tests/unit/http/test_app_composition.py",
+    "tests/unit/application"
+  ],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
