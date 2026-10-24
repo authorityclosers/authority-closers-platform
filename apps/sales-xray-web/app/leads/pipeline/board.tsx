@@ -465,6 +465,16 @@ export function PipelineBoard({
             });
         },
         (reason: unknown) => {
+          if (reason instanceof LeadsError && reason.kept) {
+            // Kept on this phone: the card stays where it was dropped.
+            notify({
+              id: `board-move-${lead.lead_id}`,
+              tone: "info",
+              title: `${lead.name}: saved on this phone`,
+              message: "It's sent as soon as Sales X-Ray answers.",
+            });
+            return;
+          }
           track("sx.board_drag", { result: "refused" });
           setBoard(before);
           notify({
