@@ -20,20 +20,29 @@ from uuid import UUID
 
 from ac_platform.lead_desk.contracts import APP_CHANGE_UNDO_DAYS
 
-Action = Literal["note", "task"]
-ACTIONS: Final[tuple[Action, ...]] = ("note", "task")
-SCOPES: Final[dict[str, str]] = {"note": "leads:notes", "task": "leads:tasks"}
+Action = Literal["note", "task", "update"]
+ACTIONS: Final[tuple[Action, ...]] = ("note", "task", "update")
+SCOPES: Final[dict[str, str]] = {
+    "note": "leads:notes",
+    "task": "leads:tasks",
+    "update": "leads:update",
+}
 # The workspace's switch (Organisation -> AI apps). Defaults agreed 25 Oct 2026: notes,
-# tasks and outcomes on; everything else off until an owner turns it on.
+# tasks and outcomes on; everything else (lead updates too) off until an owner turns it on.
 SWITCH_DEFAULTS: Final[dict[str, bool]] = {
     "paused": False,
     "note": True,
     "task": True,
     "outcome": True,
+    "update": False,
 }
+# A lead update (ai-writes.md, section 2): only these fields. Phone and email decide
+# duplicates and who a call matches, so they wait for the review queue (slice 2).
+UPDATE_FIELDS: Final[tuple[str, ...]] = ("name", "company", "city", "interest", "language")
+REVIEW_FIELDS: Final[tuple[str, ...]] = ("phone", "email")
 # Caps, in the last 24 hours unless said otherwise (ai-writes.md, section 5).
-PER_CONNECTION: Final[dict[str, int]] = {"note": 200, "task": 200}
-PER_LEAD: Final[dict[str, int]] = {"note": 20, "task": 20}
+PER_CONNECTION: Final[dict[str, int]] = {"note": 200, "task": 200, "update": 200}
+PER_LEAD: Final[dict[str, int]] = {"note": 20, "task": 20, "update": 20}
 PER_WORKSPACE: Final = 2_000
 PER_MINUTE: Final = 30  # one connection, any action
 UNDO_WINDOW: Final = timedelta(days=APP_CHANGE_UNDO_DAYS)
@@ -182,9 +191,11 @@ __all__ = [
     "PER_LEAD",
     "PER_MINUTE",
     "PER_WORKSPACE",
+    "REVIEW_FIELDS",
     "SCOPES",
     "SWITCH_DEFAULTS",
     "UNDO_WINDOW",
+    "UPDATE_FIELDS",
     "Counts",
     "Decision",
     "clean_text",

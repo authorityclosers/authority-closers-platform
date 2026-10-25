@@ -13,7 +13,13 @@ SCOPES: dict[str, str] = {
     # AI writes (docs/product/ai-writes.md): each change an app may make is its own scope.
     "leads:notes": "Add notes to leads",
     "leads:tasks": "Add tasks and reminders to leads",
+    "leads:update": "Change a lead's name, company, city, interest or language",
     "webhooks:manage": "Manage the webhook",
+}
+# Only an app a person connects may ask for these: they act as that person, which an
+# organisation's API key never is (POST /v1/api/calls; integrations/app_uploads.py).
+APP_SCOPES: dict[str, str] = {
+    "calls:write": "Send call recordings for you to add to your calls",
 }
 
 
@@ -21,10 +27,12 @@ class ScopeError(ValueError):
     pass
 
 
-def validate(scopes: Iterable[object]) -> list[str]:
-    """Known scopes only, at least one, sorted and without repeats."""
+def validate(scopes: Iterable[object], *, app: bool = False) -> list[str]:
+    """Known scopes only, at least one, sorted and without repeats; ``app`` also takes
+    the scopes only a person's connected app may hold."""
+    known = {**SCOPES, **APP_SCOPES} if app else SCOPES
     chosen = list(scopes)
-    if not chosen or any(not isinstance(scope, str) or scope not in SCOPES for scope in chosen):
+    if not chosen or any(not isinstance(scope, str) or scope not in known for scope in chosen):
         raise ScopeError("scopes")
     return sorted(set(chosen))  # type: ignore[arg-type]
 

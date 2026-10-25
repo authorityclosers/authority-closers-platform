@@ -25,6 +25,7 @@ import {
   LeadStagesPane,
 } from "../leads/settings-panes";
 import { OrganisationView } from "../organisation/organisation-view";
+import { PulsePanel } from "../organisation/pulse/pulse-panel";
 import { useApkLinksAllowed } from "../purchase-policy";
 import { Panel } from "../ui/kit";
 import { AiAppsSection } from "./ai-apps";
@@ -199,6 +200,8 @@ export function SettingsSectionView({
       );
     case "developers":
       return <DevelopersSection />;
+    case "pulse":
+      return <PulsePanel />;
     case "notifications":
     case "devices":
       return <PhoneAndAlerts />;

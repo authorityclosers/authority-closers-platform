@@ -135,6 +135,9 @@ from ac_platform.kernel.errors import DomainError, ResourceNotFound
 from ac_platform.kernel.events import EventCategory, EventEnvelope
 from ac_platform.organisations.sign_in import join_at_sign_in_best_effort
 from ac_platform.outbox.repository import OutboxRepository
+from ac_platform.pulse.profile import fetch_pulse_photo
+from ac_platform.pulse.profile import record_profile as record_pulse_profile
+from ac_platform.pulse.profile import save_photo as save_pulse_photo
 from ac_platform.tenancy.learner_provisioning import (
     AsyncLearnerProvisioningApplication,
     LearnerConsentMissingError,
@@ -512,6 +515,7 @@ class EmailLoginCodeConfigResponse(BaseModel):
     # Sales Xray only: each shows once its provider's settings exist.
     apple_enabled: bool = False
     facebook_enabled: bool = False
+    pulse_enabled: bool = False
     expires_in_seconds: int
     resend_after_seconds: int
 
@@ -1641,7 +1645,7 @@ def _surface_callback_uri(settings: Settings, surface: str, provider: str = "goo
 
 
 # Providers offered next to Google, on Sales Xray only.
-SALES_XRAY_EXTRA_PROVIDERS = frozenset({"facebook", "apple"})
+SALES_XRAY_EXTRA_PROVIDERS = frozenset({"facebook", "apple", "pulse"})
 _OAUTH_STATE_PATTERN = re.compile(r"[A-Za-z0-9_-]{32,160}")
 # "/" because deployments name it with the __Host- prefix, which requires Path=/.
 _APPLE_RETURN_COOKIE_PATH = "/"
@@ -1712,7 +1716,16 @@ def _link_existing_email(surface: str, provider: str) -> bool | None:
 
     if surface != "sales_xray":
         return None
-    return provider in {"google", "apple"}
+    return provider in {"google", "apple", "pulse"}
+
+
+async def _prepare_provider(provider: object) -> None:
+    """A provider that reads its settings over the network (Pulse's discovery) does it here,
+    before an authorize address is made; the others have nothing to prepare."""
+
+    prepare = getattr(provider, "prepare", None)
+    if prepare is not None:
+        await prepare()
 
 
 def _apple_return_cookie_name(settings: Settings, state: str) -> str:
@@ -1722,7 +1735,12 @@ def _apple_return_cookie_name(settings: Settings, state: str) -> str:
 
 
 def _provider_label(provider: str) -> str:
-    return {"google": "Google", "facebook": "Facebook", "apple": "Apple"}.get(provider, provider)
+    return {
+        "google": "Google",
+        "facebook": "Facebook",
+        "apple": "Apple",
+        "pulse": "Pulse",
+    }.get(provider, provider)
 
 
 # Navigation context only; these destinations do not grant enrollment or access.
@@ -2019,6 +2037,7 @@ def install_identity_http(
             ),
             apple_enabled=surface == "sales_xray" and "apple" in sign_in_providers,
             facebook_enabled=surface == "sales_xray" and "facebook" in sign_in_providers,
+            pulse_enabled=surface == "sales_xray" and "pulse" in sign_in_providers,
             expires_in_seconds=int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
             resend_after_seconds=int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
         )
@@ -2518,7 +2537,7 @@ def install_identity_http(
         tenant_id: UUID,
         previous_consent_version: str | None,
         previous_consented_at: datetime | None,
-        accepted_via: Literal["google", "facebook", "apple", "email_otp"],
+        accepted_via: Literal["google", "facebook", "apple", "pulse", "email_otp"],
     ) -> None:
         """Append the canonical learner-consent audit for a signed full acceptance."""
 
@@ -2705,6 +2724,70 @@ def install_identity_http(
                 )
         except Exception:
             _LOGGER.warning("google_profile_photo_save_failed")
+
+    async def _record_pulse_profile_best_effort(
+        database: AsyncSession,
+        *,
+        person_id: UUID,
+        state: str,
+    ) -> tuple[UUID, str] | None:
+        """Pulse's name, title, team and photo address for this person (display only)."""
+
+        provider = sign_in_providers.get("pulse")
+        claims_for = getattr(provider, "claims_for", None)
+        claims = claims_for(state) if claims_for is not None else None
+        if claims is None:
+            return None
+        try:
+            async with database.begin_nested():
+                picture = await record_pulse_profile(
+                    database,
+                    person_id=person_id,
+                    claims=claims,
+                    source="sign_in",
+                    now=datetime.now(UTC),
+                )
+        except Exception:
+            _LOGGER.warning("pulse_profile_not_saved")
+            return None
+        return None if picture is None else (person_id, picture)
+
+    async def _refresh_pulse_profile_photo(person_id: UUID, picture_url: str) -> None:
+        provider = sign_in_providers.get("pulse")
+        issuer = getattr(provider, "issuer", None)
+        if not isinstance(issuer, str):
+            return
+        jpeg = await fetch_pulse_photo(picture_url, issuer=issuer)
+        if jpeg is None:
+            return
+        try:
+            async with sessions() as database, database.begin():
+                await save_pulse_photo(
+                    database,
+                    person_id=person_id,
+                    picture_url=picture_url,
+                    jpeg=jpeg,
+                    now=datetime.now(UTC),
+                )
+        except Exception:
+            _LOGGER.warning("pulse_profile_photo_save_failed")
+
+    def _profile_photo_task(
+        google: tuple[UUID, str, str] | None,
+        pulse: tuple[UUID, str] | None,
+    ) -> BackgroundTask | None:
+        """The photo copies to make after the answer is sent (Google's, Pulse's or both)."""
+
+        if google is None and pulse is None:
+            return None
+
+        async def run() -> None:
+            if google is not None:
+                await _refresh_google_profile_photo(*google)
+            if pulse is not None:
+                await _refresh_pulse_profile_photo(*pulse)
+
+        return BackgroundTask(run)
 
     async def _prefill_sales_xray_profile_name(
         database: AsyncSession,
@@ -2911,7 +2994,7 @@ def install_identity_http(
     @router.get("/auth/{provider_name}/start", name="sales_xray_provider_auth_start")
     async def sales_xray_provider_auth_start(
         request: Request,
-        provider_name: Literal["facebook", "apple"],
+        provider_name: Literal["facebook", "apple", "pulse"],
         authorization_type: Annotated[ProviderAuthorizationType, Query(alias="action")],
         surface: Literal["sales_xray"] = "sales_xray",
         return_path: str = "/home",
@@ -3161,6 +3244,7 @@ def install_identity_http(
             )
         else:
             redirect_uri = _surface_callback_uri(settings, surface, provider_name)
+            await _prepare_provider(selected_provider)
             authorization_url = selected_provider.authorization_url(
                 transaction,
                 redirect_uri=redirect_uri,
@@ -3267,7 +3351,7 @@ def install_identity_http(
     @router.post("/me/sign-in-methods/{provider_name}/connect", name="sign_in_method_connect")
     async def connect_sign_in_method(
         request: Request,
-        provider_name: Literal["google", "apple", "facebook"],
+        provider_name: Literal["google", "apple", "facebook", "pulse"],
         body: SignInMethodConnectRequest,
     ) -> Response:
         """Settings -> Connect: the provider address for a signed-in, fresh session.
@@ -3352,6 +3436,10 @@ def install_identity_http(
             return_path=stored_return,
             provider=provider_name,
         )
+        try:
+            await _prepare_provider(selected_provider)
+        except IdentityProviderUnavailable:
+            return refuse(503, "unavailable", "This sign-in method isn't reachable right now.")
         response = JSONResponse(
             {
                 "redirect_url": selected_provider.authorization_url(
@@ -3448,12 +3536,12 @@ def install_identity_http(
     @router.get("/auth/{provider_name}/callback", name="sales_xray_provider_auth_callback")
     async def sales_xray_provider_auth_callback(
         request: Request,
-        provider_name: Literal["facebook", "apple"],
+        provider_name: Literal["facebook", "apple", "pulse"],
     ) -> Response:
         state_values = request.query_params.getlist("state")
-        if provider_name == "facebook":
+        if provider_name in {"facebook", "pulse"}:
             return await _finish_provider_sign_in(
-                "facebook",
+                provider_name,
                 request,
                 state_values=state_values,
                 code_values=request.query_params.getlist("code"),
@@ -3814,6 +3902,7 @@ def install_identity_http(
         session_token: str | None = None
         issued_session_id: UUID | None = None
         photo_refresh: tuple[UUID, str, str] | None = None
+        pulse_photo: tuple[UUID, str] | None = None
         try:
             async with sessions() as database, database.begin():
                 identity = _identity(database)
@@ -3856,6 +3945,10 @@ def install_identity_http(
                             assertion=assertion,
                             claims=profile_claims,
                         )
+                    if provider_name == "pulse":
+                        pulse_photo = await _record_pulse_profile_best_effort(
+                            database, person_id=registered.person.id, state=state_value
+                        )
                     if transaction.surface in {"learner", "sales_xray"}:
                         tenant_id = await ensure_public_learner(
                             database,
@@ -3874,7 +3967,8 @@ def install_identity_http(
                                     previous_consent_version=(registered.previous_consent_version),
                                     previous_consented_at=registered.previous_consented_at,
                                     accepted_via=cast(
-                                        Literal["google", "facebook", "apple"], provider_name
+                                        Literal["google", "facebook", "apple", "pulse"],
+                                        provider_name,
                                     ),
                                 )
                             if registered.linked_by_email:
@@ -3940,6 +4034,10 @@ def install_identity_http(
                             person_id=issued.metadata.person_id,
                             assertion=assertion,
                             claims=profile_claims,
+                        )
+                    if provider_name == "pulse":
+                        pulse_photo = await _record_pulse_profile_best_effort(
+                            database, person_id=issued.metadata.person_id, state=state_value
                         )
                     # Existing members may also own an operations tenant. In
                     # that case the generic identity service issues an
@@ -4022,6 +4120,10 @@ def install_identity_http(
                             person_id=linked.person_id,
                             assertion=assertion,
                             claims=profile_claims,
+                        )
+                    if provider_name == "pulse":
+                        pulse_photo = await _record_pulse_profile_best_effort(
+                            database, person_id=linked.person_id, state=state_value
                         )
         except PasswordRegistrationUnavailable as error:
             if transaction.surface == "sales_xray":
@@ -4208,22 +4310,21 @@ def install_identity_http(
                 settings,
                 transaction_cookie_names=transaction_cookie_names,
             )
-            if photo_refresh is not None:
-                handoff_page.background = BackgroundTask(
-                    _refresh_google_profile_photo, *photo_refresh
-                )
+            handoff_page.background = _profile_photo_task(photo_refresh, pulse_photo)
             return handoff_page
         if (
             transaction.surface == "sales_xray"
             and transaction.authorization_type is ProviderAuthorizationType.LINK
         ):
             # Connected; the session stays the one that started it.
-            return _sales_xray_auth_result_response(
+            linked_page = _sales_xray_auth_result_response(
                 settings,
                 result="linked",
                 transaction_cookie_names=transaction_cookie_names,
                 flow_id=completion_flow_id,
             )
+            linked_page.background = _profile_photo_task(None, pulse_photo)
+            return linked_page
         if transaction.surface == "sales_xray" and not sales_xray_success:
             # A successful identity operation without a session/flow binding
             # must never be accepted by the browser as completed sign-in.
@@ -4264,12 +4365,12 @@ def install_identity_http(
                 ),
             )
         if (
-            photo_refresh is not None
+            (photo_refresh is not None or pulse_photo is not None)
             and session_token is not None
             and issued_session_id is not None
             and (transaction.surface != "sales_xray" or sales_xray_success)
         ):
-            response.background = BackgroundTask(_refresh_google_profile_photo, *photo_refresh)
+            response.background = _profile_photo_task(photo_refresh, pulse_photo)
         response.headers["cache-control"] = "no-store"
         response.headers["pragma"] = "no-cache"
         return response

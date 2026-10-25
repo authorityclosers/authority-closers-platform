@@ -58,6 +58,7 @@ import {
   SkeletonBlocks,
 } from "./organisation-skeleton";
 import { CompanyDetailsPanel } from "./company-details-panel";
+import { type PulsePerson, readPulsePeople } from "./pulse/pulse-client";
 import { CompanyLogoPanel } from "./company-logo-panel";
 import {
   addMember,
@@ -1406,6 +1407,15 @@ function MembersPanel({
 }) {
   const [email, setEmail] = useState("");
   const dates = useDisplayDates();
+  // Photos, titles and teams from the organisation's Pulse link, when it has one.
+  const [pulsePeople, setPulsePeople] = useState<Record<string, PulsePerson>>(
+    {},
+  );
+  useEffect(() => {
+    const controller = new AbortController();
+    readPulsePeople(controller.signal).then(setPulsePeople, () => undefined);
+    return () => controller.abort();
+  }, []);
   const [newRole, setNewRole] = useState<OrgRole>("member");
   const [busy, setBusy] = useState(false);
   const [invalid, setInvalid] = useState("");
@@ -1721,7 +1731,19 @@ function MembersPanel({
                     <small>
                       {member.status === "invited" && !member.name
                         ? "Has not joined yet"
-                        : member.email}
+                        : [
+                            member.personId
+                              ? [
+                                  pulsePeople[member.personId]?.title,
+                                  pulsePeople[member.personId]?.team,
+                                ]
+                                  .filter(Boolean)
+                                  .join(", ")
+                              : "",
+                            member.email,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                     </small>
                   </span>
                 </span>

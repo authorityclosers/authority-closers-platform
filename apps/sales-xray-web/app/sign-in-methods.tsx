@@ -18,6 +18,7 @@ import { inPhoneApp } from "./leads/native-phone";
 import { notify } from "./notice-center";
 import { goToProvider } from "./sign-in-connect";
 import { BrandTile } from "./ui/brand-tile";
+import { PulseTile } from "./ui/pulse-mark";
 import styles from "./account-view.module.css";
 import local from "./sign-in-methods.module.css";
 
@@ -26,8 +27,9 @@ export type MethodKind =
   | "password"
   | "google"
   | "apple"
-  | "facebook";
-type ProviderKind = "google" | "apple" | "facebook";
+  | "facebook"
+  | "pulse";
+type ProviderKind = "google" | "apple" | "facebook" | "pulse";
 export type SignInMethod = {
   kind: MethodKind;
   addedAt: string | null;
@@ -56,10 +58,11 @@ const LABELS: Record<MethodKind, string> = {
   google: "Google",
   apple: "Apple",
   facebook: "Facebook",
+  pulse: "Pulse",
 };
 const KINDS = new Set<string>(Object.keys(LABELS));
 // Only a provider can be connected or removed; email code and password stay.
-const PROVIDERS = new Set<string>(["google", "apple", "facebook"]);
+const PROVIDERS = new Set<string>(["google", "apple", "facebook", "pulse"]);
 const DATE = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",
@@ -140,6 +143,7 @@ const TILES: Record<MethodKind, { brands?: string[]; icon?: LucideIcon }> = {
   google: { brands: ["google"] },
   apple: { brands: ["apple"] },
   facebook: { brands: ["facebook"] },
+  pulse: {},
 };
 
 /** The corner card for the way back from a provider, or null. */
@@ -422,7 +426,11 @@ export function SignInMethods({ active }: { active: boolean }) {
       {loaded.methods.map((method) => (
         <div className={styles.row} key={method.kind}>
           <div className={local.lead}>
-            <BrandTile {...TILES[method.kind]} size={36} />
+            {method.kind === "pulse" ? (
+              <PulseTile size={36} />
+            ) : (
+              <BrandTile {...TILES[method.kind]} size={36} />
+            )}
             <div className={styles.rowText}>
               <span className={styles.rowLabel}>{LABELS[method.kind]}</span>
               <span className={styles.rowHint}>
@@ -457,7 +465,11 @@ export function SignInMethods({ active }: { active: boolean }) {
           data-connect={option.kind}
         >
           <div className={local.lead}>
-            <BrandTile brands={[option.kind]} size={36} />
+            {option.kind === "pulse" ? (
+              <PulseTile size={36} />
+            ) : (
+              <BrandTile brands={[option.kind]} size={36} />
+            )}
             <div className={styles.rowText}>
               <span className={styles.rowLabel}>{option.label}</span>
               <span className={styles.rowHint}>

@@ -244,6 +244,8 @@ export type AiWritesSwitch = {
   note: boolean;
   task: boolean;
   outcome: boolean;
+  /** Lead details (name, company, city…) from apps such as Pulse; off by default. */
+  update: boolean;
   /** Owners and admins. */
   canChange: boolean;
 };
@@ -264,6 +266,7 @@ export function parseAiWrites(value: unknown): AiWritesSwitch | null {
     note: value.note,
     task: value.task,
     outcome: value.outcome,
+    update: value.update === true,
     canChange: value.can_change === true,
   };
 }
@@ -290,6 +293,7 @@ export async function saveAiWrites(
       note: next.note,
       task: next.task,
       outcome: next.outcome,
+      update: next.update,
     }),
   });
   if (!response.ok) throw await refusal(response);

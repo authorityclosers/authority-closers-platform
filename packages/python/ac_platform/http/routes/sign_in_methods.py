@@ -109,7 +109,7 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                         "linked": provider in linked,
                         "can_connect": provider in configured and provider not in linked,
                     }
-                    for provider in ("google", "apple", "facebook")
+                    for provider in ("google", "apple", "facebook", "pulse")
                 },
                 # The Connect list: the providers offered here, in sign-in order.
                 "available": [
@@ -118,7 +118,7 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
                         "label": PROVIDER_LABELS[provider],
                         "connected": provider in linked,
                     }
-                    for provider in ("google", "apple", "facebook")
+                    for provider in ("google", "apple", "facebook", "pulse")
                     if provider in configured
                 ],
                 "fresh_sign_in": fresh,
@@ -129,7 +129,7 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
     async def remove(
         request: Request,
         response: Response,
-        provider: Literal["google", "apple", "facebook"],
+        provider: Literal["google", "apple", "facebook", "pulse"],
     ) -> dict[str, Any]:
         async with account(request, response, write=True) as auth:
             actor = auth.resolved.actor

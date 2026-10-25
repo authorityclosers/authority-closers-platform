@@ -175,6 +175,13 @@ export function AiWritesPanel() {
           disabled={busy}
           onChange={(on) => save({ ...current, task: on })}
         />
+        <SwitchRow
+          label="Lead details"
+          hint="Name, company, city, interest and language, for example from Pulse. Phone and email never change from apps."
+          checked={current.update}
+          disabled={busy}
+          onChange={(on) => save({ ...current, update: on })}
+        />
       </SwitchRow>
     </Panel>
   );

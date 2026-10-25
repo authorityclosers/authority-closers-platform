@@ -50,7 +50,12 @@ PROVIDER_CONNECTED_ROUTE = OutboxJobRoute(
 # A provider sign-in refused because its email belongs to an account it may not
 # join (audit only; nobody is emailed).
 SIGN_IN_REFUSED_ACTION = "identity.provider_sign_in_refused.v1"
-PROVIDER_LABELS = {"google": "Google", "apple": "Apple", "facebook": "Facebook"}
+PROVIDER_LABELS = {
+    "google": "Google",
+    "apple": "Apple",
+    "facebook": "Facebook",
+    "pulse": "Pulse",
+}
 SUPPORT_EMAIL = "admin@authorityclosers.com"
 # Where the person checks and removes sign-in methods (the settings dialog's hash).
 SIGN_IN_METHODS_PATH = "/#settings/security"
@@ -69,7 +74,7 @@ _NOTICES = {
         PROVIDER_LINKED_ACTION,
         PROVIDER_LINKED_EVENT,
         "identity-provider-linked",
-        frozenset({"google", "apple"}),
+        frozenset({"google", "apple", "pulse"}),
     ),
     PROVIDER_REMOVED_JOB: _Notice(
         PROVIDER_REMOVED_ACTION,

@@ -36,6 +36,8 @@ _SYNTHETIC_BYTES_PATH = re.compile(
     r"/v1/conversation/acquisition/imports/sandbox/calls/syn-[A-Za-z0-9][A-Za-z0-9._:-]{0,150}/source"
 )
 _CONVERSATION_DRAFT_IMPORT_PATH = re.compile(rf"/v1/admin/conversation/runs/{_UUID}/draft")
+# A recording an authorised app sends for a person (POST /v1/api/calls, calls:write).
+_APP_CALL_UPLOAD_PATH = re.compile(r"/v1/api/calls")
 
 
 def request_body_limit(scope: Scope) -> int:
@@ -164,6 +166,23 @@ class RequestBodyLimitMiddleware:
             )
             else None
         )
+        if (
+            upload_limit is None
+            and scope.get("method") == "POST"
+            and _APP_CALL_UPLOAD_PATH.fullmatch(scope.get("path", ""))
+        ):
+            upload_limit = self.acquisition_upload_max_bytes or 100_000_000
+            lengths = tuple(_header_values(scope, b"content-length"))
+            if (
+                len(lengths) != 1
+                or re.fullmatch(rb"[1-9][0-9]{0,8}", lengths[0]) is None
+                or int(lengths[0]) > upload_limit
+                or tuple(_header_values(scope, b"transfer-encoding"))
+            ):
+                await _send_too_large(scope, send)
+                return
+            await self.app(scope, receive, send)
+            return
         if upload_limit is not None and scope.get("method") == "PUT":
             lengths = tuple(_header_values(scope, b"content-length"))
             if (
