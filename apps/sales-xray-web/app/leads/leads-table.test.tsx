@@ -99,7 +99,6 @@ it("shows each lead on one line, with names capitalised and the columns asked fo
     "Source",
     "Next action",
     "Last call",
-    "In stage",
   ]);
   const first = host.querySelector("tbody tr")!;
   expect(first.textContent).toContain("Meera Fictional");
@@ -133,7 +132,6 @@ it("leaves out Owner on my own leads and Pipeline with one pipeline", async () =
     "Source",
     "Next action",
     "Last call",
-    "In stage",
   ]);
 });
 
@@ -161,7 +159,6 @@ it("shows and hides columns from the picker", async () => {
     "Source",
     "Next action",
     "Last call",
-    "In stage",
     "Reason",
   ]);
   // Kept for this browser; the next test starts from the first columns.
@@ -297,7 +294,7 @@ it("opens the columns that don't fit under a row, without opening the lead", asy
     expect(host.querySelectorAll("tbody tr")[1].textContent).toContain(
       "No next step",
     );
-    expect(host.textContent).toContain("4 more columns under each row");
+    expect(host.textContent).toContain("3 more columns under each row");
     // No pencil beside a narrow name: renaming is on the lead page.
     expect(host.querySelector('[aria-label^="Rename"]')).toBeNull();
     const more = host.querySelector<HTMLButtonElement>(
@@ -309,7 +306,7 @@ it("opens the columns that don't fit under a row, without opening the lead", asy
     const under = host.querySelector(`#more-${id(1)}`)!;
     expect(
       Array.from(under.querySelectorAll("dt"), (term) => term.textContent),
-    ).toEqual(["Phone", "Source", "Last call", "In stage"]);
+    ).toEqual(["Phone", "Source", "Last call"]);
     expect(under.textContent).toContain("•• 3210");
     // Only that row opened; the name still opens the lead.
     expect(host.querySelector(`#more-${id(2)}`)).toBeNull();

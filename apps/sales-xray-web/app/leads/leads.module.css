@@ -5860,3 +5860,66 @@ button.leadTags {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
+
+/* The list's toolbar (owner, 25 Oct 2026): List | Table as one switch in words,
+   and the table's Columns beside it. */
+.layoutSwitch {
+  display: inline-flex;
+  gap: 2px;
+  padding: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+}
+
+.layoutSwitch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.layoutSwitch button[aria-pressed="true"] {
+  background: var(--sx-elevated);
+  color: var(--sx-ink);
+  box-shadow: 0 0 0 0.5px var(--sx-hairline);
+}
+
+.layoutSwitch button:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.columnsSlot {
+  display: contents;
+}
+
+/* Who did it: a small avatar beside each History line and note (owner, 25 Oct
+   2026: "work done by a specific person"). */
+.actor {
+  display: inline-flex;
+  margin-right: 6px;
+  vertical-align: -5px;
+}
+
+.noteBy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A computer: Taking leads and the gear sit in the page header's row, so the
+   row of their own goes (owner, 25 Oct 2026: the top half was empty). */
+@media (min-width: 900px) {
+  .toolbar[data-head] {
+    display: none;
+  }
+}

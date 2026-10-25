@@ -188,7 +188,9 @@ it("lets an owner pick test leads and delete them", async () => {
   await act(async () => button("Select")!.click());
   const boxes = [...host.querySelectorAll('[role="checkbox"]')];
   expect(boxes).toHaveLength(3);
-  expect(host.textContent).toContain("Tap leads to select them");
+  expect(host.textContent).toContain(
+    "Tick the leads to change, then choose what to do",
+  );
   await act(async () => (boxes[1] as HTMLButtonElement).click());
   await act(async () => (boxes[2] as HTMLButtonElement).click());
   expect(boxes[1].getAttribute("aria-checked")).toBe("true");

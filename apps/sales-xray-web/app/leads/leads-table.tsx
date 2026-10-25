@@ -33,6 +33,7 @@ import {
   type ReactNode,
   type RefObject,
 } from "react";
+import { createPortal } from "react-dom";
 
 import { displayName } from "../display-name";
 import {
@@ -125,12 +126,12 @@ export const OPTIONAL: Column[] = [
   "reason",
   "created",
 ];
+// In stage starts hidden: an owner's table had no room for the name (25 Oct 2026).
 const SHOWN_AT_FIRST: ReadonlySet<Column> = new Set([
   "phone",
   "source",
   "next",
   "last",
-  "age",
 ]);
 const COLUMNS_KEY = "sx-leads-table-columns";
 
@@ -297,6 +298,7 @@ export function LeadsTable({
   chosen,
   onToggle,
   keysRef,
+  columnsSlot = null,
   quickAdd = null,
   edit = null,
   serverSort = null,
@@ -313,6 +315,8 @@ export function LeadsTable({
   onToggle?: (row: LeadRow) => void;
   /** The list's row keys (J/K, Enter) read the table's rows here. */
   keysRef?: RefObject<HTMLDivElement | null>;
+  /** The list's toolbar: Columns shows there instead of a row of its own. */
+  columnsSlot?: HTMLElement | null;
   /** Quick add as the last line: the pipeline it adds to, and after adding. */
   quickAdd?: {
     pipeline: string | null;
@@ -530,7 +534,9 @@ export function LeadsTable({
                 else onOpen(row.lead_id);
               }}
             >
-              <strong>{displayName(row.name)}</strong>
+              <strong title={displayName(row.name)}>
+                {displayName(row.name)}
+              </strong>
               {statusUnderName ? (
                 <small>
                   {row.stage_label}
@@ -651,6 +657,59 @@ export function LeadsTable({
 
   const across = rowColumns.length + (selecting ? 1 : 0) + (fit ? 1 : 0);
 
+  // A cut cell slides to show its end while the pointer or focus rests on it
+  // (owner, 25 Oct 2026: the Pipeline, Owner and Source cells were cut).
+  const slide = (target: EventTarget | null) => {
+    const cell = (target as HTMLElement | null)?.closest?.("td");
+    const text = cell?.querySelector<HTMLElement>("[data-cell-text]");
+    if (!cell || !text) return;
+    const hidden = text.scrollWidth - text.clientWidth;
+    if (hidden < 2) return;
+    cell.style.setProperty("--slide", `${-hidden}px`);
+    cell.style.setProperty("--slide-ms", `${Math.max(900, hidden * 24)}ms`);
+    cell.setAttribute("data-slide", "");
+  };
+  const rest = (target: EventTarget | null) => {
+    (target as HTMLElement | null)
+      ?.closest?.("td")
+      ?.removeAttribute("data-slide");
+  };
+
+  // Columns: in the list's toolbar on a computer, or in its own bar.
+  const columnsControl = (
+    <>
+      <button
+        type="button"
+        className={styles.columnsButton}
+        aria-expanded={picking}
+        onClick={() => setPicking((open) => !open)}
+      >
+        <Columns3 size={16} aria-hidden="true" />
+        Columns
+      </button>
+      {picking ? (
+        <fieldset className={styles.columnsMenu}>
+          <legend className={styles.srOnly}>Columns to show</legend>
+          {fit ? (
+            <p className={styles.columnsHint}>
+              {`${rowColumns.map((column) => LABELS[column]).join(", ")} fit in each row. The rest open from the row's arrow.`}
+            </p>
+          ) : null}
+          {OPTIONAL.map((column) => (
+            <label key={column}>
+              <input
+                type="checkbox"
+                checked={visible.has(column)}
+                onChange={() => toggleColumn(column)}
+              />
+              {LABELS[column]}
+            </label>
+          ))}
+        </fieldset>
+      ) : null}
+    </>
+  );
+
   return (
     <div
       className={styles.wrap}
@@ -660,44 +719,20 @@ export function LeadsTable({
         if (keysRef) keysRef.current = node;
       }}
     >
-      <div className={styles.columnsBar}>
-        {fit && underColumns.length ? (
-          <small className={styles.columnsNote}>
-            {underColumns.length === 1
-              ? "1 more column under each row"
-              : `${underColumns.length} more columns under each row`}
-          </small>
-        ) : null}
-        <button
-          type="button"
-          className={styles.columnsButton}
-          aria-expanded={picking}
-          onClick={() => setPicking((open) => !open)}
-        >
-          <Columns3 size={16} aria-hidden="true" />
-          Columns
-        </button>
-        {picking ? (
-          <fieldset className={styles.columnsMenu}>
-            <legend className={styles.srOnly}>Columns to show</legend>
-            {fit ? (
-              <p className={styles.columnsHint}>
-                {`${rowColumns.map((column) => LABELS[column]).join(", ")} fit in each row. The rest open from the row's arrow.`}
-              </p>
-            ) : null}
-            {OPTIONAL.map((column) => (
-              <label key={column}>
-                <input
-                  type="checkbox"
-                  checked={visible.has(column)}
-                  onChange={() => toggleColumn(column)}
-                />
-                {LABELS[column]}
-              </label>
-            ))}
-          </fieldset>
-        ) : null}
-      </div>
+      {columnsSlot && !fit ? (
+        createPortal(columnsControl, columnsSlot)
+      ) : (
+        <div className={styles.columnsBar}>
+          {fit && underColumns.length ? (
+            <small className={styles.columnsNote}>
+              {underColumns.length === 1
+                ? "1 more column under each row"
+                : `${underColumns.length} more columns under each row`}
+            </small>
+          ) : null}
+          {columnsControl}
+        </div>
+      )}
       {fit && quickAdd ? (
         <div className={styles.quickAbove}>
           <QuickAddBar
@@ -712,6 +747,10 @@ export function LeadsTable({
         className={styles.table}
         aria-label="Leads"
         onKeyDown={onGridKey}
+        onPointerOver={(event) => slide(event.target)}
+        onPointerOut={(event) => rest(event.target)}
+        onFocus={(event) => slide(event.target)}
+        onBlur={(event) => rest(event.target)}
         style={
           fit
             ? ({ "--key-width": `${fit.keyWidth}px` } as CSSProperties)
@@ -819,7 +858,13 @@ export function LeadsTable({
                       </td>
                     ) : (
                       <td key={column} data-column={column}>
-                        {body(row, column)}
+                        {column === "name" ? (
+                          body(row, column)
+                        ) : (
+                          <span className={styles.text} data-cell-text="">
+                            {body(row, column)}
+                          </span>
+                        )}
                       </td>
                     ),
                   )}
