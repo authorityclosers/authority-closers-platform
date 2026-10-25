@@ -835,7 +835,7 @@ function ThemeRow() {
   // The theme control is only released where the provider is enabled.
   if (!theme) return null;
   return (
-    <Row label="Theme" hint="System follows your device setting.">
+    <Row label="Theme" hint="Light is the default.">
       <label className={styles.selectWrap}>
         <span className={styles.srOnly}>Theme</span>
         <select
