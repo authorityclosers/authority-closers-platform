@@ -107,9 +107,9 @@ VIDEOS = [
     (
         "tasks-remind",
         "Tasks tab and Remind (v0.89)",
-        "open",
+        "done",
         "high",
-        "Waiting for v0.89 on dev; Lead OS session asked for shas and fixture URLs.",
+        "Done 25 Oct (video 17, v0.89 screens): Tasks with Overdue, Today and Upcoming, Done, Do it later, and Remind on a lead. Reel 29-30 s, YouTube 47-52 s, en/hi/mr. https://drive.google.com/drive/folders/1x51YeyTnpMkbTuKlUQbMYuPIOvldevBi",
     ),
     (
         "billing",
