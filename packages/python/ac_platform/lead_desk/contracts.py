@@ -696,6 +696,99 @@ class MergeView(Model):
     undone_at: datetime | None = None
 
 
+DuplicateBand = Literal["certain", "probable", "possible"]
+
+
+class DuplicateLead(Model):
+    """One side of a possible duplicate, as the review queue shows it."""
+
+    lead_id: UUID
+    name: str
+    company: str | None = None
+    city: str | None = None
+    phone_last4: str | None = None
+    # The whole number where the business shows full numbers (show_full_phones).
+    phone: str | None = None
+    email: str | None = None
+    stage_label: str
+    owner_person_id: UUID | None = None
+    owner_name: str | None = None
+    source_label: str
+    received_at: datetime
+    # People's own work on it (calls, notes, results, messages…), on the compare only.
+    activity: int | None = None
+
+
+class DuplicatePairView(Model):
+    """Two leads that may be one person: how sure, and why (and why not)."""
+
+    pair_id: UUID
+    band: DuplicateBand
+    score: int
+    reasons: tuple[str, ...]
+    against: tuple[str, ...] = ()
+    first: DuplicateLead
+    second: DuplicateLead
+    computed_at: datetime
+
+
+class DuplicateQueue(Model):
+    """The pairs to review, the likeliest first; how many in each band."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    pairs: tuple[DuplicatePairView, ...]
+    total: int
+    counts: dict[str, int] = Field(default_factory=dict)
+
+
+class OwnerOption(Model):
+    person_id: UUID
+    name: str
+
+
+class DuplicateCompare(Model):
+    """One pair side by side, with what a merge would do: the lead kept, who would have
+    it and why. With two sellers active lately (``choose_owner``), the manager picks one
+    of ``owner_choices``."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    pair: DuplicatePairView
+    keep_lead_id: UUID
+    owner_person_id: UUID | None
+    owner_name: str | None
+    owner_why: str
+    owner_reason: str
+    choose_owner: bool = False
+    owner_choices: tuple[OwnerOption, ...] = ()
+
+
+class NotSame(Command):
+    """Two different people after all: the pair leaves the queue for good."""
+
+    command_id: UUID
+    note: str | None = Field(default=None, max_length=300)
+
+
+class DuplicateHint(Model):
+    """On a lead's page (owners and managers): another lead that may be the same person."""
+
+    pair_id: UUID
+    other_lead_id: UUID
+    other_name: str
+    band: DuplicateBand
+    reasons: tuple[str, ...]
+
+
+class MergedInto(Model):
+    """On a merged lead's page: the lead it went into."""
+
+    lead_id: UUID
+    name: str
+    merged_at: datetime | None = None
+    # Whether this person may open it (theirs, a manager's, or "worked before").
+    can_open: bool = False
+
+
 class SearchResult(Model):
     """A few words, everywhere a seller looks (v0.89): leads, notes and open tasks."""
 
@@ -728,6 +821,12 @@ class LeadDetail(Model):
     meeting: MeetingView | None = None
     # The lead's open tasks, the next one first (work-memory engine).
     tasks: tuple[TaskView, ...] = ()
+    # Duplicates (D4): other leads that may be this person (owners and managers), and the
+    # lead this one was merged into.
+    duplicates: tuple[DuplicateHint, ...] = ()
+    merged_into: MergedInto | None = None
+    # Read only: this person worked on a lead merged into this one lately ("worked before").
+    worked_before: bool = False
 
 
 class PhoneHealth(Model):

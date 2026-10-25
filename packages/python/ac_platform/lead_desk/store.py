@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk import allocation, deletion, reports
+from ac_platform.lead_desk import allocation, deletion, duplicate_queue, reports
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk import meetings as meeting_rows
 from ac_platform.lead_desk import tasks as task_book
@@ -581,6 +581,21 @@ class LeadDesk:
             lead = survivor
         return lead
 
+    async def _readable(self, lead_id: UUID) -> tuple[Lead, bool]:
+        """A lead this person may open: one on their desk, or, to read only, the lead a
+        merge kept from a lead they worked on lately (duplicates, "worked before")."""
+        try:
+            return await self._lead(lead_id), False
+        except DeskError:
+            if self.viewer.can_manage or not await duplicate_queue.worked_before(self, lead_id):
+                raise
+        lead: Lead | None = await self.db.scalar(
+            select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id == lead_id)
+        )
+        if lead is None:
+            raise DeskError(404, "This lead isn't on your desk.")
+        return lead, True
+
     async def _command_seen(self, command_id: UUID) -> LeadEvent | None:
         seen: LeadEvent | None = await self.db.scalar(
             select(LeadEvent).where(
@@ -1035,6 +1050,7 @@ class LeadDesk:
         due: LeadDue | None = None,
         contact: LeadSince | None = None,
         created: LeadMade | None = None,
+        duplicates: bool = False,
     ) -> LeadPage:
         limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_manage:
@@ -1054,6 +1070,11 @@ class LeadDesk:
             # Test and sample leads (sandbox seed, practice workspaces, Meta's testing
             # tool): easy to find and clear.
             where.append(or_(Lead.test_data.is_(True), Lead.name.like(META_TEST_LEAD)))
+        if duplicates:
+            # Leads that may be one person, for owners and managers to review (D4).
+            if not self.viewer.can_manage:
+                raise DeskError(403, "Only owners and admins review duplicate leads.")
+            where.append(Lead.id.in_(duplicate_queue.reviewable(self.tenant_id)))
         if scope == "mine":
             where.append(Lead.owner_person_id == self.viewer.person_id)
         elif scope == "unassigned":
@@ -1262,7 +1283,7 @@ class LeadDesk:
         )
 
     async def detail(self, lead_id: UUID) -> LeadDetail:
-        lead = await self._lead(lead_id)
+        lead, worked_before = await self._readable(lead_id)
         journey = await self._labels(journeys.pipeline_of(lead))
         suggestion = await signals.lead_suggestion(
             self.db, self.tenant_id, lead.id, lead.stage, lead.step, journey
@@ -1381,6 +1402,9 @@ class LeadDesk:
                 task_book.view(task, lead.name, self.now)
                 for task in await task_book.TaskBook(self).open_for(lead.id)
             ),
+            duplicates=await duplicate_queue.hints(self, lead),
+            merged_into=await duplicate_queue.merged_into(self, lead),
+            worked_before=worked_before,
         )
 
     @staticmethod

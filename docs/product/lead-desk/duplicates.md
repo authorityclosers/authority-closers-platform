@@ -92,7 +92,7 @@ only add to the queue, never merge.
 - **Two sellers active:** the review sheet asks the manager, defaulting to the most recent. The other
   seller is told, keeps view access, and sees a "worked before" note.
 - **Nobody active:** the earliest assignee.
-- The reason is always one line ("Kept with Dipak: called them 2 days ago").
+- The reason is always one line ("Kept with Asha: worked on it in the last 14 days").
 
 ## 5. Surfaces
 
@@ -101,7 +101,30 @@ only add to the queue, never merge.
 - An Admin metric: open pairs, merged, not the same.
 - The API and MCP read the queue, through the AI-writes policy.
 
-## 6. Data (migration 0135)
+**As built (D4, `lead_desk/duplicate_queue.py`):**
+- `GET /v1/lead-desk/duplicates` (`?band=` optional): the pairs, the likeliest first (50 at
+  most), with counts by band. Owners and admins only; a seller gets 403.
+- `GET /duplicates/{pair_id}`: one pair side by side, each lead's own activity, the lead a
+  merge keeps, who has it and the one-line reason. With two sellers active lately,
+  `choose_owner` is true and `owner_choices` lists them (the most recent first).
+- `POST /duplicates/{pair_id}/not-same` (`command_id`, optional `note`): the pair leaves the
+  queue, and no later scan brings it back. A retry is one decision.
+- `POST /duplicates/scan`: look now, one scan per organisation at a time.
+- `POST /duplicates/merge` and `POST /merges/{merge_id}/undo` are D3's.
+- Leads: `GET /leads?duplicates=review` lists the leads in a certain or probable pair
+  (owners and admins).
+- The lead page (`LeadDetail`): `duplicates` (up to 5 hints, owners and admins only),
+  `merged_into` (the kept lead, with `can_open`), and `worked_before`. A seller named on a
+  merge as having worked on the lead lately reads the kept lead, read only (`can_edit`
+  false; every write still answers 404).
+- Admin: `GET /v1/admin/lead-desk-duplicates` (operations control accounts): per
+  organisation, pairs waiting by band, merges kept and undone, "not the same", and the last
+  scan. Counts only.
+- Every query names the organisation; another organisation's pair answers 404.
+- **Next (D4b):** the MCP and API read of the queue, once the public API reader
+  (`integrations/api_http.py`) is free of other open work.
+
+## 6. Data (migration 0134)
 
 - `lead_desk_leads.merged_into_id` and `merged_at`.
 - `lead_desk_duplicate_pairs`: tenant, the pair (ordered), score, band, reasons, against, computed at.
