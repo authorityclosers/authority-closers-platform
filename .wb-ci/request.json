@@ -1,0 +1,41 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "dbe08e4fc7688883c11c2667d38e9bb8392650db",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/oauth-discovery.ts",
+    "apps/sales-xray-web/public/developers/sx.py",
+    "packages/python/ac_platform/integrations/ai_writes.py",
+    "packages/python/ac_platform/integrations/api_http.py",
+    "packages/python/ac_platform/integrations/mcp_http.py",
+    "packages/python/ac_platform/integrations/oauth_http.py",
+    "packages/python/ac_platform/integrations/scopes.py",
+    "packages/python/ac_platform/integrations/write_policy.py",
+    "packages/python/ac_platform/lead_desk/contracts.py",
+    "packages/python/ac_platform/lead_desk/finder.py",
+    "packages/python/ac_platform/lead_desk/http.py",
+    "packages/python/ac_platform/lead_desk/store.py",
+    "packages/python/ac_platform/lead_desk/tasks.py",
+    "tests/database/test_ai_writes_postgresql.py",
+    "tests/unit/integrations/test_platform_apps.py",
+    "tests/unit/integrations/test_sx_cli.py",
+    "tests/unit/integrations/test_write_policy.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/database/test_ai_writes_postgresql.py",
+    "tests/database/test_ai_writes_migration_postgresql.py",
+    "tests/unit/integrations",
+    "tests/unit/lead_desk",
+    "tests/database/test_lead_desk_finder_postgresql.py",
+    "tests/database/test_lead_desk_tasks_postgresql.py",
+    "tests/database/test_integrations_postgresql.py",
+    "tests/database/test_integrations_platform_apps_postgresql.py"
+  ],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
