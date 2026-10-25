@@ -11,6 +11,7 @@ from ac_platform.audit.models import AuditEvent
 from ac_platform.audit.service import verify_audit_chain_sync
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.outbox.models import OutboxEvent
 from ac_platform.tenancy.models import Membership, Organisation
 from tests.unit.http.test_organisation import call, state  # noqa: F401
 from tests.unit.http.test_workspaces import (  # noqa: F401
@@ -208,7 +209,9 @@ async def test_transfer_swaps_roles_with_exactly_one_owner(state, target_role): 
     with Session(state.engine) as db:
         created = db.get(Membership, (state.tenant, state.person)).created_at
     key = uuid4()
-    response = await call(state, "POST", "/owner", body={"person_id": str(target)}, key=key)
+    response = await call(
+        state, "POST", "/owner", body={"person_id": str(target), "confirm_name": "Alpha"}, key=key
+    )
     assert response.status_code == 200, response.text
     body = response.json()
     assert set(body) == {"owner", "former_owner"}
@@ -225,13 +228,31 @@ async def test_transfer_swaps_roles_with_exactly_one_owner(state, target_role): 
     # The former owner's same-intent replay is stable after losing authority;
     # a changed target or a fresh request is refused without another effect.
     assert (
-        await call(state, "POST", "/owner", body={"person_id": str(target)}, key=key)
+        await call(
+            state,
+            "POST",
+            "/owner",
+            body={"person_id": str(target), "confirm_name": "Alpha"},
+            key=key,
+        )
     ).json() == body
     assert (
-        await call(state, "POST", "/owner", body={"person_id": str(state.person)}, key=key)
+        await call(
+            state,
+            "POST",
+            "/owner",
+            body={"person_id": str(state.person), "confirm_name": "Alpha"},
+            key=key,
+        )
     ).status_code == 409
     assert (
-        await call(state, "POST", "/owner", body={"person_id": str(target)}, key=uuid4())
+        await call(
+            state,
+            "POST",
+            "/owner",
+            body={"person_id": str(target), "confirm_name": "Alpha"},
+            key=uuid4(),
+        )
     ).status_code == 403
     assert roles(state) == after
     (event,) = audits(state)
@@ -245,7 +266,7 @@ async def test_transfer_swaps_roles_with_exactly_one_owner(state, target_role): 
 
 async def test_new_owner_can_transfer_back_and_changed_actor_is_refused(state):  # noqa: F811
     key = uuid4()
-    body = {"person_id": str(state.other)}
+    body = {"person_id": str(state.other), "confirm_name": "Alpha"}
     assert (await call(state, "POST", "/owner", body=body, key=key)).status_code == 200
     assert (
         await call(state, "POST", "/owner", body=body, key=key, token=OTHER_TOKEN)
@@ -254,7 +275,7 @@ async def test_new_owner_can_transfer_back_and_changed_actor_is_refused(state): 
         state,
         "POST",
         "/owner",
-        body={"person_id": str(state.person)},
+        body={"person_id": str(state.person), "confirm_name": "Alpha"},
         key=uuid4(),
         token=OTHER_TOKEN,
     )
@@ -280,7 +301,13 @@ async def test_transfer_refuses_unavailable_targets(state, target):  # noqa: F81
         "suspended": state.member,
     }[target]
     before = roles(state)
-    response = await call(state, "POST", "/owner", body={"person_id": str(person_id)}, key=uuid4())
+    response = await call(
+        state,
+        "POST",
+        "/owner",
+        body={"person_id": str(person_id), "confirm_name": "Alpha"},
+        key=uuid4(),
+    )
     assert response.status_code == (409 if target == "self" else 404)
     assert roles(state) == before and audits(state) == []
 
@@ -294,7 +321,7 @@ async def test_only_the_owner_transfers_ownership(state, actor_role):  # noqa: F
         state,
         "POST",
         "/owner",
-        body={"person_id": str(state.other)},
+        body={"person_id": str(state.other), "confirm_name": "Alpha"},
         key=uuid4(),
         token=OTHER_TOKEN,
     )
@@ -304,7 +331,7 @@ async def test_only_the_owner_transfers_ownership(state, actor_role):  # noqa: F
 
 def request_for(state, method):  # noqa: F811
     if method == "POST":
-        return "/owner", {"person_id": str(state.member)}
+        return "/owner", {"person_id": str(state.member), "confirm_name": "Alpha"}
     return f"/members/{state.member}", ({"role": "admin"} if method == "PATCH" else None)
 
 
@@ -395,3 +422,39 @@ async def test_replay_key_cannot_move_to_another_organisation(state, method):  #
             )
             == 0
         )
+
+
+async def test_transfer_needs_the_organisation_name_typed_and_emails_both(state):  # noqa: F811
+    # Owner, 25 Oct 2026: never one click. A wrong name is refused before anything moves.
+    before = roles(state)
+    wrong = await call(
+        state,
+        "POST",
+        "/owner",
+        body={"person_id": str(state.other), "confirm_name": "Alfa"},
+        key=uuid4(),
+    )
+    assert wrong.status_code == 422
+    assert "name" in wrong.json()["detail"]
+    missing = await call(state, "POST", "/owner", body={"person_id": str(state.other)}, key=uuid4())
+    assert missing.status_code == 422
+    assert roles(state) == before and audits(state) == []
+    # Case and spaces don't matter; the name does.
+    done = await call(
+        state,
+        "POST",
+        "/owner",
+        body={"person_id": str(state.other), "confirm_name": "  alpha "},
+        key=uuid4(),
+    )
+    assert done.status_code == 200, done.text
+    with Session(state.engine) as db:
+        queued = db.scalars(
+            select(OutboxEvent).where(
+                OutboxEvent.event_type == "organisation.ownership_transferred.v1"
+            )
+        ).all()
+    assert sorted(event.payload["recipient"] for event in queued) == [
+        "former_owner",
+        "new_owner",
+    ]

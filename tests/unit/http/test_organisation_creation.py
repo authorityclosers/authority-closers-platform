@@ -155,7 +155,7 @@ async def test_create_replay_reports_current_role_after_owner_transfer(state):
     ) as client:
         transferred = await client.post(
             "/v1/organisation/owner",
-            json={"person_id": str(state.other)},
+            json={"person_id": str(state.other), "confirm_name": "Fictional Team"},
             headers={
                 "Origin": ORIGIN,
                 "Cookie": f"ac_session={TOKEN}",

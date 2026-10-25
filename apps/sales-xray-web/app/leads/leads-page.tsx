@@ -82,6 +82,7 @@ import type { LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
 import { ShareOut } from "./assign-sheet";
+import { SellerChips } from "./seller-chips";
 import { useNudgeCard } from "./nudge-card";
 import {
   LEADS_PATH,
@@ -90,11 +91,13 @@ import {
   pickContacts,
   readDesk,
   readLeads,
+  readTeam,
   searchDesk,
   sharedLead,
   type Desk,
   type LeadRow,
   type PickedContact,
+  type RepView,
   likelyNext,
   moreParams,
   readLeadAhead,
@@ -396,6 +399,15 @@ export function LeadsRoute() {
   // Whose leads and the search start from the address (a saved view, a link).
   const [scopeChoice, setScopeChoice] = useState<Scope | null>(() =>
     asScope(params.get("who")),
+  );
+  // One seller's leads on All leads (owner, 25 Oct 2026): the seller chips,
+  // with the team's sellers and, when the server counts them, their leads.
+  const [sellerOwner, setSellerOwner] = useState<string | null>(() =>
+    params.get("seller"),
+  );
+  const [team, setTeam] = useState<readonly RepView[] | null>(null);
+  const [ownerCounts, setOwnerCounts] = useState<Record<string, number> | null>(
+    null,
   );
   // Leads → Filter: a fresh sheet each opening.
   const [filtering, setFiltering] = useState<{
@@ -830,6 +842,16 @@ export function LeadsRoute() {
   }, [authenticated, canStart]);
   useCommandSource("leads", commands);
 
+  useEffect(() => {
+    if (!can) return;
+    const controller = new AbortController();
+    readTeam(controller.signal).then(
+      (next) => setTeam(next.reps),
+      () => undefined,
+    );
+    return () => controller.abort();
+  }, [can]);
+
   // Opened from a nudge (?nudge=1): its words as the urgent card, with Start
   // calling (owner program, 25 Oct 2026, section 3).
   useNudgeCard(
@@ -1222,6 +1244,24 @@ export function LeadsRoute() {
               ]}
               actions={
                 <>
+                  {/* On a computer the header's tools share this row (owner,
+                      25 Oct 2026: the top half of Leads was empty space). */}
+                  <TakingSwitch
+                    key={`taking-head-${desk.me.taking_leads !== false}`}
+                    initial={desk.me.taking_leads !== false}
+                    place="chip"
+                    pausedUntil={desk.me.paused_until ?? null}
+                    onChanged={refresh}
+                  />
+                  <button
+                    type="button"
+                    className={styles.toolButton}
+                    aria-label="Leads settings"
+                    aria-haspopup="dialog"
+                    onClick={() => setSettingsOpen(true)}
+                  >
+                    <SettingsIcon size={20} aria-hidden="true" />
+                  </button>
                   <Button onClick={() => begin("menu", setMenu)}>
                     <Plus size={14} aria-hidden="true" />
                     Add leads
@@ -1253,8 +1293,9 @@ export function LeadsRoute() {
           ) : (
             <>
               {/* One header on every view (owner, 25 Oct 2026): Taking leads and the
-                  gear for Leads settings, in the same place on each. */}
-              <div className={styles.toolbar}>
+                  gear for Leads settings, in the same place on each (on a
+                  computer they sit in the page header's row). */}
+              <div className={styles.toolbar} data-head="">
                 <TakingSwitch
                   key={`taking-${desk.me.taking_leads !== false}`}
                   initial={desk.me.taking_leads !== false}
@@ -1336,6 +1377,35 @@ export function LeadsRoute() {
                   onChange={applyFilters}
                 />
               ) : null}
+              {can && stageView && view !== TEST && team && team.length > 1 ? (
+                <SellerChips
+                  reps={team}
+                  counts={
+                    ownerCounts ??
+                    Object.fromEntries(
+                      team.map((rep) => [rep.person_id, rep.open_leads]),
+                    )
+                  }
+                  unassigned={desk.counts.unassigned ?? null}
+                  pick={{
+                    owner: scope === "team" ? sellerOwner : null,
+                    unassigned: scope === "unassigned",
+                  }}
+                  onPick={(next) => {
+                    setSellerOwner(next.owner);
+                    const url = new URL(window.location.href);
+                    if (next.owner) url.searchParams.set("seller", next.owner);
+                    else url.searchParams.delete("seller");
+                    window.history.replaceState(
+                      window.history.state,
+                      "",
+                      url.pathname + url.search + url.hash,
+                    );
+                    const who = next.unassigned ? "unassigned" : "team";
+                    if (scope !== who) applyFilters({ ...shownFilters, who });
+                  }}
+                />
+              ) : null}
             </>
           )}
           {error ? (
@@ -1383,6 +1453,8 @@ export function LeadsRoute() {
               stage={view}
               stageLabel={stageLabel}
               scope={view === TEST ? "team" : scope}
+              owner={view !== TEST && scope === "team" ? sellerOwner : null}
+              onOwnerCounts={setOwnerCounts}
               query={query}
               onOpen={(leadId) => open(leadId)}
               version={version}

@@ -38,6 +38,7 @@ from ac_platform.identity.provider_link_email import (
     PROVIDER_REMOVED_JOB,
 )
 from ac_platform.identity.reviewer_auth import REVIEWER_AUTH_EVENT, REVIEWER_AUTH_JOB
+from ac_platform.organisations.ownership_email import OWNERSHIP_EVENT, OWNERSHIP_JOB
 from ac_platform.outbox.models import (
     Job,
     JobStatus,
@@ -211,6 +212,7 @@ async def test_dispatcher_rejects_job_kinds_outside_the_exact_allowlist() -> Non
 def test_outbox_route_is_exact_and_contains_no_unsafe_default_email_kind() -> None:
     assert set(OUTBOX_JOB_ROUTES) == {
         ORGANISATION_INVITATION_EVENT,
+        OWNERSHIP_EVENT,
         STAFF_KEY_CREATED_EVENT,
         PROVIDER_LINKED_EVENT,
         PROVIDER_REMOVED_EVENT,
@@ -863,6 +865,7 @@ def test_default_worker_provider_is_fake_and_unconfigured_resend_is_rejected() -
         {
             ENROLLMENT_WELCOME_JOB,
             ORGANISATION_INVITATION_JOB,
+            OWNERSHIP_JOB,
             STAFF_KEY_CREATED_JOB,
             PROVIDER_LINKED_JOB,
             PROVIDER_REMOVED_JOB,

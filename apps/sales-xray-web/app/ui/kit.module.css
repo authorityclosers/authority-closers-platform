@@ -573,8 +573,9 @@ a.tile:active {
   background: var(--sx-fill);
 }
 
+/* A full control height on its own (44 px on touch), inside the well. */
 .segment {
-  min-height: calc(var(--sx-control-h) - 4px);
+  min-height: var(--sx-control-h);
   padding: 0 10px;
   border: 0;
   border-radius: calc(var(--sx-radius-sm) - 2px);
@@ -973,11 +974,22 @@ a.rowTitle:focus-visible::after {
   resize: vertical;
 }
 
-.field :is(input, select, textarea):focus,
+.field :is(input, textarea):focus,
 .inlineInput:focus {
   border-color: var(--sx-accent);
   outline: none;
   box-shadow: 0 0 0 3px var(--sx-accent-soft);
+}
+
+/* A select glows for keyboards only: a tap or click left a teal glow on it
+   (owner, 25 Oct 2026, Organisation > Members > Role). */
+.field select:focus {
+  border-color: var(--sx-accent);
+  outline: none;
+}
+
+.field select:focus-visible {
+  box-shadow: var(--sx-focus-ring);
 }
 
 .fieldHint {

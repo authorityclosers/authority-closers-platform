@@ -1904,3 +1904,48 @@
     font-size: 13px;
   }
 }
+
+/* ── Phones: nothing past the edge (Report fit, owner program 25 Oct 2026) ──
+   At 320 px with larger text the status cards' labels ran 9 px past the screen
+   and the Next Steps rows 15-24 px: the cards stack the count over the label
+   without the icon, and a step's date and owner wrap under its words. */
+@media (max-width: 600px) {
+  .countCard {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+  .countCard .disc {
+    display: none;
+  }
+  .countLabel {
+    font-size: 14px;
+    line-height: 1.25;
+    overflow-wrap: break-word;
+    hyphens: auto;
+  }
+  .stepRow {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 8px;
+    padding-left: 38px;
+  }
+  .stepRow > :nth-child(1) {
+    position: absolute;
+    top: 8px;
+    left: 0;
+  }
+  .stepRow > :nth-child(2) {
+    flex: 1 1 100%;
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+  .stepRow > :nth-child(3),
+  .stepRow > :nth-child(4) {
+    white-space: normal;
+  }
+  .stepRow > span:empty {
+    display: none;
+  }
+}

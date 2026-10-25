@@ -29,7 +29,8 @@ export type Distribution = {
     name: string;
     leads: number;
     open_after: number;
-    max_open: number;
+    /** null: no limit. */
+    max_open: number | null;
   }[];
   /** Leads left where they are, by why. */
   left: Partial<

@@ -31,32 +31,38 @@
     {
       "id": "04-call-a-lead",
       "title": "Call a lead and log how it went",
-      "shows": "Call in one tap, then log how the call went and what happens next."
+      "shows": "Call in one tap, then log how the call went and what happens next.",
+      "coming": true
     },
     {
       "id": "13-lead-stages-board",
       "title": "Lead stages and the Board",
-      "shows": "The nine lead stages, the Board, moving a lead and the pipeline numbers."
+      "shows": "The nine lead stages, the Board, moving a lead and the pipeline numbers.",
+      "coming": true
     },
     {
       "id": "14-my-work",
       "title": "My work and notes",
-      "shows": "Everything you did today, yesterday or this week, and quick notes on a lead."
+      "shows": "Everything you did today, yesterday or this week, and quick notes on a lead.",
+      "coming": true
     },
     {
       "id": "15-all-leads-filter",
       "title": "All leads: filter and sort",
-      "shows": "Search, filter and sort your whole lead list, and save the views you use."
+      "shows": "Search, filter and sort your whole lead list, and save the views you use.",
+      "coming": true
     },
     {
       "id": "16-never-lose-a-change",
       "title": "Never lose a change",
-      "shows": "What Not sent yet and All changes saved mean, and why your work is safe."
+      "shows": "What Not sent yet and All changes saved mean, and why your work is safe.",
+      "coming": true
     },
     {
       "id": "17-tasks-and-remind",
       "title": "Tasks and reminders",
       "shows": "Your follow-ups by Overdue, Today and Upcoming, and Remind on any lead."
     }
-  ]
+  ],
+  "coming": "New version coming with the redesigned app"
 }

@@ -15,6 +15,7 @@ from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.sales_xray_home import lead_counts
 from ac_platform.kernel.errors import DomainError
+from ac_platform.tenancy.roles import can
 
 
 class SalesXrayWorkspaceResponse(BaseModel):
@@ -188,7 +189,7 @@ def install_sales_xray_workspaces_http(
         person = auth.resolved.actor.person_id
         readable = workspace is not None and (
             home.owner_id == person
-            or (workspace.kind == "organisation" and workspace.role in {"owner", "admin"})
+            or (workspace.kind == "organisation" and can(workspace.role, "team.view"))
         )
         if not readable:
             raise missing

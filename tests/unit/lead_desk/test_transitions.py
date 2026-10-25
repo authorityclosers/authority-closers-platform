@@ -346,6 +346,11 @@ def test_an_import_skips_the_graph_but_never_a_reason() -> None:
     assert move.stage.key == "won"
     # New → Demo completed isn't a move; an import can say a lead stands there.
     t.check(journey, current, "demo_completed", EVERYTHING, can_manage=True, source="import")
+    # Nor what a seller gives with a move: a file has no follow-up time, meeting or why a
+    # call didn't connect (universal intake, 25 Oct 2026).
+    for key in ("not_connected", "interested", "meeting_scheduled"):
+        moved = t.check(journey, current, key, t.Given(), can_manage=True, source="import")
+        assert moved.stage.key == key
     with pytest.raises(t.MoveRefused) as refused:
         t.check(journey, current, "lost", t.Given(), can_manage=True, source="import")
     assert refused.value.needs == ("reason",)

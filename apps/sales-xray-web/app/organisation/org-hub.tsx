@@ -202,6 +202,61 @@ function Parts({
   );
 }
 
+type HubWorkspace = { name: string; role: string | null };
+
+/** The organisation's name and your role, at the top of the hub and of Insights. */
+function OrgHeader({ workspace }: { workspace: HubWorkspace }) {
+  const manager = workspace.role === "owner" || workspace.role === "admin";
+  return (
+    <header className={styles.header}>
+      <span className={styles.tile} aria-hidden="true">
+        <Building2 size={20} />
+      </span>
+      <div>
+        <h1>{workspace.name}</h1>
+        <p>
+          Organisation · Your role:{" "}
+          <b>
+            {workspace.role === "owner"
+              ? "Owner"
+              : manager
+                ? "Admin"
+                : "Member"}
+          </b>
+        </p>
+      </div>
+    </header>
+  );
+}
+
+/**
+ * The hub's header and tab row around a page of its own (Insights), so the
+ * organisation keeps one shell (owner, 25 Oct 2026). Outside an organisation
+ * the page shows on its own.
+ */
+export function OrgHubFrame({
+  current,
+  children,
+}: {
+  current: string;
+  children: ReactNode;
+}) {
+  const access = useWorkspaceAccess();
+  const workspace = access?.workspaces?.find(
+    (item) => item.tenant_id === access.context?.tenantId,
+  );
+  if (workspace?.kind !== "organisation") return <>{children}</>;
+  const manager = workspace.role === "owner" || workspace.role === "admin";
+  const tabs = HUB_TABS.filter((tab) => manager || !tab.managers);
+  return (
+    <div className={styles.hub}>
+      <OrgHeader workspace={workspace} />
+      <HubTabs tabs={tabs} current={current} />
+      <div className={styles.body}>{children}</div>
+    </div>
+  );
+}
+
 export function OrganisationHub({
   initial = null,
   base = HUB_PATH,
@@ -281,24 +336,7 @@ export function OrganisationHub({
       mobileFit={false}
     >
       <div className={styles.hub}>
-        <header className={styles.header}>
-          <span className={styles.tile} aria-hidden="true">
-            <Building2 size={20} />
-          </span>
-          <div>
-            <h1>{current.name}</h1>
-            <p>
-              Organisation · Your role:{" "}
-              <b>
-                {current.role === "owner"
-                  ? "Owner"
-                  : manager
-                    ? "Admin"
-                    : "Member"}
-              </b>
-            </p>
-          </div>
-        </header>
+        <OrgHeader workspace={current} />
         <HubTabs tabs={tabs} current={tab.id} base={base} />
         <div className={styles.body}>{body}</div>
       </div>

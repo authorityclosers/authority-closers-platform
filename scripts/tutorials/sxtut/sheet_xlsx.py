@@ -73,7 +73,11 @@ def main(manifest_path: str, links_path: str, out: str) -> None:
     for r, v in enumerate(m["videos"], 4):
         fill = PatternFill("solid", fgColor=PAPER if r % 2 == 0 else WHITE)
         values = [v["number"], v["title"], v["shows"], length(v)]
-        values += [link(links.get(v["phone"].get(lang)), "▶ Watch") for lang, _ in LANGS]
+        if v.get("coming"):
+            # Not out yet: one note across the three language columns instead of links.
+            values += [m.get("coming", "Coming soon"), "", ""]
+        else:
+            values += [link(links.get(v["phone"].get(lang)), "▶ Watch") for lang, _ in LANGS]
         for i, value in enumerate(values, 1):
             c = ws.cell(row=r, column=i, value=value)
             c.fill = fill
@@ -87,6 +91,11 @@ def main(manifest_path: str, links_path: str, out: str) -> None:
             c.alignment = Alignment(
                 horizontal="left" if i in (2, 3) else "center", vertical="center", wrap_text=i == 3
             )
+        if v.get("coming"):
+            ws.merge_cells(start_row=r, start_column=5, end_row=r, end_column=7)
+            note = ws.cell(row=r, column=5)
+            note.font = Font(name=FONT, size=12, italic=True, color="6B7280")
+            note.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
         ws.row_dimensions[r].height = 42
     ws.freeze_panes = "A4"
 

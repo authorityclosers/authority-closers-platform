@@ -1,0 +1,79 @@
+/* Leads per seller on All leads (owner, 25 Oct 2026): one row of chips that
+   wraps on a computer and scrolls by itself on a phone. Tokens only. */
+
+.strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+
+.chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.chip:not(:has(> span:first-child)) {
+  padding-left: 14px;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--sx-ink);
+  background: var(--sx-ink);
+  color: var(--sx-paper);
+}
+
+.count {
+  min-width: 22px;
+  padding: 0 6px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.chip[aria-pressed="true"] .count {
+  background: color-mix(in oklab, var(--sx-paper) 22%, transparent);
+  color: var(--sx-paper);
+}
+
+.chip[data-tone="warn"]:not([aria-pressed="true"]) .count {
+  background: var(--lx-warning-soft);
+  color: var(--sx-ink);
+}
+
+.chip:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* A phone: one row that scrolls inside itself. */
+@media (max-width: 899.98px) {
+  .strip {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-inline: -16px;
+    padding-inline: 16px;
+  }
+
+  .strip::-webkit-scrollbar {
+    display: none;
+  }
+}

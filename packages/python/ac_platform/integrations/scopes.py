@@ -10,6 +10,9 @@ SCOPES: dict[str, str] = {
     "reports:read": "Read call reports and the facts found in calls",
     "leads:read": "Read leads",
     "leads:write": "Create and update leads",
+    # AI writes (docs/product/ai-writes.md): each change an app may make is its own scope.
+    "leads:notes": "Add notes to leads",
+    "leads:tasks": "Add tasks and reminders to leads",
     "webhooks:manage": "Manage the webhook",
 }
 

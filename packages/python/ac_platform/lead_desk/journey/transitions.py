@@ -34,6 +34,8 @@ from ac_platform.lead_desk.vocabulary import (
     IMPORTED_LOST,
     JUNK_REASONS,
     LOST_REASONS,
+    MERGED_DUPLICATE,
+    MERGED_WORDS,
     OTHER_REASON,
 )
 
@@ -68,9 +70,18 @@ SOURCES: Final[frozenset[str]] = frozenset(
 )
 
 
+# Moves that keep the books, never a person's progress: the stage list placing leads, and a
+# merge (duplicates) keeping the furthest stage or closing the lead merged away.
+BOOKKEEPING: Final[frozenset[str]] = frozenset({STAGES_CHANGED, "merge"})
+# Moves that say where a lead stands, not how it got there: the stage list's moves and what
+# a seller gives with a move don't apply (a file, a merge).
+PLACING: Final[frozenset[str]] = frozenset({"import", "merge"})
+
+
 def stages_changed(data: Any) -> bool:
-    """Whether a history line is a move the stage list itself made."""
-    return isinstance(data, dict) and data.get("v") == 2 and data.get("source") == STAGES_CHANGED
+    """Whether a history line is a bookkeeping move (the stage list's, or a merge's): never
+    progress, a conversion or a seller's work."""
+    return isinstance(data, dict) and data.get("v") == 2 and data.get("source") in BOOKKEEPING
 
 
 class MoveRefused(Exception):
@@ -213,8 +224,9 @@ def check(
 ) -> Move:
     """The move to ``step`` if this person may make it with what they gave; else refused.
 
-    Imports skip the stage list's moves (the file says where each lead stands) but never
-    a required reason."""
+    Imports skip the stage list's moves and what a seller gives with a move (a follow-up
+    time, a meeting, why a call didn't connect): the file says where each lead stands. They
+    never skip a Lost or Junk reason ("Imported" when the file gives none)."""
     target = journey.stage_for(step)
     if target is None or target.archived:
         raise MoveRefused(422, "Pick one of your current stages.")
@@ -223,7 +235,7 @@ def check(
     allowed = _all_moves(journey, current)
     move = next((item for item in allowed if item.stage.key == target.key), None)
     if move is None:
-        if source != "import":
+        if source not in PLACING:
             mine = [m for m in allowed if can_manage or not m.managers_only]
             where = _words([f"“{m.stage.label}”" for m in mine])
             raise MoveRefused(
@@ -241,8 +253,14 @@ def check(
             if move.action == "reopen"
             else "Only an owner or admin can mark a closed lead as Junk.",
         )
-    missing = [need for need in move.needs if not _has(need, given)]
-    if given.reason is not None and not (source == "import" and given.reason == IMPORTED_LOST):
+    missing = [
+        need
+        for need in move.needs
+        if not _has(need, given) and (source not in PLACING or need == REASON)
+    ]
+    if given.reason is not None and not (
+        source in PLACING and given.reason in (IMPORTED_LOST, MERGED_DUPLICATE)
+    ):
         keys = {key for key, _ in move.reasons}
         if move.reasons and given.reason not in keys:
             raise MoveRefused(422, "Pick one of the listed reasons.", needs=(REASON,))
@@ -278,6 +296,8 @@ def reason_label(move: Move, reason: str | None) -> str | None:
         return None
     if reason == IMPORTED_LOST:
         return "Imported"
+    if reason == MERGED_DUPLICATE:
+        return MERGED_WORDS
     return dict(move.reasons).get(reason)
 
 

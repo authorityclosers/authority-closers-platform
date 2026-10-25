@@ -96,6 +96,9 @@ class LeadRow(Model):
     language: str | None
     interest: str | None
     phone_last4: str | None
+    # The whole number, when the organisation shows full numbers in lists (owner, 25 Oct
+    # 2026: "Always show full phone numbers"); else only the last four digits.
+    phone: str | None = None
     stage: str
     stage_label: str
     source: str
@@ -210,6 +213,9 @@ class LeadPage(Model):
     # Leads per stage for the same people, search and test filter, every stage
     # at once: the Leads page's stage tabs show real counts (owner, 22 Oct 2026).
     stage_counts: dict[str, int] = Field(default_factory=dict)
+    # Owners and admins on the team's list: leads per seller ("none": nobody's) for the
+    # same filters, without the seller picked, for the per-seller chips (25 Oct 2026).
+    owner_counts: dict[str, int] = Field(default_factory=dict)
 
 
 class BulkDone(Model):
@@ -297,6 +303,12 @@ class LeadEventView(Model):
     task_action: str | None = None
     task_kind: str | None = None
     due_at: datetime | None = None
+    # A change an AI app or an API key made (docs/product/ai-writes.md): which one
+    # ("ChatGPT", "API key sxk_live_ab12"), its change id, and whether this viewer may
+    # still undo it (7 days; the person who made it, the lead's owner or a manager).
+    app_label: str | None = None
+    change_id: UUID | None = None
+    can_undo: bool = False
 
 
 class RepOption(Model):
@@ -467,7 +479,10 @@ class StageChoice(Model):
 
 
 TaskKind = Literal["call_back", "whatsapp", "email", "send_file", "meeting", "other"]
-TaskSource = Literal["seller", "after_call", "note", "message", "commitment"]
+# "assistant": sent from ChatGPT, Claude, an API key or the CLI (docs/product/ai-writes.md).
+TaskSource = Literal["seller", "after_call", "note", "message", "commitment", "assistant"]
+# How long a change an AI app made can be undone (owner order, 25 Oct 2026).
+APP_CHANGE_UNDO_DAYS = 7
 TaskSnoozeChoice = Literal["15m", "1h", "evening", "tomorrow"]
 TaskBucket = Literal["overdue", "today", "upcoming"]
 
@@ -619,7 +634,7 @@ class DistributedTo(Model):
     # Leads of this set they hold after it, and their open leads then, against their cap.
     leads: int
     open_after: int
-    max_open: int
+    max_open: int | None
 
 
 class Distribution(Model):
@@ -641,6 +656,44 @@ class Distribution(Model):
     # More unassigned leads wait than one distribution takes.
     more: bool = False
     words: str
+
+
+class MergeLeads(Command):
+    """An owner or manager merges two leads that are one person (duplicates): the lead with
+    the most human work is kept unless ``keep`` names it; ``owner_person_id`` picks who has it
+    when two sellers worked on them lately."""
+
+    command_id: UUID
+    lead_ids: tuple[UUID, UUID]
+    keep: UUID | None = None
+    owner_person_id: UUID | None = None
+
+
+class UndoMerge(Command):
+    command_id: UUID
+
+
+class MergeView(Model):
+    """A merge: the lead kept and the lead merged into it, who has it now and why in one
+    line, what moved, and until when it can be undone."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    merge_id: UUID
+    kept_lead_id: UUID
+    kept_name: str
+    merged_lead_id: UUID
+    merged_name: str
+    owner_person_id: UUID | None
+    owner_name: str | None
+    owner_reason: str
+    # active, asked, chosen, first or nobody (dupes.OwnerChoice).
+    owner_why: str
+    # Others who worked on the lead in the last 14 days ("worked before").
+    also_worked: tuple[str, ...] = ()
+    moved: dict[str, int] = Field(default_factory=dict)
+    created_at: datetime
+    undo_until: datetime
+    undone_at: datetime | None = None
 
 
 class SearchResult(Model):
@@ -697,7 +750,12 @@ class RepView(Model):
     role: str
     revision: int
     available: bool
-    max_open: int
+    # The seller's open-lead limit, or None for no limit; default_cap: it is the
+    # organisation's default (the seller has no rules of their own yet). over_capacity: open
+    # leads beyond the limit, which manual assigns and imports may make (owner, 25 Oct 2026).
+    max_open: int | None
+    default_cap: bool = False
+    over_capacity: int = 0
     languages: tuple[str, ...]
     areas: tuple[str, ...]
     interests: tuple[str, ...]
@@ -726,6 +784,10 @@ class SettingsView(Model):
     reassign_minutes: int
     default_country: str
     work_hours: WorkHoursView | None = None
+    # Lists show whole phone numbers, not only the last four digits.
+    show_full_phones: bool = False
+    # The open-lead limit of a seller with no rules of their own; None: no limit.
+    default_max_open: int | None = None
     # Nudges (team engine, section 3): off until an owner turns them on, and off for these.
     nudges: bool = False
     nudges_off_for: tuple[UUID, ...] = ()
@@ -823,7 +885,12 @@ class ImportPreview(Model):
     with_phone: int
     repeats_in_file: int
     # Numbers in the file that are already leads (anyone's): kept there, never added again.
+    # Rows without a number count by their email (universal intake).
     known_leads: int = 0
+    # The CRM whose export this is, when its headers say so ("Zoho CRM"), and how many rows
+    # make a lead with the columns matched: the screen offers one-click Import when most do.
+    detected: str | None = None
+    importable: int = 0
 
 
 class ImportResult(Model):
@@ -838,6 +905,9 @@ class ImportResult(Model):
     owned: int = 0
     unmatched_stages: tuple[str, ...] = ()
     unmatched_owners: tuple[str, ...] = ()
+    # People an import took past their open-lead limit, said plainly (owner, 25 Oct 2026):
+    # an import may go over; it never hides it.
+    warnings: tuple[str, ...] = ()
 
 
 class SourceView(Model):
@@ -1101,7 +1171,8 @@ class DeleteLead(Command):
 class RepRules(Command):
     expected_revision: int = Field(ge=0)
     available: bool
-    max_open: int = Field(ge=1, le=1000)
+    # None: no limit.
+    max_open: int | None = Field(ge=1, le=1000)
     languages: tuple[str, ...] = Field(default=(), max_length=12)
     areas: tuple[str, ...] = Field(default=(), max_length=40)
     interests: tuple[str, ...] = Field(default=(), max_length=40)
@@ -1151,6 +1222,11 @@ class SettingsCommand(Command):
     expected_revision: int = Field(ge=0)
     auto_reassign: bool
     reassign_minutes: int = Field(ge=5, le=1440)
+    # None keeps it as it is.
+    show_full_phones: bool | None = None
+    # Sent: the open-lead limit of sellers with no rules of their own (null: no limit).
+    # Left out: kept as it is.
+    default_max_open: int | None = Field(default=None, ge=1, le=1000)
 
 
 class NudgesCommand(Command):
@@ -1186,6 +1262,8 @@ class ImportCommand(Command):
     assign: Literal["rules", "me"] = "rules"
     # A pipeline picked by hand; None: the one that takes file imports.
     pipeline: str | None = Field(default=None, max_length=40)
+    # The CRM the preview recognised: the leads' source says "<CRM> export: <file>".
+    source_name: str | None = Field(default=None, max_length=40)
 
 
 class NewSource(Command):

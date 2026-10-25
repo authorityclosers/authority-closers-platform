@@ -9,8 +9,6 @@ import re
 import sys
 from pathlib import Path
 
-import pytest
-
 ROOT = Path(__file__).resolve().parents[3]
 TUT = ROOT / "scripts/tutorials"
 sys.path.insert(0, str(TUT))
@@ -298,14 +296,15 @@ def test_store_names_keep_avatar_initials_in_step() -> None:
 def test_phone_footage_maps_into_the_reel_frame() -> None:
     # A 1080x2340 phone recording, status bar cropped, is padded at the sides to the reel's 9:16.
     f = {"file": "x.mp4", "size": [1080, 2340], "from": 9.0, "to": 31.5, "crop": [84, 50]}
-    left, top, cw, ch, pad, s = v2.footage_frame(f)
-    assert (left, top, cw, ch, pad) == (0, 84, 1080, 2206, 81)
+    left, top, cw, ch, pad, pad_top, s = v2.footage_frame(f)
+    assert (left, top, cw, ch, pad, pad_top) == (0, 84, 1080, 2206, 81, 0)
     assert abs((cw + 2 * pad) * s - v2.REEL_W) < 1 and abs(ch * s - v2.REEL_H) < 1
-    # A recording with black side bars has them cropped; one still wider than 9:16 is refused.
+    # A recording with black side bars has them cropped.
     bars = {**f, "size": [720, 1280], "crop": [60, 60, 80, 80]}
-    assert v2.footage_frame(bars)[:5] == (80, 60, 560, 1160, 46)
-    with pytest.raises(ValueError):
-        v2.footage_frame({**f, "size": [1080, 1080], "crop": []})
+    assert v2.footage_frame(bars)[:6] == (80, 60, 560, 1160, 46, 0)
+    # In the 9:19.5 phone frame the cropped status and gesture bars come back as black.
+    framed = v2.footage_frame(f, v2.FRAME_PHONE)
+    assert framed[4] == 0 and framed[5] == round(134 * 84 / 134) and framed[6] == 1
     board = {"id": "t"}
     beat = {
         "id": "b",
@@ -338,3 +337,39 @@ def test_the_video_list_numbers_and_chains_the_videos_in_order() -> None:
     assert names[0] == "01 Join the testers" and names[8] == "09 All leads - filter and sort"
     assert all(re.fullmatch(r"\d\d [\w ,.()&-]+", n) for n in names)
     assert cat["optin"].startswith("https://play.google.com/apps/testing/")
+    # Videos waiting for a re-shoot stay listed with a note, never with old files.
+    coming = [v for v in cat["videos"] if v.get("coming")]
+    assert all(v["coming"] is True for v in coming) and (not coming or cat["coming"])
+
+
+def test_framed_shots_sit_in_their_device_and_reels_keep_a_caption_band() -> None:
+    # Owner, 25 Oct 2026: a 9:19.5 phone and a 16:10 laptop; captions never on the app.
+    phone = {"device": "phone2", "width": 1080, "height": 2340}
+    w, h, to = v2.geometry("reel", phone)
+    assert (w, h) == (brand.REEL_W, brand.REEL_PIC_H) and w == 1080 and h + brand.REEL_BAND == 1920
+    full = to({"x": 0, "y": 0, "w": 1080, "h": 2340})
+    hole = brand.REEL_PHONE_HOLE
+    assert abs(full["x"] - hole["x"]) < 1e-6 and abs(full["h"] - hole["h"]) < 1
+    laptop = {"device": "laptop", "width": 2560, "height": 1600}
+    w, h, to = v2.geometry("youtube", laptop)
+    assert (w, h) == (brand.STAGE_W, brand.STAGE_H)
+    assert abs(to({"x": 0, "y": 0, "w": 2560, "h": 1600})["w"] - brand.YT_LAPTOP_HOLE["w"]) < 1
+    assert v2.stage_art("reel", phone) == ["reel-stage", "band"]
+    assert v2.stage_art("youtube", laptop) == ["stage-laptop"]
+    # Older shots keep the old stage, so their cached cuts stay valid.
+    assert v2.stage_art("youtube", {"device": "reel"}) == ["stage"]
+    assert v2.stage_art("reel", {"device": "reel"}) == []
+    # The chapter tag (bottom left at 1920 wide; a 28-character title is about 700 px) stays clear
+    # of the phone's bezel, and of the laptop, which ends above it.
+    bezel = brand.YT_PHONE_HOLE["w"] * 0.022
+    assert (brand.YT_PHONE_HOLE["x"] - bezel) * 1920 / brand.STAGE_W > 72 + 700
+    laptop_bottom = brand.YT_LAPTOP_HOLE["y"] + brand.YT_LAPTOP_HOLE["h"] * 1.06
+    assert laptop_bottom * 1080 / brand.STAGE_H < 916
+    for b in boards():
+        for c in b.get("chapters", []):
+            assert all(len(t) <= 28 for t in c["title"].values()), (b["id"], c["id"])
+    # Phone footage in a framed board joins the drawn phone at its own 9:19.5.
+    f = {"file": "x.mp4", "size": [1080, 2340], "from": 0.0, "to": 5.0, "crop": [84, 50]}
+    sspec = {"id": "p", "footage": f, "beats": [{"id": "b", "phone": {"at": 0.5, "events": []}}]}
+    assert v2.footage_shot({"id": "t", "frames": True}, sspec)["device"] == "phone2"
+    assert v2.footage_shot({"id": "t"}, sspec)["device"] == "footage"

@@ -119,6 +119,8 @@ async def test_processing_identity_refuses_member_management(selected_state, sur
     body = {"role": "admin"} if action == "role" else {}
     if action == "transfer":
         body["person_id"] = str(processing)
+        if surface != "platform":
+            body["confirm_name"] = "Alpha"
     if surface == "platform":
         body["reason"] = "Fictional processing identity protection test"
         response = await platform_call(

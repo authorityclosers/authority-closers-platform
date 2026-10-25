@@ -759,6 +759,7 @@ export function ImportDialog({
   // Rows pasted from a sheet, a CSV or a chat (owner P0, 23 Oct 2026).
   const [text, setText] = useState("");
   const [dropped, setDropped] = useState(0);
+  const [columns, setColumns] = useState(false);
 
   const pick = async (file: File | undefined) => {
     if (!file) return;
@@ -768,6 +769,7 @@ export function ImportDialog({
       const next = await previewImport(file);
       setPreview(next);
       setMapping(next.mapping);
+      setColumns(false);
     } catch (reason) {
       setError(
         reason instanceof LeadsError
@@ -801,6 +803,15 @@ export function ImportDialog({
     setText(pasted);
     reading.current(pasted);
   }, [open, pasted]);
+
+  // One click (universal intake, 25 Oct 2026): when the columns are matched and nearly
+  // every row makes a lead, the column list waits behind "Change columns".
+  const matched =
+    preview !== null &&
+    preview.importable !== undefined &&
+    Boolean(mapping.name || mapping.phone) &&
+    preview.importable >= Math.ceil(preview.total_rows * 0.9);
+  const showColumns = !matched || columns;
 
   const run = async () => {
     if (!preview) return;
@@ -904,6 +915,11 @@ export function ImportDialog({
             stay New.
           </p>
         ) : null}
+        {result?.warnings?.map((warning) => (
+          <p key={warning} className={styles.hint}>
+            {warning}
+          </p>
+        ))}
         {result?.unmatched_owners?.length ? (
           <p className={styles.hint}>
             Nobody on your team called {result.unmatched_owners.join(", ")}:
@@ -970,6 +986,7 @@ export function ImportDialog({
         ) : (
           <>
             <p className={styles.hint}>
+              {preview.detected ? `${preview.detected} export. ` : ""}
               {preview.file_name === PASTED_FILE ? "Pasted" : preview.file_name}
               : {preview.total_rows} rows
               {preview.truncated || dropped
@@ -983,60 +1000,81 @@ export function ImportDialog({
                 : ""}
               .
             </p>
-            <div className={styles.formGrid}>
-              {[...MAPPABLE, "stage", ...(canManage ? ["owner"] : [])].map(
-                (field) => (
-                  <Field key={field} label={COLUMN_LABELS[field]}>
-                    <select
-                      value={mapping[field] ?? ""}
-                      onChange={(event) =>
-                        setMapping((current) => {
-                          const next = { ...current };
-                          if (event.target.value)
-                            next[field] = event.target.value;
-                          else delete next[field];
-                          return next;
-                        })
-                      }
-                    >
-                      <option value="">Not in this file</option>
-                      {preview.headers.map((header) => (
-                        <option key={header} value={header}>
-                          {header}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                ),
-              )}
-            </div>
-            {mapping.stage || (canManage && mapping.owner) ? (
+            {showColumns ? null : (
               <p className={styles.hint}>
-                Stages are matched by name to the pipeline&apos;s stages, and
-                owners to your team. One that doesn&apos;t match stays New, or
-                goes by the lead rules.
+                Columns matched:{" "}
+                {Object.keys(mapping)
+                  .filter((field) => mapping[field])
+                  .map((field) => COLUMN_LABELS[field] ?? field)
+                  .join(", ")}
+                .{" "}
+                <button
+                  type="button"
+                  className={styles.linkButton}
+                  onClick={() => setColumns(true)}
+                >
+                  Change columns
+                </button>
               </p>
-            ) : null}
-            <div className={styles.previewTable}>
-              <table className={styles.table}>
-                <thead>
-                  <tr>
-                    {preview.headers.slice(0, 6).map((header) => (
-                      <th key={header}>{header}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {preview.rows.slice(0, 3).map((row, index) => (
-                    <tr key={index}>
-                      {preview.headers.slice(0, 6).map((header) => (
-                        <td key={header}>{row[header] ?? ""}</td>
+            )}
+            {showColumns ? (
+              <>
+                <div className={styles.formGrid}>
+                  {[...MAPPABLE, "stage", ...(canManage ? ["owner"] : [])].map(
+                    (field) => (
+                      <Field key={field} label={COLUMN_LABELS[field]}>
+                        <select
+                          value={mapping[field] ?? ""}
+                          onChange={(event) =>
+                            setMapping((current) => {
+                              const next = { ...current };
+                              if (event.target.value)
+                                next[field] = event.target.value;
+                              else delete next[field];
+                              return next;
+                            })
+                          }
+                        >
+                          <option value="">Not in this file</option>
+                          {preview.headers.map((header) => (
+                            <option key={header} value={header}>
+                              {header}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    ),
+                  )}
+                </div>
+                {mapping.stage || (canManage && mapping.owner) ? (
+                  <p className={styles.hint}>
+                    Stages are matched by name to the pipeline&apos;s stages,
+                    and owners to your team. One that doesn&apos;t match stays
+                    New, or goes by the lead rules.
+                  </p>
+                ) : null}
+                <div className={styles.previewTable}>
+                  <table className={styles.table}>
+                    <thead>
+                      <tr>
+                        {preview.headers.slice(0, 6).map((header) => (
+                          <th key={header}>{header}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.rows.slice(0, 3).map((row, index) => (
+                        <tr key={index}>
+                          {preview.headers.slice(0, 6).map((header) => (
+                            <td key={header}>{row[header] ?? ""}</td>
+                          ))}
+                        </tr>
                       ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            ) : null}
             {canManage ? (
               <PipelinePick
                 open={open}

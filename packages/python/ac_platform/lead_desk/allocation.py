@@ -32,7 +32,8 @@ class RepState:
     person_id: UUID
     name: str
     available: bool
-    max_open: int
+    # None: no limit.
+    max_open: int | None
     open_leads: int
     languages: tuple[str, ...] = ()
     areas: tuple[str, ...] = ()
@@ -110,7 +111,9 @@ def allocate(lead: LeadFacts, reps: Sequence[RepState]) -> Allocation:
     candidates = [
         rep
         for rep in reps
-        if rep.person_id not in lead.exclude and rep.available and rep.open_leads < rep.max_open
+        if rep.person_id not in lead.exclude
+        and rep.available
+        and (rep.max_open is None or rep.open_leads < rep.max_open)
     ]
     if not candidates:
         if not any(rep.available for rep in reps if rep.person_id not in lead.exclude):

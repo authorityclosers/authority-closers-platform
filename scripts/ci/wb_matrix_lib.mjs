@@ -30,6 +30,17 @@ export const SCALES = [
 
 export const THEMES = ["light", "dark"];
 
+// Computers, for the screens that ask (desktop: true): 100% and the browser's text scales (the app's zoom is
+// a phone's), no touch screen.
+export const DESKTOP_SIZES = [
+  { label: "1280x800", width: 1280, height: 800 },
+  { label: "1440x900", width: 1440, height: 900 },
+  { label: "1920x1080", width: 1920, height: 1080 },
+];
+const DESKTOP_SCALES = SCALES.filter(
+  (variant) => variant.mode === "text" || variant.scale === 1,
+);
+
 // Review fixtures (fictional data, no API), each with the taps that reach its state.
 const firstLead = [
   { click: ":is(button, a)[data-row-key], [data-row-key] :is(button, a)" },
@@ -41,8 +52,12 @@ const asTable = [
 ];
 export const SCREENS = {
   "leads-desk": { path: "/review-fixture/leads" },
-  "leads-all": { path: "/review-fixture/leads?tab=all" },
-  "leads-table": { path: "/review-fixture/leads?tab=all", steps: asTable },
+  "leads-all": { path: "/review-fixture/leads?tab=all", desktop: true },
+  "leads-table": {
+    path: "/review-fixture/leads?tab=all",
+    steps: asTable,
+    desktop: true,
+  },
   "leads-table-open": {
     path: "/review-fixture/leads?tab=all",
     steps: [
@@ -165,6 +180,19 @@ export function states() {
       THEMES.map((theme) => ({ ...size, ...variant, theme })),
     ),
   );
+}
+
+/** A screen's states: every phone and tablet state, and the computer ones when it asks for them. */
+export function statesFor(screen) {
+  if (!screen?.desktop) return states();
+  return [
+    ...states(),
+    ...DESKTOP_SIZES.flatMap((size) =>
+      DESKTOP_SCALES.flatMap((variant) =>
+        THEMES.map((theme) => ({ ...size, ...variant, theme, desktop: true })),
+      ),
+    ),
+  ];
 }
 
 /** The app's zoom for a state: its font scale clamped to 1-1.2; text scaling keeps the page at 1. */
@@ -345,6 +373,31 @@ export function measure() {
         : null;
     })
     .filter(Boolean);
+  // A ring left after a tap or click: the focused control (not a text field,
+  // which shows focus while typing) looks different focused than blurred.
+  result.ring = [];
+  const active = document.activeElement;
+  const typing =
+    active?.isContentEditable ||
+    active?.matches?.(
+      'textarea, input:not([type="button"], [type="submit"], [type="checkbox"], [type="radio"])',
+    );
+  if (
+    active &&
+    active !== document.body &&
+    active !== document.documentElement &&
+    !typing
+  ) {
+    const look = () => {
+      const s = getComputedStyle(active);
+      return `${s.outlineStyle} ${s.outlineWidth} ${s.outlineColor} | ${s.boxShadow}`;
+    };
+    const focused = look();
+    active.blur();
+    const blurred = look();
+    active.focus({ preventScroll: true });
+    if (focused !== blurred) result.ring.push(name(active));
+  }
   return result;
 }
 
@@ -378,6 +431,7 @@ export const FIELDS = [
   "clipped",
   "tiny",
   "sideways",
+  "ring",
   "errors",
 ];
 

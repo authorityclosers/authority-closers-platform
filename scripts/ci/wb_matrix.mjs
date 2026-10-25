@@ -10,7 +10,9 @@ import { resolve } from "node:path";
 import { chromium } from "playwright";
 import { waitForFixtureServer } from "./sales_xray_visual.mjs";
 import {
+  DESKTOP_SIZES,
   SIZES,
+  statesFor,
   measure,
   onSheet,
   pickScreens,
@@ -39,6 +41,32 @@ async function local(route) {
   return route.continue();
 }
 
+/** Let the app frame's inner scroller run to its full height, for one whole-page shot. */
+function unclip() {
+  let tallest = null;
+  for (const el of document.querySelectorAll("body *")) {
+    const style = getComputedStyle(el);
+    if (!/(auto|scroll)/.test(style.overflowY)) continue;
+    const extra = el.scrollHeight - el.clientHeight;
+    if (extra > 10 && (!tallest || extra > tallest.extra))
+      tallest = { el, extra };
+  }
+  if (!tallest) return;
+  for (
+    let el = tallest.el;
+    el && el !== document.documentElement;
+    el = el.parentElement
+  ) {
+    el.style.setProperty("height", "auto", "important");
+    el.style.setProperty("max-height", "none", "important");
+    el.style.setProperty("overflow", "visible", "important");
+  }
+  for (const el of [document.documentElement, document.body]) {
+    el.style.setProperty("height", "auto", "important");
+    el.style.setProperty("overflow", "visible", "important");
+  }
+}
+
 async function step(page, item) {
   if (item.click) {
     const target = page.locator(item.click).first();
@@ -57,7 +85,9 @@ async function sheet(browser, output, key, shots) {
     ["100% dark", (s) => s.scale === 1 && s.theme === "dark"],
   ];
   const cells = [];
-  for (const size of SIZES)
+  for (const size of [...SIZES, ...DESKTOP_SIZES]) {
+    // Computer rows only for the screens that measured them.
+    if (!shots.some((item) => item.state.label === size.label)) continue;
     for (const [label, test] of columns) {
       const shot = shots.find(
         (item) => item.state.label === size.label && test(item.state),
@@ -68,6 +98,7 @@ async function sheet(browser, output, key, shots) {
           `<figcaption>${size.label} · ${label}</figcaption></figure>`,
       );
     }
+  }
   const page = await browser.newPage({
     viewport: { width: 4 * 200 + 40, height: 600 },
   });
@@ -95,8 +126,8 @@ async function main() {
     request = JSON.parse(await readFile(requestPath, "utf8"));
   } catch {}
   const screens = pickScreens(request.routes ?? []);
-  const jobs = states().flatMap((state) =>
-    screens.map(([key, screen]) => ({ key, screen, state })),
+  const jobs = screens.flatMap(([key, screen]) =>
+    statesFor(screen).map((state) => ({ key, screen, state })),
   );
   const env = Object.fromEntries(
     ["PATH", "HOME", "TMPDIR", "PLAYWRIGHT_BROWSERS_PATH"]
@@ -164,7 +195,7 @@ async function main() {
           deviceScaleFactor: zoom,
           colorScheme: state.theme,
           isMobile: state.width < 768,
-          hasTouch: true,
+          hasTouch: !state.desktop,
           locale: "en-GB",
           reducedMotion: "reduce",
           serviceWorkers: "block",
@@ -200,6 +231,27 @@ async function main() {
               scale: "css",
             });
             shots.push({ key, state, path });
+          }
+          // One whole page per screen, phone size (and 1440 for a computer
+          // screen): the slice's before and after shot.
+          if (
+            (state.width === 390 || state.width === 1440) &&
+            state.scale === 1 &&
+            state.mode === "app" &&
+            state.theme === "light"
+          ) {
+            await page.evaluate(unclip);
+            await page.waitForTimeout(150);
+            await page.screenshot({
+              path: resolve(
+                output,
+                `page-${key}${state.width === 1440 ? "-desktop" : ""}.jpg`,
+              ),
+              type: "jpeg",
+              quality: 70,
+              fullPage: true,
+              scale: "css",
+            });
           }
           rows.push({ key, tag, ...state, ...facts, errors: [...errors] });
         } catch (error) {

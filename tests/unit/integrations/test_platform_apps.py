@@ -139,19 +139,38 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "list_leads",
         "get_lead",
         "add_lead",
+        "add_note",
+        "add_task",
+        "list_my_changes",
+        "undo_change",
     }
     reading = {tool["name"] for tool in mcp_http.listed(frozenset({"calls:read"}))}
     assert reading == {"search", "fetch", "whoami", "list_calls", "get_call"}
     leads = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:read"}))}
     assert leads == {"search", "fetch", "whoami", "list_leads", "get_lead"}
     assert {tool["name"] for tool in mcp_http.listed(frozenset({"webhooks:manage"}))} == {"whoami"}
+    # AI writes (docs/product/ai-writes.md): each write tool needs its own scope; reading
+    # leads alone shows none of them.
+    notes = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:notes"}))}
+    assert notes == {"whoami", "add_note", "list_my_changes", "undo_change"}
+    tasks = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:tasks"}))}
+    assert tasks == {"whoami", "add_task", "list_my_changes", "undo_change"}
+    writes = {"add_lead", "add_note", "add_task", "undo_change"}
     for tool in mcp_http.listed(frozenset(scopes.SCOPES)):
         assert "scope" not in tool and tool["inputSchema"]["type"] == "object"
-        assert tool["annotations"]["readOnlyHint"] is (tool["name"] != "add_lead")
-        # The directories ask for every hint, true or false, never left out.
-        assert tool["annotations"]["destructiveHint"] is False
+        assert tool["annotations"]["readOnlyHint"] is (tool["name"] not in writes)
+        # The directories ask for every hint, true or false, never left out. Only undo
+        # takes something away (a note stops showing).
+        assert tool["annotations"]["destructiveHint"] is (tool["name"] == "undo_change")
         assert tool["annotations"]["openWorldHint"] is False
+        if tool["name"] in writes - {"add_lead"}:
+            assert tool["annotations"]["idempotentHint"] is True
+            assert "request_id" in tool["inputSchema"]["properties"]
         assert tool["title"]
+        # The Claude directory's tool check wants the title inside the annotations too.
+        assert tool["annotations"]["title"] == tool["title"]
+    # Listing never changes the shared definitions.
+    assert all("title" not in tool["annotations"] for tool in mcp_http.TOOLS)
 
 
 BASE = "https://salesxray.example.test"

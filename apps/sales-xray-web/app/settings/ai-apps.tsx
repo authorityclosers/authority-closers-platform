@@ -31,6 +31,7 @@ import {
   usedWords,
   type AiApp,
 } from "./ai-apps-client";
+import { AiWritesPanel, AppChangesPanel } from "./ai-changes";
 import { CopyButton } from "./copy-button";
 import { useOrigin } from "./use-origin";
 import styles from "./ai-apps.module.css";
@@ -106,7 +107,8 @@ function ConnectPanel() {
         {guide.note ? <p className={styles.note}>{guide.note}</p> : null}
         <p className={styles.note}>
           An AI app sees only what you can see in Sales X-Ray, and you choose
-          what it may read when you sign in. Disconnect it here at any time.
+          what it may read or add when you sign in. What it adds shows which app
+          sent it and can be undone for 7 days. Disconnect it here at any time.
         </p>
       </div>
     </Panel>
@@ -256,6 +258,8 @@ export function AiAppsSection() {
           </List>
         )}
       </Panel>
+      <AppChangesPanel />
+      <AiWritesPanel />
       <ConnectPanel />
       <Dialog
         open={leaving !== null}

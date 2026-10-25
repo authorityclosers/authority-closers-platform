@@ -55,6 +55,9 @@ ALIASES: Final[dict[str, tuple[str, ...]]] = {
         "your_name",
         "prospect_name",
         "person",
+        # Other CRMs' exports (universal intake, 25 Oct 2026).
+        "person_name",
+        "contact_person",
     ),
     "phone": (
         "phone_number",
@@ -71,8 +74,44 @@ ALIASES: Final[dict[str, tuple[str, ...]]] = {
         "number",
         "contact",
         "telephone",
+        "mobile_phone_number",
+        "mobile_phone",
+        "phone_numbers",
+        "person_phone",
+        "person_phone_mobile",
+        "person_phone_work",
+        "primary_phone",
+        "phone_1",
+        "mobile_1",
+        "phone_mobile",
+        "work_phone",
+        "lead_phone",
+        "lead_mobile",
+        "customer_phone",
+        "customer_mobile",
+        "client_phone",
+        "alternate_contact_no",
+        "alternate_phone",
+        "alternate_number",
+        "landline",
     ),
-    "email": ("email", "email_address", "e_mail", "mail", "email_id"),
+    "email": (
+        "email",
+        "email_address",
+        "e_mail",
+        "mail",
+        "email_id",
+        "emails",
+        "person_email",
+        "person_email_work",
+        "primary_email",
+        "work_email",
+        "email_1",
+        "lead_email",
+        "customer_email",
+        "client_email",
+        "secondary_email",
+    ),
     "company": (
         "company_name",
         "company",
@@ -83,8 +122,28 @@ ALIASES: Final[dict[str, tuple[str, ...]]] = {
         "firm",
         "firm_name",
         "brand",
+        "company_account",
+        "organization_name",
+        "organisation_name",
+        "person_organization",
+        "account_name",
+        "lead_company",
     ),
-    "city": ("city", "town", "location", "district", "area", "locality", "region", "state"),
+    "city": (
+        "city",
+        "town",
+        "location",
+        "district",
+        "area",
+        "locality",
+        "region",
+        "state",
+        "mailing_city",
+        "billing_city",
+        "person_city",
+        "lead_city",
+        "city_name",
+    ),
     "language": ("language", "preferred_language", "lang", "languages", "speaks"),
     "interest": (
         "interest",
@@ -102,8 +161,68 @@ ALIASES: Final[dict[str, tuple[str, ...]]] = {
         "looking_for",
         "campaign_name",
         "form_name",
+        "project",
+        "project_name",
+        "product_interest",
+        "lead_title",
+        "deal_title",
+        "property_type",
+        "course_interested",
+        "service_required",
     ),
 }
+# The export columns only one CRM's file has (after key()): the first set a file's headers
+# include names its source ("Zoho CRM export: leads.csv"). From each vendor's export as
+# documented or seen; a file that matches none is just a spreadsheet, and nothing else
+# depends on this (universal intake, docs/product/lead-desk/universal-intake.md).
+CRM_EXPORTS: Final[tuple[tuple[str, tuple[frozenset[str], ...]], ...]] = (
+    (
+        "Zoho CRM",
+        (
+            frozenset({"lead_owner", "record_id"}),
+            frozenset({"lead_owner", "lead_status", "created_time"}),
+            frozenset({"lead_owner", "modified_time"}),
+        ),
+    ),
+    ("HubSpot", (frozenset({"record_id", "contact_owner"}), frozenset({"lifecycle_stage"}))),
+    (
+        "Salesforce",
+        (
+            frozenset({"company_account"}),
+            frozenset({"lead_owner", "lead_status", "created_date"}),
+        ),
+    ),
+    (
+        "Pipedrive",
+        (
+            frozenset({"person_name", "person_phone"}),
+            frozenset({"lead_title", "person_name"}),
+            frozenset({"deal_title", "person_name"}),
+        ),
+    ),
+    (
+        "LeadSquared",
+        (
+            frozenset({"prospect_id"}),
+            frozenset({"prospectid"}),
+            frozenset({"lead_stage", "owner", "created_on"}),
+        ),
+    ),
+    (
+        "Kylas",
+        (frozenset({"phone_numbers", "pipeline_stage"}), frozenset({"phone_numbers", "emails"})),
+    ),
+    ("Freshsales", (frozenset({"sales_owner"}),)),
+    (
+        "LeadRat",
+        (
+            frozenset({"contact_no", "alternate_contact_no"}),
+            frozenset({"sub_status", "assigned_to", "project"}),
+        ),
+    ),
+)
+# What separates several numbers or emails in one cell.
+_SEVERAL = re.compile(r"\s*(?:[,;/|\n]|\s{2,}|\bor\b)\s*")
 _FIRST = ("first_name", "firstname", "given_name")
 _LAST = ("last_name", "lastname", "surname", "family_name")
 _EMAIL = re.compile(r"\A[^@\s]{1,64}@[^@\s]{1,255}\.[^@\s]{2,}\Z")
@@ -220,6 +339,39 @@ class Extracted:
         return value
 
 
+def detect_crm(headers: Iterable[str]) -> str | None:
+    """The CRM whose export these headers are, when only one CRM's file has them."""
+    keys = {key(header) for header in headers}
+    for name, signatures in CRM_EXPORTS:
+        if any(signature <= keys for signature in signatures):
+            return name
+    return None
+
+
+def first_phone(raw: object, *, default_country: str = "91") -> str | None:
+    """The first usable number in a cell that may hold several ("98765 43210, 91234
+    56780"); the others stay in the payload."""
+    whole = normalise_phone(raw, default_country=default_country)
+    text = clean(raw, 200)
+    if whole is not None or text is None or not _SEVERAL.search(text):
+        return whole
+    for part in _SEVERAL.split(text):
+        found = normalise_phone(part, default_country=default_country)
+        if found is not None:
+            return found
+    return None
+
+
+def first_email(raw: str | None) -> str | None:
+    """The first valid address in a cell that may hold several, in lower case."""
+    if raw is None:
+        return None
+    for part in re.split(r"[\s,;|/]+", raw.lower()):
+        if _EMAIL.fullmatch(part):
+            return part
+    return None
+
+
 def suggest_mapping(headers: Iterable[str]) -> dict[str, str]:
     """Which header most likely holds each field (first alias wins)."""
     by_key = {key(header): header for header in headers}
@@ -258,10 +410,21 @@ def extract(
         joined = " ".join(part for part in (clean(first), clean(last)) if part)
         values["name"] = joined[: _LIMITS["name"]] or None
     phone_raw = values["phone"]
-    phone = normalise_phone(phone_raw, default_country=default_country)
-    email = values["email"].lower() if values["email"] else None
-    if email is not None and not _EMAIL.fullmatch(email):
-        email = None
+    phone = first_phone(phone_raw, default_country=default_country)
+    if phone is None:
+        # The chosen column is empty or holds no number for this record: the next column
+        # that holds phones does ("Phone" empty, "Mobile" filled).
+        for alias in ALIASES["phone"]:
+            other = next((name for name in flat if key(name) == alias), None)
+            if other is None or other == chosen.get("phone"):
+                continue
+            text = clean(flat.get(other), _LIMITS["phone"] * 4)
+            found_phone = first_phone(text, default_country=default_country)
+            if found_phone is not None:
+                phone, phone_raw = found_phone, text
+                used["phone"] = other
+                break
+    email = first_email(values["email"])
     return Extracted(
         name=values["name"],
         phone=phone,

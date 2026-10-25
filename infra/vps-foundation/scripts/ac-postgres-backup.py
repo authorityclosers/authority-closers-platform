@@ -753,7 +753,43 @@ TEAM_PARITY_TABLES = TASKS_PARITY_TABLES + (
     "lead_desk_targets",
     "lead_desk_nudges",
 )
+# 0131 adds the AI-write ledger (one table).
+AI_WRITES_PARITY_MIGRATION_HEAD = "20261025_0131"
+AI_WRITES_PARITY_CONTRACT = "ac-postgres-parity-v98"
+AI_WRITES_PARITY_TABLES = TEAM_PARITY_TABLES + ("integration_writes",)
+# 0132 lets a task come from an AI app (a check, no table).
+ASSISTANT_TASKS_PARITY_MIGRATION_HEAD = "20261025_0132"
+ASSISTANT_TASKS_PARITY_CONTRACT = "ac-postgres-parity-v99"
+ASSISTANT_TASKS_PARITY_TABLES = AI_WRITES_PARITY_TABLES
+# 0133 lets a seller have no open-lead limit (a column, no table).
+REP_LIMIT_PARITY_MIGRATION_HEAD = "20261025_0133"
+REP_LIMIT_PARITY_CONTRACT = "ac-postgres-parity-v100"
+REP_LIMIT_PARITY_TABLES = ASSISTANT_TASKS_PARITY_TABLES
+# 0134 adds duplicate leads' pairs, decisions and merges (three tables).
+DUPLICATES_PARITY_MIGRATION_HEAD = "20261025_0134"
+DUPLICATES_PARITY_CONTRACT = "ac-postgres-parity-v101"
+DUPLICATES_PARITY_TABLES = REP_LIMIT_PARITY_TABLES + (
+    "lead_desk_duplicate_pairs",
+    "lead_desk_duplicate_decisions",
+    "lead_desk_merges",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    DUPLICATES_PARITY_MIGRATION_HEAD: (
+        DUPLICATES_PARITY_CONTRACT,
+        DUPLICATES_PARITY_TABLES,
+    ),
+    REP_LIMIT_PARITY_MIGRATION_HEAD: (
+        REP_LIMIT_PARITY_CONTRACT,
+        REP_LIMIT_PARITY_TABLES,
+    ),
+    ASSISTANT_TASKS_PARITY_MIGRATION_HEAD: (
+        ASSISTANT_TASKS_PARITY_CONTRACT,
+        ASSISTANT_TASKS_PARITY_TABLES,
+    ),
+    AI_WRITES_PARITY_MIGRATION_HEAD: (
+        AI_WRITES_PARITY_CONTRACT,
+        AI_WRITES_PARITY_TABLES,
+    ),
     TEAM_PARITY_MIGRATION_HEAD: (
         TEAM_PARITY_CONTRACT,
         TEAM_PARITY_TABLES,

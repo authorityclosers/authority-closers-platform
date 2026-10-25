@@ -147,6 +147,7 @@ from ac_platform.tenancy.models import (
     MembershipStatus,
     Organisation,
 )
+from ac_platform.tenancy.roles import can
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -969,7 +970,7 @@ def _with_role_permissions(
     if is_organisation:
         permissions = (
             frozenset({"organisation_manage"})
-            if resolved.membership_role in {MembershipRole.OWNER.value, MembershipRole.ADMIN.value}
+            if can(resolved.membership_role, "org.manage")
             else frozenset()
         )
     else:

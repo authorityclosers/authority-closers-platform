@@ -63,7 +63,15 @@ describe("OAuth discovery", () => {
     expect(oidc.registration_endpoint).toBe(`${origin}/v1/oauth/register`);
     expect(
       protectedResourceMetadata(origin, "/v1/mcp")?.scopes_supported,
-    ).toEqual(["calls:read", "reports:read", "leads:read", "leads:write"]);
+    ).toEqual([
+      "calls:read",
+      "reports:read",
+      "leads:read",
+      "leads:write",
+      // AI writes (docs/product/ai-writes.md): notes and tasks, each its own scope.
+      "leads:notes",
+      "leads:tasks",
+    ]);
     const resource = await resourceMetadata(
       at("salesxray.authorityclosers.com"),
       { params: Promise.resolve({ resource: ["v1", "mcp"] }) },

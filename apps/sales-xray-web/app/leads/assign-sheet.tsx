@@ -268,7 +268,9 @@ export function AssignSheet({
                       <strong>{displayName(rep.name)}</strong>
                       <small>
                         {rep.available
-                          ? `${rep.open_leads} open · limit ${rep.max_open}`
+                          ? rep.max_open === null
+                            ? `${rep.open_leads} open · no limit`
+                            : `${rep.open_leads} open · limit ${rep.max_open}`
                           : "Not taking leads"}
                       </small>
                     </span>
@@ -309,7 +311,11 @@ export function AssignSheet({
                     <li key={row.person_id}>
                       <span>{displayName(row.name)}</span>
                       <strong>{`+${row.leads}`}</strong>
-                      <small>{`${row.open_after} open of ${row.max_open}`}</small>
+                      <small>
+                        {row.max_open === null
+                          ? `${row.open_after} open`
+                          : `${row.open_after} open of ${row.max_open}`}
+                      </small>
                     </li>
                   ))}
                 </ul>

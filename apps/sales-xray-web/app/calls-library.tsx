@@ -958,6 +958,21 @@ function CallsLibraryContent({
     return () => window.removeEventListener(CALL_LABEL_EVENT, onLabel);
   }, []);
 
+  // The report's route read ahead, so its outline shows the moment the tap
+  // ends (friction report, 25 Oct 2026: no change for a second).
+  const warm = (id: string) => {
+    try {
+      router.prefetch(callHref(id, studioHref));
+    } catch {
+      // Not a saved call's id: nothing to read ahead.
+    }
+  };
+  useEffect(() => {
+    for (const item of submissions.filter((row) => row.hasReport).slice(0, 3))
+      warm(item.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [submissions]);
+
   function openSubmission(submission: LibrarySubmission) {
     if (opening) return;
     setOpeningId(submission.id);
@@ -1328,6 +1343,8 @@ function CallsLibraryContent({
           type="button"
           disabled={opening}
           aria-busy={isOpening || undefined}
+          onPointerDown={() => warm(submission.id)}
+          onMouseEnter={() => warm(submission.id)}
           onClick={() => openSubmission(submission)}
         >
           <span className={`${styles.copy} calls-library-copy`}>

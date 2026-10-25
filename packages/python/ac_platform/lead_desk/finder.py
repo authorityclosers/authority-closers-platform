@@ -92,9 +92,13 @@ async def notes(
     more = len(rows) > limit
     rows = rows[:limit]
     names = await desk._names(event.actor_person_id for event, _ in rows)
+    # A note an AI app added and someone undid stays out (docs/product/ai-writes.md).
+    removed = await desk._undone(str(event.id) for event, _ in rows)
     labels: dict[str, journeys.Journey] = {}
     items: list[ActivityItem] = []
     for event, lead in rows:
+        if str(event.id) in removed:
+            continue
         key = journeys.pipeline_of(lead)
         if key not in labels:
             labels[key] = await desk._labels(key)

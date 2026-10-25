@@ -84,17 +84,20 @@ export function BulkSheet({
   open,
   leadIds,
   pipeline,
+  initialStep = "menu",
   onClose,
   onDone,
 }: {
   open: boolean;
   leadIds: string[];
+  /** Assign to… and Move stage open the sheet at their step (Back: the menu). */
+  initialStep?: "menu" | "assign" | "stage";
   /** The pipeline the list shows; none: every pipeline's leads. */
   pipeline: string | null;
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [step, setStep] = useState<Step>("menu");
+  const [step, setStep] = useState<Step>(initialStep);
   const [team, setTeam] = useState<RepView[] | null>(null);
   const [stages, setStages] = useState<StageView[] | null>(null);
   const [busy, setBusy] = useState(false);

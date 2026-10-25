@@ -45,8 +45,9 @@ from ac_platform.tenancy.models import (
     Tenant,
     TenantStatus,
 )
+from ac_platform.tenancy.roles import roles_with
 
-_MANAGERS = ("owner", "admin")
+_MANAGERS = roles_with("team.view")
 
 
 @dataclass(frozen=True)
