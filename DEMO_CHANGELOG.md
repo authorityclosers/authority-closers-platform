@@ -107,6 +107,27 @@ org, and all are still `new`. Grouped by root cause:
 - **Red banner for a follow-up due within the hour (P1 step 12)**, 5b073299b.
   - What changed: the app asks `GET /v1/lead-desk/soon` every minute and on focus. It raises a red top banner with the urgent haptic, "<lead>: follow-up in 40 min", with Open going to the lead. Once per follow-up; quiet outside work hours.
   - Verified by: `due-soon.test.tsx`, `test_lead_desk_digests_postgresql.py`; wb-ci full and e2e. The 360/390 matrix is on `/review-fixture/alerts?level=due`.
+- **Leads setup: Stages and Sources open on a tap**, 77b722e90.
+  - What changed: the part row read its part from the address only, which a bare `history.replaceState` doesn't refresh, so a tap changed the address but not the page. A tap now shows its part at once and keeps it in the address (Connections too). Every tile's note wraps to two lines, and first-call times read "22h 38m". The Sellers rows' "1/50 open" is that seller's real limit (no change).
+  - Verified by: `org-hub.test.tsx`, `words.test.ts`; wb-ci full and e2e.
+- **The sales team's eight stages**, eaf7dfa88 (v0.93): New lead, Not connected, Discussion incomplete, Interested, Meeting/Demo scheduled, Meeting/Demo completed, Won, Lost.
+  - What changed:
+    - Junk is no stage: a lead that was never real is Lost, "Junk / not a real lead". The board has no Junk column.
+    - Pipeline numbers count it, and "Merged into another lead", as Junk, never as a lost deal.
+    - New organisations start on these stages.
+    - Organisations on the old nine move by `lead-stages-template.py`, their Junk leads going to Lost with that reason (production after the owner's approval).
+  - Verified by: `test_transitions.py`, `test_journey.py`, `test_reports.py`, the acceptance, pipeline-report, merge, onboarding and stages-script database tests; wb-ci full and e2e.
+- **Onboarded sellers skip "A few details"**, eaf7dfa88: `onboard-organisation.py` now writes each person's profile phone (and name when empty), never over a phone they set, so a seller goes from Sign in with Google straight to the terms. Verified by `test_onboard_organisation_data_change_postgresql.py`.
+- **Switches answer a tap at once**, 16f0c77a4 (Admin bugs #1 and #2): Taking new leads and every switch on the same pattern give a haptic and a pressed look on the tap, show the new state before the save returns, then a short "Taking new leads: On" and a success haptic; a failed save goes back, with the error haptic and its corner card. Verified by `state-switch.test.tsx`, `phone-panel.test.tsx`; wb-ci full and e2e.
+- **The red banner on a 320 px phone**, 1c36f6d17: Open goes under the words, so a long lead name wraps between words. Verified by the 320/360 matrix; wb-ci full and e2e.
+- **After a call, the lead fills itself and can be put back** (v0.93, owner's after-call chain, server side):
+  - What already existed: name, company, city and interest filled from the call only into empty or AI-filled fields, never over a person's value; the rest asked one at a time.
+  - New:
+    - Each fill names the fact that made it and what the field held before. "Filled in for you" says `can_undo`, and `POST /v1/sales-xray/call-data/objects/{id}/undo-fill` puts the field back in one tap, only while nobody has changed it since. The fact becomes "rejected", so the same words don't fill it again.
+    - The lead's history says "filled from the call" (`via: "call"`); an undone fill and its undo are not shown.
+    - A suggested WhatsApp or SMS after the newest call, in its language (English, Hinglish, Hindi or Marathi): thanks, and the agreed next talk while it is still ahead. Fixed wording, no model; sending only opens WhatsApp or SMS, keeping the key `after_call`.
+  - Not yet: starting the analysis by itself after every call needs a standing consent (a design for the owner); the screens are the builder's.
+  - Verified by: `test_call_data_after_call_postgresql.py`, `test_call_data_http_postgresql.py`, `test_call_data_reply.py`; wb-ci full and e2e.
 - **Who did what, with their photo**, a578dd0e9: history, activity and tasks carry the person's id and photo URL for avatars. Verified by wb-ci full and e2e.
 
 ### Still flaky or open

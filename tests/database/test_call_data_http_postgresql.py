@@ -206,11 +206,32 @@ def test_a_call_fills_its_lead_and_asks_the_seller(postgres_harness: Any, tmp_pa
                 assert desk["lead"]["city"] == "Pune"
                 edited = [e for e in desk["events"] if e["kind"] == "edited"]
                 assert edited and edited[0]["changed"] == ["city"]
+                assert body["reply"]["language"] == "hinglish"
+
+                # One tap puts back what the call filled: the company was empty before.
+                now_view = (await client.get(f"{BASE}/leads/{lead_id}")).json()
+                filled = {f["field"]: f for f in now_view["filled"]}
+                assert filled["company"]["can_undo"] is True
+                undo = f"{BASE}/objects/{filled['company']['object_id']}/undo-fill"
+                refused = await client.post(undo, json={"command_id": str(uuid4())})
+                assert refused.status_code == 403
+                undone = await client.post(undo, json={"command_id": str(uuid4())}, headers=WRITE)
+                assert undone.status_code == 200, undone.text
+                assert {f["field"] for f in undone.json()["filled"]} == {"name"}
+                twice = await client.post(undo, json={"command_id": str(uuid4())}, headers=WRITE)
+                assert twice.status_code == 409
+                desk = (await client.get(f"/v1/lead-desk/leads/{lead_id}")).json()
+                assert desk["lead"]["company"] is None
+                # The name's fill says where it came from; the undone one is not shown.
+                fills = [e for e in desk["events"] if e.get("via") == "call"]
+                assert [(e["changed"], e["fill_object_id"]) for e in fills] == [
+                    (["name"], filled["name"]["object_id"])
+                ]
                 taxonomy = await client.get(f"{BASE}/taxonomy")
                 assert taxonomy.json()["version"] == "call-taxonomy/2"
                 async with setup.sessions() as db:
                     lead = (await db.execute(select(Lead).where(Lead.id == lead_id))).scalar_one()
-                    assert (lead.name, lead.company) == ("Amit Sharma", "XYZ Digital")
+                    assert (lead.name, lead.company) == ("Amit Sharma", None)
                 # A lead that is not on this desk is not found.
                 missing = await client.get(f"{BASE}/leads/{uuid4()}")
                 assert missing.status_code == 404

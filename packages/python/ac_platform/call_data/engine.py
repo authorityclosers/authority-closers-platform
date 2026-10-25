@@ -635,6 +635,8 @@ class LeadState:
     phone: str | None
     auto_filled: dict[str, str]
     rejected: frozenset[tuple[str, str]]
+    # The columns as stored (a placeholder name included): what an undo puts back.
+    stored: dict[str, str | None] = field(default_factory=dict)
 
 
 def _norm(value: str | None) -> str:
@@ -695,6 +697,12 @@ def lead_state(connection: Any, tenant_id: UUID, lead_id: UUID) -> LeadState | N
         phone=lead.phone,
         auto_filled=auto_filled,
         rejected=frozenset((row.type_key, _norm(row.display)) for row in rejected_rows),
+        stored={
+            "name": lead.name,
+            "company": lead.company,
+            "city": lead.city,
+            "interest": lead.interest,
+        },
     )
 
 
@@ -708,8 +716,14 @@ def write_lead(
     submission_id: UUID | None,
     actor_person_id: UUID | None,
     now: datetime,
+    object_id: UUID | None = None,
 ) -> bool:
-    """Write one lead column with the desk's revision rule and an 'edited' history row."""
+    """Write one lead column with the desk's revision rule and an 'edited' history row.
+
+    The row keeps the fact that wrote it and the value it replaced, so a person can
+    undo the fill in one tap while nobody has changed the field since (owner, 25 Oct
+    2026: the after-call chain).
+    """
     if column not in LEAD_COLUMNS:
         raise ValueError("call_data_lead_column")
     value = value.strip()[: LEAD_LIMITS[column]]
@@ -722,8 +736,10 @@ def write_lead(
     )
     if result.rowcount != 1:
         return False
+    before = lead.stored[column] if column in lead.stored else lead.columns.get(column)
     lead.revision += 1
     lead.columns[column] = value
+    lead.stored[column] = value
     connection.execute(
         insert(LeadEvent).values(
             id=uuid4(),
@@ -736,6 +752,9 @@ def write_lead(
                 "changed": [column],
                 "via": "call_data",
                 "submission_id": str(submission_id) if submission_id else None,
+                "object_id": str(object_id) if object_id else None,
+                "before": before,
+                "value": value,
             },
             created_at=now,
         )
@@ -826,6 +845,7 @@ def save_objects(
                 submission_id=call.submission_id,
                 actor_person_id=None,
                 now=now,
+                object_id=object_id,
             )
         connection.execute(
             insert(CallObjectDecision).values(

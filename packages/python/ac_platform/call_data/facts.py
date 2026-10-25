@@ -18,9 +18,11 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import insert, select, text
 
-from ac_platform.call_data import taxonomy
+from ac_platform.call_data import reply, taxonomy
+from ac_platform.call_data.engine import IST, PLACEHOLDER_NAMES
 from ac_platform.call_data.models import CallDataRun, CallObject, CallObjectDecision
 from ac_platform.call_data.values import CallValueError, display, similar, validate_value
+from ac_platform.lead_desk.models import LeadEvent
 
 LEAD_SCHEMA = "call-data-lead/1"
 PROSPECT_SCHEMA = "prospect-facts/1"
@@ -35,6 +37,35 @@ class FactsError(ValueError):
 
 def _norm(value: str | None) -> str:
     return " ".join((value or "").casefold().split())
+
+
+# The engine's own lead writes (engine.write_lead): history rows that name the fact
+# that wrote them and the value they replaced.
+FILL_VIA = "call_data"
+
+
+def _fill_events(connection: Any, tenant_id: UUID, lead_id: UUID) -> dict[str, Any]:
+    """A lead's fills that name their fact, by fact (the newest wins)."""
+    rows = connection.execute(
+        select(LeadEvent.id, LeadEvent.data)
+        .where(
+            LeadEvent.tenant_id == tenant_id,
+            LeadEvent.lead_id == lead_id,
+            LeadEvent.kind == "edited",
+            LeadEvent.data["via"].as_string() == FILL_VIA,
+            LeadEvent.data["object_id"].as_string().is_not(None),
+        )
+        .order_by(LeadEvent.created_at)
+    ).all()
+    return {str(row.data["object_id"]): row for row in rows}
+
+
+def _still_filled(event: Any, column: str | None, lead_columns: dict[str, str | None]) -> bool:
+    """The field still holds what the engine wrote: nobody has changed it since."""
+    if event is None or not column:
+        return False
+    value = event.data.get("value")
+    return isinstance(value, str) and _norm(lead_columns.get(column)) == _norm(value)
 
 
 def _marked(connection: Any, recording_ids: set[UUID]) -> dict[UUID, set[str]]:
@@ -224,6 +255,45 @@ def _pipelines(connection: Any, where: Any) -> dict[str, Any]:
     return result
 
 
+FOLLOW_UP = "commitment.follow_up"
+
+
+def _reply(items: list[Item], lead_columns: dict[str, str | None]) -> dict[str, Any] | None:
+    """The suggested message after the lead's newest analysed call (call_data.reply), in
+    the language the lead spoke; the agreed next talk only while it is still ahead."""
+    if not items:
+        return None
+    newest = max(items, key=lambda i: i.row.created_at).row
+    call = [item for item in items if item.row.recording_id == newest.recording_id]
+    quotes = [
+        (item.roles.get(str(e.get("speaker"))), str(e["quote"]))
+        for item in call
+        for e in item.row.evidence or []
+        if isinstance(e.get("quote"), str)
+    ]
+    heard = [quote for role, quote in quotes if role != "salesperson"] or [q for _, q in quotes]
+    when = None
+    follow = next((item for item in _merge(call) if item.row.type_key == FOLLOW_UP), None)
+    if follow is not None:
+        value = follow.shown_value
+        day = value.get("date")
+        past = isinstance(day, str) and day < datetime.now(IST).date().isoformat()
+        when = value.get("text") if isinstance(value.get("text"), str) and not past else None
+    draft = reply.draft(
+        heard, name=reply.first_name(lead_columns.get("name"), PLACEHOLDER_NAMES), when=when
+    )
+    return {
+        "template": reply.TEMPLATE,
+        "language": draft.language,
+        "text": draft.text,
+        "follow_up": draft.follow_up,
+        "call": {
+            "recording_id": str(newest.recording_id),
+            "submission_id": str(newest.submission_id) if newest.submission_id else None,
+        },
+    }
+
+
 def lead_facts(
     connection: Any, tenant_id: UUID, lead_id: UUID, lead_columns: dict[str, str | None]
 ) -> dict[str, Any]:
@@ -252,12 +322,17 @@ def lead_facts(
         if recordings
         else (CallDataRun.id.is_(None)),
     )
+    fills = _fill_events(connection, tenant_id, lead_id)
     filled = [
         {
             "field": decision.lead_field,
             "value": item.shown_display,
             "object_id": str(item.row.id),
             "at": decision.created_at.isoformat(),
+            # One tap puts the field back (POST /objects/{id}/undo-fill).
+            "can_undo": _still_filled(
+                fills.get(str(item.row.id)), decision.lead_field, lead_columns
+            ),
         }
         for item in items
         if (decision := item.decision) is not None
@@ -272,6 +347,9 @@ def lead_facts(
         "questions": questions,
         "facts": [_fact(item) for item in _merge(items)],
         "filled": filled,
+        # A WhatsApp or SMS to send after the newest call, ready to change; its {my_name}
+        # and {org} are the page's to fill. Sending only opens WhatsApp or SMS.
+        "reply": _reply(items, lead_columns),
         "categories": dict(taxonomy.CATEGORIES),
     }
 
@@ -384,6 +462,61 @@ def plan_decision(
     return Decided(
         obj.id, obj.lead_id, lead_field, (shown or obj.display) if lead_field else None, False, row
     )
+
+
+@dataclass(frozen=True, slots=True)
+class Undo:
+    field: str
+    before: str | None  # what the field held before the fill (None: it was empty)
+    event_id: UUID  # the fill's history row
+
+
+def plan_undo_fill(
+    connection: Any,
+    *,
+    tenant_id: UUID,
+    lead_id: UUID,
+    object_id: UUID,
+    lead_columns: dict[str, str | None],
+) -> Undo:
+    """Check a one-tap undo of a lead field the engine filled from a call.
+
+    The field goes back to what it held only while it still holds the filled value:
+    a person's later change always wins, and nothing is undone over it.
+    """
+    latest = connection.execute(
+        select(
+            CallObjectDecision.decision,
+            CallObjectDecision.actor,
+            CallObjectDecision.lead_field,
+            CallObjectDecision.lead_written,
+        )
+        .where(
+            CallObjectDecision.object_id == object_id,
+            CallObjectDecision.tenant_id == tenant_id,
+            CallObjectDecision.erased_at.is_(None),
+        )
+        .order_by(CallObjectDecision.created_at.desc())
+        .limit(1)
+    ).first()
+    if (
+        latest is None
+        or latest.actor != "engine"
+        or latest.decision != "auto_filled"
+        or not latest.lead_written
+        or not latest.lead_field
+    ):
+        raise FactsError(409, "fill_gone")
+    event = _fill_events(connection, tenant_id, lead_id).get(str(object_id))
+    if event is None:
+        raise FactsError(409, "fill_old")
+    if not _still_filled(event, latest.lead_field, lead_columns):
+        raise FactsError(409, "fill_changed")
+    before = event.data.get("before")
+    before = before if isinstance(before, str) and before.strip() else None
+    if latest.lead_field == "name" and before is None:
+        raise FactsError(409, "fill_name")
+    return Undo(latest.lead_field, before, event.id)
 
 
 def save_decision(connection: Any, decided: Decided, *, lead_written: bool) -> None:

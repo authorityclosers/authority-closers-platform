@@ -189,8 +189,16 @@ IMPORTED_LOST: Final[str] = "imported"
 MERGED_DUPLICATE: Final[str] = "merged"
 MERGED_WORDS: Final[str] = "Merged into another lead"
 
-TEMPLATE_KEYS: Final[frozenset[str]] = frozenset(key for key, _, _ in MESSAGE_TEMPLATES)
-TEMPLATE_LABELS: Final[dict[str, str]] = {key: label for key, label, _ in MESSAGE_TEMPLATES}
+# The reply drafted after a call in the call's language (call_data.reply): its words
+# come with the lead's facts, and like the others only its key is kept.
+AFTER_CALL_REPLY: Final[str] = "after_call"
+TEMPLATE_KEYS: Final[frozenset[str]] = frozenset(
+    {*(key for key, _, _ in MESSAGE_TEMPLATES), AFTER_CALL_REPLY}
+)
+TEMPLATE_LABELS: Final[dict[str, str]] = {
+    **{key: label for key, label, _ in MESSAGE_TEMPLATES},
+    AFTER_CALL_REPLY: "After the call",
+}
 
 
 def retry_after(reason: str, attempts: int) -> timedelta | None:

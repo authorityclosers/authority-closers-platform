@@ -410,6 +410,8 @@ def _strings(values: Any) -> tuple[str, ...]:
 
 # An undo of a change an AI app made: the marker event's pointer (ai-writes.md).
 UNDO_OF = "undo_of"
+# A lead field the call data engine filled from a call (call_data.engine.write_lead).
+CALL_FILL = "call_data"
 
 
 class LeadDesk:
@@ -1259,7 +1261,11 @@ class LeadDesk:
         more = len(rows) > limit
         rows = rows[:limit]
         hidden = await self._private_calls(after) if who != self.viewer.person_id else frozenset()
-        removed = await self._undone(str(event.id) for event, _ in rows if event.kind == "note")
+        removed = await self._undone(
+            str(event.id)
+            for event, _ in rows
+            if event.kind == "note" or event.data.get("via") == CALL_FILL
+        )
         names = await self._names([who])
         photos = await person_photos.photo_urls(self.db, [who])
         labels: dict[str, journeys.Journey] = {}
@@ -1378,6 +1384,8 @@ class LeadDesk:
                 if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
                 and not (event.kind == "edited" and UNDO_OF in event.data)
                 and not (event.kind == "note" and str(event.id) in undone)
+                # A field the call filled and someone undid (call_data undo-fill).
+                and not (event.data.get("via") == CALL_FILL and str(event.id) in undone)
                 and (str(event.id) not in hidden or event.actor_person_id == self.viewer.person_id)
                 and str(event.id) not in absorbed
             ),
@@ -1550,7 +1558,14 @@ class LeadDesk:
             template_label=TEMPLATE_LABELS.get(data["template"])
             if isinstance(data.get("template"), str)
             else None,
-            via="phone" if data.get("via") == "phone" else None,
+            via="phone"
+            if data.get("via") == "phone"
+            else "call"
+            if event.kind == "edited" and data.get("via") == CALL_FILL
+            else None,
+            fill_object_id=self._uuid(data.get("object_id"))
+            if event.kind == "edited" and data.get("via") == CALL_FILL
+            else None,
             event_id=event.id if phone_call else None,
             can_hide=phone_call and event.actor_person_id == self.viewer.person_id,
             private=str(event.id) in hidden,
@@ -3052,7 +3067,10 @@ class LeadDesk:
         await self.db.flush()
         return await self.detail(lead.id)
 
-    async def edit(self, lead_id: UUID, command: LeadEdit) -> LeadDetail:
+    async def edit(
+        self, lead_id: UUID, command: LeadEdit, *, marks: Mapping[str, Any] | None = None
+    ) -> LeadDetail:
+        """``marks``: more for the history row (an undo of a call's fill names the fill)."""
         seen = await self._command_seen(command.command_id)
         if seen is not None:
             return await self.detail(seen.lead_id)
@@ -3098,7 +3116,7 @@ class LeadDesk:
         self._event(
             lead,
             "edited",
-            {"changed": changed},
+            {"changed": changed, **(marks or {})},
             actor=self.viewer.person_id,
             command_id=command.command_id,
         )
