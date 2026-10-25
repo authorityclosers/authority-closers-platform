@@ -596,6 +596,53 @@ class MyDayView(Model):
     fallback: MyDayFallback | None = None
 
 
+class DistributeLeads(Command):
+    """An owner or manager gives a chosen set of leads out by a rule (team engine, section
+    1): the chosen rows, or every open lead nobody holds. A preview changes nothing."""
+
+    command_id: UUID
+    lead_ids: tuple[UUID, ...] = Field(default=(), max_length=1000)
+    unassigned: bool = False
+    rule: Literal["even", "balanced", "by_source", "by_city"] = "even"
+    # Even and Balanced: these sellers, in this order (none: every seller taking leads).
+    sellers: tuple[UUID, ...] = Field(default=(), max_length=200)
+    # By source or by city: each source or city to the sellers who take it.
+    groups: dict[str, tuple[UUID, ...]] = Field(default_factory=dict, max_length=100)
+    # Even and Balanced: leads already with a chosen seller move too.
+    spread_all: bool = False
+    preview: bool = True
+
+
+class DistributedTo(Model):
+    person_id: UUID
+    name: str
+    # Leads of this set they hold after it, and their open leads then, against their cap.
+    leads: int
+    open_after: int
+    max_open: int
+
+
+class Distribution(Model):
+    """The plan (a preview) or what was done: per seller, how many; what stays and why. No
+    lead names."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    rule: str
+    preview: bool
+    leads: int
+    moved: int
+    given: tuple[DistributedTo, ...]
+    # Leads left where they are, by why: closed, already_theirs, no_seller_for_it,
+    # everyone_at_cap, gone.
+    left: dict[str, int]
+    # The sources and cities among these open leads, with how many, to map them.
+    sources: dict[str, int]
+    cities: dict[str, int]
+    # More unassigned leads wait than one distribution takes.
+    more: bool = False
+    words: str
+
+
 class SearchResult(Model):
     """A few words, everywhere a seller looks (v0.89): leads, notes and open tasks."""
 
@@ -679,6 +726,9 @@ class SettingsView(Model):
     reassign_minutes: int
     default_country: str
     work_hours: WorkHoursView | None = None
+    # Nudges (team engine, section 3): off until an owner turns them on, and off for these.
+    nudges: bool = False
+    nudges_off_for: tuple[UUID, ...] = ()
 
 
 class Team(Model):
@@ -1103,6 +1153,14 @@ class SettingsCommand(Command):
     reassign_minutes: int = Field(ge=5, le=1440)
 
 
+class NudgesCommand(Command):
+    """An owner or manager turns nudges on for the workspace, and off for chosen sellers."""
+
+    expected_revision: int = Field(ge=0)
+    enabled: bool
+    off_for: tuple[UUID, ...] = Field(default=(), max_length=200)
+
+
 class WorkHoursCommand(Command):
     """A manager sets the team's work hours; no days clears them."""
 
@@ -1205,6 +1263,8 @@ class AlertText(Model):
     body: str
     lead_id: UUID | None
     url: str
+    # A nudge: the app plays its own urgent sound.
+    urgency: Literal["urgent"] | None = None
 
 
 class PhoneBook(Model):

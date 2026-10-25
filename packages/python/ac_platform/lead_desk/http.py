@@ -49,6 +49,8 @@ from ac_platform.lead_desk.contracts import (
     DeviceCommand,
     DeviceView,
     Disposition,
+    DistributeLeads,
+    Distribution,
     FollowUp,
     ImportCommand,
     ImportPreview,
@@ -69,6 +71,7 @@ from ac_platform.lead_desk.contracts import (
     NewLead,
     NewSource,
     NoteCommand,
+    NudgesCommand,
     Performance,
     PhoneBook,
     PhoneCall,
@@ -338,6 +341,16 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.bulk(command)
 
+    @router.post("/leads/distribute", response_model=Distribution, response_model_by_alias=True)
+    async def distribute_leads(
+        command: DistributeLeads, request: Request, response: Response
+    ) -> Distribution:
+        """Owners and managers give chosen or unassigned leads out by a rule; a preview
+        changes nothing and names no lead."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await team_engine.distribute_leads(lead_desk, command)
+
     @router.post("/leads/delete", response_model=LeadsDeleted, response_model_by_alias=True)
     async def delete_leads(
         command: DeleteLeads, request: Request, response: Response
@@ -516,9 +529,15 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
             return await lead_desk.badge()
 
     @router.get("/alert", response_model=AlertText, response_model_by_alias=True)
-    async def alert_summary(request: Request, response: Response) -> AlertText:
-        no_query(request)
+    async def alert_summary(
+        request: Request, response: Response, kind: Literal["nudge"] | None = None
+    ) -> AlertText:
+        """The words on a phone alert for several leads at once; with kind=nudge, on the
+        seller's latest nudge (team engine)."""
+        no_query(request, frozenset({"kind"}))
         async with desk_for(request, response) as lead_desk:
+            if kind == "nudge":
+                return await team_engine.nudge_words(lead_desk)
             return await lead_desk.alert_summary()
 
     @router.get("/leads/{lead_id}/alert", response_model=AlertText, response_model_by_alias=True)
@@ -744,6 +763,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.save_settings(command)
+
+    @router.put("/nudges", response_model=Team, response_model_by_alias=True)
+    async def save_nudges(command: NudgesCommand, request: Request, response: Response) -> Team:
+        """Nudges on for the workspace (off by default), and off for chosen sellers."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await team_engine.save_nudges(lead_desk, command)
 
     @router.put("/work-hours", response_model=Team, response_model_by_alias=True)
     async def save_work_hours(

@@ -17,26 +17,41 @@ from datetime import date, datetime, timedelta
 from typing import TYPE_CHECKING, Any, Final
 from uuid import UUID, uuid5
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, func, or_, select
 
+from ac_platform.lead_desk import distribute as spread
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk import my_day as day_plan
 from ac_platform.lead_desk import next_best
+from ac_platform.lead_desk import nudges as nudge_rules
 from ac_platform.lead_desk import targets as goals
 from ac_platform.lead_desk.contracts import (
+    AlertText,
+    DistributedTo,
+    DistributeLeads,
+    Distribution,
     MetricProgressView,
     MyDayFallback,
     MyDayItem,
     MyDayView,
+    NudgesCommand,
     SellerTargets,
     TargetLine,
     TargetsCommand,
+    Team,
     TouchedItem,
     UpcomingItem,
 )
 from ac_platform.lead_desk.errors import DeskError
-from ac_platform.lead_desk.models import Lead, LeadEvent, LeadTarget, LeadTask
-from ac_platform.lead_desk.vocabulary import OPEN_STAGES
+from ac_platform.lead_desk.models import (
+    Lead,
+    LeadDeskSettings,
+    LeadEvent,
+    LeadNudge,
+    LeadTarget,
+    LeadTask,
+)
+from ac_platform.lead_desk.vocabulary import OPEN_STAGES, SOURCE_LABELS
 
 if TYPE_CHECKING:
     from ac_platform.lead_desk.store import LeadDesk
@@ -417,4 +432,288 @@ async def my_day_for(desk: LeadDesk, person: UUID | None = None) -> MyDayView:
                 for item in fallback.recent
             ),
         ),
+    )
+
+
+# ----- distribution (section 1) ----------------------------------------------------------
+
+LEFT_WORDS: Final = {
+    "closed": "closed",
+    "already_theirs": "already with a chosen seller",
+    "no_seller_for_it": "no seller for their source or city",
+    "everyone_at_cap": "everyone at their cap",
+    "gone": "not found",
+}
+GROUPS_SHOWN: Final = 50
+
+
+def _source_of(lead: Lead) -> str:
+    return lead.source_label or SOURCE_LABELS.get(lead.source, lead.source)
+
+
+def _seen(values: Sequence[str | None]) -> dict[str, int]:
+    """Each value with how many, first spelling kept, the most common first."""
+    counts: dict[str, int] = {}
+    spelling: dict[str, str] = {}
+    for value in values:
+        key = " ".join((value or "").lower().split())
+        if not key:
+            continue
+        spelling.setdefault(key, " ".join((value or "").split()))
+        counts[key] = counts.get(key, 0) + 1
+    ranked = sorted(counts, key=lambda key: (-counts[key], key))[:GROUPS_SHOWN]
+    return {spelling[key]: counts[key] for key in ranked}
+
+
+def _distribution_words(moved: int, left: dict[str, int], *, preview: bool) -> str:
+    leads = f"{moved} lead{'' if moved == 1 else 's'}"
+    said = (
+        (f"{leads} would move." if preview else f"{leads} given out.")
+        if moved
+        else ("No lead would move." if preview else "No lead moved.")
+    )
+    stay = sum(left.values())
+    if stay:
+        why = ", ".join(
+            f"{count} {LEFT_WORDS.get(reason, reason)}"
+            for reason, count in sorted(left.items(), key=lambda item: -item[1])
+        )
+        said += f" {stay} stay where they are: {why}."
+    return said
+
+
+async def distribute_leads(desk: LeadDesk, command: DistributeLeads) -> Distribution:
+    """Give chosen or unassigned leads out by a rule; a preview changes nothing (team
+    engine, section 1). Each move is a manager's move, one history line each, and a retry
+    of the same command returns what it did."""
+    desk._require_manager()
+    if bool(command.lead_ids) == command.unassigned:
+        raise DeskError(422, "Choose some leads, or all unassigned leads.")
+    by_group = command.rule in ("by_source", "by_city")
+    if by_group and not any(command.groups.values()):
+        raise DeskError(422, "Choose who takes each source or city.")
+    if not command.preview:
+        seen = await desk._command_seen(command.command_id)
+        if seen is not None:
+            done = seen.data.get("distribution")
+            if not isinstance(done, dict):
+                raise DeskError(409, "This request was already used. Try again.")
+            return Distribution.model_validate(done)
+    reps = {rep.state.person_id: rep.state for rep in await desk._reps()}
+    if by_group:
+        people = list(
+            dict.fromkeys(person for group in command.groups.values() for person in group)
+        )
+    else:
+        people = list(dict.fromkeys(command.sellers)) or [
+            person for person, state in reps.items() if state.available
+        ]
+    if not people:
+        raise DeskError(422, "Nobody is taking leads. Choose at least one seller.")
+    if any(person not in reps for person in people):
+        raise DeskError(422, "Choose people who are active members of this workspace.")
+
+    query = select(Lead).where(Lead.tenant_id == desk.tenant_id)
+    if command.unassigned:
+        query = (
+            query.where(Lead.owner_person_id.is_(None), Lead.stage.in_(OPEN_STAGES))
+            .order_by(Lead.created_at, Lead.id)
+            .limit(spread.LIMIT + 1)
+        )
+    else:
+        query = query.where(Lead.id.in_(command.lead_ids))
+    if not command.preview:
+        query = query.with_for_update()
+    found = list((await desk.db.scalars(query)).all())
+    more = len(found) > spread.LIMIT
+    found = found[: spread.LIMIT]
+    gone = 0
+    if not command.unassigned:
+        place = {lead_id: index for index, lead_id in enumerate(dict.fromkeys(command.lead_ids))}
+        found.sort(key=lambda lead: place[lead.id])
+        gone = len(place) - len(found)
+
+    plan = spread.distribute(
+        [
+            spread.LeadSpot(lead.id, lead.stage, lead.owner_person_id, _source_of(lead), lead.city)
+            for lead in found
+        ],
+        [
+            spread.Seller(person, reps[person].open_leads, reps[person].max_open)
+            for person in people
+        ],
+        command.rule,
+        groups=command.groups if by_group else None,
+        spread_all=command.spread_all,
+    )
+    left = dict(plan.left)
+    if gone:
+        left["gone"] = gone
+    arriving: dict[UUID, int] = defaultdict(int)
+    leaving: dict[UUID, int] = defaultdict(int)
+    for move in plan.moves:
+        arriving[move.to] += 1
+        if move.previous is not None:
+            leaving[move.previous] += 1
+    still_open = [lead for lead in found if lead.stage in OPEN_STAGES]
+    view = Distribution(
+        rule=command.rule,
+        preview=command.preview,
+        leads=len(found) + gone,
+        moved=len(plan.moves),
+        given=tuple(
+            DistributedTo(
+                person_id=person,
+                name=reps[person].name,
+                leads=plan.given.get(person, 0),
+                open_after=reps[person].open_leads + arriving[person] - leaving[person],
+                max_open=reps[person].max_open,
+            )
+            for person in people
+        ),
+        left=left,
+        sources=_seen([_source_of(lead) for lead in still_open]),
+        cities=_seen([lead.city for lead in still_open]),
+        more=more,
+        words=_distribution_words(len(plan.moves), left, preview=command.preview),
+    )
+    if command.preview or not plan.moves:
+        return view
+    leads = {lead.id: lead for lead in found}
+    reason = f"Distributed: {spread.RULE_WORDS[command.rule]}"
+    for index, move in enumerate(plan.moves):
+        event = await desk._set_owner(
+            leads[move.lead_id],
+            move.to,
+            reason,
+            "distribute",
+            actor=desk.viewer.person_id,
+            kind="reassigned",
+            # The first move carries the command and what it did, so a retry returns it.
+            command_id=command.command_id
+            if index == 0
+            else uuid5(command.command_id, str(move.lead_id)),
+        )
+        if index == 0:
+            event.data = {
+                **event.data,
+                "distribution": view.model_dump(mode="json", by_alias=True),
+            }
+    await desk.db.flush()
+    return view
+
+
+# ----- nudges (section 3) ------------------------------------------------------------
+
+NUDGE_TITLES: Final = {"drift": "Behind pace", "idle": "Leads waiting"}
+
+
+async def save_nudges(desk: LeadDesk, command: NudgesCommand) -> Team:
+    """An owner or manager turns nudges on for the workspace (off by default) and off for
+    chosen sellers."""
+    desk._require_manager()
+    off = sorted({str(person) for person in command.off_for})
+    members = {str(rep.state.person_id) for rep in await desk._reps()}
+    if any(person not in members for person in off):
+        raise DeskError(422, "Choose people who are active members of this workspace.")
+    row = await desk.db.get(LeadDeskSettings, desk.tenant_id, with_for_update=True)
+    current = row.revision if row else 0
+    if current != command.expected_revision:
+        raise DeskError(409, "Someone changed these settings. Reload and try again.")
+    config = dict(row.config) if row else {}
+    config["team"] = {
+        **dict(config.get("team") or {}),
+        "nudges": command.enabled,
+        "nudges_off_for": off,
+    }
+    if row is None:
+        row = LeadDeskSettings(tenant_id=desk.tenant_id, revision=0, config={})
+        desk.db.add(row)
+    row.revision = current + 1
+    row.config = config
+    row.updated_by_person_id = desk.viewer.person_id
+    row.updated_at = desk.now
+    await desk.db.flush()
+    return await desk.team()
+
+
+async def nudge_now(desk: LeadDesk) -> tuple[nudge_rules.Nudge, int] | None:
+    """The nudge the desk's seller should get now, with how much work waits, or None.
+    Cheap first: with nudges off, outside work, or with this window or the day's three
+    already sent, nothing else is read."""
+    person = desk.viewer.person_id
+    config = (await desk.settings())[1]
+    if not nudges_on(config, person):
+        return None
+    hours = work_hours.parse(config)
+    window = nudge_rules.window_start(hours, desk.now)
+    if window is None:
+        return None
+    day = goals.day_start(desk.now)
+    sent = list(
+        (
+            await desk.db.scalars(
+                select(LeadNudge.window_start).where(
+                    LeadNudge.tenant_id == desk.tenant_id,
+                    LeadNudge.person_id == person,
+                    LeadNudge.window_start >= day,
+                )
+            )
+        ).all()
+    )
+    if window in sent or len(sent) >= nudge_rules.PER_DAY:
+        return None
+    found = await facts(desk, person, goals.week_start(desk.now))
+    wanted = await targets_on(desk, person, day.date())
+    last_activity = await desk.db.scalar(
+        select(func.max(LeadEvent.created_at)).where(
+            LeadEvent.tenant_id == desk.tenant_id,
+            LeadEvent.actor_person_id == person,
+            LeadEvent.created_at >= day,
+            LeadEvent.created_at <= desk.now,
+        )
+    )
+    last_call = max(
+        (fact.at for fact in found if fact.kind in ("call", "result") and fact.at <= desk.now),
+        default=None,
+    )
+    due = (await desk.badge()).to_call
+    chosen = nudge_rules.nudge(
+        goals.progress(found, wanted, hours, desk.now),
+        last_activity=last_activity,
+        last_call=last_call,
+        due_work=due,
+        hours=hours,
+        sent=sent,
+        now=desk.now,
+    )
+    return None if chosen is None else (chosen, due)
+
+
+async def nudge_words(desk: LeadDesk) -> AlertText:
+    """The words on the seller's latest nudge today, read by the app on their session."""
+    latest = await desk.db.scalar(
+        select(LeadNudge)
+        .where(
+            LeadNudge.tenant_id == desk.tenant_id,
+            LeadNudge.person_id == desk.viewer.person_id,
+            LeadNudge.window_start >= goals.day_start(desk.now),
+        )
+        .order_by(LeadNudge.claimed_at.desc())
+        .limit(1)
+    )
+    if latest is None:
+        return AlertText(
+            title="Back to your leads",
+            body="Open Sales Xray to see what's next.",
+            lead_id=None,
+            url="/leads",
+            urgency="urgent",
+        )
+    return AlertText(
+        title=NUDGE_TITLES.get(latest.kind, "Back to your leads"),
+        body=latest.words,
+        lead_id=None,
+        url="/leads",
+        urgency="urgent",
     )

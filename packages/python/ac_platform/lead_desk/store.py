@@ -225,6 +225,11 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def _team_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """The team engine's part of the desk settings (nudges)."""
+    return dict(config.get("team") or {})
+
+
 async def owner_names(db: AsyncSession, ids: Iterable[UUID | None]) -> dict[UUID, str]:
     """The names of the people who own these leads (for inbox rows)."""
     wanted = {value for value in ids if value is not None}
@@ -2592,14 +2597,14 @@ class LeadDesk:
         actor: UUID | None = None,
         kind: str = "assigned",
         command_id: UUID | None = None,
-    ) -> None:
+    ) -> LeadEvent:
         previous = lead.owner_person_id
         lead.owner_person_id = person_id
         lead.assigned_at = self.now if person_id is not None else None
         lead.owner_reason = reason[:300]
         lead.revision += 1 if kind == "reassigned" else 0
         lead.updated_at = self.now
-        self._event(
+        event = self._event(
             lead,
             kind,
             {
@@ -2615,6 +2620,7 @@ class LeadDesk:
         # the lead, which must be whole by then.
         if previous != person_id:
             await task_book.follow_owner(self, lead, person_id)
+        return event
 
     async def _allocate(
         self,
@@ -3729,6 +3735,10 @@ class LeadDesk:
                 reassign_minutes=int(config["reassign_minutes"]),
                 default_country=str(config["default_country"]),
                 work_hours=hours_view(work_hours.parse(config), self.now),
+                nudges=bool(_team_config(config).get("nudges")),
+                nudges_off_for=tuple(
+                    UUID(str(person)) for person in _team_config(config).get("nudges_off_for") or ()
+                ),
             ),
             by_stage={stage: int(count) for stage, count in by_stage.items()},
             by_source={source: int(count) for source, count in by_source.items()},

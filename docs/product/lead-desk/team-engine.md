@@ -35,11 +35,17 @@ A manager picks leads (selected rows, a filter, or "all unassigned") and sellers
 - **Who is left alone:** a closed lead (Won, Lost, Junk) never moves. A lead already with a
   chosen seller stays with them under Even unless the manager asks to "spread everything".
 
-`POST /leads/distribute` takes `{command_id, leads | filter, sellers, rule, map?, preview}`:
-- The preview returns the plan: per seller, how many leads; leftovers with why; no lead names.
-- Apply moves each lead through the app's own reassign, one history line each, reason
-  "Distributed: <rule>". It is idempotent by command_id.
-- At most 1,000 leads per call.
+`POST /leads/distribute` takes `{command_id, lead_ids | unassigned, rule, sellers, groups,
+spread_all, preview}` (owners and managers):
+- `lead_ids` are the chosen rows; `unassigned: true` takes every open lead nobody holds, oldest
+  first. `sellers` (Even, Balanced) defaults to every seller taking leads; `groups` (By source,
+  By city) maps each source or city, in any case, to its sellers.
+- The preview returns the plan: per seller, how many leads, their open leads after it and their
+  cap; leftovers with why; the sources and cities among the open leads, with how many, so the
+  screen can offer the map; no lead names.
+- Apply moves each lead the way a manager's own move does, one history line each, reason
+  "Distributed: <rule>". It is idempotent by command_id: a retry returns what it did.
+- At most 1,000 leads per call; `more` says when more unassigned leads wait.
 
 Pure core: `distribute(leads, sellers, rule) -> Plan`, with no database and no clock.
 
@@ -83,10 +89,16 @@ The rules:
 - **Quiet hours:** never outside the seller's work hours, never on a day off, never in the first 30
   minutes of work, and never within 10 minutes of their last call.
 - **At most 3 nudges a day.** After a nudge, activity within 20 minutes counts as "back to work".
-- **The push:** a data message `kind = "nudge"`. The app plays its own distinct sound and shows one
-  line: "You're 6 calls behind today's pace. Next: Call Asha" (the words come from
-  `GET /leads/nudge`, on the seller's session, like the other alerts).
-- **Off by default.** An owner turns nudges on per workspace and can turn them off per seller.
+- **The push** (agreed with the Android app, 25 Oct 2026): FCM data
+  `{type: "lead_desk", kind: "nudge", urgency: "urgent", tenant, count}`, with no lead id and no
+  words; `count` is the work waiting. The app plays its own distinct sound and shows one line,
+  read on the seller's own session from `GET /alert?kind=nudge`:
+  `{title, body, url: "/leads", lead_id: null, urgency: "urgent"}`, for example "Behind pace" and
+  "You're 6 calls behind today's pace." The sender (`nudge_push`) runs in the lead alerts' pass,
+  under its lock, and looks at each seller at most every five minutes.
+- **Off by default.** An owner or manager turns nudges on per workspace and off per seller with
+  `PUT /nudges {expected_revision, enabled, off_for}`; the team settings show `nudges` and
+  `nudges_off_for`.
 
 Pure core: `nudge(progress, last_activity, due_work, hours, ledger, now) -> Nudge | None`.
 
