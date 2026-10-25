@@ -53,7 +53,7 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.lead_desk.contracts import TaskKind
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
-from ac_platform.tenancy.roles import ORG_ROLES, can
+from ac_platform.tenancy.roles import ORG_ROLES, READ_ONLY_ROLES, can
 
 PRIVATE = {"Cache-Control": "no-store"}
 PAGE = 50
@@ -196,6 +196,14 @@ class Reader:
     def require(self, scope: str) -> None:
         if scope not in self.key.scopes:
             raise ApiError(403, "scope_missing", f"This key does not have {scope}.")
+        if not scope.endswith(":read"):
+            self._refuse_read_only()
+
+    def _refuse_read_only(self) -> None:
+        # Roles B (25 Oct 2026): what a person's role cannot change, their keys and
+        # connections cannot either, whatever scopes they were given.
+        if self.caller.reach == "person" and self.caller.role in READ_ONLY_ROLES:
+            raise ApiError(403, "role_read_only", "Your role can view only. Ask an owner or admin.")
 
     def _desk(self) -> LeadDesk:
         if self.caller.personal_workspace:
@@ -360,6 +368,7 @@ class Reader:
 
     async def _writes(self) -> AiWrites:
         """Changes from this caller, behind the AI-write guardrails (ai-writes.md)."""
+        self._refuse_read_only()
         desk = self._desk()
         if self.key.prefix.startswith("app "):
             name = await self.session.scalar(

@@ -154,6 +154,8 @@ from ac_platform.tenancy.models import Membership
 from ac_platform.tenancy.roles import roles_with
 
 MANAGERS = frozenset(roles_with("leads.manage"))
+# Deleting leads stays with owners and admins (Roles B: not Sales managers).
+DELETERS = frozenset(roles_with("leads.delete"))
 # A phone alert names a task due within this of now (task_push reminds up to two hours
 # before an in-person meeting).
 TASK_ALERT_WINDOW = timedelta(hours=2)
@@ -219,6 +221,10 @@ class Viewer:
     @property
     def can_manage(self) -> bool:
         return self.role in MANAGERS
+
+    @property
+    def can_delete(self) -> bool:
+        return self.role in DELETERS
 
 
 @dataclass(frozen=True, slots=True)
@@ -3344,7 +3350,7 @@ class LeadDesk:
         """Delete chosen leads for good (test, demo or junk leads), audited: deletion.py.
 
         One: a single lead's own Delete, which says so when the lead isn't here."""
-        if not self.viewer.can_manage:
+        if not self.viewer.can_delete:
             raise DeskError(403, "Only owners and admins delete leads.")
         wanted = list(dict.fromkeys(command.lead_ids))
         found: list[UUID] = []

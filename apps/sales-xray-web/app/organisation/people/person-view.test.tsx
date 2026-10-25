@@ -209,7 +209,7 @@ async function show(id: string, role: "owner" | "admin" | "member" = "owner") {
 it("shows a teammate's profile to an owner: who, figures, weekly charts, reports and calls", async () => {
   await show(ashaId);
   expect(host.querySelector("h1")?.textContent).toContain("Asha Menon");
-  expect(host.querySelector("h1")?.textContent).toContain("Member");
+  expect(host.querySelector("h1")?.textContent).toContain("Seller");
   expect(host.textContent).toContain("asha@example.com");
   const tiles = host.querySelector('[aria-label="Last 12 weeks"]');
   expect(tiles?.textContent).toContain("Calls2");

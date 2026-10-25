@@ -67,6 +67,7 @@ import {
   OrgApiError,
   readActivity,
   readMembers,
+  ORG_ROLES,
   readOrganisation,
   removeMember,
   revokeInvite,
@@ -77,6 +78,7 @@ import {
   type OrgRole,
   type Organisation,
 } from "./organisation-api";
+import { ROLE_HINT, ROLE_LABEL, rolesToGive } from "./roles";
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
 import { TeamPatternsSection } from "./team-patterns-section";
@@ -113,12 +115,6 @@ type Tab = (typeof TABS)[number]["id"];
 const isTab = (value: string | null): value is Tab =>
   TABS.some((item) => item.id === value);
 
-const ROLES: OrgRole[] = ["owner", "admin", "member"];
-const ROLE_LABEL: Record<OrgRole, string> = {
-  owner: "Owner",
-  admin: "Admin",
-  member: "Member",
-};
 const WEEK_MS = 7 * 86_400_000;
 const ORG_NOTICE = "organisation-load";
 const ACTION_NOTICE = "organisation-action";
@@ -1454,7 +1450,7 @@ function MembersPanel({
     }
     setInvalid("");
     setConfirming({
-      message: `Invite ${address} as ${ROLE_LABEL[additionRole]}? They join once they accept.`,
+      message: `Invite ${address} as ${ROLE_LABEL[additionRole]}? ${ROLE_HINT[additionRole]} They join once they accept.`,
       verb: "Invite",
       action: async () => {
         const answer = await addMember(address, additionRole);
@@ -1483,7 +1479,7 @@ function MembersPanel({
           .sort(
             (a, b) =>
               Number(isTestEmail(a.email)) - Number(isTestEmail(b.email)) ||
-              ROLES.indexOf(a.role) - ROLES.indexOf(b.role) ||
+              ORG_ROLES.indexOf(a.role) - ORG_ROLES.indexOf(b.role) ||
               Number(a.status === "invited") - Number(b.status === "invited") ||
               memberName(a).localeCompare(memberName(b)),
           )
@@ -1536,9 +1532,7 @@ function MembersPanel({
               disabled={disabled}
               aria-label="Role for the new person"
             >
-              {ROLES.filter(
-                (item) => item === "member" || (isOwner && item === "admin"),
-              ).map((item) => (
+              {rolesToGive(isOwner).map((item) => (
                 <option key={item} value={item}>
                   {ROLE_LABEL[item]}
                 </option>
@@ -1711,14 +1705,14 @@ function MembersPanel({
                       onChange={(event) => {
                         const nextRole = event.target.value as OrgRole;
                         setConfirming({
-                          message: `Change ${name} to ${ROLE_LABEL[nextRole]}?`,
+                          message: `Change ${name} to ${ROLE_LABEL[nextRole]}? ${ROLE_HINT[nextRole]}`,
                           verb: "Change role",
                           action: () => changeRole(member.personId, nextRole),
                         });
                       }}
                       aria-label={`Role for ${name}`}
                     >
-                      {ROLES.filter((item) => item !== "owner").map((item) => (
+                      {rolesToGive(true).map((item) => (
                         <option key={item} value={item}>
                           {ROLE_LABEL[item]}
                         </option>

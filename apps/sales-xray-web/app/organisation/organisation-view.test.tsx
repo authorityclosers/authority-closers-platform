@@ -404,7 +404,7 @@ it("allows admins to add/remove members and revoke pending invites", async () =>
         'select[aria-label="Role for the new person"] option',
       ),
     ].map((item) => item.textContent),
-  ).toEqual(["Member"]);
+  ).toEqual(["Sales manager", "Seller", "Viewer", "Finance"]);
   expect(host.querySelector('select[aria-label="Role for Dipak"]')).toBeNull();
   expect(button("Make Dipak the owner")).toBeUndefined();
   expect(button("Remove Admin")).toBeUndefined();
@@ -426,7 +426,7 @@ it("uses the API role and shows members only their own row read-only", async () 
   await render();
   await click("Members");
   expect(host.querySelector("header")?.textContent).toContain(
-    "Your role: Member",
+    "Your role: Seller",
   );
   expect(host.querySelectorAll('[role="row"]')).toHaveLength(2);
   expect(host.textContent).not.toContain("dipak@example.com");

@@ -1,10 +1,11 @@
+import { ORG_ROLES, type OrgRole } from "./organisation/organisation-api";
 import { earlyFetch } from "./early-reads";
 
 export type SalesXrayWorkspace = Readonly<{
   tenant_id: string;
   kind: "personal" | "organisation";
   name: string;
-  role: "owner" | "admin" | "member" | null;
+  role: OrgRole | null;
   sales_xray_enabled: boolean;
 }>;
 
@@ -44,10 +45,7 @@ export function parseSalesXrayWorkspaces(
       !text(item.tenant_id) ||
       !text(item.name) ||
       (item.kind !== "personal" && item.kind !== "organisation") ||
-      (item.role !== null &&
-        item.role !== "owner" &&
-        item.role !== "admin" &&
-        item.role !== "member") ||
+      (item.role !== null && !ORG_ROLES.includes(item.role as OrgRole)) ||
       typeof item.sales_xray_enabled !== "boolean" ||
       ids.has(item.tenant_id)
     )

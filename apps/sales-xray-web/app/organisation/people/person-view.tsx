@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AcquisitionShell } from "../../acquisition-shell";
+import type { OrgRole } from "../organisation-api";
 import { useDisplayDates } from "../../display-clock";
 import { dismissNotice, notify } from "../../notice-center";
 import { Empty, PageHeader } from "../../ui/kit";
@@ -165,7 +166,7 @@ function PersonPage({
 }: {
   id: string;
   viewerId: string;
-  viewerRole: "owner" | "admin" | "member";
+  viewerRole: OrgRole;
 }) {
   const router = useRouter();
   const dates = useDisplayDates();
