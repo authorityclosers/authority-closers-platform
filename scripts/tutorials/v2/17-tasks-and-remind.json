@@ -1,0 +1,416 @@
+{
+  "id": "17-tasks-and-remind",
+  "number": "17",
+  "kind": "feature",
+  "title": {
+    "en": "Tasks and Remind",
+    "hi": "Tasks aur Remind",
+    "mr": "Tasks aani Remind"
+  },
+  "description": {
+    "en": "Tasks in Sales X-Ray keeps every follow-up you promised: overdue, today and upcoming. Tick one off, push it to later, or set a reminder on any lead with Remind.",
+    "hi": "Sales X-Ray ka Tasks aapka har promised follow-up sambhalta hai: overdue, aaj ke aur aane wale. Kaam ho gaya toh tick kijiye, baad mein karna hai toh later, aur kisi bhi lead pe Remind se reminder lagaiye.",
+    "mr": "Sales X-Ray madhla Tasks tumcha pratyek promised follow-up sambhalto: overdue, aajche aani yenare. Kaam jhala tar tick kara, nantar karaycha asel tar later, aani kuthlyahi lead var Remind ne reminder lava."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "lead management",
+    "sales CRM India",
+    "Hindi",
+    "Marathi",
+    "follow-up reminders",
+    "tasks"
+  ],
+  "names": {
+    "Sales Xray": "Sales X-Ray",
+    "ASHA FICTIONAL": "Asha Kulkarni",
+    "RAVI SAMPLE": "Ravi Deshmukh",
+    "MEERA FICTIONAL": "Meera Joshi",
+    "NEHA FICTIONAL": "Neha Patil",
+    "KARAN EXAMPLE": "Karan Mehta",
+    "asha fictional": "Asha Kulkarni",
+    "ravi sample": "Ravi Deshmukh",
+    "meera fictional": "Meera Joshi",
+    "neha fictional": "Neha Patil",
+    "karan example": "Karan Mehta"
+  },
+  "next": {
+    "id": "04-call-a-lead",
+    "title": {
+      "en": "Call a lead and log how it went",
+      "hi": "Lead ko call karo, result log karo",
+      "mr": "Lead la call kara, result log kara"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "In this video: Tasks, and Remind on any lead.",
+      "hi": "इस video में: Tasks, और किसी भी lead पे Remind.",
+      "mr": "या video मध्ये: Tasks, आणि कुठल्याही lead वर Remind."
+    },
+    "latn": {
+      "hi": "Is video mein: Tasks, aur kisi bhi lead pe Remind.",
+      "mr": "Ya video madhye: Tasks, aani kuthlyahi lead var Remind."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "No follow-up forgotten.",
+      "hi": "Koi follow-up nahi bhoolega.",
+      "mr": "Kuthlahi follow-up visarnar nahi."
+    },
+    "say": {
+      "en": "Next: calling a lead and logging how it went.",
+      "hi": "अगले video में: lead को call करो, और result log करो.",
+      "mr": "पुढच्या video मध्ये: lead ला call करा, आणि result log करा."
+    },
+    "latn": {
+      "hi": "Agle video mein: lead ko call karo, aur result log karo.",
+      "mr": "Pudhchya video madhye: lead la call kara, aani result log kara."
+    }
+  },
+  "chapters": [
+    {
+      "id": "tasks",
+      "title": {
+        "en": "Your tasks",
+        "hi": "Aapke tasks",
+        "mr": "Tumche tasks"
+      }
+    },
+    {
+      "id": "remind",
+      "title": {
+        "en": "Remind me",
+        "hi": "Remind me",
+        "mr": "Remind me"
+      }
+    }
+  ],
+  "reel": {
+    "hook": {
+      "beat": "segments",
+      "text": {
+        "en": "Never forget a follow-up",
+        "hi": "Koi follow-up mat bhooliye",
+        "mr": "Kuthlahi follow-up visru naka"
+      },
+      "accent": {
+        "en": "follow-up",
+        "hi": "follow-up",
+        "mr": "follow-up"
+      },
+      "say": {
+        "en": "Promised to call back? Sales X-Ray remembers for you.",
+        "hi": "Call back का promise किया? Sales X-Ray आपके लिए याद रखता है.",
+        "mr": "Call back चं promise केलंय? Sales X-Ray तुमच्यासाठी लक्षात ठेवतो."
+      },
+      "latn": {
+        "hi": "Call back ka promise kiya? Sales X-Ray aapke liye yaad rakhta hai.",
+        "mr": "Call back cha promise kelay? Sales X-Ray tumchyasathi lakshat thevto."
+      }
+    },
+    "beats": ["row", "done-later", "remind-tile", "remind-what", "remind-save"]
+  },
+  "shots": [
+    {
+      "id": "tasks",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=tasks"
+        },
+        {
+          "do": "wait",
+          "ms": 700
+        }
+      ],
+      "beats": [
+        {
+          "id": "tasks-tab",
+          "chapter": "tasks",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Tasks",
+                "exact": true
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "In Leads, open Tasks. Every follow-up you promised is here.",
+            "hi": "Leads में Tasks खोलिए. आपने जो भी follow-up promise किया, सब यहाँ है.",
+            "mr": "Leads मध्ये Tasks उघडा. तुम्ही promise केलेले सगळे follow-ups इथे आहेत."
+          },
+          "latn": {
+            "hi": "Leads mein Tasks kholiye. Aapne jo bhi follow-up promise kiya, sab yahan hai.",
+            "mr": "Leads madhye Tasks ughda. Tumhi promise kelele sagle follow-ups ithe aahet."
+          }
+        },
+        {
+          "id": "segments",
+          "chapter": "tasks",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Overdue"
+              },
+              "ms": 1100
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Upcoming"
+              },
+              "ms": 1100
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Today"
+              },
+              "ms": 900
+            }
+          ],
+          "say": {
+            "en": "Switch between Overdue, Today and Upcoming.",
+            "hi": "Overdue, Today और Upcoming के बीच switch कीजिए.",
+            "mr": "Overdue, Today आणि Upcoming मध्ये switch करा."
+          },
+          "latn": {
+            "hi": "Overdue, Today aur Upcoming ke beech switch kijiye.",
+            "mr": "Overdue, Today aani Upcoming madhye switch kara."
+          },
+          "sync": {
+            "en": "Overdue",
+            "hi": "Overdue",
+            "mr": "Overdue"
+          }
+        },
+        {
+          "id": "row",
+          "chapter": "tasks",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "WhatsApp ·"
+              },
+              "ms": 1800
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Each task says what to do, for which lead, and when. Tap it to open the lead.",
+            "hi": "हर task बताता है क्या करना है, किस lead के लिए, और कब. Tap कीजिए, lead खुल जाएगा.",
+            "mr": "प्रत्येक task सांगतो काय करायचं, कुठल्या lead साठी, आणि कधी. Tap करा, lead उघडेल."
+          },
+          "latn": {
+            "hi": "Har task batata hai kya karna hai, kis lead ke liye, aur kab. Tap kijiye, lead khul jaayega.",
+            "mr": "Pratyek task sangto kay karaycha, kuthlya lead saathi, aani kadhi. Tap kara, lead ughdel."
+          },
+          "short": {
+            "say": {
+              "en": "Each task: what, for whom, and when.",
+              "hi": "हर task: क्या, किसके लिए, और कब.",
+              "mr": "प्रत्येक task: काय, कुणासाठी, आणि कधी."
+            },
+            "latn": {
+              "hi": "Har task: kya, kiske liye, aur kab.",
+              "mr": "Pratyek task: kay, kunasathi, aani kadhi."
+            }
+          }
+        },
+        {
+          "id": "done-later",
+          "chapter": "tasks",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Done: WhatsApp"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Later: WhatsApp"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Close",
+                "exact": true
+              },
+              "ms": 600
+            }
+          ],
+          "say": {
+            "en": "Done ticks it off. The clock moves it to later, like this evening or tomorrow.",
+            "hi": "Done से task पूरा. Clock से बाद में, जैसे आज शाम या कल.",
+            "mr": "Done ने task पूर्ण. Clock ने नंतर, जसं आज संध्याकाळी किंवा उद्या."
+          },
+          "latn": {
+            "hi": "Done se task poora. Clock se baad mein, jaise aaj shaam ya kal.",
+            "mr": "Done ne task poorna. Clock ne nantar, jasa aaj sandhyakali kinva udya."
+          },
+          "short": {
+            "say": {
+              "en": "Done, or later.",
+              "hi": "Done, या बाद में.",
+              "mr": "Done, किंवा नंतर."
+            },
+            "latn": {
+              "hi": "Done, ya baad mein.",
+              "mr": "Done, kinva nantar."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "remind",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tasks=1"
+        },
+        {
+          "do": "wait",
+          "ms": 700
+        },
+        {
+          "do": "tap",
+          "target": {
+            "role": "button",
+            "name": "Open Ravi Sample"
+          },
+          "ms": 1400
+        }
+      ],
+      "beats": [
+        {
+          "id": "remind-tile",
+          "chapter": "remind",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Remind me"
+              },
+              "ms": 1400
+            }
+          ],
+          "say": {
+            "en": "Promised something on a call? On the lead, tap Remind.",
+            "hi": "Call पे कुछ promise किया? Lead पे Remind दबाइए.",
+            "mr": "Call वर काही promise केलंत? Lead वर Remind दाबा."
+          },
+          "latn": {
+            "hi": "Call pe kuch promise kiya? Lead pe Remind dabaiye.",
+            "mr": "Call var kahi promise kelat? Lead var Remind daba."
+          },
+          "sync": {
+            "en": "Remind",
+            "hi": "Remind",
+            "mr": "Remind"
+          }
+        },
+        {
+          "id": "remind-what",
+          "chapter": "remind",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Meeting",
+                "exact": true
+              },
+              "ms": 1100
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "This evening",
+                "exact": true
+              },
+              "ms": 1100
+            },
+            {
+              "do": "type",
+              "target": {
+                "placeholder": "What you promised, in a few words"
+              },
+              "text": "Bring the floor plans",
+              "delay": 90,
+              "ms": 600
+            }
+          ],
+          "say": {
+            "en": "Pick what you promised and when, and add a few words.",
+            "hi": "क्या promise किया और कब, चुनिए, और दो शब्द लिख दीजिए.",
+            "mr": "काय promise केलं आणि कधी, ते निवडा, आणि दोन शब्द लिहा."
+          },
+          "latn": {
+            "hi": "Kya promise kiya aur kab, chuniye, aur do shabd likh dijiye.",
+            "mr": "Kay promise kela aani kadhi, te nivada, aani don shabda liha."
+          }
+        },
+        {
+          "id": "remind-save",
+          "chapter": "remind",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Save",
+                "exact": true
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Save, and it waits for you in Tasks.",
+            "hi": "Save कीजिए, और वो Tasks में आपका इंतज़ार करेगा.",
+            "mr": "Save करा, आणि ते Tasks मध्ये तुमची वाट पाहील."
+          },
+          "latn": {
+            "hi": "Save kijiye, aur woh Tasks mein aapka intezaar karega.",
+            "mr": "Save kara, aani te Tasks madhye tumchi vaat pahil."
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1000,6 +1000,128 @@ def thumbnail(
     return None
 
 
+# ------------------------------------------------------------------------------------ phone footage
+
+# Shots with device "footage" are real phone recordings (screens only a phone shows). The source
+# files stay on ac under <out>/v2/footage, never in git. "footage": {"file", "size": [w, h], "from",
+# "to", "crop": [top, bottom], "blur": [{"box": [x, y, w, h], "from"?, "to"?}]} in source pixels and
+# seconds; each beat's "phone": {"at", "events": [{"do", "at", "box", "key"?, "what"?}]}. The cut
+# is padded to the reel frame with the app's black and gets mint tap rings, so the build treats it
+# like a take.
+REEL_W, REEL_H = 1170, 2078
+RING = 150
+
+
+def footage_frame(f: dict) -> tuple[int, int, int, int, int, float]:
+    """(left, top, cropped width, cropped height, side pad, scale to the reel frame) for a portrait
+    recording; "crop" is [top, bottom] or [top, bottom, left, right] (black bars, status bar)."""
+    w, h = f["size"]
+    top, bottom, left, right = [*f.get("crop", []), 0, 0, 0, 0][:4]
+    cw, ch = w - left - right, h - top - bottom
+    full = round(ch * REEL_W / REEL_H)
+    if full < cw:
+        raise ValueError(f"{f['file']} is wider than 9:16 after cropping: crop its sides")
+    return left, top, cw, ch, (full - cw) // 2, REEL_W / full
+
+
+def footage_shot(board: dict, sspec: dict) -> dict:
+    """The take entry for a footage shot: times from the cut's start, boxes in reel pixels."""
+    f = sspec["footage"]
+    left, top, _, _, pad, s = footage_frame(f)
+
+    def box(b: list[float]) -> dict:
+        x, y, w, h = b
+        return {"x": (x - left + pad) * s, "y": (y - top) * s, "w": w * s, "h": h * s}
+
+    beats = []
+    for b in sspec["beats"]:
+        p = b["phone"]
+        evs = [
+            {"do": e["do"], "t": round(e["at"] - f["from"], 3), "box": box(e["box"])}
+            | ({"key": True} if e.get("key") else {})
+            for e in p.get("events", [])
+        ]
+        beats.append({"id": b["id"], "t0": round(p["at"] - f["from"], 3), "events": evs})
+    return {
+        "id": sspec["id"],
+        "device": "footage",
+        "clip": f"clips/{board['id']}--{sspec['id']}.mp4",
+        "seconds": round(f["to"] - f["from"], 3),
+        "beats": beats,
+    }
+
+
+def prepare_footage(board: dict, sspec: dict, src_dir: Path, take_dir: Path) -> Path:
+    """Cuts a phone recording into the shot's clip: trimmed, private bits blurred, status bar
+    cropped, padded to the reel frame, and a tap ring wherever the beats tap."""
+    f = sspec["footage"]
+    src = src_dir / f["file"]
+    shot = footage_shot(board, sspec)
+    out = take_dir / shot["clip"]
+    # Tap labels ("what") are for the script table only; they don't change the picture.
+    phones = [
+        {
+            **b["phone"],
+            "events": [{k: v for k, v in e.items() if k != "what"} for e in b["phone"]["events"]],
+        }
+        for b in sspec["beats"]
+    ]
+    key = _key(f, phones, render.mtime(src), REEL_W, RING)
+    if render.fresh(out, key):
+        return out
+    if not src.exists():
+        raise FileNotFoundError(f"phone recording {src} is missing")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    left, top, cw, ch, pad, _ = footage_frame(f)
+    t0, dur = f["from"], f["to"] - f["from"]
+    # Phones record only when the screen changes: make the frame rate steady before trimming, or
+    # the cut would start at the first change after "from" and every time after it would shift.
+    chain = [
+        f"[0:v]setpts=PTS-STARTPTS,fps={FPS},trim=start={t0:.3f}:end={f['to']:.3f},"
+        "setpts=PTS-STARTPTS[v0]"
+    ]
+    last = "v0"
+    for i, bl in enumerate(f.get("blur", [])):
+        x, y, bw, bh = bl["box"]
+        a, b = bl.get("from", t0) - t0, bl.get("to", f["to"]) - t0
+        chain.append(
+            f"[{last}]split[k{i}][s{i}];[s{i}]crop={bw}:{bh}:{x}:{y},"
+            f"boxblur=lr=20:lp=3:cr=8:cp=3[b{i}];"
+            f"[k{i}][b{i}]overlay={x}:{y}:enable='between(t,{a:.3f},{b:.3f})'[u{i}]"
+        )
+        last = f"u{i}"
+    chain.append(
+        f"[{last}]crop={cw}:{ch}:{left}:{top},pad={cw + 2 * pad}:{ch}:{pad}:0:black,"
+        f"scale={REEL_W}:{REEL_H}:flags=lanczos,setsar=1[f]"
+    )
+    last = "f"
+    taps = [ev for bt in shot["beats"] for ev in bt["events"] if ev["do"] == "tap"]
+    mint = brand.MINT.lstrip("#")
+    r, g, b = (int(mint[i : i + 2], 16) for i in (0, 2, 4))
+    c = RING / 2
+    ring = (
+        f"color=c=black:s={RING}x{RING}:d={dur:.3f}:r={FPS},format=rgba,"
+        f"geq=r={r}:g={g}:b={b}:a='if(between(hypot(X-{c},Y-{c}),{c - 22},{c - 8}),235,"
+        f"if(lt(hypot(X-{c},Y-{c}),{c - 22}),60,0))'"
+    )
+    if taps:
+        chain.append(f"{ring},split={len(taps)}" + "".join(f"[r{i}]" for i in range(len(taps))))
+    for i, e in enumerate(taps):
+        bx = e["box"]
+        x, y = bx["x"] + bx["w"] / 2 - c, bx["y"] + bx["h"] / 2 - c
+        chain.append(
+            f"[{last}][r{i}]overlay={x:.0f}:{y:.0f}:"
+            f"enable='between(t,{e['t'] - 0.05:.3f},{e['t'] + 0.55:.3f})'[t{i}]"
+        )
+        last = f"t{i}"
+    fc = ";".join(chain) + f";[{last}]format=yuv420p[v]"
+    _ffmpeg(
+        ["-i", str(src), "-filter_complex", fc, "-map", "[v]", "-an", *X264, "-crf", "14", str(out)]
+    )
+    render.stamp(out, key)
+    return out
+
+
 def build(
     repo: Path,
     board: dict,
@@ -1015,13 +1137,18 @@ def build(
 ) -> list[dict]:
     tid = board["id"]
     take_file = take_dir / f"take-{tid}.json"
-    screens = [s for s in board["shots"] if s["device"] != "card"]
-    # A video made only of step cards has nothing to record.
+    screens = [s for s in board["shots"] if s["device"] not in ("card", "footage")]
+    # A video made only of step cards and phone footage has nothing to record.
     take = (
         json.loads(take_file.read_text(encoding="utf-8"))
         if screens or take_file.exists()
         else {"tutorial": tid, "shots": []}
     )
+    for sspec in board["shots"]:
+        if sspec["device"] == "footage":
+            prepare_footage(board, sspec, root / "footage", take_dir)
+            take["shots"] = [s for s in take["shots"] if s["id"] != sspec["id"]]
+            take["shots"].append(footage_shot(board, sspec))
     used = {b["id"] for s in board["shots"] for b in s["beats"]}
     shown = [
         f"{b['id']}: {w}"

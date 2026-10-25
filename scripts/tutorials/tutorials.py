@@ -137,6 +137,8 @@ NOT_PROSE = {
     "sync",
     "key",
     "theme",
+    "footage",
+    "phone",
 }
 
 

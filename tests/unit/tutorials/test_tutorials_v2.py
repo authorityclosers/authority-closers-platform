@@ -9,6 +9,8 @@ import re
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[3]
 TUT = ROOT / "scripts/tutorials"
 sys.path.insert(0, str(TUT))
@@ -36,9 +38,16 @@ def test_v2_storyboards_follow_the_owner_rules_and_have_every_language() -> None
         assert hook is None or hook in ids
         assert b["reel"].get("all") or set(b["reel"]["beats"]) <= set(ids)
         for s in b["shots"]:
-            assert s["device"] in ("reel", "wide", "card")
+            assert s["device"] in ("reel", "wide", "card", "footage")
             for beat in s["beats"]:
                 assert ("card" in beat) == (s["device"] == "card"), beat["id"]
+                assert ("phone" in beat) == (s["device"] == "footage"), beat["id"]
+            if s["device"] == "footage":
+                f = s["footage"]
+                assert not f["file"].startswith(("/", ".")) and f["from"] < f["to"]
+                for beat in s["beats"]:
+                    times = [beat["phone"]["at"], *(e["at"] for e in beat["phone"]["events"])]
+                    assert all(f["from"] <= t <= f["to"] for t in times), beat["id"]
             for a in s.get("setup", []) + [a for beat in s["beats"] for a in beat["actions"]]:
                 if a["do"] == "goto":
                     assert a["url"].startswith("/review-fixture/"), a
@@ -106,6 +115,9 @@ def _fake_take(board: dict) -> dict:
     for s in board["shots"]:
         if s["device"] == "card":
             continue  # step cards are drawn, not recorded
+        if s["device"] == "footage":
+            shots.append({**v2.footage_shot(board, s), "width": 1170, "height": 2078})
+            continue
         t, beats = 0.3, []
         for beat in s["beats"]:
             evs = []
@@ -262,7 +274,7 @@ def test_pack_script_rows_follow_the_cut() -> None:
     rows = pack.script_rows(b, "hi", cues)
     assert [r["time"] for r in rows] == ["00:00", "00:05", "00:12", "00:40"]
     assert rows[1]["on_screen"].startswith("Screen atki")
-    assert rows[2]["on_screen"].startswith("Show “Refresh app data”")
+    assert rows[2]["on_screen"] == "Phone: Tap “Refresh app data”"  # real phone footage
     assert all(r["say"] and r["roman"] for r in rows)
     assert pack.safe("T1 Join: the testers?") == "T1 Join the testers"
 
@@ -281,3 +293,29 @@ def test_store_names_keep_avatar_initials_in_step() -> None:
             checked += 1
     assert checked >= 8
     assert pl.NAMES["Swamini Fictional"] == "Kavya Gokhale"
+
+
+def test_phone_footage_maps_into_the_reel_frame() -> None:
+    # A 1080x2340 phone recording, status bar cropped, is padded at the sides to the reel's 9:16.
+    f = {"file": "x.mp4", "size": [1080, 2340], "from": 9.0, "to": 31.5, "crop": [84, 50]}
+    left, top, cw, ch, pad, s = v2.footage_frame(f)
+    assert (left, top, cw, ch, pad) == (0, 84, 1080, 2206, 81)
+    assert abs((cw + 2 * pad) * s - v2.REEL_W) < 1 and abs(ch * s - v2.REEL_H) < 1
+    # A recording with black side bars has them cropped; one still wider than 9:16 is refused.
+    bars = {**f, "size": [720, 1280], "crop": [60, 60, 80, 80]}
+    assert v2.footage_frame(bars)[:5] == (80, 60, 560, 1160, 46)
+    with pytest.raises(ValueError):
+        v2.footage_frame({**f, "size": [1080, 1080], "crop": []})
+    board = {"id": "t"}
+    beat = {
+        "id": "b",
+        "phone": {
+            "at": 9.6,
+            "events": [{"do": "tap", "at": 11.7, "box": [0, 84, 100, 50], "key": True}],
+        },
+    }
+    shot = v2.footage_shot(board, {"id": "p", "footage": f, "beats": [beat]})
+    assert shot["clip"] == "clips/t--p.mp4" and shot["seconds"] == 22.5
+    ev = shot["beats"][0]["events"][0]
+    assert shot["beats"][0]["t0"] == 0.6 and ev["t"] == 2.7 and ev["key"]
+    assert abs(ev["box"]["x"] - 81 * s) < 1e-6 and ev["box"]["y"] == 0

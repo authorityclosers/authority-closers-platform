@@ -109,6 +109,11 @@ def _describe(beat: dict) -> str:
                 "select": "Choose in",
             }[a["do"]]
             out.append(f"{verb} “{what}”")
+    phone = beat.get("phone")
+    if phone:
+        # Real phone footage: its taps carry a label ("what") instead of a target.
+        taps = [f"Tap “{e['what']}”" for e in phone.get("events", []) if e.get("what")]
+        return "Phone: " + ("; ".join(dict.fromkeys(taps)) or "the real screen")
     return "; ".join(dict.fromkeys(out)) or "Screen"
 
 

@@ -156,81 +156,154 @@
       ]
     },
     {
-      "id": "settings",
-      "device": "reel",
-      "setup": [
-        {
-          "do": "goto",
-          "url": "/review-fixture/settings?section=notifications"
-        },
-        {
-          "do": "hide",
-          "target": {
-            "text": "Sample data only."
+      "id": "settings-phone",
+      "device": "footage",
+      "footage": {
+        "file": "n8-03-refresh-app-data.mp4",
+        "size": [1080, 2340],
+        "from": 1.4,
+        "to": 57.5,
+        "crop": [84, 50],
+        "blur": [
+          {
+            "box": [30, 130, 125, 125]
           },
-          "collapse": true
+          {
+            "box": [40, 1430, 1000, 220],
+            "to": 2.6
+          },
+          {
+            "box": [70, 262, 135, 135],
+            "from": 2.2,
+            "to": 20.4
+          },
+          {
+            "box": [210, 262, 460, 135],
+            "from": 2.2,
+            "to": 20.4
+          },
+          {
+            "box": [0, 230, 1080, 2000],
+            "from": 2.2,
+            "to": 2.75
+          },
+          {
+            "box": [0, 230, 1080, 2000],
+            "from": 19.6,
+            "to": 20.4
+          }
+        ]
+      },
+      "beats": [
+        {
+          "id": "menu",
+          "chapter": "refresh",
+          "actions": [],
+          "phone": {
+            "at": 1.6,
+            "events": [
+              {
+                "do": "tap",
+                "at": 2.2,
+                "box": [40, 140, 110, 110],
+                "key": true,
+                "what": "your picture"
+              }
+            ]
+          },
+          "say": {
+            "en": "Still stuck? Tap your picture at the top.",
+            "hi": "फिर भी अटका है? ऊपर अपनी photo पे tap कीजिए.",
+            "mr": "तरीही अडकलंय? वर तुमच्या photo वर tap करा."
+          },
+          "latn": {
+            "hi": "Phir bhi atka hai? Upar apni photo pe tap kijiye.",
+            "mr": "Tarihi adaklay? Var tumchya photo var tap kara."
+          },
+          "sync": {
+            "en": "Tap",
+            "hi": "tap",
+            "mr": "tap"
+          }
         },
         {
-          "do": "wait",
-          "ms": 500
-        }
-      ],
-      "beats": [
+          "id": "phone-alerts",
+          "chapter": "refresh",
+          "actions": [],
+          "phone": {
+            "at": 3.0,
+            "events": [
+              {
+                "do": "tap",
+                "at": 19.7,
+                "box": [100, 976, 880, 204],
+                "key": true,
+                "what": "Phone & alerts"
+              }
+            ]
+          },
+          "say": {
+            "en": "Open Phone and alerts.",
+            "hi": "Phone and alerts खोलिए.",
+            "mr": "Phone and alerts उघडा."
+          },
+          "latn": {
+            "hi": "Phone and alerts kholiye.",
+            "mr": "Phone and alerts ughda."
+          }
+        },
+        {
+          "id": "scroll",
+          "chapter": "refresh",
+          "actions": [],
+          "phone": {
+            "at": 22.0,
+            "events": []
+          },
+          "say": {
+            "en": "Scroll down to Sales X-Ray on your phone.",
+            "hi": "नीचे Sales X-Ray on your phone तक scroll कीजिए.",
+            "mr": "खाली Sales X-Ray on your phone पर्यंत scroll करा."
+          },
+          "latn": {
+            "hi": "Neeche Sales X-Ray on your phone tak scroll kijiye.",
+            "mr": "Khali Sales X-Ray on your phone paryant scroll kara."
+          }
+        },
         {
           "id": "refresh",
           "chapter": "refresh",
-          "actions": [
-            {
-              "do": "scrollto",
-              "target": {
-                "role": "button",
-                "name": "Refresh app data"
-              },
-              "offset": 330,
-              "ms": 800
-            },
-            {
-              "do": "highlight",
-              "target": {
-                "role": "button",
-                "name": "Refresh app data"
-              },
-              "ms": 1700
-            },
-            {
-              "do": "unhighlight"
-            }
-          ],
+          "actions": [],
+          "phone": {
+            "at": 30.0,
+            "events": [
+              {
+                "do": "tap",
+                "at": 50.6,
+                "box": [124, 1400, 360, 80],
+                "key": true,
+                "what": "Refresh app data"
+              }
+            ]
+          },
           "say": {
-            "en": "Still stuck? Open Settings, Phone and alerts, and tap Refresh app data.",
-            "hi": "फिर भी अटका है? Settings खोलिए, Phone and alerts में Refresh app data दबाइए.",
-            "mr": "तरीही अडकलंय? Settings उघडा, Phone and alerts मध्ये Refresh app data दाबा."
+            "en": "Tap Refresh app data.",
+            "hi": "Refresh app data दबाइए.",
+            "mr": "Refresh app data दाबा."
           },
           "latn": {
-            "hi": "Phir bhi atka hai? Settings kholiye, Phone and alerts mein Refresh app data dabaiye.",
-            "mr": "Tarihi adaklay? Settings ughda, Phone and alerts madhye Refresh app data daba."
-          },
-          "sync": {
-            "en": "Refresh app data",
-            "hi": "Refresh app data",
-            "mr": "Refresh app data"
+            "hi": "Refresh app data dabaiye.",
+            "mr": "Refresh app data daba."
           }
         },
         {
           "id": "kept",
           "chapter": "refresh",
-          "actions": [
-            {
-              "do": "highlight",
-              "target": {
-                "text": "You stay signed in"
-              },
-              "ms": 1800
-            },
-            {
-              "do": "unhighlight"
-            }
-          ],
+          "actions": [],
+          "phone": {
+            "at": 51.8,
+            "events": []
+          },
           "say": {
             "en": "It starts Sales X-Ray afresh. You stay signed in, and changes not sent yet are kept.",
             "hi": "ये Sales X-Ray को नए सिरे से चालू करता है. आप signed in रहते हैं, और जो changes अभी नहीं गए, वो भी safe रहते हैं.",
