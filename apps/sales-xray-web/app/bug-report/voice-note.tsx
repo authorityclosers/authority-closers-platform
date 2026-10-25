@@ -9,9 +9,10 @@
 import { Mic, Square, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { inPhoneApp } from "../leads/native-phone";
+import { inPhoneApp, phoneStatus } from "../leads/native-phone";
 import { tick } from "../ui/haptics";
 import styles from "./bug-report.module.css";
+import { browserFrom } from "./device";
 
 export const VOICE_LIMIT_SECONDS = 60;
 const TYPES = [
@@ -27,7 +28,47 @@ type State =
   | { status: "idle" }
   | { status: "recording"; startedAt: number }
   | { status: "denied" }
+  | { status: "no_microphone" }
+  | { status: "app_update" }
   | { status: "unsupported" };
+
+/** The Android app's first version that lets a page use the microphone (#11). */
+export const VOICE_APP_VERSION = "1.0.35";
+
+/** True when an app version (e.g. "1.0.34") is older than `than`. */
+export function olderThan(version: string, than: string): boolean {
+  const parts = (value: string) =>
+    value.split(".").map((part) => Number.parseInt(part, 10) || 0);
+  const [mine, theirs] = [parts(version), parts(than)];
+  for (let i = 0; i < Math.max(mine.length, theirs.length); i += 1) {
+    const [a, b] = [mine[i] ?? 0, theirs[i] ?? 0];
+    if (a !== b) return a < b;
+  }
+  return false;
+}
+
+/** Where to turn the microphone on when nothing asks (#11: this browser's own route). */
+export function micRoute(userAgent: string, inApp: boolean): string {
+  if (inApp) {
+    return "If nothing asks: phone Settings → Apps → Sales X-Ray → Permissions → Microphone.";
+  }
+  const browser = browserFrom(userAgent) ?? "";
+  const phone = /Mobi|Android|iPhone|iPad/.test(userAgent);
+  if (browser.startsWith("Firefox")) {
+    return "If nothing asks: click the microphone icon in the address bar and allow it.";
+  }
+  if (browser.startsWith("Safari")) {
+    return phone
+      ? "If nothing asks: tap aA in the address bar → Website Settings → Microphone → Allow."
+      : "If nothing asks: Safari → Settings → Websites → Microphone → allow this site.";
+  }
+  if (phone) {
+    return "If nothing asks: tap the icon left of the address → Permissions → Microphone → Allow.";
+  }
+  return browser.startsWith("Edge")
+    ? "If nothing asks: click the lock left of the address → Permissions for this site → Microphone → Allow."
+    : "If nothing asks: click the icon left of the address → Site settings → Microphone → Allow, then reload.";
+}
 
 export function voiceSupported(): boolean {
   return (
@@ -89,6 +130,15 @@ export function VoiceNoteRow({
   );
 
   const start = async () => {
+    // The Android app before 1.0.35 can't give a page the microphone: say an update
+    // brings it, not an error (#11, 26 Oct 2026).
+    if (inPhoneApp()) {
+      const phone = await phoneStatus();
+      if (phone?.version && olderThan(phone.version, VOICE_APP_VERSION)) {
+        setState({ status: "app_update" });
+        return;
+      }
+    }
     if (!voiceSupported()) {
       setState({ status: "unsupported" });
       return;
@@ -97,8 +147,13 @@ export function VoiceNoteRow({
       stream.current = await navigator.mediaDevices.getUserMedia({
         audio: true,
       });
-    } catch {
-      setState({ status: "denied" });
+    } catch (error) {
+      setState({
+        status:
+          error instanceof DOMException && error.name === "NotFoundError"
+            ? "no_microphone"
+            : "denied",
+      });
       return;
     }
     const type = pickType();
@@ -176,7 +231,9 @@ export function VoiceNoteRow({
         type="button"
         className={styles.chip}
         onClick={() => void start()}
-        disabled={state.status === "unsupported"}
+        disabled={
+          state.status === "unsupported" || state.status === "app_update"
+        }
       >
         <Mic size={15} aria-hidden="true" />
         Add a voice note
@@ -195,11 +252,17 @@ export function VoiceNoteRow({
             Allow microphone
           </button>
           <small className={styles.fine}>
-            {inPhoneApp()
-              ? "If nothing asks: phone Settings → Apps → Sales X-Ray → Permissions → Microphone."
-              : "If nothing asks: allow the microphone for this site in your browser's settings."}
+            {micRoute(navigator.userAgent, inPhoneApp())}
           </small>
         </div>
+      ) : state.status === "app_update" ? (
+        <small className={styles.note} role="status">
+          Voice notes come in the next app update. You can type for now.
+        </small>
+      ) : state.status === "no_microphone" ? (
+        <small className={styles.note} role="status">
+          No microphone found on this device. You can type instead.
+        </small>
       ) : state.status === "unsupported" ? (
         <small className={styles.note} role="status">
           Voice notes don&apos;t work in this browser. Type instead.
