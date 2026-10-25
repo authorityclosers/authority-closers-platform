@@ -112,7 +112,7 @@ it("reads Pulse titles and photos for member lists, nothing on refusal", async (
           p1: {
             title: "Founder",
             team: "Leadership",
-            photo_url: "/v1/sales-xray/pulse/members/m9/photo",
+            photo_url: "/v1/people/p1/photo?v=3f9c0a1b",
           },
           p2: { title: null, photo_url: "//elsewhere/p.jpg" },
         },
@@ -123,7 +123,7 @@ it("reads Pulse titles and photos for member lists, nothing on refusal", async (
   expect(people.p1).toEqual({
     title: "Founder",
     team: "Leadership",
-    photoUrl: "/v1/sales-xray/pulse/members/m9/photo",
+    photoUrl: "/v1/people/p1/photo?v=3f9c0a1b",
   });
   expect(people.p2.photoUrl).toBeNull();
   vi.stubGlobal(

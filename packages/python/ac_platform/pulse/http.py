@@ -594,21 +594,27 @@ def install_pulse_http(
 
     @router.get("/v1/sales-xray/pulse/people")
     async def people(request: Request, response: Response) -> dict[str, Any]:
-        """Pulse titles, teams and photos of this organisation's people, for member lists."""
+        """This organisation's people with their photo (an upload, else Pulse's, else
+        Google's) and their Pulse title and team, for member lists (any member)."""
         response.headers.update(PRIVATE)
         async with member_of_org(request) as auth:
             tenant_id = auth.resolved.actor.tenant_id
+            from ac_platform.identity import person_photos
             from ac_platform.pulse.models import PulseOrgMember
 
+            members = (
+                await auth.database.scalars(
+                    select(Membership.person_id).where(
+                        Membership.tenant_id == tenant_id,
+                        Membership.status == "active",
+                        Membership.ended_at.is_(None),
+                    )
+                )
+            ).all()
+            photos = await person_photos.photo_urls(auth.database, members)
             rows = (
                 await auth.database.execute(
-                    select(
-                        PulseOrgMember.id,
-                        PulseOrgMember.person_id,
-                        PulseOrgMember.title,
-                        PulseOrgMember.team,
-                        PulseOrgMember.photo_sha256,
-                    )
+                    select(PulseOrgMember.person_id, PulseOrgMember.title, PulseOrgMember.team)
                     .join(PulseOrgLink, PulseOrgLink.id == PulseOrgMember.link_id)
                     .where(
                         PulseOrgMember.tenant_id == tenant_id,
@@ -618,18 +624,15 @@ def install_pulse_http(
                     )
                 )
             ).all()
+            pulse = {row.person_id: (row.title, row.team) for row in rows}
             return {
                 "people": {
-                    str(row.person_id): {
-                        "title": row.title,
-                        "team": row.team,
-                        "photo_url": (
-                            f"/v1/sales-xray/pulse/members/{row.id}/photo"
-                            if row.photo_sha256
-                            else None
-                        ),
+                    str(person_id): {
+                        "title": pulse.get(person_id, (None, None))[0],
+                        "team": pulse.get(person_id, (None, None))[1],
+                        "photo_url": photos.get(person_id),
                     }
-                    for row in rows
+                    for person_id in members
                 }
             }
 

@@ -317,9 +317,11 @@ export async function readPulsePeople(
     found[personId] = {
       title: text(raw.title),
       team: text(raw.team),
+      // The shared photo route (upload, Pulse, then Google) or Pulse's directory one.
       photoUrl:
         typeof raw.photo_url === "string" &&
-        raw.photo_url.startsWith(`${API}/members/`)
+        (raw.photo_url.startsWith("/v1/people/") ||
+          raw.photo_url.startsWith(`${API}/members/`))
           ? raw.photo_url
           : null,
     };

@@ -1,6 +1,7 @@
 """Pulse: profiles from Pulse, an organisation's Pulse link and directory, recordings from apps
 (owner, 25 Oct 2026; contract docs/architecture/pulse-identity-contract.md; design
-docs/product/roles-owner-profile-pulse.md, section 3, migration "0137 Pulse org link").
+docs/product/roles-owner-profile-pulse.md, section 3; the design reserved 0137, which Lead
+OS digests took first, so this is the next free number).
 
 - ``person_pulse_profiles``: one row per person: their Pulse name, title, team, handle and
   a 256 px JPEG copy of their Pulse photo (at most 64 KB), from Sign in with Pulse or from
@@ -18,16 +19,14 @@ All four tables are new, so their indexes are made with them. Nothing else chang
 Rollback: allowed while no link, member or upload exists (profiles are a cache and go
 with it); otherwise that history requires forward recovery.
 
-Chain: after the head at landing (20261025_0132, tasks from AI apps). The orchestrator
-reserved 0133-0136 for Lead OS, roles and profiles; whichever lands next chains after
-this file.
+Chain: after 20261025_0138 (bug issues), the head when this landed.
 """
 
 import sqlalchemy as sa
 from alembic import op
 
-revision = "20261025_0137"
-down_revision = "20261025_0132"
+revision = "20261026_0139"
+down_revision = "20261025_0138"
 branch_labels = None
 depends_on = None
 

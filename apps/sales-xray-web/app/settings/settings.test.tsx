@@ -100,10 +100,13 @@ it("maps every section, and the old account sections, to an address of its own",
     "apps",
     "ai-replies",
     "developers",
+    "pulse",
     "notifications",
     "devices",
     "help",
   ]);
+  // Organisation → Connections → Pulse (25 Oct 2026) lives in the organisation hub.
+  expect(isSettingsSection("pulse")).toBe(true);
   expect(settingsPath("team")).toBe("/settings/team");
   // Leads' own settings (approved map, slice 5, 22 Oct 2026).
   expect(settingsPath("stages")).toBe("/settings/stages");
