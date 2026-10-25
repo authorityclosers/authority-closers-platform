@@ -5,9 +5,13 @@
  * on GitHub (wb-ci --visual). Lead Desk reads are answered here; nothing
  * leaves the browser. `?role=owner` (default): how sales are going, sellers,
  * open leads by stage, then call analysis. `?role=seller`: today's calls.
- * `&quiet=1`: a seller with nobody to call now. Owners see Needs you (two leads
- * past the first-response target, two with no owner) and Team | My day (`?view=mine`). `&pipelines=2`: two pipelines,
- * each with its own stages, and a switch above the open leads by stage.
+ * `&quiet=1`: a seller with nobody to call now and nothing done today (My day's
+ * fallback: what is next, this week beside last week). `&none=1`: a seller with
+ * no leads yet, while the team has open ones. `&targets=0`: no targets, so
+ * today's numbers sit beside yesterday's. Owners see Needs you (two leads past
+ * the first-response target, two with no owner) and Team | My day
+ * (`?view=mine`). `&pipelines=2`: two pipelines, each with its own stages, and
+ * a switch above the open leads by stage.
  */
 
 import type { CallActivity, CallSummary } from "../../dashboard/dashboard-data";
@@ -69,7 +73,74 @@ function queue(now: number) {
   }));
 }
 
-function answers(now: number, path: string, quiet: boolean): unknown {
+type Mode = { quiet: boolean; none: boolean; targets: boolean };
+
+const BECAUSE: Record<string, string[]> = {
+  due: ["promised a call back", "1 h overdue"],
+  new: ["new lead, 12 min waiting"],
+  retry: ["due in 30 min", "far along"],
+  later: ["due in 1 h 30 min"],
+};
+
+/** My day (Lead OS's team engine): ranked work with why, targets, fallback. */
+function myDay(now: number, mode: Mode) {
+  const empty = mode.quiet || mode.none;
+  return {
+    schema: "lead-desk/1",
+    person_id: SELLER,
+    do_now: empty
+      ? []
+      : queue(now).map((row, index) => ({
+          lead_id: row.lead_id,
+          lead_name: row.name,
+          task_id: null,
+          due_at: row.next_action_at,
+          score: 1 - index / 10,
+          because: BECAUSE[String(row.why_kind)] ?? [],
+        })),
+    today: empty ? {} : { calls: 18, connects: 7, follow_ups: 5 },
+    progress:
+      empty || !mode.targets
+        ? []
+        : (
+            [
+              ["calls", "day", 40, 18, 26, true, 8],
+              ["connects", "day", 15, 7, 9.75, false, 0],
+              ["follow_ups", "day", 5, 5, 3.25, false, 0],
+              ["meetings", "week", 6, 2, 3, true, 1],
+            ] as const
+          ).map(([metric, period, target, done, expected, behind, short]) => ({
+            metric,
+            period,
+            target,
+            done,
+            pace: 0.65,
+            expected,
+            behind,
+            short,
+          })),
+    fallback: mode.quiet
+      ? {
+          next_up: queue(now)
+            .slice(2, 5)
+            .map((row, index) => ({
+              lead_id: row.lead_id,
+              lead_name: row.name,
+              at: new Date(now + (14 + index * 2) * 60 * MINUTE).toISOString(),
+              what: index === 1 ? "Meeting" : "Call",
+            })),
+          week: { calls: 64, connects: 29, follow_ups: 12, meetings: 3 },
+          last_week: { calls: 58, connects: 22, follow_ups: 15, meetings: 3 },
+          recent: [],
+        }
+      : null,
+  };
+}
+
+function answers(now: number, path: string, mode: Mode): unknown {
+  const { quiet, none } = mode;
+  const empty = quiet || none;
+  if (path === "/v1/lead-desk/my-day") return myDay(now, mode);
   if (path === "/v1/lead-desk")
     return {
       me: {
@@ -79,15 +150,38 @@ function answers(now: number, path: string, quiet: boolean): unknown {
         can_manage: false,
         taking_leads: true,
       },
-      numbers: {
-        calls: 18,
-        connected: 7,
-        talk_seconds: 3_120,
-        follow_ups_done: 5,
-        new_assigned: 3,
+      numbers: empty
+        ? {
+            calls: 0,
+            connected: 0,
+            talk_seconds: 0,
+            follow_ups_done: 0,
+            new_assigned: 0,
+          }
+        : {
+            calls: 18,
+            connected: 7,
+            talk_seconds: 3_120,
+            follow_ups_done: 5,
+            new_assigned: 3,
+          },
+      numbers_yesterday: {
+        calls: 22,
+        connected: 9,
+        talk_seconds: 3_900,
+        follow_ups_done: 4,
+        new_assigned: 2,
       },
+      numbers_week: {
+        calls: 64,
+        connected: 29,
+        talk_seconds: 11_400,
+        follow_ups_done: 12,
+        new_assigned: 9,
+      },
+      team_pool: { open: 382, unassigned: 40, may_take: true },
       counts: {
-        open: 21,
+        open: none ? 0 : 21,
         new: 1,
         follow_up_due: 2,
         not_connected: 1,
@@ -96,7 +190,7 @@ function answers(now: number, path: string, quiet: boolean): unknown {
         unassigned: 2,
         overdue: 1,
       },
-      queue: quiet ? [] : queue(now),
+      queue: empty ? [] : queue(now),
       upcoming: quiet
         ? [
             {
@@ -248,14 +342,14 @@ function answers(now: number, path: string, quiet: boolean): unknown {
   return null;
 }
 
-function install(quiet: boolean) {
+function install(mode: Mode) {
   if (typeof window === "undefined") return true;
   const real = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const url = String(input instanceof Request ? input.url : input);
     const path = url.replace(/^https?:\/\/[^/]+/, "");
     const body = path.startsWith("/v1/")
-      ? answers(Date.now(), path, quiet)
+      ? answers(Date.now(), path, mode)
       : null;
     if (body !== null)
       return new Response(JSON.stringify(body), {
@@ -303,9 +397,14 @@ function fixtureActivity(): CallActivity {
 function Preview() {
   const params = useSearchParams();
   const seller = params.get("role") === "seller";
-  const quiet = params.get("quiet") === "1";
   const analysis = params.get("analysis") === "1";
-  useState(() => install(quiet));
+  useState(() =>
+    install({
+      quiet: params.get("quiet") === "1",
+      none: params.get("none") === "1",
+      targets: params.get("targets") !== "0",
+    }),
+  );
   return (
     <WorkspaceAccessContext.Provider
       value={{

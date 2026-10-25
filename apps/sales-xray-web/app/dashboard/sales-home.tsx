@@ -56,6 +56,8 @@ import { several, usePipelines } from "../leads/use-pipelines";
 import { ActionList, ActionRow, Avatar, Delta, Segmented } from "../ui/kit";
 import { NeedsYou } from "./needs-you";
 import { TakingSwitch } from "../leads/taking-switch";
+import type { HomeDesk } from "./my-day-client";
+import { DayNumbers, DoNowRow, NextUp, TeamPoolCard, useMyDay } from "./my-day";
 import { RecentlyCalled } from "./recently-called";
 import {
   FunnelSkeleton,
@@ -480,7 +482,11 @@ function LeadLink({ row }: { row: LeadRow }) {
 }
 
 function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
-  if (state.status === "loading") return <TodaySkeleton />;
+  // Read beside the desk, so both land together (Lead OS's team engine).
+  const myDay = useMyDay();
+  const [now] = useState(() => Date.now());
+  if (state.status === "loading" || myDay.status === "loading")
+    return <TodaySkeleton />;
   if (state.status === "error")
     return (
       <section className={styles.block}>
@@ -495,13 +501,18 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
         </div>
       </section>
     );
-  const { desk } = state;
+  const desk: HomeDesk = state.desk;
   const sections = deskSections(desk.queue);
   const count = (key: string) =>
     sections.find((section) => section.key === key)?.rows.length ?? 0;
-  const next = desk.queue[0];
+  // My day's ranked work with why; the desk's queue if My day didn't load.
+  const ranked = myDay.status === "ready" ? myDay.value.do_now : null;
+  const first = ranked
+    ? ranked[0] && { id: ranked[0].lead_id, name: ranked[0].lead_name }
+    : desk.queue[0] && { id: desk.queue[0].lead_id, name: desk.queue[0].name };
+  const fallback = myDay.status === "ready" ? myDay.value.fallback : null;
   const later = desk.upcoming?.[0];
-  const { numbers } = desk;
+  const mineNone = !desk.queue.length && !desk.counts.open;
   return (
     <>
       {/* Taking new leads, or not, in plain sight with one tap to change
@@ -519,33 +530,44 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
           <h2 id="today-title">Today</h2>
           <span className={styles.meta}>Who to call</span>
         </div>
+        {/* Only counts that are there: never "0 to call now". */}
         <div className={styles.chips}>
           {count("overdue") ? (
             <Link className={styles.chip} data-tone="bad" href="/leads">
               {`${count("overdue")} late`}
             </Link>
           ) : null}
-          <Link className={styles.chip} href="/leads">
-            {`${count("now")} to call now`}
-          </Link>
-          <Link className={styles.chip} href="/leads">
-            {`${count("later")} later today`}
-          </Link>
+          {count("now") ? (
+            <Link className={styles.chip} href="/leads">
+              {`${count("now")} to call now`}
+            </Link>
+          ) : null}
+          {count("later") ? (
+            <Link className={styles.chip} href="/leads">
+              {`${count("later")} later today`}
+            </Link>
+          ) : null}
         </div>
-        {next ? (
+        {first ? (
           <>
             <ol className={styles.list}>
-              {desk.queue.slice(0, 4).map((row) => (
-                <LeadLink key={row.lead_id} row={row} />
-              ))}
+              {ranked
+                ? ranked
+                    .slice(0, 4)
+                    .map((item) => (
+                      <DoNowRow key={item.lead_id} item={item} now={now} />
+                    ))
+                : desk.queue
+                    .slice(0, 4)
+                    .map((row) => <LeadLink key={row.lead_id} row={row} />)}
             </ol>
             <Link
               className={styles.primary}
               href="/leads"
-              onClick={() => handOverLead(next.lead_id, true)}
+              onClick={() => handOverLead(first.id, true)}
             >
               <PhoneCall size={18} aria-hidden="true" />
-              {`Call ${displayName(next.name).split(" ")[0]}`}
+              {`Call ${displayName(first.name).split(" ")[0]}`}
             </Link>
             {desk.queue.length > 4 ? (
               <Link className={styles.more} href="/leads">
@@ -553,35 +575,31 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
               </Link>
             ) : null}
           </>
+        ) : mineNone && desk.team_pool?.open ? (
+          <TeamPoolCard desk={desk} />
         ) : (
-          <div className={styles.caughtUp}>
-            <strong>All caught up</strong>
-            <span>
-              {later?.next_action_at
-                ? `Next call ${when(later.next_action_at)}: ${later.name}.`
-                : "New leads land on Leads the moment they come in."}
-            </span>
-            <Link className={styles.more} href="/leads">
-              Open Leads
-            </Link>
-          </div>
+          <>
+            <div className={styles.caughtUp}>
+              <strong>All caught up</strong>
+              <span>
+                {fallback?.next_up.length
+                  ? "Nothing is due now. Next up:"
+                  : later?.next_action_at
+                    ? `Next call ${when(later.next_action_at)}: ${displayName(later.name)}.`
+                    : "New leads land on Leads the moment they come in."}
+              </span>
+              {fallback?.next_up.length ? null : (
+                <Link className={styles.more} href="/leads">
+                  Open Leads
+                </Link>
+              )}
+            </div>
+            {fallback ? <NextUp items={fallback.next_up} /> : null}
+          </>
         )}
       </section>
       <RecentlyCalled />
-      <dl className={styles.dayStrip} aria-label="Your day">
-        <div>
-          <dt>Calls</dt>
-          <dd>{numbers.calls}</dd>
-        </div>
-        <div>
-          <dt>Connected</dt>
-          <dd>{numbers.connected}</dd>
-        </div>
-        <div>
-          <dt>Follow-ups done</dt>
-          <dd>{numbers.follow_ups_done}</dd>
-        </div>
-      </dl>
+      <DayNumbers desk={desk} myDay={myDay} />
     </>
   );
 }

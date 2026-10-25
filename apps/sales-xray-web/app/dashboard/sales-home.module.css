@@ -118,7 +118,7 @@
 .chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
 }
 
 .chips:empty {
@@ -129,7 +129,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  /* A full target (the matrix measured 38 px). */
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-pill);
