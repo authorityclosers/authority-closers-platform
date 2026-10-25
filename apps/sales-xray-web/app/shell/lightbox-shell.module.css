@@ -2299,3 +2299,55 @@
     font-weight: 650;
   }
 }
+
+/* ---------- Groups (owner, 25 Oct 2026: Pulse's sidebar) ----------
+   A group adds no box of its own. Collapsed, its title is a short hairline
+   between the icons (none above the first group); open, the title is a
+   small heading over its places, and rows are Pulse's 32 px. */
+.stripGroup {
+  display: contents;
+}
+
+.stripGroupTitle {
+  display: block;
+  flex: none;
+  width: 24px;
+  height: 1px;
+  overflow: hidden;
+  background: var(--lx-line);
+  color: transparent;
+  font-size: 0;
+}
+
+.stripGroupTitle[data-first] {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripGroupTitle {
+    display: block;
+    width: auto;
+    height: auto;
+    padding: 14px 10px 4px;
+    background: none;
+    color: var(--sx-muted);
+    font-size: var(--sx-text-xs);
+    font-weight: 650;
+    line-height: 16px;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripGroupTitle[data-first] {
+    padding-top: 2px;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripNav
+    .stripBtn {
+    height: 32px;
+  }
+}

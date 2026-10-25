@@ -1283,146 +1283,201 @@ function LightboxShellFrame({
             </div>
           </div>
           <div className={styles.stripNav}>
-            <ScreenLink
-              className={`${styles.stripBtn}${place === "dashboard" && !reportsHere ? ` ${styles.stripBtnActive}` : ""}`}
-              href="/dashboard"
-              aria-label="Home"
-              data-rail-tip="Home"
-              aria-current={
-                place === "dashboard" && !reportsHere ? "page" : undefined
-              }
-            >
-              <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railPill} aria-hidden="true" />
-              <span style={RAIL_NAME_STYLE}>Home</span>
-            </ScreenLink>
-            <ScreenLink
-              className={`${styles.stripBtn}${place === "leads" ? ` ${styles.stripBtnActive}` : ""}`}
-              href="/leads"
-              aria-label="Leads"
-              data-rail-tip="Leads"
-              aria-current={place === "leads" ? "page" : undefined}
-            >
-              <LeadsTabIcon
-                size={20}
-                strokeWidth={1.75}
-                live={leadsBadgeLive}
-              />
-              <span className={styles.railPill} aria-hidden="true" />
-              <span style={RAIL_NAME_STYLE}>Leads</span>
-            </ScreenLink>
-            {/* Every open lead, one click from anywhere; the open sidebar only. */}
-            {inOrganisation ? (
-              <Suspense fallback={<AllLeadsLink here={false} />}>
-                <AllLeadsSubPlace />
-              </Suspense>
-            ) : null}
-            <ScreenLink
-              className={`${styles.stripBtn}${place === "chats" ? ` ${styles.stripBtnActive}` : ""}`}
-              href="/chats"
-              aria-label="Chats"
-              data-rail-tip="Chats"
-              aria-current={place === "chats" ? "page" : undefined}
-            >
-              <ChatsTabIcon
-                size={20}
-                strokeWidth={1.75}
-                live={leadsBadgeLive}
-              />
-              <span className={styles.railPill} aria-hidden="true" />
-              <span style={RAIL_NAME_STYLE}>Chats</span>
-            </ScreenLink>
-            <ScreenLink
-              className={`${styles.stripBtn}${place === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
-              href={newAnalysisHref}
-              aria-label="New analysis"
-              data-rail-tip="New analysis"
-              aria-current={place === "analyse" ? "page" : undefined}
-            >
-              <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railPill} aria-hidden="true" />
-              <span style={RAIL_NAME_STYLE}>New analysis</span>
-            </ScreenLink>
-            <ScreenLink
-              className={`${styles.stripBtn}${place === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
-              href="/analysis/calls"
-              aria-label="Calls"
-              data-rail-tip="Calls"
-              aria-current={place === "calls" ? "page" : undefined}
-            >
-              <AudioLines size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railPill} aria-hidden="true" />
-              <span style={RAIL_NAME_STYLE}>Calls</span>
-            </ScreenLink>
-            {/* Every report in one place (owner, 25 Oct 2026). */}
-            <ScreenLink
-              className={`${styles.stripBtn}${reportsHere ? ` ${styles.stripBtnActive}` : ""}`}
-              href="/reports"
-              aria-label="Reports"
-              data-rail-tip="Reports"
-              aria-current={reportsHere ? "page" : undefined}
-            >
-              <LineChart size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railPill} aria-hidden="true" />
-              <span style={RAIL_NAME_STYLE}>Reports</span>
-            </ScreenLink>
+            {/* The places in groups, as Pulse draws them (owner, 25 Oct 2026:
+                "group what belongs together on the user's journey"): the
+                day's work, the organisation, then how it is going. Collapsed,
+                a hairline stands for each group's title. */}
+            <div className={styles.stripGroup} role="group" aria-label="Work">
+              <span
+                className={styles.stripGroupTitle}
+                data-first=""
+                aria-hidden="true"
+              >
+                Work
+              </span>
+              <ScreenLink
+                className={`${styles.stripBtn}${place === "dashboard" && !reportsHere ? ` ${styles.stripBtnActive}` : ""}`}
+                href="/dashboard"
+                aria-label="Home"
+                data-rail-tip="Home"
+                aria-current={
+                  place === "dashboard" && !reportsHere ? "page" : undefined
+                }
+              >
+                <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span className={styles.railPill} aria-hidden="true" />
+                <span style={RAIL_NAME_STYLE}>Home</span>
+              </ScreenLink>
+              <ScreenLink
+                className={`${styles.stripBtn}${place === "leads" ? ` ${styles.stripBtnActive}` : ""}`}
+                href="/leads"
+                aria-label="Leads"
+                data-rail-tip="Leads"
+                aria-current={place === "leads" ? "page" : undefined}
+              >
+                <LeadsTabIcon
+                  size={20}
+                  strokeWidth={1.75}
+                  live={leadsBadgeLive}
+                />
+                <span className={styles.railPill} aria-hidden="true" />
+                <span style={RAIL_NAME_STYLE}>Leads</span>
+              </ScreenLink>
+              {inOrganisation ? (
+                <SubPlace
+                  label="All leads"
+                  href={ALL_LEADS_HREF}
+                  path="/leads"
+                  tab="all"
+                />
+              ) : null}
+              <ScreenLink
+                className={`${styles.stripBtn}${place === "chats" ? ` ${styles.stripBtnActive}` : ""}`}
+                href="/chats"
+                aria-label="Chats"
+                data-rail-tip="Chats"
+                aria-current={place === "chats" ? "page" : undefined}
+              >
+                <ChatsTabIcon
+                  size={20}
+                  strokeWidth={1.75}
+                  live={leadsBadgeLive}
+                />
+                <span className={styles.railPill} aria-hidden="true" />
+                <span style={RAIL_NAME_STYLE}>Chats</span>
+              </ScreenLink>
+              <ScreenLink
+                className={`${styles.stripBtn}${place === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
+                href={newAnalysisHref}
+                aria-label="New analysis"
+                data-rail-tip="New analysis"
+                aria-current={place === "analyse" ? "page" : undefined}
+              >
+                <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span className={styles.railPill} aria-hidden="true" />
+                <span style={RAIL_NAME_STYLE}>New analysis</span>
+              </ScreenLink>
+              <ScreenLink
+                className={`${styles.stripBtn}${place === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
+                href="/analysis/calls"
+                aria-label="Calls"
+                data-rail-tip="Calls"
+                aria-current={place === "calls" ? "page" : undefined}
+              >
+                <AudioLines size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span className={styles.railPill} aria-hidden="true" />
+                <span style={RAIL_NAME_STYLE}>Calls</span>
+              </ScreenLink>
+              <ScreenLink
+                className={`${styles.stripBtn}${place === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
+                href="/prospects"
+                aria-label="Prospects"
+                data-rail-tip="Prospects"
+                aria-current={place === "prospects" ? "page" : undefined}
+              >
+                <Users size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span className={styles.railPill} aria-hidden="true" />
+                <span style={RAIL_NAME_STYLE}>Prospects</span>
+              </ScreenLink>
+            </div>
             {/* Owner, 23 Oct 2026: team and organisation were "too hidden";
-                the hub sits right after the daily places. */}
-            {inOrganisation || place === "organisation" ? (
-              <ScreenLink
-                className={`${styles.stripBtn}${orgHere ? ` ${styles.stripBtnActive}` : ""}`}
-                href="/organisation"
+                the organisation comes right after the daily places. */}
+            {inOrganisation || orgHere || place === "insights" ? (
+              <div
+                className={styles.stripGroup}
+                role="group"
                 aria-label="Organisation"
-                data-rail-tip="Organisation"
-                aria-current={orgHere ? "page" : undefined}
               >
-                <Building2 size={20} strokeWidth={1.75} aria-hidden="true" />
-                <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>Organisation</span>
-              </ScreenLink>
+                <span className={styles.stripGroupTitle} aria-hidden="true">
+                  Organisation
+                </span>
+                {inOrganisation || orgHere ? (
+                  <ScreenLink
+                    className={`${styles.stripBtn}${orgHere ? ` ${styles.stripBtnActive}` : ""}`}
+                    href="/organisation"
+                    aria-label="Organisation overview"
+                    data-rail-tip="Organisation"
+                    aria-current={orgHere ? "page" : undefined}
+                  >
+                    <Building2
+                      size={20}
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
+                    <span className={styles.railPill} aria-hidden="true" />
+                    <span style={RAIL_NAME_STYLE}>Overview</span>
+                  </ScreenLink>
+                ) : null}
+                {inOrganisation ? (
+                  <SubPlace
+                    label="Team"
+                    href={TEAM_HREF}
+                    path="/organisation"
+                    tab="team"
+                  />
+                ) : null}
+                {orgAdmin || place === "insights" ? (
+                  <ScreenLink
+                    className={`${styles.stripBtn}${place === "insights" ? ` ${styles.stripBtnActive}` : ""}`}
+                    href="/organisation/insights"
+                    aria-label="Insights"
+                    data-rail-tip="Insights"
+                    aria-current={place === "insights" ? "page" : undefined}
+                  >
+                    <BarChart3
+                      size={20}
+                      strokeWidth={1.75}
+                      aria-hidden="true"
+                    />
+                    <span className={styles.railPill} aria-hidden="true" />
+                    <span style={RAIL_NAME_STYLE}>Insights</span>
+                  </ScreenLink>
+                ) : null}
+              </div>
             ) : null}
-            <ScreenLink
-              className={`${styles.stripBtn}${place === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
-              href="/prospects"
-              aria-label="Prospects"
-              data-rail-tip="Prospects"
-              aria-current={place === "prospects" ? "page" : undefined}
+            <div
+              className={styles.stripGroup}
+              role="group"
+              aria-label="Performance"
             >
-              <Users size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railPill} aria-hidden="true" />
-              <span style={RAIL_NAME_STYLE}>Prospects</span>
-            </ScreenLink>
-            <ScreenLink
-              className={`${styles.stripBtn}${place === "coaching" ? ` ${styles.stripBtnActive}` : ""}`}
-              href="/coaching"
-              aria-label="Coaching"
-              data-rail-tip="Coaching"
-              aria-current={place === "coaching" ? "page" : undefined}
-            >
-              <GraduationCap size={20} strokeWidth={1.75} aria-hidden="true" />
-              <span className={styles.railPill} aria-hidden="true" />
-              <span style={RAIL_NAME_STYLE}>Coaching</span>
-            </ScreenLink>
-            {orgAdmin || place === "insights" ? (
+              <span className={styles.stripGroupTitle} aria-hidden="true">
+                Performance
+              </span>
+              {/* Every report in one place (owner, 25 Oct 2026). */}
               <ScreenLink
-                className={`${styles.stripBtn}${place === "insights" ? ` ${styles.stripBtnActive}` : ""}`}
-                href="/organisation/insights"
-                aria-label="Insights"
-                data-rail-tip="Insights"
-                aria-current={place === "insights" ? "page" : undefined}
+                className={`${styles.stripBtn}${reportsHere ? ` ${styles.stripBtnActive}` : ""}`}
+                href="/reports"
+                aria-label="Reports"
+                data-rail-tip="Reports"
+                aria-current={reportsHere ? "page" : undefined}
               >
-                <BarChart3 size={20} strokeWidth={1.75} aria-hidden="true" />
+                <LineChart size={20} strokeWidth={1.75} aria-hidden="true" />
                 <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>Insights</span>
+                <span style={RAIL_NAME_STYLE}>Reports</span>
               </ScreenLink>
-            ) : null}
-            {/* Gold reviewers (owner, 19 Oct); nothing for anyone else. */}
-            <ReviewRailLink
-              live={leadsBadgeLive}
-              className={styles.stripBtn}
-              activeClassName={styles.stripBtnActive}
-              nameStyle={RAIL_NAME_STYLE}
-            />
+              <ScreenLink
+                className={`${styles.stripBtn}${place === "coaching" ? ` ${styles.stripBtnActive}` : ""}`}
+                href="/coaching"
+                aria-label="Coaching"
+                data-rail-tip="Coaching"
+                aria-current={place === "coaching" ? "page" : undefined}
+              >
+                <GraduationCap
+                  size={20}
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                />
+                <span className={styles.railPill} aria-hidden="true" />
+                <span style={RAIL_NAME_STYLE}>Coaching</span>
+              </ScreenLink>
+              {/* Gold reviewers (owner, 19 Oct); nothing for anyone else. */}
+              <ReviewRailLink
+                live={leadsBadgeLive}
+                className={styles.stripBtn}
+                activeClassName={styles.stripBtnActive}
+                nameStyle={RAIL_NAME_STYLE}
+              />
+            </div>
           </div>
           <div className={styles.stripBottom}>
             {bell}
@@ -2120,28 +2175,51 @@ export function LightboxShell(props: LightboxShellProps) {
 }
 
 /**
- * All leads under Leads in the open sidebar (owner, 25 Oct 2026: the old row
- * lined up with nothing and never lit): text only, lined up with Leads' label,
- * and lit while the list shows every lead.
+ * A page's sub-place in the open sidebar (owner, 25 Oct 2026: the old "All
+ * leads" row lined up with nothing and never lit): text only, lined up with
+ * its page's label, and lit while that page shows that tab. The address is
+ * read in its own Suspense boundary, so the shell never bails out of static
+ * rendering.
  */
-function AllLeadsSubPlace() {
+type SubPlaceProps = {
+  label: string;
+  href: string;
+  /** The page, and the ?tab= that lights this sub-place on it. */
+  path: string;
+  tab: string;
+};
+
+function SubPlace(props: SubPlaceProps) {
+  return (
+    <Suspense fallback={<SubPlaceLink {...props} here={false} />}>
+      <LiveSubPlace {...props} />
+    </Suspense>
+  );
+}
+
+function LiveSubPlace(props: SubPlaceProps) {
   const pathname = usePathname();
   const params = useSearchParams();
   return (
-    <AllLeadsLink
-      here={pathname === "/leads" && params?.get("tab") === "all"}
+    <SubPlaceLink
+      {...props}
+      here={pathname === props.path && params?.get("tab") === props.tab}
     />
   );
 }
 
-function AllLeadsLink({ here }: { here: boolean }) {
+function SubPlaceLink({
+  label,
+  href,
+  here,
+}: SubPlaceProps & { here: boolean }) {
   return (
     <ScreenLink
       className={`${styles.stripBtn} ${styles.stripSub}`}
-      href={ALL_LEADS_HREF}
+      href={href}
       aria-current={here ? "page" : undefined}
     >
-      All leads
+      {label}
     </ScreenLink>
   );
 }
