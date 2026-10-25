@@ -114,12 +114,17 @@ export const SCREENS = {
   "reports-seller": { path: "/review-fixture/reports?role=seller" },
   "reports-quiet": { path: "/review-fixture/reports?quiet=1" },
   "reports-loading": { path: "/review-fixture/reports?loading=1" },
+  // The organisation, Insights and Settings, phones and computers (owner, 25 Oct
+  // 2026: one page title across the app).
+  "org-hub": { path: "/review-fixture/hub", desktop: true },
+  insights: { path: "/review-fixture/insights", desktop: true },
+  settings: { path: "/review-fixture/settings", desktop: true },
   // Call analysis as it is (owner program, section 8: the rebuild's baseline): the Report,
   // a won call, coaching, the calls list, an empty list, a picked file, analysing.
   report: { path: "/review-fixture/report/story" },
   "report-won": { path: "/review-fixture/report/story?example=won" },
   "report-coach": { path: "/review-fixture/report/story?example=coach" },
-  "calls-list": { path: "/review-fixture/calls" },
+  "calls-list": { path: "/review-fixture/calls", desktop: true },
   "calls-empty": { path: "/review-fixture/calls?empty=1" },
   "upload-picked": { path: "/review-fixture/upload?step=picked" },
   "upload-analysing": { path: "/review-fixture/upload?step=analysing" },
