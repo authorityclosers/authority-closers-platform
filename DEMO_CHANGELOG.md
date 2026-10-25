@@ -102,6 +102,69 @@ org, and all are still `new`. Grouped by root cause:
     the recording from the lead.
   - Verified by: `organisation-view.test.tsx`; wb-ci --web 40212885213.
 
+### Bug status without Admin's form (before v0.93)
+
+- **`scripts/data-changes/bug-status.py`**, 8578fec86.
+  - Sets reports' status by number through Admin's own change function, with the note and one audit each naming the approver and "Claude (orchestrator)".
+  - Dry run by default, idempotent, one transaction, and v0.91-safe.
+  - Verified by: `test_bug_status_data_change_postgresql.py` and a dry run on dev (#1, #2 → fixed, rolled back).
+  - The orchestrator runs it on production once the owner approves.
+
+### v0.93 (cut 23:00Z on 26 Oct)
+
+- **Bug issues and ac-bugs (owner: reports "combined, analysed and clubbed together", marked fixed "via bugs api cli")**, 3a6518cb5 (migration 0138).
+  - What changed:
+    - Reports that look like one problem join one issue: same screen pattern, and the same newest error or else the same key words.
+    - An issue has a status: new, fixing, fixed in the next update, or solved. Each status set reaches every report on the issue.
+    - Solved puts "Fixed: <their report>" in each reporter's bell, once.
+    - `ac-bugs list|show|set|released` (`--json`) works through Admin's API with `AC_BUGS_KEY`: a staff key holding only bugs:read and bugs:write.
+    - `ac-bug-alerts@production` keeps a Pulse task per issue (marker `bug:<issue id>`).
+    - `ac-bugs-release` marks issues Solved when a release carrying their fix is live.
+    - Admin /bugs leads with Issues.
+    - Owner, 26 Oct: "admin api, cli, mcp".
+      - Admin's report routes take a number (`/v1/admin/bugs/9`), and the bugs key reaches the list, one report and its status.
+      - `ac-bugs reports | report N | report-set N`.
+      - MCP at `https://admin.authorityclosers.com/v1/admin/bugs/mcp` (list_bugs, get_bug, set_bug_status), staff keys only.
+      - Lists mask the words, and every change is audited naming the key.
+  - Verified by: `test_bug_issues_postgresql.py`, `test_issue_fingerprint.py`, `test_bug_issue_host_tools.py`, `test_staff_key_reads.py`; wb-ci --full 40245395931, --e2e 40245388557.
+- **Profile photos**, 3a6518cb5 (storage) and ec8822f6f (screens).
+  - Tap your avatar in Settings → Profile; it picks from the gallery only. The server crops and resizes the photo and keeps it as a file, and the old bytes are the read fallback.
+  - Members and a person's page show photos instead of initials.
+  - An unverified phone says what comes next.
+  - Verified by: `test_profile_details.py`, `test_organisation.py`, `profile-details.test.tsx`.
+- **#15: a report's route was "/[long]" with area "other"**, 706843908.
+  - Root cause: the long-string mask counted "/", so a call page's whole path became "[long]".
+  - Now a route is its pattern (e.g. `/analysis/calls/:id`, area Report), and the report carries the screen's name; masking is kept.
+  - Verified by: `test_bug_report_scrub.py`, `scrub.test.ts`.
+- **#11: the microphone can't be turned on (Windows Chrome)**, 20f23ddb1.
+  - Root cause: the edge's shared security headers send `microphone=()` and, being deferred, override the app's `microphone=(self)`.
+  - The Sales X-Ray page handle now sends `microphone=(self)`.
+  - The Android app before 1.0.35 says "Voice notes come in the next app update". A refusal gives the browser's own route.
+  - Verified by: `test_sales_xray_microphone_edge.py`, `voice-note.test.tsx`. **Check on staging after v0.93:** `curl -sI https://salesxray-staging.authorityclosers.com/ | grep -i permissions-policy`.
+- **#5: Ctrl B shown in the menu**, ca94ae5a0.
+  - The You menu's Report a problem row shows Ctrl B (⌘B on a Mac).
+  - A test opens the menu and reports with the shortcut.
+  - Verified by: `bug-report-entry.test.tsx`.
+- **P1: accepting the full report froze that seller's app ~28 s**, 3f7f70274.
+  - Root cause: the worker's provider call kept the seller's person and session locked, and the recording FOR UPDATE, for the whole call. Every request of that person signs in with the person FOR UPDATE, so they all queued, and the call page said "taking longer than expected".
+  - Now, during the call only:
+    - the person and session are not locked, nor are the profile, the configuration's controller, or the budget and minute accounts;
+    - the recording is held shared.
+  - Deleting the recording, withdrawing consent, revoking the lease and erasing media still wait for the call.
+  - **Change in meaning, accepted by the orchestrator, 26 Oct (for the CTO's review):** a sign-out or suspension during a call no longer waits for it. The next step re-admits with full locks and keeps nothing if that fails.
+  - Verified by: `test_inference_call_locks_postgresql.py` (a real held call: the person's sign-in and the call page go through, a delete waits) and the worker suites.
+- **Privacy page: Google for the call audio (owner-approved new version, 26 Oct)**, e32644858.
+  - "AI service providers for call analysis" names Google (Gemini API) for the call audio and transcript, and ElevenLabs only for calls before 21 Oct.
+  - The plan display never prints a sealed notice naming a provider the plan doesn't use.
+  - Root fix (notices built per stage provider) for v0.94 with the pipeline owner.
+- **Pulse bug tasks carry only the screen, the count and the Admin link**, 7e7d8b140.
+- **Shake to report opened by itself on a pick-up**, 7bdda7a40: it now needs a deliberate double shake (4 swings in 1.5 s, 20 m/s²). Verified by: `shake.test.ts`.
+- **Dev #2: the picture left an open side panel out**, ca94ae5a0.
+  - Root cause: the page copy skipped every dialog, and side panels and sheets are dialogs.
+  - Now only the reporter's own sheet is left out, and open layers are drawn over the page in order.
+  - Key-shaped text in the picture reads as a marker.
+  - Verified by: `bug-report-entry.test.tsx` (panel kept, reporter left out, key masked).
+
 ### Still flaky or open
 
 - **Recordings from phones (B, #4).**
@@ -111,6 +174,12 @@ org, and all are still `new`. Grouped by root cause:
   - Analytics could also show logged calls with no recording; not done tonight.
 - **Facebook:** connecting more than one account, a list of every form, and managing forms in one place are not built. Accounts outside the Meta app's testers can't connect until Meta's review passes.
 - **Marking the 8 reports Solved in production:** waiting for the fixes to be live and for the orchestrator's go-ahead.
+- **Ops finding (orchestrator, 26 Oct ~21:15Z): uploads were blocked since the 17 Oct reboot.**
+  - Production's media scanner couldn't scan anything after the 17 Oct 18:01Z reboot: its 8 GiB temp ext4 wasn't remounted, clamd got "Permission denied", and every scanned upload returned 503 media-scanner-unavailable.
+  - Re-run with the owner's approval at ~21:15Z (`infra/media-safety/manage.py start`, release ebe1b0bb); `prove` says ready.
+  - Follow-up after the demo: run the controller at boot (a systemd unit), so a reboot never silently blocks uploads.
+  - Before calling photos done: upload a test photo on staging after v0.93 deploys and confirm it passes the scanner.
+- **Found while fixing #11, not changed:** the Sales X-Ray handles' own `Referrer-Policy "no-referrer"` never reaches browsers. The shared block wins, so browsers get `strict-origin-when-cross-origin`, as before. Changing it is a separate decision.
 
 ## P2 onboarding and notifications (Lead OS session)
 
