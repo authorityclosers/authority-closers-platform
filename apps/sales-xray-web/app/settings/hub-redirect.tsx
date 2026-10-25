@@ -10,6 +10,8 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 
+import { OrganisationSkeleton } from "../organisation/organisation-skeleton";
+
 /** The hub address with the old address's own query and hash kept. */
 export function hubTarget(to: string, search: string, hash = ""): string {
   const target = new URL(to, "https://x.invalid");
@@ -24,9 +26,7 @@ export function HubRedirect({ to }: { to: string }) {
   useEffect(() => {
     router.replace(hubTarget(to, window.location.search, window.location.hash));
   }, [router, to]);
-  return (
-    <p role="status" aria-busy="true">
-      Opening the organisation…
-    </p>
-  );
+  // The organisation's own outline while it opens, never a bare line of
+  // text on an empty page (owner, 26 Oct 2026).
+  return <OrganisationSkeleton />;
 }
