@@ -194,6 +194,8 @@ export function measure() {
   const visible = (el) => {
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) return false;
+    // Parked off the page until focused (a skip link): not seen, not measured.
+    if (r.bottom <= 0 || r.right <= 0) return false;
     const s = getComputedStyle(el);
     return (
       s.visibility !== "hidden" &&
