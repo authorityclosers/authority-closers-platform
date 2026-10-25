@@ -37,6 +37,7 @@ import { createPortal } from "react-dom";
 
 import { displayName } from "../display-name";
 import {
+  displayPhone,
   ago,
   readLead,
   when,
@@ -259,7 +260,7 @@ function sortKey(row: LeadRow, by: Column): string | number {
     case "name":
       return displayName(row.name).toLowerCase();
     case "phone":
-      return row.phone_last4 ?? "";
+      return row.phone ?? row.phone_last4 ?? "";
     case "stage":
       return STAGE_ORDER.indexOf(row.stage);
     case "pipeline":
@@ -567,7 +568,11 @@ export function LeadsTable({
           </span>
         );
       case "phone":
-        return row.phone_last4 ? (
+        // The whole number when the organisation shows full numbers (owner,
+        // 25 Oct 2026); else its last four digits.
+        return row.phone ? (
+          <span className={styles.phone}>{displayPhone(row.phone)}</span>
+        ) : row.phone_last4 ? (
           <span className={styles.phone}>{`•• ${row.phone_last4}`}</span>
         ) : (
           <span className={styles.quiet}>No number</span>

@@ -48,6 +48,13 @@ import { notify } from "../notice-center";
 import { CallsReport } from "./calls-report";
 import { AdSpendPanel } from "./ad-spend";
 import { SlaPanel } from "./sla-panel";
+import {
+  LIMIT_RULE,
+  LimitField,
+  limitDraft,
+  openWords,
+  readLimit,
+} from "./limit-field";
 import { phoneDot } from "./phone-setup-words";
 import styles from "./leads.module.css";
 
@@ -244,7 +251,9 @@ function RulesDialog({
   const startLevel: CallAiLevel | "" = own?.own ? own.level : "";
   const [aiLevel, setAiLevel] = useState<CallAiLevel | "">(startLevel);
   const [available, setAvailable] = useState(rep?.available ?? true);
-  const [cap, setCap] = useState(String(rep?.max_open ?? 50));
+  const [cap, setCap] = useState(() =>
+    limitDraft(rep ? rep.max_open : undefined),
+  );
   const [languages, setLanguages] = useState(rep?.languages.join(", ") ?? "");
   const [areas, setAreas] = useState(rep?.areas.join(", ") ?? "");
   const [interests, setInterests] = useState(rep?.interests.join(", ") ?? "");
@@ -253,9 +262,9 @@ function RulesDialog({
 
   const save = async () => {
     if (!rep) return;
-    const max = Number(cap);
-    if (!Number.isInteger(max) || max < 1 || max > 1000) {
-      setError("Open-lead limit is a whole number from 1 to 1000.");
+    const max = readLimit(cap);
+    if (max === undefined) {
+      setError(LIMIT_RULE);
       return;
     }
     setSaving(true);
@@ -326,13 +335,13 @@ function RulesDialog({
           />
           Takes new leads now
         </label>
-        <Field label="Most open leads at once">
-          <input
-            inputMode="numeric"
-            value={cap}
-            onChange={(event) => setCap(event.target.value)}
-          />
-        </Field>
+        <LimitField
+          id={`limit-${rep?.person_id ?? "seller"}`}
+          label="Most open leads at once"
+          hint={rep?.default_cap ? "Organisation default" : undefined}
+          draft={cap}
+          onChange={setCap}
+        />
         <Field
           label="Languages"
           hint="Comma separated, e.g. Hindi, Marathi, English"
@@ -612,7 +621,9 @@ export function TeamView({
                   {callAi ? <AiCell callAi={callAi} rep={rep} /> : null}
                   <td data-num>
                     {rep.open_leads}
-                    <small>/{rep.max_open}</small>
+                    {rep.max_open === null ? null : (
+                      <small>/{rep.max_open}</small>
+                    )}
                   </td>
                   <td data-num>{rep.due_now}</td>
                   <td data-num>{rep.calls_today}</td>
@@ -670,7 +681,7 @@ export function TeamView({
                 </button>
               </span>
               <span>
-                {`${rep.open_leads}/${rep.max_open} open · ${rep.due_now} due · ${rep.calls_today} ${rep.calls_today === 1 ? "call" : "calls"} today · ${rep.connected_today} connected`}
+                {`${openWords(rep.open_leads, rep.max_open)} open · ${rep.due_now} due · ${rep.calls_today} ${rep.calls_today === 1 ? "call" : "calls"} today · ${rep.connected_today} connected`}
                 {rep.first_call_minutes != null
                   ? ` · first call ${waitWords(rep.first_call_minutes)}`
                   : ""}
@@ -736,6 +747,14 @@ export function TeamView({
             ) : null}
           </div>
         </Panel>
+        <ListsPanel
+          key={`lists-${team.settings.revision}`}
+          team={team}
+          onSaved={(next) => {
+            setTeam(next);
+            onChanged();
+          }}
+        />
         <WorkHoursPanel
           key={`${team.settings.revision}`}
           team={team}
@@ -793,5 +812,90 @@ export function TeamView({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Limits and phone numbers for the whole team (owner, 25 Oct 2026): the
+ * open-lead limit of sellers with no rules of their own, and whether lists
+ * show whole phone numbers.
+ */
+function ListsPanel({
+  team,
+  onSaved,
+}: {
+  team: Team;
+  onSaved: (team: Team) => void;
+}) {
+  const [draft, setDraft] = useState(() =>
+    limitDraft(team.settings.default_max_open),
+  );
+  const [full, setFull] = useState(team.settings.show_full_phones === true);
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    const max = readLimit(draft);
+    if (max === undefined) {
+      setNote(LIMIT_RULE);
+      return;
+    }
+    setBusy(true);
+    setNote(null);
+    try {
+      onSaved(
+        await saveSettings(team.settings.revision, {
+          auto_reassign: team.settings.auto_reassign,
+          reassign_minutes: team.settings.reassign_minutes,
+          default_max_open: max,
+          show_full_phones: full,
+        }),
+      );
+      notify({
+        id: "lead-limits",
+        tone: "success",
+        title: "Limits and phone numbers saved",
+        timeout: 3000,
+      });
+    } catch (reason) {
+      setNote(
+        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Panel title="Limits and phone numbers">
+      <div className={styles.form}>
+        <LimitField
+          id="limit-new-sellers"
+          label="Open-lead limit for new sellers"
+          hint="Sellers without rules of their own use this."
+          draft={draft}
+          onChange={setDraft}
+        />
+        <label className={styles.toggle}>
+          <input
+            type="checkbox"
+            checked={full}
+            onChange={(event) => setFull(event.target.checked)}
+          />
+          Always show full phone numbers
+        </label>
+        <p className={styles.hint}>
+          Off, lists show a number&apos;s last four digits.
+        </p>
+        <div className={styles.row}>
+          <Button variant="primary" disabled={busy} onClick={() => void save()}>
+            {busy ? "Saving…" : "Save"}
+          </Button>
+        </div>
+        {note ? (
+          <p className={styles.hint} role="status">
+            {note}
+          </p>
+        ) : null}
+      </div>
+    </Panel>
   );
 }

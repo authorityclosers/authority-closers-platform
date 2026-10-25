@@ -119,6 +119,22 @@ it("shows each lead on one line, with names capitalised and the columns asked fo
   ).toBe("button");
 });
 
+it("shows the whole number when the organisation shows full numbers", async () => {
+  await act(async () =>
+    root.render(
+      <LeadsTable
+        rows={[row(1, { phone: "+919876543210" }), row(2)]}
+        onOpen={vi.fn()}
+        showOwner={false}
+      />,
+    ),
+  );
+  const [first, second] = host.querySelectorAll("tbody tr");
+  expect(first.textContent).toContain("+91 98765 43210");
+  expect(first.textContent).not.toContain("•• 3210");
+  expect(second.textContent).toContain("•• 3210");
+});
+
 it("leaves out Owner on my own leads and Pipeline with one pipeline", async () => {
   await act(async () =>
     root.render(

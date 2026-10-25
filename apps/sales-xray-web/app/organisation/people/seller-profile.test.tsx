@@ -147,8 +147,11 @@ async function show(canManage = true, isYou = false) {
 
 it("shows a manager the seller's day, their AI level and five tabs at most", async () => {
   await show();
-  expect(host.textContent).toContain("Takes new leads");
-  expect(host.textContent).toContain("AI on calls: Data only");
+  // Quiet chips (owner, 25 Oct 2026): nothing to flag for a seller taking
+  // leads within their limit; the phone app and AI on calls are in Settings.
+  expect(host.textContent).not.toContain("Takes new leads");
+  expect(host.textContent).not.toContain("AI on calls");
+  expect(host.textContent).not.toContain("Over limit");
   expect(host.textContent).toContain("Open leads");
   expect(host.textContent).toContain("Calls and charts");
   const tabs = [...host.querySelectorAll('[role="tablist"] button')].map(
@@ -202,4 +205,47 @@ it("shows a seller their own level and no settings or team numbers", async () =>
   expect(calls.some((call) => call.url.startsWith("/v1/lead-desk/team"))).toBe(
     false,
   );
+});
+
+it("flags a seller over their limit, with Change to their rules", async () => {
+  const before = { ...team.reps[0] };
+  Object.assign(team.reps[0], {
+    available: false,
+    open_leads: 168,
+    over_capacity: 118,
+    default_cap: true,
+  });
+  try {
+    await show();
+    expect(host.textContent).toContain("Not taking leads");
+    expect(host.textContent).toContain("Over limit by 118");
+    const change = [...host.querySelectorAll("button")].find(
+      (item) => item.textContent === "Change",
+    )!;
+    await act(async () => change.click());
+    expect(window.location.search).toBe("?tab=settings");
+    expect(host.textContent).toContain("Organisation default");
+    expect(host.textContent).toContain("AI on calls");
+    expect(host.textContent).toContain("No phone app");
+  } finally {
+    team.reps.splice(0, 1, before);
+  }
+});
+
+it("shows No limit as no limit, never as a number", async () => {
+  const before = { ...team.reps[0] };
+  Object.assign(team.reps[0], { max_open: null });
+  try {
+    await show();
+    expect(host.textContent).toContain("Open leads, no limit");
+    expect(host.textContent).not.toContain("null");
+    expect(host.textContent).not.toContain("Over limit");
+    await act(async () => tab("Settings").click());
+    const none = host.querySelector<HTMLInputElement>(
+      'fieldset input[type="checkbox"]',
+    )!;
+    expect(none.checked).toBe(true);
+  } finally {
+    team.reps.splice(0, 1, before);
+  }
 });
