@@ -99,6 +99,15 @@ export const SCREENS = {
   "reports-seller": { path: "/review-fixture/reports?role=seller" },
   "reports-quiet": { path: "/review-fixture/reports?quiet=1" },
   "reports-loading": { path: "/review-fixture/reports?loading=1" },
+  // Call analysis as it is (owner program, section 8: the rebuild's baseline): the Report,
+  // a won call, coaching, the calls list, an empty list, a picked file, analysing.
+  report: { path: "/review-fixture/report/story" },
+  "report-won": { path: "/review-fixture/report/story?example=won" },
+  "report-coach": { path: "/review-fixture/report/story?example=coach" },
+  "calls-list": { path: "/review-fixture/calls" },
+  "calls-empty": { path: "/review-fixture/calls?empty=1" },
+  "upload-picked": { path: "/review-fixture/upload?step=picked" },
+  "upload-analysing": { path: "/review-fixture/upload?step=analysing" },
   // Notifications in their sheet: groups, kinds, unread, and nothing waiting.
   notifications: {
     path: "/review-fixture/notifications",
