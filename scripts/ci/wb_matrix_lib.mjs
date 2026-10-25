@@ -373,6 +373,31 @@ export function measure() {
         : null;
     })
     .filter(Boolean);
+  // A ring left after a tap or click: the focused control (not a text field,
+  // which shows focus while typing) looks different focused than blurred.
+  result.ring = [];
+  const active = document.activeElement;
+  const typing =
+    active?.isContentEditable ||
+    active?.matches?.(
+      'textarea, input:not([type="button"], [type="submit"], [type="checkbox"], [type="radio"])',
+    );
+  if (
+    active &&
+    active !== document.body &&
+    active !== document.documentElement &&
+    !typing
+  ) {
+    const look = () => {
+      const s = getComputedStyle(active);
+      return `${s.outlineStyle} ${s.outlineWidth} ${s.outlineColor} | ${s.boxShadow}`;
+    };
+    const focused = look();
+    active.blur();
+    const blurred = look();
+    active.focus({ preventScroll: true });
+    if (focused !== blurred) result.ring.push(name(active));
+  }
   return result;
 }
 
@@ -406,6 +431,7 @@ export const FIELDS = [
   "clipped",
   "tiny",
   "sideways",
+  "ring",
   "errors",
 ];
 
