@@ -14,7 +14,11 @@ import {
   bugFilters,
   bugQuery,
   bugsApiPath,
+  ISSUE_LABEL,
+  ISSUE_TONE,
+  normalizeIssues,
   normalizePage,
+  type BugIssue,
   type BugSummary,
 } from "@/app/bugs/bugs-data";
 import styles from "@/app/bugs/bugs.module.css";
@@ -57,14 +61,91 @@ function Marks({ bug }: { bug: BugSummary }) {
   );
 }
 
+/** Issues first (v0.93): what is wrong, how often, on which devices, with its reports. */
+function Issues({
+  issues,
+  marked,
+}: {
+  issues: BugIssue[];
+  marked: number | null;
+}) {
+  if (!issues.length) return null;
+  return (
+    <Panel
+      title="Issues"
+      sub="Reports that look like one problem, newest activity first; agents set their status with ac-bugs"
+    >
+      <Table label="Bug issues">
+        <thead>
+          <tr>
+            <th scope="col">Issue</th>
+            <th scope="col">State</th>
+            <th scope="col">Screen</th>
+            <th scope="col">Reports</th>
+            <th scope="col">Devices</th>
+            <th scope="col">Last report</th>
+          </tr>
+        </thead>
+        <tbody>
+          {issues.map((issue) => (
+            <tr
+              key={issue.id}
+              id={`issue-${issue.number}`}
+              aria-current={issue.number === marked ? "true" : undefined}
+            >
+              <th scope="row">Issue {issue.number}</th>
+              <td>
+                <span className={styles.marks}>
+                  <Badge tone={ISSUE_TONE[issue.status]}>
+                    {ISSUE_LABEL[issue.status]}
+                  </Badge>
+                  {issue.cameBack ? (
+                    <Badge tone="bad">Came back after the fix</Badge>
+                  ) : null}
+                  {issue.release ? <Badge>{issue.release}</Badge> : null}
+                </span>
+              </td>
+              <td>
+                <code>{issue.screen}</code>
+              </td>
+              <td>
+                {issue.count}:{" "}
+                {issue.reports.map((report, index) => (
+                  <span key={report.id}>
+                    {index ? ", " : ""}
+                    <Link href={`/bugs/${report.id}`}>Bug {report.number}</Link>
+                  </span>
+                ))}
+              </td>
+              <td>
+                {Object.entries(issue.devices)
+                  .map(([name, n]) => `${name} (${n})`)
+                  .join(", ") || "Not known"}
+              </td>
+              <td>{issue.lastSeen ? when(issue.lastSeen) : "—"}</td>
+            </tr>
+          ))}
+        </tbody>
+      </Table>
+    </Panel>
+  );
+}
+
 /** Bugs and problems testers report from Sales X-Ray (owner, 23 Oct 2026). */
 export default async function BugsPage({
   searchParams,
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const filters = bugFilters(await searchParams);
-  const result = await adminRead(bugsApiPath(filters), normalizePage);
+  const params = await searchParams;
+  const filters = bugFilters(params);
+  const [result, issues] = await Promise.all([
+    adminRead(bugsApiPath(filters), normalizePage),
+    adminRead("/v1/admin/bugs/issues?which=all", normalizeIssues),
+  ]);
+  const marked = Number(
+    Array.isArray(params.issue) ? params.issue[0] : params.issue,
+  );
   const data = result.ok ? result.data : null;
   const open = data
     ? data.counts.new + data.counts.triaged + data.counts.in_progress
@@ -97,6 +178,12 @@ export default async function BugsPage({
           { key: "all", label: "All" },
         ]}
       />
+      {issues.ok ? (
+        <Issues
+          issues={issues.data}
+          marked={Number.isInteger(marked) ? marked : null}
+        />
+      ) : null}
       <BugFilters filters={filters} organisations={data?.organisations ?? []} />
       {!result.ok ? (
         <Unavailable title="Bug reports" reason={result.error} />

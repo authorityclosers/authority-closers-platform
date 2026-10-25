@@ -11,6 +11,11 @@
 - GET  /v1/admin/bugs/{id}/screenshot      its picture (same origin, private)
 - GET  /v1/admin/bugs/{id}/voice           its voice note (same origin, private)
 - POST /v1/admin/bugs/{id}/events          change status, severity or area, or add a note
+- POST /v1/admin/bugs/mcp                  the same work as MCP tools (admin_tools.py)
+
+A report is its id or its number (9, #9) on the read and change routes, and a staff key
+holding bugs:read and bugs:write reaches them (v0.93): ac-bugs and agents work without the
+browser. A list for a key masks the words; the change is audited naming the key.
 
 Everything the device sends is scrubbed again here (scrub.py). Admin routes follow the
 other Admin areas: Admin host, the AC operations workspace, a Sales X-Ray control account;
@@ -21,16 +26,19 @@ from __future__ import annotations
 
 import base64
 import binascii
+import json
 import re
 from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
-from ac_platform.audit.service import AuditRepository
+from ac_platform.bug_reports import admin_tools
+from ac_platform.bug_reports.issues import BugIssueNotFound, BugIssueRefused, IssueStore
 from ac_platform.bug_reports.models import AREAS, SEVERITIES, STATUSES
 from ac_platform.bug_reports.screenshots import (
     ScreenshotError,
@@ -93,6 +101,18 @@ class NewBugReport(BaseModel):
     client_errors: list[Any] = Field(default_factory=list, max_length=50)
     screenshot: Screenshot | None = None
     voice: Voice | None = None
+
+
+class IssueChange(BaseModel):
+    """An issue's new status, with an optional note, fixing commit and release."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: Literal["new", "fixing", "fixed_next", "solved"]
+    note: str | None = Field(default=None, max_length=2000)
+    commit: str | None = Field(default=None, max_length=40)
+    release: str | None = Field(default=None, max_length=32)
+    app_update: bool = False
 
 
 class BugChange(BaseModel):
@@ -216,7 +236,7 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
                     "seconds": note.seconds,
                 }
                 spoken = "kept"
-        await store.create(
+        report = await store.create(
             NewReport(
                 person_id=actor.person_id,
                 tenant_id=actor.tenant_id,
@@ -234,6 +254,8 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
             screenshot=picture,
             voice=voice,
         )
+        # One problem, one issue (v0.93): the report joins the issue it looks like.
+        await IssueStore(auth.database).assign(report, now=now)
         return {"bug_id": str(bug_id), "screenshot": kept, "voice": spoken}
 
     @reports.get("/mine")
@@ -302,24 +324,112 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
             raise HTTPException(422, "Choose an area from the list.")
         if not 0 <= offset <= 100_000:
             raise HTTPException(422, "That page is out of range.")
-        return await BugReportStore(auth.database).page(
+        page = await BugReportStore(auth.database).page(
             status=status,
             severity=severity,
             area=area,
             organisation=organisation,
             offset=offset,
         )
+        # A staff key (ac-bugs, agents) gets the words masked, and no reporter email.
+        if getattr(request.state, "staff_key_row", None) is not None:
+            page["items"] = [admin_tools.masked(item) for item in page["items"]]
+        return page
 
-    @admin.get("/{bug_id}")
-    async def one(
-        bug_id: UUID,
+    # Issues (v0.93): reports that look like one problem, with their reports.
+    @admin.get("/issues")
+    async def issue_list(
+        request: Request,
+        response: Response,
+        which: str = "open",
+        since: datetime | None = None,
+        auth: AuthenticatedTransaction = read_dependency,
+    ) -> dict[str, Any]:
+        await admit(request, response, auth, write=False, query=frozenset({"which", "since"}))
+        if which not in ("new", "open", "solved", "all"):
+            raise HTTPException(422, "Choose new, open, solved or all.")
+        return {"issues": await IssueStore(auth.database).issues(which=which, since=since)}
+
+    @admin.get("/issues/{ref}")
+    async def issue_one(
+        ref: str,
         request: Request,
         response: Response,
         auth: AuthenticatedTransaction = read_dependency,
     ) -> dict[str, Any]:
         await admit(request, response, auth, write=False)
         try:
-            return await BugReportStore(auth.database).detail(bug_id)
+            return await IssueStore(auth.database).detail(ref)
+        except BugIssueNotFound:
+            raise HTTPException(404, "That issue is not here.") from None
+
+    @admin.post("/issues/{ref}/status")
+    async def issue_status(
+        ref: str,
+        change: IssueChange,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        actor = await admit(request, response, auth, write=True)
+        # With a staff key (ac-bugs), the issue's history names the key.
+        key = getattr(request.state, "staff_key_row", None)
+        try:
+            return await IssueStore(auth.database).set_status(
+                ref,
+                status=change.status,
+                now=datetime.now(UTC),
+                actor="staff",
+                actor_person_id=actor.person_id,
+                actor_name=f"key {key.prefix}" if key is not None else None,
+                note=change.note,
+                commit=change.commit,
+                release=change.release,
+                app_update=change.app_update,
+            )
+        except BugIssueNotFound:
+            raise HTTPException(404, "That issue is not here.") from None
+        except BugIssueRefused as error:
+            raise HTTPException(422, str(error)) from None
+
+    # The same work as MCP tools, for staff and staff keys only (admin_tools.py).
+    @admin.get("/mcp")
+    async def mcp_no_stream() -> Response:
+        return Response(status_code=405, headers={"Allow": "POST", **PRIVATE})
+
+    @admin.post("/mcp")
+    async def mcp(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> Response:
+        actor = await admit(request, response, auth, write=True)
+        raw = await request.body()
+        if len(raw) > admin_tools.MAX_BODY:
+            raise HTTPException(413, "One message at a time.")
+        try:
+            message = json.loads(raw)
+        except ValueError:
+            return JSONResponse(
+                admin_tools.failure(None, -32700, "Parse error"), status_code=400, headers=PRIVATE
+            )
+        key = getattr(request.state, "staff_key_row", None)
+        answer = await admin_tools.answer(auth.database, actor, key, message)
+        if answer is None:
+            return Response(status_code=202, headers=PRIVATE)
+        return JSONResponse(answer, headers=PRIVATE)
+
+    @admin.get("/{bug_id}")
+    async def one(
+        bug_id: str,
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = read_dependency,
+    ) -> dict[str, Any]:
+        await admit(request, response, auth, write=False)
+        try:
+            found = await admin_tools.report_id(auth.database, bug_id)
+            return await BugReportStore(auth.database).detail(found)
         except BugReportNotFound:
             raise HTTPException(404, "That report is not here.") from None
 
@@ -371,7 +481,7 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
 
     @admin.post("/{bug_id}/events")
     async def change(
-        bug_id: UUID,
+        bug_id: str,
         command: BugChange,
         request: Request,
         response: Response,
@@ -380,13 +490,12 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
         actor = await admit(request, response, auth, write=True)
         if command.area is not None and command.area not in AREAS:
             raise HTTPException(422, "Choose an area from the list.")
-        store = BugReportStore(auth.database)
         try:
-            before = await store.state(bug_id)
-            added = await store.change(
-                bug_id,
-                actor_person_id=actor.person_id,
-                now=datetime.now(UTC),
+            return await admin_tools.apply_change(
+                auth.database,
+                actor,
+                getattr(request.state, "staff_key_row", None),
+                await admin_tools.report_id(auth.database, bug_id),
                 status=command.status,
                 severity=command.severity,
                 area=command.area,
@@ -396,20 +505,5 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
             raise HTTPException(404, "That report is not here.") from None
         except BugReportRefused as error:
             raise HTTPException(422, str(error)) from None
-        if added:
-            await AuditRepository(auth.database).append_for_actor(
-                actor,
-                action="bug_report.changed",
-                resource_type="bug_report",
-                resource_id=str(bug_id),
-                payload={
-                    "changed": added,
-                    "status": [before["status"], command.status or before["status"]],
-                    "severity": [before["severity"], command.severity or before["severity"]],
-                    "area": [before["area"], command.area or before["area"]],
-                    "note": bool(command.note),
-                },
-            )
-        return await store.detail(bug_id)
 
     app.include_router(admin)

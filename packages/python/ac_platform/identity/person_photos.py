@@ -11,10 +11,15 @@ share an active organisation.
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import io
+import os
+import warnings
 from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime
+from pathlib import Path
 from uuid import UUID
 
 from sqlalchemy import exists, select
@@ -29,6 +34,9 @@ from ac_platform.tenancy.models import Membership, Organisation
 
 MAX_BYTES = 2 * 1024 * 1024
 TYPES = ("image/jpeg", "image/png", "image/webp")
+# v0.93: resized on the server to this square, as WebP, and kept as a file.
+SIZE = 256
+FOLDER = "person-photos"
 
 
 class PhotoRejected(ValueError):
@@ -51,6 +59,90 @@ def _kind(data: bytes) -> str | None:
     if len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return "image/webp"
     return None
+
+
+class PhotoFiles:
+    """The private folder of profile photos under the environment's Sales X-Ray store (where
+    bug-report pictures live). Names are built here, never taken from a request."""
+
+    def __init__(self, storage_root: str | os.PathLike[str] | None) -> None:
+        root = Path(storage_root) if storage_root else None
+        self.folder = (
+            root / FOLDER if root is not None and root.is_absolute() and root.is_dir() else None
+        )
+
+    @classmethod
+    def default(cls) -> PhotoFiles:
+        try:
+            from ac_platform.application.settings import get_settings
+
+            return cls(get_settings().sales_xray_storage_root)
+        except Exception:  # noqa: BLE001 - no settings (tests, tools): the bytes column
+            return cls(None)
+
+    @property
+    def available(self) -> bool:
+        return self.folder is not None
+
+    def key_for(self, person_id: UUID, revision: int) -> str:
+        return f"{FOLDER}/{person_id.hex}.{revision}.webp"
+
+    def _path(self, key: str) -> Path:
+        name = key.removeprefix(FOLDER + "/")
+        if self.folder is None or name == key or "/" in name or name.startswith("."):
+            raise PhotoRejected("That photo is not kept here.")
+        return self.folder / name
+
+    def write(self, key: str, data: bytes) -> str:
+        path = self._path(key)
+        assert self.folder is not None
+        self.folder.mkdir(mode=0o700, exist_ok=True)
+        temporary = self.folder / f".upload-{path.name}-{os.getpid()}.tmp"
+        try:
+            with open(temporary, "wb") as output:
+                output.write(data)
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temporary, path)
+        finally:
+            temporary.unlink(missing_ok=True)
+        return key
+
+    def read(self, key: str, *, sha256: str) -> bytes | None:
+        try:
+            data = self._path(key).read_bytes()
+        except (OSError, PhotoRejected):
+            return None
+        return data if hashlib.sha256(data).hexdigest() == sha256 else None
+
+    def remove(self, key: str | None) -> None:
+        if not key:
+            return
+        with contextlib.suppress(OSError, PhotoRejected):
+            self._path(key).unlink(missing_ok=True)
+
+
+def resized(data: bytes) -> bytes:
+    """The middle square at 256 px as WebP: new pixels, no metadata, a bounded size."""
+    from PIL import Image, ImageOps
+
+    try:
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            with Image.open(io.BytesIO(data), formats=["JPEG", "PNG", "WEBP"]) as source:
+                image = ImageOps.exif_transpose(source)
+                image = image.convert("RGBA" if "A" in image.getbands() else "RGB")
+                side = min(image.size)
+                left, top = (image.width - side) // 2, (image.height - side) // 2
+                image = image.crop((left, top, left + side, top + side))
+                image = image.resize((SIZE, SIZE), Image.Resampling.LANCZOS)
+                output = io.BytesIO()
+                image.save(output, format="WEBP", quality=85, method=4)
+                return output.getvalue()
+    except (OSError, ValueError, Image.DecompressionBombWarning, Image.DecompressionBombError):
+        raise PhotoRejected(
+            "This photo could not be read. Choose a JPEG, PNG or WebP photo."
+        ) from None
 
 
 def url_for(person_id: UUID, sha256: str) -> str:
@@ -81,14 +173,25 @@ async def photo_urls(
     return urls
 
 
-async def read_photo(session: AsyncSession, person_id: UUID) -> Photo | None:
+async def read_photo(
+    session: AsyncSession, person_id: UUID, files: PhotoFiles | None = None
+) -> Photo | None:
     own = await session.scalar(
         select(PersonPhoto)
         .where(PersonPhoto.person_id == person_id)
         .options(undefer(PersonPhoto.photo))
     )
     if own is not None:
-        return Photo(bytes(own.photo), own.content_type, own.sha256)
+        # The file first (v0.93), else the bytes column (photos saved before).
+        data = (
+            (files or PhotoFiles.default()).read(own.storage_key, sha256=own.sha256)
+            if own.storage_key
+            else None
+        )
+        if data is None and own.photo is not None:
+            data = bytes(own.photo)
+        if data is not None:
+            return Photo(data, own.content_type, own.sha256)
     google = await read_google_profile_photo(session, person_id)
     if google is None:
         return None
@@ -125,26 +228,39 @@ async def save_upload(
     tenant_id: UUID,
     content_type: str,
     data: bytes,
+    files: PhotoFiles | None = None,
 ) -> str:
-    """Keep the person's uploaded photo (cropped square by the app); its URL comes back."""
+    """Keep the person's uploaded photo, resized here; its URL comes back."""
     declared = content_type.split(";")[0].strip().lower()
     if not data or len(data) > MAX_BYTES:
         raise PhotoRejected("Choose a photo up to 2 MB.")
     kind = _kind(data)
     if kind is None or declared not in TYPES or kind != declared:
         raise PhotoRejected("Choose a JPEG, PNG or WebP photo.")
-    sha = hashlib.sha256(data).hexdigest()
+    picture = resized(data)
+    sha = hashlib.sha256(picture).hexdigest()
     now = datetime.now(UTC)
+    store = files or PhotoFiles.default()
     row = await session.scalar(
         select(PersonPhoto).where(PersonPhoto.person_id == person_id).with_for_update()
     )
     if row is None:
         row = PersonPhoto(person_id=person_id, revision=0)
         session.add(row)
-    row.source, row.content_type, row.photo = "upload", kind, data
-    row.byte_size, row.sha256, row.updated_at = len(data), sha, now
+    earlier = row.storage_key
     row.revision = (row.revision or 0) + 1
+    if store.available:
+        row.storage_key = store.write(store.key_for(person_id, row.revision), picture)
+        row.photo = None
+    else:
+        row.storage_key, row.photo = None, picture
+    row.source, row.content_type = "upload", "image/webp"
+    row.byte_size, row.sha256, row.updated_at = len(picture), sha, now
     await session.flush()
+    if earlier and earlier != row.storage_key:
+        store.remove(earlier)
+    kind = "image/webp"
+    data = picture
     await AuditRepository(session).append(
         tenant_id=tenant_id,
         actor_person_id=person_id,
@@ -168,8 +284,10 @@ async def remove_upload(
     )
     if row is None:
         return False
+    key = row.storage_key
     await session.delete(row)
     await session.flush()
+    PhotoFiles.default().remove(key)
     await AuditRepository(session).append(
         tenant_id=tenant_id,
         actor_person_id=person_id,
@@ -189,14 +307,17 @@ async def erase_photo(session: AsyncSession, person_id: UUID) -> bool:
     row = await session.scalar(select(PersonPhoto).where(PersonPhoto.person_id == person_id))
     if row is None:
         return False
+    key = row.storage_key
     await session.delete(row)
     await session.flush()
+    PhotoFiles.default().remove(key)
     return True
 
 
 __all__ = [
     "MAX_BYTES",
     "Photo",
+    "PhotoFiles",
     "PhotoRejected",
     "erase_photo",
     "may_see",

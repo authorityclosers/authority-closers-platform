@@ -140,6 +140,9 @@ class PersonPhoto(Base):
         CheckConstraint("byte_size BETWEEN 1 AND 2097152", name="person_photo_size"),
         CheckConstraint("length(sha256) = 64", name="person_photo_sha256"),
         CheckConstraint("revision >= 1", name="person_photo_revision"),
+        # v0.93 (migration 0138): the photo is a file under the Sales X-Ray store; the bytes
+        # column stays for photos saved before, until a later migration clears it.
+        CheckConstraint("photo IS NOT NULL OR storage_key IS NOT NULL", name="person_photo_kept"),
     )
 
     person_id: Mapped[UUID] = mapped_column(
@@ -153,7 +156,8 @@ class PersonPhoto(Base):
     )
     source: Mapped[str] = mapped_column(String(12), nullable=False)
     content_type: Mapped[str] = mapped_column(String(16), nullable=False)
-    photo: Mapped[bytes] = mapped_column(LargeBinary, nullable=False, deferred=True)
+    photo: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, deferred=True)
+    storage_key: Mapped[str | None] = mapped_column(String(256), nullable=True)
     byte_size: Mapped[int] = mapped_column(Integer, nullable=False)
     sha256: Mapped[str] = mapped_column(String(64), nullable=False)
     revision: Mapped[int] = mapped_column(Integer, nullable=False)

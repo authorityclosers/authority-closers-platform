@@ -98,7 +98,8 @@ class Notification(Base):
     __tablename__ = "notifications"
     __table_args__ = (
         CheckConstraint(
-            "kind IN ('report_ready', 'analysis_paused', 'invite_received')", name="kind"
+            "kind IN ('report_ready', 'analysis_paused', 'invite_received', 'bug_solved')",
+            name="kind",
         ),
         CheckConstraint(
             r"href LIKE '/%' AND href NOT LIKE '//%' AND href = replace(href, '\', '')",

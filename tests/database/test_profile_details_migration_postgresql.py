@@ -13,6 +13,8 @@ from typing import Any
 from uuid import uuid4
 
 import pytest
+import sqlalchemy as sa
+from alembic import op
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
@@ -42,6 +44,15 @@ def migration() -> Any:
     return module
 
 
+def _photo_files_at_head() -> None:
+    """0138's photo step (storage_key, optional bytes), re-applied so the schema meets head."""
+    op.add_column("person_photos", sa.Column("storage_key", sa.String(256), nullable=True))
+    op.alter_column("person_photos", "photo", existing_type=sa.LargeBinary(), nullable=True)
+    op.create_check_constraint(
+        "person_photo_kept", "person_photos", "photo IS NOT NULL OR storage_key IS NOT NULL"
+    )
+
+
 def test_migration_chain_and_schema_gate_rules() -> None:
     from scripts.ci.migration_schema_gate import check_operations
     from scripts.ops.migration_safety import classify_source
@@ -63,6 +74,8 @@ def test_unused_migration_downgrades_reupgrades_and_matches_the_models(
             tables = set(inspect(connection).get_table_names())
             assert not {"person_photos", "person_profile_details"} & tables
             module.upgrade()
+            # At head, 0138 also changed person_photos (photo files): re-apply its step.
+            _photo_files_at_head()
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []
 
 

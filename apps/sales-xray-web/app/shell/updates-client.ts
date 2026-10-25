@@ -12,7 +12,12 @@ export type UpdateNote = Readonly<{
 }>;
 export type UpdateNotification = Readonly<{
   id: string;
-  kind: "updates" | "report_ready" | "analysis_paused" | "invite_received";
+  kind:
+    | "updates"
+    | "report_ready"
+    | "analysis_paused"
+    | "invite_received"
+    | "bug_solved";
   title: string;
   href: string | null;
   urgent: boolean;
@@ -70,9 +75,18 @@ function note(value: unknown): UpdateNote {
     throw new Error("invalid_updates_response");
   return v as UpdateNote;
 }
-function notification(value: unknown): UpdateNotification {
+// The kinds this app shows; a newer server's kind is left out, not an error, so one new
+// kind never empties the whole bell (bug_solved, v0.93).
+const KINDS = [
+  "report_ready",
+  "analysis_paused",
+  "invite_received",
+  "bug_solved",
+];
+function notification(value: unknown): UpdateNotification | null {
   const v = record(value);
   const release = v.kind === "updates";
+  if (!release && !KINDS.includes(String(v.kind))) return null;
   if (
     !text(v.id) ||
     !text(v.title) ||
@@ -81,11 +95,7 @@ function notification(value: unknown): UpdateNotification {
     typeof v.urgent !== "boolean" ||
     (release
       ? !count(v.count) || v.count < 1 || v.href !== null || v.urgent !== false
-      : !["report_ready", "analysis_paused", "invite_received"].includes(
-          String(v.kind),
-        ) ||
-        typeof v.body !== "string" ||
-        typeof v.href !== "string")
+      : typeof v.body !== "string" || typeof v.href !== "string")
   )
     throw new Error("invalid_notifications_response");
   // A bad destination must not hide an otherwise valid notification.
@@ -105,7 +115,10 @@ export function parseNotifications(value: unknown) {
   if (!Array.isArray(v.notifications) || !count(v.unread_count))
     throw new Error("invalid_notifications_response");
   return {
-    notifications: v.notifications.map(notification),
+    notifications: v.notifications.flatMap((item: unknown) => {
+      const shown = notification(item);
+      return shown ? [shown] : [];
+    }),
     unread_count: v.unread_count,
   };
 }

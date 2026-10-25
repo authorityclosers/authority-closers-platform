@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+"""ac-bugs-release: when a release is live on production, the bug issues it fixed become
+Solved and their reporters are told (owner, 25 Oct 2026, v0.93; orchestrator: a timer that
+reads ac-ship's log, not a change to ac-ship).
+
+Every 5 minutes (ac-bugs-release.timer) it reads /var/log/ac-ship.log. For each
+"vX is live on production" line it has not handled, it takes the hold line before it,
+"hold <sha> (workbench <sha> over main <sha>)", and runs
+`ac-bugs released vX --source <that workbench sha>`: every issue fixed in the next update whose
+commit is in that workbench commit becomes Solved, with the release in its note. The last
+handled releases are kept in /var/lib/ac-bugs-release/state.json, so a rerun does nothing.
+
+  ac-bugs-release [--dry-run]
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+SHIP_LOG = Path(os.environ.get("AC_BUGS_RELEASE_LOG", "/var/log/ac-ship.log"))
+STATE = Path(os.environ.get("AC_BUGS_RELEASE_STATE", "/var/lib/ac-bugs-release/state.json"))
+AC_BUGS = os.environ.get("AC_BUGS_RELEASE_AC_BUGS", "/usr/local/bin/ac-bugs")
+LIVE = re.compile(r"^\S+ (v\d+\.\d+\.\d+) is live on production\b")
+HOLD = re.compile(
+    r"^\S+ hold [0-9a-f]{7,40} \(workbench ([0-9a-f]{7,40}) over main [0-9a-f]{7,40}\)"
+)
+
+
+def releases(lines: list[str]) -> list[tuple[str, str]]:
+    """(version, workbench sha) for each live release, its hold line the one before it."""
+    found: list[tuple[str, str]] = []
+    hold: str | None = None
+    for line in lines:
+        held = HOLD.match(line)
+        if held:
+            hold = held.group(1)
+            continue
+        live = LIVE.match(line)
+        if live and hold and all(version != live.group(1) for version, _ in found):
+            found.append((live.group(1), hold))
+    return found
+
+
+def main(argv: list[str]) -> int:
+    dry = "--dry-run" in argv
+    try:
+        state = json.loads(STATE.read_text())
+    except (OSError, json.JSONDecodeError):
+        state = {}
+    done: list[str] = state.get("done", [])
+    try:
+        lines = SHIP_LOG.read_text(encoding="utf-8", errors="replace").splitlines()
+    except OSError:
+        return 0
+    found = releases(lines)
+    if not state:
+        # First run: only releases from now on (the past ones carried no issues).
+        done = [version for version, _ in found]
+        found = []
+    for version, source in found:
+        if version in done:
+            continue
+        command = [AC_BUGS, "--json", "released", version, "--source", source]
+        if dry:
+            command.append("--dry-run")
+        result = subprocess.run(  # noqa: S603 - fixed argv
+            command, capture_output=True, text=True, timeout=600, check=False
+        )
+        print(
+            f"{version} (workbench {source}): exit {result.returncode}"
+            f" {result.stdout.strip()[-300:]}"
+        )
+        if result.returncode != 0 and "has no bug issues yet" not in result.stderr:
+            return 1
+        if not dry:
+            done.append(version)
+    if not dry:
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(json.dumps({"done": done[-50:]}, indent=1))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

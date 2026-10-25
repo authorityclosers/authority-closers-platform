@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""ac-bug-alerts: every new bug issue, and every new report on one, keeps one AC Pulse task
+under HQ (owner, 25 Oct 2026: bug alerts reach the team by themselves; v0.93).
+
+Every minute (ac-bug-alerts@<env>.timer) it asks the environment, through ac-bugs, for the
+issues with reports made since its last run. Each new issue gets a task with the marker
+bug:<issue id> under "Revenue: AC features in AC Pulse HQ" (ensure, then save the parent);
+a known one has its title and notes updated with the new count. A task holds the screen, the
+count, devices and the Admin link only: never a report's words, a name or a number.
+
+  ac-bug-alerts production | staging | development-live
+  ac-bug-alerts <env> --dry-run      print what it would send, change nothing
+
+State: /var/lib/ac-bug-alerts/<env>.json (the last run and each issue's count and task).
+Before the environment carries bug issues (v0.93), the run does nothing.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+AC_BUGS = os.environ.get("AC_BUG_ALERTS_AC_BUGS", "/usr/local/bin/ac-bugs")
+PULSE = os.environ.get("AC_BUG_ALERTS_PULSE", "/usr/local/bin/ac-pulse-tasks")
+STATE = Path(os.environ.get("AC_BUG_ALERTS_STATE", "/var/lib/ac-bug-alerts"))
+PARENT = "edbfc873-6012-4001-923e-ba05fb231d00"  # Revenue: AC features in AC Pulse HQ
+ADMIN = {
+    "production": "https://admin.authorityclosers.com",
+    "staging": "https://admin-staging.authorityclosers.com",
+    "development-live": "https://admin-dev.authorityclosers.com",
+}
+LABEL = {"production": "", "staging": "[staging] ", "development-live": "[dev] "}
+WORDS = {
+    "new": "New",
+    "fixing": "Fixing",
+    "fixed_next": "Fixed in the next update",
+    "solved": "Solved",
+}
+
+
+def issues_since(env: str, since: str) -> list[dict] | None:
+    done = subprocess.run(  # noqa: S603 - fixed argv
+        [AC_BUGS, "--env", env, "--json", "list", "--all", "--since", since],
+        capture_output=True,
+        text=True,
+        timeout=180,
+        env={**os.environ, "AC_BUGS_LOG": "/dev/null"},
+        check=False,
+    )
+    if "has no bug issues yet" in done.stderr + done.stdout:
+        return None
+    if done.returncode != 0:
+        raise RuntimeError(f"ac-bugs refused (exit {done.returncode})")
+    return json.loads(done.stdout.strip().splitlines()[-1])["issues"]
+
+
+def pulse(op: dict, *, dry: bool) -> dict:
+    request = {"actor": "ac-bug-alerts", "dry": dry, "ops": [op]}
+    done = subprocess.run(  # noqa: S603 - fixed argv
+        [PULSE, "--batch", "-"],
+        input=json.dumps(request, ensure_ascii=False),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    if done.returncode != 0:
+        raise RuntimeError(f"ac-pulse-tasks refused (exit {done.returncode})")
+    answer = json.loads(done.stdout)
+    return answer.get("results", [{}])[0].get("r", answer)
+
+
+def task_text(env: str, issue: dict) -> tuple[str, str]:
+    count = issue["count"]
+    back = " · came back after the fix" if issue.get("came_back") else ""
+    title = (
+        f"{LABEL[env]}Bug {issue['number']}: {issue['screen']} · {count} report"
+        f"{'' if count == 1 else 's'}{back}"
+    )
+    devices = ", ".join(f"{name} ({n})" for name, n in issue.get("devices", {}).items())
+    android = ", ".join(f"{name} ({n})" for name, n in issue.get("android", {}).items())
+    notes = "\n".join(
+        [
+            f"Screen: {issue['screen']} ({issue.get('area', 'other')})",
+            f"Status: {WORDS.get(issue['status'], issue['status'])}",
+            f"Reports: {count}, first {issue.get('first_seen', '')[:16]}Z,"
+            f" last {issue.get('last_seen', '')[:16]}Z, in {issue.get('orgs', 0)} organisation(s)",
+            f"Devices: {devices or 'not known'}",
+            f"Android: {android or 'not known'}",
+            f"Admin: {ADMIN[env]}/bugs?issue={issue['number']}",
+            "Work it with: sudo ac-bugs show / set (no report text here by design).",
+            f"Marker: bug:{issue['id']}",
+        ]
+    )
+    return title, notes
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] not in ADMIN:
+        print(__doc__)
+        return 2
+    env, dry = argv[0], "--dry-run" in argv[1:]
+    state_file = STATE / f"{env}.json"
+    try:
+        state = json.loads(state_file.read_text())
+    except (OSError, json.JSONDecodeError):
+        state = {}
+    now = datetime.now(UTC)
+    since = state.get("since") or (now - timedelta(days=30)).isoformat()
+    issues = issues_since(env, since)
+    if issues is None:
+        return 0
+    counts: dict[str, int] = state.get("counts", {})
+    tasks: dict[str, str] = state.get("tasks", {})
+    for issue in issues:
+        known = counts.get(issue["id"])
+        if known is not None and issue["count"] <= known:
+            continue
+        title, notes = task_text(env, issue)
+        if dry:
+            print(json.dumps({"marker": f"bug:{issue['id']}", "title": title}, ensure_ascii=False))
+            continue
+        found = pulse(
+            {
+                "op": "ensure",
+                "marker": f"bug:{issue['id']}",
+                "fields": {"title": title, "notes": notes},
+            },
+            dry=False,
+        )
+        task = found.get("id")
+        if task:
+            fields = {"title": title, "notes": notes}
+            if found.get("created") or not found.get("parentId"):
+                fields["parentId"] = PARENT
+            pulse({"op": "save", "id": task, "fields": fields}, dry=False)
+            tasks[issue["id"]] = task
+        counts[issue["id"]] = issue["count"]
+    if not dry:
+        STATE.mkdir(parents=True, exist_ok=True)
+        # Overlap the next window by two minutes: a report made during this run is not missed.
+        state = {
+            "since": (now - timedelta(minutes=2)).isoformat(),
+            "counts": counts,
+            "tasks": tasks,
+        }
+        state_file.write_text(json.dumps(state, indent=1))
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except RuntimeError as error:
+        print(f"ac-bug-alerts: {error}", file=sys.stderr)
+        raise SystemExit(1) from None

@@ -154,6 +154,12 @@
   --kind-soft: var(--lx-info-soft);
 }
 
+/* "Fixed: <your report>" (v0.93). */
+.row[data-tone="solved"] {
+  --kind: var(--lx-success, var(--sx-good));
+  --kind-soft: var(--lx-success-soft, var(--sx-fill-soft));
+}
+
 .row[data-tone="news"] {
   --kind: var(--lx-missed);
   --kind-soft: var(--lx-missed-soft);

@@ -1,0 +1,10 @@
+[Unit]
+Description=Every minute: Sales Xray bug issues to AC Pulse tasks (%i)
+
+[Timer]
+OnBootSec=3min
+OnCalendar=minutely
+AccuracySec=5s
+
+[Install]
+WantedBy=timers.target

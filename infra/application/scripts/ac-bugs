@@ -1,0 +1,395 @@
+#!/usr/bin/env python3
+"""ac-bugs: Sales X-Ray bug issues for people and agents on ac (owner, 25 Oct 2026: reports are
+"combined, analysed and clubbed together", fixed the same day or in the next update, marked
+fixed "via bugs api cli", and the reporter sees it in the app; v0.93).
+
+Two ways in, the same answers:
+- With AC_BUGS_KEY in the environment (a staff key holding only bugs:read and bugs:write, kept
+  in Infisical production and injected at run time, e.g. `infisical run --env=prod --
+  ac-bugs ...`), it calls Admin's API; the key is never printed or logged, and each change is
+  in the issue's history under the key's name.
+- Without it (root on ac, with sudo), it runs the application's own module
+  (ac_platform.bug_reports.issues_cli) inside the environment, as ac-bug-board does, and the
+  change is in the history under --as (default: the sudo user).
+Each call adds one line to /var/log/ac-bugs.log: time, subcommand, issue, result; never a
+report's words, a name or a phone number.
+
+  sudo ac-bugs list [--new | --open | --solved | --all] [--since ISO] [--json]
+  sudo ac-bugs show ISSUE [--json]                       an issue's number or id
+  sudo ac-bugs set ISSUE --status fixing|fixed-in-next-update|solved [--note TEXT]
+                         [--commit SHA] [--release VERSION] [--app-update] [--as NAME] [--json]
+  sudo ac-bugs released VERSION --source WORKBENCH_SHA [--repo PATH] [--dry-run] [--json]
+      every issue fixed in the next update whose commit is in that release becomes solved,
+      with the release in its note (the hook for "vX is live on production")
+
+Reports (owner, 26 Oct 2026: "admin api, cli, mcp"):
+  ac-bugs reports [--status open|new|triaged|in_progress|fixed|verified|closed|all] [--json]
+                                                          their words masked
+  ac-bugs report NUMBER [--json]                          one report, with its words
+  ac-bugs report-set NUMBER --status new|triaged|in_progress|fixed|verified|closed
+                    [--note TEXT] [--json]                needs AC_BUGS_KEY: the change is
+      audited under the key's name, as Admin's form audits it (fixed reads as Solved in the
+      reporter's app; closing needs a note)
+The same work as MCP tools (list_bugs, get_bug, set_bug_status): POST {admin}/v1/admin/bugs/mcp
+with the same key.
+
+  --env production (default) | staging | development-live
+  --as NAME names who made the change in the issue's history (default: the sudo user).
+
+Exit status 0 on success, 1 when the environment refused (its answer is printed), 2 on usage.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+from datetime import UTC, datetime
+from pathlib import Path
+
+MODULE = "ac_platform.bug_reports.issues_cli"
+REPO = "/home/acdev/src/dev-live/authority-closers-platform"
+LOG = Path(os.environ.get("AC_BUGS_LOG", "/var/log/ac-bugs.log"))
+API_STATUS = {"fixing": "fixing", "fixed-in-next-update": "fixed_next", "solved": "solved"}
+ADMIN = {
+    "production": "https://admin.authorityclosers.com",
+    "staging": "https://admin-staging.authorityclosers.com",
+    "development-live": "https://admin-dev.authorityclosers.com",
+}
+WORDS = {
+    "new": "New",
+    "fixing": "Fixing",
+    "fixed_next": "Fixed in the next update",
+    "solved": "Solved",
+}
+
+
+def runner(env: str) -> list[str]:
+    """The command that runs the issues module inside the environment."""
+    override = os.environ.get("AC_BUGS_RUNNER")
+    if override:
+        return override.split()
+    if env == "development-live":
+        slot = Path("/var/lib/ac-dev-live-backend/active-slot").read_text().strip()
+        python = f"/srv/authority-closers/development/live-backend/{slot}/.venv/bin/python"
+        return [
+            "env",
+            "-i",
+            "PATH=/usr/bin:/bin",
+            "HOME=/root",
+            "LANG=C.UTF-8",
+            python,
+            "-m",
+            MODULE,
+            "--database-url-file",
+            "/etc/authority-closers/development/database-url-live",
+        ]
+    container = f"ac-application-{env}-sales-xray-worker-1"
+    return [
+        "docker",
+        "exec",
+        container,
+        "python",
+        "-m",
+        MODULE,
+        "--database-url-file",
+        "/run/ac-sales-xray/database-url",
+    ]
+
+
+def run_module(env: str, *args: str) -> dict:
+    done = subprocess.run(  # noqa: S603 - argv lists from fixed commands; no shell is used.
+        [*runner(env), *args],
+        capture_output=True,
+        text=True,
+        timeout=120,
+        cwd="/",
+        check=False,
+    )
+    if done.returncode != 0 and "No module named" in done.stderr:
+        raise SystemExit(f"ac-bugs: {env} has no bug issues yet (it arrives with v0.93)")
+    try:
+        answer = json.loads(done.stdout.strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError):
+        raise SystemExit(
+            f"ac-bugs: the {env} module gave no answer (exit {done.returncode})"
+        ) from None
+    if done.returncode != 0 or "error" in answer:
+        print(json.dumps(answer, ensure_ascii=False), file=sys.stderr)
+        raise SystemExit(1)
+    return answer
+
+
+def log(command: str, issue: str, result: str) -> None:
+    """One line per call: time, subcommand, issue, result (never words, names or keys)."""
+    stamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    try:
+        with LOG.open("a", encoding="utf-8") as handle:
+            handle.write(f"{stamp} {command} {issue or '-'} {result}\n")
+    except OSError:
+        pass
+
+
+def api(env: str, method: str, path: str, body: dict | None = None) -> dict:
+    """Admin's API with the staff key from AC_BUGS_KEY (never printed)."""
+    base = os.environ.get("AC_BUGS_BASE", ADMIN[env]).rstrip("/")
+    data = json.dumps(body).encode("utf-8") if body is not None else None
+    request = urllib.request.Request(  # noqa: S310 - fixed https Admin hosts
+        base + path,
+        data=data,
+        method=method,
+        headers={
+            "Authorization": "Bearer " + os.environ["AC_BUGS_KEY"],
+            "Accept": "application/json",
+            **({"Content-Type": "application/json"} if data is not None else {}),
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=60) as answer:  # noqa: S310
+            return json.loads(answer.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        detail = error.read().decode("utf-8", "replace")[:300]
+        print(json.dumps({"error": f"HTTP {error.code}", "detail": detail}), file=sys.stderr)
+        raise SystemExit(1) from None
+
+
+def call(env: str, op: str, *args: str, **body: object) -> dict:
+    """The same answers by key (API) or inside the environment (module)."""
+    if not os.environ.get("AC_BUGS_KEY"):
+        if op == "report-set":
+            raise SystemExit(
+                "ac-bugs: report-set needs AC_BUGS_KEY, so the change is audited under its name"
+            )
+        return run_module(env, op, *args)
+    if op == "reports":
+        status = urllib.parse.urlencode({} if body["status"] == "all" else body)
+        return api(env, "GET", f"/v1/admin/bugs?{status}")
+    if op == "report":
+        return {"report": api(env, "GET", f"/v1/admin/bugs/{args[0]}")}
+    if op == "report-set":
+        return {"report": api(env, "POST", f"/v1/admin/bugs/{args[0]}/events", dict(body))}
+    if op == "list":
+        query = urllib.parse.urlencode(
+            {key: value for key, value in body.items() if value is not None}
+        )
+        return api(env, "GET", f"/v1/admin/bugs/issues?{query}")
+    if op == "show":
+        return {"issue": api(env, "GET", f"/v1/admin/bugs/issues/{args[0]}")}
+    if op == "fixed-next":
+        issues = api(env, "GET", "/v1/admin/bugs/issues?which=open")["issues"]
+        return {"issues": [item for item in issues if item["status"] == "fixed_next"]}
+    return {"issue": api(env, "POST", f"/v1/admin/bugs/issues/{args[0]}/status", dict(body))}
+
+
+def line(env: str, issue: dict) -> str:
+    back = " · came back after the fix" if issue.get("came_back") else ""
+    return (
+        f"#{issue['number']:<4} {WORDS.get(issue['status'], issue['status']):<26} "
+        f"{issue['count']:>3} report{'s' if issue['count'] != 1 else ' '}  "
+        f"{issue['screen']}{back}\n      {ADMIN[env]}/bugs?issue={issue['number']}"
+    )
+
+
+def arguments(argv: list[str]) -> argparse.Namespace:
+    parser = argparse.ArgumentParser(prog="ac-bugs", description=__doc__.split("\n\n")[0])
+    parser.add_argument("--env", default="production", choices=sorted(ADMIN))
+    parser.add_argument("--json", action="store_true")
+    commands = parser.add_subparsers(dest="command", required=True)
+    listing = commands.add_parser("list")
+    which = listing.add_mutually_exclusive_group()
+    for name in ("new", "open", "solved", "all"):
+        which.add_argument(f"--{name}", dest="which", action="store_const", const=name)
+    listing.add_argument("--since")
+    listing.add_argument("--limit", default="100")
+    show = commands.add_parser("show")
+    show.add_argument("issue")
+    change = commands.add_parser("set")
+    change.add_argument("issue")
+    change.add_argument(
+        "--status", required=True, choices=["fixing", "fixed-in-next-update", "solved"]
+    )
+    change.add_argument("--note")
+    change.add_argument("--commit")
+    change.add_argument("--release")
+    change.add_argument("--app-update", action="store_true")
+    change.add_argument("--as", dest="actor")
+    released = commands.add_parser("released")
+    released.add_argument("version")
+    released.add_argument(
+        "--source", required=True, help="the workbench commit the release was cut from"
+    )
+    released.add_argument("--repo", default=REPO)
+    released.add_argument("--dry-run", action="store_true")
+    reports = commands.add_parser("reports")
+    reports.add_argument("--status", default="open", choices=REPORT_LIST)
+    report = commands.add_parser("report")
+    report.add_argument("report", type=report_number)
+    report_set = commands.add_parser("report-set")
+    report_set.add_argument("report", type=report_number)
+    report_set.add_argument("--status", required=True, choices=REPORT_STATUSES)
+    report_set.add_argument("--note")
+    for sub in (listing, show, change, released, reports, report, report_set):
+        sub.add_argument("--json", action="store_true", default=argparse.SUPPRESS)
+    return parser.parse_args(argv)
+
+
+REPORT_STATUSES = ("new", "triaged", "in_progress", "fixed", "verified", "closed")
+REPORT_LIST = ("open", *REPORT_STATUSES, "all")
+
+
+def report_number(value: str) -> str:
+    number = value.strip().lstrip("#")
+    if not number.isdigit() or not 0 < int(number) < 10**9:
+        raise argparse.ArgumentTypeError("a report's number, e.g. 9")
+    return str(int(number))
+
+
+def report_line(report: dict) -> str:
+    where = report.get("route") or "/"
+    return f"#{report['number']:<5} {report['status']:<12} {report.get('area') or '-':<9} {where}"
+
+
+def who(chosen: str | None) -> str:
+    return chosen or os.environ.get("SUDO_USER") or os.environ.get("USER") or "unknown"
+
+
+def in_release(repo: str, commit: str, source: str) -> bool:
+    done = subprocess.run(  # noqa: S603 - fixed argv
+        # Root reads acdev's repository: name it safe for this one command.
+        ["git", "-c", f"safe.directory={repo}", "-C", repo]
+        + ["merge-base", "--is-ancestor", commit, source],
+        capture_output=True,
+        check=False,
+    )
+    return done.returncode == 0
+
+
+def main(argv: list[str] | None = None) -> int:
+    a = arguments(sys.argv[1:] if argv is None else argv)
+    if a.command == "list":
+        args = ["--" + (a.which or "open"), "--limit", a.limit]
+        if a.since:
+            args += ["--since", a.since]
+        answer = call(a.env, "list", *args, which=a.which or "open", since=a.since)
+        log("list", a.which or "open", f"{len(answer['issues'])} issues")
+        if a.json:
+            print(json.dumps(answer, ensure_ascii=False))
+        else:
+            for issue in answer["issues"]:
+                print(line(a.env, issue))
+            print(f"{len(answer['issues'])} issue(s)")
+        return 0
+    if a.command == "show":
+        answer = call(a.env, "show", a.issue)
+        log("show", a.issue, answer["issue"]["status"])
+        if a.json:
+            print(json.dumps(answer, ensure_ascii=False))
+        else:
+            issue = answer["issue"]
+            print(line(a.env, issue))
+            print(
+                f"      devices {issue['devices']}  android {issue['android']}  "
+                f"app {issue['app_versions']}  orgs {issue['orgs']}"
+            )
+            for event in issue["history"]:
+                print(
+                    f"      {event['created_at'][:16]} {event['kind']} "
+                    f"{event.get('status') or ''} {event.get('note') or ''} "
+                    f"({event.get('actor_name') or event['actor']})"
+                )
+        return 0
+    if a.command == "set":
+        args = [a.issue, "--status", a.status, "--as", who(a.actor)]
+        for flag, value in (("--note", a.note), ("--commit", a.commit), ("--release", a.release)):
+            if value:
+                args += [flag, value]
+        if a.app_update:
+            args.append("--app-update")
+        answer = call(
+            a.env,
+            "set",
+            *args,
+            status=API_STATUS[a.status],
+            note=a.note,
+            commit=a.commit,
+            release=a.release,
+            app_update=a.app_update,
+        )
+        log("set", a.issue, API_STATUS[a.status])
+        print(json.dumps(answer, ensure_ascii=False) if a.json else line(a.env, answer["issue"]))
+        return 0
+    if a.command == "reports":
+        answer = call(a.env, "reports", "--status", a.status, status=a.status)
+        log("reports", a.status, f"{len(answer['items'])} reports")
+        if a.json:
+            print(json.dumps(answer, ensure_ascii=False))
+        else:
+            for report in answer["items"]:
+                print(report_line(report))
+            print(f"{len(answer['items'])} report(s)")
+        return 0
+    if a.command == "report":
+        answer = call(a.env, "report", a.report)
+        log("report", a.report, answer["report"]["status"])
+        if a.json:
+            print(json.dumps(answer, ensure_ascii=False))
+        else:
+            report = answer["report"]
+            print(report_line(report))
+            print(f"      {report['words']}")
+            for event in report.get("history", []):
+                print(
+                    f"      {event['created_at'][:16]} {event['kind']} "
+                    f"{event.get('status') or ''} {event.get('note') or ''}"
+                )
+        return 0
+    if a.command == "report-set":
+        answer = call(a.env, "report-set", a.report, status=a.status, note=a.note)
+        log("report-set", a.report, a.status)
+        report = answer["report"]
+        print(json.dumps(answer, ensure_ascii=False) if a.json else report_line(report))
+        return 0
+    # released: issues fixed in the next update whose commit the release carries.
+    waiting = call(a.env, "fixed-next")["issues"]
+    moved = []
+    for issue in waiting:
+        commit = issue.get("commit")
+        if not commit or not in_release(a.repo, commit, a.source):
+            continue
+        if a.dry_run:
+            moved.append(issue)
+            continue
+        answer = call(
+            a.env,
+            "set",
+            str(issue["number"]),
+            "--status",
+            "solved",
+            "--as",
+            "release",
+            "--release",
+            a.version,
+            "--note",
+            f"Live in {a.version}",
+            status="solved",
+            release=a.version,
+            note=f"Live in {a.version}",
+        )
+        moved.append(answer["issue"])
+        log("released", str(issue["number"]), f"solved {a.version}")
+    if a.json:
+        print(json.dumps({"solved": moved, "dry_run": a.dry_run}, ensure_ascii=False))
+    else:
+        for issue in moved:
+            print(line(a.env, issue))
+        print(f"{len(moved)} issue(s) {'would be ' if a.dry_run else ''}solved by {a.version}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

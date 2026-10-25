@@ -4,7 +4,9 @@ the completion progress, the photo upload's rules, and whose photo wins."""
 
 from __future__ import annotations
 
+import io
 from datetime import timedelta
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -28,8 +30,17 @@ from tests.unit.identity.test_sales_xray_profile import (  # noqa: F401
     database,
 )
 
-WEBP = b"RIFF\x10\x00\x00\x00WEBPVP8 fictional"
-PNG = b"\x89PNG\r\n\x1a\nfictional"
+
+def _image(kind: str, colour: tuple[int, int, int], size: tuple[int, int] = (40, 30)) -> bytes:
+    from PIL import Image
+
+    output = io.BytesIO()
+    Image.new("RGB", size, colour).save(output, format=kind)
+    return output.getvalue()
+
+
+WEBP = _image("WEBP", (200, 30, 30))
+PNG = _image("PNG", (30, 30, 200), (30, 60))
 
 
 async def _details(db: Any, person=PERSON_ID, *, revision=0, now=NOW, **fields: Any) -> Any:
@@ -120,7 +131,9 @@ async def test_the_photo_upload_rules_and_which_photo_wins(database: Any) -> Non
     assert urls[PERSON_ID] == url and url.startswith(f"/v1/people/{PERSON_ID}/photo?v=")
     assert urls[OTHER_PERSON_ID] == f"/v1/people/{OTHER_PERSON_ID}/photo?v=bbbbbbbb"
     photo = await person_photos.read_photo(db, PERSON_ID)
-    assert photo is not None and photo.content_type == "image/webp" and photo.data == WEBP
+    # Resized on the server: a 256 px WebP, whatever came in.
+    assert photo is not None and photo.content_type == "image/webp"
+    assert photo.data.startswith(b"RIFF") and photo.data[8:12] == b"WEBP"
     mine = await get_sales_xray_profile(db, person_id=PERSON_ID)
     assert mine.avatar_url == url and mine.own_photo and "photo" not in mine.missing
     assert mine.photo_url == "/v1/me/sales-xray-profile/photo"
@@ -155,3 +168,53 @@ async def test_account_deletion_takes_the_photo(database: Any) -> None:  # noqa:
     )
     assert await erase_sales_xray_profile(db, person_id=PERSON_ID)
     assert sync.get(PersonPhoto, PERSON_ID) is None
+
+
+@pytest.mark.asyncio
+async def test_a_photo_is_a_resized_file_and_an_unreadable_one_is_refused(
+    database: Any,  # noqa: F811
+    tmp_path: Path,
+) -> None:
+    """v0.93: a 256 px WebP file under the store, the bytes column as the fallback."""
+    from PIL import Image
+
+    db, sync = database
+    files = person_photos.PhotoFiles(tmp_path)
+    with pytest.raises(person_photos.PhotoRejected, match="could not be read"):
+        await person_photos.save_upload(
+            db,
+            person_id=PERSON_ID,
+            session_id=SESSION_ID,
+            tenant_id=TENANT_ID,
+            content_type="image/webp",
+            data=b"RIFF\x10\x00\x00\x00WEBPVP8 fictional",
+            files=files,
+        )
+    await person_photos.save_upload(
+        db,
+        person_id=PERSON_ID,
+        session_id=SESSION_ID,
+        tenant_id=TENANT_ID,
+        content_type="image/png",
+        data=_image("PNG", (10, 120, 60), (900, 400)),
+        files=files,
+    )
+    row = sync.get(PersonPhoto, PERSON_ID)
+    assert row.storage_key == f"person-photos/{PERSON_ID.hex}.1.webp" and row.photo is None
+    stored = tmp_path / row.storage_key
+    with Image.open(stored) as picture:
+        assert picture.size == (256, 256) and picture.format == "WEBP"
+    photo = await person_photos.read_photo(db, PERSON_ID, files)
+    assert photo is not None and photo.data == stored.read_bytes()
+    # A second photo replaces the first file.
+    await person_photos.save_upload(
+        db,
+        person_id=PERSON_ID,
+        session_id=SESSION_ID,
+        tenant_id=TENANT_ID,
+        content_type="image/webp",
+        data=WEBP,
+        files=files,
+    )
+    assert not stored.exists()
+    assert (tmp_path / f"person-photos/{PERSON_ID.hex}.2.webp").exists()
