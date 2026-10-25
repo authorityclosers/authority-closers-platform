@@ -288,6 +288,23 @@ export function parseTry(
   };
 }
 
+/**
+ * The caller's signal, or 15 seconds, whichever ends first: a request that
+ * hangs is given up and said, never an endless spinner (bug report #14, 25 Oct
+ * 2026: "this loading takes forever").
+ */
+export function limited(signal?: AbortSignal | null, ms = 15000): AbortSignal {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  const stop = () => {
+    clearTimeout(timer);
+    controller.abort();
+  };
+  if (signal?.aborted) stop();
+  else signal?.addEventListener("abort", stop, { once: true });
+  return controller.signal;
+}
+
 async function send(
   path: string,
   init: RequestInit & { signal?: AbortSignal } = {},
@@ -296,6 +313,7 @@ async function send(
     credentials: "same-origin",
     cache: "no-store",
     ...init,
+    signal: limited(init.signal),
     headers: {
       accept: "application/json",
       ...(init.body ? { "content-type": "application/json" } : {}),

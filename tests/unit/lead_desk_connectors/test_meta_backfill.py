@@ -235,11 +235,14 @@ def test_a_finished_or_missing_backfill_does_nothing() -> None:
 def test_the_pages_forms_are_kept_with_their_names_and_status() -> None:
     kept = meta_backfill.remember_forms(
         {"page_id": "p1"},
-        [{"id": "f1", "name": "Enquiry", "status": "ACTIVE"}, {"id": "f2", "name": "Old"}],
+        [
+            {"id": "f1", "name": "Enquiry", "status": "ACTIVE", "leads": 31},
+            {"id": "f2", "name": "Old"},
+        ],
     )
     assert kept["form_list"] == [
-        {"id": "f1", "name": "Enquiry", "status": "ACTIVE"},
-        {"id": "f2", "name": "Old", "status": ""},
+        {"id": "f1", "name": "Enquiry", "status": "ACTIVE", "leads": 31},
+        {"id": "f2", "name": "Old", "status": "", "leads": None},
     ]
 
 
@@ -361,3 +364,9 @@ def test_bringing_in_older_leads_counts_what_it_linked() -> None:
     assert state is not None
     assert created == 1 and desk.filed == ["p-1"]
     assert (state["state"], state["created"], state["linked"], state["seen"]) == ("done", 1, 2, 3)
+    # Bug report #10: a second run says what it found, not "none added".
+    again = source()
+    asyncio.run(meta_backfill.step(desk, again, graph, cfg(), now=NOW + 120))
+    state = meta_backfill.state(again.config)
+    assert state is not None
+    assert (state["created"], state["linked"], state["known"], state["seen"]) == (0, 0, 3, 3)

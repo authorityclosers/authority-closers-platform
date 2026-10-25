@@ -43,15 +43,28 @@ import {
   type SourceView,
 } from "./leads-client";
 import styles from "./leads.module.css";
+import formStyles from "./meta-forms.module.css";
 import { SpendSummary } from "./ad-spend";
 import { JourneyStrip } from "./journey/journey-strip";
 
 /* ---------- Meta connector API (lead_desk/connectors) ---------- */
 
-export type MetaForm = { id: string; name: string; status: string };
+export type MetaForm = {
+  id: string;
+  name: string;
+  status: string;
+  /** How many leads Meta holds for the form, when it says. */
+  leads?: number | null;
+};
 export type MetaBackfill = {
   state: "running" | "done" | "blocked";
   created: number;
+  /** Read from Meta and already in the leads: linked, asked again, or the same lead. */
+  linked?: number;
+  repeat?: number;
+  known?: number;
+  /** How many forms this run reads. */
+  forms?: number;
   seen: number;
   finishedAt?: string | null;
   error?: string | null;
@@ -60,16 +73,21 @@ export type MetaProblem = {
   kind: "token" | "permission" | "lead_access" | "other";
   text: string;
 };
+/** The Facebook account a Page was shared through (bug report #8). */
+export type MetaAccount = { name: string; picture?: string | null };
 export type MetaPage = {
   pageId: string;
   name: string;
   active: boolean;
+  account?: MetaAccount | null;
   received: number;
   /** When Sales Xray last asked Meta for this Page's leads (every 10 minutes). */
   lastPulledAt?: string | null;
   /** "all" takes every form on the Page, ones made later too. */
   forms?: "all" | string[];
   formsCovered?: MetaForm[];
+  /** Every form on the Page, taken or not, archived ones too. */
+  formsOnPage?: MetaForm[];
   /** Bringing in the older leads Meta still keeps (90 days). */
   backfill?: MetaBackfill | null;
   /** Why Meta last refused this Page. */
@@ -93,16 +111,158 @@ export function formsLine(page: MetaPage): string {
     : `Forms: ${names.join(", ")}`;
 }
 
-/** Where bringing in older leads has got to, or null when it never ran. */
+/**
+ * What a "Check now" found, in words: new leads apart from people who asked
+ * again (repeats were counted as new before, 25 Oct 2026).
+ */
+export function checkedLine(
+  name: string,
+  created: number,
+  repeat: number,
+): string {
+  if (!created && !repeat) return `No new leads from ${name}.`;
+  const parts = [
+    created ? `${created} new lead${created === 1 ? "" : "s"}` : null,
+    repeat
+      ? `${repeat} ${repeat === 1 ? "person" : "people"} asked again`
+      : null,
+  ].filter(Boolean);
+  return `${parts.join(", ")} from ${name}.`;
+}
+
+/** How many leads a run read that were already in the leads. */
+export function alreadyHere(backfill?: MetaBackfill | null): number {
+  if (!backfill) return 0;
+  return (
+    (backfill.linked ?? 0) + (backfill.repeat ?? 0) + (backfill.known ?? 0)
+  );
+}
+
+/**
+ * Where bringing in older leads has got to, or null when it never ran. It says
+ * what was read, not only what was new (bug report #10, 25 Oct 2026: "Bring old
+ * leads did nothing, says no added" when every lead was already here).
+ */
 export function backfillLine(backfill?: MetaBackfill | null): string | null {
   if (!backfill) return null;
   const leads = (count: number) => `${count} lead${count === 1 ? "" : "s"}`;
+  const found = `${leads(backfill.seen)} read: ${backfill.created} new, ${alreadyHere(backfill)} already in your leads`;
   if (backfill.state === "running")
-    return `Bringing in older leads… ${leads(backfill.created)} so far`;
+    return `Bringing in older leads… ${found} so far`;
   if (backfill.state === "blocked") return "Older leads stopped: see below";
-  return backfill.created
-    ? `Older leads: ${leads(backfill.created)} from the last 90 days`
-    : "Older leads: none missing from the last 90 days";
+  return backfill.seen
+    ? `Older leads, last 90 days: ${found}`
+    : "Older leads: Meta has none from the last 90 days";
+}
+
+const FORM_STATUS: Record<string, string> = {
+  ACTIVE: "Active",
+  ARCHIVED: "Archived",
+  DRAFT: "Draft",
+  DELETED: "Deleted",
+};
+
+/**
+ * Every form on a Page, with its state and how many leads Meta holds, to pick
+ * from: bring in a form's older leads, or choose which forms come in live (bug
+ * reports #12, #13 and #14, 25 Oct 2026: "all forms ... in one click", paused
+ * ones too).
+ */
+function PageForms({
+  page,
+  busy,
+  onOlder,
+  onKeep,
+}: {
+  page: MetaPage;
+  busy: boolean;
+  onOlder: (forms: string[] | null) => void;
+  onKeep: (forms: "all" | string[]) => void;
+}) {
+  const forms = page.formsOnPage?.length
+    ? page.formsOnPage
+    : (page.formsCovered ?? []);
+  const takesAll = !page.forms || page.forms === "all";
+  const live = new Set(takesAll ? forms.map((form) => form.id) : page.forms);
+  const [picked, setPicked] = useState<string[]>(() =>
+    forms.map((form) => form.id),
+  );
+  if (!forms.length) return null;
+  const everyForm = picked.length === forms.length;
+  const some = everyForm ? "" : ` (${picked.length})`;
+  const flip = (id: string) =>
+    setPicked((current) =>
+      current.includes(id)
+        ? current.filter((item) => item !== id)
+        : [...current, id],
+    );
+  return (
+    <details className={formStyles.formPicker}>
+      <summary>Forms on this Page ({forms.length})</summary>
+      <label className={formStyles.formRow}>
+        <input
+          type="checkbox"
+          checked={everyForm}
+          onChange={() =>
+            setPicked(everyForm ? [] : forms.map((form) => form.id))
+          }
+        />
+        <span className={formStyles.formName}>Select all</span>
+      </label>
+      {forms.map((form) => (
+        <label key={form.id} className={formStyles.formRow}>
+          <input
+            type="checkbox"
+            checked={picked.includes(form.id)}
+            onChange={() => flip(form.id)}
+          />
+          <span className={formStyles.formName}>{form.name}</span>
+          <span className={cardStyles.facts}>
+            <span
+              className={cardStyles.fact}
+              data-tone={form.status === "ACTIVE" ? "good" : undefined}
+            >
+              {FORM_STATUS[form.status] ??
+                (form.status.toLowerCase() || "Form")}
+            </span>
+            {typeof form.leads === "number" ? (
+              <span className={cardStyles.fact}>{form.leads} on Meta</span>
+            ) : null}
+            <span className={cardStyles.fact}>
+              {page.active && live.has(form.id) ? "Comes in live" : "Not live"}
+            </span>
+          </span>
+        </label>
+      ))}
+      <span className={styles.pageActions}>
+        <Button
+          variant="ghost"
+          disabled={
+            busy ||
+            !picked.length ||
+            !page.active ||
+            page.backfill?.state === "running"
+          }
+          onClick={() => onOlder(everyForm ? null : picked)}
+        >
+          <History size={14} aria-hidden="true" />
+          Bring old leads{some}
+        </Button>
+        <Button
+          variant="ghost"
+          disabled={busy || !picked.length}
+          onClick={() => onKeep(everyForm ? "all" : picked)}
+        >
+          Keep live{some}
+        </Button>
+      </span>
+      {!page.active ? (
+        <small className={styles.pageForms}>
+          Keep live turns the Page on; then its older leads can come in.
+        </small>
+      ) : null}
+    </details>
+  );
 }
 type MetaPull = {
   page: MetaPage;
@@ -149,6 +309,13 @@ async function connectorCall<T>(
 
 const metaCall = <T,>(path: string, init: RequestInit = {}) =>
   connectorCall<T>(`${META}${path}`, init);
+
+/** A signal that gives up after ``ms``, so a read never spins forever. */
+function timeLimit(ms: number): AbortSignal {
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), ms);
+  return controller.signal;
+}
 
 /* ---------- Google Ads connector API (lead_desk/connectors) ---------- */
 
@@ -204,16 +371,23 @@ function GoogleTile() {
     GOOGLE_RETURNED[params.get("google") ?? ""] ?? null,
   );
   const [busy, setBusy] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   const load = () =>
-    connectorCall<GoogleStatus>(`${GOOGLE}/status`)
-      .then((next) =>
+    connectorCall<GoogleStatus>(`${GOOGLE}/status`, {
+      signal: timeLimit(15000),
+    })
+      .then((next) => {
+        setFailed(false);
         setStatus({
           ...next,
           accounts: Array.isArray(next?.accounts) ? next.accounts : [],
-        }),
-      )
-      .catch(() => setStatus({ configured: false, accounts: [] }));
+        });
+      })
+      .catch(() => {
+        setFailed(true);
+        setStatus((current) => current ?? { configured: true, accounts: [] });
+      });
   useEffect(() => {
     void load();
   }, []);
@@ -261,10 +435,7 @@ function GoogleTile() {
       const result = await connectorCall<GooglePull>(path(account, "/pull"), {
         method: "POST",
       });
-      const added = result.created + result.repeat;
-      return added
-        ? `${added} new lead${added === 1 ? "" : "s"} from ${account.name}.`
-        : `No new leads from ${account.name}.`;
+      return checkedLine(account.name, result.created, result.repeat);
     });
 
   const live = status?.accounts.filter((account) => account.active).length ?? 0;
@@ -275,7 +446,9 @@ function GoogleTile() {
       text="Leads from your lead form ads, without copying anything."
       loading={status === null}
       status={
-        !status ? null : !status.configured ? (
+        !status ? null : failed ? (
+          <StatusPill tone="warn">Didn&apos;t load</StatusPill>
+        ) : !status.configured ? (
           <StatusPill>Coming soon</StatusPill>
         ) : live ? (
           <StatusPill tone="good">
@@ -288,7 +461,12 @@ function GoogleTile() {
         )
       }
       action={
-        status?.configured ? (
+        failed ? (
+          <Button variant="ghost" onClick={() => void load()}>
+            <RefreshCw size={14} aria-hidden="true" />
+            Try again
+          </Button>
+        ) : status?.configured ? (
           <a
             className={
               status.accounts.length ? cardStyles.secondary : cardStyles.primary
@@ -424,8 +602,10 @@ export function OtherAccountSteps() {
       <ul>
         <li>
           Facebook connects the account signed in on this phone or browser. To
-          use another one, sign out of Facebook first, or press Connect in a
-          private window.
+          use another one, press{" "}
+          <a href={`${META}/connect?switch=1`}>Use another Facebook account</a>:
+          Facebook asks you to sign in again, and you can choose the account
+          that runs the Page. Each Page shows the account it came through.
         </li>
         <li>
           While Meta reviews Sales Xray, Facebook lets only accounts we have
@@ -479,16 +659,23 @@ function MetaTile() {
     RETURNED[params.get("meta") ?? ""] ?? null,
   );
   const [busy, setBusy] = useState<string | null>(null);
+  // Bug report #14 (25 Oct 2026: "this loading takes forever"): a read that
+  // hangs stops after 15 seconds and says so, with Try again.
+  const [failed, setFailed] = useState(false);
 
   const load = () =>
-    metaCall<MetaStatus>("/status")
-      .then((next) =>
+    metaCall<MetaStatus>("/status", { signal: timeLimit(15000) })
+      .then((next) => {
+        setFailed(false);
         setStatus({
           ...next,
           pages: Array.isArray(next?.pages) ? next.pages : [],
-        }),
-      )
-      .catch(() => setStatus({ configured: false, pages: [] }));
+        });
+      })
+      .catch(() => {
+        setFailed(true);
+        setStatus((current) => current ?? { configured: true, pages: [] });
+      });
   useEffect(() => {
     void load();
   }, []);
@@ -520,17 +707,8 @@ function MetaTile() {
           method: "POST",
         });
       } else {
-        const result = await metaCall<{ imported: number }>(
-          `/pages/${encodeURIComponent(page.pageId)}`,
-          {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ forms: "all" }),
-          },
-        );
-        setNote(
-          `${result.imported ? `${result.imported} lead${result.imported === 1 ? "" : "s"} from the last week came in. ` : ""}Older leads, up to 90 days, follow in the next few minutes.`,
-        );
+        await keepLive(page, "all");
+        return;
       }
       await load();
     } catch (reason) {
@@ -552,11 +730,34 @@ function MetaTile() {
         `/pages/${encodeURIComponent(page.pageId)}/pull`,
         { method: "POST" },
       );
-      const added = result.created + result.repeat;
+      setNote(checkedLine(page.name, result.created, result.repeat));
+      await load();
+    } catch (reason) {
       setNote(
-        added
-          ? `${added} new lead${added === 1 ? "" : "s"} from ${page.name}.`
-          : `No new leads from ${page.name}.`,
+        reason instanceof LeadsError ? reason.message : "That didn't work.",
+      );
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  // Turn a Page on with these forms, or change which forms come in live; the
+  // last week's leads come in now and the older ones follow.
+  const keepLive = async (page: MetaPage, forms: "all" | string[]) => {
+    setBusy(page.pageId);
+    setNote(null);
+    try {
+      const result = await metaCall<{ imported: number; linked?: number }>(
+        `/pages/${encodeURIComponent(page.pageId)}`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ forms }),
+        },
+      );
+      const here = result.linked ?? 0;
+      setNote(
+        `${result.imported} new lead${result.imported === 1 ? "" : "s"} from the last week${here ? `, ${here} already in your leads` : ""}. Older leads, up to 90 days, follow in the next few minutes.`,
       );
       await load();
     } catch (reason) {
@@ -568,18 +769,28 @@ function MetaTile() {
     }
   };
 
-  // Every lead Meta still keeps (90 days); leads already here are skipped.
-  const older = async (page: MetaPage) => {
+  // Every lead Meta still keeps (90 days), from every form or the ones picked;
+  // leads already here are linked, never filed twice.
+  const older = async (page: MetaPage, forms: string[] | null = null) => {
     setBusy(page.pageId);
     setNote(null);
     try {
       const result = await metaCall<{ imported: number; page: MetaPage }>(
         `/pages/${encodeURIComponent(page.pageId)}/backfill`,
-        { method: "POST" },
+        forms
+          ? {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ forms }),
+            }
+          : { method: "POST" },
       );
-      const more = result.page.backfill?.state === "running";
+      const run = result.page.backfill;
+      const more = run?.state === "running";
       setNote(
-        `${result.imported} older lead${result.imported === 1 ? "" : "s"} came in${more ? "; the rest follow in the next few minutes" : ""}.`,
+        run
+          ? `${run.seen} older lead${run.seen === 1 ? "" : "s"} read: ${run.created} new, ${alreadyHere(run)} already in your leads${more ? "; the rest follow in the next few minutes" : ""}.`
+          : `${result.imported} older lead${result.imported === 1 ? "" : "s"} came in.`,
       );
       await load();
     } catch (reason) {
@@ -605,7 +816,9 @@ function MetaTile() {
       text="Leads from your Instant Form ads arrive here in seconds."
       loading={status === null}
       status={
-        !status ? null : !status.configured ? (
+        !status ? null : failed ? (
+          <StatusPill tone="warn">Didn&apos;t load</StatusPill>
+        ) : !status.configured ? (
           <StatusPill>Coming soon</StatusPill>
         ) : live ? (
           <StatusPill tone="good">
@@ -618,7 +831,12 @@ function MetaTile() {
         )
       }
       action={
-        status?.configured ? (
+        failed ? (
+          <Button variant="ghost" onClick={() => void load()}>
+            <RefreshCw size={14} aria-hidden="true" />
+            Try again
+          </Button>
+        ) : status?.configured ? (
           <a
             className={
               status.pages.length ? cardStyles.secondary : cardStyles.primary
@@ -648,6 +866,21 @@ function MetaTile() {
             >
               <span className={styles.pageName}>
                 <strong>{page.name}</strong>
+                {page.account ? (
+                  <span className={formStyles.pageAccount}>
+                    {page.account.picture ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- Facebook's own small photo
+                      <img
+                        src={page.account.picture}
+                        alt=""
+                        width={18}
+                        height={18}
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : null}
+                    Through {page.account.name}&apos;s Facebook
+                  </span>
+                ) : null}
                 {page.active ? (
                   <span className={cardStyles.facts}>
                     <span className={cardStyles.fact} data-tone="good">
@@ -665,6 +898,12 @@ function MetaTile() {
                 {page.active ? (
                   <small className={styles.pageForms}>{formsLine(page)}</small>
                 ) : null}
+                <PageForms
+                  page={page}
+                  busy={busy === page.pageId}
+                  onOlder={(forms) => void older(page, forms)}
+                  onKeep={(forms) => void keepLive(page, forms)}
+                />
                 {page.active && backfillLine(page.backfill) ? (
                   <small
                     className={styles.pageForms}

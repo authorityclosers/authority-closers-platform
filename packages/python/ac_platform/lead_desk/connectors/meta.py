@@ -226,17 +226,20 @@ def read_state(
     return body
 
 
-def dialog_url(cfg: MetaConfig, *, redirect_uri: str, state: str) -> str:
-    query = urlencode(
-        {
-            "client_id": cfg.app_id,
-            "redirect_uri": redirect_uri,
-            "state": state,
-            "config_id": cfg.login_config_id,
-            "response_type": "code",
-            "override_default_response_type": "true",
-        }
-    )
+def dialog_url(cfg: MetaConfig, *, redirect_uri: str, state: str, switch: bool = False) -> str:
+    """Meta's sign-in. ``switch`` asks Facebook to sign in again, so a person signed in to
+    another Facebook account can choose the one that runs the Page (bug reports #7, #8)."""
+    params = {
+        "client_id": cfg.app_id,
+        "redirect_uri": redirect_uri,
+        "state": state,
+        "config_id": cfg.login_config_id,
+        "response_type": "code",
+        "override_default_response_type": "true",
+    }
+    if switch:
+        params["auth_type"] = "reauthenticate"
+    query = urlencode(params)
     return f"{DIALOG}/{cfg.graph_version}/dialog/oauth?{query}"
 
 
@@ -561,13 +564,15 @@ class Graph:
                 )
         return out[:MAX_PAGES]
 
-    async def forms(self, page_id: str, page_token: str) -> list[dict[str, str]]:
-        """Every Instant Form on the Page, archived ones too (their leads stay readable)."""
-        out: list[dict[str, str]] = []
+    async def forms(self, page_id: str, page_token: str) -> list[dict[str, Any]]:
+        """Every Instant Form on the Page, archived ones too (their leads stay readable),
+        with how many leads Meta holds for each (``leads``)."""
+        out: list[dict[str, Any]] = []
         async for rows in self._pages(
             f"{page_id}/leadgen_forms",
             limit=MAX_FORMS,
-            fields="id,name,status",
+            fields="id,name,status,leads_count",
+            filtering=FORM_STATUSES,
             access_token=page_token,
         ):
             out.extend(
@@ -575,11 +580,40 @@ class Graph:
                     "id": str(row["id"]),
                     "name": str(row.get("name") or row["id"])[:120],
                     "status": str(row.get("status") or "")[:20],
+                    "leads": _count(row.get("leads_count")),
                 }
                 for row in rows
                 if row.get("id")
             )
         return out[:MAX_FORMS]
+
+    async def me(self, user_token: str) -> dict[str, str]:
+        """Who signed in: their Facebook id, name and small photo; {} when Meta won't say.
+        The Pages they shared show it, so a team sees which account runs which Page."""
+        try:
+            body = await self._call(
+                "GET",
+                "me",
+                fields="id,name,picture.width(80).height(80){url}",
+                access_token=user_token,
+            )
+        except MetaError:
+            return {}
+        picture = body.get("picture")
+        data = picture.get("data") if isinstance(picture, Mapping) else None
+        url = data.get("url") if isinstance(data, Mapping) else None
+        return {
+            key: value
+            for key, value in (
+                ("id", str(body.get("id") or "")[:40]),
+                ("name", str(body.get("name") or "")[:100]),
+                (
+                    "picture",
+                    str(url)[:1000] if isinstance(url, str) and url.startswith("https://") else "",
+                ),
+            )
+            if value
+        }
 
     async def require_lead_access(self, page_id: str, page_token: str) -> None:
         """Refuse in plain words when the Page's business uses Meta's Leads Access Manager
@@ -671,6 +705,22 @@ class Graph:
             if len(out) >= limit:
                 break
         return out[:limit]
+
+
+# Every form, whatever its state: Meta lists only some by default on some Pages.
+FORM_STATUSES: Final[str] = json.dumps(
+    [{"field": "status", "operator": "IN", "value": ["ACTIVE", "ARCHIVED", "DELETED", "DRAFT"]}]
+)
+
+
+def _count(value: object) -> int | None:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str) and value.isdigit():
+        return int(value)
+    return None
 
 
 def _since(since: int) -> str:

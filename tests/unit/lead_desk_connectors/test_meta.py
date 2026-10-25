@@ -305,21 +305,60 @@ def test_one_page_of_leads_returns_metas_next_cursor() -> None:
 def test_forms_lists_every_form_archived_ones_too() -> None:
     def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/v23.0/111/leadgen_forms"
+        # Every state asked for by name (bug report #14: paused forms too).
+        assert json.loads(request.url.params["filtering"])[0]["value"] == [
+            "ACTIVE",
+            "ARCHIVED",
+            "DELETED",
+            "DRAFT",
+        ]
+        assert "leads_count" in request.url.params["fields"]
         if request.url.params.get("after") == "c1":
             return httpx.Response(200, json={"data": [{"id": "F2", "status": "ARCHIVED"}]})
         return httpx.Response(
             200,
             json={
-                "data": [{"id": "F1", "name": "Enquiry", "status": "ACTIVE"}],
+                "data": [{"id": "F1", "name": "Enquiry", "status": "ACTIVE", "leads_count": 42}],
                 "paging": {"cursors": {"after": "c1"}, "next": "https://graph.facebook.com/n"},
             },
         )
 
     forms = asyncio.run(_graph(handler).forms("111", "t"))
     assert forms == [
-        {"id": "F1", "name": "Enquiry", "status": "ACTIVE"},
-        {"id": "F2", "name": "F2", "status": "ARCHIVED"},
+        {"id": "F1", "name": "Enquiry", "status": "ACTIVE", "leads": 42},
+        {"id": "F2", "name": "F2", "status": "ARCHIVED", "leads": None},
     ]
+
+
+def test_who_signed_in_is_named_with_their_photo_and_nothing_when_meta_refuses() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert request.url.path == "/v23.0/me"
+        if request.url.params["access_token"] == "bad":  # noqa: S105 - a fake token
+            return httpx.Response(400, json={"error": {"code": 190}})
+        return httpx.Response(
+            200,
+            json={
+                "id": "77",
+                "name": "Fictional Owner",
+                "picture": {"data": {"url": "https://scontent.example/p.jpg"}},
+            },
+        )
+
+    graph = _graph(handler)
+    assert asyncio.run(graph.me("good")) == {
+        "id": "77",
+        "name": "Fictional Owner",
+        "picture": "https://scontent.example/p.jpg",
+    }
+    assert asyncio.run(graph.me("bad")) == {}
+
+
+def test_switching_accounts_asks_facebook_to_sign_in_again() -> None:
+    cfg = meta.config(ENV)
+    assert cfg is not None
+    plain = meta.dialog_url(cfg, redirect_uri="https://x/cb", state="s")
+    switched = meta.dialog_url(cfg, redirect_uri="https://x/cb", state="s", switch=True)
+    assert "auth_type" not in plain and "auth_type=reauthenticate" in switched
 
 
 @pytest.mark.parametrize(

@@ -14,8 +14,8 @@ nothing else changes. New leads then go through the duplicate engine at once
 
 State, under ``config["backfill"]``:
 ``{"state": "running" | "done" | "blocked", "since": epoch, "forms": [form ids],
-"form": index, "after": cursor | None, "created": n, "linked": n, "seen": n,
-"started_at": epoch,
+"form": index, "after": cursor | None, "created": n, "linked": n, "repeat": n,
+"known": n, "seen": n, "started_at": epoch,
 "finished_at": epoch | None, "error": text | None}``. "blocked" means Meta refused in
 a way only the customer can fix (Leads Access Manager, a lost connection); asking
 again starts over.
@@ -76,6 +76,8 @@ def begin(config: Mapping[str, Any], *, form_ids: list[str], now: int) -> dict[s
             "after": None,
             "created": 0,
             "linked": 0,
+            "repeat": 0,
+            "known": 0,
             "seen": 0,
             "started_at": now,
             "finished_at": None,
@@ -84,12 +86,18 @@ def begin(config: Mapping[str, Any], *, form_ids: list[str], now: int) -> dict[s
     }
 
 
-def remember_forms(config: Mapping[str, Any], forms: list[dict[str, str]]) -> dict[str, Any]:
-    """Keep the Page's forms (id, name, status), so the page can say which are covered."""
+def remember_forms(config: Mapping[str, Any], forms: list[dict[str, Any]]) -> dict[str, Any]:
+    """Keep the Page's forms (id, name, status, leads Meta holds), so the page can list
+    them all and say which are covered."""
     return {
         **config,
         "form_list": [
-            {"id": form["id"], "name": form["name"], "status": form.get("status", "")}
+            {
+                "id": form["id"],
+                "name": form["name"],
+                "status": form.get("status", ""),
+                "leads": form.get("leads"),
+            }
             for form in forms[: meta.MAX_FORMS]
         ],
     }
@@ -267,18 +275,17 @@ async def apply(desk: LeadDesk, source: LeadSource, piece: Slice, *, now: int) -
     ):
         return 0
     page_name = str(config.get("page_name") or "")
-    created = linked = 0
+    counts = dict.fromkeys(("created", "linked", "repeat", "known"), 0)
     made: list[UUID] = []
     for lead in piece.leads:
         outcome = await file_lead(desk, source, lead, page_name=page_name, made=made)
-        created += outcome == "created"
-        linked += outcome == "linked"
+        if outcome in counts:
+            counts[outcome] += 1
     await duplicate_intake.after_intake(desk, made)
     current.update(
+        {key: int(current.get(key) or 0) + count for key, count in counts.items()},
         form=piece.form,
         after=piece.after,
-        created=int(current.get("created") or 0) + created,
-        linked=int(current.get("linked") or 0) + linked,
         seen=int(current.get("seen") or 0) + len(piece.leads),
         error=str(piece.error) if piece.error is not None else None,
     )
@@ -288,7 +295,7 @@ async def apply(desk: LeadDesk, source: LeadSource, piece: Slice, *, now: int) -
         current.update(state="done", finished_at=now, after=None)
     config[KEY] = current
     source.config = config
-    return created
+    return counts["created"]
 
 
 async def step(

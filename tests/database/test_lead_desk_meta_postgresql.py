@@ -113,6 +113,11 @@ class FakeGraph:
         assert user_token == USER_TOKEN
         return [{"id": "p1", "name": "Fictional Homes", "token": "page-token-1"}]
 
+    async def me(self, user_token: str) -> dict[str, str]:
+        # Who signed in, shown on each Page shared (bug report #8).
+        assert user_token == USER_TOKEN
+        return {"id": "77", "name": "Fictional Owner"}
+
     async def ad_accounts(self, user_token: str) -> list[dict[str, str]]:
         assert user_token == USER_TOKEN
         return [{"id": "act_10000001", "name": "Fictional Homes ads"}]

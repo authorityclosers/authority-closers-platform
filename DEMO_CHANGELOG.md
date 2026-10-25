@@ -6,6 +6,20 @@ No client names here.
 
 ## Facebook lead sources (Meta-suite session): bug reports #7, #8, #10, #12, #13, #14
 
+- **Every form on every Page, picked forms' older leads or live, which account, and loading that ends (#10, #12, #13, #14, #7, #8)**, this commit.
+  - What changed:
+    - Sources lists every form on each Facebook Page (active, archived, draft), with "N on Meta" and whether it comes in live. Select all, or pick some, then "Bring old leads" or "Keep live".
+    - A run says "100 leads read: 0 new, 100 already in your leads".
+    - Each Page shows the Facebook account it came through, with its photo. "Use another Facebook account" asks Facebook to sign in again.
+    - Meta, Google and Connections reads give up after 15 seconds with "Didn't load" and Try again.
+    - "Check now" keeps new leads apart from people who asked again.
+  - Found: AC's Page has 4 forms, all active, with 103 leads on Meta (a read-only probe). The last 90 days hold 99 ad leads, from 4 now-paused campaigns, and all were read. Meta keeps leads 90 days, so the May campaign's leads can't come in by API.
+  - Verified by:
+    - `meta-sources.test.tsx`, `sources-view.test.tsx` and `connected-apps-limit.test.ts`; vitest app/leads and Connections: 412 tests.
+    - `test_meta.py`, `test_meta_backfill.py` and `test_meta_pull.py`.
+    - eslint, tsc and mypy; wb-ci full and e2e (runs in the commit's notes).
+  - Open: connecting Pages from a Facebook account that isn't an app tester still needs Meta's App Review (Leads app, in review since 19 Oct). Until then, the tester workflow.
+
 - **Meta leads already in the leads are linked, not repeated; new ones go through the duplicate engine (P0)**, this commit.
   - Found on production (counts only, logged as `fb10*.sql`):
     - AC's Page was switched on at 18:23Z, 25 Oct.

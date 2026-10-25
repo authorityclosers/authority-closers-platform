@@ -131,8 +131,8 @@ def test_every_pull_keeps_the_pages_forms_so_the_page_can_show_them() -> None:
     src = source()
     asyncio.run(meta_pull.pull_source(Desk([]), src, Graph([]), cfg(), now=NOW))
     assert src.config["form_list"] == [
-        {"id": "f1", "name": "A", "status": "ACTIVE"},
-        {"id": "f2", "name": "B", "status": "ACTIVE"},
+        {"id": "f1", "name": "A", "status": "ACTIVE", "leads": None},
+        {"id": "f2", "name": "B", "status": "ACTIVE", "leads": None},
     ]
 
 

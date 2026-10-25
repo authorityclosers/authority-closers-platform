@@ -876,8 +876,16 @@ export function ConnectedApps() {
 
   useEffect(() => {
     const controller = new AbortController();
+    // Bug report #14 (25 Oct 2026: "this loading takes forever"): a read that
+    // hangs gives up after 15 seconds and says so, with Try again.
+    let late = false;
+    const limit = window.setTimeout(() => {
+      late = true;
+      controller.abort();
+    }, 14000);
     readHealth(controller.signal).then(
       (health) => {
+        window.clearTimeout(limit);
         lastRead.current = Date.now();
         setLoaded({
           state: "ready",
@@ -887,14 +895,16 @@ export function ConnectedApps() {
         setRefreshing(false);
       },
       (error: unknown) => {
-        if (controller.signal.aborted) return;
+        window.clearTimeout(limit);
+        if (controller.signal.aborted && !late) return;
         setRefreshing(false);
         if (error instanceof AppsError && error.status === 403) {
           setLoaded({ state: "members" });
           return;
         }
-        const message =
-          error instanceof AppsError
+        const message = late
+          ? "Your apps took too long to answer. Try again."
+          : error instanceof AppsError
             ? error.message
             : "Check your connection and try again.";
         notify({
@@ -908,7 +918,10 @@ export function ConnectedApps() {
         );
       },
     );
-    return () => controller.abort();
+    return () => {
+      window.clearTimeout(limit);
+      controller.abort();
+    };
   }, [attempt]);
 
   useEffect(() => {

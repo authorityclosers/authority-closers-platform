@@ -77,6 +77,8 @@ class MetaForm(BaseModel):
     id: str
     name: str
     status: str
+    # How many leads Meta holds for the form (its last 90 days and older), when Meta says.
+    leads: int | None = None
 
 
 class MetaBackfill(BaseModel):
@@ -86,6 +88,12 @@ class MetaBackfill(BaseModel):
     state: Literal["running", "done", "blocked"]
     created: int
     seen: int
+    # Read from Meta and already here: linked to the lead imported earlier, a real
+    # repeat (sent again after the lead was made), or this very Meta lead.
+    linked: int = 0
+    repeat: int = 0
+    known: int = 0
+    forms: int = 0
     since: str | None = None
     started_at: str | None = Field(default=None, alias="startedAt")
     finished_at: str | None = Field(default=None, alias="finishedAt")
@@ -100,17 +108,27 @@ class MetaProblem(BaseModel):
     at: str | None = None
 
 
+class MetaAccount(BaseModel):
+    """The Facebook account a Page was shared through, as Meta names it."""
+
+    name: str
+    picture: str | None = None
+
+
 class MetaPage(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     page_id: str = Field(alias="pageId")
     name: str
     active: bool
+    account: MetaAccount | None = None
     forms: Literal["all"] | list[str]
     received: int
     last_received_at: str | None = Field(default=None, alias="lastReceivedAt")
     last_pulled_at: str | None = Field(default=None, alias="lastPulledAt")
     # The forms whose leads come in: every form on the Page for "all" (new ones too).
     forms_covered: list[MetaForm] = Field(default_factory=list, alias="formsCovered")
+    # Every form on the Page, picked or not, paused and archived ones too.
+    forms_on_page: list[MetaForm] = Field(default_factory=list, alias="formsOnPage")
     backfill: MetaBackfill | None = None
     problem: MetaProblem | None = None
 
@@ -130,6 +148,15 @@ class Connected(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     page: MetaPage
     imported: int
+    # Leads from the last week that were already here: linked, not filed again.
+    linked: int = 0
+
+
+class BackfillPage(BaseModel):
+    """Which forms to bring older leads in from; none named: every form the Page takes."""
+
+    model_config = ConfigDict(extra="forbid")
+    forms: list[str] | None = Field(default=None, max_length=100)
 
 
 class BackfillStarted(BaseModel):
@@ -454,6 +481,8 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             else None,
             last_pulled_at=_epoch_iso(config.get("last_pulled_at")),
             forms_covered=_covered(config.get("form_list"), forms),
+            forms_on_page=_covered(config.get("form_list"), "all"),
+            account=_account_view(config.get("account")),
             backfill=_backfill_view(meta_backfill.state(config)),
             problem=_problem_view(config.get("last_error")),
         )
@@ -541,6 +570,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         reply: str | None = Query(default=None, alias="format"),
         return_to: str | None = Query(default=None),
         card: str | None = Query(default=None),
+        switch: bool = Query(default=False),
     ) -> Response:
         cfg = meta_config()
         challenge = app_challenge(app_challenge_value)
@@ -554,7 +584,9 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 app_challenge=challenge,
                 card=settings_card,
             )
-        return started(meta.dialog_url(cfg, redirect_uri=callback_url(), state=state), reply)
+        return started(
+            meta.dialog_url(cfg, redirect_uri=callback_url(), state=state, switch=switch), reply
+        )
 
     @router.get("/meta/callback", response_model=None)
     async def meta_callback(request: Request, response: Response) -> Response:
@@ -615,6 +647,9 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         graph = meta.Graph(cfg)
         user = await graph.user_token(code=code, redirect_uri=callback_url())
         pages = await graph.pages(user.token)
+        # Who shared these Pages: each Page shows the account it came through, so a team
+        # with several Facebook accounts sees which is which (bug report #8).
+        account = await graph.me(user.token)
         # The organisation's own connection, sealed to it: it lists and writes the
         # datasets that lead stages go back to (Conversions API for CRM).
         row = await lead_settings(desk)
@@ -646,6 +681,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                     **(source.config or {}),
                     "page_name": page["name"],
                     "token": sealed,
+                    **({"account": account} if account else {}),
                 }
                 source.label = f"Meta · {page['name']}"[:120]
                 source.updated_at = desk.now
@@ -665,6 +701,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                         "page_name": page["name"],
                         "token": sealed,
                         "forms": "all",
+                        **({"account": account} if account else {}),
                     },
                     active=False,
                     received=0,
@@ -927,7 +964,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             source.updated_at = desk.now
             # The last week comes in now; the rest Meta keeps (90 days) follows in the
             # background, a slice a minute (meta_backfill).
-            imported = 0
+            imported = linked = 0
             page_name = str(source.config.get("page_name") or "")
             made: list[UUID] = []
             for lead in await graph.recent_leads(
@@ -937,13 +974,14 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                     desk, source, lead, page_name=page_name, made=made
                 )
                 imported += outcome == "created"
+                linked += outcome == "linked"
             await duplicate_intake.after_intake(desk, made)
             source.config = {
                 **{k: v for k, v in source.config.items() if k != "last_error"},
                 "last_pulled_at": now,
             }
             await desk.db.flush()
-            return Connected(page=page_view(source), imported=imported)
+            return Connected(page=page_view(source), imported=imported, linked=linked)
 
     @router.post(
         "/meta/pages/{page_id}/backfill",
@@ -951,10 +989,11 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         response_model_by_alias=True,
     )
     async def meta_backfill_page(
-        page_id: str, request: Request, response: Response
+        page_id: str, request: Request, response: Response, command: BackfillPage | None = None
     ) -> BackfillStarted:
-        """Bring in every lead Meta still keeps for this Page (90 days). Leads already
-        here are skipped; the first slice is filed now and the rest in the background."""
+        """Bring in every lead Meta still keeps for this Page (90 days), from every form it
+        takes or from the forms named (paused and archived ones too). Leads already here
+        are linked or skipped; the first slice is filed now and the rest in the background."""
         cfg = meta_config()
         async with desk_for(request, response, write=True) as desk:
             desk._require_manager()
@@ -972,6 +1011,12 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 if forms == "all" or not isinstance(forms, list)
                 else [str(form) for form in forms]
             )
+            if command is not None and command.forms:
+                # The forms the manager picked, whether or not the Page takes them live.
+                on_page = {str(form["id"]) for form in listed}
+                form_ids = [form for form in dict.fromkeys(command.forms) if form in on_page]
+                if not form_ids:
+                    raise DeskError(422, "Those forms aren't on this Page any more.")
             now = int(time.time())
             source.config = meta_backfill.begin(
                 meta_backfill.remember_forms(source.config, listed), form_ids=form_ids, now=now
@@ -1393,6 +1438,16 @@ def _waiting_words(code: str | None) -> str | None:
     return None
 
 
+def _account_view(value: object) -> MetaAccount | None:
+    if not isinstance(value, dict) or not value.get("name"):
+        return None
+    picture = value.get("picture")
+    return MetaAccount(
+        name=str(value["name"])[:100],
+        picture=picture if isinstance(picture, str) and picture.startswith("https://") else None,
+    )
+
+
 def _covered(form_list: object, forms: object) -> list[MetaForm]:
     """The forms whose leads come in, from the Page's last known list of forms."""
     known = [
@@ -1400,6 +1455,7 @@ def _covered(form_list: object, forms: object) -> list[MetaForm]:
             id=str(item["id"]),
             name=str(item.get("name") or item["id"]),
             status=str(item.get("status") or ""),
+            leads=item.get("leads") if isinstance(item.get("leads"), int) else None,
         )
         for item in (form_list if isinstance(form_list, list) else [])
         if isinstance(item, dict) and item.get("id")
@@ -1417,6 +1473,10 @@ def _backfill_view(state: dict[str, Any] | None) -> MetaBackfill | None:
         state=state["state"],
         created=int(state.get("created") or 0),
         seen=int(state.get("seen") or 0),
+        linked=int(state.get("linked") or 0),
+        repeat=int(state.get("repeat") or 0),
+        known=int(state.get("known") or 0),
+        forms=len(state.get("forms") or []),
         since=_epoch_iso(state.get("since")),
         started_at=_epoch_iso(state.get("started_at")),
         finished_at=_epoch_iso(state.get("finished_at")),
