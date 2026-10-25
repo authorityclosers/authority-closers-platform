@@ -208,6 +208,8 @@ class TransferOwnerRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     # A JSON body carries the identifier as a string.
     person_id: UUID = Field(strict=False)
+    # The organisation's name, typed by the owner (owner, 25 Oct 2026: never one click).
+    confirm_name: str = Field(min_length=1, max_length=200)
 
 
 class OwnerTransferResponse(BaseModel):
@@ -668,6 +670,7 @@ def install_organisation_http(
             body.person_id,
             key,
             actor_person_id=auth.resolved.actor.person_id,
+            confirm_name=body.confirm_name,
         )
         return OwnerTransferResponse.model_validate_json(json.dumps(result))
 

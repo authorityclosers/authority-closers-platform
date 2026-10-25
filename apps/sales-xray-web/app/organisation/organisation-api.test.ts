@@ -177,10 +177,10 @@ const actions = [
   ],
   [
     "transfer",
-    () => transferOwnership(person),
+    () => transferOwnership(person, "Fictional Homes"),
     "/owner",
     "POST",
-    { person_id: person },
+    { person_id: person, confirm_name: "Fictional Homes" },
   ],
   [
     "revoke",

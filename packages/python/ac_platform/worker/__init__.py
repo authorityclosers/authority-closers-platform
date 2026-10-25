@@ -85,6 +85,11 @@ from ac_platform.identity.provider_link_email import (
     PROVIDER_REMOVED_ROUTE,
 )
 from ac_platform.identity.reviewer_auth import REVIEWER_AUTH_EVENT, REVIEWER_AUTH_JOB
+from ac_platform.organisations.ownership_email import (
+    OWNERSHIP_EVENT,
+    OWNERSHIP_JOB,
+    OWNERSHIP_ROUTE,
+)
 from ac_platform.outbox.models import Job, JobStatus, RecoveryStatus
 from ac_platform.outbox.policy import ReconciliationRequiredError
 from ac_platform.outbox.repository import (
@@ -144,6 +149,7 @@ OUTBOX_JOB_ROUTES: Mapping[str, OutboxJobRoute] = MappingProxyType(
     {
         ENROLLMENT_WELCOME_EVENT: ENROLLMENT_WELCOME_ROUTE,
         ORGANISATION_INVITATION_EVENT: ORGANISATION_INVITATION_ROUTE,
+        OWNERSHIP_EVENT: OWNERSHIP_ROUTE,
         STAFF_KEY_CREATED_EVENT: STAFF_KEY_CREATED_ROUTE,
         PROVIDER_LINKED_EVENT: PROVIDER_LINKED_ROUTE,
         PROVIDER_REMOVED_EVENT: PROVIDER_REMOVED_ROUTE,
@@ -548,6 +554,7 @@ def build_default_dispatcher(
         {
             ENROLLMENT_WELCOME_JOB: handler,
             ORGANISATION_INVITATION_JOB: handler,
+            OWNERSHIP_JOB: handler,
             STAFF_KEY_CREATED_JOB: handler,
             PROVIDER_LINKED_JOB: handler,
             PROVIDER_REMOVED_JOB: handler,
@@ -720,6 +727,7 @@ class DurableWorker:
             if job.kind not in {
                 ENROLLMENT_WELCOME_JOB,
                 ORGANISATION_INVITATION_JOB,
+                OWNERSHIP_JOB,
                 STAFF_KEY_CREATED_JOB,
                 PROVIDER_LINKED_JOB,
                 PROVIDER_REMOVED_JOB,
@@ -837,6 +845,12 @@ class DurableWorker:
             )
 
             return await resolve_staff_key_created_message(
+                session, self._settings, job, provider_key=provider_key
+            )
+        if job.kind == OWNERSHIP_JOB:
+            from ac_platform.organisations.ownership_email import resolve_ownership_message
+
+            return await resolve_ownership_message(
                 session, self._settings, job, provider_key=provider_key
             )
         if job.kind == ORGANISATION_INVITATION_JOB:

@@ -403,6 +403,60 @@ def render_email(message: EmailMessage) -> RenderedEmail:
             ),
         )
 
+    if message.template == "organisation-ownership":
+        # Owner transfer (organisations/ownership_email.py): both people are told.
+        if message.communication_class != "verification_security":
+            raise PermanentProviderError("ownership notice has the wrong communication class")
+        organisation = _required_text(message.variables, "organisation_name", maximum=200)
+        new_owner = _required_text(message.variables, "new_owner_name", maximum=200)
+        former_owner = _required_text(message.variables, "former_owner_name", maximum=200)
+        recipient = message.variables.get("recipient")
+        if recipient not in {"new_owner", "former_owner"}:
+            raise PermanentProviderError("ownership notice names no recipient side")
+        support = _required_text(message.variables, "support_email", maximum=120)
+        try:
+            changed = datetime.fromisoformat(
+                _required_text(message.variables, "changed_at", maximum=64).replace("Z", "+00:00")
+            )
+        except ValueError as error:
+            raise PermanentProviderError("ownership notice time must be ISO-8601") from error
+        if changed.tzinfo is None:
+            raise PermanentProviderError("ownership notice time must include a timezone")
+        when = changed.astimezone(UTC).strftime("%d %b %Y at %H:%M UTC")
+        link = _action_link(message.variables)
+        safe_link = html.escape(link, quote=True)
+        safe_support = html.escape(support)
+        if recipient == "new_owner":
+            subject = f"You are now the owner of {organisation} on Sales Xray"
+            what = (
+                f"{former_owner} made you the owner of {organisation} on {when}. You can now "
+                "manage everything there, including billing, and only you can give ownership "
+                f"to someone else. {former_owner} is now an admin."
+            )
+        else:
+            subject = f"{new_owner} is now the owner of {organisation} on Sales Xray"
+            what = (
+                f"Ownership of {organisation} moved from you to {new_owner} on {when}. You are "
+                f"now an admin there. Only {new_owner} can give ownership back."
+            )
+        not_you = f"Not expected? Write to {support} at once."
+        return RenderedEmail(
+            subject=subject,
+            text=f"Hi {first_name},\n\n{what}\n\n{not_you}\n{link}",
+            html=_email_layout(
+                preheader=html.escape(subject) + ".",
+                eyebrow="Organisation",
+                heading=html.escape(subject) + ".",
+                greeting=f"Hi {safe_name},",
+                paragraphs=(html.escape(what),),
+                action_label="See your organisation",
+                action_link=safe_link,
+                security_note=html.escape(not_you).replace(
+                    html.escape(support), f"<strong>{safe_support}</strong>"
+                ),
+            ),
+        )
+
     if message.template in {"identity-account-closed", "identity-account-deletion-requested"}:
         # Settings -> Security -> Delete account (identity/account_deletion.py).
         if message.communication_class != "verification_security":

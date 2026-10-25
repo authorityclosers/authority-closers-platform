@@ -588,10 +588,12 @@ export const removeMember = (personId: string) =>
 export const revokeInvite = (inviteId: string) =>
   call(`/invites/${encodeURIComponent(inviteId)}`, { method: "DELETE" });
 
-export const transferOwnership = (personId: string) =>
+/** Make someone the owner. The organisation's name is typed, and the server
+ * checks it too, so it is never one click (owner, 25 Oct 2026). */
+export const transferOwnership = (personId: string, confirmName: string) =>
   call("/owner", {
     method: "POST",
-    body: JSON.stringify({ person_id: personId }),
+    body: JSON.stringify({ person_id: personId, confirm_name: confirmName }),
   });
 
 export const saveDomains = (verifiedDomains: string[], autoJoin: boolean) =>

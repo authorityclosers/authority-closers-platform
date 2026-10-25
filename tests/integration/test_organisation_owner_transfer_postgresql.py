@@ -122,7 +122,13 @@ def test_transfer_is_atomic_under_concurrency_and_shared_fences(postgres_harness
                     )
 
                 def transfer(actor_id, target, key):
-                    return send("POST", "/owner", actor_id, key, {"person_id": str(target)})
+                    return send(
+                        "POST",
+                        "/owner",
+                        actor_id,
+                        key,
+                        {"person_id": str(target), "confirm_name": "Fictional Transfer Team"},
+                    )
 
                 original = memberships()[owner].created_at
                 # A request holding the target's shared authentication fence

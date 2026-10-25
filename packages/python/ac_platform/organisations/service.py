@@ -32,6 +32,7 @@ from ac_platform.organisations.invitations import (
     invitation_policies,
 )
 from ac_platform.organisations.invite_email import enqueue_invitation_email
+from ac_platform.organisations.ownership_email import enqueue_ownership_emails
 from ac_platform.organisations.usage import invite_row, member_rows, organisation_seats
 from ac_platform.tenancy.models import (
     Membership,
@@ -706,7 +707,14 @@ class OrganisationService:
         *,
         actor_person_id: UUID,
         operator_reference: str | None = None,
+        confirm_name: str | None = None,
     ) -> dict[str, object]:
+        """Make another member the owner; the owner becomes an admin.
+
+        An owner in the app types the organisation's name (``confirm_name``), checked
+        here after the owner check, so no client can do it in one click (owner, 25 Oct
+        2026). An operator gives a reason instead. Both people are emailed.
+        """
         intent = {
             "action": "transfer_ownership",
             "person_id": str(person_id),
@@ -734,6 +742,10 @@ class OrganisationService:
             owner_id = current
         elif acting != "owner":
             raise AuthorizationDenied("Only the owner can transfer ownership.")
+        if confirm_name is not None:
+            tenant = await self.session.get(Tenant, tenant_id)
+            if tenant is None or not _same_name(confirm_name, tenant.name):
+                raise DomainError("Type the organisation's name to confirm.")
         if person_id == owner_id:
             raise ResourceConflict("This person is already the owner.")
         locked = await self._lock_members(tenant_id, owner_id, person_id)
@@ -767,7 +779,7 @@ class OrganisationService:
             "owner": (await member_rows(self.session, tenant_id, person_id))[0],
             "former_owner": (await member_rows(self.session, tenant_id, owner_id))[0],
         }
-        await self._audit(
+        transferred = await self._audit(
             tenant_id,
             command_id,
             "organisation.ownership_transferred",
@@ -786,6 +798,8 @@ class OrganisationService:
             operator_reference,
             actor_person_id=actor_person_id,
         )
+        # Both people are told by email (owner, 25 Oct 2026: not one quiet click).
+        await enqueue_ownership_emails(self.session, transferred)
         return result
 
     async def request_member(
@@ -1367,8 +1381,8 @@ class OrganisationService:
         reason: str | None,
         *,
         actor_person_id: UUID | None = None,
-    ) -> None:
-        await append_audit_event(
+    ) -> AuditEvent:
+        return await append_audit_event(
             self.session,
             tenant_id=tenant_id,
             actor_person_id=actor_person_id,
@@ -1380,6 +1394,11 @@ class OrganisationService:
             reason=reason,
             request_id=str(command_id),
         )
+
+
+def _same_name(typed: str, name: str) -> bool:
+    """Typed as shown, ignoring case and extra spaces."""
+    return " ".join(typed.split()).casefold() == " ".join(name.split()).casefold()
 
 
 def _domain_result(
