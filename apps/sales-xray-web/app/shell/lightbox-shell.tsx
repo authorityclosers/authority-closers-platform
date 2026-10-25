@@ -131,6 +131,7 @@ import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
 import { leavingOverlay } from "../ui/back-close";
 import { tick } from "../ui/haptics";
+import { DueSoonWatch } from "../leads/due-soon";
 import { LeadsTabIcon } from "../leads/leads-badge";
 import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
 import styles from "./lightbox-shell.module.css";
@@ -1256,6 +1257,8 @@ function LightboxShellFrame({
       <a className={styles.skip} href="#main-content">
         Skip to workspace
       </a>
+      {/* Work due within the hour: the red banner (demo, workflow 12). */}
+      <DueSoonWatch live={leadsBadgeLive} />
       <aside
         id="sales-xray-sidebar"
         className={styles.sidebar}

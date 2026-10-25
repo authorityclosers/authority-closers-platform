@@ -53,6 +53,10 @@ class MembershipRole(StrEnum):
     ADMIN = "admin"
     OWNER = "owner"
     MEMBER = "member"
+    # Organisation roles from Roles B (migration 0136; tenancy/roles.py).
+    MANAGER = "manager"
+    VIEWER = "viewer"
+    FINANCE = "finance"
 
 
 class MembershipStatus(StrEnum):
@@ -127,7 +131,8 @@ class Membership(Base):
             name="fk_memberships_person_id_persons",
         ),
         CheckConstraint(
-            "role IN ('learner', 'support', 'admin', 'owner', 'processing', 'member')",
+            "role IN ('learner', 'support', 'admin', 'owner', 'processing', 'member',"
+            " 'manager', 'viewer', 'finance')",
             name="role_supported",
         ),
         CheckConstraint(
@@ -264,7 +269,9 @@ class OrganisationInvite(Base):
         ForeignKeyConstraint(
             ["tenant_id"], ["organisations.tenant_id"], name="fk_org_invites_organisation"
         ),
-        CheckConstraint("role IN ('admin', 'member')", name="role_supported"),
+        CheckConstraint(
+            "role IN ('admin', 'member', 'manager', 'viewer', 'finance')", name="role_supported"
+        ),
         CheckConstraint("status IN ('pending', 'accepted', 'revoked')", name="status_supported"),
         UniqueConstraint("command_id", name="uq_org_invites_command_id"),
         Index(

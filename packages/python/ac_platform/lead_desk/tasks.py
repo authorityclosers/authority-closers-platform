@@ -15,7 +15,7 @@ one ``task`` event on the lead, so the lead's history and My work show it.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, Final, Literal
@@ -23,6 +23,7 @@ from uuid import UUID, uuid4
 
 from sqlalchemy import and_, func, select, update
 
+from ac_platform.identity import person_photos
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk import scheduler
 from ac_platform.lead_desk.commitments import IST, TASK_KINDS, title_for
@@ -73,7 +74,12 @@ def bucket(task: LeadTask, now: datetime) -> TaskBucket | None:
     return "today" if task.starts_at < today_end else "upcoming"
 
 
-def view(task: LeadTask, lead_name: str, now: datetime) -> TaskView:
+def view(
+    task: LeadTask,
+    lead_name: str,
+    now: datetime,
+    photos: Mapping[UUID, str | None] | None = None,
+) -> TaskView:
     return TaskView(
         task_id=task.id,
         lead_id=task.lead_id,
@@ -94,6 +100,23 @@ def view(task: LeadTask, lead_name: str, now: datetime) -> TaskView:
         owner_person_id=task.owner_person_id,
         overdue=bucket(task, now) == "overdue",
         bucket=bucket(task, now),
+        created_by_person_id=task.created_by_person_id,
+        created_by_photo_url=(photos or {}).get(task.created_by_person_id)
+        if task.created_by_person_id
+        else None,
+    )
+
+
+async def views(
+    db: Any, tasks: Iterable[LeadTask], lead_name: str | None, now: datetime, names: Any = None
+) -> tuple[TaskView, ...]:
+    """Tasks with their writers' photos: one photo read for them all. ``names`` gives each
+    task's lead name when they are on different leads."""
+    listed = list(tasks)
+    photos = await person_photos.photo_urls(db, (task.created_by_person_id for task in listed))
+    return tuple(
+        view(task, lead_name if lead_name is not None else names[task.id], now, photos)
+        for task in listed
     )
 
 
@@ -175,7 +198,9 @@ class TaskBook:
             )
         ).all()
         return TaskList(
-            tasks=tuple(view(task, name, self.now) for task, name in rows),
+            tasks=await views(
+                self.db, (task for task, _ in rows), None, self.now, {t.id: n for t, n in rows}
+            ),
             counts=counts,
         )
 
@@ -253,7 +278,7 @@ class TaskBook:
             if same.lead_id != lead_id:
                 raise DeskError(409, "That request was already used for another lead.")
             lead = await self.desk._lead(lead_id)
-            return view(same, lead.name, self.now)
+            return (await views(self.db, [same], lead.name, self.now))[0]
         lead = await self.desk._lead(lead_id, lock=True)
         self._may_write(lead)
         if command.kind not in TASK_KINDS:
@@ -299,7 +324,7 @@ class TaskBook:
         await self.db.flush()
         await self.project(lead)
         await self.db.flush()
-        return view(task, lead.name, self.now)
+        return (await views(self.db, [task], lead.name, self.now))[0]
 
     async def _changing(self, task_id: UUID, command: TaskAction, action: Action) -> _Change:
         """The task, locked, and its lead when the change goes ahead. A replayed command
@@ -339,7 +364,7 @@ class TaskBook:
 
     async def _answer(self, change: _Change) -> TaskView:
         lead = change.lead or await self.desk._lead(change.task.lead_id)
-        return view(change.task, lead.name, self.now)
+        return (await views(self.db, [change.task], lead.name, self.now))[0]
 
     async def done(self, task_id: UUID, command: TaskAction) -> TaskView:
         change = await self._changing(task_id, command, "done")

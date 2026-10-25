@@ -2,8 +2,9 @@
  * Shake the phone to report a problem, in the Sales X-Ray phone app only (a
  * phone browser would ask for motion permission, and laptops do not shake).
  * Three hard shakes within a second open the reporter; walking, typing or a
- * bump in the pocket does not. Never while a sheet or dialog is open, never
- * twice within five seconds, and the person can turn it off in the reporter.
+ * bump in the pocket does not. It works over an open menu or sheet (owner, 25 Oct
+ * 2026: "any menu if on I need the report a bug to work"), never over the reporter
+ * itself, never twice within five seconds, and the person can turn it off there.
  */
 
 import { useEffect, useSyncExternalStore } from "react";
@@ -70,7 +71,7 @@ export function useShakeToReport(active: boolean, onShake: () => void): void {
     const listen = (event: DeviceMotionEvent) => {
       const a = event.accelerationIncludingGravity;
       if (!a || a.x === null || a.y === null || a.z === null) return;
-      if (document.hidden || document.querySelector("dialog[open]")) return;
+      if (document.hidden) return;
       if (shaken(a.x, a.y, a.z)) onShake();
     };
     window.addEventListener("devicemotion", listen);

@@ -1,5 +1,6 @@
 "use client";
 
+import { roleLabel } from "../roles";
 import { Building2, MailOpen } from "lucide-react";
 import { useRef, useState } from "react";
 
@@ -148,7 +149,7 @@ export function InvitesView({ inviteId }: { inviteId: string | null }) {
                     icon={<Building2 size={15} aria-hidden="true" />}
                     title={invite.organisationName}
                     meta={[
-                      `Invited as ${invite.role === "admin" ? "admin" : "member"}`,
+                      `Invited as ${roleLabel(invite.role).toLowerCase()}`,
                       until ? `Open until ${until}` : null,
                     ]}
                     end={

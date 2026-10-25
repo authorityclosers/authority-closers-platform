@@ -63,7 +63,9 @@ def test_absent_account_is_empty_only_after_eligibility(setup, name):
     assert (history.account_id, history.entries, history.next_before) == (None, [], None)
     assert setup.eligibility.await_count == 2
     if name == "organisation":
-        assert setup.eligibility.await_args.kwargs["roles"] == frozenset({"owner", "admin"})
+        assert setup.eligibility.await_args.kwargs["roles"] == frozenset(
+            {"owner", "admin", "finance"}
+        )
     setup.database.execute.assert_not_awaited()
     setup.database.add.assert_not_called()
 

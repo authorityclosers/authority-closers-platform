@@ -69,6 +69,7 @@ import {
 } from "./open";
 import { flush, keepNow, type OutboxItem } from "./outbox";
 import { recentErrors } from "./recent-errors";
+import { recentSteps } from "../telemetry";
 import { scrubRoute } from "./scrub";
 import { setShakeToReport, useShakeSetting, useShakeToReport } from "./shake";
 import { VoiceNoteRow, type VoiceNote } from "./voice-note";
@@ -299,7 +300,7 @@ export function BugReportSheet({
           : text,
         blocksWork,
         route,
-        context: await reportContext(),
+        context: { ...(await reportContext()), trail: recentSteps() },
         errors: recentErrors(),
         picture: include && picture.state === "ready" ? picture.picture : null,
         voice: voice ? { blob: voice.blob, seconds: voice.seconds } : null,
@@ -686,7 +687,8 @@ export function BugReportHost() {
     tick();
     openBugReport();
   }, []);
-  useShakeToReport(inApp, onShake);
+  // Over a menu or another sheet too (bug #5, 25 Oct 2026); not over the reporter.
+  useShakeToReport(inApp && !open, onShake);
 
   useEffect(() => {
     const send = () => {
@@ -713,7 +715,7 @@ export function BugReportHost() {
             notify({
               id: `bug-fixed-${report.bugId}`,
               tone: "success",
-              title: `Fixed: “${report.words.slice(0, 60)}${report.words.length > 60 ? "…" : ""}”`,
+              title: `Solved: “${report.words.slice(0, 60)}${report.words.length > 60 ? "…" : ""}”`,
               message: "Thanks for reporting it. If it still happens, tell us.",
               timeout: 12_000,
               action: { label: "Report again", run: () => openBugReport() },

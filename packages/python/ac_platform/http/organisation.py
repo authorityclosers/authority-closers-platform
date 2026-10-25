@@ -30,14 +30,14 @@ from ac_platform.tenancy.models import (
     OrganisationInvite,
     Tenant,
 )
-from ac_platform.tenancy.roles import ORG_ROLES
+from ac_platform.tenancy.roles import ORG_ROLES, AssignableRoleName, OrgRoleName
 
 
 class OrganisationResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     tenant_id: UUID
     name: str
-    role: Literal["owner", "admin", "member"]
+    role: OrgRoleName
     verified_domains: list[str]
     auto_join: bool
     member_count: int
@@ -67,7 +67,7 @@ class OrganisationProfileResponse(BaseModel):
     tenant_id: UUID
     handle: str
     name: str
-    your_role: Literal["owner", "admin", "member"]
+    your_role: OrgRoleName
 
 
 class ChangeHandleRequest(BaseModel):
@@ -85,7 +85,7 @@ class PendingInviteResponse(BaseModel):
     invite_id: UUID
     tenant_id: UUID
     organisation_name: str
-    role: Literal["admin", "member"]
+    role: AssignableRoleName
     invited_at: datetime
     expires_at: datetime | None
 
@@ -100,7 +100,7 @@ class AcceptedInviteResponse(BaseModel):
     invite_id: UUID
     tenant_id: UUID
     person_id: UUID
-    role: Literal["owner", "admin", "member"]
+    role: OrgRoleName
     status: Literal["accepted"]
 
 
@@ -110,7 +110,7 @@ class MemberResponse(BaseModel):
     invite_id: UUID | None
     name: str | None
     email: str | None
-    role: Literal["owner", "admin", "member"]
+    role: OrgRoleName
     status: Literal["active", "invited"]
     joined_at: datetime | None
     last_active_at: datetime | None
@@ -197,12 +197,12 @@ class PersonActivityResponse(BaseModel):
 class AddMemberRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     email: str
-    role: Literal["admin", "member"]
+    role: AssignableRoleName
 
 
 class ChangeRoleRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    role: Literal["admin", "member"]
+    role: AssignableRoleName
 
 
 class TransferOwnerRequest(BaseModel):
@@ -311,7 +311,7 @@ def install_organisation_http(
                     invite_id=invite.id,
                     tenant_id=invite.tenant_id,
                     organisation_name=tenant.name,
-                    role=cast(Literal["admin", "member"], invite.role),
+                    role=cast(AssignableRoleName, invite.role),
                     invited_at=invite.created_at,
                     expires_at=policies[invite.id].expires_at,
                 )
@@ -359,7 +359,7 @@ def install_organisation_http(
             tenant_id=result.tenant_id,
             handle=result.slug,
             name=result.name,
-            your_role=cast(Literal["owner", "admin", "member"], result.owner_role),
+            your_role=cast(OrgRoleName, result.owner_role),
         )
 
     @router.get("/profile", response_model=OrganisationProfileResponse)
@@ -372,7 +372,7 @@ def install_organisation_http(
             tenant_id=tenant.id,
             handle=tenant.slug,
             name=tenant.name,
-            your_role=cast(Literal["owner", "admin", "member"], auth.resolved.membership_role),
+            your_role=cast(OrgRoleName, auth.resolved.membership_role),
         )
 
     @router.put("/handle", response_model=OrganisationProfileResponse)
@@ -416,7 +416,7 @@ def install_organisation_http(
         return OrganisationResponse(
             tenant_id=tenant.id,
             name=tenant.name,
-            role=cast(Literal["owner", "admin", "member"], auth.resolved.membership_role),
+            role=cast(OrgRoleName, auth.resolved.membership_role),
             verified_domains=[] if domains is None else domains.verified_domains,
             auto_join=False if domains is None else domains.auto_join,
             member_count=count or 0,

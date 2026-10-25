@@ -6,6 +6,7 @@
  * and the session, never the Chats page, its API client or the Lead Desk.
  */
 
+import { can } from "../organisation/roles";
 import { MessagesSquare } from "lucide-react";
 import type { ReactNode } from "react";
 
@@ -74,7 +75,7 @@ export function useManagesChats(): boolean | null {
   const role = access.workspaces.find(
     (workspace) => workspace.tenant_id === tenantId,
   )?.role;
-  return role === "owner" || role === "admin";
+  return can(role, "leads.manage");
 }
 
 /** The filter row as it stands (Liquid Glass polish, 22 Oct 2026): Name, whose

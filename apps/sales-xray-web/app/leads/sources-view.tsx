@@ -413,6 +413,34 @@ function SourceRow({
  * Meta's Leads Access Manager: a business can choose which CRMs read its Pages'
  * leads. Once it is in use, Sales Xray must be on that list.
  */
+/**
+ * Another Facebook account, or a Page someone else manages (bug reports #7 and #8,
+ * 25 Oct 2026: a second account got "App not active" or "page not existing").
+ */
+export function OtherAccountSteps() {
+  return (
+    <details className={styles.metaHelp}>
+      <summary>Connecting another Facebook account or Page?</summary>
+      <ul>
+        <li>
+          Facebook connects the account signed in on this phone or browser. To
+          use another one, sign out of Facebook first, or press Connect in a
+          private window.
+        </li>
+        <li>
+          While Meta reviews Sales Xray, Facebook lets only accounts we have
+          added connect. If it says &ldquo;App not active&rdquo;, report it with
+          the account&apos;s name and we add it the same day.
+        </li>
+        <li>
+          A Page someone else runs: ask them to give your Facebook account
+          access in the Page&apos;s settings, then press Add a Page again.
+        </li>
+      </ul>
+    </details>
+  );
+}
+
 export function LeadAccessSteps({ open }: { open?: boolean }) {
   return (
     <details className={styles.metaHelp} open={open}>
@@ -691,6 +719,7 @@ function MetaTile() {
       ) : null}
       {status?.configured && status.pages.length ? <SpendSummary /> : null}
       {status?.configured ? <LeadAccessSteps open={blocked} /> : null}
+      {status?.configured ? <OtherAccountSteps /> : null}
       {status?.configured && status.pages.length ? (
         <JourneyStrip key={appConnected} />
       ) : null}

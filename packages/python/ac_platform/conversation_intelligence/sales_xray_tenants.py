@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.application.settings import Settings
 from ac_platform.tenancy.models import Organisation, Tenant
+from ac_platform.tenancy.roles import ORG_ROLES
 
 if TYPE_CHECKING:
     from ac_platform.http.conversation_intake import ConversationIntakeRuntime
@@ -20,7 +21,9 @@ CLAIM_PERSONAL_ONLY_MESSAGE = "Switch to Personal to claim this call."
 # Memberships that may hold Sales Xray minutes: Personal learners and the
 # human roles of an approved organisation. The shared processing identity never
 # qualifies.
-SALES_XRAY_MEMBER_ROLES: frozenset[str] = frozenset({"learner", "owner", "admin", "member"})
+# Learners, and every organisation role (Roles B adds Sales manager, Viewer and Finance;
+# what each may do is tenancy/roles.py's, and read-only roles are refused writes there).
+SALES_XRAY_MEMBER_ROLES: frozenset[str] = frozenset({"learner", *ORG_ROLES})
 # The historical scope of minute administration outside a served tenant.
 LEARNER_ROLES: frozenset[str] = frozenset({"learner"})
 

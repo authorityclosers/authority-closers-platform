@@ -1423,7 +1423,9 @@ def _required_text(value: str, field: str, maximum: int) -> str:
 def _member_role(value: str) -> str:
     normalized = value.strip().lower()
     if normalized not in ASSIGNABLE_ROLES:
-        raise OrganisationCommandError("member role must be admin or member")
+        raise OrganisationCommandError(
+            "member role must be admin, manager, member, viewer or finance"
+        )
     return normalized
 
 

@@ -224,3 +224,14 @@ it("finishes a Google Connect the app brought back to this page", async () => {
   );
   expect(window.location.hash).toBe("");
 });
+
+// Bug reports #7 and #8 (25 Oct 2026): another Facebook account, "App not active", a
+// Page someone else runs.
+it("explains connecting another Facebook account or Page", async () => {
+  const { renderToStaticMarkup } = await import("react-dom/server");
+  const { OtherAccountSteps } = await import("./sources-view");
+  const html = renderToStaticMarkup(<OtherAccountSteps />);
+  expect(html).toContain("App not active");
+  expect(html).toContain("private window");
+  expect(html).toContain("Add a Page again");
+});

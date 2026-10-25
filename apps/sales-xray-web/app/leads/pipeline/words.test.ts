@@ -137,10 +137,10 @@ describe("the timeline", () => {
 describe("waits in words", () => {
   it("reads as a time, never 1358 min", async () => {
     const { waitWords } = await import("../leads-client");
-    expect(waitWords(45)).toBe("45 min");
-    expect(waitWords(1358)).toBe("22 h 38 min");
-    expect(waitWords(120)).toBe("2 h");
-    expect(waitWords(3120)).toBe("2 d 4 h");
+    expect(waitWords(45)).toBe("45m");
+    expect(waitWords(1358)).toBe("22h 38m");
+    expect(waitWords(120)).toBe("2h");
+    expect(waitWords(3120)).toBe("2d 4h");
   });
 });
 

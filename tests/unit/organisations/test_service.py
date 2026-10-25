@@ -520,7 +520,9 @@ async def test_add_member_is_idempotent_verified_and_reactivates_explicitly(
         )
     with pytest.raises(OrganisationCommandError, match="active and have a verified email"):
         await state.service.add_member(organisation.tenant_id, state.inactive_id, "member", uuid4())
-    with pytest.raises(OrganisationCommandError, match="role must be admin or member"):
+    with pytest.raises(
+        OrganisationCommandError, match="role must be admin, manager, member, viewer or finance"
+    ):
         await state.service.add_member(organisation.tenant_id, state.worker_id, "owner", uuid4())
     removed = state.session.get(Membership, (organisation.tenant_id, state.worker_id))
     assert removed is not None

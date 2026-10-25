@@ -2,7 +2,7 @@
 
 import json
 from datetime import UTC, datetime
-from typing import Annotated, Literal
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Request
@@ -29,6 +29,7 @@ from ac_platform.organisations.workspace_kinds import (
     ordered,
 )
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
+from ac_platform.tenancy.roles import AssignableRoleName
 
 READ_CAPABILITY = "platform_tenants_read"
 MANAGE_CAPABILITY = "platform_organisations_manage"
@@ -72,11 +73,11 @@ class ReasonRequest(_Strict):
 
 class OperatorAddMemberRequest(ReasonRequest):
     email: str
-    role: Literal["admin", "member"]
+    role: AssignableRoleName
 
 
 class OperatorChangeRoleRequest(ReasonRequest):
-    role: Literal["admin", "member"]
+    role: AssignableRoleName
 
 
 class OperatorTransferOwnerRequest(ReasonRequest):

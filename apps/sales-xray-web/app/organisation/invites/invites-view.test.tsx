@@ -115,7 +115,7 @@ it("joins the invitation from the email link and opens the organisation", async 
   // The linked invitation leads and alone carries the primary button.
   const rows = [...host.querySelectorAll("li")];
   expect(rows[0].textContent).toContain("Brightline Coaching");
-  expect(rows[0].textContent).toContain("Invited as member");
+  expect(rows[0].textContent).toContain("Invited as seller");
   expect(rows[0].textContent).toContain("Open until");
   const join = rows[0].querySelector("button")!;
   expect(join.getAttribute("data-variant")).toBe("primary");

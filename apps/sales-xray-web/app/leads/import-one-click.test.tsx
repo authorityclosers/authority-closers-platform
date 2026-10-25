@@ -10,6 +10,16 @@ vi.mock("./leads-client", async (original) => ({
   commitImport: (...args: unknown[]) => commitImport(...args),
 }));
 
+vi.mock("next/link", () => ({
+  default: ({
+    href,
+    children,
+  }: {
+    href: string;
+    children: React.ReactNode;
+  }) => <a href={href}>{children}</a>,
+}));
+
 vi.mock("./use-pipelines", () => ({
   usePipelines: () => null,
   several: () => false,
@@ -17,6 +27,7 @@ vi.mock("./use-pipelines", () => ({
 }));
 
 import { resetBackCloseForTests } from "../ui/back-close";
+import { settingsPath } from "../settings/settings-sections";
 import { ImportDialog } from "./capture-dialogs";
 
 (
@@ -34,7 +45,13 @@ const settle = async () =>
     for (let index = 0; index < 6; index += 1) await Promise.resolve();
   });
 
-async function mount(importable: number) {
+async function mount(
+  importable: number,
+  {
+    warnings,
+    canManage = false,
+  }: { warnings?: string[]; canManage?: boolean } = {},
+) {
   previewImport.mockResolvedValue({
     file_name: "zoho.csv",
     headers: ["First Name", "Last Name", "Mobile", "Lead Status"],
@@ -67,6 +84,7 @@ async function mount(importable: number) {
     skipped: 0,
     assigned: 2,
     waiting: 0,
+    ...(warnings ? { warnings } : {}),
   });
   host = document.createElement("div");
   document.body.append(host);
@@ -75,7 +93,7 @@ async function mount(importable: number) {
     root.render(
       <ImportDialog
         open
-        canManage={false}
+        canManage={canManage}
         onClose={() => undefined}
         onDone={() => undefined}
         pasted={"Name\tPhone\nAsha Example\t98760 72001"}
@@ -127,4 +145,26 @@ it("shows the columns when many rows make no lead", async () => {
   const dialog = await mount(1);
   expect(dialog.querySelectorAll("select").length).toBeGreaterThan(0);
   expect(button(dialog, "Change columns")).toBeUndefined();
+});
+
+it("says who the import took past their limit, as a warning with Change limits", async () => {
+  const warning = "Asha now has 58 open leads, 8 over their limit of 50.";
+  const dialog = await mount(2, { warnings: [warning], canManage: true });
+  await act(async () => button(dialog, "Import 2 leads")!.click());
+  await settle();
+  const box = dialog.querySelector("[data-import-warnings]")!;
+  expect(box.getAttribute("role")).toBe("status");
+  expect(box.textContent).toContain(warning);
+  expect(box.querySelector("a")?.getAttribute("href")).toBe(
+    settingsPath("lead-rules"),
+  );
+  expect(box.querySelectorAll("a")).toHaveLength(1);
+});
+
+it("shows no warning box when the import stayed within every limit", async () => {
+  const dialog = await mount(2, { warnings: [], canManage: true });
+  await act(async () => button(dialog, "Import 2 leads")!.click());
+  await settle();
+  expect(dialog.querySelector("[data-import-warnings]")).toBeNull();
+  expect(dialog.textContent).not.toContain("Change limits");
 });

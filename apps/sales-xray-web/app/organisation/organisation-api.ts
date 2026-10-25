@@ -4,7 +4,16 @@ import { earlyFetch } from "../early-reads";
 import type { ActivityDay } from "../dashboard/dashboard-data";
 import { displayName, displayNameOf } from "../display-name";
 
-export type OrgRole = "owner" | "admin" | "member";
+// Roles B (migration 0136): Sales manager, Viewer and Finance; sellers stay "member".
+export const ORG_ROLES = [
+  "owner",
+  "admin",
+  "manager",
+  "member",
+  "viewer",
+  "finance",
+] as const;
+export type OrgRole = (typeof ORG_ROLES)[number];
 
 export const organisationDetailFields = [
   "name",
@@ -151,7 +160,7 @@ const date = (value: unknown) =>
 const count = (value: unknown): value is number =>
   typeof value === "number" && Number.isFinite(value) && value >= 0;
 const validRole = (value: unknown): value is OrgRole =>
-  value === "owner" || value === "admin" || value === "member";
+  ORG_ROLES.includes(value as OrgRole);
 
 export function parseOrganisation(value: unknown): Organisation {
   const data = obj(value);
@@ -610,7 +619,7 @@ export type PendingInvite = {
   inviteId: string;
   tenantId: string;
   organisationName: string;
-  role: "admin" | "member";
+  role: Exclude<OrgRole, "owner">;
   invitedAt: string | null;
   expiresAt: string | null;
 };
@@ -624,7 +633,8 @@ export function parsePendingInvites(value: unknown): PendingInvite[] {
       !id(item.invite_id) ||
       !id(item.tenant_id) ||
       !name ||
-      (item.role !== "admin" && item.role !== "member")
+      !validRole(item.role) ||
+      item.role === "owner"
     )
       return [];
     return [

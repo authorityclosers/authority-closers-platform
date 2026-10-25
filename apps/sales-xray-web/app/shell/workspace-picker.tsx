@@ -12,6 +12,7 @@
  * - "Create an organisation" apart from the list, as an action, never
  *   mistaken for a place you can switch to.
  */
+import { roleLabel } from "../organisation/roles";
 import { Building2, Check, MailOpen, Plus } from "lucide-react";
 
 import type { PendingInvite } from "../organisation/organisation-api";
@@ -207,9 +208,7 @@ export function WorkspacePicker({
               </span>
               <span className={styles.copy}>
                 <b>{invite.organisationName}</b>
-                <small>
-                  Invited as {invite.role === "admin" ? "admin" : "member"}
-                </small>
+                <small>Invited as {roleLabel(invite.role).toLowerCase()}</small>
               </span>
               <span className={styles.join} aria-hidden="true">
                 {joining === invite.inviteId ? "Joining…" : "Join"}

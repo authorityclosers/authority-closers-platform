@@ -13,12 +13,13 @@ const KEY = "sx-my-reports-seen";
 const LOOKED = "sx-my-reports-looked";
 const EVERY_MS = 6 * 3600 * 1000;
 
+// Received → Fixing → Solved (demo P0, 26 Oct 2026).
 export const STATUS_WORDS: Record<string, string> = {
-  new: "Sent",
-  triaged: "Seen by the team",
-  in_progress: "Being fixed",
-  fixed: "Fixed",
-  verified: "Fixed",
+  new: "Received",
+  triaged: "Received",
+  in_progress: "Fixing",
+  fixed: "Solved",
+  verified: "Solved",
   closed: "Closed",
 };
 

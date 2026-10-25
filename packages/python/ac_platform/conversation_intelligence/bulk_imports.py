@@ -38,6 +38,7 @@ from ac_platform.identity.sales_xray_profile import (
 )
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.roles import roles_with
 
 IMPORT_LIFETIME = timedelta(days=7)
 IMPORT_SOURCE_NAMESPACE = UUID("3d11e2cc-3b70-4f8d-ae49-52b5d7cec676")
@@ -144,7 +145,7 @@ class RecordingImports:
             or member is None
             or member.status != "active"
             or member.ended_at is not None
-            or member.role not in {"owner", "admin", "member"}
+            or member.role not in roles_with("leads.work")
         ):
             raise ConversationDenied(
                 "The confirmed member is no longer available in this organisation."

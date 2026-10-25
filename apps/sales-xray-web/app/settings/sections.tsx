@@ -33,6 +33,7 @@ import { DevelopersSection } from "./developers";
 import { ThemeControl } from "../lightbox/theme-provider";
 import { PhoneSetupPanel, VibrationPanel } from "./phone-panel";
 import { PrivacySettings } from "./privacy";
+import { ProfileDetailsPanel } from "./profile-details";
 import { SellingSettings } from "./selling";
 import type { SettingsSectionId } from "./settings-sections";
 import styles from "./sections.module.css";
@@ -152,7 +153,12 @@ export function SettingsSectionView({
 }) {
   switch (id) {
     case "profile":
-      return <AccountSettings only={["profile", "general"]} />;
+      return (
+        <>
+          <ProfileDetailsPanel />
+          <AccountSettings only={["profile", "general"]} />
+        </>
+      );
     case "selling":
       return <SellingSettings />;
     case "security":

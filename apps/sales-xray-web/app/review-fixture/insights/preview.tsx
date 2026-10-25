@@ -55,23 +55,26 @@ export function InsightsFixture() {
     <div
       style={{
         display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr)",
         gap: 16,
         padding: 16,
         maxWidth: 1280,
         margin: "0 auto",
       }}
     >
-      <Segmented<View>
-        label="Fixture"
-        value={view}
-        onChange={setView}
-        items={[
-          { key: "sandbox", label: "Sandbox org" },
-          { key: "team", label: "Small team" },
-          { key: "empty", label: "Empty" },
-          { key: "denied", label: "Member" },
-        ]}
-      />
+      <div style={{ minWidth: 0, overflowX: "auto" }}>
+        <Segmented<View>
+          label="Fixture"
+          value={view}
+          onChange={setView}
+          items={[
+            { key: "sandbox", label: "Sandbox org" },
+            { key: "team", label: "Small team" },
+            { key: "empty", label: "Empty" },
+            { key: "denied", label: "Member" },
+          ]}
+        />
+      </div>
       <InsightsView
         key={view}
         fixture

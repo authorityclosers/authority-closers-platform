@@ -1,0 +1,25 @@
+{
+  "owner": [
+    "billing.pay",
+    "billing.view",
+    "leads.delete",
+    "leads.manage",
+    "leads.work",
+    "members.manage",
+    "org.manage",
+    "team.view"
+  ],
+  "admin": [
+    "billing.view",
+    "leads.delete",
+    "leads.manage",
+    "leads.work",
+    "members.manage",
+    "org.manage",
+    "team.view"
+  ],
+  "manager": ["leads.manage", "leads.work", "team.view"],
+  "member": ["leads.work"],
+  "viewer": ["team.view"],
+  "finance": ["billing.pay", "billing.view"]
+}

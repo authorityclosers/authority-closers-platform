@@ -126,10 +126,39 @@ _NUMBER_FIELDS: dict[str, tuple[str, ...]] = {
 }
 
 
-def clean_context(value: object) -> dict[str, dict[str, Any]]:
-    """Only the app and device fields listed above, each bounded."""
+# The last app steps before a report (telemetry event names, oldest first; demo P0,
+# 26 Oct 2026): never content, only the name, when and the page's route template.
+MAX_TRAIL = 20
+_STEP = re.compile(r"[a-z][a-z0-9_]{1,63}")
+_STEP_AT = re.compile(r"[0-9T:.+\-Z]{10,40}")
+
+
+def clean_trail(value: object) -> list[dict[str, str]]:
+    """At most twenty recent app steps, each a known-shaped event name with its time and
+    route; anything else is dropped."""
+    if not isinstance(value, list):
+        return []
+    out: list[dict[str, str]] = []
+    for item in value[-MAX_TRAIL:]:
+        if not isinstance(item, dict):
+            continue
+        event = item.get("event")
+        if not isinstance(event, str) or _STEP.fullmatch(event) is None:
+            continue
+        step = {"event": event}
+        at = item.get("at")
+        if isinstance(at, str) and _STEP_AT.fullmatch(at):
+            step["at"] = at
+        if isinstance(item.get("route"), str) and item["route"].strip():
+            step["route"] = scrub_route(item["route"], 200)
+        out.append(step)
+    return out
+
+
+def clean_context(value: object) -> dict[str, Any]:
+    """Only the app and device fields listed above, each bounded, and the trail."""
     raw = value if isinstance(value, dict) else {}
-    out: dict[str, dict[str, Any]] = {}
+    out: dict[str, Any] = {}
     for group in ("app", "device"):
         source = raw.get(group)
         source = source if isinstance(source, dict) else {}
@@ -153,6 +182,9 @@ def clean_context(value: object) -> dict[str, dict[str, Any]]:
             ):
                 kept[key] = round(float(number), 2)
         out[group] = kept
+    trail = clean_trail(raw.get("trail"))
+    if trail:
+        out["trail"] = trail
     return out
 
 

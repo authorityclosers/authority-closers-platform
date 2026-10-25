@@ -103,6 +103,17 @@ async def cards(db: AsyncSession, tenant_id: UUID) -> list[dupes.Card]:
     return found
 
 
+async def lock(db: AsyncSession, tenant_id: UUID) -> bool:
+    """One scan per organisation at a time, across API processes, until the transaction
+    ends; False while another is running."""
+    return bool(
+        await db.scalar(
+            text("SELECT pg_try_advisory_xact_lock(:a, hashtext(:t))"),
+            {"a": _LOCK, "t": str(tenant_id)},
+        )
+    )
+
+
 async def scan(db: AsyncSession, tenant_id: UUID, now: datetime) -> dict[str, Any]:
     """Find one organisation's pairs and keep them; the caller commits."""
     found = dupes.find(await cards(db, tenant_id))
@@ -183,11 +194,7 @@ async def run_scans(
                 if stop.is_set():
                     break
                 async with sessions() as db, db.begin():
-                    locked = await db.scalar(
-                        text("SELECT pg_try_advisory_xact_lock(:a, hashtext(:t))"),
-                        {"a": _LOCK, "t": str(tenant_id)},
-                    )
-                    if locked:
+                    if await lock(db, tenant_id):
                         await scan(db, tenant_id, datetime.now(UTC))
         except Exception:  # noqa: BLE001 - the loop must survive a bad pass
             log.warning("lead desk duplicate scan failed")

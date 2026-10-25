@@ -1459,16 +1459,17 @@ export function minutesLabel(seconds: number): string {
 /** A wait in words: "45 min", "22 h 38 min", "2 d 4 h" (Redmi sweep, 24 Oct 2026:
  *  "1358 min" read as a number, not a time). */
 export function waitWords(minutes: number): string {
+  // Short, so a half-width tile keeps it on one line: "22h 38m" (owner, 25 Oct 2026).
   const total = Math.max(0, Math.round(minutes));
-  if (total < 60) return `${total} min`;
+  if (total < 60) return `${total}m`;
   const hours = Math.floor(total / 60);
   if (hours < 24) {
     const rest = total % 60;
-    return rest ? `${hours} h ${rest} min` : `${hours} h`;
+    return rest ? `${hours}h ${rest}m` : `${hours}h`;
   }
   const days = Math.floor(hours / 24);
   const left = hours % 24;
-  return left ? `${days} d ${left} h` : `${days} d`;
+  return left ? `${days}d ${left}h` : `${days}d`;
 }
 
 export function ago(iso: string, now: Date = new Date()): string {

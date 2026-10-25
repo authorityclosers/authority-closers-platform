@@ -148,5 +148,7 @@ async def search(desk: LeadDesk, q: str | None) -> SearchResult:
     return SearchResult(
         leads=leads.leads,
         notes=written.items,
-        tasks=tuple(task_book.view(task, name, desk.now) for task, name in found),
+        tasks=await task_book.views(
+            desk.db, (task for task, _ in found), None, desk.now, {t.id: n for t, n in found}
+        ),
     )

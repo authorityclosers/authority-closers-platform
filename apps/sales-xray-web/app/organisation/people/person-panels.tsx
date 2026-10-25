@@ -24,6 +24,7 @@ import {
 } from "../../ui/kit";
 import { useWorkspaceAccess } from "../../workspace-access";
 import type { OrgMember, OrgRole } from "../organisation-api";
+import { ROLE_LABEL, rolesToGive } from "../roles";
 import type { TeamPatterns } from "../team-patterns";
 import {
   callStatus,
@@ -36,12 +37,6 @@ import {
   type Week,
 } from "./person-data";
 import styles from "./person.module.css";
-
-const ROLE_LABEL: Record<OrgRole, string> = {
-  owner: "Owner",
-  admin: "Admin",
-  member: "Member",
-};
 
 const shortDate = (at: number | string, dates: DisplayDates) =>
   new Intl.DateTimeFormat(dates.locale, {
@@ -161,8 +156,11 @@ export function PersonHeader({
                     })
                   }
                 >
-                  <option value="admin">Admin</option>
-                  <option value="member">Member</option>
+                  {rolesToGive(true).map((role) => (
+                    <option key={role} value={role}>
+                      {ROLE_LABEL[role]}
+                    </option>
+                  ))}
                 </select>
               ) : null}
               {canRemove ? (

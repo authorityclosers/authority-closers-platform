@@ -67,6 +67,7 @@ import {
   OrgApiError,
   readActivity,
   readMembers,
+  ORG_ROLES,
   readOrganisation,
   removeMember,
   revokeInvite,
@@ -77,6 +78,7 @@ import {
   type OrgRole,
   type Organisation,
 } from "./organisation-api";
+import { can, ROLE_HINT, ROLE_LABEL, rolesToGive } from "./roles";
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
 import { TeamPatternsSection } from "./team-patterns-section";
@@ -113,12 +115,6 @@ type Tab = (typeof TABS)[number]["id"];
 const isTab = (value: string | null): value is Tab =>
   TABS.some((item) => item.id === value);
 
-const ROLES: OrgRole[] = ["owner", "admin", "member"];
-const ROLE_LABEL: Record<OrgRole, string> = {
-  owner: "Owner",
-  admin: "Admin",
-  member: "Member",
-};
 const WEEK_MS = 7 * 86_400_000;
 const ORG_NOTICE = "organisation-load";
 const ACTION_NOTICE = "organisation-action";
@@ -382,7 +378,10 @@ export function OrganisationView({
   );
   const live = org.status === "ready" && org.value.tenantId === tenantId;
   const myRole: OrgRole | null = live ? org.value.role : null;
-  const canManage = live && (myRole === "owner" || myRole === "admin");
+  // What your role may do here (Roles B: tenancy/roles.py, role-capabilities.json).
+  const canManage = live && can(myRole, "members.manage");
+  const seesTeam = live && can(myRole, "team.view");
+  const managesOrg = live && can(myRole, "org.manage");
   const refreshAccess = useCallback(() => {
     refreshOrganisation();
     access?.retry();
@@ -484,7 +483,7 @@ export function OrganisationView({
 
           {sections ? null : (
             <nav className={styles.tabs} aria-label="Organisation sections">
-              {(canManage ? TABS : MEMBER_TABS).map(({ id, label }) => (
+              {(managesOrg ? TABS : MEMBER_TABS).map(({ id, label }) => (
                 <button
                   key={id}
                   type="button"
@@ -510,7 +509,7 @@ export function OrganisationView({
                 activity={activity}
                 members={members}
                 memberCount={memberCount}
-                team={canManage}
+                team={seesTeam}
                 onInvite={() =>
                   (embedded || sections) && router
                     ? router.push("/settings/team")
@@ -518,7 +517,7 @@ export function OrganisationView({
                 }
                 retry={reloadActivity}
                 analysed={
-                  canManage && tenantId !== null ? (
+                  seesTeam && tenantId !== null ? (
                     <SectionBoundary name="Calls analysed">
                       <ReceiptActivitySection
                         key={tenantId}
@@ -546,6 +545,7 @@ export function OrganisationView({
                     reloadOrg();
                   }}
                   canManage={canManage}
+                  seesTeam={seesTeam}
                   isOwner={live && myRole === "owner"}
                   orgName={name}
                   yourPersonId={access?.context?.personId ?? null}
@@ -554,7 +554,7 @@ export function OrganisationView({
               </SectionBoundary>
             )}
 
-            {shows("integrations") && canManage && (
+            {shows("integrations") && managesOrg && (
               <SectionBoundary name="Integrations">
                 <IntegrationsPanel
                   parts={integrationParts}
@@ -562,7 +562,7 @@ export function OrganisationView({
                 />
               </SectionBoundary>
             )}
-            {sections?.includes("integrations") && live && !canManage ? (
+            {sections?.includes("integrations") && live && !managesOrg ? (
               <section className={styles.state} role="status">
                 <h2>Owners and admins only</h2>
                 <p>
@@ -585,7 +585,7 @@ export function OrganisationView({
                         <CompanyLogoPanel
                           key={`${access?.context?.sessionId}:${tenantId}`}
                           name={name}
-                          canEdit={canManage}
+                          canEdit={managesOrg}
                         />
                       </SectionBoundary>
                       <SectionBoundary name="Company details">
@@ -705,14 +705,16 @@ function GetStarted({
         {invite ? <UserPlus size={18} /> : <AudioLines size={18} />}
       </span>
       <h2 id="org-get-started">
-        {invite ? "Bring your team in" : "No calls in the last 30 days"}
+        {invite
+          ? "Bring your team in"
+          : "No analysed calls in the last 30 days"}
       </h2>
       <p>
         {invite
           ? "Invite your sales team. Their calls, who made them and each report’s status appear here."
           : team
-            ? "When anyone here saves a call, it appears with who made it and its report status."
-            : "Calls you save in this organisation appear here with their report status."}
+            ? "Calls show here once their recording is saved. A call logged on a lead without its recording isn't analysed: add the recording from the lead after the call."
+            : "Calls show here once their recording is saved, with their report status. After a call, add its recording from the lead."}
       </p>
       {invite ? (
         <button type="button" className={styles.primary} onClick={onInvite}>
@@ -1384,6 +1386,7 @@ function MembersPanel({
   members,
   reload,
   canManage,
+  seesTeam = canManage,
   isOwner,
   orgName = "",
   yourPersonId,
@@ -1392,6 +1395,8 @@ function MembersPanel({
   members: Live<OrgMember[]>;
   reload: () => void;
   canManage: boolean;
+  /** Sees everyone's row (team.view), not only their own. */
+  seesTeam?: boolean;
   isOwner: boolean;
   /** Typed to confirm an ownership transfer. */
   orgName?: string;
@@ -1454,7 +1459,7 @@ function MembersPanel({
     }
     setInvalid("");
     setConfirming({
-      message: `Invite ${address} as ${ROLE_LABEL[additionRole]}? They join once they accept.`,
+      message: `Invite ${address} as ${ROLE_LABEL[additionRole]}? ${ROLE_HINT[additionRole]} They join once they accept.`,
       verb: "Invite",
       action: async () => {
         const answer = await addMember(address, additionRole);
@@ -1479,11 +1484,11 @@ function MembersPanel({
   const rows =
     members.status === "ready"
       ? members.value
-          .filter((member) => canManage || member.personId === yourPersonId)
+          .filter((member) => seesTeam || member.personId === yourPersonId)
           .sort(
             (a, b) =>
               Number(isTestEmail(a.email)) - Number(isTestEmail(b.email)) ||
-              ROLES.indexOf(a.role) - ROLES.indexOf(b.role) ||
+              ORG_ROLES.indexOf(a.role) - ORG_ROLES.indexOf(b.role) ||
               Number(a.status === "invited") - Number(b.status === "invited") ||
               memberName(a).localeCompare(memberName(b)),
           )
@@ -1536,9 +1541,7 @@ function MembersPanel({
               disabled={disabled}
               aria-label="Role for the new person"
             >
-              {ROLES.filter(
-                (item) => item === "member" || (isOwner && item === "admin"),
-              ).map((item) => (
+              {rolesToGive(isOwner).map((item) => (
                 <option key={item} value={item}>
                   {ROLE_LABEL[item]}
                 </option>
@@ -1711,14 +1714,14 @@ function MembersPanel({
                       onChange={(event) => {
                         const nextRole = event.target.value as OrgRole;
                         setConfirming({
-                          message: `Change ${name} to ${ROLE_LABEL[nextRole]}?`,
+                          message: `Change ${name} to ${ROLE_LABEL[nextRole]}? ${ROLE_HINT[nextRole]}`,
                           verb: "Change role",
                           action: () => changeRole(member.personId, nextRole),
                         });
                       }}
                       aria-label={`Role for ${name}`}
                     >
-                      {ROLES.filter((item) => item !== "owner").map((item) => (
+                      {rolesToGive(true).map((item) => (
                         <option key={item} value={item}>
                           {ROLE_LABEL[item]}
                         </option>

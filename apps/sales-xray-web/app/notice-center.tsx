@@ -12,7 +12,11 @@ import {
 } from "lucide-react";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
-import { openBugReport, useReporterAvailable } from "./bug-report/open";
+import {
+  installReportShortcut,
+  openBugReport,
+  useReporterAvailable,
+} from "./bug-report/open";
 import { installErrorRecorder, recordError } from "./bug-report/recent-errors";
 import { AlertHost } from "./ui/alerts";
 import styles from "./notice-center.module.css";
@@ -208,6 +212,8 @@ export function NoticeCenter() {
 
   // Keeps the page's last twenty problems for a bug report (bug-report/).
   useEffect(() => installErrorRecorder(), []);
+  // Ctrl B or ⌘B reports a problem from anywhere (bug-report/open.ts).
+  useEffect(() => installReportShortcut(), []);
 
   useEffect(() => {
     let last = 0;

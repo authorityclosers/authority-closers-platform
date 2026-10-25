@@ -7,6 +7,22 @@
   padding-bottom: 4px;
 }
 
+/* Phones: room under the last row for the sheet's footer (Cancel, Send), so the
+   "Shake to report" pill is never under it (owner, 26 Oct 2026). */
+@media (max-width: 899.98px) {
+  .form {
+    padding-bottom: 72px;
+  }
+}
+
+.micAsk {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+}
+
 .about {
   display: flex;
   align-items: center;

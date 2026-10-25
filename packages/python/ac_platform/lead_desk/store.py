@@ -23,8 +23,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
+from ac_platform.identity import person_photos
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk import allocation, deletion, reports
+from ac_platform.lead_desk import allocation, deletion, duplicate_queue, reports
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk import meetings as meeting_rows
 from ac_platform.lead_desk import tasks as task_book
@@ -154,6 +155,8 @@ from ac_platform.tenancy.models import Membership
 from ac_platform.tenancy.roles import roles_with
 
 MANAGERS = frozenset(roles_with("leads.manage"))
+# Deleting leads stays with owners and admins (Roles B: not Sales managers).
+DELETERS = frozenset(roles_with("leads.delete"))
 # A phone alert names a task due within this of now (task_push reminds up to two hours
 # before an in-person meeting).
 TASK_ALERT_WINDOW = timedelta(hours=2)
@@ -219,6 +222,10 @@ class Viewer:
     @property
     def can_manage(self) -> bool:
         return self.role in MANAGERS
+
+    @property
+    def can_delete(self) -> bool:
+        return self.role in DELETERS
 
 
 @dataclass(frozen=True, slots=True)
@@ -574,6 +581,21 @@ class LeadDesk:
             seen.add(survivor.id)
             lead = survivor
         return lead
+
+    async def _readable(self, lead_id: UUID) -> tuple[Lead, bool]:
+        """A lead this person may open: one on their desk, or, to read only, the lead a
+        merge kept from a lead they worked on lately (duplicates, "worked before")."""
+        try:
+            return await self._lead(lead_id), False
+        except DeskError:
+            if self.viewer.can_manage or not await duplicate_queue.worked_before(self, lead_id):
+                raise
+        lead: Lead | None = await self.db.scalar(
+            select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id == lead_id)
+        )
+        if lead is None:
+            raise DeskError(404, "This lead isn't on your desk.")
+        return lead, True
 
     async def _command_seen(self, command_id: UUID) -> LeadEvent | None:
         seen: LeadEvent | None = await self.db.scalar(
@@ -1029,6 +1051,7 @@ class LeadDesk:
         due: LeadDue | None = None,
         contact: LeadSince | None = None,
         created: LeadMade | None = None,
+        duplicates: bool = False,
     ) -> LeadPage:
         limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_manage:
@@ -1048,6 +1071,11 @@ class LeadDesk:
             # Test and sample leads (sandbox seed, practice workspaces, Meta's testing
             # tool): easy to find and clear.
             where.append(or_(Lead.test_data.is_(True), Lead.name.like(META_TEST_LEAD)))
+        if duplicates:
+            # Leads that may be one person, for owners and managers to review (D4).
+            if not self.viewer.can_manage:
+                raise DeskError(403, "Only owners and admins review duplicate leads.")
+            where.append(Lead.id.in_(duplicate_queue.reviewable(self.tenant_id)))
         if scope == "mine":
             where.append(Lead.owner_person_id == self.viewer.person_id)
         elif scope == "unassigned":
@@ -1232,6 +1260,7 @@ class LeadDesk:
         hidden = await self._private_calls(after) if who != self.viewer.person_id else frozenset()
         removed = await self._undone(str(event.id) for event, _ in rows if event.kind == "note")
         names = await self._names([who])
+        photos = await person_photos.photo_urls(self.db, [who])
         labels: dict[str, journeys.Journey] = {}
         items: list[ActivityItem] = []
         for event, lead in rows:
@@ -1246,7 +1275,7 @@ class LeadDesk:
                     lead_id=lead.id,
                     lead_name=lead.name,
                     stage_label=labels[key].label(lead.stage, lead.step),
-                    event=self._event_view(event, names),
+                    event=self._event_view(event, names, photos=photos),
                 )
             )
         return ActivityPage(
@@ -1256,7 +1285,7 @@ class LeadDesk:
         )
 
     async def detail(self, lead_id: UUID) -> LeadDetail:
-        lead = await self._lead(lead_id)
+        lead, worked_before = await self._readable(lead_id)
         journey = await self._labels(journeys.pipeline_of(lead))
         suggestion = await signals.lead_suggestion(
             self.db, self.tenant_id, lead.id, lead.stage, lead.step, journey
@@ -1278,6 +1307,7 @@ class LeadDesk:
                     with contextlib.suppress(ValueError):
                         people.add(UUID(value))
         names = await self._names(people)
+        photos = await person_photos.photo_urls(self.db, people)
         day_end = self._day_start() + timedelta(days=1)
         hidden = await self._private_calls(lead_id=lead.id)
         # Changes an AI app made and someone undid (docs/product/ai-writes.md).
@@ -1341,6 +1371,7 @@ class LeadDesk:
                     recording=joined.get(str(event.id)),
                     undone=undone,
                     lead_owner=lead.owner_person_id,
+                    photos=photos,
                 )
                 for event in events
                 if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
@@ -1371,10 +1402,12 @@ class LeadDesk:
             )
             if meeting is not None
             else None,
-            tasks=tuple(
-                task_book.view(task, lead.name, self.now)
-                for task in await task_book.TaskBook(self).open_for(lead.id)
+            tasks=await task_book.views(
+                self.db, await task_book.TaskBook(self).open_for(lead.id), lead.name, self.now
             ),
+            duplicates=await duplicate_queue.hints(self, lead),
+            merged_into=await duplicate_queue.merged_into(self, lead),
+            worked_before=worked_before,
         )
 
     @staticmethod
@@ -1446,6 +1479,7 @@ class LeadDesk:
         recording: LeadEvent | None = None,
         undone: frozenset[str] = frozenset(),
         lead_owner: UUID | None = None,
+        photos: Mapping[UUID, str | None] | None = None,
     ) -> LeadEventView:
         phone_call = event.kind == "call" and event.data.get("via") == "phone"
         data = event.data
@@ -1483,6 +1517,10 @@ class LeadDesk:
             kind=event.kind,
             at=event.created_at,
             actor_name=names.get(event.actor_person_id) if event.actor_person_id else None,
+            actor_person_id=event.actor_person_id,
+            actor_photo_url=(photos or {}).get(event.actor_person_id)
+            if event.actor_person_id
+            else None,
             stage=stage,
             stage_label=text("step_label")
             or (text("to_label") if moved else None)
@@ -3344,7 +3382,7 @@ class LeadDesk:
         """Delete chosen leads for good (test, demo or junk leads), audited: deletion.py.
 
         One: a single lead's own Delete, which says so when the lead isn't here."""
-        if not self.viewer.can_manage:
+        if not self.viewer.can_delete:
             raise DeskError(403, "Only owners and admins delete leads.")
         wanted = list(dict.fromkeys(command.lead_ids))
         found: list[UUID] = []

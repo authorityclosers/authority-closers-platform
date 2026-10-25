@@ -15,7 +15,7 @@ from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.sales_xray_home import lead_counts
 from ac_platform.kernel.errors import DomainError
-from ac_platform.tenancy.roles import can
+from ac_platform.tenancy.roles import OrgRoleName, can
 
 
 class SalesXrayWorkspaceResponse(BaseModel):
@@ -24,7 +24,7 @@ class SalesXrayWorkspaceResponse(BaseModel):
     tenant_id: UUID
     kind: Literal["personal", "organisation"]
     name: str
-    role: Literal["owner", "admin", "member"] | None
+    role: OrgRoleName | None
     sales_xray_enabled: bool
 
 

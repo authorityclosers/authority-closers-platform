@@ -1,5 +1,6 @@
 "use client";
 
+import { can } from "../organisation/roles";
 import { AlertCircle, Plus } from "lucide-react";
 import Link from "next/link";
 import {
@@ -56,10 +57,7 @@ export function useDashboardTeam(): boolean | null {
   const current = access.workspaces?.find(
     (item) => item.tenant_id === access.context?.tenantId,
   );
-  return (
-    current?.kind === "organisation" &&
-    (current.role === "owner" || current.role === "admin")
-  );
+  return current?.kind === "organisation" && can(current.role, "team.view");
 }
 
 /**

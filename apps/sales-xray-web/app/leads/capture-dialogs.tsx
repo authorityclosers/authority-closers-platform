@@ -17,6 +17,7 @@ import {
   Megaphone,
   Plus,
 } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { displayName } from "../display-name";
@@ -45,6 +46,7 @@ import {
 } from "./leads-client";
 import { askFeedback } from "../feedback/ask";
 import { PASTED_FILE, pastedFile, readPasted } from "./paste-import";
+import { settingsPath } from "../settings/settings-sections";
 import styles from "./leads.module.css";
 
 export type AddWay = "type" | "contacts" | "file" | "sources";
@@ -915,11 +917,22 @@ export function ImportDialog({
             stay New.
           </p>
         ) : null}
-        {result?.warnings?.map((warning) => (
-          <p key={warning} className={styles.hint}>
-            {warning}
-          </p>
-        ))}
+        {/* People the import took past their limit (Lead OS, 25 Oct 2026):
+            said as written, as a warning; an import never hides it. */}
+        {result?.warnings?.length ? (
+          <div
+            className={styles.importWarnings}
+            role="status"
+            data-import-warnings=""
+          >
+            {result.warnings.map((warning) => (
+              <p key={warning}>{warning}</p>
+            ))}
+            {canManage ? (
+              <Link href={settingsPath("lead-rules")}>Change limits</Link>
+            ) : null}
+          </div>
+        ) : null}
         {result?.unmatched_owners?.length ? (
           <p className={styles.hint}>
             Nobody on your team called {result.unmatched_owners.join(", ")}:

@@ -26,6 +26,21 @@
     glow 1.6s ease-in-out 3;
 }
 
+/* Work due within the hour: the banner in the urgent colour. */
+.bannerUrgent {
+  border-color: var(--lx-danger-edge);
+  border-top: 4px solid var(--lx-danger);
+}
+
+.bannerUrgent .bannerIcon {
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
+}
+
+.bannerUrgent .bannerAction {
+  background: var(--lx-danger-soft);
+}
+
 .bannerIcon {
   display: grid;
   place-items: center;

@@ -87,6 +87,14 @@ def test_merge_keeps_the_story_and_an_unmerge_puts_it_back(
                 return await here.events(lead)
 
             before_other = len(await events(other))
+            # Who did each line, by id, for avatars; and who wrote each task.
+            here.as_admin()
+            shown = await here.detail(kept)
+            assert {line.get("actor_person_id") for line in shown["events"]} >= {str(seller)}
+            assert all(line.get("actor_photo_url") is None for line in shown["events"])
+            assert all("created_by_person_id" in item for item in shown["tasks"])
+            assert all(item["created_by_photo_url"] is None for item in shown["tasks"])
+            here.as_seller()
             command = {"command_id": str(uuid4()), "lead_ids": [other, kept]}
             refused = await here.client.post(
                 f"{BASE}/duplicates/merge", json=command, headers=WRITE

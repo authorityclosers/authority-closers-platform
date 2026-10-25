@@ -221,6 +221,35 @@ export default async function BugPage({
               </p>
             )}
           </Panel>
+          <Panel
+            title="Last steps in the app"
+            sub={`${bug.trail.length} kept, oldest first: what they did, never what they typed`}
+          >
+            {bug.trail.length ? (
+              <Table label="Last steps">
+                <thead>
+                  <tr>
+                    <th scope="col">When</th>
+                    <th scope="col">Step</th>
+                    <th scope="col">Page</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bug.trail.map((step, index) => (
+                    <tr key={index}>
+                      <td>{when(step.at)}</td>
+                      <td className={styles.mono}>{step.event}</td>
+                      <td className={styles.mono}>
+                        <Fact value={step.route} missing="None" />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            ) : (
+              <p className={kitStyles.muted}>No steps came with this report.</p>
+            )}
+          </Panel>
           <Panel title="History" sub="Oldest first; nothing is overwritten">
             {bug.history.length ? (
               <ol className={styles.history}>
