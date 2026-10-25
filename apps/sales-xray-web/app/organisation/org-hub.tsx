@@ -27,7 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { SettingsSectionView } from "../settings/sections";
@@ -180,7 +180,16 @@ function Parts({
   parts: readonly Part[];
   part: string | null;
 }) {
-  const current = parts.find((item) => item.key === part) ?? parts[0];
+  // A tap shows its part at once. The address alone can't: here a bare
+  // history.replaceState doesn't refresh useSearchParams, so Stages and Sources
+  // stayed on Lead rules (owner, 25 Oct 2026). The tap holds until the address's
+  // own part changes (a link, another tab).
+  const [chosen, setChosen] = useState<{
+    from: string | null;
+    key: string;
+  } | null>(null);
+  const shown = chosen && chosen.from === part ? chosen.key : part;
+  const current = parts.find((item) => item.key === shown) ?? parts[0];
   return (
     <div className={styles.parts}>
       <Segmented
@@ -188,7 +197,8 @@ function Parts({
         value={current.key}
         items={parts.map((item) => ({ key: item.key, label: item.label }))}
         onChange={(next) => {
-          // The part lives in the address, so reload and links keep it.
+          setChosen({ from: part, key: next });
+          // The part lives in the address too, so reload and links keep it.
           const url = new URL(window.location.href);
           url.searchParams.set("part", next);
           window.history.replaceState(window.history.state, "", url);

@@ -369,12 +369,17 @@ a.tile:active {
   margin-left: auto;
 }
 
+/* Up to two lines, then an ellipsis: a phone's half-width tile showed only
+   "524 waiting for a …" (owner, 25 Oct 2026). */
 .tileNote {
+  display: -webkit-box;
   overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 /* ---------- Empty, why, skeleton ---------- */
