@@ -15,6 +15,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { readConsent } from "../consent-renewal-client";
+import { FIRST_RUN_ATTRIBUTE } from "../welcome/setup-state";
 import { useWorkspaceAccess } from "../workspace-access";
 import { callRecorderStatus, inPhoneApp, setupStatus } from "./native-phone";
 import { flowSteps } from "./phone-setup-steps";
@@ -82,17 +83,17 @@ export function PhoneOnboarding() {
     return () => window.removeEventListener(PHONE_SETUP_OPEN, show);
   }, []);
 
-  // Waits for the Terms card: it covers the page while consent isn't current.
+  // Waits for the Terms card (it covers the page while consent isn't
+  // current) and for Home's first-run check (where to work, or setup): one
+  // flow, one screen at a time (owner, 25 Oct 2026).
   useEffect(() => {
     if (!signedIn || !inPhoneApp() || phoneOnboarded()) return;
     let stopped = false;
+    const waiting = () =>
+      document.documentElement.hasAttribute("data-sx-consent") ||
+      document.documentElement.hasAttribute(FIRST_RUN_ATTRIBUTE);
     const start = async () => {
-      if (
-        stopped ||
-        phoneOnboarded() ||
-        document.documentElement.hasAttribute("data-sx-consent")
-      )
-        return;
+      if (stopped || phoneOnboarded() || waiting()) return;
       try {
         if ((await readConsent()).status !== "current") return;
       } catch {
@@ -106,13 +107,14 @@ export function PhoneOnboarding() {
         markOnboarded();
         return;
       }
+      if (waiting()) return;
       setOpen(true);
     };
     void start();
     const watch = new MutationObserver(() => void start());
     watch.observe(document.documentElement, {
       attributes: true,
-      attributeFilter: ["data-sx-consent"],
+      attributeFilter: ["data-sx-consent", FIRST_RUN_ATTRIBUTE],
     });
     return () => {
       stopped = true;
