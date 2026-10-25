@@ -5,10 +5,12 @@ import { afterEach, expect, it, vi } from "vitest";
 import { NoticeCenter, dismissNotice, notify } from "../notice-center";
 import { SettingsMenu } from "../shell/settings-menu";
 import {
+  installReportShortcut,
   REPORT_PROBLEM_EVENT,
   reporterMounted,
   type ReportAbout,
 } from "./open";
+import { copyScreen } from "./capture";
 import { clearRecentErrors, recentErrors } from "./recent-errors";
 
 (
@@ -110,4 +112,74 @@ it("an error card offers Report only while the reporter is in the app", async ()
     dismissNotice("bug-report-failed");
     unmount();
   });
+});
+
+// #5 (owner, 26 Oct 2026): with a menu open, the computer's shortcut still reports, and
+// the menu stays open for the report's picture; the menu shows the shortcut.
+it("opens a menu, then reports from it with Ctrl B", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(new Response(null, { status: 503 })),
+  );
+  vi.stubGlobal("matchMedia", (query: string) => ({
+    matches: query === "(pointer: fine)",
+    media: query,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  }));
+  const onClose = vi.fn();
+  const uninstall = installReportShortcut();
+  await render(
+    <SettingsMenu
+      open
+      anchorRef={{ current: document.createElement("button") }}
+      onClose={onClose}
+      name="Fictional User"
+      email="fictional@example.test"
+      allowance={null}
+    />,
+  );
+  const row = button("Report a problem");
+  expect(row?.getAttribute("aria-keyshortcuts")).toBe("Control+B");
+  expect(
+    row?.querySelector("[data-shortcut]")?.getAttribute("data-shortcut"),
+  ).toBe("Ctrl B");
+  // A menu that keeps its own keys cannot swallow the shortcut.
+  const menu = row!.closest("div") as HTMLElement;
+  menu.addEventListener("keydown", (event) => event.stopPropagation());
+  row!.focus();
+  await act(async () => {
+    row!.dispatchEvent(
+      new KeyboardEvent("keydown", { key: "b", ctrlKey: true, bubbles: true }),
+    );
+  });
+  expect(opened).toEqual([null]);
+  expect(onClose).not.toHaveBeenCalled();
+  uninstall();
+});
+
+// Dev #2 (owner, 26 Oct 2026): with a side panel open, the picture left the panel out.
+// Every open layer is in it (side panels, sheets, menus); the reporter's own sheet is not,
+// and a key shown once reads as a marker.
+it("reports from a screen with a side panel open: the picture keeps the panel", async () => {
+  await render(<main>Organisation · Connections</main>);
+  const panel = document.createElement("dialog");
+  panel.innerHTML =
+    "<h2>Connected apps</h2><code>Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4zAb7cDe0fGh</code>";
+  const reporter = document.createElement("dialog");
+  reporter.innerHTML =
+    "<form data-bug-reporter><p>Tell us what went wrong</p></form>";
+  document.body.append(panel, reporter);
+  panel.setAttribute("open", "");
+  reporter.setAttribute("open", "");
+  const copy = await copyScreen();
+  panel.remove();
+  reporter.remove();
+  expect(copy).not.toBeNull();
+  const text = copy!.textContent ?? "";
+  expect(text).toContain("Organisation · Connections");
+  expect(text).toContain("Connected apps");
+  expect(text).not.toContain("Tell us what went wrong");
+  expect(text).not.toContain("Ab3dEf6hIj9kLm2nOp5qRs8tUv1wXy4zAb7cDe0fGh");
+  expect(text).toContain("[long]");
 });
