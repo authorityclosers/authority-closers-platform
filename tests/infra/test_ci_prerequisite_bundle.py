@@ -259,7 +259,7 @@ def test_workflow_producer_gates_every_offline_consumer_and_has_its_own_retentio
                 "validate-sales-xray-acquisition-browser",
             ),
         ),
-        ("workbench-checks.yml", ("py-tests", "visual", "e2e")),
+        ("workbench-checks.yml", ("py-tests", "visual", "matrix", "e2e")),
     ]:
         jobs = yaml.safe_load((ROOT / ".github/workflows" / filename).read_text())["jobs"]
         producer = jobs["ci-prerequisites"]

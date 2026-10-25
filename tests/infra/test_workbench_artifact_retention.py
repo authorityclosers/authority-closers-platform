@@ -28,7 +28,7 @@ SHARD_UPLOADS = [step for step in UPLOADS if step["with"]["name"].startswith("wb
 
 
 def test_all_workbench_uploads_expire_after_one_day() -> None:
-    assert len(UPLOADS) == 4  # coverage summaries, failed shards, screenshots and e2e
+    assert len(UPLOADS) == 5  # coverage summaries, failed shards, screenshots, e2e and the matrix
     assert all(step["with"]["retention-days"] == 1 for step in UPLOADS)
 
 
