@@ -75,6 +75,23 @@ export const SCREENS = {
   "home-seller-day": { path: "/review-fixture/home?role=seller&targets=0" },
   "home-seller-quiet": { path: "/review-fixture/home?role=seller&quiet=1" },
   "home-seller-none": { path: "/review-fixture/home?role=seller&none=1" },
+  // Alerts by urgency: the banner up top and the centre card, with long words.
+  "alert-normal": {
+    path: "/review-fixture/alerts",
+    steps: [{ wait: '[role="status"]' }],
+  },
+  "alert-normal-long": {
+    path: "/review-fixture/alerts?long=1",
+    steps: [{ wait: '[role="status"]' }],
+  },
+  "alert-urgent": {
+    path: "/review-fixture/alerts?level=urgent",
+    steps: [{ wait: '[role="alertdialog"]' }],
+  },
+  "alert-urgent-long": {
+    path: "/review-fixture/alerts?level=urgent&long=1",
+    steps: [{ wait: '[role="alertdialog"]' }],
+  },
 };
 
 /** The screens a request asks for: screen names or fixture paths ("/review-fixture/..."); none means all. */
