@@ -42,6 +42,8 @@ const SHELL_ROUTES = new Set([
   "/chats",
   // Settings and each of its sections (owner, 20 Oct 2026).
   "/settings",
+  // Reports: every kind of report in one place (owner, 25 Oct 2026).
+  "/reports",
 ]);
 
 export function isShellRoute(pathname: string | null) {

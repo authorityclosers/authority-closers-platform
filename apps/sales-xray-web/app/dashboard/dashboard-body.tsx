@@ -197,6 +197,10 @@ export function DashboardBody({
                       : `${summary.needsAttention} calls need a look`}
                   </Link>
                 ) : null}
+                {/* Every kind of report in one place (owner, 25 Oct 2026). */}
+                <Link className={styles.allReports} href="/reports">
+                  All reports
+                </Link>
               </div>
               {activityState.status === "ready" &&
               summaryState.status === "ready" &&

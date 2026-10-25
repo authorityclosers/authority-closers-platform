@@ -57,6 +57,7 @@ export function phoneTabFor(
     if (under(pathname, "/prospects")) return "leads";
     if (under(pathname, "/coaching")) return "calls";
     if (under(pathname, "/organisation")) return "dashboard";
+    if (under(pathname, "/reports")) return "dashboard";
     if (
       ["/account", "/settings", "/plans"].some((root) => under(pathname, root))
     )
@@ -90,6 +91,7 @@ export function shellActiveFor(
     if (under(pathname, "/coaching")) return "coaching";
     if (under(pathname, "/organisation/insights")) return "insights";
     if (under(pathname, "/organisation")) return "organisation";
+    if (under(pathname, "/reports")) return "dashboard";
     if (under(pathname, "/account")) return "account";
     // Settings and its sections light the account entry, loading or not.
     if (under(pathname, "/settings")) return "account";

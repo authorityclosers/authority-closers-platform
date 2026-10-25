@@ -1,0 +1,196 @@
+/* Reports, /reports (owner, 25 Oct 2026): what stands out, then every kind of
+   report by category, each a row with its own colour and live line. 8 pt
+   grid, tokens only. */
+
+.hub {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
+}
+
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kind {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.kind[aria-selected="true"] {
+  border-color: var(--sx-ink);
+  background: var(--sx-ink);
+  color: var(--sx-paper);
+}
+
+.standout {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--lx-missed-edge);
+  border-radius: var(--sx-radius-lg);
+  background: color-mix(in oklab, var(--lx-missed-soft) 55%, var(--sx-surface));
+}
+
+.standout h2,
+.group h2 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.standout h2 svg {
+  color: var(--lx-missed);
+}
+
+.standout ul,
+.cards {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.standout a {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  color: var(--sx-ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.standout a span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.standout a svg {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.standoutSkeleton {
+  display: grid;
+  gap: 12px;
+  padding: 8px 0;
+}
+
+.calm {
+  margin: 0;
+  color: var(--sx-muted);
+}
+
+.group {
+  display: grid;
+  gap: 8px;
+}
+
+.card {
+  --kind: var(--lx-teal);
+  --kind-soft: var(--lx-teal-soft);
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) 16px;
+  gap: 12px;
+  align-items: center;
+  min-height: 64px;
+  padding: 12px 16px 12px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.card[data-tone="violet"] {
+  --kind: var(--lx-missed);
+  --kind-soft: var(--lx-missed-soft);
+}
+
+.card[data-tone="blue"] {
+  --kind: var(--lx-info);
+  --kind-soft: var(--lx-info-soft);
+}
+
+.card[data-tone="slate"] {
+  --kind: var(--sx-ink-2);
+  --kind-soft: var(--sx-sunken);
+}
+
+.card[data-tone="green"] {
+  --kind: var(--lx-success);
+  --kind-soft: var(--lx-teal-soft);
+}
+
+.card[data-tone="amber"] {
+  --kind: var(--lx-warning);
+  --kind-soft: var(--lx-warning-soft);
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--sx-radius-md);
+  background: var(--kind-soft);
+  color: var(--kind);
+}
+
+.words {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.words strong {
+  font-size: var(--sx-text-md);
+  overflow-wrap: anywhere;
+}
+
+.words small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.card > svg {
+  color: var(--sx-muted);
+}
+
+.kind:focus-visible,
+.card:focus-visible,
+.standout a:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    border-color: var(--kind);
+  }
+}
+
+@media (min-width: 900px) {
+  .cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
