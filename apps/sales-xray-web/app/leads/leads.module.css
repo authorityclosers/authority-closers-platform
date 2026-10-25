@@ -268,8 +268,8 @@
 .quickAct {
   position: relative;
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   padding: 0;
   border: 1px solid var(--sx-line);
@@ -3471,8 +3471,8 @@ a.repName {
 .bannerClose {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: 50%;
   background: transparent;
@@ -5026,8 +5026,8 @@ a.repName {
 
 .searchClear {
   display: inline-grid;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border: 0;
   border-radius: 50%;
@@ -5686,6 +5686,7 @@ a.repName {
 }
 
 .actionBox {
+  container-type: inline-size;
   display: grid;
   justify-items: center;
   align-content: center;
@@ -5710,10 +5711,12 @@ a.repName {
   color: var(--kind-ink, var(--sx-ink-2));
 }
 
+/* The label shrinks with a narrow box (320 px, larger text) instead of
+   losing its end: "WhatsApp" was cut to "WhatsAp…". */
 .actionLabel {
   max-width: 100%;
   overflow: hidden;
-  font-size: var(--sx-text-xs);
+  font-size: min(var(--sx-text-xs), 16cqi);
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -5757,9 +5760,10 @@ a.repName {
   --kind-edge: color-mix(in oklab, var(--lx-closing) 28%, transparent);
 }
 
+/* Copy link and Edit share one height, even when larger text grows one. */
 .panelEnd {
   display: inline-flex;
-  align-items: center;
+  align-items: stretch;
   gap: 8px;
   margin-left: auto;
 }
