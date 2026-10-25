@@ -1,0 +1,154 @@
+/* The WhatsApp and SMS composer (owner, 25 Oct 2026: "asymmetrical"): one
+   centred column on the 8 pt grid; ready messages two to a row, equal, the odd
+   last one across both. Tokens only. */
+
+.body {
+  display: grid;
+  gap: 16px;
+}
+
+.channels {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-sunken);
+}
+
+.channels button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.channels button[aria-pressed="true"] {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: var(--lx-shadow-1);
+}
+
+.channels button:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.templates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.templates:empty {
+  display: none;
+}
+
+.template {
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.template:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+/* Messages are violet across the app. */
+.template[aria-pressed="true"] {
+  border-color: var(--lx-missed);
+  background: var(--lx-missed-soft);
+  color: var(--lx-missed-ink);
+}
+
+.template:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.field {
+  display: grid;
+  gap: 8px;
+}
+
+.fieldLabel {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.field textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 112px;
+  padding: 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--lx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 16px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.field textarea:focus-visible {
+  border-color: var(--sx-accent);
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.send {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 52px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+  text-decoration: none;
+}
+
+.send[data-channel="whatsapp"] {
+  background: var(--lx-success);
+}
+
+.send[aria-disabled="true"] {
+  opacity: 0.45;
+}
+
+.send:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.hint {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-align: center;
+}

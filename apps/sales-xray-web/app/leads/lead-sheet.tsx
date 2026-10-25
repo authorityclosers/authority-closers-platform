@@ -8,6 +8,7 @@
  */
 
 import {
+  ArrowRightLeft,
   BellPlus,
   CheckCircle2,
   History as HistoryIcon,
@@ -1032,18 +1033,32 @@ export function eventText(event: LeadEvent): {
         }`,
       };
     case "stage": {
-      // Lead OS: how it moved (reopen, close, Junk) and why.
+      // Lead OS: how it moved (reopen, close, Junk) and why, in plain
+      // sentences (owner, 25 Oct 2026: "New → New Lead" was hard to read).
       const to = event.stage_label ?? "a new stage";
       const why = event.outcome_reason_label ?? event.reason_label;
+      const detail = [why, event.note].filter(Boolean).join(" · ");
+      // A new stage list moved it, not a person (Lead OS, AUT-2218).
+      if (event.move_source === "template")
+        return {
+          title: event.from_label
+            ? `Stages updated: ${event.from_label} is now ${to}`
+            : `Stages updated: now in ${to}`,
+          detail: detail || undefined,
+        };
       const title =
         event.action === "reopen"
-          ? `${who} reopened them in ${to}`
+          ? `${who} reopened this lead in ${to}`
           : event.action === "close" || event.action === "reclassify"
-            ? `${who} closed them: ${to}`
-            : `${who} moved them to ${to}`;
+            ? `${who} closed this lead as ${to}`
+            : `${who} moved this lead to ${to}`;
+      const was =
+        event.from_label && event.from_label !== to
+          ? `It was in ${event.from_label}`
+          : null;
       return {
-        title: event.from_label ? `${title} (from ${event.from_label})` : title,
-        detail: [why, event.note].filter(Boolean).join(" · ") || undefined,
+        title,
+        detail: [was, detail].filter(Boolean).join(" · ") || undefined,
       };
     }
     case "meeting": {
@@ -1996,20 +2011,22 @@ function NoteBox({
       setSaving(false);
     }
   };
+  // A field that looks like one (owner, 25 Oct 2026: the bar under History
+  // didn't read as something to type into).
   return (
     <div className={styles.noteBox}>
-      <div className={styles.noteRow}>
-        <textarea
-          id={`lead-note-${leadId}`}
-          aria-label="Add a note"
-          rows={1}
-          value={note}
-          maxLength={1000}
-          placeholder="Add a note for the next caller"
-          onChange={(event) => setNote(event.target.value)}
-        />
+      <textarea
+        id={`lead-note-${leadId}`}
+        aria-label="Add a note"
+        rows={3}
+        value={note}
+        maxLength={1000}
+        placeholder="Type a note: what they said, what you agreed"
+        onChange={(event) => setNote(event.target.value)}
+      />
+      <div className={styles.noteSave}>
         <Button onClick={save} disabled={saving || !note.trim()}>
-          {saving ? "Adding…" : "Add"}
+          {saving ? "Adding…" : "Add note"}
         </Button>
       </div>
       {error ? (
@@ -2018,6 +2035,113 @@ function NoteBox({
         </p>
       ) : null}
     </div>
+  );
+}
+
+/** The lead's notes: a field to type into, the newest two, and all of them on
+ *  Notes (owner, 25 Oct 2026: "a clear Notes section with a visible input"). */
+function NotesSection({
+  detail,
+  onSaved,
+}: {
+  detail: LeadDetail;
+  onSaved: (next: LeadDetail) => void;
+}) {
+  const notes = detail.events
+    .filter((event) => event.kind === "note" && event.note)
+    .slice(0, 2);
+  const titleId = `lead-notes-${detail.lead.lead_id}`;
+  return (
+    <section className={styles.notesBlock} aria-labelledby={titleId}>
+      <div className={styles.panelHead}>
+        <h3 id={titleId}>Notes</h3>
+        <Link className={styles.linkButton} href="/leads/notes">
+          See all notes
+        </Link>
+      </div>
+      {detail.can_edit ? (
+        <NoteBox leadId={detail.lead.lead_id} onSaved={onSaved} />
+      ) : null}
+      {notes.length ? (
+        <ul className={styles.noteList}>
+          {notes.map((event, index) => (
+            <li key={event.event_id ?? `${event.at}-${index}`}>
+              <p>{event.note}</p>
+              <small>
+                {[event.actor_name, ago(event.at)].filter(Boolean).join(" · ")}
+              </small>
+            </li>
+          ))}
+        </ul>
+      ) : detail.next_action_note ? (
+        <ul className={styles.noteList}>
+          <li>
+            <p>{detail.next_action_note}</p>
+            <small>With the next follow-up</small>
+          </li>
+        </ul>
+      ) : (
+        <p className={styles.hint}>No notes yet.</p>
+      )}
+    </section>
+  );
+}
+
+/** One of the lead's equal action boxes (owner, 25 Oct 2026: "on one grid,
+ *  equal action boxes, nothing overflowing at any font size"). */
+function ActionBox({
+  kind,
+  channel,
+  label,
+  name = label,
+  icon,
+  onClick,
+  href,
+  disabled = false,
+  why,
+}: {
+  /** The kind's colour: messages violet, notes amber, tasks blue, moves slate. */
+  kind: "message" | "note" | "task" | "stage";
+  channel: string;
+  label: string;
+  /** What a screen reader says, when it says more than the label. */
+  name?: string;
+  icon: ReactNode;
+  onClick?: () => void;
+  href?: string;
+  disabled?: boolean;
+  /** Why a box can't work now; it stays in its place, greyed. */
+  why?: string;
+}) {
+  const inside = (
+    <>
+      {icon}
+      <span className={styles.actionLabel}>{label}</span>
+    </>
+  );
+  return href && !disabled ? (
+    <a
+      className={styles.actionBox}
+      data-kind={kind}
+      data-channel={channel}
+      href={href}
+      aria-label={name}
+    >
+      {inside}
+    </a>
+  ) : (
+    <button
+      type="button"
+      className={styles.actionBox}
+      data-kind={kind}
+      data-channel={channel}
+      aria-label={disabled && why ? why : name}
+      title={disabled ? why : undefined}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      {inside}
+    </button>
   );
 }
 
@@ -2050,10 +2174,6 @@ export function LeadCard({
   /** Opened from My work: the history line made at this time. */
   focusAt?: string | null;
 }) {
-  // The newest note typed on the lead, else the note with its next follow-up.
-  const lastNote =
-    detail.events.find((event) => event.kind === "note" && event.note)?.note ??
-    detail.next_action_note;
   const { lead } = detail;
   const setup = useContext(MessageSetup);
   const waitingRecording = usePendingRecording(lead.lead_id);
@@ -2248,7 +2368,6 @@ export function LeadCard({
               <Badge tone={stageTone(lead.stage)}>{lead.stage_label}</Badge>
             )}
             <Badge>{sourceText(lead)}</Badge>
-            <CopyLeadLink leadId={lead.lead_id} />
           </div>
         </div>
       </header>
@@ -2265,11 +2384,10 @@ export function LeadCard({
           onMoved={onChanged}
         />
       ) : null}
-      {lastNote ? (
-        <p className={styles.nextNote}>Last note: {lastNote}</p>
-      ) : null}
 
-      <div className={styles.actions} data-contact="">
+      {/* Call, then one grid of equal boxes (owner, 25 Oct 2026): three to a
+          row, the same size, a box that can't work greyed in its place. */}
+      <div className={styles.leadActions}>
         {detail.phone ? (
           <a
             className={styles.callButton}
@@ -2299,85 +2417,78 @@ export function LeadCard({
         ) : (
           <p className={styles.hint}>No phone number on this lead.</p>
         )}
-        {detail.phone ? (
-          // Owner, 19 Oct: clean WhatsApp and SMS buttons beside Call.
-          <>
-            <button
-              type="button"
-              className={styles.contactIcon}
-              data-channel="whatsapp"
-              aria-label="WhatsApp"
-              onClick={() => openMessage(null, "whatsapp")}
-            >
-              <WhatsAppGlyph />
-              <small aria-hidden="true">WhatsApp</small>
-            </button>
-            <button
-              type="button"
-              className={styles.contactIcon}
-              data-channel="sms"
-              aria-label="SMS"
-              onClick={() => openMessage(null, "sms")}
-            >
-              <MessageSquareText size={22} aria-hidden="true" />
-              <small aria-hidden="true">SMS</small>
-            </button>
-          </>
-        ) : null}
-        {detail.email || detail.can_edit ? (
-          // Email, Note and Remind in one even row under Call, WhatsApp and SMS:
-          // one tap each (owner, 24 Oct 2026).
-          <div className={styles.contactMore}>
-            {detail.email ? (
-              <a
-                className={styles.contactIcon}
-                data-channel="email"
-                href={`mailto:${detail.email}`}
-                aria-label="Email"
-              >
-                <Mail size={22} aria-hidden="true" />
-                <small aria-hidden="true">Email</small>
-              </a>
-            ) : null}
-            {detail.can_edit ? (
-              // A note on its own, not only after a call (owner, 24 Oct 2026).
-              <button
-                type="button"
-                className={styles.contactIcon}
-                data-channel="note"
-                aria-label="Add a note"
+        <div className={styles.actionGrid} data-sx-equal="lead actions">
+          <ActionBox
+            kind="message"
+            channel="whatsapp"
+            label="WhatsApp"
+            icon={<WhatsAppGlyph />}
+            disabled={!detail.phone}
+            why="WhatsApp: add a phone number first"
+            onClick={() => openMessage(null, "whatsapp")}
+          />
+          <ActionBox
+            kind="message"
+            channel="sms"
+            label="SMS"
+            icon={<MessageSquareText size={22} aria-hidden="true" />}
+            disabled={!detail.phone}
+            why="SMS: add a phone number first"
+            onClick={() => openMessage(null, "sms")}
+          />
+          <ActionBox
+            kind="message"
+            channel="email"
+            label="Email"
+            icon={<Mail size={22} aria-hidden="true" />}
+            href={detail.email ? `mailto:${detail.email}` : undefined}
+            disabled={!detail.email}
+            why="No email on this lead"
+          />
+          {detail.can_edit ? (
+            <>
+              <ActionBox
+                kind="note"
+                channel="note"
+                label="Note"
+                name="Add a note"
+                icon={<NotebookPen size={22} aria-hidden="true" />}
                 onClick={() => {
+                  // The Notes field is just below: focus it there, no jump.
                   const box = document.getElementById(
                     `lead-note-${lead.lead_id}`,
                   );
                   box?.scrollIntoView?.({
-                    block: "center",
+                    block: "nearest",
                     behavior: "smooth",
                   });
                   box?.focus({ preventScroll: true });
                 }}
-              >
-                <NotebookPen size={22} aria-hidden="true" />
-                <small aria-hidden="true">Note</small>
-              </button>
-            ) : null}
-            {detail.can_edit ? (
-              // A promise with a time: Tasks lists it and the phone reminds once.
-              <button
-                type="button"
-                className={styles.contactIcon}
-                data-channel="remind"
-                aria-label="Remind me"
+              />
+              <ActionBox
+                kind="task"
+                channel="remind"
+                label="Remind"
+                name="Remind me"
+                icon={<BellPlus size={22} aria-hidden="true" />}
                 onClick={() => setReminding(true)}
-              >
-                <BellPlus size={22} aria-hidden="true" />
-                <small aria-hidden="true">Remind</small>
-              </button>
-            ) : null}
-          </div>
-        ) : null}
+              />
+              <ActionBox
+                kind="stage"
+                channel="move"
+                label="Move"
+                name={`Move stage, now ${lead.stage_label}`}
+                icon={<ArrowRightLeft size={22} aria-hidden="true" />}
+                disabled={!canMove}
+                why="No other stage to move to"
+                onClick={() => setStaging(true)}
+              />
+            </>
+          ) : null}
+        </div>
       </div>
       {detail.phone ? <InAppCallHint /> : null}
+      <NotesSection detail={detail} onSaved={onChanged} />
       {detail.can_edit ? (
         <RemindSheet
           open={reminding}
@@ -2491,9 +2602,6 @@ export function LeadCard({
       <section className={styles.historyBlock} aria-label="History">
         <StorySoFar detail={detail} />
         <h3 className={styles.stepLabel}>History</h3>
-        {detail.can_edit ? (
-          <NoteBox leadId={lead.lead_id} onSaved={onChanged} />
-        ) : null}
         <History
           events={detail.events}
           onChanged={onChanged}
@@ -2518,16 +2626,20 @@ export function LeadCard({
       <section className={styles.panel} aria-label="Details">
         <div className={styles.panelHead}>
           <h3>Details</h3>
-          {detail.can_edit && !editing ? (
-            <button
-              type="button"
-              className={styles.linkButton}
-              onClick={() => setEditing(true)}
-            >
-              <Pencil size={14} aria-hidden="true" />
-              Edit
-            </button>
-          ) : null}
+          {/* Rare, so here rather than among the stage and source. */}
+          <span className={styles.panelEnd}>
+            <CopyLeadLink leadId={lead.lead_id} />
+            {detail.can_edit && !editing ? (
+              <button
+                type="button"
+                className={styles.linkButton}
+                onClick={() => setEditing(true)}
+              >
+                <Pencil size={14} aria-hidden="true" />
+                Edit
+              </button>
+            ) : null}
+          </span>
         </div>
         {editing ? (
           <EditDetails
