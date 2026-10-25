@@ -96,8 +96,10 @@ def test_an_admin_makes_a_key_and_an_app_uses_it(postgres_harness: Any, tmp_path
                     assert missing.status_code == 401
                     assert missing.headers["WWW-Authenticate"].startswith("Bearer")
                     assert missing.json()["error"]["code"] == "key_missing"
+                    # Never the real last character (a fixed X matched it ~1 run in 62).
+                    wrong_last = "Y" if key.endswith("X") else "X"
                     wrong = await app.get(
-                        "/v1/api/me", headers={"Authorization": f"Bearer {key[:-1]}X"}
+                        "/v1/api/me", headers={"Authorization": f"Bearer {key[:-1]}{wrong_last}"}
                     )
                     assert wrong.status_code == 401
                     live = "sxk_live_" + key[9:]

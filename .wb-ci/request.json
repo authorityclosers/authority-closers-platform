@@ -1,0 +1,26 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "5d9912cd993688a90725fcec0afe2af28b34da88",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/leads/lead-filters.test.tsx",
+    "apps/sales-xray-web/app/leads/lead-filters.tsx",
+    "apps/sales-xray-web/app/leads/leads-table.module.css",
+    "apps/sales-xray-web/app/leads/leads-table.test.tsx",
+    "apps/sales-xray-web/app/leads/leads-table.tsx",
+    "apps/sales-xray-web/app/leads/leads.module.css",
+    "tests/database/test_integrations_postgresql.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/database/test_integrations_postgresql.py"
+  ],
+  "include_paths": [
+    "tests/database/test_integrations_postgresql.py"
+  ],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
