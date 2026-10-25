@@ -33,6 +33,7 @@ from ac_platform.pulse.profile import read_profile as read_pulse_profile
 if TYPE_CHECKING:
     from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 
+
 class ProfileCompletion(BaseModel):
     """What a complete profile still needs (the "Your profile: 3 of 6" card)."""
 
