@@ -30,9 +30,10 @@ import {
 import Form from "next/form";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   createContext,
+  Suspense,
   useCallback,
   useContext,
   useEffect,
@@ -454,6 +455,9 @@ function LightboxShellFrame({
   // already show that place, so their highlight glides with the move.
   const shownPath = standIn ?? pathname;
   const place = shellActiveFor(shownPath, active);
+  // Reports has its own row in the sidebar; elsewhere it belongs to Home.
+  const reportsHere =
+    shownPath === "/reports" || Boolean(shownPath?.startsWith("/reports/"));
   // Every Settings page says Settings, even while its section loads.
   const pageTitle = resolvePageTitle(
     place,
@@ -1280,11 +1284,13 @@ function LightboxShellFrame({
           </div>
           <div className={styles.stripNav}>
             <ScreenLink
-              className={`${styles.stripBtn}${place === "dashboard" ? ` ${styles.stripBtnActive}` : ""}`}
+              className={`${styles.stripBtn}${place === "dashboard" && !reportsHere ? ` ${styles.stripBtnActive}` : ""}`}
               href="/dashboard"
               aria-label="Home"
               data-rail-tip="Home"
-              aria-current={place === "dashboard" ? "page" : undefined}
+              aria-current={
+                place === "dashboard" && !reportsHere ? "page" : undefined
+              }
             >
               <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
               <span className={styles.railPill} aria-hidden="true" />
@@ -1307,13 +1313,9 @@ function LightboxShellFrame({
             </ScreenLink>
             {/* Every open lead, one click from anywhere; the open sidebar only. */}
             {inOrganisation ? (
-              <ScreenLink
-                className={`${styles.stripBtn} ${styles.stripSub}`}
-                href={ALL_LEADS_HREF}
-              >
-                <Rows3 size={16} strokeWidth={1.75} aria-hidden="true" />
-                All leads
-              </ScreenLink>
+              <Suspense fallback={<AllLeadsLink here={false} />}>
+                <AllLeadsSubPlace />
+              </Suspense>
             ) : null}
             <ScreenLink
               className={`${styles.stripBtn}${place === "chats" ? ` ${styles.stripBtnActive}` : ""}`}
@@ -1351,6 +1353,18 @@ function LightboxShellFrame({
               <AudioLines size={20} strokeWidth={1.75} aria-hidden="true" />
               <span className={styles.railPill} aria-hidden="true" />
               <span style={RAIL_NAME_STYLE}>Calls</span>
+            </ScreenLink>
+            {/* Every report in one place (owner, 25 Oct 2026). */}
+            <ScreenLink
+              className={`${styles.stripBtn}${reportsHere ? ` ${styles.stripBtnActive}` : ""}`}
+              href="/reports"
+              aria-label="Reports"
+              data-rail-tip="Reports"
+              aria-current={reportsHere ? "page" : undefined}
+            >
+              <LineChart size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className={styles.railPill} aria-hidden="true" />
+              <span style={RAIL_NAME_STYLE}>Reports</span>
             </ScreenLink>
             {/* Owner, 23 Oct 2026: team and organisation were "too hidden";
                 the hub sits right after the daily places. */}
@@ -2103,4 +2117,31 @@ export function LightboxShell(props: LightboxShellProps) {
   const registry = useContext(PersistentShellContext);
   if (!registry) return <LightboxShellFrame {...props} />;
   return <ShellPageSettings registry={registry} {...props} />;
+}
+
+/**
+ * All leads under Leads in the open sidebar (owner, 25 Oct 2026: the old row
+ * lined up with nothing and never lit): text only, lined up with Leads' label,
+ * and lit while the list shows every lead.
+ */
+function AllLeadsSubPlace() {
+  const pathname = usePathname();
+  const params = useSearchParams();
+  return (
+    <AllLeadsLink
+      here={pathname === "/leads" && params?.get("tab") === "all"}
+    />
+  );
+}
+
+function AllLeadsLink({ here }: { here: boolean }) {
+  return (
+    <ScreenLink
+      className={`${styles.stripBtn} ${styles.stripSub}`}
+      href={ALL_LEADS_HREF}
+      aria-current={here ? "page" : undefined}
+    >
+      All leads
+    </ScreenLink>
+  );
 }

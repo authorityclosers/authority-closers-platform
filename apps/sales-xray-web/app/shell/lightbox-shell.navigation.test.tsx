@@ -73,6 +73,12 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
       'a[aria-label="Prospects"][href="/prospects"][data-next-client-link="true"]',
     ),
   ).not.toBeNull();
+  // Reports has its own row, right after Calls (owner, 25 Oct 2026).
+  expect(
+    desktopNav?.querySelector(
+      'a[aria-label="Reports"][href="/reports"][data-next-client-link="true"]',
+    ),
+  ).not.toBeNull();
   // Coaching sits right after Prospects in the rail (AUT-1678).
   const rail = Array.from(
     desktopNav?.querySelectorAll<HTMLAnchorElement>("a[data-rail-tip]") ?? [],
@@ -81,6 +87,10 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
   expect(
     rail.slice(rail.indexOf("Prospects"), rail.indexOf("Prospects") + 2),
   ).toEqual(["Prospects", "Coaching"]);
+  expect(rail.slice(rail.indexOf("Calls"), rail.indexOf("Calls") + 2)).toEqual([
+    "Calls",
+    "Reports",
+  ]);
   expect(
     desktopNav?.querySelector('a[aria-label="Coaching"][href="/coaching"]'),
   ).not.toBeNull();

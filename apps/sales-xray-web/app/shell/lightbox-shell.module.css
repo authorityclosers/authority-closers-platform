@@ -2284,10 +2284,18 @@
     .stripSub {
     display: flex;
     height: 32px;
-    gap: 8px;
+    /* The text lines up with Leads' label: its 10px inset, 20px icon and
+       10px gap. */
     padding-inline-start: 40px;
     color: var(--sx-muted);
     font-size: var(--sx-text-sm);
     font-weight: 500;
+  }
+
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .stripSub[aria-current="page"] {
+    color: var(--sx-accent-ink, var(--sx-accent));
+    font-weight: 650;
   }
 }
