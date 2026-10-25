@@ -1098,6 +1098,13 @@ class LeadDesk:
             LeadEvent.kind.in_(WORK_KINDS),
             LeadEvent.created_at >= after,
             LeadEvent.created_at < upto,
+            # A new stage list placing leads is not the person's work (AUT-2218, 25 Oct
+            # 2026: "8 stage moves" credited to the admin who approved the install).
+            or_(
+                LeadEvent.kind != "stage",
+                func.coalesce(LeadEvent.data["source"].as_string(), "")
+                != transitions.STAGES_CHANGED,
+            ),
             self._visible(),
         ]
         joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
