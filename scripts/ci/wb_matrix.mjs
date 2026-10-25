@@ -201,6 +201,20 @@ async function main() {
             });
             shots.push({ key, state, path });
           }
+          // One whole page per screen, phone size: the slice's before and after shot.
+          if (
+            state.width === 390 &&
+            state.scale === 1 &&
+            state.mode === "app" &&
+            state.theme === "light"
+          )
+            await page.screenshot({
+              path: resolve(output, `page-${key}.jpg`),
+              type: "jpeg",
+              quality: 70,
+              fullPage: true,
+              scale: "css",
+            });
           rows.push({ key, tag, ...state, ...facts, errors: [...errors] });
         } catch (error) {
           rows.push({
