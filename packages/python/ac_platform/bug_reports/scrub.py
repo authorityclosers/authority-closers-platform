@@ -35,6 +35,13 @@ _REDACTIONS: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"(?<![\w-])\+?\d(?:[\s().-]?\d){8,}(?![\w-])"), "[phone]"),
 )
 
+# An id in a route (a UUID, a number, or a long opaque part with a digit) becomes ":id", so
+# a route is the screen's pattern (#15, 26 Oct 2026: "/analysis/calls/<uuid>" was "/[long]").
+_ID_PART = re.compile(
+    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    r"|[0-9]+|(?=[A-Za-z_-]*[0-9])[A-Za-z0-9_-]{16,}",
+    re.I,
+)
 # Query keys whose values are always dropped from a route.
 _SECRET_KEYS = re.compile(
     r"(?i)token|code|key|secret|password|state|auth|session|email|phone|mobile|signature|sig"
@@ -71,18 +78,25 @@ def scrub_text(value: object, limit: int) -> str:
     return text[:limit]
 
 
+def _route_part(value: str, limit: int) -> str:
+    """One part of a route: an id becomes ":id", anything else is scrubbed like text."""
+    return ":id" if _ID_PART.fullmatch(value) else scrub_text(value, limit)
+
+
 def scrub_route(value: object, limit: int = 512) -> str:
-    """A route's path and query, with secret-looking values dropped and no fragment."""
+    """A route's pattern: ids become ":id", secret-looking query values are dropped, each
+    part is scrubbed on its own (a redaction never spans a "/"), and there is no fragment."""
     if not isinstance(value, str) or not value.strip():
         return "/"
     parts = urlsplit(value.strip())
-    path = parts.path if parts.path.startswith("/") else "/" + parts.path
+    path = "/".join(_route_part(segment, 80) for segment in parts.path.split("/"))
+    path = path if path.startswith("/") else "/" + path
     query = [
-        (key, "" if _SECRET_KEYS.search(key) else val)
+        (scrub_text(key, 40), "" if _SECRET_KEYS.search(key) else _route_part(val, 80))
         for key, val in parse_qsl(parts.query, keep_blank_values=True)
     ][:12]
-    route = path + ("?" + urlencode(query) if query else "")
-    return scrub_text(route, limit) or "/"
+    route = path + ("?" + urlencode(query, safe=":[]") if query else "")
+    return route[:limit] or "/"
 
 
 def area_for(route: str, hint: object = None) -> str:
@@ -100,7 +114,15 @@ def area_for(route: str, hint: object = None) -> str:
 
 
 _STRING_FIELDS: dict[str, dict[str, int]] = {
-    "app": {"version": 40, "release": 40, "build": 64, "native_version": 40, "native_build": 40},
+    "app": {
+        "version": 40,
+        "release": 40,
+        "build": 64,
+        "native_version": 40,
+        "native_build": 40,
+        # The screen's name (telemetry's screenOf, #15), e.g. "report".
+        "page": 40,
+    },
     "device": {
         "platform": 40,
         "os": 40,
@@ -203,7 +225,12 @@ def clean_errors(value: object) -> list[dict[str, Any]]:
         message = scrub_text(item.get("message"), 300)
         if message:
             entry["message"] = message
-        source = scrub_text(item.get("source"), 200)
+        raw_source = item.get("source")
+        source = (
+            scrub_route(raw_source, 200)
+            if isinstance(raw_source, str) and raw_source.startswith("/")
+            else scrub_text(raw_source, 200)
+        )
         if source:
             entry["source"] = source
         reference = item.get("reference")

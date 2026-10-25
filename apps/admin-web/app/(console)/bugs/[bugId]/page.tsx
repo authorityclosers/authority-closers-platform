@@ -75,7 +75,15 @@ export default async function BugPage({
         ? `${bug.organisation.name}${bug.workspaceRole ? ` (${bug.workspaceRole})` : ""}`
         : null,
     ],
-    ["Screen", <code key="route">{bug.route}</code>],
+    [
+      "Screen",
+      <span key="route">
+        {typeof bug.app.page === "string" && bug.app.page !== "other"
+          ? `${bug.app.page} · `
+          : null}
+        <code>{bug.route}</code>
+      </span>,
+    ],
     ["App", appLine(bug.app)],
     ["Device", deviceLine(bug.device) || null],
     [

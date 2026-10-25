@@ -4,7 +4,7 @@
  * (ac_platform/bug_reports/scrub.py) and adds its own release.
  */
 
-import type { TrailStep } from "../telemetry";
+import { screenOf, type TrailStep } from "../telemetry";
 import { isAppUserAgent } from "../in-app";
 import { inPhoneApp, phoneStatus } from "../leads/native-phone";
 
@@ -15,6 +15,8 @@ export type ReportContext = {
     channel: "web" | "android";
     release?: string;
     native_version?: string;
+    /** The screen's name (telemetry's screenOf, #15), e.g. "report". */
+    page?: string;
   };
   device: {
     os?: string;
@@ -112,6 +114,7 @@ export async function reportContext(): Promise<ReportContext> {
       channel: inApp ? "android" : "web",
       ...(releaseId ? { release: releaseId } : {}),
       ...(phone?.version ? { native_version: phone.version } : {}),
+      page: screenOf(window.location.pathname, window.location.search),
     },
     device: {
       os: osFrom(userAgent),

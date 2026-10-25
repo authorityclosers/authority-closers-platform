@@ -115,3 +115,22 @@ def test_the_trail_keeps_twenty_named_steps_and_nothing_else() -> None:
     }
     assert trail[-1] == {"event": "call_logged"}
     assert "trail" not in clean_context({"trail": "nope"})
+
+
+def test_a_route_is_its_pattern_with_ids_taken_out() -> None:
+    """#15: "/analysis/calls/<uuid>" was "/[long]" with area "other"."""
+    call = "/analysis/calls/0f8e2a4c-5b6d-4e7f-8a9b-0c1d2e3f4a5b"
+    assert scrub_route(call) == "/analysis/calls/:id"
+    assert area_for(scrub_route(call)) == "report"
+    assert scrub_route("/prospects/48213/notes") == "/prospects/:id/notes"
+    assert scrub_route("/organisation/people/ckz9x2abc0001qwerty") == "/organisation/people/:id"
+    assert (
+        scrub_route("/leads?lead=0f8e2a4c-5b6d-4e7f-8a9b-0c1d2e3f4a5b&tab=stages")
+        == "/leads?lead=:id&tab=stages"
+    )
+    # Personal data in a part is still masked, and the query keys stay masked.
+    assert scrub_route("/x/a.person@example.test?q=a.person@example.test") == (
+        "/x/[email]?q=[email]"
+    )
+    assert scrub_route("/auth/complete?code=987654") == "/auth/complete?code="
+    assert scrub_route("/settings/team") == "/settings/team"
