@@ -418,6 +418,7 @@ function LightboxShellFrame({
       status={updates.notifications_status}
       openNews={openNews}
       openEvent={openEvent}
+      markRead={markRead}
     />
   ) : null;
   const profile = useShellProfile(

@@ -1,3 +1,8 @@
+/* The bell, and Notifications in a sheet (owner program, 25 Oct 2026, item
+   5): groups by priority, each line in its kind's colour (reports teal,
+   paused analysis amber, invites slate, what's new violet), unread lines
+   marked with a dot. 8 pt grid, tokens only. */
+
 .trigger {
   position: relative;
   display: grid;
@@ -19,8 +24,7 @@
     height: 44px;
   }
 }
-.trigger:focus-visible,
-.panel button:focus-visible {
+.trigger:focus-visible {
   outline: 2px solid var(--lx-teal);
   outline-offset: 2px;
 }
@@ -32,66 +36,282 @@
   padding: 1px 3px;
   border-radius: 9px;
   background: var(--lx-teal);
-  color: white;
-  font-size: 10px;
+  color: var(--lx-on-teal);
+  font-size: 11px;
+  font-weight: 700;
   line-height: 14px;
 }
-.panel {
-  position: fixed;
-  z-index: 1100;
-  box-sizing: border-box;
-  width: min(340px, calc(100vw - 16px));
-  max-height: min(420px, calc(100dvh - 16px));
-  overflow: auto;
-  padding: 12px;
-  border: 1px solid var(--lx-line);
-  border-radius: 16px;
-  background: var(--lx-surface);
-  color: var(--lx-ink);
-  box-shadow: var(--lx-shadow-2);
-}
-.panel h2 {
-  margin: 0 0 10px;
-  font-size: 14px;
-}
-.panel p {
-  font-size: 12px;
-}
-.panel ul {
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
-.panel li {
-  border-radius: 8px;
-}
-.panel li[data-unread="true"] {
-  background: var(--lx-sunken);
-}
-.panel button {
+
+.body {
   display: grid;
-  box-sizing: border-box;
-  gap: 5px;
-  width: 100%;
-  padding: 12px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  text-align: left;
+  gap: 16px;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.readAll {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
   cursor: pointer;
 }
-.panel button:disabled {
+
+.readAll:disabled {
+  opacity: 0.5;
   cursor: default;
 }
-.panel strong {
-  font-size: 13px;
+
+.group {
+  display: grid;
+  gap: 8px;
 }
-.panel span,
-.panel small {
-  font-size: 12px;
+
+.group h3 {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.group h3 span {
+  min-width: 24px;
+  padding: 0 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-sunken);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 20px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.group h3[data-group="urgent"] {
+  color: var(--lx-danger);
+}
+
+.group h3[data-group="urgent"] span {
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
+}
+
+.group ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  --kind: var(--lx-teal);
+  --kind-soft: var(--lx-teal-soft);
+  position: relative;
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 4px 12px;
+  align-items: start;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  padding: 12px 16px 12px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.row[data-tone="paused"] {
+  --kind: var(--lx-warning);
+  --kind-soft: var(--lx-warning-soft);
+}
+
+.row[data-tone="invite"] {
+  --kind: var(--lx-info);
+  --kind-soft: var(--lx-info-soft);
+}
+
+.row[data-tone="news"] {
+  --kind: var(--lx-missed);
+  --kind-soft: var(--lx-missed-soft);
+}
+
+li[data-unread="true"] > .row {
+  border-color: color-mix(in oklab, var(--kind) 40%, var(--sx-line));
+  background: color-mix(in oklab, var(--kind-soft) 45%, var(--sx-surface));
+}
+
+/* Unread: a dot in the kind's colour at the top right. */
+li[data-unread="true"] > .row::after {
+  content: "";
+  position: absolute;
+  top: 16px;
+  right: 12px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--kind);
+}
+
+li[data-urgent] > .row {
+  border-left: 4px solid var(--lx-danger);
+}
+
+.row:disabled {
+  cursor: default;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--sx-radius-md);
+  background: var(--kind-soft);
+  color: var(--kind);
+}
+
+.words {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding-right: 16px;
+}
+
+.words strong {
+  font-size: var(--sx-text-md);
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
-.panel small {
+
+li[data-unread="true"] .words strong {
+  font-weight: 750;
+}
+
+.words > span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.words small {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.unread {
+  color: var(--kind);
+  font-weight: 650;
+}
+
+.verb {
+  grid-column: 2;
+  justify-self: start;
+  color: var(--kind);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.row:disabled .verb {
+  color: var(--sx-muted);
+}
+
+.failed {
+  margin: 0;
+  padding: 12px 16px;
+  border-radius: var(--sx-radius-md);
+  background: var(--lx-danger-soft);
+  color: var(--lx-danger);
+  font-weight: 600;
+}
+
+.quiet {
+  margin: 0;
+  color: var(--sx-muted);
+}
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.empty > span:last-child {
+  max-width: 280px;
+  color: var(--sx-muted);
+}
+
+.emptyIcon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  margin-bottom: 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-teal-soft);
   color: var(--lx-teal);
+}
+
+.skeleton {
+  display: grid;
+  gap: 8px;
+}
+
+.skeletonRow {
+  height: 64px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.row:focus-visible,
+.readAll:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .row:not(:disabled):hover {
+    border-color: var(--kind);
+  }
 }
