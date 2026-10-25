@@ -705,14 +705,16 @@ function GetStarted({
         {invite ? <UserPlus size={18} /> : <AudioLines size={18} />}
       </span>
       <h2 id="org-get-started">
-        {invite ? "Bring your team in" : "No calls in the last 30 days"}
+        {invite
+          ? "Bring your team in"
+          : "No analysed calls in the last 30 days"}
       </h2>
       <p>
         {invite
           ? "Invite your sales team. Their calls, who made them and each report’s status appear here."
           : team
-            ? "When anyone here saves a call, it appears with who made it and its report status."
-            : "Calls you save in this organisation appear here with their report status."}
+            ? "Calls show here once their recording is saved. A call logged on a lead without its recording isn't analysed: add the recording from the lead after the call."
+            : "Calls show here once their recording is saved, with their report status. After a call, add its recording from the lead."}
       </p>
       {invite ? (
         <button type="button" className={styles.primary} onClick={onInvite}>

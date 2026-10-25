@@ -33,7 +33,7 @@ org, and all are still `new`. Grouped by root cause:
 
 ### Fixes
 
-- **Report-a-bug (A, #5)**, commit SHA to come.
+- **Report-a-bug (A, #5)**, a572dd29f.
   - What changed:
     - Ctrl B (⌘B on a Mac) opens the reporter from any screen, with a menu or sheet open too.
     - Shake opens it over menus and sheets too, but not over the reporter.
@@ -42,13 +42,19 @@ org, and all are still `new`. Grouped by root cause:
     - The reporter was already on in every org, new ones included, with no per-org switch.
   - Verified by:
     - unit tests: `open.test.ts` (shortcut), `my-reports.test.ts` (words), `trail.test.ts` (20 steps), `test_bug_report_scrub.py` (server keeps 20 well-formed steps only);
-    - wb-ci --full RUN.
-- **Facebook lead sources (C, #7, #8)**, commit SHA to come.
+    - wb-ci --full 40210818306 (all green but mypy, fixed; lint 40211813646) and --e2e 40211606997.
+- **Facebook lead sources (C, #7, #8)**, 51219e766.
   - What changed: Sources → Facebook & Instagram gains "Connecting another Facebook account or Page?". It covers:
     - which account Facebook uses;
     - that "App not active" means the account must be added while Meta reviews the app, and to report it;
     - how to get access to a Page someone else runs.
   - Verified by: `sources-view.test.tsx`.
+
+- **Empty analytics explained (B, #4)**, the commit that adds this line.
+  - What changed: the organisation overview's empty state reads "No analysed calls in the
+    last 30 days" and says a call logged without its recording isn't analysed, and to add
+    the recording from the lead.
+  - Verified by: `organisation-view.test.tsx`; wb-ci --web 40212885213.
 
 ### Still flaky or open
 

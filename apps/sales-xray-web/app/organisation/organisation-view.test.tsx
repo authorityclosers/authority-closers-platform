@@ -512,7 +512,7 @@ it("gives a new organisation one next step instead of zero tiles", async () => {
   window.history.replaceState(null, "", "/organisation");
   (routes["/v1/organisation"] as { member_count: number }).member_count = 3;
   await render();
-  expect(host.textContent).toContain("No calls in the last 30 days");
+  expect(host.textContent).toContain("No analysed calls in the last 30 days");
   expect(
     host.querySelector('a[href*="/analysis/new"], a[href*="new=1"]'),
   ).not.toBeNull();
