@@ -462,7 +462,7 @@
   display: inline-flex;
   flex: none;
   align-items: center;
-  min-height: 36px;
+  min-height: 44px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-pill);
   background: var(--sx-surface);

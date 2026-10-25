@@ -441,12 +441,12 @@
 
 .sheetClose {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 8px;
+  right: 8px;
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: var(--sx-radius-sm);
   background: transparent;
@@ -913,7 +913,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-pill);
@@ -5156,8 +5156,8 @@ a.repName {
 .swipeHintClose {
   display: inline-grid;
   flex: none;
-  width: 32px;
-  height: 32px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border: 0;
   border-radius: 50%;
@@ -5833,4 +5833,30 @@ a.repName {
 /* In the symmetric head, Close keeps its 44 px slot exactly. */
 .actionSheetHead .actionSheetClose {
   margin: 0;
+}
+
+/* Text links a thumb hits (rule 2, 44 px): the height comes from padding with
+   a matching negative margin, so the lines around them don't move. */
+.historyLink,
+.linkButton,
+.detailRows dd a {
+  padding-block: 12px;
+  margin-block: -12px;
+}
+
+.historyLink,
+.detailRows dd a {
+  display: inline-block;
+}
+
+/* The tags beside a Now card open it (friction report, 25 Oct 2026). */
+button.leadTags {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
 }

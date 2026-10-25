@@ -17,6 +17,7 @@ import { Hand, Inbox, Mail, Phone, X, type LucideIcon } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 
 import { ChannelMark } from "../chats/channel-mark";
+import { haptic } from "../ui/haptics";
 import { Avatar, Badge, Button, Kpi, Panel, Tiles, type Tone } from "../ui/kit";
 import { useRowKeys } from "../ui/row-keys";
 import { useRowGestures } from "./gestures";
@@ -132,6 +133,12 @@ export function LeadLine({
   });
   const sub = [row.interest, row.company, row.city].filter(Boolean).join(" · ");
   const tap = actions?.onTap;
+  // A tap felt at once, while the lead opens to call or message (friction
+  // report, 25 Oct 2026: Call showed nothing for about a second).
+  const press: NonNullable<typeof tap> = (...args) => {
+    haptic("tap");
+    tap?.(...args);
+  };
   const tags = (
     <>
       <Badge
@@ -211,7 +218,18 @@ export function LeadLine({
           // Beside the card's tap area, never inside it: the stage above the
           // buttons on a phone. A lead with no number shows them greyed, with why.
           <span className={styles.leadEnd} data-quick="">
-            <span className={styles.leadTags}>{tags}</span>
+            {/* The stage and owner beside the card open it too (friction
+                report, 25 Oct 2026: rage taps on this text). Keyboards use the
+                card's own button. */}
+            <button
+              type="button"
+              className={styles.leadTags}
+              tabIndex={-1}
+              aria-label={`Open ${row.name}`}
+              onClick={() => onOpen(row.lead_id)}
+            >
+              {tags}
+            </button>
             <span className={styles.leadQuick}>
               <button
                 type="button"
@@ -223,7 +241,7 @@ export function LeadLine({
                     : `No number to call ${row.name}`
                 }
                 disabled={!reachable}
-                onClick={() => tap(row, "call")}
+                onClick={() => press(row, "call")}
               >
                 <Phone size={16} aria-hidden="true" />
               </button>
@@ -237,7 +255,7 @@ export function LeadLine({
                     : `No number to WhatsApp ${row.name}`
                 }
                 disabled={!reachable}
-                onClick={() => tap(row, "whatsapp")}
+                onClick={() => press(row, "whatsapp")}
               >
                 <ChannelMark channel="whatsapp" size={18} />
               </button>
@@ -247,7 +265,7 @@ export function LeadLine({
                   className={styles.quickAct}
                   data-channel="email"
                   aria-label={`Email ${row.name}`}
-                  onClick={() => tap(row, "email")}
+                  onClick={() => press(row, "email")}
                 >
                   <Mail size={16} aria-hidden="true" />
                 </button>

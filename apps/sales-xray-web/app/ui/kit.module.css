@@ -573,8 +573,9 @@ a.tile:active {
   background: var(--sx-fill);
 }
 
+/* A full control height on its own (44 px on touch), inside the well. */
 .segment {
-  min-height: calc(var(--sx-control-h) - 4px);
+  min-height: var(--sx-control-h);
   padding: 0 10px;
   border: 0;
   border-radius: calc(var(--sx-radius-sm) - 2px);
