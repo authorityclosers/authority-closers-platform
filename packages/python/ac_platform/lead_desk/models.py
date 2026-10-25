@@ -281,8 +281,9 @@ class LeadTask(Base):
             name="lead_desk_task_remind_before",
         ),
         CheckConstraint(
+            # 'assistant': sent from ChatGPT, Claude, an API key or the CLI (0132).
             "source IN ('seller', 'after_call', 'note', 'message', 'commitment', 'report',"
-            " 'meeting', 'adopted', 'rule')",
+            " 'meeting', 'adopted', 'rule', 'assistant')",
             name="lead_desk_task_source",
         ),
         CheckConstraint("length(trim(title)) > 0", name="lead_desk_task_title"),

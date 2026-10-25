@@ -22,6 +22,7 @@ from sqlalchemy import (
     Text,
     UniqueConstraint,
     Uuid,
+    text,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -195,3 +196,76 @@ class IntegrationOAuthToken(Base):
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     replaced_by: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+
+
+class IntegrationWrite(Base):
+    """One change an AI app, an API key or the CLI made to a lead, or one undo (migration
+    0131; design: docs/product/ai-writes.md).
+
+    Append-only: an undo is a new row pointing at the change it undoes, at most once. It
+    holds ids, the request's SHA-256 and the names of the fields set, never the text. It
+    decides the daily caps and the 7-day undo.
+    """
+
+    __tablename__ = "integration_writes"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_integration_write_tenant"),
+        ForeignKeyConstraint(
+            ["tenant_id", "person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_integration_write_person",
+        ),
+        ForeignKeyConstraint(
+            ["undoes_id"], ["integration_writes.id"], name="fk_integration_write_undoes"
+        ),
+        CheckConstraint("via IN ('connection', 'key', 'app')", name="integration_write_via"),
+        CheckConstraint(
+            "((via = 'connection') = (grant_id IS NOT NULL))"
+            " AND ((via = 'key') = (key_id IS NOT NULL))",
+            name="integration_write_door",
+        ),
+        CheckConstraint(
+            "action IN ('note', 'task', 'outcome', 'summary', 'stage', 'create', 'update',"
+            " 'import', 'undo')",
+            name="integration_write_action",
+        ),
+        CheckConstraint(
+            "(action = 'undo') = (undoes_id IS NOT NULL)", name="integration_write_undo"
+        ),
+        CheckConstraint(
+            "via = 'app' OR request_sha256 IS NOT NULL", name="integration_write_request"
+        ),
+        Index("uq_integration_write_command", "tenant_id", "command_id", unique=True),
+        Index(
+            "uq_integration_write_undoes",
+            "undoes_id",
+            unique=True,
+            postgresql_where=text("undoes_id IS NOT NULL"),
+        ),
+        Index("ix_integration_write_grant", "tenant_id", "grant_id", "created_at"),
+        Index("ix_integration_write_key", "tenant_id", "key_id", "created_at"),
+        Index("ix_integration_write_lead", "tenant_id", "lead_id", "created_at"),
+        Index("ix_integration_write_recent", "tenant_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    # Who acted: the person who made the key or approved the connection, or who undid it.
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    # Which door: a Connect connection (ChatGPT, Claude), an API key (scripts, the CLI), or
+    # the app itself (an undo made in Sales X-Ray).
+    via: Mapped[str] = mapped_column(String(12))
+    grant_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    key_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    # What the lead's history shows: "ChatGPT", "Claude", "API key sxk_live_ab12…".
+    app_label: Mapped[str] = mapped_column(String(80))
+    action: Mapped[str] = mapped_column(String(16))
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    request_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    command_id: Mapped[UUID] = mapped_column(Uuid)
+    # What the change made: the lead event (a note) or the task.
+    event_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    task_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    fields: Mapped[list[str]] = mapped_column(JSON)
+    undoes_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
