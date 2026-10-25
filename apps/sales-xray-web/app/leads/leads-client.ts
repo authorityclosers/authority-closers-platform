@@ -180,6 +180,11 @@ export type LeadEvent = {
   starts_at?: string | null;
   from_starts_at?: string | null;
   mode_label?: string | null;
+  /** A change an AI app or an API key made (ai-writes, 25 Oct 2026): which one, and
+   * whether this person may still undo it (7 days). */
+  app_label?: string | null;
+  change_id?: string | null;
+  can_undo?: boolean;
 };
 
 export type LeadDetail = {
@@ -1307,6 +1312,14 @@ export type CallReport = {
     missed: number;
   }[];
 };
+
+/** Undo a change an AI app made: a note stops showing, an open task is cancelled. */
+export function undoAppChange(changeId: string) {
+  return request<{ status: string }>(
+    `/ai-changes/${encodeURIComponent(changeId)}/undo`,
+    json("POST", {}),
+  );
+}
 
 /** Hides a call the seller's phone logged from everyone else, or shows it again. */
 export function setCallPrivacy(

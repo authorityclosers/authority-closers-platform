@@ -35,6 +35,8 @@ export const SCOPES: [string, string][] = [
   ["reports:read", "Read the facts found in calls"],
   ["leads:read", "Read leads"],
   ["leads:write", "Add leads"],
+  ["leads:notes", "Add notes to leads"],
+  ["leads:tasks", "Add tasks and reminders to leads"],
   ["webhooks:manage", "Manage the webhook (coming to the API)"],
 ];
 
@@ -316,6 +318,136 @@ const { id, outcome } = await response.json(); // 201 created, or 200`,
     notes:
       "outcome is created (201), or 200 with known (this external_id was sent before) or repeat (a lead with this phone exists; it is marked as asking again).",
   },
+  {
+    id: "api-add-note",
+    method: "POST",
+    path: "/leads/{lead_id}/notes",
+    scope: "leads:notes",
+    summary:
+      "Add a note to a lead. The lead's history shows it came from your key, and it can be undone for 7 days. The same request_id again changes nothing.",
+    params: [
+      { name: "lead_id", where: "path", type: "string", text: "From /leads." },
+      {
+        name: "note",
+        where: "body",
+        type: "string",
+        text: "1 to 1,000 characters.",
+      },
+      {
+        name: "request_id",
+        where: "body",
+        type: "string",
+        text: "8 to 80 characters, new for each change.",
+      },
+      {
+        name: "preview",
+        where: "body",
+        type: "boolean",
+        text: "true: see what would change, without changing it.",
+      },
+    ],
+    curl: `curl ${API}/leads/c7d2.../notes \\\n  ${AUTH} \\\n  -H "Content-Type: application/json" \\\n  -d '{"note": "Wants a demo on Monday", "request_id": "crm-note-42"}'`,
+    js: `const response = await fetch("${API}/leads/" + leadId + "/notes", {
+  method: "POST",
+  headers: { ...${HEADERS}, "Content-Type": "application/json" },
+  body: JSON.stringify({ note: "Wants a demo on Monday", request_id: "crm-note-42" }),
+});
+const { change_id, undo_until } = await response.json(); // 201, or 200 for a retry`,
+    answer: `{ "change_id": "9b1e…", "action": "note", "lead_id": "c7d2…", "via": "API key sxk_live_ab12", "status": "applied", "undo_until": "2026-11-01T10:00:00+00:00" }`,
+    notes:
+      "Only these fields are taken. Refusals: 403 writes_paused (an owner paused changes from apps), 403 action_off, 429 cap_reached (200 a day per key, 20 per lead), 409 request_reused.",
+  },
+  {
+    id: "api-add-task",
+    method: "POST",
+    path: "/leads/{lead_id}/tasks",
+    scope: "leads:tasks",
+    summary:
+      "Add a task or reminder to a lead, for the lead's owner. It can be undone for 7 days while nobody has changed it.",
+    params: [
+      { name: "lead_id", where: "path", type: "string", text: "From /leads." },
+      {
+        name: "kind",
+        where: "body",
+        type: "string",
+        text: "call_back, whatsapp, email, send_file, meeting or other.",
+      },
+      {
+        name: "due",
+        where: "body",
+        type: "string",
+        text: "Date and time with its time zone.",
+      },
+      {
+        name: "title, note, ends_at, remind_before_minutes",
+        where: "body",
+        type: "",
+        text: "Optional.",
+      },
+      {
+        name: "request_id",
+        where: "body",
+        type: "string",
+        text: "8 to 80 characters, new for each change.",
+      },
+    ],
+    curl: `curl ${API}/leads/c7d2.../tasks \\\n  ${AUTH} \\\n  -H "Content-Type: application/json" \\\n  -d '{"kind": "call_back", "due": "2026-10-27T10:00:00+05:30", "request_id": "crm-task-42"}'`,
+    js: `await fetch("${API}/leads/" + leadId + "/tasks", {
+  method: "POST",
+  headers: { ...${HEADERS}, "Content-Type": "application/json" },
+  body: JSON.stringify({
+    kind: "call_back",
+    due: "2026-10-27T10:00:00+05:30",
+    request_id: "crm-task-42",
+  }),
+});`,
+    answer: `{ "change_id": "4a7c…", "action": "task", "task_id": "e21f…", "status": "applied" }`,
+  },
+  {
+    id: "api-changes",
+    method: "GET",
+    path: "/changes",
+    scope: "leads:notes or leads:tasks",
+    summary:
+      "The notes and tasks your key added in the last 30 days, newest first, and whether each can still be undone.",
+    params: [
+      {
+        name: "lead_id",
+        where: "query",
+        type: "string",
+        text: "Only this lead's.",
+      },
+    ],
+    curl: `curl ${API}/changes \\\n  ${AUTH}`,
+    js: `const { changes } = await (
+  await fetch("${API}/changes", { headers: ${HEADERS} })
+).json();`,
+    answer: `{ "changes": [{ "change_id": "9b1e…", "action": "note", "lead_name": "Asha Rao", "status": "applied", "can_undo": true }] }`,
+  },
+  {
+    id: "api-undo",
+    method: "POST",
+    path: "/changes/{change_id}/undo",
+    scope: "leads:notes or leads:tasks",
+    summary:
+      "Undo one change your key made, within 7 days: a note stops showing, an open task is cancelled. Both stay in the lead's history.",
+    params: [
+      {
+        name: "change_id",
+        where: "path",
+        type: "string",
+        text: "From the change or /changes.",
+      },
+    ],
+    curl: `curl -X POST ${API}/changes/9b1e.../undo \\\n  ${AUTH}`,
+    js: `await fetch("${API}/changes/" + changeId + "/undo", {
+  method: "POST",
+  headers: ${HEADERS},
+});`,
+    answer: `{ "change_id": "9b1e…", "status": "undone", "undo_change_id": "77c0…" }`,
+    notes:
+      "409 changed_since: someone changed the task in Sales X-Ray since, and their change stands.",
+  },
 ];
 
 export const EVENTS: [string, string][] = [
@@ -409,6 +541,10 @@ export const MCP_TOOLS: [string, string, string][] = [
   ["list_leads", "leads:read", "Leads, by stage"],
   ["get_lead", "leads:read", "One lead with its history"],
   ["add_lead", "leads:write", "Add a lead"],
+  ["add_note", "leads:notes", "Add a note to a lead (undo for 7 days)"],
+  ["add_task", "leads:tasks", "Add a task or reminder to a lead"],
+  ["list_my_changes", "leads:notes or leads:tasks", "What this app added"],
+  ["undo_change", "leads:notes or leads:tasks", "Undo one of its changes"],
 ];
 
 /** The remote MCP server in each assistant: add the address, then sign in. */
