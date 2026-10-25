@@ -66,9 +66,47 @@ def test_views_are_camel_case_and_name_no_amount() -> None:
 def test_meta_lead_ads_say_honestly_where_meta_review_stands() -> None:
     review = apps.meta_review()
     assert review.state == "pending" and review.since.isoformat() == "2026-10-19"
-    assert "testers" in review.works_now and review.after
+    # Meta lets an app under review read only its testers' test leads, never ad leads.
+    assert "testers" in review.works_now and "only test leads" in review.works_now
+    assert "Website form" in review.works_now and review.after
     dumped = review.model_dump(by_alias=True)
     assert "worksNow" in dumped and dumped["state"] == "pending"
+
+
+def test_lead_ads_say_why_ad_leads_dont_come_yet_and_where_to_bring_them_in() -> None:
+    [blocker] = apps.meta_blockers()
+    assert "19 Oct" in blocker.reason and "not leads from your ads" in blocker.reason
+    assert "Website form" in blocker.fix and blocker.page == apps.SOURCES_PAGE
+    assert blocker.action == "Add a Website form" and "test leads only" in blocker.short
+    dumped = blocker.model_dump(by_alias=True)
+    assert set(dumped) == {"short", "reason", "fix", "page", "action"}
+
+
+def test_messaging_cards_say_meta_hasnt_approved_them_and_what_instagram_lacks() -> None:
+    [review] = apps.messaging_blockers("messenger", pages=1, accounts=1)
+    assert "hasn't approved" in review.reason and "ask us" in review.fix
+    assert review.page is None
+    # A Page is connected but none has an Instagram account: say so, with the fix.
+    instagram = apps.messaging_blockers("instagram", pages=1, accounts=0)
+    assert [b.reason for b in instagram][1].startswith("None of your connected Pages")
+    assert "Allow access to messages" in instagram[1].fix
+    # Nothing connected yet: only the review stands between them and connecting.
+    assert len(apps.messaging_blockers("instagram", pages=0, accounts=0)) == 1
+    assert len(apps.messaging_blockers("whatsapp", pages=0, accounts=0)) == 1
+
+
+def test_a_card_keeps_its_blockers_through_the_settings_shape() -> None:
+    health = apps.AppHealth(
+        app="meta_leads",
+        name=apps.NAMES["meta_leads"],
+        state="not_connected",
+        words="Bring in the leads.",
+        configured=True,
+        blockers=apps.meta_blockers(),
+    )
+    card = apps._card(health).model_dump(by_alias=True)
+    assert card["blockers"][0]["page"] == "/leads?tab=sources"
+    assert apps._card(health.model_copy(update={"blockers": []})).blockers == []
 
 
 def test_the_lead_stages_card_says_where_stages_go_and_what_waits() -> None:

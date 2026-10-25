@@ -60,6 +60,22 @@
   line-height: 1.45;
 }
 
+/* The way in for ad leads until Meta approves (connected_apps.meta_blockers). */
+.reviewFix {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.reviewFix:hover,
+.reviewFix:focus-visible {
+  text-decoration: underline;
+}
+
 /* ---------- Steps ---------- */
 
 .steps {

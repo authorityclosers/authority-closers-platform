@@ -120,6 +120,8 @@ class LeadRow(Model):
     # An open lead past New with no follow-up set (spec section 6: every active lead
     # has a next action).
     no_next_action: bool = False
+    # It has an email address: the card offers one-tap Email (never the address itself).
+    has_email: bool = False
 
 
 class MessageTemplate(Model):
@@ -484,6 +486,15 @@ class TaskList(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     tasks: tuple[TaskView, ...]
     counts: dict[str, int] = Field(default_factory=dict)
+
+
+class SearchResult(Model):
+    """A few words, everywhere a seller looks (v0.89): leads, notes and open tasks."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    leads: tuple[LeadRow, ...]
+    notes: tuple[ActivityItem, ...]
+    tasks: tuple[TaskView, ...]
 
 
 class LeadDetail(Model):

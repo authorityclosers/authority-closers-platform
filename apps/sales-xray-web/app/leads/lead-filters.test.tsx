@@ -205,3 +205,26 @@ it("the sort and the new filters show as chips that remove themselves", async ()
     more: { ...on.more, due: null },
   });
 });
+
+it("asks for the pipeline first, then whose leads, then the rest", async () => {
+  await act(async () =>
+    root.render(
+      <FilterSheet
+        open
+        onClose={() => undefined}
+        filters={NONE}
+        defaultWho="team"
+        canPickWho
+        pipes={PIPES}
+        onApply={() => undefined}
+      />,
+    ),
+  );
+  // Pipeline first (orchestrator, 25 Oct 2026: the most important filter for AC).
+  const fields = [...document.querySelectorAll("form > *")].map(
+    (field) => field.textContent ?? "",
+  );
+  expect(fields[0]).toContain("Pipeline");
+  expect(fields[1]).toContain("Whose leads");
+  expect(fields[2]).toContain("Name or number");
+});

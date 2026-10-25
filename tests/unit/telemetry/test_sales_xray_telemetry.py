@@ -310,3 +310,68 @@ def test_unsent_changes_are_reported_as_counts_only() -> None:
         with pytest.raises(ValueError):
             check_payload_values(event, bad)
     assert "note" not in event.allowed_payload_keys
+
+
+def test_friction_events_take_flow_steps_prompt_outcomes_and_tap_places_only() -> None:
+    flow = SALES_XRAY_EVENTS["sx.flow"]
+    check_payload_values(
+        flow,
+        {
+            "flow": "onboarding",
+            "outcome": "abandon",
+            "step": "name",
+            "index": 1,
+            "steps": 5,
+            "ms": 41_000,
+            "via": "business",
+        },
+    )
+    check_payload_values(flow, {"flow": "phone_setup", "outcome": "done", "left": 2, "via": "all"})
+    for bad in (
+        {"flow": "checkout", "outcome": "start"},
+        {"flow": "add_lead", "outcome": "gave_up"},
+        {"flow": "add_lead", "outcome": "step", "step": "Priya Sample"},
+        {"flow": "add_lead", "outcome": "done", "ms": 3_600_001},
+        {"outcome": "start"},
+    ):
+        with pytest.raises(ValueError):
+            check_payload_values(flow, bad)
+    prompt = SALES_XRAY_EVENTS["sx.permission_prompt"]
+    check_payload_values(
+        prompt,
+        {
+            "permission": "rec_files",
+            "outcome": "blocked",
+            "via": "settings",
+            "from": "fix",
+            "ms": 12_000,
+        },
+    )
+    with pytest.raises(ValueError):
+        check_payload_values(prompt, {"permission": "contacts", "outcome": "granted"})
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.screen_hidden"], {"screen": "welcome", "kind": "exit", "seen_ms": 9}
+    )
+    check_payload_values(
+        SALES_XRAY_EVENTS["sx.screen_viewed"],
+        {"screen": "lead", "from": "leads", "nav": "back", "stay_ms": 90_000, "seen_ms": 4_000},
+    )
+    tap = SALES_XRAY_EVENTS["sx.tap_issue"]
+    check_payload_values(
+        tap,
+        {
+            "kind": "dead",
+            "target": "text",
+            "screen": "leads",
+            "zone": "r4c3",
+            "element": "leads-table.stagechip",
+            "where": "e1a2b3c4",
+        },
+    )
+    for bad in (
+        {"kind": "dead", "target": "text", "zone": "r5c1"},
+        {"kind": "dead", "target": "text", "element": "Call Priya"},
+    ):
+        with pytest.raises(ValueError):
+            check_payload_values(tap, bad)
+    assert "/welcome" in SALES_XRAY_SURFACE.routes

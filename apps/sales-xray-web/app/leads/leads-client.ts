@@ -65,6 +65,8 @@ export type LeadRow = {
   next_action_note?: string | null;
   /** An open lead past New with no follow-up set. */
   no_next_action?: boolean;
+  /** It has an email address: the card offers one-tap Email. */
+  has_email?: boolean;
 };
 
 export type MessageTemplate = { key: string; label: string; text: string };
@@ -207,6 +209,8 @@ export type LeadDetail = {
   moves?: MoveOption[];
   /** Its scheduled meeting, if one is booked. */
   meeting?: MeetingView | null;
+  /** Its open tasks, the next one first (work-memory engine). */
+  tasks?: TaskView[];
 };
 
 export type StageSuggestion = {
@@ -724,6 +728,133 @@ export function readActivity(
   const params = new URLSearchParams({ day });
   if (before) params.set("before", before);
   return request<ActivityPage>(`/activity?${params}`, { signal });
+}
+
+/* ---------- Tasks (work-memory engine, docs/product/lead-desk/work-memory-engine.md) ---------- */
+
+export type TaskKind =
+  | "call_back"
+  | "whatsapp"
+  | "email"
+  | "send_file"
+  | "meeting"
+  | "other";
+export type TaskBucket = "overdue" | "today" | "upcoming";
+export type TaskSnoozeChoice = "15m" | "1h" | "evening" | "tomorrow";
+
+export type TaskView = {
+  task_id: string;
+  lead_id: string;
+  lead_name: string;
+  kind: TaskKind;
+  title: string;
+  note: string | null;
+  starts_at: string;
+  ends_at: string | null;
+  location: string | null;
+  status: "open" | "done" | "cancelled";
+  done_at: string | null;
+  original_due_at: string;
+  snoozes: number;
+  rollovers: number;
+  source: string;
+  revision: number;
+  owner_person_id: string | null;
+  /** Open and a minute past its due. */
+  overdue: boolean;
+  bucket: TaskBucket | null;
+};
+
+export type TaskList = {
+  tasks: TaskView[];
+  counts: Partial<Record<TaskBucket, number>>;
+};
+
+export type NewTask = {
+  kind: TaskKind;
+  starts_at: string;
+  ends_at?: string | null;
+  location?: string | null;
+  note?: string | null;
+};
+
+/** A seller's open tasks in one bucket, earliest first, with every bucket's count. */
+export function readTasks(view: TaskBucket, signal?: AbortSignal) {
+  return request<TaskList>(`/tasks?view=${view}`, { signal });
+}
+
+export function addTask(leadId: string, task: NewTask, command = commandId()) {
+  const body = Object.fromEntries(
+    Object.entries(task).filter(([, value]) => value !== "" && value != null),
+  );
+  return request<TaskView>(
+    `/leads/${encodeURIComponent(leadId)}/tasks`,
+    json("POST", {
+      command_id: command,
+      client_at: new Date().toISOString(),
+      ...body,
+    }),
+  );
+}
+
+/** Notes: what people wrote on your leads, newest first; with words, what says
+ *  them (v0.89). A note on its own and the remark saved with a call's outcome. */
+export function readNotes(
+  q: string | null = null,
+  before: string | null = null,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams();
+  if (q?.trim()) params.set("q", q.trim().slice(0, 80));
+  if (before) params.set("before", before);
+  const query = params.toString();
+  return request<ActivityPage>(`/notes${query ? `?${query}` : ""}`, {
+    signal,
+  });
+}
+
+export type SearchResult = {
+  leads: LeadRow[];
+  notes: ActivityItem[];
+  tasks: TaskView[];
+};
+
+/** A few words (two letters at least) across leads, notes and open tasks. */
+export function searchDesk(q: string, signal?: AbortSignal) {
+  const params = new URLSearchParams({ q: q.trim().slice(0, 80) });
+  return request<SearchResult>(`/search?${params}`, { signal });
+}
+
+/** Done, undo or cancel, on the revision this device saw. */
+export function taskAction(
+  task: Pick<TaskView, "task_id" | "revision">,
+  action: "done" | "undo" | "cancel",
+  command = commandId(),
+) {
+  return request<TaskView>(
+    `/tasks/${encodeURIComponent(task.task_id)}/${action}`,
+    json("POST", {
+      command_id: command,
+      expected_revision: task.revision,
+      client_at: new Date().toISOString(),
+    }),
+  );
+}
+
+export function snoozeTask(
+  task: Pick<TaskView, "task_id" | "revision">,
+  choice: TaskSnoozeChoice,
+  command = commandId(),
+) {
+  return request<TaskView>(
+    `/tasks/${encodeURIComponent(task.task_id)}/snooze`,
+    json("POST", {
+      command_id: command,
+      expected_revision: task.revision,
+      client_at: new Date().toISOString(),
+      choice,
+    }),
+  );
 }
 
 /** At most this many leads go in one delete. */

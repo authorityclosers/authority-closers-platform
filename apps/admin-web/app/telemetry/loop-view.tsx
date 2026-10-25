@@ -55,10 +55,11 @@ const LOOP_PAGES = [
   { key: "devices", label: "Devices" },
   { key: "releases", label: "Releases" },
   { key: "fix", label: "Fix next" },
+  { key: "friction", label: "Friction" },
 ] as const;
 export type LoopPage = (typeof LOOP_PAGES)[number]["key"];
 
-/** Overview, Devices, Releases and Fix next: the telemetry pages, one tab each. */
+/** Overview, Devices, Releases, Fix next and Friction: the telemetry pages, one tab each. */
 export function LoopTabs({
   current,
   hrefs,
@@ -87,6 +88,7 @@ export const LOOP_HREFS: Record<LoopPage, string> = {
   devices: "/telemetry/devices",
   releases: "/telemetry/releases",
   fix: "/telemetry/fix-next",
+  friction: "/telemetry/friction",
 };
 
 type Bar = {
@@ -104,7 +106,7 @@ type Bar = {
  * Sorted horizontal bars with each value written at the end (colour never alone). `limit`
  * draws the line a value should stay under; on phones only the first seven bars show.
  */
-function Bars({
+export function Bars({
   label,
   rows,
   limit,

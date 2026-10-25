@@ -1,4 +1,5 @@
 import { History } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 
@@ -18,6 +19,7 @@ import {
   normalizeDetail,
 } from "@/app/bugs/bugs-data";
 import styles from "@/app/bugs/bugs.module.css";
+import { sellerPath } from "@/app/sellers/seller-data";
 import {
   Badge,
   Empty,
@@ -58,6 +60,14 @@ export default async function BugPage({
     [
       "By",
       [bug.person.name, bug.person.email].filter(Boolean).join(" · ") || null,
+    ],
+    [
+      "What happened",
+      bug.person.id ? (
+        <Link key="seller" href={sellerPath(bug.person.id)}>
+          Their days, before and after this report
+        </Link>
+      ) : null,
     ],
     [
       "Organisation",

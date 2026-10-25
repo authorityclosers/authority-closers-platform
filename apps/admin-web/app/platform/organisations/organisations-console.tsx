@@ -1,6 +1,7 @@
 "use client";
 
 import { Building2, RefreshCw, UsersRound } from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import {
   loadPlatformIdentity,
@@ -32,6 +33,7 @@ import {
 } from "../../ui/kit";
 import styles from "./organisations.module.css";
 import { istStamp } from "../../lib/time";
+import { sellerPath } from "../../sellers/seller-data";
 
 const date = (value: string | null) => istStamp(value);
 
@@ -224,7 +226,18 @@ export function OrganisationsConsole() {
               <tbody>
                 {members.map((member) => (
                   <tr key={member.person_id ?? member.invite_id}>
-                    <td>{member.name ?? "—"}</td>
+                    <td>
+                      {member.person_id ? (
+                        <Link
+                          href={sellerPath(member.person_id)}
+                          title="What happened, day by day"
+                        >
+                          {member.name ?? "Unnamed member"}
+                        </Link>
+                      ) : (
+                        (member.name ?? "—")
+                      )}
+                    </td>
                     <td>{member.email ?? "—"}</td>
                     <td>{member.role}</td>
                     <td>

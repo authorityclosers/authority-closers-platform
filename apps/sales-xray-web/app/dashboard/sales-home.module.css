@@ -208,6 +208,34 @@
   white-space: normal;
 }
 
+/* Recently called: the row opens the lead; the round button calls them back. */
+.recentItem {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.callBack {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  margin-right: 10px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.callBack:active {
+  background: var(--sx-fill-soft);
+}
+
+.callBack:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
 .rowEnd {
   display: grid;
   justify-items: end;

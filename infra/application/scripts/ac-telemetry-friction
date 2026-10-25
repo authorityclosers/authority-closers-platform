@@ -1,0 +1,186 @@
+#!/usr/bin/env python3
+"""Sales X-Ray's weekly friction report -> markdown for the owner and the builders (owner,
+25 Oct 2026: "automatically find where users stop ... a weekly report feeding the redesign
+loop").
+
+Every Monday at 07:00 IST (ac-telemetry-friction@<env>.timer) the last India week's report
+is worked out by the application's own module (ac_platform.telemetry.friction_cli) inside
+the environment, read-only: the worker container on staging and production, the active slot
+on dev. It is written as
+
+  /var/lib/ac-telemetry-friction/<env>/<week>.md   (root's copy, kept)
+  /home/acdev/reports/telemetry-friction/<env>/<week>.md and latest.md   (for the builders)
+
+Counts, timings and code names only: no person, workspace or call is named. Admin ->
+Product telemetry -> Friction shows the same report live. Before a release carries the
+module, the run does nothing.
+
+  ac-telemetry-friction development-live | staging | production [--week YYYY-MM-DD]
+  ac-telemetry-friction <env> --dry-run     print the report, write nothing
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import pwd
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+MODULE = "ac_platform.telemetry.friction_cli"
+STATE = Path(os.environ.get("AC_TELEMETRY_FRICTION_STATE", "/var/lib/ac-telemetry-friction"))
+SHARED = Path(
+    os.environ.get("AC_TELEMETRY_FRICTION_SHARED", "/home/acdev/reports/telemetry-friction")
+)
+SHARED_OWNER = os.environ.get("AC_TELEMETRY_FRICTION_OWNER", "acdev")
+ENVIRONMENTS = ("development-live", "staging", "production")
+WEEK = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def runner(env: str) -> list[str]:
+    """The command that runs the report module inside the environment."""
+    override = os.environ.get("AC_TELEMETRY_FRICTION_RUNNER")
+    if override:
+        return override.split()
+    if env == "development-live":
+        slot = Path("/var/lib/ac-dev-live-backend/active-slot").read_text().strip()
+        python = f"/srv/authority-closers/development/live-backend/{slot}/.venv/bin/python"
+        return [
+            "env",
+            "-i",
+            "PATH=/usr/bin:/bin",
+            "HOME=/root",
+            "LANG=C.UTF-8",
+            python,
+            "-m",
+            MODULE,
+            "--database-url-file",
+            "/etc/authority-closers/development/database-url-live",
+        ]
+    container = f"ac-application-{env}-sales-xray-worker-1"
+    return [
+        "docker",
+        "exec",
+        container,
+        "python",
+        "-m",
+        MODULE,
+        "--database-url-file",
+        "/run/ac-sales-xray/database-url",
+    ]
+
+
+def run_module(env: str, *args: str) -> dict | None:
+    """The module's JSON answer; None when this environment has no module yet."""
+    done = subprocess.run(  # noqa: S603 - argv lists from fixed commands; no shell is used.
+        [*runner(env), "--environment", env, *args],
+        capture_output=True,
+        text=True,
+        timeout=600,
+        cwd="/",
+        check=False,
+    )
+    if done.returncode != 0 and "No module named" in done.stderr:
+        return None
+    try:
+        answer = json.loads(done.stdout.strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError):
+        raise RuntimeError(f"report module gave no answer (exit {done.returncode})") from None
+    if done.returncode != 0 or "error" in answer:
+        raise RuntimeError(f"report module refused: {answer.get('error', done.returncode)}")
+    return answer
+
+
+def _write(path: Path, text: str, owner: tuple[int, int] | None = None) -> None:
+    """Write through a temporary file, so a reader never sees half a report."""
+    temporary = path.with_name(path.name + ".tmp")
+    temporary.write_text(text, encoding="utf-8")
+    temporary.chmod(0o644)
+    if owner is not None:
+        os.chown(temporary, *owner)
+    temporary.replace(path)
+
+
+def _shared_owner() -> tuple[int, int] | None:
+    try:
+        user = pwd.getpwnam(SHARED_OWNER)
+    except KeyError:
+        return None
+    return user.pw_uid, user.pw_gid
+
+
+def publish(env: str, week: str, markdown: str) -> list[Path]:
+    """Root's kept copy, and the builders' copy plus latest.md (owned by acdev)."""
+    if not WEEK.fullmatch(week):
+        raise RuntimeError("report module named no week")
+    kept = STATE / env
+    kept.mkdir(mode=0o755, parents=True, exist_ok=True)
+    written = [kept / f"{week}.md"]
+    _write(written[0], markdown)
+    owner = _shared_owner()
+    shared = SHARED / env
+    try:
+        # Each level made here goes to acdev, never only the last one.
+        for level in (SHARED.parent, SHARED, shared):
+            if not level.exists():
+                level.mkdir(mode=0o755)
+                if owner is not None:
+                    os.chown(level, *owner)
+        for name in (f"{week}.md", "latest.md"):
+            _write(shared / name, markdown, owner)
+            written.append(shared / name)
+    except OSError as error:
+        print(json.dumps({"env": env, "shared_copy": "failed", "detail": str(error)[:200]}))
+    return written
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] not in ENVIRONMENTS:
+        print(
+            "usage: ac-telemetry-friction development-live|staging|production "
+            "[--week YYYY-MM-DD] [--dry-run]"
+        )
+        return 2
+    env, rest = argv[0], argv[1:]
+    dry = "--dry-run" in rest
+    args: list[str] = []
+    if "--week" in rest:
+        index = rest.index("--week")
+        if index + 1 >= len(rest) or not WEEK.fullmatch(rest[index + 1]):
+            print("usage: --week YYYY-MM-DD")
+            return 2
+        args = ["--week", rest[index + 1]]
+    try:
+        answer = run_module(env, *args)
+    except (RuntimeError, OSError, subprocess.TimeoutExpired) as error:
+        print(json.dumps({"env": env, "failed": str(error)[:200]}))
+        return 1
+    if answer is None:
+        print(json.dumps({"env": env, "skipped": "no report module in this release yet"}))
+        return 0
+    if dry:
+        print(answer["markdown"])
+        return 0
+    try:
+        written = publish(env, str(answer.get("week", "")), str(answer["markdown"]))
+    except (RuntimeError, OSError, KeyError) as error:
+        print(json.dumps({"env": env, "failed": str(error)[:200]}))
+        return 1
+    print(
+        json.dumps(
+            {
+                "env": env,
+                "week": answer["week"],
+                "findings": answer.get("findings"),
+                "events": answer.get("events"),
+                "written": [str(path) for path in written],
+            }
+        )
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

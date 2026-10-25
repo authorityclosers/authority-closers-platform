@@ -42,6 +42,8 @@ import {
 } from "../organisation/organisation-api";
 import { readSalesXrayWorkspaces } from "../sales-xray-workspaces";
 import { BrandMark } from "../shell/brand-lockup";
+import { telemetry } from "../telemetry";
+import { useFlow } from "../telemetry-flows";
 import {
   firstName,
   inviteEmails,
@@ -130,8 +132,14 @@ async function readPerson(
   });
   if (response.status === 401) return "signed-out";
   if (!response.ok) throw new Error("identity_unavailable");
-  const body = (await response.json()) as { person_id?: unknown };
+  const body = (await response.json()) as {
+    person_id?: unknown;
+    session_id?: unknown;
+  };
   if (typeof body.person_id !== "string") throw new Error("identity_shape");
+  // This page has no app frame: usage events carry the session from here.
+  if (typeof body.session_id === "string")
+    telemetry.setSession(body.session_id);
   const [directory, profile, invites] = await Promise.all([
     readSalesXrayWorkspaces(signal),
     readAccountProfile(signal).catch(() => null),
@@ -241,7 +249,17 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
   const steps = stepsFor(path);
   const step = steps[Math.min(index, steps.length - 1)];
 
+  // Where people stop in setup (the weekly friction report); review fixtures
+  // record nothing.
+  const flow = useFlow("onboarding", { via: path });
+  const live = !preview && person !== null;
+  useEffect(() => {
+    if (live) flow.step(step, index, steps.length);
+  }, [flow, live, step, index, steps.length]);
+
   function exit(mark: "done" | "skipped", href: string) {
+    if (mark === "done") flow.done({ step });
+    else flow.skip(step);
     if (preview?.onLeave) preview.onLeave(href);
     else leave(person?.personId, mark, href);
   }
@@ -317,6 +335,7 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
     const clean = orgName.trim().replace(/\s+/g, " ");
     if (clean.length < 2 || clean.length > 80) {
       setFieldError("Use 2 to 80 characters.");
+      flow.blocked("name");
       return;
     }
     if (createRequest.current?.name !== clean)
@@ -362,6 +381,7 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
       setFieldError(
         `Check ${invalid.length === 1 ? "this address" : "these addresses"}: ${invalid.join(", ")}`,
       );
+      flow.blocked("team");
       return;
     }
     if (!valid.length) return go("first");

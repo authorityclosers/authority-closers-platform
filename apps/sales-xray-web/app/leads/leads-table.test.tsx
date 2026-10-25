@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import type { LeadRow } from "./leads-client";
-import { LeadsTable } from "./leads-table";
+import { fitColumns, LeadsTable } from "./leads-table";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -228,4 +228,114 @@ it("ticks leads while selecting instead of opening them", async () => {
     expect.objectContaining({ lead_id: id(1) }),
   );
   expect(onOpen).not.toHaveBeenCalled();
+});
+
+// Phones (owner, 25 Oct 2026: "sideways scrolling is hard"): the key columns
+// that fit stay in the row, the rest open under it; nothing scrolls sideways.
+it("fits Name and the key columns to the pane's width", () => {
+  const shown = ["phone", "stage", "source", "next", "last", "age"];
+  const order = ["stage", "next", "owner", "last", "source", "age", "phone"];
+  expect(fitColumns(0, shown, order, false)).toBeNull();
+  expect(fitColumns(900, shown, order, false)).toBeNull();
+  // A 360 px phone leaves 328 and a 390 px one 358: Name and Stage (with the
+  // next action under it), 144 px, the rest (140 and 170) for the name.
+  expect(fitColumns(328, shown, order, false)).toEqual({
+    keys: ["stage"],
+    keyWidth: 144,
+  });
+  expect(fitColumns(358, shown, order, false)).toEqual({
+    keys: ["stage"],
+    keyWidth: 144,
+  });
+  // The tick column while selecting still leaves room for Stage at 390.
+  expect(fitColumns(358, shown, order, true)?.keys).toEqual(["stage"]);
+  // 130% text on a small phone: no room for a column; all goes under the name.
+  expect(fitColumns(234, shown, order, false)?.keys).toEqual([]);
+  // A tablet holds four, in the table's own order.
+  expect(fitColumns(736, shown, order, false)).toEqual({
+    keys: ["stage", "source", "next", "last"],
+    keyWidth: 140,
+  });
+});
+
+const atWidth = async (width: number, run: () => Promise<void>) => {
+  const before = Object.getOwnPropertyDescriptor(
+    HTMLElement.prototype,
+    "clientWidth",
+  );
+  Object.defineProperty(HTMLElement.prototype, "clientWidth", {
+    configurable: true,
+    get: () => width,
+  });
+  try {
+    await run();
+  } finally {
+    if (before)
+      Object.defineProperty(HTMLElement.prototype, "clientWidth", before);
+    else delete (HTMLElement.prototype as { clientWidth?: number }).clientWidth;
+  }
+};
+
+it("opens the columns that don't fit under a row, without opening the lead", async () => {
+  const onOpen = vi.fn();
+  await atWidth(358, async () => {
+    await act(async () =>
+      root.render(
+        <LeadsTable
+          rows={[
+            row(1, { next_action_at: "2026-10-25T10:00:00Z" }),
+            row(2, { name: "ravi sample" }),
+          ]}
+          onOpen={onOpen}
+          showOwner={false}
+        />,
+      ),
+    );
+    expect(host.querySelector("[data-fit]")).not.toBeNull();
+    expect(headers()).toEqual(["Name", "Stage · next", "More"]);
+    // Stage carries the next action; without one it says so.
+    expect(host.querySelectorAll("tbody tr")[1].textContent).toContain(
+      "No next step",
+    );
+    expect(host.textContent).toContain("4 more columns under each row");
+    // No pencil beside a narrow name: renaming is on the lead page.
+    expect(host.querySelector('[aria-label^="Rename"]')).toBeNull();
+    const more = host.querySelector<HTMLButtonElement>(
+      'button[aria-label="Show more about Meera Fictional"]',
+    )!;
+    await act(async () => more.click());
+    expect(onOpen).not.toHaveBeenCalled();
+    expect(more.getAttribute("aria-expanded")).toBe("true");
+    const under = host.querySelector(`#more-${id(1)}`)!;
+    expect(
+      Array.from(under.querySelectorAll("dt"), (term) => term.textContent),
+    ).toEqual(["Phone", "Source", "Last call", "In stage"]);
+    expect(under.textContent).toContain("•• 3210");
+    // Only that row opened; the name still opens the lead.
+    expect(host.querySelector(`#more-${id(2)}`)).toBeNull();
+    await act(async () =>
+      host
+        .querySelector<HTMLButtonElement>(`[data-row-key="${id(2)}"]`)!
+        .click(),
+    );
+    expect(onOpen).toHaveBeenCalledWith(id(2));
+    await act(async () => more.click());
+    expect(host.querySelector(`#more-${id(1)}`)).toBeNull();
+  });
+});
+
+it("puts stage and next step under the name when no column fits", async () => {
+  await atWidth(234, async () => {
+    await act(async () =>
+      root.render(
+        <LeadsTable
+          rows={[row(1, { stage_label: "Follow up" })]}
+          onOpen={() => undefined}
+          showOwner={false}
+        />,
+      ),
+    );
+    expect(headers()).toEqual(["Name", "More"]);
+    expect(host.querySelector("tbody tr small")?.textContent).toBe("Follow up");
+  });
 });

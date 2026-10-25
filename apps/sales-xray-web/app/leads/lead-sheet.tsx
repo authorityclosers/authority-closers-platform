@@ -8,6 +8,7 @@
  */
 
 import {
+  BellPlus,
   CheckCircle2,
   History as HistoryIcon,
   Mail,
@@ -34,11 +35,13 @@ import {
   useId,
   useRef,
   useState,
+  type MouseEvent,
   type ReactNode,
 } from "react";
 
 import { callHref, type UploadPolicy } from "../acquisition-client";
 import { notify } from "../notice-center";
+import { useFlow } from "../telemetry-flows";
 import { CallFacts } from "../call-engine/call-facts";
 import { Avatar, Badge, Button, Empty, Field } from "../ui/kit";
 import {
@@ -70,6 +73,9 @@ import {
   type Stage,
 } from "./leads-client";
 import { LastCallBrief } from "./call-brief-card";
+import { InAppCallHint } from "./call-hint";
+import { LeadTasks } from "./lead-tasks";
+import { RemindSheet } from "./remind-sheet";
 import {
   chatDays,
   chatDayTitle,
@@ -353,6 +359,27 @@ export function CallOutcome({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // "How did it go?" in the weekly friction report: started when the seller
+  // is back from a call (or answers), where they stop, Save refused for
+  // something missing. Closing the lead without saving is left half way.
+  const flow = useFlow("log_result", {
+    active: attention,
+    via: attention ? "after_call" : "lead",
+  });
+  const formStep =
+    talk === null
+      ? null
+      : talk === "missed"
+        ? reason === null
+          ? "talk"
+          : "reason"
+        : stage === null
+          ? "talk"
+          : "stage";
+  useEffect(() => {
+    if (formStep) flow.step(formStep);
+  }, [flow, formStep]);
+
   useEffect(() => {
     const box = ref.current;
     if (!box || (!attention && !ask)) return;
@@ -421,6 +448,7 @@ export function CallOutcome({
         deal_value: deal.trim() || undefined,
       });
       buzz("done");
+      flow.done({ step: "save" });
       after(saved);
       // Reviews engine (owner, 23 Oct 2026): asks later, when nothing is in the way.
       askFeedback("call_outcome");
@@ -441,6 +469,15 @@ export function CallOutcome({
       void submit(after);
       return;
     }
+    flow.blocked(
+      talk === "missed"
+        ? reason === null
+          ? "reason"
+          : "next"
+        : stage === null
+          ? "stage"
+          : "next",
+    );
     setNudges((count) => count + 1);
     stepRef.current?.scrollIntoView?.({
       block: "center",
@@ -2022,6 +2059,8 @@ export function LeadCard({
   const waitingRecording = usePendingRecording(lead.lead_id);
   const [permits, setPermits] = useState(false);
   const [calling, setCalling] = useState(false);
+  // Remind: a task on this lead (work-memory engine).
+  const [reminding, setReminding] = useState(false);
   const [messaging, setMessaging] = useState<{
     round: number;
     preset: string | null;
@@ -2086,19 +2125,33 @@ export function LeadCard({
       window.location.href = `tel:${detail.phone}`;
     }
   };
+  // A tel: link's tap: the app places it, a browser follows the link.
+  const callHere = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (inPhoneApp()) {
+      event.preventDefault();
+      void callFromApp(false);
+    } else rememberCall(lead.lead_id);
+  };
   // Once per opening: the intent came with this lead.
   const acted = useRef(false);
   const act = useRef<() => void>(() => undefined);
   useEffect(() => {
-    act.current = () => (intent === "call" ? placeCall() : openMessage(null));
+    act.current = () => {
+      if (intent === "call") placeCall();
+      // One-tap Email on a card (owner, 24 Oct 2026): the phone's mail app.
+      else if (intent === "email" && detail.email)
+        window.location.href = `mailto:${detail.email}`;
+      else openMessage(null);
+    };
   });
   useEffect(() => {
     // "log" only opens the call's outcome; nothing to place or write.
     if (!intent || intent === "log" || acted.current) return;
-    if (!detail.phone || !detail.can_edit) return;
+    if (intent === "email" ? !detail.email : !detail.phone || !detail.can_edit)
+      return;
     acted.current = true;
     act.current();
-  }, [intent, detail.phone, detail.can_edit]);
+  }, [intent, detail.phone, detail.email, detail.can_edit]);
   const [editing, setEditing] = useState(false);
   const [testing, setTesting] = useState(false);
   const [moving, setMoving] = useState(false);
@@ -2127,7 +2180,11 @@ export function LeadCard({
           {
             label: "Phone",
             value: (
-              <a href={`tel:${detail.phone}`}>{displayPhone(detail.phone)}</a>
+              // The number calls through the app too: a call from the dialler
+              // is never seen (builder, 24 Oct 2026).
+              <a href={`tel:${detail.phone}`} onClick={callHere}>
+                {displayPhone(detail.phone)}
+              </a>
             ),
           },
         ]
@@ -2198,6 +2255,7 @@ export function LeadCard({
       <p className={styles.why}>{whyLine(lead)}</p>
       <SuggestedStage detail={detail} onChanged={onChanged} />
       <MeetingCard detail={detail} onChanged={onChanged} />
+      <LeadTasks detail={detail} onChanged={onChanged} />
       {canMove ? (
         <StageSheet
           open={staging}
@@ -2217,12 +2275,7 @@ export function LeadCard({
             className={styles.callButton}
             href={`tel:${detail.phone}`}
             aria-busy={calling || undefined}
-            onClick={(event) => {
-              if (inPhoneApp()) {
-                event.preventDefault();
-                void callFromApp(false);
-              } else rememberCall(lead.lead_id);
-            }}
+            onClick={callHere}
           >
             <Phone size={20} aria-hidden="true" />
             <span>
@@ -2271,30 +2324,72 @@ export function LeadCard({
             </button>
           </>
         ) : null}
-        {detail.can_edit ? (
-          // A note on its own, not only after a call (owner, 24 Oct 2026).
-          <button
-            type="button"
-            className={styles.contactIcon}
-            data-channel="note"
-            aria-label="Add a note"
-            onClick={() => {
-              const box = document.getElementById(`lead-note-${lead.lead_id}`);
-              box?.scrollIntoView?.({ block: "center", behavior: "smooth" });
-              box?.focus({ preventScroll: true });
-            }}
-          >
-            <NotebookPen size={22} aria-hidden="true" />
-            <small aria-hidden="true">Note</small>
-          </button>
-        ) : null}
-        {detail.email ? (
-          <a className={styles.actionButton} href={`mailto:${detail.email}`}>
-            <Mail size={18} aria-hidden="true" />
-            Email
-          </a>
+        {detail.email || detail.can_edit ? (
+          // Email, Note and Remind in one even row under Call, WhatsApp and SMS:
+          // one tap each (owner, 24 Oct 2026).
+          <div className={styles.contactMore}>
+            {detail.email ? (
+              <a
+                className={styles.contactIcon}
+                data-channel="email"
+                href={`mailto:${detail.email}`}
+                aria-label="Email"
+              >
+                <Mail size={22} aria-hidden="true" />
+                <small aria-hidden="true">Email</small>
+              </a>
+            ) : null}
+            {detail.can_edit ? (
+              // A note on its own, not only after a call (owner, 24 Oct 2026).
+              <button
+                type="button"
+                className={styles.contactIcon}
+                data-channel="note"
+                aria-label="Add a note"
+                onClick={() => {
+                  const box = document.getElementById(
+                    `lead-note-${lead.lead_id}`,
+                  );
+                  box?.scrollIntoView?.({
+                    block: "center",
+                    behavior: "smooth",
+                  });
+                  box?.focus({ preventScroll: true });
+                }}
+              >
+                <NotebookPen size={22} aria-hidden="true" />
+                <small aria-hidden="true">Note</small>
+              </button>
+            ) : null}
+            {detail.can_edit ? (
+              // A promise with a time: Tasks lists it and the phone reminds once.
+              <button
+                type="button"
+                className={styles.contactIcon}
+                data-channel="remind"
+                aria-label="Remind me"
+                onClick={() => setReminding(true)}
+              >
+                <BellPlus size={22} aria-hidden="true" />
+                <small aria-hidden="true">Remind</small>
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
+      {detail.phone ? <InAppCallHint /> : null}
+      {detail.can_edit ? (
+        <RemindSheet
+          open={reminding}
+          leadId={lead.lead_id}
+          leadName={lead.name}
+          onClose={() => setReminding(false)}
+          onSaved={() => {
+            setReminding(false);
+            readLead(lead.lead_id).then(onChanged, () => undefined);
+          }}
+        />
+      ) : null}
       {permits ? (
         <section className={styles.permits} aria-label="Allow calling">
           <h3>Call from Sales X-Ray</h3>
@@ -2618,7 +2713,7 @@ function CopyLeadLink({ leadId }: { leadId: string }) {
 /* ---------- Lead sheet ---------- */
 
 /** What a lead opens for: a call, a message, or saying how a call went (L). */
-export type LeadIntent = "call" | "message" | "log";
+export type LeadIntent = "call" | "message" | "log" | "email";
 
 /**
  * Which pipeline the lead is in, and a move to another (owners and admins, when the

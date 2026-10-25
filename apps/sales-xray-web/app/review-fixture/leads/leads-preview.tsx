@@ -246,8 +246,86 @@ function rows(now: number) {
     test_data: false,
     overdue: index === 1,
     pipeline: index % 2 ? "main" : "partner_outreach",
+    // One-tap Email on the cards that have an address.
+    has_email: index % 3 === 0,
   }));
 }
+
+/** Tasks (?tab=tasks): a seller's fictional promises in each list. `&tasks=1`
+ * also puts the first one on its lead. */
+function fixtureTasks(now: number, view: string) {
+  const leads = rows(now);
+  const today = new Date(now);
+  const at = (minutes: number) => new Date(now + minutes * MINUTE);
+  const clock = (days: number, hour: number) =>
+    new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate() + days,
+      hour,
+    );
+  const task = (
+    n: number,
+    bucket: "overdue" | "today" | "upcoming",
+    kind: string,
+    title: string,
+    starts: Date,
+    extra: Record<string, unknown> = {},
+  ) => ({
+    task_id: `00000000-0000-4000-a000-${String(n).padStart(12, "0")}`,
+    lead_id: leads[n].lead_id,
+    lead_name: leads[n].name,
+    kind,
+    title,
+    note: null,
+    starts_at: starts.toISOString(),
+    ends_at: null,
+    location: null,
+    status: "open",
+    done_at: null,
+    original_due_at: starts.toISOString(),
+    snoozes: 0,
+    rollovers: 0,
+    source: "seller",
+    revision: 1,
+    owner_person_id: OWNER,
+    overdue: bucket === "overdue",
+    bucket,
+    ...extra,
+  });
+  const all = [
+    task(0, "overdue", "call_back", `Call back ${leads[0].name}`, at(-40), {
+      note: "Asked for the 2 BHK brochure and the price list",
+    }),
+    task(1, "today", "whatsapp", `WhatsApp ${leads[1].name}`, at(120)),
+    task(2, "today", "meeting", `Meeting with ${leads[2].name}`, at(240), {
+      ends_at: at(300).toISOString(),
+      location: "Baner office",
+    }),
+    task(
+      3,
+      "upcoming",
+      "send_file",
+      `Send file to ${leads[3].name}`,
+      clock(1, 10),
+    ),
+    task(4, "upcoming", "email", `Email ${leads[4].name}`, clock(3, 11), {
+      note: "Floor plans for the corner flat",
+    }),
+  ];
+  return {
+    tasks: all.filter((item) => item.bucket === view),
+    counts: { overdue: 1, today: 2, upcoming: 2 },
+  };
+}
+
+const tasksOn = () =>
+  typeof window !== "undefined" &&
+  new URLSearchParams(window.location.search).get("tasks") === "1";
+
+/** A fictional event's note, when it has one. */
+const noteOf = (item: { event: object }) =>
+  (item.event as { note?: unknown }).note;
 
 /** My work (?tab=work): a seller's fictional day, newest first. */
 function fixtureWork(now: number) {
@@ -318,6 +396,39 @@ function answers(now: number, path: string): unknown {
   if (bare.startsWith("/v1/lead-desk/board")) return fixtureBoard();
   if (bare === "/v1/lead-desk/reports/pipeline") return fixtureReport();
   if (bare === "/v1/lead-desk/activity") return fixtureWork(now);
+  // Notes (?tab=notes): the notes and outcome remarks of the same fictional day;
+  // with words, those that say them.
+  if (bare === "/v1/lead-desk/notes") {
+    const words = (new URLSearchParams(query).get("q") ?? "").toLowerCase();
+    const written = fixtureWork(now).items.filter((item) => {
+      const note = noteOf(item);
+      return (
+        typeof note === "string" &&
+        (!words || `${note} ${item.lead_name}`.toLowerCase().includes(words))
+      );
+    });
+    return {
+      items: written,
+      next_before: null,
+      counts: { note: written.length },
+    };
+  }
+  if (bare === "/v1/lead-desk/search") {
+    const words = (new URLSearchParams(query).get("q") ?? "").toLowerCase();
+    const says = (text: unknown) =>
+      typeof text === "string" && text.toLowerCase().includes(words);
+    return {
+      leads: rows(now)
+        .filter((row) => says(row.name))
+        .slice(0, 8),
+      notes: fixtureWork(now).items.filter((item) => says(noteOf(item))),
+      tasks: ["overdue", "today", "upcoming"]
+        .flatMap((view) => fixtureTasks(now, view).tasks)
+        .filter((task) => says(task.title) || says(task.note)),
+    };
+  }
+  if (bare === "/v1/lead-desk/tasks")
+    return fixtureTasks(now, new URLSearchParams(query).get("view") ?? "today");
   const asked =
     bare === "/v1/lead-desk" || bare === "/v1/lead-desk/next"
       ? new URLSearchParams(query).get("pipeline")
@@ -470,6 +581,10 @@ function answers(now: number, path: string): unknown {
       call_mode: "phone",
       first_call_minutes: null,
       stage_suggestion: null,
+      tasks:
+        tasksOn() && row.lead_id === all[0].lead_id
+          ? fixtureTasks(Date.now(), "overdue").tasks
+          : [],
       stage_choices: (
         [
           ["step_2", "Call back", "follow_up", "You spoke to them"],

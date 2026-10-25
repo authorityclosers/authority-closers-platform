@@ -1,0 +1,384 @@
+{
+  "id": "14-my-work",
+  "number": "14",
+  "kind": "feature",
+  "title": {
+    "en": "My work and quick notes",
+    "hi": "My work aur quick notes",
+    "mr": "My work aani quick notes"
+  },
+  "description": {
+    "en": "My work in Sales X-Ray shows everything you did: calls, how they went, notes and stage moves, for today, yesterday or this week. Add a note to any lead in seconds.",
+    "hi": "Sales X-Ray mein My work aapka sab kaam dikhata hai: calls, kaise rahe, notes aur stage moves, aaj, kal ya is hafte ke. Kisi bhi lead pe seconds mein note likhiye.",
+    "mr": "Sales X-Ray madhla My work tumcha sagla kaam dakhavto: calls, kase jhale, notes aani stage moves, aaj, kaal kinva ya athavdyache. Kuthlyahi lead var kahi seconds madhye note liha."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "lead management",
+    "sales CRM India",
+    "Hindi",
+    "Marathi",
+    "daily report",
+    "notes",
+    "productivity"
+  ],
+  "names": {
+    "Sales Xray": "Sales X-Ray",
+    "[the owner's one-line reason]": "a quick partnership idea",
+    "Can I show you in 10 minutes how": "Can I quickly show you how"
+  },
+  "next": {
+    "id": "16-never-lose-a-change",
+    "title": {
+      "en": "Never lose a change",
+      "hi": "Koi change na khoye",
+      "mr": "Kuthlahi change harvu naye"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "In this video: My work, your day at a glance, and quick notes.",
+      "hi": "इस video में: My work, आपका पूरा दिन एक नज़र में, और quick notes.",
+      "mr": "या video मध्ये: My work, तुमचा पूर्ण दिवस एका नजरेत, आणि quick notes."
+    },
+    "latn": {
+      "hi": "Is video mein: My work, aapka poora din ek nazar mein, aur quick notes.",
+      "mr": "Ya video madhye: My work, tumcha poorna divas eka najret, aani quick notes."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "Your day, at a glance.",
+      "hi": "Aapka din, ek nazar mein.",
+      "mr": "Tumcha divas, eka najret."
+    },
+    "say": {
+      "en": "Next: never losing a change on your phone.",
+      "hi": "अगले video में: phone पे कोई भी change कभी न खोए.",
+      "mr": "पुढच्या video मध्ये: phone वरचा कुठलाही change कधीच हरवत नाही."
+    },
+    "latn": {
+      "hi": "Agle video mein: phone pe koi bhi change kabhi na khoye.",
+      "mr": "Pudhchya video madhye: phone varcha kuthlahi change kadhich harvat nahi."
+    }
+  },
+  "chapters": [
+    {
+      "id": "work",
+      "title": {
+        "en": "My work",
+        "hi": "My work",
+        "mr": "My work"
+      }
+    },
+    {
+      "id": "notes",
+      "title": {
+        "en": "Quick notes",
+        "hi": "Quick notes",
+        "mr": "Quick notes"
+      }
+    }
+  ],
+  "reel": {
+    "hook": {
+      "beat": "summary",
+      "text": {
+        "en": "Your whole day, one screen",
+        "hi": "Poora din, ek screen",
+        "mr": "Poorna divas, ek screen"
+      },
+      "accent": {
+        "en": "one screen",
+        "hi": "ek screen",
+        "mr": "ek screen"
+      },
+      "say": {
+        "en": "What did you get done today? It's all on one screen.",
+        "hi": "आज क्या क्या किया? सब एक ही screen पे.",
+        "mr": "आज काय काय केलं? सगळं एकाच screen वर."
+      },
+      "latn": {
+        "hi": "Aaj kya kya kiya? Sab ek hi screen pe.",
+        "mr": "Aaj kay kay kela? Sagla ekach screen var."
+      }
+    },
+    "beats": ["summary", "entries", "note-entry", "periods", "add-note"]
+  },
+  "shots": [
+    {
+      "id": "work",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=work"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Deal value"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "beats": [
+        {
+          "id": "work-tab",
+          "chapter": "work",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "tab",
+                "name": "My work"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "In Leads, tap My work. It shows everything you did, newest first.",
+            "hi": "Leads में My work दबाइए. आपने जो भी किया, सब दिखता है, सबसे नया सबसे ऊपर.",
+            "mr": "Leads मध्ये My work दाबा. तुम्ही जे काही केलं, सगळं दिसतं, सगळ्यात नवीन सगळ्यात वर."
+          },
+          "latn": {
+            "hi": "Leads mein My work dabaiye. Aapne jo bhi kiya, sab dikhta hai, sabse naya sabse upar.",
+            "mr": "Leads madhye My work daba. Tumhi je kahi kela, sagla dista, saglyat navin saglyat var."
+          }
+        },
+        {
+          "id": "summary",
+          "chapter": "work",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "stage moves"
+              },
+              "ms": 1700
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "The top line adds up your day: calls, notes and stage moves.",
+            "hi": "सबसे ऊपर की line पूरा दिन जोड़ देती है: calls, notes और stage moves.",
+            "mr": "सगळ्यात वरची line पूर्ण दिवसाची बेरीज देते: calls, notes आणि stage moves."
+          },
+          "latn": {
+            "hi": "Sabse upar ki line poora din jod deti hai: calls, notes aur stage moves.",
+            "mr": "Saglyat varchi line poorna divasachi berij dete: calls, notes aani stage moves."
+          },
+          "short": {
+            "say": {
+              "en": "Calls, notes, stage moves: added up.",
+              "hi": "Calls, notes, stage moves: सब जुड़ा हुआ.",
+              "mr": "Calls, notes, stage moves: सगळं एकत्र."
+            },
+            "latn": {
+              "hi": "Calls, notes, stage moves: sab juda hua.",
+              "mr": "Calls, notes, stage moves: sagla ektra."
+            }
+          }
+        },
+        {
+          "id": "entries",
+          "chapter": "work",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "You talked to them"
+              },
+              "ms": 1400
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "From the phone dialer"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "You moved them"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Each line says what happened: who you talked to and how it went, calls from your phone, and leads you moved.",
+            "hi": "हर line बताती है क्या हुआ: किससे बात हुई और कैसी रही, phone से किए calls, और कौन से leads आगे बढ़ाए.",
+            "mr": "प्रत्येक line सांगते काय झालं: कोणाशी बोललात आणि कसं झालं, phone वरून केलेले calls, आणि कुठले leads पुढे नेले."
+          },
+          "latn": {
+            "hi": "Har line batati hai kya hua: kisse baat hui aur kaisi rahi, phone se kiye calls, aur kaun se leads aage badhaye.",
+            "mr": "Pratyek line sangte kay jhala: konashi bollat aani kasa jhala, phone varun kelele calls, aani kuthle leads pudhe nele."
+          },
+          "short": {
+            "say": {
+              "en": "Every call, note and move.",
+              "hi": "हर call, note और move.",
+              "mr": "प्रत्येक call, note आणि move."
+            },
+            "latn": {
+              "hi": "Har call, note aur move.",
+              "mr": "Pratyek call, note aani move."
+            }
+          }
+        },
+        {
+          "id": "note-entry",
+          "chapter": "work",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "text": "You added a note"
+              },
+              "offset": 220,
+              "ms": 700
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "You added a note"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Your notes are here too, so you pick up exactly where you left off.",
+            "hi": "आपके notes भी यहीं हैं, तो जहाँ छोड़ा था वहीं से शुरू कीजिए.",
+            "mr": "तुमच्या notes पण इथेच आहेत, म्हणजे जिथे थांबलात तिथूनच सुरू करा."
+          },
+          "latn": {
+            "hi": "Aapke notes bhi yahin hain, toh jahan chhoda tha wahin se shuru kijiye.",
+            "mr": "Tumchya notes pan ithech aahet, mhanje jithe thamblat tithunach suru kara."
+          }
+        },
+        {
+          "id": "periods",
+          "chapter": "work",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "role": "button",
+                "name": "Yesterday"
+              },
+              "offset": 200,
+              "ms": 600
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Yesterday"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "This week"
+              },
+              "ms": 1300
+            }
+          ],
+          "say": {
+            "en": "Look back at yesterday, or your whole week.",
+            "hi": "कल का देखिए, या पूरे हफ़्ते का.",
+            "mr": "कालचं बघा, किंवा पूर्ण आठवड्याचं."
+          },
+          "latn": {
+            "hi": "Kal ka dekhiye, ya poore hafte ka.",
+            "mr": "Kaalcha bagha, kinva poorna athavdyacha."
+          }
+        }
+      ]
+    },
+    {
+      "id": "lead",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?after-call=back"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Deal value"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "beats": [
+        {
+          "id": "add-note",
+          "chapter": "notes",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Add a note"
+              },
+              "ms": 1800
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "On any lead, tap Add a note to jot something down in seconds, like: call after seven.",
+            "hi": "किसी भी lead पे Add a note दबाइए, और seconds में कुछ भी लिख लीजिए, जैसे: सात बजे के बाद call.",
+            "mr": "कुठल्याही lead वर Add a note दाबा, आणि काही seconds मध्ये काहीही लिहून ठेवा, जसं: सात नंतर call."
+          },
+          "latn": {
+            "hi": "Kisi bhi lead pe Add a note dabaiye, aur seconds mein kuch bhi likh lijiye, jaise: saat baje ke baad call.",
+            "mr": "Kuthlyahi lead var Add a note daba, aani kahi seconds madhye kaahihi lihun theva, jasa: saat nantar call."
+          },
+          "short": {
+            "say": {
+              "en": "Add a note, in seconds.",
+              "hi": "Seconds में note.",
+              "mr": "काही seconds मध्ये note."
+            },
+            "latn": {
+              "hi": "Seconds mein note.",
+              "mr": "Kahi seconds madhye note."
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

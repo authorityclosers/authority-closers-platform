@@ -68,46 +68,179 @@
   white-space: nowrap;
 }
 
-/* Phones and narrow windows (owner, 24 Oct 2026: the table on a phone): the
-   table scrolls sideways inside its frame, rows are compact, and the name stays
-   in view on the left. */
-@media (max-width: 899.98px) {
-  .wrap {
-    overflow-x: auto;
-    overscroll-behavior-x: contain;
-  }
+/* Phones and narrow panes (owner, 25 Oct 2026: "sideways scrolling is hard"):
+   nothing scrolls sideways. Name takes what is left beside the key columns
+   (--key-width each, set from the pane's width) and the 44 px chevron; the
+   other columns open under the row. 8 pt grid: 16 px cell padding outside,
+   8 between a name and its line under it. */
+.wrap[data-fit] .table :is(td, th) {
+  box-sizing: border-box;
+}
 
-  .table {
-    width: max-content;
-    min-width: 100%;
-    table-layout: auto;
-  }
+.wrap[data-fit] .table td {
+  height: 56px;
+  padding: 0 8px;
+}
 
-  .table td {
-    height: 44px;
-    max-width: 220px;
-    padding: 0 10px;
-  }
+/* Stage, with the next action under it. */
+.stageStack {
+  display: grid;
+  justify-items: start;
+  gap: 2px;
+  min-width: 0;
+}
 
-  .sort {
-    min-height: 40px;
-    padding: 0 10px;
-    white-space: nowrap;
-  }
+.stageStack small {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
-  .table [data-column="name"] {
-    position: sticky;
-    z-index: 1;
-    left: 0;
-    min-width: 132px;
-    max-width: 168px;
-    background: var(--sx-surface);
-    box-shadow: 1px 0 0 var(--sx-line);
-  }
+.wrap[data-fit] .columnsBar {
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 8px 8px 8px 16px;
+}
 
-  .table thead [data-column="name"] {
-    z-index: 2;
+.wrap[data-fit] .quickAbove {
+  padding: 0 8px 8px;
+}
+
+.wrap[data-fit] .table td:first-child,
+.wrap[data-fit] .table th:first-child .sort {
+  padding-left: 16px;
+}
+
+.wrap[data-fit] .sort {
+  min-height: 44px;
+  padding: 0 8px;
+  white-space: nowrap;
+}
+
+.wrap[data-fit] .table [data-column]:not([data-column="name"]) {
+  width: var(--key-width);
+}
+
+.wrap[data-fit] .name {
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 2px;
+  min-height: 56px;
+}
+
+.wrap[data-fit] .name strong,
+.wrap[data-fit] .name small {
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+.table .more {
+  width: 44px;
+  padding: 0;
+  text-align: center;
+}
+
+.moreButton {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: none;
+  color: var(--sx-muted);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.moreButton svg {
+  transition: transform 150ms var(--lx-ease-quick, ease-out);
+}
+
+.moreButton[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .moreButton svg {
+    transition: none;
   }
+}
+
+.moreButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.table tbody tr[data-open] td {
+  border-bottom-color: transparent;
+}
+
+.moreRow td {
+  height: auto;
+  padding: 0 16px 16px;
+  white-space: normal;
+}
+
+/* The other columns as label and value, two to a line where they fit. */
+.moreList {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(136px, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+  padding: 8px 0 0;
+}
+
+.moreList div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.moreList dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.moreList dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.moreList .cell {
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  white-space: normal;
+}
+
+.columnsNote {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.columnsHint {
+  max-width: 240px;
+  margin: 0 0 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.quickAbove {
+  padding: 0 0 8px;
+}
+
+.wrap[data-fit] .name small span[data-late] {
+  color: var(--lx-danger);
+  font-weight: 600;
 }
 
 .table tbody tr:last-child td {
@@ -480,4 +613,16 @@
   gap: 8px;
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
+}
+
+/* Touch screens: the picker and its rows are full-size targets. */
+@media (pointer: coarse) {
+  .columnsButton,
+  .columnsMenu label {
+    min-height: 44px;
+  }
+
+  .columnsButton {
+    padding: 0 16px;
+  }
 }

@@ -6,6 +6,7 @@ name: Workbench checks
 # Fixed slot names keep each slot's caches warm (Actions caches are scoped to the branch name).
 # No secrets, no deploys, no real databases: PostgreSQL runs in throwaway containers with local passwords, as in
 # Application validation. Full layout: lint, tsc, vitest, visual and 16 Python shards = 20 jobs (the plan's limit).
+# Opt-in families, never in a full run: e2e (the release's browser proofs) and matrix (the visual test matrix).
 # See docs/ops/WORKBENCH-CI.md.
 on:
   push:
@@ -34,6 +35,7 @@ jobs:
       lint: ${{ steps.plan.outputs.lint }}
       visual: ${{ steps.plan.outputs.visual }}
       e2e: ${{ steps.plan.outputs.e2e }}
+      matrix: ${{ steps.plan.outputs.matrix }}
       migrations: ${{ steps.plan.outputs.migrations }}
       control: ${{ steps.plan.outputs.control }}
       web_matrix: ${{ steps.plan.outputs.web_matrix }}
@@ -113,7 +115,7 @@ jobs:
     env:
       PREREQ_PUBLICATION_OWNER: ci-prerequisite-publication-v3
     needs: plan
-    if: needs.plan.outputs.py == 'true' || needs.plan.outputs.visual == 'true' || needs.plan.outputs.e2e == 'true'
+    if: needs.plan.outputs.py == 'true' || needs.plan.outputs.visual == 'true' || needs.plan.outputs.e2e == 'true' || needs.plan.outputs.matrix == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     outputs:
@@ -266,6 +268,49 @@ jobs:
           path: |
             ${{ runner.temp }}/wb-screens/*.png
             ${{ runner.temp }}/wb-screens/receipt.json
+          if-no-files-found: warn
+          retention-days: 1
+
+  matrix:
+    # Opt-in (`wb-ci --matrix [screen|route ...]`; owner via the orchestrator, 25 Oct 2026: "check symmetry and
+    # alignment numerically, not by eye"): review fixtures at 7 sizes x font scale 85/100/115/130% x light and dark,
+    # measured in the page (overflow, clipped and spilling text, taps under 44 px, uneven rows, unequal groups).
+    # One small artifact for a day: the report, every state's numbers and a contact sheet per screen (AUT-2185).
+    needs: [plan, ci-prerequisites]
+    if: needs.plan.outputs.matrix == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Check the matrix's own logic
+        run: node --test scripts/ci/wb_matrix_lib.test.mjs
+      - name: Install locked Node dependencies
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate && pnpm install --frozen-lockfile
+      - name: Require cached locked Node browser
+        timeout-minutes: 13
+        uses: ./.github/actions/ci-prerequisites
+        with:
+          bundle: ${{ needs.ci-prerequisites.outputs.bundle }}
+          components: browser
+          python: python3
+          node-browser: "true"
+      - name: Measure every size, font scale and theme, fictional data only
+        timeout-minutes: 28
+        run: node scripts/ci/wb_matrix.mjs "$RUNNER_TEMP/wb-matrix" .wb-ci/request.json
+      - name: Upload the report and contact sheets
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-matrix
+          path: |
+            ${{ runner.temp }}/wb-matrix/report.md
+            ${{ runner.temp }}/wb-matrix/matrix.json
+            ${{ runner.temp }}/wb-matrix/sheet-*.jpg
           if-no-files-found: warn
           retention-days: 1
 
@@ -441,7 +486,7 @@ jobs:
         run: bash scripts/validate-control-plane.sh
 
   summary:
-    needs: [plan, ci-prerequisites, lint, web, py-tests, visual, e2e, migrations, control-plane]
+    needs: [plan, ci-prerequisites, lint, web, py-tests, visual, matrix, e2e, migrations, control-plane]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

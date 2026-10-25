@@ -1,0 +1,263 @@
+{
+  "id": "t1-join-testing",
+  "number": "T1",
+  "kind": "tester",
+  "title": {
+    "en": "Join the Sales X-Ray testers",
+    "hi": "Sales X-Ray tester kaise banein",
+    "mr": "Sales X-Ray tester kase vhayche"
+  },
+  "description": {
+    "en": "Got a tester invite? Open the invite link, tap Become a tester with the Google account we invited, then install Sales X-Ray: AI Sales Coach from Google Play.",
+    "hi": "Tester invite mila? Invite link kholiye, jis Google account ko invite kiya hai usse Become a tester dabaiye, phir Google Play se Sales X-Ray: AI Sales Coach install kijiye.",
+    "mr": "Tester invite aala? Invite link ughda, jya Google account la invite kelay tyane Become a tester daba, mag Google Play madhun Sales X-Ray: AI Sales Coach install kara."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "tester",
+    "Google Play",
+    "how to",
+    "Hindi",
+    "Marathi",
+    "beta testing",
+    "Android app"
+  ],
+  "names": {
+    "Asha Example": "Asha Kulkarni",
+    "fictional-homes.example": "skyline.example",
+    "Sales Xray": "Sales X-Ray"
+  },
+  "next": {
+    "id": "t2-install-from-play",
+    "title": {
+      "en": "Install from Google Play",
+      "hi": "Google Play se install",
+      "mr": "Google Play madhun install"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "Got an invite to test Sales X-Ray? Here's how to join, step by step.",
+      "hi": "Sales X-Ray test करने का invite मिला? देखिए join कैसे करें, step by step.",
+      "mr": "Sales X-Ray test करायचं invite आलं? बघा join कसं करायचं, step by step."
+    },
+    "latn": {
+      "hi": "Sales X-Ray test karne ka invite mila? Dekhiye join kaise karein, step by step.",
+      "mr": "Sales X-Ray test karaycha invite aala? Bagha join kasa karaycha, step by step."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "You're in.",
+      "hi": "Ho gaya!",
+      "mr": "Jhala!"
+    },
+    "say": {
+      "en": "Next: installing from Google Play, and moving over from the old app.",
+      "hi": "अगले video में: Google Play से install, और पुराने app से कैसे shift करें.",
+      "mr": "पुढच्या video मध्ये: Google Play मधून install, आणि जुन्या app वरून कसं shift करायचं."
+    },
+    "latn": {
+      "hi": "Agle video mein: Google Play se install, aur purane app se kaise shift karein.",
+      "mr": "Pudhchya video madhye: Google Play madhun install, aani junya app varun kasa shift karaycha."
+    }
+  },
+  "chapters": [
+    {
+      "id": "join",
+      "title": {
+        "en": "Join the testers",
+        "hi": "Tester baniye",
+        "mr": "Tester vha"
+      }
+    },
+    {
+      "id": "web",
+      "title": {
+        "en": "From Settings",
+        "hi": "Settings se",
+        "mr": "Settings madhun"
+      }
+    }
+  ],
+  "reel": {
+    "all": true,
+    "hook": {
+      "text": {
+        "en": "Become a Sales X-Ray tester",
+        "hi": "Sales X-Ray tester baniye",
+        "mr": "Sales X-Ray tester vha"
+      },
+      "say": {
+        "en": "Got a tester invite? Here's how to join.",
+        "hi": "Tester invite मिला? देखिए कैसे join करें.",
+        "mr": "Tester invite आलं? बघा कसं join करायचं."
+      },
+      "latn": {
+        "hi": "Tester invite mila? Dekhiye kaise join karein.",
+        "mr": "Tester invite aala? Bagha kasa join karaycha."
+      }
+    }
+  },
+  "shots": [
+    {
+      "id": "steps",
+      "device": "card",
+      "beats": [
+        {
+          "id": "invite",
+          "chapter": "join",
+          "actions": [],
+          "card": {
+            "step": "Step 1",
+            "title": {
+              "en": "Open the invite link",
+              "hi": "Invite link kholiye",
+              "mr": "Invite link ughda"
+            },
+            "icon": "link",
+            "chips": ["Invite link"]
+          },
+          "say": {
+            "en": "Open the tester invite link we sent you, on your Android phone.",
+            "hi": "जो tester invite link हमने भेजा है, उसे अपने Android phone पे खोलिए.",
+            "mr": "आम्ही पाठवलेली tester invite link तुमच्या Android phone वर उघडा."
+          },
+          "latn": {
+            "hi": "Jo tester invite link humne bheja hai, use apne Android phone pe kholiye.",
+            "mr": "Aamhi pathavleli tester invite link tumchya Android phone var ughda."
+          }
+        },
+        {
+          "id": "become",
+          "chapter": "join",
+          "actions": [],
+          "card": {
+            "step": "Step 2",
+            "title": {
+              "en": "Tap Become a tester",
+              "hi": "Become a tester dabaiye",
+              "mr": "Become a tester daba"
+            },
+            "icon": "tester",
+            "chips": ["Become a tester"]
+          },
+          "say": {
+            "en": "Make sure you're signed in with the Google account we invited. Then tap Become a tester.",
+            "hi": "ध्यान रखिए, वही Google account हो जिसे हमने invite किया है. फिर Become a tester दबाइए.",
+            "mr": "लक्षात ठेवा, तोच Google account असावा ज्याला आम्ही invite केलंय. मग Become a tester दाबा."
+          },
+          "latn": {
+            "hi": "Dhyaan rakhiye, wahi Google account ho jise humne invite kiya hai. Phir Become a tester dabaiye.",
+            "mr": "Lakshat theva, toch Google account asava jyala aamhi invite kelay. Mag Become a tester daba."
+          }
+        },
+        {
+          "id": "find",
+          "chapter": "join",
+          "actions": [],
+          "card": {
+            "step": "Step 3",
+            "title": {
+              "en": "Find the app on Google Play",
+              "hi": "Google Play pe app dhoondhiye",
+              "mr": "Google Play var app shodha"
+            },
+            "icon": "store",
+            "chips": ["Sales X-Ray: AI Sales Coach"]
+          },
+          "say": {
+            "en": "Now open the Google Play link on that page, or search Google Play for Sales X-Ray: AI Sales Coach.",
+            "hi": "अब उसी page पे Google Play link खोलिए, या Google Play में Sales X-Ray: AI Sales Coach search कीजिए.",
+            "mr": "आता त्याच page वरची Google Play link उघडा, किंवा Google Play मध्ये Sales X-Ray: AI Sales Coach search करा."
+          },
+          "latn": {
+            "hi": "Ab usi page pe Google Play link kholiye, ya Google Play mein Sales X-Ray: AI Sales Coach search kijiye.",
+            "mr": "Aata tyach page varchi Google Play link ughda, kinva Google Play madhye Sales X-Ray: AI Sales Coach search kara."
+          }
+        },
+        {
+          "id": "install",
+          "chapter": "join",
+          "actions": [],
+          "card": {
+            "step": "Step 4",
+            "title": {
+              "en": "Tap Install",
+              "hi": "Install dabaiye",
+              "mr": "Install daba"
+            },
+            "icon": "install",
+            "chips": ["Install"]
+          },
+          "say": {
+            "en": "Tap Install. As a tester, you get every new version first, through normal Play updates.",
+            "hi": "Install दबाइए. Tester होने के नाते हर नया version आपको सबसे पहले मिलेगा, Play के normal updates से.",
+            "mr": "Install दाबा. Tester म्हणून प्रत्येक नवीन version तुम्हाला सगळ्यात आधी मिळेल, Play च्या normal updates मधून."
+          },
+          "latn": {
+            "hi": "Install dabaiye. Tester hone ke naate har naya version aapko sabse pehle milega, Play ke normal updates se.",
+            "mr": "Install daba. Tester mhanun pratyek navin version tumhala saglyat aadhi milel, Play chya normal updates madhun."
+          }
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/settings?section=notifications"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Sample data only."
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "web-link",
+          "chapter": "web",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "text": "Sales X-Ray on your phone"
+              },
+              "offset": 120,
+              "ms": 700
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "link",
+                "name": "Testers: install from Google Play"
+              },
+              "ms": 1800
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Already using Sales X-Ray on the web? Settings, Phone and alerts, has the same Google Play link.",
+            "hi": "Web पे पहले से Sales X-Ray use कर रहे हैं? Settings में, Phone and alerts के अंदर, यही Google Play link है.",
+            "mr": "Web वर आधीच Sales X-Ray वापरताय? Settings मध्ये, Phone and alerts मध्ये, हीच Google Play link आहे."
+          },
+          "latn": {
+            "hi": "Web pe pehle se Sales X-Ray use kar rahe hain? Settings mein, Phone and alerts ke andar, yahi Google Play link hai.",
+            "mr": "Web var aadhich Sales X-Ray vapartay? Settings madhye, Phone and alerts madhye, hich Google Play link aahe."
+          }
+        }
+      ]
+    }
+  ]
+}
