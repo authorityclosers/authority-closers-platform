@@ -35,7 +35,7 @@ def downgrade() -> None:
     op.execute(sa.text("LOCK TABLE lead_desk_tasks IN ACCESS EXCLUSIVE MODE"))
     tasks = sa.table("lead_desk_tasks", sa.column("source"))
     if op.get_bind().scalar(sa.select(sa.exists().where(tasks.c.source == "assistant"))):
-        raise RuntimeError("Tasks added by AI apps require forward recovery.")
+        raise RuntimeError("AI app task history requires forward recovery.")
     op.drop_constraint("lead_desk_task_source", "lead_desk_tasks", type_="check")
     # Written as PostgreSQL stores 0129's check after a dump and restore (element casts
     # inside ARRAY[...]), so the rollback gives back the exact schema the gate compares.
