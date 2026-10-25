@@ -2,7 +2,8 @@
 
 - GET  /leads/{lead_id}            a lead's facts from its calls, its open questions
 - POST /objects/{object_id}/decision  a person's accept, edit or reject (writes the
-  lead through the Lead Desk's own edit, so its owner and revision rules apply)
+  lead through the Lead Desk's own edit, so its owner and revision rules apply; a
+  kept follow-up with a date ahead sets the lead's next call when it has none)
 - POST /objects/{object_id}/undo-fill  one tap puts back a lead field the engine
   filled, while nobody has changed it since (the fact is rejected, so the same
   words don't fill it again)
@@ -16,6 +17,7 @@ workspace's owners and admins.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -34,7 +36,7 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk.contracts import LeadEdit
+from ac_platform.lead_desk.contracts import FollowUp, LeadEdit
 from ac_platform.lead_desk.store import MANAGERS, DeskError, LeadDesk, Viewer, person_name
 from ac_platform.tenancy.models import Membership
 
@@ -203,6 +205,21 @@ def install_call_data_http(application: FastAPI, ctx: RouteContext) -> None:
                         ),
                     )
                     written = True
+            # A follow-up the person kept becomes the lead's next call when it has none
+            # (owner, 25 Oct 2026, the after-call chain); a next call already set stays.
+            if detail is not None and decided.next_call is not None:
+                lead = (await desk.detail(detail.lead.lead_id)).lead
+                if lead.next_action_at is None:
+                    # A closed lead keeps no next call; the answer still counts.
+                    with contextlib.suppress(DeskError):
+                        await desk.follow_up(
+                            lead.lead_id,
+                            FollowUp(
+                                command_id=uuid5(command.command_id, "next-call"),
+                                expected_revision=lead.revision,
+                                at=decided.next_call,
+                            ),
+                        )
             try:
                 await database.run_sync(
                     lambda session: facts.save_decision(

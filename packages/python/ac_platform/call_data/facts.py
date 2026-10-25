@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -384,6 +384,27 @@ class Decided:
     lead_value: str | None
     replayed: bool
     row: dict[str, Any] | None = None  # the decision to insert (None on a replay)
+    next_call: datetime | None = None  # a kept follow-up, as the lead's next call
+
+
+# A follow-up day without a time: 10:00 India time, as onboarding sets next calls.
+NEXT_CALL_HOUR = 10
+
+
+def next_call(value: object, now: datetime) -> datetime | None:
+    """The agreed follow-up as the lead's next call: its date, at its time or 10:00, in
+    India time, while it is still ahead and within the year."""
+    if not isinstance(value, dict) or not isinstance(value.get("date"), str):
+        return None
+    try:
+        day = date.fromisoformat(value["date"])
+        hour, minute = NEXT_CALL_HOUR, 0
+        if isinstance(value.get("time"), str):
+            hour, minute = (int(part) for part in value["time"].split(":")[:2])
+        at = datetime.combine(day, time(hour, minute), tzinfo=IST)
+    except ValueError:
+        return None
+    return at if now < at <= now + timedelta(days=365) else None
 
 
 def plan_decision(
@@ -442,6 +463,12 @@ def plan_decision(
     lead_field = (
         kind_type.lead_field if obj.lead_id is not None and decision != "rejected" else None
     )
+    kept_follow_up = obj.type_key == FOLLOW_UP and obj.lead_id is not None
+    next_at = (
+        next_call(stored_value if decision == "edited" else obj.value, now)
+        if kept_follow_up and decision != "rejected"
+        else None
+    )
     row = {
         "id": uuid4(),
         "tenant_id": tenant_id,
@@ -460,7 +487,13 @@ def plan_decision(
         "created_at": now,
     }
     return Decided(
-        obj.id, obj.lead_id, lead_field, (shown or obj.display) if lead_field else None, False, row
+        obj.id,
+        obj.lead_id,
+        lead_field,
+        (shown or obj.display) if lead_field else None,
+        False,
+        row,
+        next_at,
     )
 
 
