@@ -68,10 +68,8 @@
 }
 
 .headerCopy h1 {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  line-height: 1.25;
+  font: var(--sx-text-title);
+  letter-spacing: var(--sx-tracking-title);
 }
 
 /* Wraps rather than clipping: a cut-off privacy line reads as broken. */
@@ -1206,10 +1204,6 @@
 /* ---------- Phones and small tablets: inbox rows ---------- */
 
 @container calls-page (max-width: 760px) {
-  .headerCopy h1 {
-    font-size: 20px;
-  }
-
   /*
    * Phones: Refresh is a bare icon so the privacy line fits on one line.
    * The label stays readable to screen readers.

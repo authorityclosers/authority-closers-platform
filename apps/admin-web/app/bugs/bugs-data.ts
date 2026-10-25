@@ -193,6 +193,8 @@ export type BugDetail = BugSummary & {
   /** Set when a "Not good" with words became this report. */
   fromFeedback: { about: string; moment: string } | null;
   errors: ClientError[];
+  /** The last app steps before the report (event names and times). */
+  trail: { event: string; at: string | null; route: string | null }[];
   history: BugEvent[];
 };
 
@@ -312,6 +314,14 @@ export function normalizeDetail(raw: unknown): BugDetail {
         status: read.optionalNumber(row.status),
         method: read.optionalString(row.method),
         path: read.optionalString(row.path),
+      };
+    }),
+    trail: read.array(context.trail).map((item) => {
+      const row = read.object(item);
+      return {
+        event: read.string(row.event, "step"),
+        at: read.optionalString(row.at),
+        route: read.optionalString(row.route),
       };
     }),
     history: read.array(body.history).map((item) => {

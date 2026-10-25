@@ -147,7 +147,7 @@ from ac_platform.tenancy.models import (
     MembershipStatus,
     Organisation,
 )
-from ac_platform.tenancy.roles import can
+from ac_platform.tenancy.roles import can, read_only_refusal
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -225,6 +225,15 @@ class RequestOriginDenied(DomainError):
 class AdminSurfaceRequired(DomainError):
     code = "admin_surface_required"
     title = "The admin surface is required"
+    status = 403
+
+
+class RoleReadOnly(DomainError):
+    """A Viewer or Finance member asked for a change their role does not make (Roles B,
+    25 Oct 2026; tenancy/roles.py read_only_refusal)."""
+
+    code = "role_read_only"
+    title = "Your role can view only"
     status = 403
 
 
@@ -1878,6 +1887,12 @@ def install_identity_http(
             account_deletion_hook=account_deletion_hook,
         )
 
+    def _refuse_read_only_change(request: Request, resolved: ResolvedActorContext) -> None:
+        # One place for every route: a change the member's role cannot make is refused
+        # before the route runs, so a route nobody listed stays closed.
+        if read_only_refusal(resolved.membership_role, request.method, request.url.path):
+            raise RoleReadOnly("Your role can view only. Ask an owner or admin to change this.")
+
     async def require_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         key = staff_key(request, settings)
         if key is not None:
@@ -1888,6 +1903,7 @@ def install_identity_http(
                 identity = _identity(database)
                 found, session_token = await hook.resolve(request, database, identity, key)
                 resolved = await _resolved_with_role_permissions(database, found)
+                _refuse_read_only_change(request, resolved)
                 await hook.admit(request, database, resolved)
                 request.state.staff_key = True
                 yield AuthenticatedTransaction(
@@ -1905,6 +1921,7 @@ def install_identity_http(
             resolved = await _resolved_with_role_permissions(
                 database, await identity.resolve_actor(token)
             )
+            _refuse_read_only_change(request, resolved)
             yield AuthenticatedTransaction(
                 database=database,
                 identity=identity,

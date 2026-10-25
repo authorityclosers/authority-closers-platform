@@ -90,3 +90,28 @@ def test_errors_are_bounded_and_scrubbed() -> None:
         {"kind": "http", "at": "2026-10-23T10:00:00.000Z", "status": 502, "path": "/v1/x?token="}
     ]
     assert clean_errors("nope") == []
+
+
+def test_the_trail_keeps_twenty_named_steps_and_nothing_else() -> None:
+    """Demo P0 (26 Oct 2026): the last app steps travel with a report, names and times only."""
+    from ac_platform.bug_reports.scrub import clean_context
+
+    steps = [
+        {"event": f"step_{n}", "at": "2026-10-26T04:30:00.000Z", "route": "/leads?token=x"}
+        for n in range(25)
+    ]
+    steps += [
+        {"event": "Has Spaces"},
+        {"event": "call_logged", "at": "not a time", "words": "a lead's name"},
+        "text",
+    ]
+    context = clean_context({"app": {}, "device": {}, "trail": steps})
+    trail = context["trail"]
+    assert len(trail) == 18  # the last twenty items, two of them dropped as malformed
+    assert trail[0] == {
+        "event": "step_8",
+        "at": "2026-10-26T04:30:00.000Z",
+        "route": "/leads?token=",
+    }
+    assert trail[-1] == {"event": "call_logged"}
+    assert "trail" not in clean_context({"trail": "nope"})

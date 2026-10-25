@@ -9,6 +9,7 @@
 import { Mic, Square, Trash2 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { inPhoneApp } from "../leads/native-phone";
 import { tick } from "../ui/haptics";
 import styles from "./bug-report.module.css";
 
@@ -181,10 +182,24 @@ export function VoiceNoteRow({
         Add a voice note
       </button>
       {state.status === "denied" ? (
-        <small className={styles.note} role="alert">
-          The microphone is off for Sales X-Ray. Allow it in your phone or
-          browser settings, or type instead.
-        </small>
+        // Asked for only on a tap; denied, it offers to ask again and says where
+        // to turn it on (owner, 26 Oct 2026: not a red paragraph).
+        <div className={styles.micAsk} role="status">
+          <span>Voice notes need the microphone. You can also type.</span>
+          <button
+            type="button"
+            className={styles.chip}
+            onClick={() => void start()}
+          >
+            <Mic size={15} aria-hidden="true" />
+            Allow microphone
+          </button>
+          <small className={styles.fine}>
+            {inPhoneApp()
+              ? "If nothing asks: phone Settings → Apps → Sales X-Ray → Permissions → Microphone."
+              : "If nothing asks: allow the microphone for this site in your browser's settings."}
+          </small>
+        </div>
       ) : state.status === "unsupported" ? (
         <small className={styles.note} role="status">
           Voice notes don&apos;t work in this browser. Type instead.

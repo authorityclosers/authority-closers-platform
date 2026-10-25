@@ -12,6 +12,7 @@
  * is the organisation view as before, with its own states.
  */
 
+import { can, roleLabel } from "./roles";
 import {
   BarChart3,
   Building2,
@@ -26,7 +27,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { SettingsSectionView } from "../settings/sections";
@@ -179,7 +180,16 @@ function Parts({
   parts: readonly Part[];
   part: string | null;
 }) {
-  const current = parts.find((item) => item.key === part) ?? parts[0];
+  // A tap shows its part at once. The address alone can't: here a bare
+  // history.replaceState doesn't refresh useSearchParams, so Stages and Sources
+  // stayed on Lead rules (owner, 25 Oct 2026). The tap holds until the address's
+  // own part changes (a link, another tab).
+  const [chosen, setChosen] = useState<{
+    from: string | null;
+    key: string;
+  } | null>(null);
+  const shown = chosen && chosen.from === part ? chosen.key : part;
+  const current = parts.find((item) => item.key === shown) ?? parts[0];
   return (
     <div className={styles.parts}>
       <Segmented
@@ -187,7 +197,8 @@ function Parts({
         value={current.key}
         items={parts.map((item) => ({ key: item.key, label: item.label }))}
         onChange={(next) => {
-          // The part lives in the address, so reload and links keep it.
+          setChosen({ from: part, key: next });
+          // The part lives in the address too, so reload and links keep it.
           const url = new URL(window.location.href);
           url.searchParams.set("part", next);
           window.history.replaceState(window.history.state, "", url);
@@ -206,7 +217,6 @@ type HubWorkspace = { name: string; role: string | null };
 
 /** The organisation's name and your role, at the top of the hub and of Insights. */
 function OrgHeader({ workspace }: { workspace: HubWorkspace }) {
-  const manager = workspace.role === "owner" || workspace.role === "admin";
   return (
     <header className={styles.header}>
       <span className={styles.tile} aria-hidden="true">
@@ -215,14 +225,7 @@ function OrgHeader({ workspace }: { workspace: HubWorkspace }) {
       <div>
         <h1>{workspace.name}</h1>
         <p>
-          Organisation · Your role:{" "}
-          <b>
-            {workspace.role === "owner"
-              ? "Owner"
-              : manager
-                ? "Admin"
-                : "Member"}
-          </b>
+          Organisation · Your role: <b>{roleLabel(workspace.role)}</b>
         </p>
       </div>
     </header>
@@ -246,7 +249,7 @@ export function OrgHubFrame({
     (item) => item.tenant_id === access.context?.tenantId,
   );
   if (workspace?.kind !== "organisation") return <>{children}</>;
-  const manager = workspace.role === "owner" || workspace.role === "admin";
+  const manager = can(workspace.role, "team.view");
   const tabs = HUB_TABS.filter((tab) => manager || !tab.managers);
   return (
     <div className={styles.hub}>
@@ -274,7 +277,7 @@ export function OrganisationHub({
   if (current?.kind !== "organisation")
     return <OrganisationView initial={initial} sections={["overview"]} />;
 
-  const manager = current.role === "owner" || current.role === "admin";
+  const manager = can(current.role, "team.view");
   const tabs = HUB_TABS.filter((tab) => manager || !tab.managers);
   const asked = query?.get("tab") ?? "overview";
   const tab = tabs.find((item) => item.id === asked && !item.href) ?? tabs[0];

@@ -32,7 +32,15 @@ from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.integrations.ai_writes import IN_APP, AiWrites, AiWritesSettings
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk import finder, merging, push, simulation
+from ac_platform.lead_desk import (
+    digest_push,
+    due_soon,
+    duplicate_queue,
+    finder,
+    merging,
+    push,
+    simulation,
+)
 from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk import team as team_engine
 from ac_platform.lead_desk.contracts import (
@@ -52,6 +60,9 @@ from ac_platform.lead_desk.contracts import (
     Disposition,
     DistributeLeads,
     Distribution,
+    DuplicateBand,
+    DuplicateCompare,
+    DuplicateQueue,
     FollowUp,
     ImportCommand,
     ImportPreview,
@@ -74,6 +85,7 @@ from ac_platform.lead_desk.contracts import (
     NewLead,
     NewSource,
     NoteCommand,
+    NotSame,
     NudgesCommand,
     Performance,
     PhoneBook,
@@ -91,6 +103,7 @@ from ac_platform.lead_desk.contracts import (
     SellerTargets,
     SettingsCommand,
     SimulationPick,
+    Soon,
     Sources,
     SourceView,
     TakingLeads,
@@ -253,6 +266,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         due: LeadDue | None = None,
         contact: LeadSince | None = None,
         created: LeadMade | None = None,
+        duplicates: Literal["review"] | None = None,
     ) -> LeadPage:
         no_query(
             request,
@@ -271,6 +285,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                     "due",
                     "contact",
                     "created",
+                    "duplicates",
                 }
             ),
         )
@@ -295,6 +310,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 due=due,
                 contact=contact,
                 created=created,
+                duplicates=duplicates == "review",
             )
 
     @router.get("/activity", response_model=ActivityPage, response_model_by_alias=True)
@@ -354,6 +370,44 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await team_engine.distribute_leads(lead_desk, command)
+
+    @router.get("/duplicates", response_model=DuplicateQueue, response_model_by_alias=True)
+    async def duplicates(
+        request: Request, response: Response, band: DuplicateBand | None = None
+    ) -> DuplicateQueue:
+        """Owners and managers: the leads that may be one person, the likeliest first."""
+        no_query(request, frozenset({"band"}))
+        async with desk_for(request, response) as lead_desk:
+            return await duplicate_queue.queue(lead_desk, band)
+
+    @router.post("/duplicates/scan", response_model=DuplicateQueue, response_model_by_alias=True)
+    async def scan_duplicates(request: Request, response: Response) -> DuplicateQueue:
+        """Look for duplicates now, as the six-hourly scan does."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await duplicate_queue.scan_now(lead_desk)
+
+    @router.get(
+        "/duplicates/{pair_id}", response_model=DuplicateCompare, response_model_by_alias=True
+    )
+    async def duplicate(pair_id: UUID, request: Request, response: Response) -> DuplicateCompare:
+        """One pair side by side, with the lead a merge keeps and who would have it."""
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await duplicate_queue.compare(lead_desk, pair_id)
+
+    @router.post(
+        "/duplicates/{pair_id}/not-same",
+        response_model=DuplicateQueue,
+        response_model_by_alias=True,
+    )
+    async def not_same(
+        pair_id: UUID, command: NotSame, request: Request, response: Response
+    ) -> DuplicateQueue:
+        """Two different people: the pair leaves the queue for good."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await duplicate_queue.not_same(lead_desk, pair_id, command)
 
     @router.post("/duplicates/merge", response_model=MergeView, response_model_by_alias=True)
     async def merge_leads(command: MergeLeads, request: Request, response: Response) -> MergeView:
@@ -584,15 +638,28 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @router.get("/alert", response_model=AlertText, response_model_by_alias=True)
     async def alert_summary(
-        request: Request, response: Response, kind: Literal["nudge"] | None = None
+        request: Request,
+        response: Response,
+        kind: Literal["nudge", "digest", "sweep"] | None = None,
     ) -> AlertText:
         """The words on a phone alert for several leads at once; with kind=nudge, on the
-        seller's latest nudge (team engine)."""
+        seller's latest nudge (team engine); with digest or sweep, the day's follow-ups or
+        what is late and new, counted now (demo notifications)."""
         no_query(request, frozenset({"kind"}))
         async with desk_for(request, response) as lead_desk:
             if kind == "nudge":
                 return await team_engine.nudge_words(lead_desk)
+            if kind in ("digest", "sweep"):
+                return await digest_push.words(lead_desk, kind)
             return await lead_desk.alert_summary()
+
+    @router.get("/soon", response_model=Soon, response_model_by_alias=True)
+    async def due_within_the_hour(request: Request, response: Response) -> Soon:
+        """The soonest of my follow-ups, tasks and meetings due within the hour (the red
+        banner)."""
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await due_soon.soon(lead_desk)
 
     @router.get("/leads/{lead_id}/alert", response_model=AlertText, response_model_by_alias=True)
     async def alert_text(lead_id: UUID, request: Request, response: Response) -> AlertText:

@@ -401,6 +401,31 @@ class LeadTarget(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class LeadDigest(Base):
+    """The digest and sweep ledger (demo notifications, migration 0137): one row per seller,
+    kind and slot, written before the push is sent, so each goes once."""
+
+    __tablename__ = "lead_desk_digests"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_lead_desk_digest_person",
+        ),
+        CheckConstraint("kind IN ('digest', 'sweep')", name="lead_desk_digest_kind"),
+        Index("uq_lead_desk_digest_slot", "tenant_id", "person_id", "kind", "slot", unique=True),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    kind: Mapped[str] = mapped_column(String(8))
+    slot: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    counts: Mapped[dict[str, Any]] = mapped_column(JSON)
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class LeadNudge(Base):
     """The nudge ledger (team engine, migration 0130): one row per seller and two-hour
     window of the work day, written before the push is sent, so a nudge goes once."""

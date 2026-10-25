@@ -22,9 +22,9 @@ from uuid import UUID
 from pydantic import AwareDatetime, model_validator
 
 from ac_platform.coaching.contracts import Model
-from ac_platform.tenancy.roles import can
+from ac_platform.tenancy.roles import OrgRoleName, can
 
-OrgRole = Literal["owner", "admin", "member"]
+OrgRole = OrgRoleName
 Access = Literal["own", "shared_with_admin", "shared_with_coach", "denied"]
 
 

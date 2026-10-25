@@ -60,3 +60,12 @@ it("counts only reports that were open when last seen", () => {
     newlyFixed(reports, { a: "new", b: "fixed" }).map((item) => item.bugId),
   ).toEqual(["a"]);
 });
+
+it("says Received, Fixing and Solved back in the app", async () => {
+  const { STATUS_WORDS } = await import("./my-reports");
+  expect(
+    ["new", "triaged", "in_progress", "fixed", "verified"].map(
+      (status) => STATUS_WORDS[status],
+    ),
+  ).toEqual(["Received", "Received", "Fixing", "Solved", "Solved"]);
+});

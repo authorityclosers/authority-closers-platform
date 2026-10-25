@@ -167,6 +167,42 @@ it("opens each tab here, with the hub's header only", async () => {
   ).toBe("Overview");
 });
 
+// Owner, 25 Oct 2026: on Leads setup, tapping Stages or Sources left Lead rules
+// showing (the part was read from the address only, which a bare replaceState
+// doesn't refresh). The same row serves Connections.
+it("switches the part on a tap, and keeps it in the address", async () => {
+  query = "tab=leads";
+  await render("owner");
+  const segment = (label: string) =>
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Leads setup"] button',
+      ),
+    ].find((button) => button.textContent === label);
+  expect(host.querySelector('[data-section="lead-rules"]')).not.toBeNull();
+  await act(async () => segment("Stages")?.click());
+  expect(host.querySelector('[data-section="stages"]')).not.toBeNull();
+  expect(segment("Stages")?.getAttribute("aria-pressed")).toBe("true");
+  expect(new URLSearchParams(window.location.search).get("part")).toBe(
+    "stages",
+  );
+  await act(async () => segment("Sources")?.click());
+  expect(host.querySelector('[data-section="sources"]')).not.toBeNull();
+  expect(host.querySelector('[data-section="stages"]')).toBeNull();
+  await act(async () => root.unmount());
+  root = createRoot(host);
+
+  query = "tab=connections";
+  await render("owner");
+  const connection = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '[aria-label="Connections"] button',
+    ),
+  ].find((button) => button.textContent === "Developers");
+  await act(async () => connection?.click());
+  expect(host.querySelector('[data-section="developers"]')).not.toBeNull();
+});
+
 it("keeps the organisation page as it was outside an organisation", async () => {
   await render("owner", "personal");
   expect(host.querySelector('nav[aria-label="Organisation"]')).toBeNull();

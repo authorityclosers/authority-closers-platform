@@ -135,6 +135,18 @@ function install() {
       profile_complete: true,
       revision: 1,
       photo_url: null,
+      // Settings -> Profile's own part (25 Oct 2026): a title, the rest to add.
+      handle: null,
+      title: "Sales manager",
+      team: null,
+      details_revision: 0,
+      avatar_url: null,
+      own_photo: false,
+      completion: {
+        done: 2,
+        total: 6,
+        missing: ["photo", "handle", "team", "phone"],
+      },
     }),
     ...(failing
       ? {}

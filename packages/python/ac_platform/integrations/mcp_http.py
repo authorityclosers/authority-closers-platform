@@ -188,6 +188,29 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "scope": "leads:read",
     },
     {
+        "name": "list_duplicates",
+        "title": "List possible duplicate leads",
+        "description": (
+            "Leads that may be one person, the likeliest first: each pair with how sure "
+            "(certain, probable, possible) and why. For an organisation's owners and admins. "
+            "Merging is done in Sales X-Ray by a person."
+        ),
+        "inputSchema": {"type": "object", "properties": {}},
+        "annotations": _READS,
+        "scope": "leads:read",
+    },
+    {
+        "name": "get_duplicate",
+        "title": "Compare two possible duplicates",
+        "description": (
+            "One pair from list_duplicates side by side: the reasons, the lead a merge would "
+            "keep and who would have it."
+        ),
+        "inputSchema": {"type": "object", "properties": {"pair_id": _ID}, "required": ["pair_id"]},
+        "annotations": _READS,
+        "scope": "leads:read",
+    },
+    {
         "name": "add_lead",
         "title": "Add a lead",
         "description": (
@@ -437,6 +460,10 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         return await reader.leads(stage if isinstance(stage, str) else None, offset)
     if name == "get_lead":
         return await reader.lead(_uuid(args, "lead_id"))
+    if name == "list_duplicates":
+        return await reader.duplicates()
+    if name == "get_duplicate":
+        return await reader.duplicate(_uuid(args, "pair_id"))
     if name == "add_lead":
         fields = {key: args.get(key) for key in _BY_NAME["add_lead"]["inputSchema"]["properties"]}
         try:

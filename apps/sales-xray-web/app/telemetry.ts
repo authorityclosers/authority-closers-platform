@@ -745,6 +745,21 @@ type Sender = Readonly<{
   context?: () => EventContext;
 }>;
 
+/** One step for a bug report's trail: the event's name, when, and the route template. */
+export type TrailStep = Readonly<{ event: string; at: string; route?: string }>;
+const TRAIL: TrailStep[] = [];
+const TRAIL_SIZE = 20;
+
+/** The last twenty app steps, oldest first, for a bug report (demo P0, 26 Oct 2026). */
+export function recentSteps(): readonly TrailStep[] {
+  return [...TRAIL];
+}
+
+function keepStep(step: TrailStep) {
+  TRAIL.push(step);
+  if (TRAIL.length > TRAIL_SIZE) TRAIL.splice(0, TRAIL.length - TRAIL_SIZE);
+}
+
 /**
  * One page's telemetry: a queue, the session it belongs to, and the
  * server's list of accepted events (read once).
@@ -797,11 +812,17 @@ export class TelemetryClient {
       if (context.appVersion) values.app_version = context.appVersion;
     }
     if (!safePayload(values)) return;
+    const occurredAt = this.sender.now().toISOString();
+    keepStep({
+      event: name,
+      at: occurredAt,
+      ...(context?.route ? { route: context.route } : {}),
+    });
     this.queue.push({
       event_id: this.sender.id(),
       event_name: name,
       event_version: "1.0",
-      occurred_at: this.sender.now().toISOString(),
+      occurred_at: occurredAt,
       session_id: this.session,
       route: context?.route ?? null,
       payload: values,

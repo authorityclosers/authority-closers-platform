@@ -33,6 +33,8 @@ const member = (overrides: Record<string, unknown>) => ({
 
 function routes(now: number): Record<string, unknown> {
   const ago = (days: number) => new Date(now - days * DAY).toISOString();
+  // ?over=1: a seller past their limit and paused (owner, 25 Oct 2026: "168 / 50").
+  const over = new URLSearchParams(window.location.search).get("over") === "1";
   const calls = [
     ["Discovery · Amit, Fictional Interiors", 1, 760],
     ["Follow-up · Neha, Sample Homes", 2, 410],
@@ -93,6 +95,14 @@ function routes(now: number): Record<string, unknown> {
           connected_today: 9,
           first_call_minutes: 5,
           phone: null,
+          ...(over
+            ? {
+                available: false,
+                open_leads: 168,
+                over_capacity: 118,
+                default_cap: true,
+              }
+            : {}),
         },
       ],
       settings: {

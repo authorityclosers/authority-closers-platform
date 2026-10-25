@@ -155,7 +155,7 @@ it("offers each invitation as one Join, and Create only where the server can", a
   const join = menu.querySelector<HTMLButtonElement>(
     '[aria-label="Join Brightline Coaching as a member"]',
   )!;
-  expect(join.textContent).toContain("Invited as member");
+  expect(join.textContent).toContain("Invited as seller");
   await act(async () => join.click());
   expect(onJoin).toHaveBeenCalledWith(invitation);
   const create = [...menu.querySelectorAll("button")].find((button) =>

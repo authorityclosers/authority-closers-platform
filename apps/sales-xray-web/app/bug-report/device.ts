@@ -4,10 +4,13 @@
  * (ac_platform/bug_reports/scrub.py) and adds its own release.
  */
 
+import type { TrailStep } from "../telemetry";
 import { isAppUserAgent } from "../in-app";
 import { inPhoneApp, phoneStatus } from "../leads/native-phone";
 
 export type ReportContext = {
+  /** The last app steps (telemetry event names and times), added when sending. */
+  trail?: readonly TrailStep[];
   app: {
     channel: "web" | "android";
     release?: string;

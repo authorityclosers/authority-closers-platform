@@ -1,10 +1,12 @@
 "use client";
 
+import { can, roleLabel } from "../roles";
 import { Building2, CloudOff, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { AcquisitionShell } from "../../acquisition-shell";
+import type { OrgRole } from "../organisation-api";
 import { useDisplayDates } from "../../display-clock";
 import { dismissNotice, notify } from "../../notice-center";
 import { Empty, PageHeader } from "../../ui/kit";
@@ -165,7 +167,7 @@ function PersonPage({
 }: {
   id: string;
   viewerId: string;
-  viewerRole: "owner" | "admin" | "member";
+  viewerRole: OrgRole;
 }) {
   const router = useRouter();
   const dates = useDisplayDates();
@@ -174,10 +176,10 @@ function PersonPage({
     (signal: AbortSignal) => readPersonSummary(id, signal),
     [id],
   );
-  // Members see their own activity only; owners and admins see everyone's.
+  // Your own activity, or everyone's for those who see the team.
   const [activity, retryActivity] = useRead(
     readSummary,
-    viewerRole !== "member" || id === viewerId,
+    can(viewerRole, "team.view") || id === viewerId,
   );
   const [busy, setBusy] = useState(false);
 
@@ -201,9 +203,9 @@ function PersonPage({
     members.status === "ready" ? findMember(members.value, id) : null;
   const personId = member?.personId ?? (member ? null : id);
   const isYou = personId === viewerId;
-  const canManage = viewerRole === "owner" || viewerRole === "admin";
-  // Members see their own activity only; owners and admins see everyone's.
-  const sees = canManage || isYou;
+  const canManage = can(viewerRole, "members.manage");
+  // Your own activity, or everyone's for those who see the team.
+  const sees = can(viewerRole, "team.view") || isYou;
 
   if (members.status === "loading") return <PersonSkeleton />;
   if (members.status === "ready" && !member)
@@ -232,7 +234,7 @@ function PersonPage({
         title:
           action.kind === "remove"
             ? `${memberName(member)} ${member.status === "invited" ? "is no longer invited" : "was removed"}`
-            : `${memberName(member)} is now ${action.role === "admin" ? "an admin" : "a member"}`,
+            : `${memberName(member)} is now ${roleLabel(action.role)}`,
         timeout: 4000,
       });
       if (action.kind === "remove") router.push("/organisation?tab=members");
@@ -287,13 +289,13 @@ function PersonPage({
         />
       ) : !sees ? (
         <p className={styles.quietLine}>
-          Only owners and admins see a teammate&apos;s calls and reports.
+          You see your own calls and reports here, not a teammate&apos;s.
         </p>
       ) : activity.status === "ready" && personId ? (
         <SellerSections
           personId={personId}
           isYou={isYou}
-          canManage={canManage}
+          canManage={can(viewerRole, "leads.manage")}
           firstName={
             (member ? memberName(member) : "This person").split(/\s+/)[0]
           }

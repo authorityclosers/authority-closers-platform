@@ -329,6 +329,8 @@ def test_owners_and_admins_delete_chosen_leads_for_good(
             tenant = setup.state.tenant_id
             seller = await seed(setup.engine, tenant_id=tenant, role="member")
             seller_token = await _session(setup, seller)
+            manager = await seed(setup.engine, tenant_id=tenant, role="manager")
+            manager_token = await _session(setup, manager)
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
@@ -379,6 +381,13 @@ def test_owners_and_admins_delete_chosen_leads_for_good(
                 assert refused.json()["detail"] == "Only owners and admins delete leads."
                 one = await post(f"/leads/{a}/delete", {"command_id": str(uuid4())})
                 assert one.status_code == 403
+                # Sales managers manage the team's leads but don't delete them (Roles B).
+                as_(manager_token)
+                refused = await post(
+                    "/leads/delete", {"command_id": str(uuid4()), "lead_ids": [str(a)]}
+                )
+                assert refused.status_code == 403
+                assert refused.json()["detail"] == "Only owners and admins delete leads."
 
                 as_(setup.token)
                 assert (
