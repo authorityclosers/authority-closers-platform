@@ -1,14 +1,118 @@
 "use client";
 
-import { Bell } from "lucide-react";
-import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+/**
+ * Notifications (owner program, 25 Oct 2026, item 5: "ugly and stupid";
+ * rebuild it with a strong core and some personality). A sheet from the bell:
+ * what needs you first, then what is new, then what you have read; each line
+ * in its kind's colour with its one action, unread lines marked, and Mark all
+ * read. Nothing waiting: a calm line that says what lands here.
+ */
+
+import {
+  Bell,
+  BellRing,
+  CheckCheck,
+  FileCheck2,
+  PauseCircle,
+  Sparkles,
+  UserPlus,
+  type LucideIcon,
+} from "lucide-react";
+import { useRef, useState } from "react";
+
+import { Sheet } from "../ui/sheet";
 import {
   isRelativeUpdateHref,
   type UpdateNotification,
 } from "./updates-client";
 import styles from "./updates-bell.module.css";
-import { useBackClose } from "../ui/back-close";
+
+type Kind = UpdateNotification["kind"];
+
+const KINDS: Record<Kind, { icon: LucideIcon; tone: string; verb: string }> = {
+  report_ready: { icon: FileCheck2, tone: "report", verb: "Open report" },
+  analysis_paused: { icon: PauseCircle, tone: "paused", verb: "See why" },
+  invite_received: { icon: UserPlus, tone: "invite", verb: "Open invite" },
+  updates: { icon: Sparkles, tone: "news", verb: "What's new" },
+};
+
+const MINUTE = 60_000;
+
+/** "Just now", "12 min ago", "3 h ago", "Yesterday", "12 Oct". */
+export function ago(iso: string, now: number = Date.now()): string {
+  const at = Date.parse(iso);
+  const minutes = Math.floor((now - at) / MINUTE);
+  if (minutes < 1) return "Just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  if (minutes < 24 * 60) return `${Math.floor(minutes / 60)} h ago`;
+  const day = (time: number) => new Date(time).toDateString();
+  if (day(at) === day(now - 24 * 60 * MINUTE)) return "Yesterday";
+  return new Date(at).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+/** Needs you (urgent, unread), New (unread), Earlier (read): newest first. */
+export function groupNotifications(list: readonly UpdateNotification[]) {
+  const newest = [...list].sort(
+    (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
+  );
+  return [
+    {
+      key: "urgent",
+      title: "Needs you",
+      items: newest.filter((entry) => !entry.read && entry.urgent),
+    },
+    {
+      key: "new",
+      title: "New",
+      items: newest.filter((entry) => !entry.read && !entry.urgent),
+    },
+    {
+      key: "earlier",
+      title: "Earlier",
+      items: newest.filter((entry) => entry.read),
+    },
+  ].filter((group) => group.items.length);
+}
+
+function Row({
+  entry,
+  disabled,
+  onOpen,
+}: {
+  entry: UpdateNotification;
+  disabled: boolean;
+  onOpen: () => void;
+}) {
+  const kind = KINDS[entry.kind];
+  const Icon = kind.icon;
+  return (
+    <li data-unread={!entry.read} data-urgent={entry.urgent || undefined}>
+      <button
+        type="button"
+        className={styles.row}
+        data-tone={kind.tone}
+        disabled={disabled}
+        onClick={onOpen}
+      >
+        <span className={styles.icon} aria-hidden="true">
+          <Icon size={20} />
+        </span>
+        <span className={styles.words}>
+          <strong>{entry.title}</strong>
+          {entry.body ? <span>{entry.body}</span> : null}
+          <small>
+            <time dateTime={entry.created_at}>{ago(entry.created_at)}</time>
+            {!entry.read ? <span className={styles.unread}>Unread</span> : null}
+          </small>
+        </span>
+        <span className={styles.verb}>{kind.verb}</span>
+      </button>
+    </li>
+  );
+}
 
 export function UpdatesBell({
   notifications,
@@ -16,72 +120,48 @@ export function UpdatesBell({
   status,
   openNews,
   openEvent,
+  markRead,
 }: {
   notifications: readonly UpdateNotification[];
   unreadCount: number;
   status: "loading" | "ready" | "error";
   openNews: (anchor: HTMLElement | null) => void;
   openEvent: (entry: UpdateNotification) => Promise<void>;
+  /** Marks these read; with it the sheet offers Mark all read. */
+  markRead?: (ids: string[]) => Promise<void>;
 }) {
   const [open, setOpen] = useState(false);
   const [failed, setFailed] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
-  const [place, setPlace] = useState({ left: 8, top: 8 });
   const trigger = useRef<HTMLButtonElement>(null);
-  const panel = useRef<HTMLDivElement>(null);
-  const id = useId();
   const close = () => {
     setOpen(false);
     trigger.current?.focus();
   };
-  // Back (the button, the phone's gesture or key) closes it (owner, 22 Oct).
-  useBackClose(open, () => setOpen(false));
-  useLayoutEffect(() => {
-    if (!open) return;
-    const measure = () => {
-      const rect = trigger.current?.getBoundingClientRect();
-      if (!rect) return;
-      const width = Math.min(340, window.innerWidth - 16);
-      const height = Math.min(420, window.innerHeight - 16);
-      setPlace({
-        left: Math.max(
-          8,
-          Math.min(rect.right - width, window.innerWidth - width - 8),
-        ),
-        top: Math.max(
-          8,
-          Math.min(rect.bottom + 8, window.innerHeight - height - 8),
-        ),
-      });
-    };
-    measure();
-    window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
-  }, [open]);
-  useEffect(() => {
-    if (!open) return;
-    panel.current?.focus();
-    const keydown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        setOpen(false);
-        trigger.current?.focus();
-      }
-    };
-    const outside = (event: PointerEvent) => {
-      if (
-        !panel.current?.contains(event.target as Node) &&
-        !trigger.current?.contains(event.target as Node)
-      )
-        setOpen(false);
-    };
-    document.addEventListener("keydown", keydown);
-    document.addEventListener("pointerdown", outside);
-    return () => {
-      document.removeEventListener("keydown", keydown);
-      document.removeEventListener("pointerdown", outside);
-    };
-  }, [open]);
+  const unread = notifications.filter((entry) => !entry.read);
+  const groups = groupNotifications(notifications);
+  const openRow = (entry: UpdateNotification) => {
+    if (entry.kind === "updates") {
+      close();
+      openNews(trigger.current);
+      return;
+    }
+    if (!isRelativeUpdateHref(entry.href)) return;
+    setPending(entry.id);
+    setFailed(false);
+    void openEvent(entry)
+      .then(close)
+      .catch(() => setFailed(true))
+      .finally(() => setPending(null));
+  };
+  const readAll = () => {
+    if (!markRead || !unread.length) return;
+    setPending("all");
+    setFailed(false);
+    void markRead(unread.map((entry) => entry.id))
+      .catch(() => setFailed(true))
+      .finally(() => setPending(null));
+  };
   return (
     <>
       <button
@@ -92,7 +172,6 @@ export function UpdatesBell({
         title="Notifications"
         aria-haspopup="dialog"
         aria-expanded={open}
-        aria-controls={open ? id : undefined}
         onClick={() => {
           setOpen(!open);
           setFailed(false);
@@ -105,68 +184,80 @@ export function UpdatesBell({
           </span>
         ) : null}
       </button>
-      {open
-        ? createPortal(
-            <div
-              ref={panel}
-              id={id}
-              className={styles.panel}
-              style={place}
-              role="dialog"
-              aria-label="Notifications"
-              tabIndex={-1}
+      <Sheet open={open} onClose={close} title="Notifications">
+        <div className={styles.body}>
+          {markRead && unread.length ? (
+            <div className={styles.toolbar}>
+              <span>{`${unread.length} unread`}</span>
+              <button
+                type="button"
+                className={styles.readAll}
+                disabled={pending !== null}
+                onClick={readAll}
+              >
+                <CheckCheck size={16} aria-hidden="true" />
+                Mark all read
+              </button>
+            </div>
+          ) : null}
+          {failed ? (
+            <p className={styles.failed} role="alert">
+              That didn&apos;t go through. Try again.
+            </p>
+          ) : null}
+          {status === "error" && !notifications.length ? (
+            <p className={styles.quiet} role="status">
+              Notifications could not load. Try again when you return.
+            </p>
+          ) : null}
+          {status === "loading" && !notifications.length ? (
+            <div className={styles.skeleton} role="status" aria-busy="true">
+              <span className={styles.hidden}>Loading notifications…</span>
+              {[0, 1, 2].map((index) => (
+                <span key={index} className={styles.skeletonRow} />
+              ))}
+            </div>
+          ) : null}
+          {status === "ready" && !notifications.length ? (
+            <div className={styles.empty}>
+              <span className={styles.emptyIcon} aria-hidden="true">
+                <BellRing size={28} />
+              </span>
+              <strong>You&apos;re up to date</strong>
+              <span>
+                Ready reports, invites and what&apos;s new in Sales X-Ray land
+                here.
+              </span>
+            </div>
+          ) : null}
+          {groups.map((group) => (
+            <section
+              key={group.key}
+              className={styles.group}
+              aria-label={group.title}
             >
-              <h2>Notifications</h2>
-              {status === "error" ? (
-                <p role="status">
-                  Notifications could not load. Try again when you return.
-                </p>
-              ) : null}
-              {status === "loading" && !notifications.length ? (
-                <p role="status">Loading notifications…</p>
-              ) : null}
-              {status === "ready" && !notifications.length ? (
-                <p>You&apos;re up to date.</p>
-              ) : null}
-              {failed ? (
-                <p role="alert">Could not open this notification. Try again.</p>
-              ) : null}
+              <h3 data-group={group.key}>
+                {group.title}
+                <span>{group.items.length}</span>
+              </h3>
               <ul>
-                {notifications.map((entry) => (
-                  <li key={entry.id} data-unread={!entry.read}>
-                    <button
-                      type="button"
-                      disabled={
-                        pending !== null ||
-                        (entry.kind !== "updates" &&
-                          !isRelativeUpdateHref(entry.href))
-                      }
-                      onClick={() => {
-                        if (entry.kind === "updates") {
-                          close();
-                          openNews(trigger.current);
-                          return;
-                        }
-                        if (!isRelativeUpdateHref(entry.href)) return;
-                        setPending(entry.id);
-                        setFailed(false);
-                        void openEvent(entry)
-                          .then(close)
-                          .catch(() => setFailed(true))
-                          .finally(() => setPending(null));
-                      }}
-                    >
-                      <strong>{entry.title}</strong>
-                      {entry.body ? <span>{entry.body}</span> : null}
-                      {!entry.read ? <small>Unread</small> : null}
-                    </button>
-                  </li>
+                {group.items.map((entry) => (
+                  <Row
+                    key={entry.id}
+                    entry={entry}
+                    disabled={
+                      pending !== null ||
+                      (entry.kind !== "updates" &&
+                        !isRelativeUpdateHref(entry.href))
+                    }
+                    onOpen={() => openRow(entry)}
+                  />
                 ))}
               </ul>
-            </div>,
-            document.body,
-          )
-        : null}
+            </section>
+          ))}
+        </div>
+      </Sheet>
     </>
   );
 }

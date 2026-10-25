@@ -9,11 +9,32 @@
  * person; an account that already has an organisation or a call never sees it.
  */
 
-export type SetupPath = "business" | "solo" | "join";
-export type SetupStep = "start" | "name" | "business" | "team" | "first";
+export type SetupPath = "business" | "solo" | "join" | "pick";
+export type SetupStep =
+  | "workspace"
+  | "start"
+  | "name"
+  | "business"
+  | "team"
+  | "first";
 export type SetupMark = "done" | "skipped" | "not-needed";
 
 export const WELCOME_PATH = "/welcome";
+
+/**
+ * Right after a sign-in, someone with more than one workspace (organisations,
+ * their own calls) is asked where to work, in the middle of the screen (owner,
+ * 25 Oct 2026: a tester got lost between her organisation and her account).
+ */
+export const PICK_PATH = `${WELCOME_PATH}?pick=1`;
+
+/** Set on the page while Home decides whether a first run opens. */
+export const FIRST_RUN_ATTRIBUTE = "data-sx-first-run";
+
+export function holdFirstRun(on: boolean) {
+  if (on) document.documentElement.setAttribute(FIRST_RUN_ATTRIBUTE, "");
+  else document.documentElement.removeAttribute(FIRST_RUN_ATTRIBUTE);
+}
 
 export function setupKey(personId: string) {
   return `sx-setup:${personId}`;
@@ -42,9 +63,15 @@ export function markSetup(personId: string, mark: SetupMark) {
 
 /** The steps a path shows, in order. Members who join skip the owner's setup. */
 export function stepsFor(path: SetupPath): SetupStep[] {
+  if (path === "pick") return ["workspace"];
   return path === "business"
     ? ["start", "name", "business", "team", "first"]
     : ["start", "first"];
+}
+
+/** Where to work is asked when sign-in leaves two or more to choose from. */
+export function needsPick(enabledWorkspaces: number) {
+  return enabledWorkspaces >= 2;
 }
 
 /** A brand-new account: no organisation of its own or to join, and no calls yet. */

@@ -317,3 +317,50 @@ it("sends someone who already has a business straight home", async () => {
   expect(replace).toHaveBeenCalledWith("/");
   expect(readSetupMark(PERSON)).toBe("not-needed");
 });
+
+// Owner, 25 Oct 2026: a tester got lost between her organisation and her own
+// account. Right after a sign-in, two or more workspaces: where to work?
+it("asks where to work right after a sign-in, and opens the one picked", async () => {
+  organisations = [
+    {
+      tenant_id: NEW_ORG,
+      kind: "organisation",
+      name: "Bright Homes",
+      role: "owner",
+      sales_xray_enabled: true,
+    },
+  ];
+  window.history.replaceState(null, "", "/welcome?pick=1");
+  const fetchMock = vi.mocked(fetch);
+  const answer = fetchMock.getMockImplementation()!;
+  fetchMock.mockImplementation(async (input, init) =>
+    String(input) === "/v1/me/sales-xray-workspaces/leads"
+      ? json({
+          workspaces: [
+            { tenant_id: NEW_ORG, leads: 383 },
+            { tenant_id: PERSONAL, leads: 0 },
+          ],
+        })
+      : answer(input, init),
+  );
+  const assign = vi
+    .spyOn(window.location, "assign")
+    .mockImplementation(() => undefined);
+  await act(async () => root.render(<SetupFlow />));
+  await settle();
+  expect(heading()).toBe("Where do you want to work?");
+  expect(progress()).toBeUndefined();
+  const choices = Array.from(host.querySelectorAll('[role="radio"]'));
+  expect(choices.map((item) => item.textContent)).toEqual([
+    "Bright HomesOwner · 383 leads",
+    "Just my own callsYour own calls and coaching, just for you.",
+  ]);
+  // Sign-in opened Personal: it stays chosen until another is picked.
+  expect(choices[1].getAttribute("aria-checked")).toBe("true");
+  await act(async () => (choices[0] as HTMLButtonElement).click());
+  await press("Open Bright Homes");
+  expect(writes()).toEqual([["/v1/context", { tenant_id: NEW_ORG }]]);
+  expect(assign).toHaveBeenCalledWith("/");
+  expect(readSetupMark(PERSON)).toBe("done");
+  window.history.replaceState(null, "", "/");
+});

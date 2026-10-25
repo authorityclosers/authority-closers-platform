@@ -18,6 +18,9 @@ Off until the FCM settings exist (``AC_FCM_SERVICE_ACCOUNT`` and the app's clien
 settings ``AC_FCM_APP_ID``, ``AC_FCM_API_KEY``, ``AC_FCM_SENDER_ID``). They live in
 Infisical, never in git.
 
+Nudges (team engine) go in the same pass, under the same lock, as their own urgent push
+with no lead in it (``nudge_push``).
+
 A second run of the same loop sends gold review alerts to the same phones (``review_push``).
 """
 
@@ -42,7 +45,7 @@ from fastapi import FastAPI
 from sqlalchemy import and_, delete, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ac_platform.lead_desk import hours, task_push
+from ac_platform.lead_desk import hours, nudge_push, task_push
 from ac_platform.lead_desk.contracts import PushConfig
 from ac_platform.lead_desk.meetings import REMIND_BEFORE
 from ac_platform.lead_desk.models import Lead, LeadDevice, LeadMeeting
@@ -309,7 +312,7 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
 
 
 async def send(
-    alerts: Sequence[Alert], fcm: Fcm, client: httpx.AsyncClient
+    alerts: Sequence[Alert | nudge_push.NudgeAlert], fcm: Fcm, client: httpx.AsyncClient
 ) -> tuple[int, list[str]]:
     """Sends each alert to each of its phones; returns how many went and the dead tokens."""
     sent = 0
@@ -338,7 +341,10 @@ async def tick(
             text("SELECT pg_try_advisory_xact_lock(:a, :b)"), {"a": _LOCK[0], "b": _LOCK[1]}
         ):
             return 0
-        alerts = await collect(database, now)
+        alerts: list[Alert | nudge_push.NudgeAlert] = [
+            *await collect(database, now),
+            *await nudge_push.collect(database, now),
+        ]
     if not alerts:
         return 0
     sent, gone = await send(alerts, fcm, client)

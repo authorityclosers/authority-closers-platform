@@ -14,6 +14,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { openBugReport, useReporterAvailable } from "./bug-report/open";
 import { installErrorRecorder, recordError } from "./bug-report/recent-errors";
+import { AlertHost } from "./ui/alerts";
 import styles from "./notice-center.module.css";
 
 export type NoticeTone = "error" | "info" | "success";
@@ -241,10 +242,14 @@ export function NoticeCenter() {
   }, []);
 
   return (
-    <div className={styles.stack} aria-live="polite" data-capture-skip="">
-      {list.map((notice) => (
-        <NoticeCard key={notice.id} notice={notice} />
-      ))}
-    </div>
+    <>
+      <div className={styles.stack} aria-live="polite" data-capture-skip="">
+        {list.map((notice) => (
+          <NoticeCard key={notice.id} notice={notice} />
+        ))}
+      </div>
+      {/* Work that needs the seller, by urgency (ui/alerts.tsx). */}
+      <AlertHost />
+    </>
   );
 }

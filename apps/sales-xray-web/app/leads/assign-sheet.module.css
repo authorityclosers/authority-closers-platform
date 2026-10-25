@@ -1,0 +1,234 @@
+/* Share out leads (owner program, 25 Oct 2026, section 2): how, to whom, the
+   plan, then one button. 8 pt grid, tokens only. */
+
+.body {
+  display: grid;
+  gap: 24px;
+}
+
+.rules {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.rules legend,
+.section h3,
+.plan h3 {
+  margin: 0 0 8px;
+  padding: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.rule,
+.seller {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 56px;
+  padding: 8px 16px 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  cursor: pointer;
+}
+
+.seller {
+  grid-template-columns: 24px 32px minmax(0, 1fr);
+}
+
+.rule:has(input:checked),
+.seller:has(input:checked) {
+  border-color: var(--lx-teal);
+  background: color-mix(in oklab, var(--lx-teal-soft) 50%, var(--sx-surface));
+}
+
+.rule input,
+.seller input,
+.toggle input {
+  width: 20px;
+  height: 20px;
+  margin: 0;
+  accent-color: var(--lx-teal);
+}
+
+.rule span,
+.seller span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rule small,
+.seller small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.rule strong,
+.seller strong {
+  overflow-wrap: anywhere;
+}
+
+.section {
+  display: grid;
+  gap: 8px;
+}
+
+.sellers,
+.groups,
+.given {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.groups li {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.groupName {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+  justify-content: space-between;
+  font-weight: 650;
+  overflow-wrap: anywhere;
+}
+
+.groupName small {
+  color: var(--sx-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip[aria-pressed="true"] {
+  border-color: var(--lx-teal);
+  background: var(--lx-teal-soft);
+  color: var(--sx-ink);
+}
+
+.toggle {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 44px;
+  color: var(--sx-ink-2);
+}
+
+.plan {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-sunken);
+}
+
+.given li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 12px;
+  align-items: baseline;
+}
+
+.given span {
+  overflow-wrap: anywhere;
+}
+
+.given strong {
+  color: var(--lx-teal);
+  font-variant-numeric: tabular-nums;
+}
+
+.given small {
+  grid-column: 1 / -1;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.left,
+.quiet {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.give {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 52px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.give:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.rule:focus-within,
+.seller:focus-within,
+.chip:focus-visible,
+.give:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spin {
+    animation: none;
+  }
+}

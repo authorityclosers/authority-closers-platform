@@ -1,6 +1,6 @@
 {
   "id": "16-never-lose-a-change",
-  "number": "16",
+  "number": "10",
   "kind": "tester",
   "title": {
     "en": "Never lose a change: Not sent yet and All changes saved",
@@ -28,11 +28,11 @@
     "Can I show you in 10 minutes how": "Can I quickly show you how"
   },
   "next": {
-    "id": "04-call-a-lead",
+    "id": "17-tasks-and-remind",
     "title": {
-      "en": "Call a lead and log how it went",
-      "hi": "Lead ko call karo, result log karo",
-      "mr": "Lead la call kara, result log kara"
+      "en": "Tasks and Remind",
+      "hi": "Tasks aur Remind",
+      "mr": "Tasks aani Remind"
     }
   },
   "intro": {
@@ -53,13 +53,13 @@
       "mr": "Kahich harvla nahi."
     },
     "say": {
-      "en": "Next: calling a lead and logging how it went.",
-      "hi": "अगले video में: lead को call करना और result log करना.",
-      "mr": "पुढच्या video मध्ये: lead ला call करणं आणि result log करणं."
+      "en": "Next: Tasks, and reminders on any lead.",
+      "hi": "अगले video में: Tasks, और किसी भी lead पे reminder.",
+      "mr": "पुढच्या video मध्ये: Tasks, आणि कुठल्याही lead वर reminder."
     },
     "latn": {
-      "hi": "Agle video mein: lead ko call karna aur result log karna.",
-      "mr": "Pudhchya video madhye: lead la call karna aani result log karna."
+      "hi": "Agle video mein: Tasks, aur kisi bhi lead pe reminder.",
+      "mr": "Pudhchya video madhye: Tasks, aani kuthlyahi lead var reminder."
     }
   },
   "chapters": [

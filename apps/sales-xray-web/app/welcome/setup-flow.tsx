@@ -21,7 +21,14 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useId, useRef, useState, type FormEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type FormEvent,
+  type RefObject,
+} from "react";
 
 import { readAccountProfile } from "../account-profile-client";
 import {
@@ -40,14 +47,19 @@ import {
   readPendingInvites,
   type PendingInvite,
 } from "../organisation/organisation-api";
-import { readSalesXrayWorkspaces } from "../sales-xray-workspaces";
+import {
+  readSalesXrayWorkspaces,
+  type SalesXrayWorkspace,
+} from "../sales-xray-workspaces";
 import { BrandMark } from "../shell/brand-lockup";
 import { telemetry } from "../telemetry";
 import { useFlow } from "../telemetry-flows";
+import { parseWorkspaceLeads } from "../workspace-leads-prompt";
 import {
   firstName,
   inviteEmails,
   markSetup,
+  needsPick,
   stepsFor,
   suggestedBusinessName,
   type SetupPath,
@@ -84,7 +96,69 @@ type Person = {
   name: string | null;
   invite: PendingInvite | null;
   personalId: string | null;
+  /** Where to work, right after a sign-in (/welcome?pick=1). */
+  pick?: Readonly<{
+    workspaces: readonly SalesXrayWorkspace[];
+    /** The one sign-in opened: where this person's data is. */
+    selected: string | null;
+    /** Leads in each, when the count could be read. */
+    leads: Readonly<Record<string, number>> | null;
+  }>;
 };
+
+const ROLE_WORDS: Record<string, string> = {
+  owner: "Owner",
+  admin: "Admin",
+  member: "Member",
+};
+
+/** Leads per workspace, or null: the choice works without the counts. */
+async function readWorkspaceLeads(signal: AbortSignal) {
+  try {
+    const response = await fetch("/v1/me/sales-xray-workspaces/leads", {
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      signal,
+      headers: { accept: "application/json" },
+    });
+    if (!response.ok) return null;
+    const counts = parseWorkspaceLeads(await response.json());
+    return counts ? Object.fromEntries(counts) : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Organisations first, most leads first; your own calls last. */
+export function orderWorkspaces(
+  workspaces: readonly SalesXrayWorkspace[],
+  leads: Readonly<Record<string, number>> | null,
+) {
+  return [...workspaces].sort(
+    (a, b) =>
+      Number(a.kind === "personal") - Number(b.kind === "personal") ||
+      (leads?.[b.tenant_id] ?? 0) - (leads?.[a.tenant_id] ?? 0),
+  );
+}
+
+/** "Owner · 383 leads", "Member · no leads yet", "Your own calls and coaching". */
+export function workspaceWords(
+  workspace: SalesXrayWorkspace,
+  leads: Readonly<Record<string, number>> | null,
+) {
+  if (workspace.kind === "personal")
+    return "Your own calls and coaching, just for you.";
+  const role = workspace.role ? ROLE_WORDS[workspace.role] : null;
+  const count = leads?.[workspace.tenant_id];
+  const many =
+    count === undefined
+      ? null
+      : count === 0
+        ? "no leads yet"
+        : `${count.toLocaleString("en-IN")} ${count === 1 ? "lead" : "leads"}`;
+  return [role, many].filter(Boolean).join(" · ") || "Your organisation";
+}
 
 export type SetupPreview = Readonly<{
   step: SetupStep;
@@ -149,6 +223,27 @@ async function readPerson(
   const organisations = directory.workspaces.filter(
     (item) => item.kind === "organisation",
   );
+  const enabled = directory.workspaces.filter(
+    (item) => item.sales_xray_enabled,
+  );
+  const asked = new URLSearchParams(window.location.search).get("pick") === "1";
+  if (asked && needsPick(enabled.length)) {
+    if (organisations.length) markSetup(body.person_id, "not-needed");
+    return {
+      personId: body.person_id,
+      email: profile?.email ?? null,
+      name: profile?.name ?? null,
+      invite,
+      personalId:
+        directory.workspaces.find((item) => item.kind === "personal")
+          ?.tenant_id ?? null,
+      pick: {
+        workspaces: enabled,
+        selected: directory.selected_tenant_id,
+        leads: await readWorkspaceLeads(signal),
+      },
+    };
+  }
   // Already in a business, with nothing to join: nothing to set up here.
   if (organisations.length > 0 && !invite) {
     markSetup(body.person_id, "not-needed");
@@ -181,6 +276,8 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
   const [path, setPath] = useState<SetupPath>(
     preview?.path ?? (preview?.person.invite ? "join" : "business"),
   );
+  // Where to work: null keeps the one sign-in opened.
+  const [chosen, setChosen] = useState<string | null>(null);
   const [index, setIndex] = useState(() =>
     preview ? Math.max(0, stepsFor(preview.path).indexOf(preview.step)) : 0,
   );
@@ -222,7 +319,8 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
         if (found === "set-up") return window.location.replace("/");
         setPerson(found);
         setOrgName(suggestedBusinessName(found.email));
-        if (found.invite) setPath("join");
+        if (found.pick) setPath("pick");
+        else if (found.invite) setPath("join");
       })
       .catch(() => {
         if (!controller.signal.aborted) setFailed(true);
@@ -251,15 +349,20 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
 
   // Where people stop in setup (the weekly friction report); review fixtures
   // record nothing.
-  const flow = useFlow("onboarding", { via: path });
+  // Where to work (the pick) is not a setup step the usage events know.
+  const flow = useFlow("onboarding", {
+    via: path === "pick" ? undefined : path,
+  });
   const live = !preview && person !== null;
   useEffect(() => {
-    if (live) flow.step(step, index, steps.length);
+    if (live && step !== "workspace") flow.step(step, index, steps.length);
   }, [flow, live, step, index, steps.length]);
 
   function exit(mark: "done" | "skipped", href: string) {
-    if (mark === "done") flow.done({ step });
-    else flow.skip(step);
+    if (step !== "workspace") {
+      if (mark === "done") flow.done({ step });
+      else flow.skip(step);
+    }
     if (preview?.onLeave) preview.onLeave(href);
     else leave(person?.personId, mark, href);
   }
@@ -326,6 +429,25 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
       );
     }
     setBusy(false);
+  }
+
+  async function openWorkspace(tenantId: string | null) {
+    if (!person || busy || !tenantId) return;
+    setBusy(true);
+    try {
+      let open = tenantId;
+      if (tenantId === "invite" && person.invite) {
+        acceptRequest.current ??= requestKey();
+        open = (
+          await acceptInvite(person.invite.inviteId, acceptRequest.current)
+        ).tenantId;
+      }
+      if (open !== person.pick?.selected) await selectWorkspace(open);
+      exit("done", "/");
+    } catch (error) {
+      failure("That workspace didn’t open", error);
+      setBusy(false);
+    }
   }
 
   async function create(event: FormEvent<HTMLFormElement>) {
@@ -482,30 +604,46 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
             disabled={busy}
             onClick={() => exit(step === "first" ? "done" : "skipped", "/")}
           >
-            {step === "first" ? "Go to Home" : "Skip setup"}
+            {step === "first"
+              ? "Go to Home"
+              : step === "workspace"
+                ? "Not now"
+                : "Skip setup"}
           </button>
         </div>
-        <div className={styles.progress}>
-          <span className={styles.progressText}>
-            Step {index + 1} of {steps.length}
-          </span>
-          <span
-            className={styles.track}
-            role="progressbar"
-            aria-label="Setup progress"
-            aria-valuemin={1}
-            aria-valuemax={steps.length}
-            aria-valuenow={index + 1}
-          >
+        {steps.length > 1 ? (
+          <div className={styles.progress}>
+            <span className={styles.progressText}>
+              Step {index + 1} of {steps.length}
+            </span>
             <span
-              className={styles.fill}
-              style={{ width: `${((index + 1) / steps.length) * 100}%` }}
-            />
-          </span>
-        </div>
+              className={styles.track}
+              role="progressbar"
+              aria-label="Setup progress"
+              aria-valuemin={1}
+              aria-valuemax={steps.length}
+              aria-valuenow={index + 1}
+            >
+              <span
+                className={styles.fill}
+                style={{ width: `${((index + 1) / steps.length) * 100}%` }}
+              />
+            </span>
+          </div>
+        ) : null}
       </header>
 
-      {step === "start" ? (
+      {step === "workspace" && person.pick ? (
+        <WorkspaceStep
+          person={person}
+          chosen={chosen}
+          onChoose={setChosen}
+          busy={busy}
+          titleId={titleId}
+          headingRef={headingRef}
+          onOpen={(tenantId) => void openWorkspace(tenantId)}
+        />
+      ) : step === "start" ? (
         <section className={styles.body} key="start">
           <p className={styles.eyebrow}>
             {greeting ? `Welcome, ${greeting}` : "Welcome to Sales X-Ray"}
@@ -834,6 +972,106 @@ export function SetupFlow({ preview }: { preview?: SetupPreview }) {
         </section>
       )}
     </main>
+  );
+}
+
+/**
+ * Where to work, right after a sign-in (owner, 25 Oct 2026: a tester got lost
+ * between her organisation and her own account): each workspace as one card
+ * with its role and leads, the one sign-in opened already chosen, and an
+ * invite to join on top. One tap opens it; the top bar switches later.
+ */
+function WorkspaceStep({
+  person,
+  chosen,
+  onChoose,
+  busy,
+  titleId,
+  headingRef,
+  onOpen,
+}: {
+  person: Person;
+  chosen: string | null;
+  onChoose: (tenantId: string) => void;
+  busy: boolean;
+  titleId: string;
+  headingRef: RefObject<HTMLHeadingElement | null>;
+  onOpen: (tenantId: string | null) => void;
+}) {
+  const pick = person.pick!;
+  const ordered = orderWorkspaces(pick.workspaces, pick.leads);
+  const current =
+    chosen ??
+    (ordered.some((item) => item.tenant_id === pick.selected)
+      ? pick.selected
+      : (ordered[0]?.tenant_id ?? null));
+  const inviteName = person.invite?.organisationName ?? "";
+  const greeting = firstName(person.name);
+  const name =
+    current === "invite"
+      ? inviteName
+      : ordered.find((item) => item.tenant_id === current)?.kind === "personal"
+        ? "my own calls"
+        : (ordered.find((item) => item.tenant_id === current)?.name ?? "");
+  return (
+    <section className={styles.body} key="workspace">
+      <p className={styles.eyebrow}>
+        {greeting ? `Welcome back, ${greeting}` : "Welcome back"}
+      </p>
+      <h1 id={titleId} ref={headingRef} tabIndex={-1}>
+        Where do you want to work?
+      </h1>
+      <p className={styles.lead}>
+        Each one keeps its own leads and calls. Switch any time from the top
+        bar.
+      </p>
+      <div
+        className={styles.choices}
+        role="radiogroup"
+        aria-labelledby={titleId}
+      >
+        {person.invite ? (
+          <Choice
+            icon={UserPlus}
+            title={`Join ${inviteName}`}
+            text={`${inviteName} invited you as ${person.invite.role === "admin" ? "an admin" : "a member"}.`}
+            on={current === "invite"}
+            onPick={() => onChoose("invite")}
+          />
+        ) : null}
+        {ordered.map((workspace) => (
+          <Choice
+            key={workspace.tenant_id}
+            icon={workspace.kind === "personal" ? AudioLines : Building2}
+            title={
+              workspace.kind === "personal"
+                ? "Just my own calls"
+                : workspace.name
+            }
+            text={workspaceWords(workspace, pick.leads)}
+            on={current === workspace.tenant_id}
+            onPick={() => onChoose(workspace.tenant_id)}
+          />
+        ))}
+      </div>
+      <footer className={styles.actions}>
+        <button
+          type="button"
+          className={styles.primary}
+          disabled={busy || !current}
+          onClick={() => onOpen(current)}
+        >
+          {busy ? (
+            <LoaderCircle
+              className={styles.spin}
+              size={18}
+              aria-hidden="true"
+            />
+          ) : null}
+          {current === "invite" ? `Join ${inviteName}` : `Open ${name}`}
+        </button>
+      </footer>
+    </section>
   );
 }
 

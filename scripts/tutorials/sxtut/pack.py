@@ -1,5 +1,7 @@
-"""Editable delivery pack for a set of v2 videos (orchestrator, 25 Oct 2026: tester videos
-"everything editable and with voice-over, in our folders").
+"""Delivery of the v2 videos. `publish` lays out the "Sales X-Ray Videos" folder (owner, 25 Oct
+2026: one numbering 1-11 from videos-v2.json, a phone-video folder per language, the wide cuts and
+the editable files apart, a start-here sheet). `export` is the earlier dated pack (orchestrator,
+25 Oct 2026: tester videos "everything editable and with voice-over, in our folders"):
 
     <day>/<Language>/<NN Title>/   both cuts (9x16, 16x9), SRT subtitles, the script (.txt, .docx)
                                    and every voice line of that language
@@ -109,6 +111,11 @@ def _describe(beat: dict) -> str:
                 "select": "Choose in",
             }[a["do"]]
             out.append(f"{verb} “{what}”")
+    phone = beat.get("phone")
+    if phone:
+        # Real phone footage: its taps carry a label ("what") instead of a target.
+        taps = [f"Tap “{e['what']}”" for e in phone.get("events", []) if e.get("what")]
+        return "Phone: " + ("; ".join(dict.fromkeys(taps)) or "the real screen")
     return "; ".join(dict.fromkeys(out)) or "Screen"
 
 
@@ -161,6 +168,93 @@ def write_docx(
     ]
     subprocess.run(cmd, check=True, stdin=subprocess.DEVNULL)  # noqa: S603 - fixed uv argument list
     spec.unlink()
+
+
+ABOUT = """Editable files: one folder per video, named like the videos.
+
+<Language>/Script.docx and Script.txt   the narration with times, to edit or re-record
+<Language>/Subtitles phone.srt, Subtitles wide.srt   (Hindi and Marathi also in Devanagari)
+<Language>/Voice lines/                 every narration line as its own MP3
+<Language>/YouTube description.txt      title, description and chapters for YouTube
+Project files/                          the screen recordings (takes), the storyboard and timings
+
+Rebuild on ac: scripts/tutorials/tutorials.py v2 build <id>, then v2 publish (README, section v2).
+"""
+
+
+def video_name(n: int, title: str) -> str:
+    """'01 Join the testers': the file and folder name of video n (no colons, for Drive and
+    Windows)."""
+    return safe(f"{n:02d} {title.replace(':', ' -')}")
+
+
+def publish(
+    repo: Path, root: Path, out: Path, catalogue: dict, boards: dict, langs: list[str]
+) -> dict:
+    """The "Sales X-Ray Videos" folder (owner, 25 Oct 2026: one numbering, simple folders, a
+    start-here sheet): each language's phone (9:16) videos at the top, the 16:9 cuts under
+    "YouTube (wide)", scripts, subtitles, voice lines and project files under "Editable files".
+    Returns (and writes as manifest.json) what the start-here sheet lists. Copies from the
+    library; never re-renders."""
+    videos = []
+    for n, entry in enumerate(catalogue["videos"], 1):
+        tid = entry["id"]
+        board = boards[tid]
+        lib = root / "library" / tid
+        name = video_name(n, entry["title"])
+        edit = out / "Editable files" / name
+        proj = edit / "Project files"
+        for src in (lib / "editor" / "clips").glob("*.mp4"):
+            _copy(src, proj / "takes" / src.name)
+        _copy(repo / "scripts/tutorials/v2" / f"{tid}.json", proj / f"{tid}.storyboard.json")
+        take_file = root / "take" / f"take-{tid}.json"
+        if take_file.exists():
+            _copy(take_file, proj / f"{tid}.take.json")
+        row = {**entry, "number": n, "name": name, "phone": {}, "wide": {}, "seconds": {}}
+        for lang in langs:
+            folder = FOLDER[lang]
+            seconds = {}
+            for fmt, cut in (("reel", "phone"), ("youtube", "wide")):
+                base = f"{tid}-{fmt}-{lang}"
+                video = lib / fmt / f"{base}.mp4"
+                if not video.exists():
+                    continue
+                meta = json.loads((lib / fmt / f"{base}.json").read_text(encoding="utf-8"))
+                seconds[fmt] = meta["seconds"]
+                top = out / folder if cut == "phone" else out / "YouTube (wide)" / folder
+                _copy(video, top / f"{name}.mp4")
+                row[cut][lang] = (top / f"{name}.mp4").relative_to(out).as_posix()
+                caps = lib / fmt / "captions"
+                _copy(
+                    caps / f"{base}.{v2.burned(lang)}.srt", edit / folder / f"Subtitles {cut}.srt"
+                )
+                if lang != "en":
+                    _copy(
+                        caps / f"{base}.{lang}.srt",
+                        edit / folder / f"Subtitles {cut} (Devanagari).srt",
+                    )
+                _copy(lib / fmt / f"{base}.cues.csv", proj / "cues" / f"{tid}-{lang}-{cut}.csv")
+                described = lib / fmt / f"{base}.youtube.txt"
+                if cut == "wide" and described.exists():
+                    _copy(described, edit / folder / "YouTube description.txt")
+            if not seconds:
+                continue
+            row["seconds"][lang] = seconds
+            title = v2.local(board["title"], lang)
+            rows = script_rows(board, lang, _cue_rows(lib, "youtube", f"{tid}-youtube-{lang}"))
+            write_txt(edit / folder / "Script.txt", title, lang, rows, seconds)
+            write_docx(repo, edit / folder / "Script.docx", title, lang, rows, seconds)
+            for mp3 in (lib / "editor" / "voice" / lang).glob("*.mp3"):
+                _copy(mp3, edit / folder / "Voice lines" / mp3.name)
+        videos.append(row)
+    (out / "Editable files").mkdir(parents=True, exist_ok=True)
+    (out / "Editable files" / "About these files.txt").write_text(ABOUT, encoding="utf-8")
+    keep = ("name", "sheet", "optin")
+    manifest = {**{k: catalogue[k] for k in keep}, "videos": videos}
+    (out / "manifest.json").write_text(
+        json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8"
+    )
+    return manifest
 
 
 def export(repo: Path, root: Path, day: Path, boards: list[dict], langs: list[str]) -> list[dict]:

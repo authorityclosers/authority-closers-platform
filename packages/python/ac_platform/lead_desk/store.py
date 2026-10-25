@@ -109,6 +109,7 @@ from ac_platform.lead_desk.contracts import (
     StageSuggestion,
     TakingLeads,
     Team,
+    TeamPool,
     WorkDay,
     WorkHoursCommand,
     WorkHoursView,
@@ -222,6 +223,11 @@ class _Rep:
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def _team_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """The team engine's part of the desk settings (nudges)."""
+    return dict(config.get("team") or {})
 
 
 async def owner_names(db: AsyncSession, ids: Iterable[UUID | None]) -> dict[UUID, str]:
@@ -755,47 +761,26 @@ class LeadDesk:
                 or 0
             )
 
-        today = (
-            await self.db.scalars(
-                select(LeadEvent)
-                .where(
-                    LeadEvent.tenant_id == self.tenant_id,
-                    LeadEvent.actor_person_id == me,
-                    LeadEvent.created_at >= day_start,
-                    LeadEvent.kind.in_(("result", "call")),
-                )
-                .limit(5000)
-            )
-        ).all()
-        hidden = await self._private_calls(day_start)
-        today = [event for event in today if str(event.id) not in hidden]
-        results = [event for event in today if event.kind == "result"]
-        # Calls the phone logged by itself count too (UX study item 5).
-        dialled = [
-            event for event in today if event.kind == "call" and counted_phone_call(event.data)
-        ]
-        talk = sum(
-            int(event.data.get("duration_seconds") or 0) for event in today if event.kind == "call"
-        )
-        new_assigned = int(
-            await self.db.scalar(
-                select(func.count()).where(
-                    Lead.tenant_id == self.tenant_id,
-                    Lead.owner_person_id == me,
-                    Lead.assigned_at >= day_start,
-                )
-            )
-            or 0
-        )
         call_back = await self._call_back(in_pipeline)
+        who = await self.me()
+        # The workspace's open leads beside mine: Home and Leads say what is there to take
+        # when none are mine (owner, 25 Oct 2026).
+        pool = (
+            await self.db.execute(
+                select(func.count(), func.count().filter(Lead.owner_person_id.is_(None))).where(
+                    Lead.tenant_id == self.tenant_id, Lead.stage.in_(OPEN_STAGES), in_pipeline
+                )
+            )
+        ).one()
         return Desk(
-            me=await self.me(),
-            numbers=Numbers(
-                calls=len(results) + len(dialled),
-                connected=sum(1 for event in [*results, *dialled] if event.data.get("connected")),
-                talk_seconds=talk,
-                follow_ups_done=sum(1 for event in results if event.data.get("was_due")),
-                new_assigned=new_assigned,
+            me=who,
+            numbers=await self._numbers(day_start, self.now + timedelta(seconds=1)),
+            numbers_yesterday=await self._numbers(day_start - timedelta(days=1), day_start),
+            numbers_week=await self._numbers(
+                day_start - timedelta(days=6), self.now + timedelta(seconds=1)
+            ),
+            team_pool=TeamPool(
+                open=int(pool[0]), unassigned=int(pool[1]), may_take=who.taking_leads
             ),
             counts=Counts(
                 open=int(counts_row[0]),
@@ -817,6 +802,52 @@ class LeadDesk:
                 for key, label, text in MESSAGE_TEMPLATES
             ),
             call_back=call_back,
+        )
+
+    async def _numbers(self, start: datetime, end: datetime) -> Numbers:
+        """My numbers between two moments: my outcomes and the calls my phone logged (a
+        private call stays private), talk time, follow-ups done and leads given to me."""
+        me = self.viewer.person_id
+        events = (
+            await self.db.scalars(
+                select(LeadEvent)
+                .where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.actor_person_id == me,
+                    LeadEvent.created_at >= start,
+                    LeadEvent.created_at < end,
+                    LeadEvent.kind.in_(("result", "call")),
+                )
+                .limit(5000)
+            )
+        ).all()
+        hidden = await self._private_calls(start)
+        events = [event for event in events if str(event.id) not in hidden]
+        results = [event for event in events if event.kind == "result"]
+        # Calls the phone logged by itself count too (UX study item 5).
+        dialled = [
+            event for event in events if event.kind == "call" and counted_phone_call(event.data)
+        ]
+        talk = sum(
+            int(event.data.get("duration_seconds") or 0) for event in events if event.kind == "call"
+        )
+        new_assigned = int(
+            await self.db.scalar(
+                select(func.count()).where(
+                    Lead.tenant_id == self.tenant_id,
+                    Lead.owner_person_id == me,
+                    Lead.assigned_at >= start,
+                    Lead.assigned_at < end,
+                )
+            )
+            or 0
+        )
+        return Numbers(
+            calls=len(results) + len(dialled),
+            connected=sum(1 for event in [*results, *dialled] if event.data.get("connected")),
+            talk_seconds=talk,
+            follow_ups_done=sum(1 for event in results if event.data.get("was_due")),
+            new_assigned=new_assigned,
         )
 
     async def _call_back(self, in_pipeline: Any = None) -> tuple[LeadRow, ...]:
@@ -2566,14 +2597,14 @@ class LeadDesk:
         actor: UUID | None = None,
         kind: str = "assigned",
         command_id: UUID | None = None,
-    ) -> None:
+    ) -> LeadEvent:
         previous = lead.owner_person_id
         lead.owner_person_id = person_id
         lead.assigned_at = self.now if person_id is not None else None
         lead.owner_reason = reason[:300]
         lead.revision += 1 if kind == "reassigned" else 0
         lead.updated_at = self.now
-        self._event(
+        event = self._event(
             lead,
             kind,
             {
@@ -2589,6 +2620,7 @@ class LeadDesk:
         # the lead, which must be whole by then.
         if previous != person_id:
             await task_book.follow_owner(self, lead, person_id)
+        return event
 
     async def _allocate(
         self,
@@ -3703,6 +3735,10 @@ class LeadDesk:
                 reassign_minutes=int(config["reassign_minutes"]),
                 default_country=str(config["default_country"]),
                 work_hours=hours_view(work_hours.parse(config), self.now),
+                nudges=bool(_team_config(config).get("nudges")),
+                nudges_off_for=tuple(
+                    UUID(str(person)) for person in _team_config(config).get("nudges_off_for") or ()
+                ),
             ),
             by_stage={stage: int(count) for stage, count in by_stage.items()},
             by_source={source: int(count) for source, count in by_source.items()},

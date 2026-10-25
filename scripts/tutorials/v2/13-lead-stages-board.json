@@ -1,6 +1,6 @@
 {
   "id": "13-lead-stages-board",
-  "number": "13",
+  "number": "07",
   "kind": "feature",
   "title": {
     "en": "Lead stages and the Board",
@@ -28,11 +28,11 @@
     "Can I show you in 10 minutes how": "Can I quickly show you how"
   },
   "next": {
-    "id": "15-all-leads-filter",
+    "id": "14-my-work",
     "title": {
-      "en": "All leads: filter, sort, views",
-      "hi": "All leads: filter, sort, views",
-      "mr": "All leads: filter, sort, views"
+      "en": "My work and quick notes",
+      "hi": "My work aur quick notes",
+      "mr": "My work aani quick notes"
     }
   },
   "intro": {
@@ -53,13 +53,13 @@
       "mr": "Pratyek lead, ek stage."
     },
     "say": {
-      "en": "Next: All leads, with filter, sort and saved views.",
-      "hi": "अगले video में: All leads, filter, sort और saved views के साथ.",
-      "mr": "पुढच्या video मध्ये: All leads, filter, sort आणि saved views सकट."
+      "en": "Next: My work, and quick notes.",
+      "hi": "अगले video में: My work, और quick notes.",
+      "mr": "पुढच्या video मध्ये: My work, आणि quick notes."
     },
     "latn": {
-      "hi": "Agle video mein: All leads, filter, sort aur saved views ke saath.",
-      "mr": "Pudhchya video madhye: All leads, filter, sort aani saved views sakat."
+      "hi": "Agle video mein: My work, aur quick notes.",
+      "mr": "Pudhchya video madhye: My work, aani quick notes."
     }
   },
   "chapters": [

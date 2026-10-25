@@ -100,3 +100,10 @@ it("lists the seller's own work newest first, and opens the lead at that line", 
   await act(async () => week.click());
   expect(asked.at(-1)).toContain("day=week");
 });
+
+it("lists each event once when an older page overlaps the one before", async () => {
+  const { uniqueEvents } = await import("./my-work");
+  const one = { event_id: "e1", lead_id: "l1" };
+  const two = { event_id: "e2", lead_id: "l2" };
+  expect(uniqueEvents([one, two, { ...one }])).toEqual([one, two]);
+});

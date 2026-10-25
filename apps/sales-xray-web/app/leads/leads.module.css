@@ -268,8 +268,8 @@
 .quickAct {
   position: relative;
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   padding: 0;
   border: 1px solid var(--sx-line);
@@ -764,12 +764,36 @@
   background: var(--sx-line-strong);
 }
 
+/* One colour per kind across Leads (owner, 25 Oct 2026): calls teal,
+   messages violet, notes amber, tasks blue, meetings green, stage moves slate. */
 .history li[data-kind="result"]::before {
-  background: var(--sx-accent);
+  background: var(--lx-teal);
+}
+
+.history li[data-kind="message"]::before,
+.history li[data-kind="chat"]::before {
+  background: var(--lx-missed);
+}
+
+.history li[data-kind="note"]::before {
+  background: var(--lx-warning);
+}
+
+.history li[data-kind="task"]::before,
+.history li[data-kind="scheduled"]::before {
+  background: var(--lx-info);
+}
+
+.history li[data-kind="meeting"]::before {
+  background: var(--lx-strength);
+}
+
+.history li[data-kind="stage"]::before {
+  background: var(--lx-closing);
 }
 
 .history li[data-kind="call"]::before {
-  background: var(--lx-closing);
+  background: var(--lx-teal);
 }
 
 /* The history's day headers, and the story so far above it (22 Oct 2026). */
@@ -3447,8 +3471,8 @@ a.repName {
 .bannerClose {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   border: 0;
   border-radius: 50%;
   background: transparent;
@@ -3793,11 +3817,18 @@ a.repName {
   touch-action: none;
 }
 
+/* Symmetric under the centred grabber (owner, 25 Oct 2026): an empty 44 px
+   slot, the title and its line centred, then Close. */
 .actionSheetHead {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.actionSheetHead::before {
+  content: "";
 }
 
 .actionSheetHead h2 {
@@ -4995,8 +5026,8 @@ a.repName {
 
 .searchClear {
   display: inline-grid;
-  width: 36px;
-  height: 36px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   border: 0;
   border-radius: 50%;
@@ -5633,4 +5664,173 @@ a.repName {
 
 .pipelineChip:focus-within {
   box-shadow: var(--sx-focus-ring);
+}
+
+/* ---------- The lead sheet on one grid (owner, 25 Oct 2026) ----------
+   Call, then equal action boxes three to a row; 22 px icons and 13 px labels
+   that never leave their box; the Notes field under them. 8 pt grid. */
+.leadActions {
+  display: grid;
+  gap: 8px;
+}
+
+.leadActions > .callButton {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.actionGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.actionBox {
+  container-type: inline-size;
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 8px 4px;
+  border: 1px solid var(--kind-edge, var(--sx-line));
+  border-radius: var(--lx-radius-md);
+  background: var(--kind-soft, var(--sx-surface));
+  color: var(--sx-ink);
+  font: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.actionBox svg {
+  width: 22px;
+  height: 22px;
+  color: var(--kind-ink, var(--sx-ink-2));
+}
+
+/* The label shrinks with a narrow box (320 px, larger text) instead of
+   losing its end: "WhatsApp" was cut to "WhatsAp…". */
+.actionLabel {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: min(var(--sx-text-xs), 16cqi);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.actionBox:active:not(:disabled) {
+  transform: scale(var(--sx-press-scale));
+}
+
+.actionBox:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.actionBox:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.actionBox[data-kind="message"] {
+  --kind-soft: var(--lx-missed-soft);
+  --kind-ink: var(--lx-missed-ink);
+  --kind-edge: color-mix(in oklab, var(--lx-missed) 28%, transparent);
+}
+
+.actionBox[data-kind="note"] {
+  --kind-soft: var(--lx-warning-soft);
+  --kind-ink: var(--lx-focus-ink);
+  --kind-edge: color-mix(in oklab, var(--lx-warning) 32%, transparent);
+}
+
+.actionBox[data-kind="task"] {
+  --kind-soft: var(--lx-info-soft);
+  --kind-ink: var(--lx-info);
+  --kind-edge: color-mix(in oklab, var(--lx-info) 28%, transparent);
+}
+
+.actionBox[data-kind="stage"] {
+  --kind-soft: var(--lx-closing-soft);
+  --kind-ink: var(--lx-closing-ink);
+  --kind-edge: color-mix(in oklab, var(--lx-closing) 28%, transparent);
+}
+
+/* Copy link and Edit share one height, even when larger text grows one. */
+.panelEnd {
+  display: inline-flex;
+  align-items: stretch;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.notesBlock {
+  display: grid;
+  gap: 8px;
+}
+
+.noteBox textarea {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 88px;
+  padding: 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--lx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 16px;
+  resize: vertical;
+}
+
+.noteBox textarea:focus-visible {
+  border-color: var(--sx-accent);
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.noteSave {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.noteList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.noteList li {
+  display: grid;
+  gap: 2px;
+  padding: 8px 12px;
+  border-left: 3px solid var(--lx-warning);
+  border-radius: var(--sx-radius-sm);
+  background: var(--lx-warning-soft);
+}
+
+.noteList p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.noteList small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* Copy link and Edit in Details' head: one height, a full target each. */
+.panelEnd > :is(a, button) {
+  min-height: 44px;
+}
+
+/* In the symmetric head, Close keeps its 44 px slot exactly. */
+.actionSheetHead .actionSheetClose {
+  margin: 0;
 }

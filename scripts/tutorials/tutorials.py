@@ -137,6 +137,8 @@ NOT_PROSE = {
     "sync",
     "key",
     "theme",
+    "footage",
+    "phone",
 }
 
 
@@ -331,6 +333,15 @@ def cmd_v2(args: argparse.Namespace) -> int:
         rows = pack.export(REPO, root, day, [b for _, b in v2_boards(args.which)], args.langs)
         print(f"pack: {len(rows)} video file(s) in {day}")
         return 0
+    if args.step == "publish":
+        from sxtut import pack
+
+        # The "Sales X-Ray Videos" folder in the catalogue's order; publish.sh uploads it.
+        boards = {b["id"]: b for _, b in v2_boards("all")}
+        out = OUT / "videos"
+        manifest = pack.publish(REPO, root, out, load("videos-v2.json"), boards, args.langs)
+        print(f"publish: {len(manifest['videos'])} video(s) in {out}")
+        return 0
     cast = load("voices-v2.json")
     todo = v2_boards(args.which)
     if not todo:
@@ -437,7 +448,7 @@ def main(argv: list[str] | None = None) -> int:
         c.add_argument("--date")
         c.set_defaults(fn=fn)
     w = sub.add_parser("v2", help="brand B reels and YouTube tutorials (see README, v2)")
-    w.add_argument("step", choices=["take", "voice", "build", "all", "index", "pack"])
+    w.add_argument("step", choices=["take", "voice", "build", "all", "index", "pack", "publish"])
     w.add_argument("which", nargs="?", default="all")
     w.add_argument("--langs", type=lambda v: v.split(","), default=list(LANGS))
     w.add_argument("--formats", type=lambda v: v.split(","), default=["reel", "youtube"])

@@ -1,6 +1,6 @@
 {
   "id": "t3-sign-in",
-  "number": "T3",
+  "number": "03",
   "kind": "tester",
   "title": {
     "en": "Sign in inside the app",
@@ -31,9 +31,9 @@
   "next": {
     "id": "t4-first-steps",
     "title": {
-      "en": "First steps in the app",
-      "hi": "App mein pehle steps",
-      "mr": "App madhle pahile steps"
+      "en": "First steps: permissions, phone setup, theme",
+      "hi": "Pehle steps: permissions, phone setup, theme",
+      "mr": "Pahile steps: permissions, phone setup, theme"
     }
   },
   "intro": {
@@ -283,6 +283,95 @@
           "latn": {
             "hi": "Agar aapki company ne invite kiya hai, toh Join chuniye. Aap seedhe apni team ke workspace mein, apne leads aur calls ke saath.",
             "mr": "Tumchya company ne invite kela asel, tar Join nivda. Tumhi thet tumchya team chya workspace madhye, tumchya leads aani calls sakat."
+          }
+        }
+      ]
+    },
+    {
+      "id": "join-phone",
+      "device": "footage",
+      "footage": {
+        "file": "n8-02-join-organisation.mp4",
+        "size": [1080, 2340],
+        "from": 9.0,
+        "to": 31.5,
+        "crop": [84, 50],
+        "blur": [
+          {
+            "box": [30, 130, 125, 125]
+          },
+          {
+            "box": [470, 295, 320, 105],
+            "to": 28.7
+          }
+        ]
+      },
+      "beats": [
+        {
+          "id": "join-menu",
+          "chapter": "workspace",
+          "actions": [],
+          "phone": {
+            "at": 9.6,
+            "events": [
+              {
+                "do": "tap",
+                "at": 11.7,
+                "box": [175, 120, 220, 135],
+                "key": true,
+                "what": "workspace name"
+              },
+              {
+                "do": "focus",
+                "at": 12.6,
+                "box": [60, 1880, 960, 180]
+              }
+            ]
+          },
+          "say": {
+            "en": "Already signed in? Tap your workspace name at the top. Your company's invitation waits under Invitations.",
+            "hi": "पहले से sign in हैं? ऊपर अपने workspace के नाम पे tap कीजिए. आपकी company का invitation, Invitations में मिलेगा.",
+            "mr": "आधीच sign in केलंय? वर तुमच्या workspace च्या नावावर tap करा. तुमच्या company चं invitation, Invitations मध्ये दिसेल."
+          },
+          "latn": {
+            "hi": "Pehle se sign in hain? Upar apne workspace ke naam pe tap kijiye. Aapki company ka invitation, Invitations mein milega.",
+            "mr": "Aadhich sign in kelay? Var tumchya workspace chya naavavar tap kara. Tumchya company cha invitation, Invitations madhye disel."
+          },
+          "sync": {
+            "en": "Tap",
+            "hi": "tap",
+            "mr": "tap"
+          }
+        },
+        {
+          "id": "join-tap",
+          "chapter": "workspace",
+          "actions": [],
+          "phone": {
+            "at": 13.0,
+            "events": [
+              {
+                "do": "tap",
+                "at": 27.5,
+                "box": [845, 1940, 135, 85],
+                "key": true,
+                "what": "Join"
+              },
+              {
+                "do": "focus",
+                "at": 29.4,
+                "box": [60, 110, 440, 150]
+              }
+            ]
+          },
+          "say": {
+            "en": "Tap Join. In a moment you're in your company's workspace, and its name shows at the top.",
+            "hi": "Join दबाइए. पल भर में आप अपनी company के workspace में होंगे, और ऊपर उसका नाम दिखेगा.",
+            "mr": "Join दाबा. क्षणात तुम्ही तुमच्या company च्या workspace मध्ये असाल, आणि वर तिचं नाव दिसेल."
+          },
+          "latn": {
+            "hi": "Join dabaiye. Pal bhar mein aap apni company ke workspace mein honge, aur upar uska naam dikhega.",
+            "mr": "Join daba. Kshanaat tumhi tumchya company chya workspace madhye asal, aani var tiche naav disel."
           }
         }
       ]

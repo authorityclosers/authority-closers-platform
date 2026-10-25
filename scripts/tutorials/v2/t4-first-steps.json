@@ -1,6 +1,6 @@
 {
   "id": "t4-first-steps",
-  "number": "T4",
+  "number": "04",
   "kind": "tester",
   "title": {
     "en": "First steps: permissions, phone setup, theme",
@@ -31,9 +31,9 @@
   "next": {
     "id": "t5-if-it-hangs",
     "title": {
-      "en": "If something hangs",
-      "hi": "Kuch atak jaaye toh",
-      "mr": "Kahi adakla tar"
+      "en": "If something hangs: Reload or Refresh app data",
+      "hi": "Kuch atak jaaye toh: Reload ya Refresh app data",
+      "mr": "Kahi adakla tar: Reload kinva Refresh app data"
     }
   },
   "intro": {
