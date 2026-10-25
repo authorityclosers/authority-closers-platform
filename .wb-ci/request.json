@@ -1,0 +1,30 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "07b0318e01c938209cdc5a4a94354c6bae0c8a5f",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "db/migrations/versions/20261025_0131_integration_writes.py",
+    "db/migrations/versions/20261025_0132_lead_desk_task_assistant.py",
+    "infra/application/scripts/restore-drill.py",
+    "infra/vps-foundation/scripts/ac-postgres-backup.py",
+    "infra/vps-foundation/scripts/ac-restic-postgres-restore-proof.py",
+    "packages/python/ac_platform/integrations/models.py",
+    "packages/python/ac_platform/lead_desk/models.py",
+    "tests/database/test_ai_writes_migration_postgresql.py",
+    "tests/database/test_model_registry.py",
+    "tests/infra/test_ai_writes_backup_parity.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/database/test_ai_writes_migration_postgresql.py",
+    "tests/database/test_model_registry.py",
+    "tests/infra/test_ai_writes_backup_parity.py",
+    "tests/database/test_lead_desk_team_migration_postgresql.py"
+  ],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
