@@ -52,7 +52,7 @@ number. The metrics:
 |---|---|
 | calls | `call` events by the seller (any direction the app logs), plus outcomes logged without a call event: one per call |
 | connects | outcomes with `connected = true` |
-| follow_ups | outcomes or stage moves that set a next action, plus tasks done |
+| follow_ups | outcomes on a lead whose follow-up was due (as Home's "Follow-ups done" counts), plus tasks done |
 | meetings | meetings booked (`meeting` events, action booked) |
 
 - Targets are set by an owner or manager. A new value supersedes from that day; history keeps the

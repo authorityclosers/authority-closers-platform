@@ -33,6 +33,7 @@ from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import finder, push, simulation
 from ac_platform.lead_desk import tasks as task_book
+from ac_platform.lead_desk import team as team_engine
 from ac_platform.lead_desk.contracts import (
     ActivityPage,
     AlertText,
@@ -64,6 +65,7 @@ from ac_platform.lead_desk.contracts import (
     Me,
     MessageSent,
     MovePipeline,
+    MyDayView,
     NewLead,
     NewSource,
     NoteCommand,
@@ -80,11 +82,13 @@ from ac_platform.lead_desk.contracts import (
     RepRules,
     SearchResult,
     SeedCommand,
+    SellerTargets,
     SettingsCommand,
     SimulationPick,
     Sources,
     SourceView,
     TakingLeads,
+    TargetsCommand,
     TaskAction,
     TaskBucket,
     TaskChange,
@@ -93,6 +97,7 @@ from ac_platform.lead_desk.contracts import (
     TaskSnooze,
     TaskView,
     Team,
+    TeamTargets,
     WorkDay,
     WorkHoursCommand,
 )
@@ -383,6 +388,41 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.edit(lead_id, command)
+
+    # ----- targets (team engine) ------------------------------------------------------
+
+    @router.get("/targets", response_model=SellerTargets, response_model_by_alias=True)
+    async def read_targets(
+        request: Request, response: Response, person: UUID | None = None
+    ) -> SellerTargets:
+        """A seller's targets today and their progress; a manager may read a seller's."""
+        no_query(request, frozenset({"person"}))
+        async with desk_for(request, response) as lead_desk:
+            return await team_engine.seller_targets(lead_desk, person)
+
+    @router.put("/targets", response_model=SellerTargets, response_model_by_alias=True)
+    async def write_targets(
+        command: TargetsCommand, request: Request, response: Response
+    ) -> SellerTargets:
+        """An owner or manager sets a seller's daily and weekly targets from a day on."""
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await team_engine.set_targets(lead_desk, command)
+
+    @router.get("/my-day", response_model=MyDayView, response_model_by_alias=True)
+    async def read_my_day(
+        request: Request, response: Response, person: UUID | None = None
+    ) -> MyDayView:
+        """The seller's work, ranked with why, today's numbers and targets, and what to
+        show when today is empty; a manager may read a seller's."""
+        no_query(request, frozenset({"person"}))
+        async with desk_for(request, response) as lead_desk:
+            return await team_engine.my_day_for(lead_desk, person)
+
+    @router.get("/targets/team", response_model=TeamTargets, response_model_by_alias=True)
+    async def read_team_targets(request: Request, response: Response) -> TeamTargets:
+        """Every seller with targets, and how each is doing (owners and managers)."""
+        async with desk_for(request, response) as lead_desk:
+            return TeamTargets(sellers=await team_engine.team_progress(lead_desk))
 
     # ----- tasks (work-memory engine) ------------------------------------------------
 

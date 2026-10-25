@@ -54,6 +54,16 @@ class Me(Model):
     paused_until: datetime | None = None
 
 
+class TeamPool(Model):
+    """The workspace's open leads, for a person with none of their own (owner, 25 Oct 2026:
+    a member saw "No leads yet" while 382 waited): how many are open, how many have no
+    owner, and whether this person takes new leads."""
+
+    open: int
+    unassigned: int
+    may_take: bool
+
+
 class Numbers(Model):
     """My day, counted from my own dispositions and calls since local midnight."""
 
@@ -144,6 +154,12 @@ class Desk(Model):
     templates: tuple[MessageTemplate, ...] = ()
     # Missed calls from my leads, newest first, until someone calls them back.
     call_back: tuple[LeadRow, ...] = ()
+    # Home's zero states (owner, 25 Oct 2026: "show the next useful data, the last days
+    # or weeks"): yesterday's numbers and the last seven days', today's included.
+    numbers_yesterday: Numbers | None = None
+    numbers_week: Numbers | None = None
+    # The workspace's open leads beside mine, for a member with none assigned.
+    team_pool: TeamPool | None = None
 
 
 class Badge(Model):
@@ -486,6 +502,98 @@ class TaskList(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     tasks: tuple[TaskView, ...]
     counts: dict[str, int] = Field(default_factory=dict)
+
+
+TargetMetric = Literal["calls", "connects", "follow_ups", "meetings"]
+TargetPeriod = Literal["day", "week"]
+
+
+class TargetLine(Model):
+    """One target: a metric over a day or a week (team engine, migration 0130)."""
+
+    metric: TargetMetric
+    period: TargetPeriod
+    value: int = Field(ge=0, le=10000)
+
+
+class MetricProgressView(Model):
+    """Done against a target, the pace by now, and whether behind (and by how many)."""
+
+    metric: TargetMetric
+    period: TargetPeriod
+    target: int
+    done: int
+    pace: float
+    expected: float
+    behind: bool
+    short: int
+
+
+class SellerTargets(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    person_id: UUID
+    targets: tuple[TargetLine, ...]
+    progress: tuple[MetricProgressView, ...]
+
+
+class TeamTargets(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    sellers: tuple[SellerTargets, ...]
+
+
+class TargetsCommand(Command):
+    """An owner or manager sets a seller's targets, from today or a later day; a value of 0
+    removes that target."""
+
+    command_id: UUID
+    person_id: UUID
+    effective_from: date | None = None
+    targets: tuple[TargetLine, ...] = Field(min_length=1, max_length=8)
+
+
+class MyDayItem(Model):
+    """One thing to do now, ranked, with why in words (team engine, section 4)."""
+
+    lead_id: UUID
+    lead_name: str
+    task_id: UUID | None = None
+    due_at: datetime | None = None
+    score: float
+    because: tuple[str, ...]
+
+
+class UpcomingItem(Model):
+    lead_id: UUID
+    lead_name: str
+    at: datetime
+    what: str
+
+
+class TouchedItem(Model):
+    lead_id: UUID
+    lead_name: str
+    at: datetime
+    outcome: str | None = None
+
+
+class MyDayFallback(Model):
+    """When nothing is due and nothing is done today: what is next, this week's numbers
+    beside last week's (no zeros), and the leads touched most recently."""
+
+    next_up: tuple[UpcomingItem, ...] = ()
+    week: dict[str, int] = Field(default_factory=dict)
+    last_week: dict[str, int] = Field(default_factory=dict)
+    recent: tuple[TouchedItem, ...] = ()
+
+
+class MyDayView(Model):
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    person_id: UUID
+    do_now: tuple[MyDayItem, ...]
+    # Today's numbers worth showing: none that is zero, unless a target makes it meaningful.
+    today: dict[str, int]
+    progress: tuple[MetricProgressView, ...]
+    fallback: MyDayFallback | None = None
 
 
 class SearchResult(Model):
