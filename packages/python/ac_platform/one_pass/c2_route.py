@@ -40,6 +40,8 @@ fallback. Pure: no I/O. ``scripts/ops/one_pass_c2_seal.py`` runs it on the host'
 from __future__ import annotations
 
 import hashlib
+import json
+from collections.abc import Mapping
 from dataclasses import replace
 from typing import Any, Final
 
@@ -47,6 +49,7 @@ from ac_platform.conversation_intelligence import gemini_audio, gemini_tiers
 from ac_platform.conversation_intelligence.activation_contract import (
     AcquisitionProviderPolicy,
     AcquisitionProviderProfile,
+    ActivationContractError,
     HostedApprovalBundle,
     load_hosted_approval_bundle,
 )
@@ -575,4 +578,102 @@ def seal(
             raise SealError("classic_routes_changed")
     if sealed.stages != bundle.stages or sealed.allowances != bundle.allowances:
         raise SealError("classic_routes_changed")
+    return sealed
+
+
+# What Root supplies to correct the privacy wording of the all-Gemini profiles, and nothing else
+# (owner, 26 Oct 2026: "approve: new privacy revision on production one-pass: Your call audio and
+# its transcript go to Google Gemini for transcription and coaching ...").
+GEMINI_GOVERNANCE_FIELDS: Final = ("privacy_revision", "privacy_notice")
+
+
+def acquisition_policies(bundle: HostedApprovalBundle) -> tuple[AcquisitionProviderPolicy, ...]:
+    return (
+        *(() if bundle.acquisition_policy is None else (bundle.acquisition_policy,)),
+        *bundle.organisation_acquisition_policies,
+    )
+
+
+def gemini_profiles(bundle: HostedApprovalBundle) -> tuple[str, ...]:
+    """The sealed profiles whose every stage runs on Gemini, so the call's audio and transcript
+    go only to Google (Flash-Lite and one-pass, standard and Flex; never a Luna or classic one)."""
+    found: list[str] = []
+    for policy in acquisition_policies(bundle):
+        for profile in policy.profiles:
+            if profile.profile_id not in found and all(
+                stage.provider_id == PROVIDER for stage in profile.stages
+            ):
+                found.append(profile.profile_id)
+    return tuple(found)
+
+
+def _without_governance(bundle: HostedApprovalBundle, profiles: tuple[str, ...]) -> Any:
+    document = json.loads(bundle.to_json())
+    for policy in (
+        document.get("acquisition_policy"),
+        *(document.get("organisation_acquisition_policies") or ()),
+    ):
+        for profile in (policy or {}).get("profiles") or ():
+            if profile.get("profile_id") in profiles:
+                for stage in profile.get("stages") or ():
+                    for field in GEMINI_GOVERNANCE_FIELDS:
+                        stage.pop(field, None)
+    return document
+
+
+def regovern(
+    bundle: HostedApprovalBundle,
+    governance: Mapping[str, Any],
+    *,
+    profiles: tuple[str, ...] | None = None,
+) -> HostedApprovalBundle:
+    """The bundle with only ``privacy_revision`` and ``privacy_notice`` replaced on every stage of
+    the all-Gemini profiles (or the named ones, each all-Gemini), in every acquisition policy.
+
+    A re-seal in place: providers, models, caps, references, classic stages and every other
+    profile stay byte-identical, or it is refused. Plans already made keep the wording they
+    froze; new plans quote the new revision once Root installs the bundle."""
+    if not isinstance(governance, Mapping) or set(governance) != set(GEMINI_GOVERNANCE_FIELDS):
+        raise SealError("gemini_governance_invalid")
+    if not acquisition_policies(bundle):
+        raise SealError("bundle_has_no_acquisition_policy")
+    allowed = gemini_profiles(bundle)
+    chosen = allowed if profiles is None else tuple(profiles)
+    if not chosen or len(set(chosen)) != len(chosen):
+        raise SealError("regovern_has_no_profiles")
+    if not set(chosen) <= set(allowed):
+        raise SealError("regovern_profile_is_not_all_gemini")
+    values = {field: governance[field] for field in GEMINI_GOVERNANCE_FIELDS}
+
+    def governed(policy: AcquisitionProviderPolicy) -> AcquisitionProviderPolicy:
+        return policy.model_copy(
+            update={
+                "profiles": tuple(
+                    profile.model_copy(
+                        update={
+                            "stages": tuple(
+                                stage.model_copy(update=values) for stage in profile.stages
+                            )
+                        }
+                    )
+                    if profile.profile_id in chosen
+                    else profile
+                    for profile in policy.profiles
+                )
+            }
+        )
+
+    update: dict[str, Any] = {
+        "organisation_acquisition_policies": tuple(
+            governed(item) for item in bundle.organisation_acquisition_policies
+        )
+    }
+    if bundle.acquisition_policy is not None:
+        update["acquisition_policy"] = governed(bundle.acquisition_policy)
+    try:
+        sealed = load_hosted_approval_bundle(bundle.model_copy(update=update).to_json())
+    except ActivationContractError:
+        raise SealError("gemini_governance_invalid") from None
+    if _without_governance(sealed, chosen) != _without_governance(bundle, chosen):
+        raise SealError("regovern_changed_more_than_governance")
     return sealed
