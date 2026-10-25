@@ -1,6 +1,6 @@
 {
   "id": "t3-sign-in",
-  "number": "T3",
+  "number": "03",
   "kind": "tester",
   "title": {
     "en": "Sign in inside the app",
@@ -31,9 +31,9 @@
   "next": {
     "id": "t4-first-steps",
     "title": {
-      "en": "First steps in the app",
-      "hi": "App mein pehle steps",
-      "mr": "App madhle pahile steps"
+      "en": "First steps: permissions, phone setup, theme",
+      "hi": "Pehle steps: permissions, phone setup, theme",
+      "mr": "Pahile steps: permissions, phone setup, theme"
     }
   },
   "intro": {

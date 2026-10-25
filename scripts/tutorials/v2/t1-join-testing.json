@@ -1,6 +1,6 @@
 {
   "id": "t1-join-testing",
-  "number": "T1",
+  "number": "01",
   "kind": "tester",
   "title": {
     "en": "Join the Sales X-Ray testers",
@@ -30,9 +30,9 @@
   "next": {
     "id": "t2-install-from-play",
     "title": {
-      "en": "Install from Google Play",
-      "hi": "Google Play se install",
-      "mr": "Google Play madhun install"
+      "en": "Install from Google Play, or move from the old app",
+      "hi": "Google Play se install, ya purane app se shift",
+      "mr": "Google Play madhun install, kinva junya app varun shift"
     }
   },
   "intro": {

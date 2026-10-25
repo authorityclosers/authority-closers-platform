@@ -178,6 +178,10 @@ def stage_html(kit: Kit) -> str:
     return kit.page(body, BARS_CSS + css, STAGE_W, STAGE_H, transparent=True)
 
 
+def _kicker(kicker: str, number: str) -> str:
+    return f"{kicker} · {number}" if number else kicker
+
+
 def intro_html(kit: Kit, number: str, title: str, kicker: str) -> str:
     """16:9 opening card, 1920x1080: the mark builds, the title rises, a mint line draws."""
     css = BARS_CSS + (
@@ -200,7 +204,7 @@ def intro_html(kit: Kit, number: str, title: str, kicker: str) -> str:
         f"<div class='big'>{_bars()}</div>"
         f"<div class='logo'><div class='mk'>{_bars()}</div>"
         f"<div class='wm svgfit'>{kit.svg('wordmark-mono-white')}</div></div>"
-        f"<div class='blk'><div class='k'>{escape(kicker)} · {escape(number)}</div>"
+        f"<div class='blk'><div class='k'>{escape(_kicker(kicker, number))}</div>"
         f"<div class='t'>{escape(title)}</div><div class='u'></div></div>"
         f"<div class='tag'>{TAGLINE}</div>"
     )
@@ -452,7 +456,7 @@ def reel_intro_html(kit: Kit, number: str, title: str, kicker: str) -> str:
         "<div class='ground'></div><div class='grain'></div>"
         f"<div class='mk'>{_bars()}</div><div class='wm svgfit'>"
         f"{kit.svg('wordmark-mono-white')}</div>"
-        f"<div class='k'>{escape(kicker)} · {escape(number)}</div>"
+        f"<div class='k'>{escape(_kicker(kicker, number))}</div>"
         f"<div class='t'>{escape(title)}</div>"
     )
     return kit.page(body, css, 1080, 1920)

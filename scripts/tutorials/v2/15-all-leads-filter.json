@@ -1,6 +1,6 @@
 {
   "id": "15-all-leads-filter",
-  "number": "15",
+  "number": "09",
   "kind": "feature",
   "title": {
     "en": "All leads: filter, sort and saved views",
@@ -28,11 +28,11 @@
     "Can I show you in 10 minutes how": "Can I quickly show you how"
   },
   "next": {
-    "id": "14-my-work",
+    "id": "16-never-lose-a-change",
     "title": {
-      "en": "My work and quick notes",
-      "hi": "My work aur quick notes",
-      "mr": "My work aani quick notes"
+      "en": "Never lose a change: Not sent yet and All changes saved",
+      "hi": "Koi change na khoye: Not sent yet aur All changes saved",
+      "mr": "Kuthlahi change harvu naye: Not sent yet aani All changes saved"
     }
   },
   "intro": {
@@ -53,13 +53,13 @@
       "mr": "Kuthlahi lead, lagech."
     },
     "say": {
-      "en": "Next: My work, and quick notes.",
-      "hi": "अगले video में: My work, और quick notes.",
-      "mr": "पुढच्या video मध्ये: My work, आणि quick notes."
+      "en": "Next: never losing a change on your phone.",
+      "hi": "अगले video में: phone पे कोई भी change कभी न खोए.",
+      "mr": "पुढच्या video मध्ये: phone वरचा कुठलाही change कधीच हरवत नाही."
     },
     "latn": {
-      "hi": "Agle video mein: My work, aur quick notes.",
-      "mr": "Pudhchya video madhye: My work, aani quick notes."
+      "hi": "Agle video mein: phone pe koi bhi change kabhi na khoye.",
+      "mr": "Pudhchya video madhye: phone varcha kuthlahi change kadhich harvat nahi."
     }
   },
   "chapters": [

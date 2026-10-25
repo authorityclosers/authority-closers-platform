@@ -1,6 +1,6 @@
 {
   "id": "17-tasks-and-remind",
-  "number": "17",
+  "number": "11",
   "kind": "feature",
   "title": {
     "en": "Tasks and Remind",
@@ -34,14 +34,6 @@
     "neha fictional": "Neha Patil",
     "karan example": "Karan Mehta"
   },
-  "next": {
-    "id": "04-call-a-lead",
-    "title": {
-      "en": "Call a lead and log how it went",
-      "hi": "Lead ko call karo, result log karo",
-      "mr": "Lead la call kara, result log kara"
-    }
-  },
   "intro": {
     "say": {
       "en": "In this video: Tasks, and Remind on any lead.",
@@ -60,13 +52,13 @@
       "mr": "Kuthlahi follow-up visarnar nahi."
     },
     "say": {
-      "en": "Next: calling a lead and logging how it went.",
-      "hi": "अगले video में: lead को call करो, और result log करो.",
-      "mr": "पुढच्या video मध्ये: lead ला call करा, आणि result log करा."
+      "en": "That's the full set. See you in Sales X-Ray.",
+      "hi": "बस, इतना ही. Sales X-Ray में मिलते हैं.",
+      "mr": "एवढंच. Sales X-Ray मध्ये भेटूया."
     },
     "latn": {
-      "hi": "Agle video mein: lead ko call karo, aur result log karo.",
-      "mr": "Pudhchya video madhye: lead la call kara, aani result log kara."
+      "hi": "Bas, itna hi. Sales X-Ray mein milte hain.",
+      "mr": "Evdhach. Sales X-Ray madhye bhetuya."
     }
   },
   "chapters": [

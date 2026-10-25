@@ -319,3 +319,22 @@ def test_phone_footage_maps_into_the_reel_frame() -> None:
     ev = shot["beats"][0]["events"][0]
     assert shot["beats"][0]["t0"] == 0.6 and ev["t"] == 2.7 and ev["key"]
     assert abs(ev["box"]["x"] - 81 * s) < 1e-6 and ev["box"]["y"] == 0
+
+
+def test_the_video_list_numbers_and_chains_the_videos_in_order() -> None:
+    # Owner, 25 Oct 2026: one numbering 1-11 in the order a tester needs; every "Next" follows it.
+    from sxtut import pack
+
+    cat = json.loads((TUT / "videos-v2.json").read_text(encoding="utf-8"))
+    by_id = {b["id"]: b for b in boards()}
+    ids = [v["id"] for v in cat["videos"]]
+    assert len(ids) == len(set(ids)) and set(ids) <= set(by_id)
+    for n, tid in enumerate(ids, 1):
+        b = by_id[tid]
+        assert b["number"] == f"{n:02d}", tid
+        nxt = (b.get("next") or {}).get("id")
+        assert nxt == (ids[n] if n < len(ids) else None), tid
+    names = [pack.video_name(n, v["title"]) for n, v in enumerate(cat["videos"], 1)]
+    assert names[0] == "01 Join the testers" and names[8] == "09 All leads - filter and sort"
+    assert all(re.fullmatch(r"\d\d [\w ,.()&-]+", n) for n in names)
+    assert cat["optin"].startswith("https://play.google.com/apps/testing/")

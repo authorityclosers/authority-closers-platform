@@ -1,6 +1,6 @@
 {
   "id": "t5-if-it-hangs",
-  "number": "T5",
+  "number": "05",
   "kind": "tester",
   "title": {
     "en": "If something hangs: Reload or Refresh app data",

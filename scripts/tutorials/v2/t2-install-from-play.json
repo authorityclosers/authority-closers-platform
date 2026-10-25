@@ -1,6 +1,6 @@
 {
   "id": "t2-install-from-play",
-  "number": "T2",
+  "number": "02",
   "kind": "tester",
   "title": {
     "en": "Install from Google Play, or move from the old app",
@@ -32,8 +32,8 @@
     "id": "t3-sign-in",
     "title": {
       "en": "Sign in inside the app",
-      "hi": "App mein sign in",
-      "mr": "App madhye sign in"
+      "hi": "App ke andar sign in kijiye",
+      "mr": "App madhye sign in kara"
     }
   },
   "intro": {

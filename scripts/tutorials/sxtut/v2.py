@@ -747,8 +747,9 @@ def art_for(
             {
                 "name": f"intro-{lang}",
                 "seconds": 3.4,
+                # No number on the cards: the list's order can change without new renders.
                 "html": brand.intro_html(
-                    kit, board["number"], local(board["title"], lang), "Sales X-Ray tutorial"
+                    kit, "", local(board["title"], lang), "Sales X-Ray tutorial"
                 ),
             }
         )
@@ -797,10 +798,7 @@ def art_for(
                     "width": 1080,
                     "height": 1920,
                     "html": brand.reel_intro_html(
-                        kit,
-                        board["number"],
-                        local(hook.get("text") or board["title"], lang),
-                        "Sales X-Ray",
+                        kit, "", local(hook.get("text") or board["title"], lang), "Sales X-Ray"
                     ),
                 }
             )
