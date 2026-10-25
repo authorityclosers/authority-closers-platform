@@ -1,0 +1,16 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "cc02cdbfb2a39a7d83f0e152b8967d69373f9df4",
+  "full": false,
+  "checks": [
+    "web"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/organisation/organisation-view.test.tsx"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
