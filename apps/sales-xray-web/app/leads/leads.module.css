@@ -4733,7 +4733,8 @@ a.repName {
   flex: none;
   align-items: center;
   gap: 6px;
-  min-height: 34px;
+  /* 44 px, like every control beside it (owner, 25 Oct 2026). */
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-pill);
@@ -4808,8 +4809,8 @@ a.repName {
 .toolButton {
   display: inline-grid;
   flex: none;
-  width: 40px;
-  height: 40px;
+  width: 44px;
+  height: 44px;
   place-items: center;
   padding: 0;
   border: 1px solid var(--sx-line);
@@ -4912,7 +4913,7 @@ a.repName {
   flex: none;
   align-items: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: 44px;
   padding: 0 12px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-pill);

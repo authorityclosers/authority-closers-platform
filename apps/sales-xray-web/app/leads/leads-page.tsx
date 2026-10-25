@@ -25,7 +25,7 @@ import {
   ArrowLeft,
   Building2,
   ChevronDown,
-  Ellipsis,
+  Settings as SettingsIcon,
   ListTodo,
   NotebookPen,
   Phone,
@@ -115,6 +115,7 @@ import { TasksView } from "./tasks-view";
 import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
 import { TakingSwitch } from "./taking-switch";
+import { MoreViews, ViewSwitch, ViewTools } from "./view-switch";
 import { several, usePipelines } from "./use-pipelines";
 
 /** To call's pipeline, remembered per seller and workspace on this device. */
@@ -378,6 +379,7 @@ export function LeadsRoute() {
   const [pastedRows, setPastedRows] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   // A settings page opened from the menu is a step of its own: Leads goes back.
   const pushedSettings = useRef(false);
   // The view picked here, until the address catches up (the router follows
@@ -1012,6 +1014,36 @@ export function LeadsRoute() {
   const stageLabel =
     tabs.find((tab) => tab.key === view)?.label ??
     (view === "open" ? "All leads" : "this stage");
+  // One switch (owner, 25 Oct 2026: "unclear what to focus on"): Now first,
+  // All leads beside it, the other views under More.
+  const moreViews = [
+    {
+      key: BOARD,
+      label: "Board",
+      note: "Every stage as a column; drag a lead to move it",
+    },
+    {
+      key: WORK,
+      label: "My work",
+      note: "Your calls, notes and moves, newest first",
+    },
+    {
+      key: TASKS,
+      label: "Tasks",
+      note: "What you promised: late, today, next",
+    },
+    { key: NOTES, label: "Notes", note: "Every note on your leads, to search" },
+  ];
+  const moreView = moreViews.find((item) => item.key === view) ?? null;
+  const section = view === "desk" ? "now" : moreView ? "more" : "all";
+  // All leads' own strip: every open lead first ("All"), then each stage.
+  const stageStrip = [
+    ...stageTabs(
+      journey?.key === journeyKey ? journey.view : null,
+      haveCounts ? counts.value : null,
+    ).map((tab) => (tab.key === "open" ? { ...tab, label: "All" } : tab)),
+    ...(view === TEST ? [{ key: TEST, label: "Test leads" }] : []),
+  ];
 
   // Leads → Filter (stage lists only): whose leads, the pipeline, a name or number.
   const filterable = (stageView || board) && view !== TEST;
@@ -1194,6 +1226,8 @@ export function LeadsRoute() {
             </div>
           ) : (
             <>
+              {/* One header on every view (owner, 25 Oct 2026): Taking leads and the
+                  gear for Leads settings, in the same place on each. */}
               <div className={styles.toolbar}>
                 <TakingSwitch
                   key={`taking-${desk.me.taking_leads !== false}`}
@@ -1203,7 +1237,34 @@ export function LeadsRoute() {
                   onChanged={refresh}
                 />
                 <PhoneLogCard as="chip" />
-                {view === "desk" && several(pipes) ? (
+                <span className={styles.toolbarEnd}>
+                  <button
+                    type="button"
+                    className={styles.toolButton}
+                    aria-label="Leads settings"
+                    aria-haspopup="dialog"
+                    onClick={() => setSettingsOpen(true)}
+                  >
+                    <SettingsIcon size={20} aria-hidden="true" />
+                  </button>
+                </span>
+              </div>
+              <ViewSwitch
+                section={section}
+                nowCount={toCall}
+                moreLabel={moreView?.label ?? "More"}
+                onNow={() => go("desk")}
+                onAll={() => go(stageView ? view : "open")}
+                onMore={() => setMoreOpen(true)}
+              />
+              <MoreViews
+                open={moreOpen}
+                onClose={() => setMoreOpen(false)}
+                views={moreViews}
+                onPick={go}
+              />
+              {section === "now" && several(pipes) ? (
+                <ViewTools>
                   <label className={styles.pipelineChip}>
                     <select
                       aria-label="Pipeline to call"
@@ -1221,8 +1282,10 @@ export function LeadsRoute() {
                     </select>
                     <ChevronDown size={14} aria-hidden="true" />
                   </label>
-                ) : null}
-                <span className={styles.toolbarEnd}>
+                </ViewTools>
+              ) : null}
+              {filterable || stageView ? (
+                <ViewTools>
                   {filterable ? (
                     <FilterChip
                       count={countFilters(shownFilters, defaultWho)}
@@ -1234,17 +1297,11 @@ export function LeadsRoute() {
                       }
                     />
                   ) : null}
-                  <button
-                    type="button"
-                    className={styles.toolButton}
-                    aria-label="Leads settings"
-                    aria-haspopup="dialog"
-                    onClick={() => setSettingsOpen(true)}
-                  >
-                    <Ellipsis size={18} aria-hidden="true" />
-                  </button>
-                </span>
-              </div>
+                  {stageView ? (
+                    <StageTabs tabs={stageStrip} current={view} onChange={go} />
+                  ) : null}
+                </ViewTools>
+              ) : null}
               {filterable ? (
                 <ActiveFilters
                   filters={shownFilters}
@@ -1253,7 +1310,6 @@ export function LeadsRoute() {
                   onChange={applyFilters}
                 />
               ) : null}
-              <StageTabs tabs={tabs} current={view} onChange={go} />
             </>
           )}
           {error ? (
