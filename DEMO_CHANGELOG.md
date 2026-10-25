@@ -65,3 +65,33 @@ org, and all are still `new`. Grouped by root cause:
   - Analytics could also show logged calls with no recording; not done tonight.
 - **Facebook:** connecting more than one account, a list of every form, and managing forms in one place are not built. Accounts outside the Meta app's testers can't connect until Meta's review passes.
 - **Marking the 8 reports Solved in production:** waiting for the fixes to be live and for the orchestrator's go-ahead.
+
+## P2 onboarding and notifications (Lead OS session)
+
+### Fixes
+
+- **Onboarding in one command (P2)**, c5b9f1fb4.
+  - What changed: `scripts/data-changes/onboard-organisation.py` makes, in one transaction:
+    - the org, with calls from the sellers' own phones (never simulated);
+    - the owner's and sellers' accounts, so their first Sign in with Google joins them;
+    - the sheet as leads, with +91 numbers, exact repeat rows dropped and every column kept;
+    - each lead given to the seller its "called by" names, by listed variants only; blank or unlisted goes to the owner;
+    - the sheet's follow-up dates as next calls at 10:00 IST;
+    - the Play opt-in link and the tester emails, printed.
+  - Dry run by default; a rerun with tonight's sheet adds only new rows.
+  - Verified by: a dry run on dev with a messy 300-row fictional sheet (284 leads, 10 repeats dropped, 161 follow-ups, 9 s, rolled back); `test_onboard_organisation_data_change_postgresql.py`; wb-ci full and e2e.
+- **10 AM digest and 2-hourly sweep (P1 steps 10, 11)**, 49b3aeba5 (migration 0137).
+  - What changed:
+    - "Today: N follow-ups" at 10:00 IST; overdue and new-lead counts at 12, 14, 16 and 18 IST.
+    - Each goes once per seller (a ledger), inside work hours. The push carries counts only; the words come from `GET /v1/lead-desk/alert?kind=digest|sweep` on the seller's own session.
+    - `scripts/data-changes/send-digests-now.py` sends them now to a test org, through the same code.
+  - Verified by: `test_digests.py`, `test_lead_desk_digests_postgresql.py`, the 0137 migration and backup-parity tests; wb-ci targeted, full and e2e.
+- **Red banner for a follow-up due within the hour (P1 step 12)**, 5b073299b.
+  - What changed: the app asks `GET /v1/lead-desk/soon` every minute and on focus. It raises a red top banner with the urgent haptic, "<lead>: follow-up in 40 min", with Open going to the lead. Once per follow-up; quiet outside work hours.
+  - Verified by: `due-soon.test.tsx`, `test_lead_desk_digests_postgresql.py`; wb-ci full and e2e. The 360/390 matrix is on `/review-fixture/alerts?level=due`.
+- **Who did what, with their photo**, a578dd0e9: history, activity and tasks carry the person's id and photo URL for avatars. Verified by wb-ci full and e2e.
+
+### Still flaky or open
+
+- The digest and sweep need the Android build that shows these two push kinds, and FCM delivery on each phone brand. Production gets them with v0.92 (it is at migration 0130 tonight).
+- Onboarding: a "called by" spelling nobody listed goes to the owner. Check the printed map in the dry run before applying.
