@@ -138,6 +138,8 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         "call_facts",
         "list_leads",
         "get_lead",
+        "list_duplicates",
+        "get_duplicate",
         "add_lead",
         "add_note",
         "add_task",
@@ -147,7 +149,15 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
     reading = {tool["name"] for tool in mcp_http.listed(frozenset({"calls:read"}))}
     assert reading == {"search", "fetch", "whoami", "list_calls", "get_call"}
     leads = {tool["name"] for tool in mcp_http.listed(frozenset({"leads:read"}))}
-    assert leads == {"search", "fetch", "whoami", "list_leads", "get_lead"}
+    assert leads == {
+        "search",
+        "fetch",
+        "whoami",
+        "list_leads",
+        "get_lead",
+        "list_duplicates",
+        "get_duplicate",
+    }
     assert {tool["name"] for tool in mcp_http.listed(frozenset({"webhooks:manage"}))} == {"whoami"}
     # AI writes (docs/product/ai-writes.md): each write tool needs its own scope; reading
     # leads alone shows none of them.

@@ -121,8 +121,10 @@ only add to the queue, never merge.
   organisation, pairs waiting by band, merges kept and undone, "not the same", and the last
   scan. Counts only.
 - Every query names the organisation; another organisation's pair answers 404.
-- **Next (D4b):** the MCP and API read of the queue, once the public API reader
-  (`integrations/api_http.py`) is free of other open work.
+- **D4b:** the Sales X-Ray API (`GET /v1/api/duplicates`, `GET /v1/api/duplicates/{pair_id}`,
+  leads:read) and the MCP tools `list_duplicates` and `get_duplicate` read the queue, for an
+  organisation's owners and admins. Read only: merging and "Not the same" stay with a person
+  in Sales X-Ray.
 
 ## 6. Data (migration 0134)
 
