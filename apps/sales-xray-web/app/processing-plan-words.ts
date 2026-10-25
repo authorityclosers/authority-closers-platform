@@ -31,7 +31,7 @@ export function providerName(provider: string): string {
     : "An approved provider";
 }
 
-/** "Audio: ElevenLabs", "Transcript and analysis: Google Gemini", in plan order. */
+/** "Audio, transcript and analysis: Google Gemini", in plan order. */
 export function providerLines(stages: readonly Stage[]): string[] {
   const byProvider = new Map<string, string[]>();
   for (const stage of stages) {
@@ -48,9 +48,25 @@ export function providerLines(stages: readonly Stage[]): string[] {
   );
 }
 
-/** Each privacy notice once, in plan order. */
+/** The providers a notice can name, as providerName names them. */
+const NAMED: ReadonlyArray<readonly [RegExp, string]> = [
+  [/elevenlabs/i, "ElevenLabs"],
+  [/\b(?:gemini|google)\b/i, "Google Gemini"],
+  [/\bopenai\b/i, "OpenAI"],
+  [/\b(?:anthropic|claude)\b/i, "Anthropic"],
+];
+
+/**
+ * Each privacy notice once, in plan order, never one that names a provider no
+ * stage of this plan uses (26 Oct 2026: one-pass plans carried a sealed notice
+ * sending the audio to ElevenLabs while Google Gemini transcribes it). The
+ * provider lines above always say who processes the call.
+ */
 export function privacyNotices(stages: readonly Stage[]): string[] {
-  return [
-    ...new Set(stages.map((stage) => stage.privacy_notice.trim())),
-  ].filter(Boolean);
+  const used = new Set(stages.map((stage) => providerName(stage.provider)));
+  return [...new Set(stages.map((stage) => stage.privacy_notice.trim()))]
+    .filter(Boolean)
+    .filter((notice) =>
+      NAMED.every(([named, name]) => !named.test(notice) || used.has(name)),
+    );
 }

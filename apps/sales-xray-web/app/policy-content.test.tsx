@@ -119,15 +119,22 @@ it("names Google (Gemini) for AI-drafted replies, and what is never sent", () =>
   expect(markup).toContain(
     "does not send Google the answers given in Facebook or Instagram lead forms",
   );
-  // Dated 24 Oct 2026: the Usage analytics section (telemetry option B).
-  expect(markup).toContain('dateTime="2026-10-24"');
+  // Dated 26 Oct 2026: a new version naming Google for the call audio (the owner approved it).
+  expect(markup).toContain('dateTime="2026-10-26"');
 });
 
 it("names the AI providers for call analysis, OpenAI with its training and retention terms", () => {
   const markup = renderToStaticMarkup(<PolicyPage slug="privacy" />);
   expect(markup).toContain("AI service providers for call analysis");
-  expect(markup).toContain("ElevenLabs (its Scribe speech-to-text API)");
-  expect(markup).toContain("Google (the Gemini API, provided by Google LLC)");
+  // 26 Oct 2026 (owner): since one-pass, Google receives the call audio; ElevenLabs only
+  // transcribed calls analysed before 21 October 2026.
+  expect(markup).toContain(
+    "Google (the Gemini API, provided by Google LLC): the call audio and its transcript",
+  );
+  expect(markup).not.toContain(
+    "ElevenLabs (its Scribe speech-to-text API): the call audio",
+  );
+  expect(markup).toContain("Calls analysed before 21 October 2026");
   expect(markup).toContain(
     "OpenAI (the OpenAI API, provided by OpenAI, L.L.C., USA)",
   );
