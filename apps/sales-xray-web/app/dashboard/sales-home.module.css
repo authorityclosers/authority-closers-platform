@@ -566,3 +566,12 @@
     min-height: 2lh;
   }
 }
+
+/* Taking new leads, on a card of its own at the top of My day: the state and
+   one tap to change it (owner, 25 Oct 2026). */
+.taking {
+  padding: 4px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}

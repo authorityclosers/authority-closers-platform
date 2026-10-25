@@ -55,6 +55,7 @@ import { KIND_WORDS } from "../leads/stage-tabs";
 import { several, usePipelines } from "../leads/use-pipelines";
 import { ActionList, ActionRow, Avatar, Delta, Segmented } from "../ui/kit";
 import { NeedsYou } from "./needs-you";
+import { TakingSwitch } from "../leads/taking-switch";
 import { RecentlyCalled } from "./recently-called";
 import {
   FunnelSkeleton,
@@ -503,6 +504,16 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
   const { numbers } = desk;
   return (
     <>
+      {/* Taking new leads, or not, in plain sight with one tap to change
+          (owner, 25 Oct 2026: "it isn't clear whether I'm taking leads"). */}
+      <section className={styles.taking} aria-label="New leads">
+        <TakingSwitch
+          key={`taking-${desk.me.taking_leads !== false}`}
+          initial={desk.me.taking_leads !== false}
+          place="row"
+          pausedUntil={desk.me.paused_until ?? null}
+        />
+      </section>
       <section className={styles.block} aria-labelledby="today-title">
         <div className={styles.head}>
           <h2 id="today-title">Today</h2>
@@ -577,16 +588,29 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
 
 type HomeView = "team" | "mine";
 
-/** Owners and admins: Team, or My day (their own calls), kept in the address. */
+const VIEW_EVENT = "sx:home-view";
+
+const readView = (): HomeView =>
+  new URLSearchParams(window.location.search).get("view") === "mine"
+    ? "mine"
+    : "team";
+
+const onView = (change: () => void) => {
+  window.addEventListener("popstate", change);
+  window.addEventListener(VIEW_EVENT, change);
+  return () => {
+    window.removeEventListener("popstate", change);
+    window.removeEventListener(VIEW_EVENT, change);
+  };
+};
+
+/** Owners and admins: Team, or My day (their own calls), kept in the address.
+ *  The server draws Team and the address's choice follows on the phone, so the
+ *  two never disagree (a direct ?view=mine threw a hydration error and showed
+ *  "Something glitched", 25 Oct 2026). */
 function useHomeView(): [HomeView, (next: HomeView) => void] {
-  const [view, setView] = useState<HomeView>(() =>
-    typeof window !== "undefined" &&
-    new URLSearchParams(window.location.search).get("view") === "mine"
-      ? "mine"
-      : "team",
-  );
+  const view = useSyncExternalStore<HomeView>(onView, readView, () => "team");
   const choose = (next: HomeView) => {
-    setView(next);
     const params = new URLSearchParams(window.location.search);
     if (next === "mine") params.set("view", "mine");
     else params.delete("view");
@@ -596,6 +620,7 @@ function useHomeView(): [HomeView, (next: HomeView) => void] {
       "",
       `${window.location.pathname}${query ? `?${query}` : ""}`,
     );
+    window.dispatchEvent(new Event(VIEW_EVENT));
   };
   return [view, choose];
 }

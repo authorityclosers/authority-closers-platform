@@ -1,0 +1,89 @@
+/* Figures that slide by themselves, with page dots (owner, 25 Oct 2026).
+   A slide at a time on a phone; side by side, without dots, on wider screens.
+   Tokens only. */
+
+.slides {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  container-type: inline-size;
+}
+
+.track {
+  display: grid;
+  grid-auto-columns: 100%;
+  grid-auto-flow: column;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.track::-webkit-scrollbar {
+  display: none;
+}
+
+.slide {
+  min-width: 0;
+  scroll-snap-align: start;
+}
+
+.dots {
+  display: flex;
+  justify-content: center;
+}
+
+/* 8 px dots on 44 px targets; the shown one stretches into a pill. */
+.dot {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.dot span {
+  width: 8px;
+  height: 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-line-strong);
+  transition:
+    width 200ms var(--sx-ease-out),
+    background 200ms var(--sx-ease-out);
+}
+
+.dot[aria-current="true"] span {
+  width: 20px;
+  background: var(--sx-accent);
+}
+
+.dot:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+  border-radius: var(--sx-radius-pill);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dot span {
+    transition: none;
+  }
+}
+
+@container (min-width: 600px) {
+  .track {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    overflow: visible;
+  }
+
+  .dots {
+    display: none;
+  }
+}

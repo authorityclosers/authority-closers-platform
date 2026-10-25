@@ -632,6 +632,49 @@
   }
 }
 
+/* Call analysis's heading row: the title, and a dot while calls need a look
+   (owner, 25 Oct 2026). */
+.partHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  margin-top: 8px;
+  padding-top: 16px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.partHead:empty {
+  display: none;
+}
+
+/* The row carries the rule and the space above; the title sits in it. */
+.partHead .partTitle {
+  flex: 1 1 auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.attention {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--lx-focus-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+/* One figure to a slide (slides.tsx). */
+.slideFigure {
+  display: grid;
+  min-width: 0;
+  margin: 0;
+}
+
 /* In an organisation, call analysis follows the sales block (22 Oct 2026). */
 .partTitle {
   margin: 8px 0 0;

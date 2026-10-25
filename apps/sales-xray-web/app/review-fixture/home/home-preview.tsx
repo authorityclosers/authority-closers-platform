@@ -10,6 +10,7 @@
  * each with its own stages, and a switch above the open leads by stage.
  */
 
+import type { CallActivity, CallSummary } from "../../dashboard/dashboard-data";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
@@ -270,10 +271,40 @@ function install(quiet: boolean) {
   return true;
 }
 
+/** `?analysis=1`: fictional call analysis numbers (24 calls, 3 need a look). */
+const FIXTURE_SUMMARY: CallSummary = {
+  total: 24,
+  processing: 2,
+  completed: 19,
+  needsAttention: 3,
+};
+
+function fixtureActivity(): CallActivity {
+  const counts = [
+    0, 1, 2, 0, 3, 1, 0, 2, 4, 1, 0, 0, 2, 3, 1, 2, 0, 1, 3, 2, 0, 4, 2, 1, 0,
+    2, 3, 1, 2, 1,
+  ];
+  const today = Date.now();
+  const days = counts.map((analysed, index) => ({
+    date: new Date(today - (29 - index) * 86_400_000)
+      .toISOString()
+      .slice(0, 10),
+    analysed,
+    analysedSeconds: analysed * 540,
+  }));
+  return {
+    timezone: "Asia/Kolkata",
+    days,
+    analysedLast30Days: counts.reduce((sum, value) => sum + value, 0),
+    analysedPrevious30Days: 31,
+  };
+}
+
 function Preview() {
   const params = useSearchParams();
   const seller = params.get("role") === "seller";
   const quiet = params.get("quiet") === "1";
+  const analysis = params.get("analysis") === "1";
   useState(() => install(quiet));
   return (
     <WorkspaceAccessContext.Provider
@@ -300,8 +331,14 @@ function Preview() {
       <LightboxShell active="dashboard" authenticated homeHref="/dashboard">
         <DashboardBody
           team={!seller}
-          summary={{ status: "ready", value: null }}
-          activity={{ status: "ready", value: null }}
+          summary={{
+            status: "ready",
+            value: analysis ? FIXTURE_SUMMARY : null,
+          }}
+          activity={{
+            status: "ready",
+            value: analysis ? fixtureActivity() : null,
+          }}
           allowance={{
             status: "ready",
             value: {

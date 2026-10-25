@@ -123,7 +123,10 @@ it("starts the four account reads after sign-in and preserves missing-route erro
   expect(host.textContent).not.toContain("Sign in to see your dashboard");
   // Summary/activity keep their existing unavailable state; session/recents
   // keep their errors. A missing API must not become invented empty data.
-  expect(host.textContent).toContain("Not available yet");
+  // No analysis numbers at all: one line says how to start (25 Oct 2026).
+  expect(host.textContent).toContain(
+    "Your call analysis shows here once a call is analysed.",
+  );
   // Failed reads keep their skeletons and raise one corner card that retries.
   expect(host.textContent).not.toContain("Couldn't load");
   expect(host.querySelector('[role="alert"]')?.textContent).toContain(
