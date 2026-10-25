@@ -22,7 +22,7 @@ import {
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 
-import { Badge, Button, Field } from "../ui/kit";
+import { Badge, Button, Field, initials } from "../ui/kit";
 import {
   AppCard,
   AppCardSkeleton,
@@ -162,106 +162,243 @@ const FORM_STATUS: Record<string, string> = {
   DELETED: "Deleted",
 };
 
+/** A run of older leads as a chip: what it found, in a few words. */
+export function backfillChip(backfill?: MetaBackfill | null): string | null {
+  if (!backfill) return null;
+  if (backfill.state === "running") return `Old leads: ${backfill.seen} read`;
+  if (backfill.state === "blocked") return "Old leads stopped";
+  return backfill.seen
+    ? `Old leads: ${backfill.created} new, ${alreadyHere(backfill)} already here`
+    : "No old leads on Meta";
+}
+
+type PageActions = {
+  busy: string | null;
+  /** Turn the Page on with every form, or switch it off. */
+  onPage: (page: MetaPage, on: boolean) => void;
+  /** Which forms come in live ("all" for every form, new ones too). */
+  onForms: (page: MetaPage, forms: "all" | string[]) => void;
+  /** Older leads from these forms, or every form the Page takes (null). */
+  onOlder: (page: MetaPage, forms: string[] | null) => void;
+  onCheck: (page: MetaPage) => void;
+};
+
 /**
- * Every form on a Page, with its state and how many leads Meta holds, to pick
- * from: bring in a form's older leads, or choose which forms come in live (bug
- * reports #12, #13 and #14, 25 Oct 2026: "all forms ... in one click", paused
- * ones too).
+ * Facebook accounts, their Pages, and each Page's forms, as rows (owner, 26 Oct
+ * 2026, bug reports #21 and #22: "too much text", "so much side spacing", "all
+ * forms and pages management should be nicer ... sliders"): a switch per Page
+ * and per form, one icon for a form's old leads, status as chips, and no
+ * paragraphs.
  */
-function PageForms({
+function MetaAccounts({
+  pages,
+  ...actions
+}: { pages: MetaPage[] } & PageActions) {
+  const groups = new Map<
+    string,
+    { account: MetaAccount | null; pages: MetaPage[] }
+  >();
+  for (const page of pages) {
+    const key = page.account?.name ?? "";
+    const group = groups.get(key) ?? {
+      account: page.account ?? null,
+      pages: [],
+    };
+    group.pages.push(page);
+    groups.set(key, group);
+  }
+  return (
+    <div className={formStyles.accounts}>
+      {[...groups.values()].map(({ account, pages: own }) => (
+        <section
+          key={account?.name ?? ""}
+          className={formStyles.account}
+          aria-label={
+            account ? `Pages through ${account.name}` : "Facebook Pages"
+          }
+        >
+          {account ? (
+            <header className={formStyles.accountHead}>
+              {account.picture ? (
+                // eslint-disable-next-line @next/next/no-img-element -- Facebook's own small photo
+                <img
+                  src={account.picture}
+                  alt=""
+                  width={24}
+                  height={24}
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <span className={formStyles.avatar} aria-hidden="true">
+                  {initials(account.name)}
+                </span>
+              )}
+              <strong>{account.name}</strong>
+              <span className={cardStyles.fact}>
+                {own.length} Page{own.length === 1 ? "" : "s"}
+              </span>
+            </header>
+          ) : null}
+          {own.map((page) => (
+            <MetaPageRows key={page.pageId} page={page} {...actions} />
+          ))}
+        </section>
+      ))}
+    </div>
+  );
+}
+
+function MetaPageRows({
   page,
   busy,
+  onPage,
+  onForms,
   onOlder,
-  onKeep,
-}: {
-  page: MetaPage;
-  busy: boolean;
-  onOlder: (forms: string[] | null) => void;
-  onKeep: (forms: "all" | string[]) => void;
-}) {
+  onCheck,
+}: { page: MetaPage } & PageActions) {
   const forms = page.formsOnPage?.length
     ? page.formsOnPage
     : (page.formsCovered ?? []);
   const takesAll = !page.forms || page.forms === "all";
-  const live = new Set(takesAll ? forms.map((form) => form.id) : page.forms);
-  const [picked, setPicked] = useState<string[]>(() =>
-    forms.map((form) => form.id),
+  const live = new Set(
+    page.active ? (takesAll ? forms.map((form) => form.id) : page.forms) : [],
   );
-  if (!forms.length) return null;
-  const everyForm = picked.length === forms.length;
-  const some = everyForm ? "" : ` (${picked.length})`;
-  const flip = (id: string) =>
-    setPicked((current) =>
-      current.includes(id)
-        ? current.filter((item) => item !== id)
-        : [...current, id],
-    );
+  const working = busy === page.pageId;
+  const running = page.backfill?.state === "running";
+  const problem = page.active
+    ? (page.problem?.text ?? page.backfill?.error ?? null)
+    : null;
+  const chip = page.active ? backfillChip(page.backfill) : null;
+  // A form's switch: the forms that come in live, this one on or off. No form
+  // left means the Page is switched off.
+  const setForm = (id: string, on: boolean) => {
+    const next = forms
+      .map((form) => form.id)
+      .filter((formId) => (formId === id ? on : live.has(formId)));
+    if (!next.length) onPage(page, false);
+    else onForms(page, next.length === forms.length ? "all" : next);
+  };
   return (
-    <details className={formStyles.formPicker}>
-      <summary>Forms on this Page ({forms.length})</summary>
-      <label className={formStyles.formRow}>
-        <input
-          type="checkbox"
-          checked={everyForm}
-          onChange={() =>
-            setPicked(everyForm ? [] : forms.map((form) => form.id))
-          }
-        />
-        <span className={formStyles.formName}>Select all</span>
-      </label>
-      {forms.map((form) => (
-        <label key={form.id} className={formStyles.formRow}>
-          <input
-            type="checkbox"
-            checked={picked.includes(form.id)}
-            onChange={() => flip(form.id)}
-          />
-          <span className={formStyles.formName}>{form.name}</span>
+    <article
+      className={formStyles.page}
+      data-off={page.active ? undefined : ""}
+    >
+      <div className={formStyles.pageHead}>
+        <div className={formStyles.pageTitle}>
+          <strong>{page.name}</strong>
           <span className={cardStyles.facts}>
             <span
               className={cardStyles.fact}
-              data-tone={form.status === "ACTIVE" ? "good" : undefined}
+              data-tone={page.active ? "good" : undefined}
             >
-              {FORM_STATUS[form.status] ??
-                (form.status.toLowerCase() || "Form")}
+              {page.active
+                ? `${page.received} lead${page.received === 1 ? "" : "s"}`
+                : "Off"}
             </span>
-            {typeof form.leads === "number" ? (
-              <span className={cardStyles.fact}>{form.leads} on Meta</span>
+            {page.active && page.lastPulledAt ? (
+              <span className={cardStyles.fact}>
+                Checked {ago(page.lastPulledAt)}
+              </span>
             ) : null}
-            <span className={cardStyles.fact}>
-              {page.active && live.has(form.id) ? "Comes in live" : "Not live"}
-            </span>
+            {chip ? (
+              <span
+                className={cardStyles.fact}
+                data-state={page.backfill?.state}
+                title={backfillLine(page.backfill) ?? undefined}
+              >
+                {chip}
+              </span>
+            ) : null}
           </span>
-        </label>
-      ))}
-      <span className={styles.pageActions}>
-        <Button
-          variant="ghost"
-          disabled={
-            busy ||
-            !picked.length ||
-            !page.active ||
-            page.backfill?.state === "running"
-          }
-          onClick={() => onOlder(everyForm ? null : picked)}
-        >
-          <History size={14} aria-hidden="true" />
-          Bring old leads{some}
-        </Button>
-        <Button
-          variant="ghost"
-          disabled={busy || !picked.length}
-          onClick={() => onKeep(everyForm ? "all" : picked)}
-        >
-          Keep live{some}
-        </Button>
-      </span>
-      {!page.active ? (
-        <small className={styles.pageForms}>
-          Keep live turns the Page on; then its older leads can come in.
+        </div>
+        <span className={formStyles.pageTools}>
+          {page.active ? (
+            <button
+              type="button"
+              className={formStyles.iconButton}
+              aria-label={`Check ${page.name} for new leads now`}
+              title="Check now"
+              disabled={working}
+              onClick={() => onCheck(page)}
+            >
+              <RefreshCw size={16} aria-hidden="true" />
+            </button>
+          ) : null}
+          <input
+            type="checkbox"
+            role="switch"
+            className={cardStyles.switch}
+            aria-label={`Leads from ${page.name}`}
+            checked={page.active}
+            disabled={working}
+            onChange={(event) => onPage(page, event.target.checked)}
+          />
+        </span>
+      </div>
+      {problem ? (
+        <small className={cardStyles.problem} role="status">
+          {problem}
         </small>
       ) : null}
-    </details>
+      {forms.length ? (
+        <ul className={formStyles.forms} aria-label={`Forms on ${page.name}`}>
+          {forms.map((form) => (
+            <li key={form.id} className={formStyles.formRow}>
+              <input
+                type="checkbox"
+                role="switch"
+                className={cardStyles.switch}
+                aria-label={`Keep ${form.name} live`}
+                checked={live.has(form.id)}
+                disabled={working}
+                onChange={(event) => setForm(form.id, event.target.checked)}
+              />
+              <span className={formStyles.formText}>
+                <span className={formStyles.formName}>{form.name}</span>
+                {form.status !== "ACTIVE" || typeof form.leads === "number" ? (
+                  <span className={cardStyles.facts}>
+                    {form.status !== "ACTIVE" ? (
+                      <span className={cardStyles.fact}>
+                        {FORM_STATUS[form.status] ??
+                          (form.status.toLowerCase() || "Form")}
+                      </span>
+                    ) : null}
+                    {typeof form.leads === "number" ? (
+                      <span className={cardStyles.fact}>
+                        {form.leads} on Meta
+                      </span>
+                    ) : null}
+                  </span>
+                ) : null}
+              </span>
+              <button
+                type="button"
+                className={formStyles.iconButton}
+                aria-label={`Bring old leads from ${form.name}`}
+                title="Bring old leads"
+                disabled={working || !page.active || running}
+                onClick={() => onOlder(page, [form.id])}
+              >
+                <History size={16} aria-hidden="true" />
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : null}
+      {page.active ? (
+        <span className={formStyles.pageFoot}>
+          <button
+            type="button"
+            className={cardStyles.chip}
+            disabled={working || running}
+            onClick={() => onOlder(page, null)}
+          >
+            <History size={14} aria-hidden="true" />
+            {running ? "Bringing in old leads…" : "Bring old leads, all forms"}
+          </button>
+        </span>
+      ) : null}
+    </article>
   );
 }
 type MetaPull = {
@@ -837,129 +974,48 @@ function MetaTile() {
             Try again
           </Button>
         ) : status?.configured ? (
-          <a
-            className={
-              status.pages.length ? cardStyles.secondary : cardStyles.primary
-            }
-            href={`${META}/connect`}
-            onClick={connect}
-          >
+          <span className={formStyles.actions}>
+            <a
+              className={
+                status.pages.length ? cardStyles.secondary : cardStyles.primary
+              }
+              href={`${META}/connect`}
+              onClick={connect}
+            >
+              {status.pages.length ? (
+                <>
+                  <Plus size={14} aria-hidden="true" />
+                  Add a Page
+                </>
+              ) : (
+                "Connect"
+              )}
+            </a>
             {status.pages.length ? (
-              <>
-                <Plus size={14} aria-hidden="true" />
-                Add a Page
-              </>
-            ) : (
-              "Connect"
-            )}
-          </a>
+              <a
+                className={cardStyles.chip}
+                href={`${META}/connect?switch=1`}
+                onClick={connect}
+                aria-label="Use another Facebook account"
+              >
+                Another account
+              </a>
+            ) : null}
+          </span>
         ) : null
       }
     >
       {status?.configured && status.pages.length ? (
-        <ul className={styles.pageList} aria-label="Facebook Pages">
-          {status.pages.map((page) => (
-            <li
-              key={page.pageId}
-              className={styles.pageRow}
-              data-off={page.active ? undefined : ""}
-            >
-              <span className={styles.pageName}>
-                <strong>{page.name}</strong>
-                {page.account ? (
-                  <span className={formStyles.pageAccount}>
-                    {page.account.picture ? (
-                      // eslint-disable-next-line @next/next/no-img-element -- Facebook's own small photo
-                      <img
-                        src={page.account.picture}
-                        alt=""
-                        width={18}
-                        height={18}
-                        referrerPolicy="no-referrer"
-                      />
-                    ) : null}
-                    Through {page.account.name}&apos;s Facebook
-                  </span>
-                ) : null}
-                {page.active ? (
-                  <span className={cardStyles.facts}>
-                    <span className={cardStyles.fact} data-tone="good">
-                      {page.received} lead{page.received === 1 ? "" : "s"}
-                    </span>
-                    {page.lastPulledAt ? (
-                      <span className={cardStyles.fact}>
-                        Checked {ago(page.lastPulledAt)}
-                      </span>
-                    ) : null}
-                  </span>
-                ) : (
-                  <small>Switched off: no new leads come in</small>
-                )}
-                {page.active ? (
-                  <small className={styles.pageForms}>{formsLine(page)}</small>
-                ) : null}
-                <PageForms
-                  page={page}
-                  busy={busy === page.pageId}
-                  onOlder={(forms) => void older(page, forms)}
-                  onKeep={(forms) => void keepLive(page, forms)}
-                />
-                {page.active && backfillLine(page.backfill) ? (
-                  <small
-                    className={styles.pageForms}
-                    data-state={page.backfill?.state}
-                  >
-                    {backfillLine(page.backfill)}
-                  </small>
-                ) : null}
-                {page.active && (page.problem || page.backfill?.error) ? (
-                  <small className={cardStyles.problem} role="status">
-                    {page.problem?.text ?? page.backfill?.error}
-                  </small>
-                ) : null}
-              </span>
-              <span className={styles.pageActions}>
-                {page.active ? (
-                  <Button
-                    variant="ghost"
-                    disabled={busy === page.pageId}
-                    onClick={() => pull(page)}
-                  >
-                    <RefreshCw size={14} aria-hidden="true" />
-                    Check now
-                  </Button>
-                ) : null}
-                {page.active && page.backfill?.state !== "running" ? (
-                  <Button
-                    variant="ghost"
-                    disabled={busy === page.pageId}
-                    onClick={() => older(page)}
-                  >
-                    <History size={14} aria-hidden="true" />
-                    Bring in older leads
-                  </Button>
-                ) : null}
-                <Button
-                  variant={page.active ? "ghost" : "primary"}
-                  disabled={busy === page.pageId}
-                  onClick={() => toggle(page)}
-                >
-                  {page.active ? "Switch off" : "Turn on"}
-                </Button>
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-      {status?.configured && status.pages.length ? (
-        <p className={styles.hint}>
-          {/* Bug report #8: another account is one press, not a dead end. */}
-          <a href={`${META}/connect?switch=1`} onClick={connect}>
-            Use another Facebook account
-          </a>{" "}
-          to add the Pages it runs. Each Page says which account it came
-          through.
-        </p>
+        <MetaAccounts
+          pages={status.pages}
+          busy={busy}
+          onPage={(page, on) =>
+            void (on ? keepLive(page, "all") : page.active && toggle(page))
+          }
+          onForms={(page, forms) => void keepLive(page, forms)}
+          onOlder={(page, forms) => void older(page, forms)}
+          onCheck={(page) => void pull(page)}
+        />
       ) : null}
       {note ? (
         <p className={styles.hint} role="status">

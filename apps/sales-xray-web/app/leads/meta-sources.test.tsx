@@ -3,6 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import {
+  backfillChip,
   backfillLine,
   checkedLine,
   formsLine,
@@ -130,16 +131,20 @@ it("says where bringing in older leads has got to", () => {
   );
 });
 
-it("shows a Page's forms and brings in older leads on request", async () => {
+it("shows each Page's forms as rows and brings in all their older leads on request", async () => {
   await render();
-  expect(tile().textContent).toContain(
-    "All forms, new ones too: Enquiry, Site visit (archived)",
-  );
-  expect(tile().textContent).toContain(
-    "Older leads, last 90 days: 15 leads read: 12 new, 0 already in your leads",
-  );
+  // Bug reports #21 and #22: rows and chips, not paragraphs.
+  expect(tile().textContent).not.toContain("All forms, new ones too");
+  const rows = [
+    ...tile().querySelectorAll('[aria-label="Forms on Fictional Homes"] li'),
+  ];
+  expect(rows.map((row) => row.textContent)).toEqual([
+    "Enquiry",
+    "Site visitArchived",
+  ]);
+  expect(tile().textContent).toContain("Old leads: 12 new, 0 already here");
   const older = [...tile().querySelectorAll("button")].find((button) =>
-    button.textContent?.includes("Bring in older leads"),
+    button.textContent?.includes("Bring old leads, all forms"),
   ) as HTMLButtonElement;
   await act(async () => older.click());
   expect(calls).toContainEqual({
@@ -149,15 +154,19 @@ it("shows a Page's forms and brings in older leads on request", async () => {
   expect(tile().textContent).toContain(
     "30 older leads read: 30 new, 0 already in your leads; the rest follow in the next few minutes.",
   );
-  expect(tile().textContent).toContain(
-    "Bringing in older leads… 30 leads read: 30 new, 0 already in your leads so far",
-  );
-  // While it runs, there is nothing to press again.
+  expect(tile().textContent).toContain("Old leads: 30 read");
+  // While it runs, nothing brings older leads in again.
+  const running = [...tile().querySelectorAll("button")].find((button) =>
+    button.textContent?.includes("Bringing in old leads"),
+  ) as HTMLButtonElement;
+  expect(running.disabled).toBe(true);
   expect(
-    [...tile().querySelectorAll("button")].some((button) =>
-      button.textContent?.includes("Bring in older leads"),
-    ),
-  ).toBe(false);
+    (
+      tile().querySelector(
+        '[aria-label="Bring old leads from Enquiry"]',
+      ) as HTMLButtonElement
+    ).disabled,
+  ).toBe(true);
 });
 
 it("walks the customer through Leads Access Manager when Meta blocks the app", async () => {
@@ -193,7 +202,7 @@ it("keeps the Leads Access Manager steps folded away when nothing is wrong", asy
   );
 });
 
-it("lists every form on the Page to pick from, and brings in the picked ones' older leads", async () => {
+it("groups Pages by account, switches forms live one by one, and brings in one form's old leads", async () => {
   pages = [
     page({
       account: { name: "Fictional Owner", picture: null },
@@ -204,41 +213,63 @@ it("lists every form on the Page to pick from, and brings in the picked ones' ol
       ],
     }),
   ];
-  const bodies: unknown[] = [];
+  const bodies: { url: string; body: unknown }[] = [];
   const base = globalThis.fetch;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-      if (init?.body) bodies.push(JSON.parse(String(init.body)));
+      if (init?.body)
+        bodies.push({
+          url: String(input),
+          body: JSON.parse(String(init.body)),
+        });
       return base(input, init);
     }),
   );
   await render();
-  // Bug report #8: which Facebook account the Page came through, and another one.
-  expect(tile().textContent).toContain("Through Fictional Owner's Facebook");
+  // Bug report #8: which Facebook account the Pages came through, and another one.
   expect(
-    tile().querySelector('a[href="/v1/lead-desk/meta/connect?switch=1"]')
+    tile().querySelector('[aria-label="Pages through Fictional Owner"]')
       ?.textContent,
-  ).toBe("Use another Facebook account");
-  expect(tile().textContent).toContain("Forms on this Page (3)");
+  ).toContain("Fictional Owner1 Page");
+  expect(
+    tile()
+      .querySelector('[aria-label="Use another Facebook account"]')
+      ?.getAttribute("href"),
+  ).toBe("/v1/lead-desk/meta/connect?switch=1");
   expect(tile().textContent).toContain("31 on Meta");
-  expect(tile().textContent).toContain("Archived");
-  const boxes = [
-    ...tile().querySelectorAll('input[type="checkbox"]'),
-  ] as HTMLInputElement[];
-  // Select all starts on; untick it, then pick one form.
-  expect(boxes[0].checked).toBe(true);
-  await act(async () => boxes[0].click());
-  await act(async () => boxes[2].click());
-  const bring = [...tile().querySelectorAll("button")].find((button) =>
-    button.textContent?.includes("Bring old leads (1)"),
+  // One form's switch: the others stay live.
+  const keep = tile().querySelector(
+    '[aria-label="Keep Old offer live"]',
+  ) as HTMLInputElement;
+  expect(keep.checked).toBe(true);
+  await act(async () => keep.click());
+  expect(bodies).toContainEqual({
+    url: "/v1/lead-desk/meta/pages/1326368220570095",
+    body: { forms: ["f1", "f2"] },
+  });
+  // One form's old leads, archived ones too.
+  const bring = tile().querySelector(
+    '[aria-label="Bring old leads from Site visit"]',
   ) as HTMLButtonElement;
   await act(async () => bring.click());
-  expect(calls).toContainEqual({
+  expect(bodies).toContainEqual({
     url: "/v1/lead-desk/meta/pages/1326368220570095/backfill",
+    body: { forms: ["f2"] },
+  });
+});
+
+it("switches a Page off from its switch", async () => {
+  await render();
+  const page = tile().querySelector(
+    '[aria-label="Leads from Fictional Homes"]',
+  ) as HTMLInputElement;
+  expect(page.checked).toBe(true);
+  await act(async () => page.click());
+  expect(calls).toContainEqual({
+    url: "/v1/lead-desk/meta/pages/1326368220570095/disconnect",
     method: "POST",
   });
-  expect(bodies).toContainEqual({ forms: ["f2"] });
 });
 
 it("says the Pages didn't load, with Try again, instead of loading forever", async () => {
@@ -276,5 +307,21 @@ it("keeps new leads apart from people who asked again after Check now", () => {
   );
   expect(checkedLine("Fictional Homes", 1, 3)).toBe(
     "1 new lead, 3 people asked again from Fictional Homes.",
+  );
+});
+
+it("says a run of older leads in a chip's few words", () => {
+  expect(backfillChip(null)).toBeNull();
+  expect(backfillChip({ state: "running", created: 2, seen: 40 })).toBe(
+    "Old leads: 40 read",
+  );
+  expect(
+    backfillChip({ state: "done", created: 0, seen: 104, known: 104 }),
+  ).toBe("Old leads: 0 new, 104 already here");
+  expect(backfillChip({ state: "done", created: 0, seen: 0 })).toBe(
+    "No old leads on Meta",
+  );
+  expect(backfillChip({ state: "blocked", created: 0, seen: 0 })).toBe(
+    "Old leads stopped",
   );
 });

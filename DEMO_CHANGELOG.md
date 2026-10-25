@@ -6,6 +6,13 @@ No client names here.
 
 ## Facebook lead sources (Meta-suite session): bug reports #7, #8, #10, #12, #13, #14
 
+- **Sources as rows: account → Page → form, a switch per Page and per form, chips for status (#21, #22)**, this commit.
+  - What changed:
+    - Each Facebook account's Pages and every form are plain rows: a Keep live switch per form, one icon for a form's old leads, and status as chips.
+    - No paragraphs. "Another account" sits beside Add a Page.
+    - Text sits on the card's own padding.
+  - Verified by: `meta-sources.test.tsx`; wb-ci web and e2e; screenshots of `/review-fixture/meta-sources` at phone and computer sizes.
+
 - **Connections: every Page on at once, older leads from the sheet, the test lead optional (dev #2, #3), and "Use another Facebook account" in plain sight (#8)**, this commit.
   - What changed:
     - The Facebook & Instagram sheet has "Turn on every Page, all forms".

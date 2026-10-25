@@ -1,41 +1,161 @@
-/* Every form on a Facebook Page, to pick from, and the account a Page came
-   through (bug reports #8, #12-#14, 26 Oct 2026). */
-.formPicker {
-  margin-top: 6px;
-  font-size: var(--sx-text-sm);
-}
-.formPicker > summary {
-  cursor: pointer;
-  color: var(--sx-accent);
-  min-height: 32px;
-  display: flex;
-  align-items: center;
-}
-.formRow {
+/* Facebook accounts, their Pages and each Page's forms, as plain rows inside
+   the card: no boxes inside boxes, so text sits on the card's own padding
+   (owner, 26 Oct 2026, bug reports #21 and #22: too much side spacing and
+   clutter). Every target is 44 px. */
+.actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
+}
+
+.actions a {
+  text-decoration: none;
+}
+
+.accounts {
+  display: grid;
+  gap: 12px;
+}
+
+.account {
+  display: grid;
+}
+
+.accountHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   min-height: 36px;
-  padding: 4px 0;
   border-bottom: 1px solid var(--sx-line);
+  font-size: var(--sx-text-sm);
 }
-.formRow input {
-  width: 18px;
-  height: 18px;
+
+.accountHead img,
+.avatar {
+  flex: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
 }
-.formName {
-  flex: 1 1 160px;
+
+.avatar {
+  display: inline-grid;
+  place-items: center;
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.accountHead strong {
   min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.page {
+  display: grid;
+  gap: 4px;
+  padding: 10px 0;
+}
+
+.page + .page {
+  border-top: 1px solid var(--sx-line);
+}
+
+.pageHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.pageTitle {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.pageTitle strong {
   overflow-wrap: anywhere;
 }
-.pageAccount {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: var(--sx-text-xs);
+
+.page[data-off] .pageTitle strong {
   color: var(--sx-muted);
 }
-.pageAccount img {
+
+.pageTools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
+.forms {
+  display: grid;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* switch | name over its chips | the old-leads icon: one shape for every form,
+   so nothing wraps under the switch on a phone. */
+.formRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 2px 0;
+  border-top: 1px solid var(--sx-line);
+}
+
+.formText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.formName {
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--sx-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.iconButton {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
   border-radius: 50%;
+  background: transparent;
+  color: var(--sx-ink-2);
+  cursor: pointer;
+}
+
+.iconButton:hover:not(:disabled) {
+  background: var(--sx-sunken);
+}
+
+.iconButton:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.iconButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.pageFoot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-top: 4px;
 }
