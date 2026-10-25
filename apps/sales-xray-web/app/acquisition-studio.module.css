@@ -3616,17 +3616,20 @@
   }
 }
 
-/* Design system v2 (20 Oct), phones: the title takes the full width with its
-   pencil beside it (it used to drop to a line of its own); the date, length
-   and language sit under it with Transcript and the menu at their end. */
+/* Phones (R2, owner program 25 Oct 2026: the Report's frame): the title with
+   its pencil, and Transcript and the menu beside it; the call's facts under
+   them as one row of chips; little space before Report | Coaching. */
 @media (max-width: 760px) {
   .app.app[data-stage="report"] .reportHeader {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "title title"
-      "meta actions";
+      "title actions"
+      "meta meta";
     align-items: center;
-    row-gap: 2px;
+    column-gap: 8px;
+    row-gap: 8px;
+    margin-bottom: 4px;
+    padding-bottom: 6px;
   }
   .app.app[data-stage="report"] .reportHeading {
     display: contents;
@@ -3639,11 +3642,28 @@
   }
   .app.app[data-stage="report"] .reportMetadata {
     grid-area: meta;
+    flex-wrap: nowrap;
+    gap: 6px;
+    min-width: 0;
     margin-top: 0;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .app.app[data-stage="report"] .reportMetadata::-webkit-scrollbar {
+    display: none;
+  }
+  .app.app[data-stage="report"] .reportMetadata > span {
+    flex: none;
+    min-height: 28px;
+    padding: 0 10px;
+    border-radius: 999px;
+    background: var(--lx-sunken);
+    white-space: nowrap;
   }
   .app.app[data-stage="report"] .reportActions {
     grid-area: actions;
     align-self: center;
+    flex-wrap: nowrap;
   }
 }
 
