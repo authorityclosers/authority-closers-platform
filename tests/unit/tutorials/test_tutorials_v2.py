@@ -265,3 +265,19 @@ def test_pack_script_rows_follow_the_cut() -> None:
     assert rows[2]["on_screen"].startswith("Show “Refresh app data”")
     assert all(r["say"] and r["roman"] for r in rows)
     assert pack.safe("T1 Join: the testers?") == "T1 Join the testers"
+
+
+def test_store_names_keep_avatar_initials_in_step() -> None:
+    # A renamed fixture person's avatar initials change with the name (Kavya Gokhale shows KG).
+    import play_listing as pl
+
+    people = {k: v for k, v in pl.NAMES.items() if re.fullmatch(r"[A-Z][a-z]+ [A-Z][a-z]+", k)}
+    checked = 0
+    for old, new in people.items():
+        before = "".join(w[0] for w in old.split())
+        after = "".join(w[0] for w in new.split())
+        if before in pl.NAMES:
+            assert pl.NAMES[before] == after, (old, new)
+            checked += 1
+    assert checked >= 8
+    assert pl.NAMES["Swamini Fictional"] == "Kavya Gokhale"

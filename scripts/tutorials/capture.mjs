@@ -1130,7 +1130,21 @@ async function probe(specFile, out) {
   for (const s of specs) {
     const { ctx, page } = await newPage(browser, s.device, s.theme || "light");
     try {
-      for (const a of s.setup || []) await act(page, a, s.device, []);
+      // dump: every text the page showed along the way (to find names a video would show).
+      const seenText = new Set();
+      for (const a of s.setup || []) {
+        await act(page, a, s.device, []);
+        if (s.dump)
+          for (const line of (
+            await page.evaluate(() => document.body.innerText)
+          ).split("\n"))
+            if (line.trim()) seenText.add(line.trim());
+      }
+      if (s.dump)
+        fs.writeFileSync(
+          path.join(out, `${s.name}.text.txt`),
+          [...seenText].join("\n") + "\n",
+        );
       await page.waitForTimeout(s.settle_ms ?? 700);
       await page.screenshot({
         path: path.join(out, `${s.name}.jpg`),

@@ -169,7 +169,8 @@
               "do": "highlight",
               "target": {
                 "role": "button",
-                "name": "New Lead"
+                "name": "New Lead",
+                "nth": 1
               },
               "ms": 1200
             },
@@ -303,27 +304,47 @@
                 "role": "button",
                 "name": "Move Asha Fictional"
               },
-              "ms": 1700
+              "ms": 1500
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Meeting / Demo Scheduled Asks for the meeting"
+              },
+              "ms": 1400
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Close",
+                "exact": true
+              },
+              "ms": 600
             }
           ],
           "say": {
-            "en": "Tap the arrows to move a lead to its next stage. Every move is saved on the lead's history.",
-            "hi": "Arrows दबाइए और lead को अगले stage पे ले जाइए. हर move lead की history में save होता है.",
-            "mr": "Arrows दाबा आणि lead ला पुढच्या stage वर न्या. प्रत्येक move lead च्या history मध्ये save होतो."
+            "en": "Tap the arrows and pick the stage the lead moves to. Every move is saved on the lead's history.",
+            "hi": "Arrows दबाइए और वो stage चुनिए जहाँ lead को ले जाना है. हर move lead की history में save होता है.",
+            "mr": "Arrows दाबा आणि lead ला ज्या stage वर न्यायचं, तो निवडा. प्रत्येक move lead च्या history मध्ये save होतो."
           },
           "latn": {
-            "hi": "Arrows dabaiye aur lead ko agle stage pe le jaaiye. Har move lead ki history mein save hota hai.",
-            "mr": "Arrows daba aani lead la pudhchya stage var nya. Pratyek move lead chya history madhye save hoto."
+            "hi": "Arrows dabaiye aur woh stage chuniye jahan lead ko le jaana hai. Har move lead ki history mein save hota hai.",
+            "mr": "Arrows daba aani lead la jya stage var nyaycha, to nivada. Pratyek move lead chya history madhye save hoto."
           },
           "short": {
             "say": {
-              "en": "Move it to the next stage.",
-              "hi": "अगले stage पे ले जाइए.",
-              "mr": "पुढच्या stage वर न्या."
+              "en": "Pick its next stage.",
+              "hi": "अगला stage चुनिए.",
+              "mr": "पुढचा stage निवडा."
             },
             "latn": {
-              "hi": "Agle stage pe le jaaiye.",
-              "mr": "Pudhchya stage var nya."
+              "hi": "Agla stage chuniye.",
+              "mr": "Pudhcha stage nivada."
             }
           }
         },
