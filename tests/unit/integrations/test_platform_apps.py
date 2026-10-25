@@ -152,6 +152,10 @@ def test_mcp_tools_follow_the_connection_scopes() -> None:
         assert tool["annotations"]["destructiveHint"] is False
         assert tool["annotations"]["openWorldHint"] is False
         assert tool["title"]
+        # The Claude directory's tool check wants the title inside the annotations too.
+        assert tool["annotations"]["title"] == tool["title"]
+    # Listing never changes the shared definitions.
+    assert all("title" not in tool["annotations"] for tool in mcp_http.TOOLS)
 
 
 BASE = "https://salesxray.example.test"

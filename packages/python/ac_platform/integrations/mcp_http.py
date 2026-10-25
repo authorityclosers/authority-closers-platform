@@ -189,9 +189,13 @@ def _allowed(tool: dict[str, Any], scopes: frozenset[str]) -> bool:
 
 
 def listed(scopes: frozenset[str]) -> list[dict[str, Any]]:
-    """The tools this connection may use, as MCP describes them."""
+    """The tools this connection may use, as MCP describes them. The title goes in the
+    annotations too: the Claude directory's tool check reads ``annotations.title``."""
     return [
-        {key: value for key, value in tool.items() if key != "scope"}
+        {
+            **{key: value for key, value in tool.items() if key != "scope"},
+            "annotations": {**tool["annotations"], "title": tool["title"]},
+        }
         for tool in TOOLS
         if _allowed(tool, scopes)
     ]
