@@ -69,6 +69,12 @@ export const SCREENS = {
   // Fictional call analysis numbers: the sliding figures and the attention dot.
   "home-analysis": { path: "/review-fixture/home?analysis=1" },
   "home-mine": { path: "/review-fixture/home?view=mine&analysis=1" },
+  // A seller's My day: ranked work with why and targets; today beside yesterday;
+  // an empty day (what is next, this week beside last); no leads of their own yet.
+  "home-seller": { path: "/review-fixture/home?role=seller" },
+  "home-seller-day": { path: "/review-fixture/home?role=seller&targets=0" },
+  "home-seller-quiet": { path: "/review-fixture/home?role=seller&quiet=1" },
+  "home-seller-none": { path: "/review-fixture/home?role=seller&none=1" },
 };
 
 /** The screens a request asks for: screen names or fixture paths ("/review-fixture/..."); none means all. */
