@@ -91,6 +91,19 @@ type Loaded = {
   counts: Record<string, number>;
 };
 
+/** Each event once: an older page that overlaps the one before (new work came
+ *  in meanwhile) repeats a few, and a repeated key breaks the list. */
+export function uniqueEvents<T extends { event_id: string }>(
+  items: readonly T[],
+): T[] {
+  const seen = new Set<string>();
+  return items.filter((item) => {
+    if (seen.has(item.event_id)) return false;
+    seen.add(item.event_id);
+    return true;
+  });
+}
+
 export function MyWork({
   onOpen,
   onStart,
@@ -110,7 +123,7 @@ export function MyWork({
       (page) =>
         setLoaded({
           day,
-          items: page.items,
+          items: uniqueEvents(page.items),
           next: page.next_before,
           counts: page.counts,
         }),
@@ -139,7 +152,7 @@ export function MyWork({
         value && value.day === day
           ? {
               ...value,
-              items: [...value.items, ...page.items],
+              items: uniqueEvents([...value.items, ...page.items]),
               next: page.next_before,
             }
           : value,

@@ -1,6 +1,6 @@
 {
   "id": "t2-install-from-play",
-  "number": "T2",
+  "number": "02",
   "kind": "tester",
   "title": {
     "en": "Install from Google Play, or move from the old app",
@@ -32,8 +32,8 @@
     "id": "t3-sign-in",
     "title": {
       "en": "Sign in inside the app",
-      "hi": "App mein sign in",
-      "mr": "App madhye sign in"
+      "hi": "App ke andar sign in kijiye",
+      "mr": "App madhye sign in kara"
     }
   },
   "intro": {
@@ -128,7 +128,111 @@
             "hi": "Sales X-Ray naya hai? Bas Google Play kholiye aur Install dabaiye. Phir updates Play se hi aayenge, baaki apps ki tarah.",
             "mr": "Sales X-Ray navin aahe? Fakta Google Play ughda aani Install daba. Mag updates Play madhunach yetil, baakichya apps sarkhe."
           }
+        }
+      ]
+    },
+    {
+      "id": "update-phone",
+      "device": "footage",
+      "footage": {
+        "file": "r13-01-update-from-play.mp4",
+        "size": [720, 1280],
+        "from": 70.0,
+        "to": 89.6,
+        "crop": [60, 60, 80, 80],
+        "blur": [
+          {
+            "box": [80, 640, 560, 480]
+          }
+        ]
+      },
+      "beats": [
+        {
+          "id": "update",
+          "chapter": "new",
+          "actions": [],
+          "phone": {
+            "at": 70.5,
+            "events": [
+              {
+                "do": "tap",
+                "at": 75.2,
+                "box": [368, 460, 237, 56],
+                "key": true,
+                "what": "Update"
+              }
+            ]
+          },
+          "say": {
+            "en": "When there's an update, Sales X-Ray's page on Google Play shows Update. Tap it.",
+            "hi": "Update आया हो, तो Google Play पे Sales X-Ray के page पे Update दिखेगा. उसे दबाइए.",
+            "mr": "Update आला असेल, तर Google Play वर Sales X-Ray च्या page वर Update दिसेल. ते दाबा."
+          },
+          "latn": {
+            "hi": "Update aaya ho, toh Google Play pe Sales X-Ray ke page pe Update dikhega. Use dabaiye.",
+            "mr": "Update aala asel, tar Google Play var Sales X-Ray chya page var Update disel. Te daba."
+          },
+          "sync": {
+            "en": "Tap it",
+            "hi": "दबाइए",
+            "mr": "दाबा"
+          }
         },
+        {
+          "id": "installing",
+          "chapter": "new",
+          "actions": [],
+          "phone": {
+            "at": 75.6,
+            "events": []
+          },
+          "say": {
+            "en": "Play downloads and installs it in a few seconds.",
+            "hi": "Play कुछ ही seconds में download और install कर देता है.",
+            "mr": "Play काही seconds मध्ये download आणि install करतो."
+          },
+          "latn": {
+            "hi": "Play kuch hi seconds mein download aur install kar deta hai.",
+            "mr": "Play kahi seconds madhye download aani install karto."
+          }
+        },
+        {
+          "id": "open",
+          "chapter": "new",
+          "actions": [],
+          "phone": {
+            "at": 81.5,
+            "events": [
+              {
+                "do": "tap",
+                "at": 88.65,
+                "box": [368, 460, 237, 56],
+                "key": true,
+                "what": "Open"
+              }
+            ]
+          },
+          "say": {
+            "en": "Then tap Open. Your leads and calls are all still there.",
+            "hi": "फिर Open दबाइए. आपके leads और calls सब वहीं हैं.",
+            "mr": "मग Open दाबा. तुमचे leads आणि calls सगळे तिथेच आहेत."
+          },
+          "latn": {
+            "hi": "Phir Open dabaiye. Aapke leads aur calls sab wahin hain.",
+            "mr": "Mag Open daba. Tumche leads aani calls sagle tithech aahet."
+          },
+          "sync": {
+            "en": "Open",
+            "hi": "Open",
+            "mr": "Open"
+          }
+        }
+      ]
+    },
+    {
+      "id": "steps-move",
+      "device": "card",
+      "beats": [
         {
           "id": "why",
           "chapter": "move",

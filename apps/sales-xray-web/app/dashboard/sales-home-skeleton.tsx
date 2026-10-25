@@ -8,6 +8,7 @@
  */
 
 import { ActionList, ActionRow, Skeleton, SkeletonRow } from "../ui/kit";
+import myDay from "./my-day.module.css";
 import styles from "./sales-home.module.css";
 
 /** A list card's rows: sellers or leads. */
@@ -115,6 +116,10 @@ export function FunnelSkeleton() {
 export function TodaySkeleton() {
   return (
     <>
+      {/* Taking new leads: its row's icon and two lines. */}
+      <section className={styles.taking} aria-hidden="true">
+        <SkeletonRow avatar={40} lines={2} />
+      </section>
       <section className={styles.block} aria-busy="true">
         <div className={styles.head}>
           <h2>Today</h2>
@@ -122,7 +127,7 @@ export function TodaySkeleton() {
         </div>
         <div className={styles.chips} aria-hidden="true">
           {[64, 112, 104].map((width) => (
-            <Skeleton key={width} width={width} height={38} radius="pill" />
+            <Skeleton key={width} width={width} height={44} radius="pill" />
           ))}
         </div>
         <RowsSkeleton rows={4} kind="lead" />
@@ -132,16 +137,19 @@ export function TodaySkeleton() {
           <Skeleton width={136} height={12} />
         </span>
       </section>
-      <dl className={styles.dayStrip} aria-hidden="true">
-        {["Calls", "Connected", "Follow-ups done"].map((label) => (
-          <div key={label}>
-            <dt>{label}</dt>
-            <dd className={styles.line}>
-              <Skeleton width={28} height={18} />
-            </dd>
-          </div>
-        ))}
-      </dl>
+      <section className={myDay.numbers} aria-hidden="true">
+        <h3 className={myDay.numbersTitle}>Today</h3>
+        <dl className={styles.dayStrip}>
+          {["Calls", "Connected", "Follow-ups done"].map((label) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd className={styles.line}>
+                <Skeleton width={28} height={18} />
+              </dd>
+            </div>
+          ))}
+        </dl>
+      </section>
     </>
   );
 }
@@ -163,7 +171,7 @@ export function SalesHomeSkeleton({ manager }: { manager: boolean }) {
             <OutcomesSkeleton />
             {/* "N for you to call today" */}
             <div className={styles.chips} aria-hidden="true">
-              <Skeleton width={190} height={38} radius="pill" />
+              <Skeleton width={190} height={44} radius="pill" />
             </div>
           </section>
           <section className={styles.block}>

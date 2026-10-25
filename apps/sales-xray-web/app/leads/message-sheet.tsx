@@ -24,7 +24,7 @@ import {
   type MessageTemplate,
 } from "./leads-client";
 import { buzz } from "./native-phone";
-import styles from "./leads.module.css";
+import styles from "./message-sheet.module.css";
 
 /** The ready messages and the names that fill them, for every lead on the page. */
 export const MessageSetup = createContext<{
@@ -111,12 +111,8 @@ export function MessageSheet({
       sub={displayPhone(target.phone)}
       onClose={onClose}
     >
-      <div className={styles.messageBody}>
-        <div
-          className={styles.channelSwitch}
-          role="group"
-          aria-label="Send with"
-        >
+      <div className={styles.body}>
+        <div className={styles.channels} role="group" aria-label="Send with">
           <button
             type="button"
             aria-pressed={channel === "whatsapp"}
@@ -137,7 +133,7 @@ export function MessageSheet({
           </button>
         </div>
         <div
-          className={styles.templateChips}
+          className={styles.templates}
           role="group"
           aria-label="Ready messages"
         >
@@ -145,8 +141,9 @@ export function MessageSheet({
             <button
               key={template.key}
               type="button"
-              className={styles.chip}
+              className={styles.template}
               aria-pressed={picked === template.key}
+              title={template.label}
               onClick={() => {
                 setPicked(template.key);
                 setText(fill(template));
@@ -156,17 +153,17 @@ export function MessageSheet({
             </button>
           ))}
         </div>
-        <label className={styles.messageField}>
-          <span className={styles.stepLabel}>Your message</span>
+        <label className={styles.field}>
+          <span className={styles.fieldLabel}>Your message</span>
           <textarea
-            rows={4}
+            rows={5}
             value={text}
             maxLength={1000}
             onChange={(event) => setText(event.target.value)}
           />
         </label>
         <a
-          className={styles.sendButton}
+          className={styles.send}
           data-channel={channel}
           href={href}
           target={channel === "whatsapp" ? "_blank" : undefined}

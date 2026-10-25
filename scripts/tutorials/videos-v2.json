@@ -1,0 +1,62 @@
+{
+  "name": "Sales X-Ray Videos",
+  "sheet": "Sales X-Ray videos – start here",
+  "optin": "https://play.google.com/apps/testing/com.authorityclosers.salesxray",
+  "videos": [
+    {
+      "id": "t1-join-testing",
+      "title": "Join the testers",
+      "shows": "Open the tester invite, become a tester and find the app on Google Play."
+    },
+    {
+      "id": "t2-install-from-play",
+      "title": "Install from Google Play",
+      "shows": "Install or update from Google Play, and move over safely from the old download-link app."
+    },
+    {
+      "id": "t3-sign-in",
+      "title": "Sign in",
+      "shows": "Sign in with Continue with Google and join your company's workspace."
+    },
+    {
+      "id": "t4-first-steps",
+      "title": "First steps",
+      "shows": "Allow the permissions, set up the phone for calls and alerts, and pick a theme."
+    },
+    {
+      "id": "t5-if-it-hangs",
+      "title": "If something hangs",
+      "shows": "Never reinstall: tap Reload, or Refresh app data in Phone & alerts."
+    },
+    {
+      "id": "04-call-a-lead",
+      "title": "Call a lead and log how it went",
+      "shows": "Call in one tap, then log how the call went and what happens next."
+    },
+    {
+      "id": "13-lead-stages-board",
+      "title": "Lead stages and the Board",
+      "shows": "The nine lead stages, the Board, moving a lead and the pipeline numbers."
+    },
+    {
+      "id": "14-my-work",
+      "title": "My work and notes",
+      "shows": "Everything you did today, yesterday or this week, and quick notes on a lead."
+    },
+    {
+      "id": "15-all-leads-filter",
+      "title": "All leads: filter and sort",
+      "shows": "Search, filter and sort your whole lead list, and save the views you use."
+    },
+    {
+      "id": "16-never-lose-a-change",
+      "title": "Never lose a change",
+      "shows": "What Not sent yet and All changes saved mean, and why your work is safe."
+    },
+    {
+      "id": "17-tasks-and-remind",
+      "title": "Tasks and reminders",
+      "shows": "Your follow-ups by Overdue, Today and Upcoming, and Remind on any lead."
+    }
+  ]
+}

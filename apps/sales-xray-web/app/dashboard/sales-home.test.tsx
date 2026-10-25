@@ -151,6 +151,7 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
     "How sales are going",
     "Needs you",
     "Sellers",
+    "Targets",
     "Open leads by stage",
   ]);
   const figures = Array.from(host.querySelectorAll("dt"), (dt) =>

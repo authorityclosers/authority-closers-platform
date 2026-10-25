@@ -74,14 +74,17 @@
   outline: 2px solid var(--sx-focus-ring);
 }
 
+/* The step and its buttons sit together in the middle of the screen, in
+   thumb reach (owner, 25 Oct 2026: "buttons in the middle, not the bottom");
+   a long step scrolls with its buttons under it. */
 .body {
   display: grid;
   align-content: center;
   justify-items: start;
   gap: 12px;
-  flex: 1;
+  flex: none;
   width: min(440px, 100%);
-  margin: 0 auto;
+  margin: auto auto 0;
 }
 
 .icon {
@@ -170,7 +173,7 @@
   display: grid;
   gap: 8px;
   width: min(440px, 100%);
-  margin: 16px auto 0;
+  margin: 24px auto auto;
 }
 
 .actions button {

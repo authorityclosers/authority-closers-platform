@@ -1,6 +1,6 @@
 {
   "id": "14-my-work",
-  "number": "14",
+  "number": "08",
   "kind": "feature",
   "title": {
     "en": "My work and quick notes",
@@ -28,11 +28,11 @@
     "Can I show you in 10 minutes how": "Can I quickly show you how"
   },
   "next": {
-    "id": "16-never-lose-a-change",
+    "id": "15-all-leads-filter",
     "title": {
-      "en": "Never lose a change",
-      "hi": "Koi change na khoye",
-      "mr": "Kuthlahi change harvu naye"
+      "en": "All leads: filter, sort and saved views",
+      "hi": "All leads: filter, sort aur saved views",
+      "mr": "All leads: filter, sort aani saved views"
     }
   },
   "intro": {
@@ -53,13 +53,13 @@
       "mr": "Tumcha divas, eka najret."
     },
     "say": {
-      "en": "Next: never losing a change on your phone.",
-      "hi": "अगले video में: phone पे कोई भी change कभी न खोए.",
-      "mr": "पुढच्या video मध्ये: phone वरचा कुठलाही change कधीच हरवत नाही."
+      "en": "Next: All leads, with filter, sort and saved views.",
+      "hi": "अगले video में: All leads, filter, sort और saved views के साथ.",
+      "mr": "पुढच्या video मध्ये: All leads, filter, sort आणि saved views सकट."
     },
     "latn": {
-      "hi": "Agle video mein: phone pe koi bhi change kabhi na khoye.",
-      "mr": "Pudhchya video madhye: phone varcha kuthlahi change kadhich harvat nahi."
+      "hi": "Agle video mein: All leads, filter, sort aur saved views ke saath.",
+      "mr": "Pudhchya video madhye: All leads, filter, sort aani saved views sakat."
     }
   },
   "chapters": [

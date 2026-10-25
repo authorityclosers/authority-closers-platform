@@ -20,13 +20,14 @@ import {
 } from "./dashboard-data";
 import { DashboardGreeting } from "./dashboard-greeting";
 import {
-  AttentionAction,
   DayBars,
   DayBarsSkeleton,
   StatusSplit,
   StatusSplitSkeleton,
 } from "./dashboard-visuals";
 import { RecentCallsList, RecentCallsSkeleton } from "./recent-calls";
+import { Slides } from "./slides";
+import { CALLS_PATH } from "../analysis-routes";
 import styles from "./dashboard.module.css";
 import type { SandboxFacts } from "./dashboard-data";
 
@@ -179,90 +180,111 @@ export function DashboardBody({
               seller's Home keeps only their recent calls below today. */}
           {salesRole === "seller" ? null : (
             <>
-              {sales ? (
-                <h2 className={styles.partTitle}>Call analysis</h2>
-              ) : null}
-              <dl className={styles.strip} aria-label="Dashboard figures">
-                <Figure
-                  id="metric-analysed"
-                  label={label("Your calls analysed", "Calls analysed", "8em")}
-                  status={activityState.status}
-                  value={activity?.analysedLast30Days}
-                  delta={
-                    activity &&
-                    (activity.analysedLast30Days ||
-                      activity.analysedPrevious30Days) ? (
-                      <Delta
-                        value={activity.analysedLast30Days}
-                        previous={activity.analysedPrevious30Days}
-                      />
-                    ) : null
-                  }
-                  context={
-                    activity === null
-                      ? null
-                      : activity.analysedPrevious30Days ||
-                          activity.analysedLast30Days
-                        ? `${activity.analysedPrevious30Days} in the 30 days before`
-                        : "in the last 30 days"
-                  }
-                  accessory={
-                    lastTwoWeeks ? (
-                      <span className={styles.figureSpark}>
-                        <Spark
-                          values={lastTwoWeeks}
-                          label={`Calls analysed per day, last 14 days: ${lastTwoWeeks.join(", ")}`}
-                        />
-                      </span>
-                    ) : null
-                  }
+              {/* Needs attention is a dot beside the title, only while calls
+                  wait (owner, 25 Oct 2026). */}
+              <div className={styles.partHead}>
+                {sales ? (
+                  <h2 className={styles.partTitle}>Call analysis</h2>
+                ) : null}
+                {summary && summary.needsAttention > 0 ? (
+                  <Link
+                    className={styles.attention}
+                    href={`${CALLS_PATH}?status=attention`}
+                  >
+                    <span className={styles.warnDot} aria-hidden="true" />
+                    {summary.needsAttention === 1
+                      ? "1 call needs a look"
+                      : `${summary.needsAttention} calls need a look`}
+                  </Link>
+                ) : null}
+                {/* Every kind of report in one place (owner, 25 Oct 2026). */}
+                <Link className={styles.allReports} href="/reports">
+                  All reports
+                </Link>
+              </div>
+              {activityState.status === "ready" &&
+              summaryState.status === "ready" &&
+              activity === null &&
+              summary === null ? (
+                <Quiet
+                  text="Your call analysis shows here once a call is analysed."
+                  action={{ href: "/new-analysis", label: "Analyse a call" }}
                 />
-                <Figure
-                  id="metric-reports-ready"
-                  label="Reports ready"
-                  status={summaryState.status}
-                  value={summary?.completed}
-                  context={
-                    summary === null ? null : team === null ? (
-                      <Ph w="9em" />
-                    ) : (
-                      `of ${summary.total} ${team ? "team" : "saved"} ${summary.total === 1 ? "call" : "calls"}`
-                    )
-                  }
-                  accessory={
-                    summary && summary.total > 0 ? (
-                      <span className={styles.figureShare}>
-                        <Meter
-                          value={summary.completed}
-                          max={summary.total}
-                          label={`${Math.round((summary.completed / summary.total) * 100)}% of saved calls have a ready report`}
-                        />
-                      </span>
-                    ) : null
-                  }
-                />
-                {/* No Minutes left here (owner, 19 Oct 2026: end users never see minutes, prices or validity; metering lives in Admin). */}
-                <Figure
-                  id="metric-needs-attention"
-                  label={
-                    summary && summary.needsAttention > 0 ? (
-                      <>
-                        <span className={styles.warnDot} aria-hidden="true" />
-                        Needs attention
-                      </>
-                    ) : (
-                      "Needs attention"
-                    )
-                  }
-                  status={summaryState.status}
-                  value={summary?.needsAttention}
-                  context={
-                    summary === null ? null : (
-                      <AttentionAction count={summary.needsAttention} />
-                    )
-                  }
-                />
-              </dl>
+              ) : (
+                // Calls analysed and Reports ready, one at a time on a phone
+                // (owner, 25 Oct 2026: an auto-sliding widget with page dots).
+                <Slides
+                  label="Dashboard figures"
+                  names={["Calls analysed", "Reports ready"]}
+                >
+                  <dl className={styles.slideFigure}>
+                    <Figure
+                      id="metric-analysed"
+                      label={label(
+                        "Your calls analysed",
+                        "Calls analysed",
+                        "8em",
+                      )}
+                      status={activityState.status}
+                      value={activity?.analysedLast30Days}
+                      delta={
+                        activity &&
+                        (activity.analysedLast30Days ||
+                          activity.analysedPrevious30Days) ? (
+                          <Delta
+                            value={activity.analysedLast30Days}
+                            previous={activity.analysedPrevious30Days}
+                          />
+                        ) : null
+                      }
+                      context={
+                        activity === null
+                          ? null
+                          : activity.analysedPrevious30Days ||
+                              activity.analysedLast30Days
+                            ? `${activity.analysedPrevious30Days} in the 30 days before`
+                            : "in the last 30 days"
+                      }
+                      accessory={
+                        lastTwoWeeks ? (
+                          <span className={styles.figureSpark}>
+                            <Spark
+                              values={lastTwoWeeks}
+                              label={`Calls analysed per day, last 14 days: ${lastTwoWeeks.join(", ")}`}
+                            />
+                          </span>
+                        ) : null
+                      }
+                    />
+                  </dl>
+                  <dl className={styles.slideFigure}>
+                    <Figure
+                      id="metric-reports-ready"
+                      label="Reports ready"
+                      status={summaryState.status}
+                      value={summary?.completed}
+                      context={
+                        summary === null ? null : team === null ? (
+                          <Ph w="9em" />
+                        ) : (
+                          `of ${summary.total} ${team ? "team" : "saved"} ${summary.total === 1 ? "call" : "calls"}`
+                        )
+                      }
+                      accessory={
+                        summary && summary.total > 0 ? (
+                          <span className={styles.figureShare}>
+                            <Meter
+                              value={summary.completed}
+                              max={summary.total}
+                              label={`${Math.round((summary.completed / summary.total) * 100)}% of saved calls have a ready report`}
+                            />
+                          </span>
+                        ) : null
+                      }
+                    />
+                  </dl>
+                </Slides>
+              )}
 
               <div className={styles.columns}>
                 <section

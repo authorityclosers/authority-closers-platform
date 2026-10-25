@@ -362,13 +362,14 @@ it("lists the pages that are not phone tabs, organisation pages only in one", as
       ),
     ].map((link) => link.getAttribute("href"));
   };
-  expect(await pages(false)).toEqual(["/prospects", "/coaching"]);
+  expect(await pages(false)).toEqual(["/prospects", "/coaching", "/reports"]);
   await act(async () => root.unmount());
   host.remove();
   expect(await pages(true)).toEqual([
     "/leads?tab=all&stage=open",
     "/prospects",
     "/coaching",
+    "/reports",
     "/organisation/insights",
   ]);
   // The website has no phone calls to offer.

@@ -1,5 +1,7 @@
-/* /welcome: one question per step. Phones first: the answer fills the screen
-   and the one action sits in the bottom third; computers get the same column. */
+/* /welcome: one question per step. Phones first: the question, its answers
+   and the one action sit together in the middle of the screen, in thumb reach
+   (owner, 25 Oct 2026: "buttons in the middle, not the bottom"); a long step
+   scrolls with its action under it. Computers get the same column. */
 .page {
   box-sizing: border-box;
   display: flex;
@@ -112,8 +114,13 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  padding: 12px 16px 0;
+  padding: 12px 16px calc(24px + env(safe-area-inset-bottom, 0px));
   animation: step-in var(--sx-dur-base) var(--sx-ease-out);
+}
+
+/* Auto margins above the first line and under the action centre the step. */
+.body > :first-child {
+  margin-top: auto;
 }
 
 .eyebrow {
@@ -407,19 +414,11 @@
   overflow-wrap: anywhere;
 }
 
-/* ---------- The one action, in the bottom third on phones ---------- */
+/* ---------- The one action, right under the answer ---------- */
 .actions {
-  position: sticky;
-  bottom: 0;
   display: grid;
   gap: 8px;
-  margin: auto -16px 0;
-  padding: 20px 16px calc(14px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(
-    to bottom,
-    color-mix(in oklab, var(--sx-paper) 0%, transparent),
-    var(--sx-paper) 18px
-  );
+  margin: 24px 0 auto;
 }
 
 .inlineActions {

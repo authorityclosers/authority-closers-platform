@@ -66,6 +66,79 @@ export const SCREENS = {
     ],
   },
   home: { path: "/review-fixture/home" },
+  // Fictional call analysis numbers: the sliding figures and the attention dot.
+  "home-analysis": { path: "/review-fixture/home?analysis=1" },
+  "home-mine": { path: "/review-fixture/home?view=mine&analysis=1" },
+  // A seller's My day: ranked work with why and targets; today beside yesterday;
+  // an empty day (what is next, this week beside last); no leads of their own yet.
+  "home-seller": { path: "/review-fixture/home?role=seller" },
+  "home-seller-day": { path: "/review-fixture/home?role=seller&targets=0" },
+  "home-seller-quiet": { path: "/review-fixture/home?role=seller&quiet=1" },
+  "home-seller-none": { path: "/review-fixture/home?role=seller&none=1" },
+  // Alerts by urgency: the banner up top and the centre card, with long words.
+  "alert-normal": {
+    path: "/review-fixture/alerts",
+    steps: [{ wait: '[role="status"]' }],
+  },
+  "alert-normal-long": {
+    path: "/review-fixture/alerts?long=1",
+    steps: [{ wait: '[role="status"]' }],
+  },
+  "alert-urgent": {
+    path: "/review-fixture/alerts?level=urgent",
+    steps: [{ wait: '[role="alertdialog"]' }],
+  },
+  // First run: where to work after a sign-in, and setup, each step mid-screen.
+  "welcome-pick": { path: "/review-fixture/welcome?path=pick" },
+  "welcome-pick-invite": { path: "/review-fixture/welcome?path=pick&invite=1" },
+  "welcome-start": { path: "/review-fixture/welcome" },
+  "welcome-business": { path: "/review-fixture/welcome?step=business" },
+  "welcome-first": { path: "/review-fixture/welcome?step=first" },
+  // Reports: what stands out and every kind of report, by category.
+  reports: { path: "/review-fixture/reports" },
+  "reports-seller": { path: "/review-fixture/reports?role=seller" },
+  "reports-quiet": { path: "/review-fixture/reports?quiet=1" },
+  "reports-loading": { path: "/review-fixture/reports?loading=1" },
+  // Call analysis as it is (owner program, section 8: the rebuild's baseline): the Report,
+  // a won call, coaching, the calls list, an empty list, a picked file, analysing.
+  report: { path: "/review-fixture/report/story" },
+  "report-won": { path: "/review-fixture/report/story?example=won" },
+  "report-coach": { path: "/review-fixture/report/story?example=coach" },
+  "calls-list": { path: "/review-fixture/calls" },
+  "calls-empty": { path: "/review-fixture/calls?empty=1" },
+  "upload-picked": { path: "/review-fixture/upload?step=picked" },
+  "upload-analysing": { path: "/review-fixture/upload?step=analysing" },
+  // The team engine: Share out leads from My day, and a seller's targets from Home.
+  "share-out": {
+    path: "/review-fixture/home?view=mine&none=1",
+    steps: [
+      { click: 'button:has-text("Share out leads")' },
+      { wait: "dialog[open]" },
+    ],
+  },
+  "targets-sheet": {
+    path: "/review-fixture/home",
+    steps: [{ click: 'button[aria-label^="Set "]' }, { wait: "dialog[open]" }],
+  },
+  // Notifications in their sheet: groups, kinds, unread, and nothing waiting.
+  notifications: {
+    path: "/review-fixture/notifications",
+    steps: [
+      { click: 'button[aria-label="Notifications"]' },
+      { wait: "dialog[open]" },
+    ],
+  },
+  "notifications-empty": {
+    path: "/review-fixture/notifications?empty=1",
+    steps: [
+      { click: 'button[aria-label="Notifications"]' },
+      { wait: "dialog[open]" },
+    ],
+  },
+  "alert-urgent-long": {
+    path: "/review-fixture/alerts?level=urgent&long=1",
+    steps: [{ wait: '[role="alertdialog"]' }],
+  },
 };
 
 /** The screens a request asks for: screen names or fixture paths ("/review-fixture/..."); none means all. */
@@ -121,6 +194,8 @@ export function measure() {
   const visible = (el) => {
     const r = el.getBoundingClientRect();
     if (r.width <= 0 || r.height <= 0) return false;
+    // Parked off the page until focused (a skip link): not seen, not measured.
+    if (r.bottom <= 0 || r.right <= 0) return false;
     const s = getComputedStyle(el);
     return (
       s.visibility !== "hidden" &&

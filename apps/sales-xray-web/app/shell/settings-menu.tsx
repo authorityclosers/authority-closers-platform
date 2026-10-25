@@ -27,6 +27,7 @@ import {
   Compass,
   GraduationCap,
   LifeBuoy,
+  LineChart,
   ListChecks,
   LogOut,
   MailOpen,
@@ -332,6 +333,8 @@ export function SettingsMenu({
       : []),
     { href: "/prospects", label: "Prospects", icon: <Users size={20} /> },
     { href: "/coaching", label: "Coaching", icon: <GraduationCap size={20} /> },
+    // Every kind of report in one place (owner, 25 Oct 2026).
+    { href: "/reports", label: "Reports", icon: <LineChart size={20} /> },
     // Owners and admins have Team & organisation at the top of You.
     ...(organisation && !insights
       ? [
