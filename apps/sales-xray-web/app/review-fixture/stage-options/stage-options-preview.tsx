@@ -34,7 +34,7 @@ const OPTIONS: {
     pick: "Recommended for partner lists",
     stages: [
       ["New", "new"],
-      ["Couldn't reach", "not_connected"],
+      ["Not connected", "not_connected"],
       ["Gatekeeper", "follow_up"],
       ["Spoke to owner", "follow_up"],
       ["Interested", "interested"],
@@ -44,7 +44,7 @@ const OPTIONS: {
       ["Not a fit", "lost"],
     ],
     outcomes: [
-      "Didn't pick → Couldn't reach, retried by itself",
+      "Didn't pick → Not connected, retried by itself",
       "Talked to staff → Gatekeeper",
       "Owner, not now → Spoke to owner + call-back date",
       "Wants details → Interested + send the deck",
@@ -59,7 +59,7 @@ const OPTIONS: {
     pick: "Recommended for enquiries",
     stages: [
       ["New enquiry", "new"],
-      ["Couldn't reach", "not_connected"],
+      ["Not connected", "not_connected"],
       ["Counselled", "follow_up"],
       ["Session booked", "interested"],
       ["Session attended", "interested"],
@@ -79,7 +79,7 @@ const OPTIONS: {
     fits: "Both kinds of leads in one list",
     stages: [
       ["New", "new"],
-      ["Couldn't reach", "not_connected"],
+      ["Not connected", "not_connected"],
       ["Talked", "follow_up"],
       ["Interested", "interested"],
       ["Meeting or demo booked", "interested"],

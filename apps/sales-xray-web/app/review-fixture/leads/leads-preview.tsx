@@ -210,7 +210,7 @@ const twoPipelines = () =>
 
 const PARTNER_STAGES = [
   ["New", "new"],
-  ["Couldn't reach", "not_connected"],
+  ["Not connected", "not_connected"],
   ["Gatekeeper", "follow_up"],
   ["Spoke to owner", "follow_up"],
   ["Interested", "interested"],
@@ -723,7 +723,7 @@ function answers(now: number, path: string): unknown {
           "building",
           [
             ["New enquiry", "new"],
-            ["Couldn't reach", "not_connected"],
+            ["Not connected", "not_connected"],
             ["Contacted", "follow_up"],
             ["Site visit booked", "interested"],
             ["Site visit done", "interested"],
@@ -739,7 +739,7 @@ function answers(now: number, path: string): unknown {
           "cap",
           [
             ["New enquiry", "new"],
-            ["Couldn't reach", "not_connected"],
+            ["Not connected", "not_connected"],
             ["Counselled", "follow_up"],
             ["Demo class booked", "interested"],
             ["Demo attended", "interested"],
@@ -755,7 +755,7 @@ function answers(now: number, path: string): unknown {
           "briefcase",
           [
             ["New lead", "new"],
-            ["Couldn't reach", "not_connected"],
+            ["Not connected", "not_connected"],
             ["Discovery call", "follow_up"],
             ["Qualified", "interested"],
             ["Meeting booked", "interested"],

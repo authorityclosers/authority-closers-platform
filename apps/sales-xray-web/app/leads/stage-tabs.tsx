@@ -31,7 +31,7 @@ const OPEN_KINDS: Kind[] = ["new", "not_connected", "follow_up", "interested"];
 /** Plain words for a kind, when a business has several stages of it. */
 export const KIND_WORDS: Record<Kind, string> = {
   new: "New",
-  not_connected: "Couldn't reach",
+  not_connected: "Not connected",
   follow_up: "Follow up",
   interested: "Interested",
   won: "Won",
@@ -41,24 +41,30 @@ export const KIND_WORDS: Record<Kind, string> = {
 
 /**
  * The tabs after To call: Open, then the kinds the business's stages use
- * (all six when it has no list yet), named by its own stage when only one
- * stage has that kind. Won, Lost and Junk (Lead OS: fake or unusable, kept apart
- * from Lost) are always there.
+ * (all of them when it has no list yet), named by its own stage when only one
+ * stage has that kind. Won and Lost are always there. Junk only where the
+ * business's list has a Junk stage, or junk leads remain: the sales team's
+ * eight stages have none, a lead that was never real being Lost, "Junk / not a
+ * real lead" (owner, 26 Oct 2026).
  */
 export function stageTabs(
   journey: Pick<JourneyView, "stages"> | null,
   counts: Record<string, number> | null,
 ): StageTab[] {
   const live = (journey?.stages ?? []).filter((stage) => !stage.archived);
-  const kinds = live.length
-    ? KIND_ORDER.filter(
-        (kind) =>
-          kind === "won" ||
-          kind === "lost" ||
-          kind === "junk" ||
-          live.some((stage) => stage.kind === kind),
-      )
-    : KIND_ORDER;
+  const junk =
+    live.some((stage) => stage.kind === "junk") || (counts?.junk ?? 0) > 0;
+  const kinds = (
+    live.length
+      ? KIND_ORDER.filter(
+          (kind) =>
+            kind === "won" ||
+            kind === "lost" ||
+            kind === "junk" ||
+            live.some((stage) => stage.kind === kind),
+        )
+      : KIND_ORDER
+  ).filter((kind) => kind !== "junk" || junk);
   const count = (kind: string) => (counts ? (counts[kind] ?? 0) : undefined);
   const open = counts
     ? OPEN_KINDS.reduce((sum, kind) => sum + (counts[kind] ?? 0), 0)

@@ -86,7 +86,7 @@ FUNNEL_ORDER: Final[dict[str, int]] = {
 # Plain words, as the page shows them.
 KIND_WORDS: Final[dict[str, str]] = {
     "new": "New lead",
-    "not_connected": "Couldn't reach",
+    "not_connected": "Not connected",
     "follow_up": "In talks",
     "interested": "Hot",
     "won": "Won",
@@ -174,7 +174,7 @@ def _r(
 _NEW = _t("new", "New", "lead")
 # Where a seller works an open lead; Won, Lost and Junk close it.
 _WORKING = ("not_connected", "interested", "discussion_incomplete", "meeting_scheduled")
-_UNREACHED = _t("not_connected", "Couldn't reach", "unreachable")
+_UNREACHED = _t("not_connected", "Not connected", "unreachable")
 _LOST = _t("lost", "Lost", "lost")
 
 TEMPLATES: Final[tuple[Template, ...]] = (

@@ -207,7 +207,7 @@ class Journey:
 
     def funnel(self) -> tuple[Stage, ...]:
         """The live stages a lead moves through towards a sale, in the business's order.
-        Couldn't reach and Lost sit beside it."""
+        Not connected and Lost sit beside it."""
         return tuple(s for s in self.live if s.kind not in ("not_connected", "lost", "junk"))
 
     def with_earlier(self, key: str) -> list[str]:
@@ -474,7 +474,7 @@ def check(stages: tuple[Stage, ...]) -> tuple[Stage, ...]:
     names = [stage.label.casefold() for stage in live]
     if len(set(names)) != len(names):
         raise JourneyError("Two stages have the same name. Give each its own.")
-    for kind, words in (("new", "a New stage"), ("not_connected", "a Couldn't reach stage")):
+    for kind, words in (("new", "a New stage"), ("not_connected", "a Not connected stage")):
         found = [stage for stage in live if stage.kind == kind]
         if len(found) != 1:
             raise JourneyError(f"Keep exactly one stage as {words}.")

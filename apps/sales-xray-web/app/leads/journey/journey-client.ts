@@ -448,7 +448,7 @@ export const KIND_ORDER: Kind[] = [
   "not_connected",
 ];
 
-/** The kinds a manager picks for a stage they add (New and Couldn't reach are one each). */
+/** The kinds a manager picks for a stage they add (New and Not connected are one each). */
 export const ADDABLE: Kind[] = ["follow_up", "interested", "won", "lost"];
 
 export function drafts(view: JourneyView): Draft[] {

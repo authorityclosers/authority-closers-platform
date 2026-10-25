@@ -5,7 +5,7 @@
  * the old Meta card was "extremely ugly" and nobody knew what to match with what).
  *
  * - A business picks its kind of business and has working stages at once.
- * - Its stages read as one path from enquiry to sale, with Couldn't reach and
+ * - Its stages read as one path from enquiry to sale, with Not connected and
  *   Lost as other outcomes. Tap a stage to rename it, change its type or what it means,
  *   move it or archive it; add one in its own words and the page says what it
  *   probably means. Nothing is saved until Save.
@@ -103,7 +103,7 @@ const ICONS: Record<string, LucideIcon> = {
 
 export const KIND_WORDS: Record<Kind, string> = {
   new: "New lead",
-  not_connected: "Couldn't reach",
+  not_connected: "Not connected",
   follow_up: "In talks",
   interested: "Hot",
   won: "Won",
