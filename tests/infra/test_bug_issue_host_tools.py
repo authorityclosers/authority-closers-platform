@@ -58,4 +58,11 @@ def test_a_pulse_task_names_the_screen_and_count_never_the_words() -> None:
     assert title == "Bug 4: /leads · 3 reports · came back after the fix"
     assert "https://admin.authorityclosers.com/bugs?issue=4" in notes
     assert "Marker: bug:6d1c2a1e-3b4d-4c5e-8f6a-7b8c9d0e1f2a" in notes
-    assert "CPH2793 (2)" in notes
+    # Only the screen, the count and the Admin link (orchestrator, 26 Oct 2026).
+    assert notes.splitlines()[:3] == [
+        "Screen: /leads",
+        "Reports: 3",
+        "Admin: https://admin.authorityclosers.com/bugs?issue=4",
+    ]
+    for absent in ("CPH2793", "Android", "organisation", "2026-10"):
+        assert absent not in notes
