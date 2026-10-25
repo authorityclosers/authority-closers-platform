@@ -41,6 +41,32 @@ async function local(route) {
   return route.continue();
 }
 
+/** Let the app frame's inner scroller run to its full height, for one whole-page shot. */
+function unclip() {
+  let tallest = null;
+  for (const el of document.querySelectorAll("body *")) {
+    const style = getComputedStyle(el);
+    if (!/(auto|scroll)/.test(style.overflowY)) continue;
+    const extra = el.scrollHeight - el.clientHeight;
+    if (extra > 10 && (!tallest || extra > tallest.extra))
+      tallest = { el, extra };
+  }
+  if (!tallest) return;
+  for (
+    let el = tallest.el;
+    el && el !== document.documentElement;
+    el = el.parentElement
+  ) {
+    el.style.setProperty("height", "auto", "important");
+    el.style.setProperty("max-height", "none", "important");
+    el.style.setProperty("overflow", "visible", "important");
+  }
+  for (const el of [document.documentElement, document.body]) {
+    el.style.setProperty("height", "auto", "important");
+    el.style.setProperty("overflow", "visible", "important");
+  }
+}
+
 async function step(page, item) {
   if (item.click) {
     const target = page.locator(item.click).first();
@@ -213,7 +239,9 @@ async function main() {
             state.scale === 1 &&
             state.mode === "app" &&
             state.theme === "light"
-          )
+          ) {
+            await page.evaluate(unclip);
+            await page.waitForTimeout(150);
             await page.screenshot({
               path: resolve(
                 output,
@@ -224,6 +252,7 @@ async function main() {
               fullPage: true,
               scale: "css",
             });
+          }
           rows.push({ key, tag, ...state, ...facts, errors: [...errors] });
         } catch (error) {
           rows.push({
