@@ -44,9 +44,9 @@ VIDEOS = [
     (
         "t4",
         "T4 First steps: permissions, phone setup, theme",
-        "in_progress",
+        "done",
         "high",
-        "Tester pack. Re-take queued (theme radios).",
+        "Done 25 Oct: en/hi/mr, 9:16 + 16:9, captions, scripts (.docx/.txt), voice files. https://drive.google.com/drive/folders/1x51YeyTnpMkbTuKlUQbMYuPIOvldevBi",
     ),
     (
         "t5",
@@ -72,25 +72,44 @@ VIDEOS = [
     (
         "04",
         "04 Call a lead and log how it went (v0.88 remake)",
-        "in_progress",
+        "done",
         "high",
-        "23 Oct version done (2:02 + 30 s reel, en/hi/mr). v0.88 remake queued: one-tap Call, How did it go, History, Save and call.",
+        "v0.88 remake done 25 Oct: one-tap Call, How did it go, History, Save and call. Reel 24-25 s, YouTube 2:16-2:34, en/hi/mr. https://drive.google.com/drive/folders/1x51YeyTnpMkbTuKlUQbMYuPIOvldevBi",
     ),
     (
         "13",
         "13 Lead stages and the Board (Lead OS)",
-        "in_progress",
+        "done",
         "high",
-        "Queued: nine stages, one-tap Call, Move, Pipeline numbers.",
+        "Done 25 Oct (v0.88): nine stages, the strip, Move sheet, one-tap Call, stage History, Pipeline numbers. Reel 34-37 s, YouTube 1:32-1:45, en/hi/mr. https://drive.google.com/drive/folders/1x51YeyTnpMkbTuKlUQbMYuPIOvldevBi",
     ),
-    ("14", "14 My work and quick notes", "in_progress", "normal", "Queued."),
-    ("15", "15 All leads: filter, sort, saved views", "in_progress", "normal", "Queued."),
+    (
+        "14",
+        "14 My work and quick notes",
+        "done",
+        "normal",
+        "Done 25 Oct (v0.88): My work for today, yesterday, this week; the Note button. Reel 25 s, YouTube 46-58 s, en/hi/mr. https://drive.google.com/drive/folders/1x51YeyTnpMkbTuKlUQbMYuPIOvldevBi",
+    ),
+    (
+        "15",
+        "15 All leads: filter, sort, saved views",
+        "done",
+        "normal",
+        "Done 25 Oct (v0.88): Filter and sort, search, chips, saved views, select many. Reel 35-38 s, YouTube 61-73 s, en/hi/mr. Dev's Leads screen has since changed (Now / All leads / More): re-shoot when that ships. https://drive.google.com/drive/folders/1x51YeyTnpMkbTuKlUQbMYuPIOvldevBi",
+    ),
     (
         "16",
         "16 Never lose a change (Not sent yet / All changes saved)",
-        "in_progress",
+        "done",
         "normal",
-        "Queued.",
+        "Done 25 Oct (v0.88): saved on the phone first, All changes saved, Not sent yet and Try again, never reinstall, Refresh app data. Reel 45-52 s, YouTube 50-58 s, en/hi/mr. https://drive.google.com/drive/folders/1x51YeyTnpMkbTuKlUQbMYuPIOvldevBi",
+    ),
+    (
+        "tasks-remind",
+        "Tasks tab and Remind (v0.89)",
+        "open",
+        "high",
+        "Waiting for v0.89 on dev; Lead OS session asked for shas and fixture URLs.",
     ),
     (
         "billing",
@@ -273,10 +292,12 @@ for slug, title, _status, priority, notes in VIDEOS:
 made = call(ops, dry=not COMMIT) if ops else []
 fresh = [v for v in VIDEOS if v[0] not in known]
 ids = {**known, **{slug: r["id"] for (slug, *_), r in zip(fresh, made, strict=True)}}
+# Only changed statuses are sent: the route adds a note to the task on every move.
+sent = state.get("status", {})
 moves = [
     {"op": "move", "id": ids[slug], "status": status, "note": notes}
     for slug, _t, status, _p, notes in VIDEOS
-    if status != "open"
+    if status != "open" and sent.get(slug) != status
 ]
 moved = call(moves, dry=not COMMIT) if moves else []
 print(
@@ -285,4 +306,5 @@ print(
 )
 if COMMIT:
     state["tasks"] = ids
+    state["status"] = {slug: status for slug, _t, status, _p, _n in VIDEOS}
     STATE.write_text(json.dumps(state, indent=1))
