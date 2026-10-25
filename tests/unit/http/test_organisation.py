@@ -371,3 +371,24 @@ async def test_sandbox_facts_are_zero_unless_this_is_the_fictional_sandbox(state
     # A plain member of the organisation reads the same facts; it is not an owner-only view.
     member = await call(state, path="/sandbox", token=OTHER_TOKEN)
     assert member.status_code == 200 and member.json()["sandbox"] is True
+
+
+async def test_member_photos_are_versioned_urls_for_active_members(state):
+    """v0.93: Members and a person page show photos; one read gives every active member's."""
+    from ac_platform.identity.sales_xray_profile_models import PersonPhoto
+
+    with Session(state.engine) as db, db.begin():
+        db.add(
+            PersonPhoto(
+                person_id=state.member,
+                source="upload",
+                content_type="image/webp",
+                photo=b"RIFF....WEBP",
+                byte_size=12,
+                sha256="d" * 64,
+                revision=1,
+                updated_at=datetime.now(UTC),
+            )
+        )
+    photos = (await call(state, path="/members/photos")).json()["photos"]
+    assert photos == {str(state.member): f"/v1/people/{state.member}/photo?v=dddddddd"}

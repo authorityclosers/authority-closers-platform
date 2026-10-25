@@ -275,3 +275,20 @@ it("shows the Home card until the profile is complete", async () => {
   await settle();
   expect(host.textContent).toBe("");
 });
+
+// v0.93: tapping the avatar opens the gallery picker (no camera capture), and an
+// unverified phone says what comes next.
+it("opens the picker from the avatar, and explains an unverified phone", async () => {
+  serve(() => Response.json({ ...PROFILE, phone_verified: false }));
+  await act(async () => root.render(<ProfileDetailsPanel />));
+  await settle();
+  const picker = host.querySelector("input[type='file']") as HTMLInputElement;
+  expect(picker.hasAttribute("capture")).toBe(false);
+  const opened = vi.spyOn(picker, "click");
+  const avatar = host.querySelector(
+    "button[aria-label='Add a photo']",
+  ) as HTMLButtonElement;
+  await act(async () => avatar.click());
+  expect(opened).toHaveBeenCalledTimes(1);
+  expect(host.textContent).toContain("Your phone number isn't verified yet");
+});

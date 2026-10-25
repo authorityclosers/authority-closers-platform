@@ -61,6 +61,7 @@ export function PersonHeader({
   busy,
   dates,
   onAction,
+  photoUrl = null,
 }: {
   member: OrgMember;
   isYou: boolean;
@@ -70,6 +71,8 @@ export function PersonHeader({
   busy: boolean;
   dates: DisplayDates;
   onAction: (action: PersonAction) => void;
+  /** Their photo (v0.93), else initials. */
+  photoUrl?: string | null;
 }) {
   const name = memberName(member);
   const [confirming, setConfirming] = useState<PersonAction | null>(null);
@@ -87,7 +90,7 @@ export function PersonHeader({
   ].filter(Boolean);
   return (
     <header className={styles.header}>
-      <Avatar name={name} size={48} />
+      <Avatar name={name} size={48} photoUrl={photoUrl} />
       <div className={styles.who}>
         <h1 className={styles.name}>
           <span>{name}</span>

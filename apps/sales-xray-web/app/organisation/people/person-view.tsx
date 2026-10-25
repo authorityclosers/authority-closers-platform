@@ -17,6 +17,7 @@ import {
   notLive,
   OrgApiError,
   readActivityDays,
+  readMemberPhotos,
   readMembers,
   readPersonActivity,
   removeMember,
@@ -182,6 +183,13 @@ function PersonPage({
     can(viewerRole, "team.view") || id === viewerId,
   );
   const [busy, setBusy] = useState(false);
+  // Their photo (v0.93): initials while it loads or when there is none.
+  const [photos, setPhotos] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const control = new AbortController();
+    void readMemberPhotos(control.signal).then(setPhotos);
+    return () => control.abort();
+  }, []);
 
   // The directory read names the person: when it fails, a corner card. A
   // failed activity read says so in its own place (below), once.
@@ -269,6 +277,7 @@ function PersonPage({
         <PersonHeader
           member={member}
           isYou={isYou}
+          photoUrl={member.personId ? (photos[member.personId] ?? null) : null}
           test={isTestEmail(member.email)}
           canChangeRole={
             viewerRole === "owner" && manageable && member.status === "active"
