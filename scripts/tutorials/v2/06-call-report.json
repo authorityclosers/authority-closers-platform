@@ -1,0 +1,853 @@
+{
+  "id": "06-call-report",
+  "number": "06",
+  "title": {
+    "en": "Read your call Report and Brain 4.0 score",
+    "hi": "Call Report aur Brain 4.0 score kaise padhein",
+    "mr": "Call Report aani Brain 4.0 score kasa vaachaycha"
+  },
+  "description": {
+    "en": "Every call you record or upload becomes a clear Report in Sales X-Ray. See the three parts, your Brain 4.0 coaching score across 18 sales skills, your biggest strength and the one thing to improve, the call outcome, and Coaching for your next call.",
+    "hi": "Sales X-Ray mein har record ya upload kiya call ek saaf Report ban jaata hai. Teen parts, 18 sales skills pe aapka Brain 4.0 coaching score, sabse badi strength aur sudharne wali ek cheez, call ka outcome, aur agle call ke liye Coaching.",
+    "mr": "Sales X-Ray madhye pratyek record kinva upload kelela call ek spashta Report banto. Teen bhaag, 18 sales skills var tumcha Brain 4.0 coaching score, sagalyat mothi strength aani sudharnyachi ek goshta, call cha outcome, aani pudhchya call saathi Coaching."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "Brain 4.0",
+    "AI sales coaching",
+    "call analysis",
+    "sales call report",
+    "sales training India",
+    "Hinglish",
+    "Marathi"
+  ],
+  "names": {
+    "Amit Sharma": "Rohan Kale",
+    "Amit": "Rohan"
+  },
+  "thumb": {
+    "beat": "areas",
+    "text": {
+      "en": "Your call, coached by AI",
+      "hi": "Aapka call, AI coaching ke saath",
+      "mr": "Tumcha call, AI coaching sobat"
+    },
+    "accent": {
+      "en": "coached by AI",
+      "hi": "AI coaching",
+      "mr": "AI coaching"
+    }
+  },
+  "next": {
+    "id": "07-stages-pipelines",
+    "title": {
+      "en": "Lead stages and pipelines",
+      "hi": "Lead stages aur pipelines",
+      "mr": "Lead stages aani pipelines"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "Every call becomes a clear Report. In this video, you'll learn to read yours.",
+      "hi": "हर call एक साफ़ Report बन जाता है. इस video में सीखिए, अपनी Report कैसे पढ़ें.",
+      "mr": "प्रत्येक call एक स्पष्ट Report बनतो. या video मध्ये शिका, तुमची Report कशी वाचायची."
+    },
+    "latn": {
+      "hi": "Har call ek saaf Report ban jaata hai. Is video mein seekhiye, apni Report kaise padhein.",
+      "mr": "Pratyek call ek spashta Report banto. Ya video madhye shika, tumchi Report kashi vaachaychi."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "Every call, coached.",
+      "hi": "Every call, coached.",
+      "mr": "Every call, coached."
+    },
+    "say": {
+      "en": "Next, see how lead stages and pipelines keep every lead moving.",
+      "hi": "अगले video में देखेंगे, lead stages और pipelines हर lead को आगे कैसे बढ़ाते हैं.",
+      "mr": "पुढच्या video मध्ये बघूया, lead stages आणि pipelines प्रत्येक lead ला पुढे कसं नेतात."
+    },
+    "latn": {
+      "hi": "Agle video mein dekhenge, lead stages aur pipelines har lead ko aage kaise badhate hain.",
+      "mr": "Pudhchya video madhye baghuya, lead stages aani pipelines pratyek lead la pudhe kasa netaat."
+    }
+  },
+  "chapters": [
+    {
+      "id": "find",
+      "title": {
+        "en": "Find your Report",
+        "hi": "Apni Report dhoondhiye",
+        "mr": "Tumchi Report shodha"
+      }
+    },
+    {
+      "id": "parts",
+      "title": {
+        "en": "The three parts",
+        "hi": "Teen parts",
+        "mr": "Teen bhaag"
+      }
+    },
+    {
+      "id": "score",
+      "title": {
+        "en": "Your coaching score",
+        "hi": "Aapka coaching score",
+        "mr": "Tumcha coaching score"
+      }
+    },
+    {
+      "id": "next",
+      "title": {
+        "en": "What to do next",
+        "hi": "Aage kya karna hai",
+        "mr": "Pudhe kay karaycha"
+      }
+    }
+  ],
+  "reel": {
+    "hook": {
+      "beat": "areas",
+      "text": {
+        "en": "Every call gets a coach",
+        "hi": "Har call ko milta hai coach",
+        "mr": "Pratyek call la milto coach"
+      },
+      "accent": {
+        "en": "a coach",
+        "hi": "coach",
+        "mr": "coach"
+      },
+      "say": {
+        "en": "Every call gets a coaching score. Here's how to read it.",
+        "hi": "हर call को मिलता है coaching score. देखिए कैसे पढ़ें.",
+        "mr": "प्रत्येक call ला मिळतो coaching score. बघा कसा वाचायचा."
+      },
+      "latn": {
+        "hi": "Har call ko milta hai coaching score. Dekhiye kaise padhein.",
+        "mr": "Pratyek call la milto coaching score. Bagha kasa vaachaycha."
+      }
+    },
+    "beats": ["parts", "areas", "skills", "strength", "coaching-view"]
+  },
+  "shots": [
+    {
+      "id": "calls",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/calls"
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "beats": [
+        {
+          "id": "calls-list",
+          "chapter": "find",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "link",
+                "name": "Calls"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Report ready"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Every call you record or upload lands in Calls. Report ready means its Report is waiting for you.",
+            "hi": "आप जो भी call record या upload करते हैं, वो Calls में आता है. Report ready मतलब उसकी Report तैयार है.",
+            "mr": "तुम्ही जो call record किंवा upload करता, तो Calls मध्ये येतो. Report ready म्हणजे त्याची Report तयार आहे."
+          },
+          "latn": {
+            "hi": "Aap jo bhi call record ya upload karte hain, woh Calls mein aata hai. Report ready matlab uski Report taiyaar hai.",
+            "mr": "Tumhi jo call record kinva upload karta, to Calls madhye yeto. Report ready mhanje tyachi Report tayar aahe."
+          }
+        },
+        {
+          "id": "ready-row",
+          "chapter": "find",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Site visit · Asha Kulkarni"
+              },
+              "ms": 1700
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Tap any call that says Ready to open its Report.",
+            "hi": "जिस call पे Ready लिखा है, उस पे tap कीजिए, Report खुल जाएगी.",
+            "mr": "ज्या call वर Ready लिहिलंय, त्यावर tap करा, Report उघडेल."
+          },
+          "latn": {
+            "hi": "Jis call pe Ready likha hai, us pe tap kijiye, Report khul jaayegi.",
+            "mr": "Jya call var Ready lihilay, tyavar tap kara, Report ughdel."
+          }
+        }
+      ]
+    },
+    {
+      "id": "report",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/report/story?example=coach&clean=1"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Call Summary"
+          },
+          "collapse": true
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "You understood that"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "header",
+          "chapter": "parts",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "css": "h1"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "At the top: who the call was with, how long it ran, and the language it was in.",
+            "hi": "सबसे ऊपर: call किसके साथ था, कितना लंबा चला, और किस language में था.",
+            "mr": "सगळ्यात वर: call कोणासोबत होता, किती वेळ चालला, आणि कुठल्या language मध्ये होता."
+          },
+          "latn": {
+            "hi": "Sabse upar: call kiske saath tha, kitna lamba chala, aur kis language mein tha.",
+            "mr": "Saglyat var: call konasobat hota, kiti vel chalala, aani kuthlya language madhye hota."
+          }
+        },
+        {
+          "id": "parts",
+          "chapter": "parts",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "link",
+                "name": "Overview & Score"
+              },
+              "ms": 1100
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "link",
+                "name": "AI Coaching Score"
+              },
+              "ms": 1100
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "link",
+                "name": "Final Call Outcome"
+              },
+              "ms": 1100
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Every Report has three parts: the overview, your AI coaching score, and how the call ended.",
+            "hi": "हर Report के तीन parts हैं: overview, आपका AI coaching score, और call का outcome.",
+            "mr": "प्रत्येक Report चे तीन भाग आहेत: overview, तुमचा AI coaching score, आणि call चा outcome."
+          },
+          "latn": {
+            "hi": "Har Report ke teen parts hain: overview, aapka AI coaching score, aur call ka outcome.",
+            "mr": "Pratyek Report che teen bhaag aahet: overview, tumcha AI coaching score, aani call cha outcome."
+          },
+          "short": {
+            "say": {
+              "en": "Three parts: overview, score, outcome.",
+              "hi": "तीन parts: overview, score, outcome.",
+              "mr": "तीन भाग: overview, score, outcome."
+            },
+            "latn": {
+              "hi": "Teen parts: overview, score, outcome.",
+              "mr": "Teen bhaag: overview, score, outcome."
+            }
+          }
+        },
+        {
+          "id": "strength",
+          "chapter": "parts",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "text": "Biggest Strength"
+              },
+              "offset": 220,
+              "parent": true,
+              "ms": 800
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Biggest Strength"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Biggest Improvement Area"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "The overview shows your biggest strength, and the one thing to improve.",
+            "hi": "Overview में दिखती है आपकी सबसे बड़ी strength, और वो एक चीज़ जो सुधारनी है.",
+            "mr": "Overview मध्ये दिसते तुमची सगळ्यात मोठी strength, आणि ती एक गोष्ट जी सुधारायची आहे."
+          },
+          "latn": {
+            "hi": "Overview mein dikhti hai aapki sabse badi strength, aur woh ek cheez jo sudharni hai.",
+            "mr": "Overview madhye diste tumchi saglyat mothi strength, aani ti ek goshta ji sudharaychi aahe."
+          },
+          "short": {
+            "say": {
+              "en": "Your biggest strength, and one thing to fix.",
+              "hi": "आपकी सबसे बड़ी strength, और सुधारने वाली एक चीज़.",
+              "mr": "तुमची सगळ्यात मोठी strength, आणि सुधारायची एक गोष्ट."
+            },
+            "latn": {
+              "hi": "Aapki sabse badi strength, aur sudharne wali ek cheez.",
+              "mr": "Tumchi saglyat mothi strength, aani sudharaychi ek goshta."
+            }
+          }
+        },
+        {
+          "id": "play-moment",
+          "chapter": "parts",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Play 13:06"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Each one links to the exact moment in the call. Tap play to hear it.",
+            "hi": "हर एक call के exact moment से जुड़ा है. Play दबाइए और सुनिए.",
+            "mr": "प्रत्येक गोष्ट call च्या exact moment शी जोडलेली आहे. Play दाबा आणि ऐका."
+          },
+          "latn": {
+            "hi": "Har ek call ke exact moment se juda hai. Play dabaiye aur suniye.",
+            "mr": "Pratyek goshta call chya exact moment shi jodleli aahe. Play daba aani aika."
+          }
+        },
+        {
+          "id": "player",
+          "chapter": "parts",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Play recording"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "The whole recording plays right inside the Report.",
+            "hi": "पूरी recording Report के अंदर ही चलती है.",
+            "mr": "पूर्ण recording Report च्या आतच चालते."
+          },
+          "latn": {
+            "hi": "Poori recording Report ke andar hi chalti hai.",
+            "mr": "Poorna recording Report chya aatach chalte."
+          }
+        },
+        {
+          "id": "score-tab",
+          "chapter": "score",
+          "sync": {
+            "en": "AI Coaching Score",
+            "hi": "AI Coaching Score",
+            "mr": "AI Coaching Score"
+          },
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "link",
+                "name": "AI Coaching Score"
+              },
+              "ms": 1500
+            }
+          ],
+          "say": {
+            "en": "Now tap AI Coaching Score.",
+            "hi": "अब AI Coaching Score पे tap कीजिए.",
+            "mr": "आता AI Coaching Score वर tap करा."
+          },
+          "latn": {
+            "hi": "Ab AI Coaching Score pe tap kijiye.",
+            "mr": "Aata AI Coaching Score var tap kara."
+          }
+        },
+        {
+          "id": "areas",
+          "chapter": "score",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "How You Talk"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Understanding the Buyer"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Moving the Sale Forward"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Brain 4.0 rates eighteen sales skills in three areas: how you talk, understanding the buyer, and moving the sale forward.",
+            "hi": "Brain 4.0 अठारह sales skills को तीन areas में rate करता है: आप कैसे बात करते हैं, buyer को कितना समझा, और sale को आगे कैसे बढ़ाया.",
+            "mr": "Brain 4.0 अठरा sales skills ना तीन areas मध्ये rate करतो: तुम्ही कसं बोलता, buyer ला किती समजून घेतलं, आणि sale पुढे कशी नेली."
+          },
+          "latn": {
+            "hi": "Brain 4.0 athaarah sales skills ko teen areas mein rate karta hai: aap kaise baat karte hain, buyer ko kitna samjha, aur sale ko aage kaise badhaya.",
+            "mr": "Brain 4.0 athra sales skills na teen areas madhye rate karto: tumhi kasa bolta, buyer la kiti samjun ghetla, aani sale pudhe kashi neli."
+          },
+          "short": {
+            "say": {
+              "en": "Eighteen skills, in three areas.",
+              "hi": "अठारह skills, तीन areas में.",
+              "mr": "अठरा skills, तीन areas मध्ये."
+            },
+            "latn": {
+              "hi": "Athaarah skills, teen areas mein.",
+              "mr": "Athra skills, teen areas madhye."
+            }
+          }
+        },
+        {
+          "id": "area-score",
+          "chapter": "score",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "4.0 / 5"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Each area gets its own score out of five, so you know which part of your selling to work on.",
+            "hi": "हर area का अपना score है, पाँच में से, तो पता चलता है selling के किस हिस्से पे काम करना है.",
+            "mr": "प्रत्येक area चा स्वतःचा score आहे, पाच पैकी, म्हणजे कळतं selling च्या कुठल्या भागावर काम करायचं."
+          },
+          "latn": {
+            "hi": "Har area ka apna score hai, paanch mein se, toh pata chalta hai selling ke kis hisse pe kaam karna hai.",
+            "mr": "Pratyek area cha swatahcha score aahe, paach paiki, mhanje kalta selling chya kuthlya bhaagavar kaam karaycha."
+          }
+        },
+        {
+          "id": "judged",
+          "chapter": "score",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Rated by AI on the coaching lead"
+              },
+              "ms": 1700
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "It also says how many skills this call gave enough to judge, so a short call is never marked down unfairly.",
+            "hi": "ये भी बताता है कि इस call में कितनी skills judge करने लायक थीं, ताकि छोटे call के नंबर गलत तरीके से न कटें.",
+            "mr": "हे पण सांगतो की या call मध्ये किती skills judge करण्यासारख्या होत्या, म्हणजे छोट्या call चे मार्क्स उगाच कापले जात नाहीत."
+          },
+          "latn": {
+            "hi": "Yeh bhi batata hai ki is call mein kitni skills judge karne laayak thin, taaki chhote call ke number galat tareeke se na katein.",
+            "mr": "He pan sangto ki ya call madhye kiti skills judge karnyasarkhya hotya, mhanje chhotya call che marks ugach kaple jaat nahit."
+          }
+        },
+        {
+          "id": "skills",
+          "chapter": "score",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "role": "button",
+                "name": "8. Finding the Decision-Makers"
+              },
+              "offset": 260,
+              "parent": true,
+              "ms": 800
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "8. Finding the Decision-Makers"
+              },
+              "ms": 1700
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Each skill is rated out of five, so you see exactly where the points went.",
+            "hi": "हर skill को पाँच में से rating मिलती है, तो साफ़ दिखता है points कहाँ गए.",
+            "mr": "प्रत्येक skill ला पाच पैकी rating मिळते, म्हणजे स्पष्ट दिसतं points कुठे गेले."
+          },
+          "latn": {
+            "hi": "Har skill ko paanch mein se rating milti hai, toh saaf dikhta hai points kahan gaye.",
+            "mr": "Pratyek skill la paach paiki rating milte, mhanje spashta dista points kuthe gele."
+          },
+          "short": {
+            "say": {
+              "en": "Each one rated out of five.",
+              "hi": "हर एक, पाँच में से.",
+              "mr": "प्रत्येक, पाच पैकी."
+            },
+            "latn": {
+              "hi": "Har ek, paanch mein se.",
+              "mr": "Pratyek, paach paiki."
+            }
+          }
+        },
+        {
+          "id": "open-skill",
+          "chapter": "score",
+          "sync": {
+            "en": "Open",
+            "hi": "skill",
+            "mr": "skill"
+          },
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "8. Finding the Decision-Makers"
+              },
+              "ms": 1800
+            }
+          ],
+          "say": {
+            "en": "Open a skill to see what happened, the moment in the call, and what to do next time.",
+            "hi": "किसी skill को खोलिए: क्या हुआ, call का कौन सा moment, और अगली बार क्या करना है.",
+            "mr": "एखादी skill उघडा: काय झालं, call चा कुठला moment, आणि पुढच्या वेळी काय करायचं."
+          },
+          "latn": {
+            "hi": "Kisi skill ko kholiye: kya hua, call ka kaun sa moment, aur agli baar kya karna hai.",
+            "mr": "Ekhadi skill ughda: kay jhala, call cha kuthla moment, aani pudhchya veli kay karaycha."
+          }
+        },
+        {
+          "id": "outcome-tab",
+          "chapter": "next",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "link",
+                "name": "Final Call Outcome"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "scrollto",
+              "target": {
+                "text": "Key Objections"
+              },
+              "offset": 260,
+              "parent": true,
+              "ms": 700
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Key Objections"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Next Steps",
+                "exact": true
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "The outcome part covers their objections, why the deal stands where it does, and the next steps.",
+            "hi": "Outcome part में उनके objections, deal अभी कहाँ है और क्यों, और next steps हैं.",
+            "mr": "Outcome भागात त्यांचे objections, deal आत्ता कुठे आहे आणि का, आणि next steps आहेत."
+          },
+          "latn": {
+            "hi": "Outcome part mein unke objections, deal abhi kahan hai aur kyon, aur next steps hain.",
+            "mr": "Outcome bhaagat tyanche objections, deal aatta kuthe aahe aani ka, aani next steps aahet."
+          }
+        },
+        {
+          "id": "stage",
+          "chapter": "next",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "text": "Sales Process Stage"
+              },
+              "offset": 240,
+              "parent": true,
+              "ms": 700
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Sales Process Stage"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "And it shows where the buyer stands in your sales process.",
+            "hi": "और ये दिखाता है कि buyer आपके sales process में कहाँ है.",
+            "mr": "आणि हे दाखवतो की buyer तुमच्या sales process मध्ये कुठे आहे."
+          },
+          "latn": {
+            "hi": "Aur yeh dikhata hai ki buyer aapke sales process mein kahan hai.",
+            "mr": "Aani he dakhavto ki buyer tumchya sales process madhye kuthe aahe."
+          }
+        },
+        {
+          "id": "transcript",
+          "chapter": "next",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Open transcript reader"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "The full transcript is always one tap away.",
+            "hi": "पूरा transcript हमेशा एक tap दूर है.",
+            "mr": "पूर्ण transcript नेहमी एका tap वर आहे."
+          },
+          "latn": {
+            "hi": "Poora transcript hamesha ek tap door hai.",
+            "mr": "Poorna transcript nehmi eka tap var aahe."
+          }
+        }
+      ]
+    },
+    {
+      "id": "coaching",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/report/story?example=coach&clean=1"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Call Summary"
+          },
+          "collapse": true
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "You understood that"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "coaching-view",
+          "chapter": "next",
+          "sync": {
+            "en": "Coaching",
+            "hi": "Coaching",
+            "mr": "Coaching"
+          },
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Coaching view"
+              },
+              "ms": 1000
+            },
+            {
+              "do": "unhighlight",
+              "ms": 100
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Coaching view"
+              },
+              "ms": 1600,
+              "key": true
+            }
+          ],
+          "say": {
+            "en": "Then switch to Coaching, for the one thing to work on before your next call.",
+            "hi": "फिर Coaching पे switch कीजिए: अगले call से पहले किस एक चीज़ पे काम करना है.",
+            "mr": "मग Coaching वर switch करा: पुढच्या call आधी कुठल्या एका गोष्टीवर काम करायचं."
+          },
+          "latn": {
+            "hi": "Phir Coaching pe switch kijiye: agle call se pehle kis ek cheez pe kaam karna hai.",
+            "mr": "Mag Coaching var switch kara: pudhchya call aadhi kuthlya eka goshtivar kaam karaycha."
+          },
+          "short": {
+            "say": {
+              "en": "Then Coaching: what to fix next.",
+              "hi": "फिर Coaching: आगे क्या सुधारना है.",
+              "mr": "मग Coaching: पुढे काय सुधारायचं."
+            },
+            "latn": {
+              "hi": "Phir Coaching: aage kya sudharna hai.",
+              "mr": "Mag Coaching: pudhe kay sudharaycha."
+            }
+          }
+        },
+        {
+          "id": "work-on",
+          "chapter": "next",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "What You Should Work On Now"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "scroll",
+              "dy": 320,
+              "ms": 900
+            }
+          ],
+          "say": {
+            "en": "It tells you what went wrong, in plain words, and what to try on your next call.",
+            "hi": "क्या गलत हुआ, सीधी भाषा में, और अगले call में क्या try करना है, सब बताता है.",
+            "mr": "काय चुकलं, सोप्या भाषेत, आणि पुढच्या call मध्ये काय try करायचं, सगळं सांगतो."
+          },
+          "latn": {
+            "hi": "Kya galat hua, seedhi bhasha mein, aur agle call mein kya try karna hai, sab batata hai.",
+            "mr": "Kay chukla, sopya bhashet, aani pudhchya call madhye kay try karaycha, sagla sangto."
+          }
+        }
+      ]
+    }
+  ]
+}

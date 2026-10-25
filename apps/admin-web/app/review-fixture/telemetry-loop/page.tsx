@@ -23,6 +23,7 @@ const HREFS = {
   devices: BASE,
   releases: `${BASE}?view=releases`,
   fix: `${BASE}?view=fix`,
+  friction: "/review-fixture/telemetry-friction",
 };
 
 /**

@@ -195,6 +195,17 @@ class Review(_View):
     after: str | None = None
 
 
+class Blocker(_View):
+    """Why an app can't do its whole job yet, and the one thing to do about it now
+    (orchestrator, 25 Oct 2026: show exactly why something can't connect yet)."""
+
+    short: str  # the card's one quiet line
+    reason: str
+    fix: str
+    page: str | None = None  # a Sales Xray page (a web path) where the fix is done
+    action: str | None = None  # the link's words, with page
+
+
 class AppHealth(_View):
     app: App
     name: str
@@ -212,6 +223,7 @@ class AppHealth(_View):
     webhook: Webhook | None = None
     tests: list[TestOffer] = []
     review: Review | None = None
+    blockers: list[Blocker] = []
 
 
 class Health(_View):
@@ -340,9 +352,16 @@ def _source_problem(source: LeadSource) -> Problem | None:
 
 # Meta App Review for the lead ads app (submission 29297824896491997, sent 19 Oct 2026
 # with the owner's approval). Until Meta approves it, only people with a role on the
-# app (its admins, developers and testers) can connect their Pages. When Meta approves
-# it, set ("approved", <the day>).
+# app (its admins, developers and testers) can connect their Pages, and Meta lets the
+# app read only the leads such people submit: its test leads, not leads from ads
+# (Meta's Lead Ads docs, "Limitations"). When Meta approves it, set ("approved", <the day>).
 META_REVIEW: Final[tuple[Literal["pending", "approved"], date]] = ("pending", date(2026, 10, 19))
+# WhatsApp, Messenger and Instagram run on the "Sales Xray Messaging" Meta app, which
+# Meta hasn't approved yet (25 Oct 2026): only people with a role on it can connect, and
+# only their messages arrive. Set True when Meta approves it.
+MESSAGING_APPROVED: Final[bool] = False
+# Where a Website form source is added: the way in for ad leads while Meta reviews.
+SOURCES_PAGE: Final[str] = "/leads?tab=sources"
 
 
 def meta_review() -> Review:
@@ -358,11 +377,66 @@ def meta_review() -> Review:
         state=state,
         since=since,
         works_now=(
-            "Until Meta approves Sales Xray, only Pages run by people added to our Meta app"
-            " as testers can connect. Ask us to add you as a tester."
+            "Until Meta approves Sales Xray, only people added to our Meta app as testers"
+            " can connect a Page, and only test leads come through. Leads from your ads"
+            " can come in now through a Website form in Leads."
         ),
         after="Once Meta approves it, any business can connect its own Pages here.",
     )
+
+
+def meta_blockers() -> list[Blocker]:
+    """What keeps lead ads from bringing in a business's real leads yet, with the fix."""
+    state, since = META_REVIEW
+    if state == "approved":
+        return []
+    return [
+        Blocker(
+            short="Meta approval pending: test leads only for now",
+            reason=(
+                f"Meta is still reviewing Sales Xray (sent {since:%d %b}). Until it approves,"
+                " only test leads come through, not leads from your ads."
+            ),
+            fix=(
+                "Bring your ad leads in now: add a Website form in Leads and send your"
+                " Facebook lead ads to it from a tool such as Make, Pabbly or Zapier."
+            ),
+            page=SOURCES_PAGE,
+            action="Add a Website form",
+        )
+    ]
+
+
+def messaging_blockers(channel: App, *, pages: int, accounts: int) -> list[Blocker]:
+    """What keeps WhatsApp, Messenger or Instagram from working for every customer yet.
+    ``pages`` is the connected Pages, ``accounts`` those with this channel."""
+    found: list[Blocker] = []
+    if not MESSAGING_APPROVED:
+        found.append(
+            Blocker(
+                short="Meta approval pending: our testers only for now",
+                reason=(
+                    "Meta hasn't approved Sales Xray for messages yet. Until it does, only"
+                    " people on our Meta app can connect, and only their messages come in."
+                ),
+                fix=(
+                    "To try it now, ask us to add you to our Meta app. Your customers'"
+                    " messages come in once Meta approves."
+                ),
+            )
+        )
+    if channel == "instagram" and pages and not accounts:
+        found.append(
+            Blocker(
+                short="No Instagram account on your Pages",
+                reason="None of your connected Pages has an Instagram professional account.",
+                fix=(
+                    "Link one to the Page in Meta Business Suite, turn on Allow access to"
+                    " messages in the Instagram app, then connect again."
+                ),
+            )
+        )
+    return found
 
 
 async def _meta_leads(db: AsyncSession, tenant_id: UUID) -> AppHealth:
@@ -415,6 +489,7 @@ async def _meta_leads(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         if active
         else [],
         review=meta_review() if configured else None,
+        blockers=meta_blockers() if configured else [],
     )
 
 
@@ -500,6 +575,7 @@ async def _whatsapp(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         tests=[TestOffer(kind="send_test", label="Send a test message", needs=["to"])]
         if rows
         else [],
+        blockers=messaging_blockers("whatsapp", pages=0, accounts=len(rows)) if configured else [],
     )
 
 
@@ -541,9 +617,8 @@ def _has_channel(account: LeadSocialAccount, channel: str) -> bool:
 
 async def _social(db: AsyncSession, tenant_id: UUID, channel: App) -> AppHealth:
     configured = graph.config() is not None
-    accounts = [
-        row for row in await social_inbox.accounts(db, tenant_id) if _has_channel(row, str(channel))
-    ]
+    pages = await social_inbox.accounts(db, tenant_id)
+    accounts = [row for row in pages if _has_channel(row, str(channel))]
     connections = [
         Connection(
             id=str(row.id),
@@ -613,6 +688,9 @@ async def _social(db: AsyncSession, tenant_id: UUID, channel: App) -> AppHealth:
             TestOffer(kind="send_reply", label="Send a test reply", needs=[], confirm=True),
         ]
         if accounts
+        else [],
+        blockers=messaging_blockers(channel, pages=len(pages), accounts=len(accounts))
+        if configured
         else [],
     )
 

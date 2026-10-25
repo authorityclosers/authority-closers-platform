@@ -355,6 +355,72 @@ class LeadTaskReminder(Base):
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class LeadTarget(Base):
+    """A seller's daily or weekly target on one metric, from a day on (team engine,
+    migration 0130; docs/product/lead-desk/team-engine.md, section 2). A new value is a new
+    row that supersedes the old one from its day; a past day keeps the target it had."""
+
+    __tablename__ = "lead_desk_targets"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_lead_desk_target_person",
+        ),
+        CheckConstraint("period IN ('day', 'week')", name="lead_desk_target_period"),
+        CheckConstraint(
+            "metric IN ('calls', 'connects', 'follow_ups', 'meetings')",
+            name="lead_desk_target_metric",
+        ),
+        CheckConstraint("value BETWEEN 0 AND 10000", name="lead_desk_target_value"),
+        Index("uq_lead_desk_target_command", "tenant_id", "command_id", unique=True),
+        Index(
+            "ix_lead_desk_target_person",
+            "tenant_id",
+            "person_id",
+            "metric",
+            "period",
+            "effective_from",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    period: Mapped[str] = mapped_column(String(8))
+    metric: Mapped[str] = mapped_column(String(16))
+    value: Mapped[int] = mapped_column(Integer)
+    effective_from: Mapped[date] = mapped_column(Date)
+    set_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    command_id: Mapped[UUID] = mapped_column(Uuid)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadNudge(Base):
+    """The nudge ledger (team engine, migration 0130): one row per seller and two-hour
+    window of the work day, written before the push is sent, so a nudge goes once."""
+
+    __tablename__ = "lead_desk_nudges"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id", "person_id"],
+            ["memberships.tenant_id", "memberships.person_id"],
+            name="fk_lead_desk_nudge_person",
+        ),
+        CheckConstraint("kind IN ('drift', 'idle')", name="lead_desk_nudge_kind"),
+        Index("uq_lead_desk_nudge_window", "tenant_id", "person_id", "window_start", unique=True),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    person_id: Mapped[UUID] = mapped_column(Uuid)
+    kind: Mapped[str] = mapped_column(String(8))
+    window_start: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    words: Mapped[str] = mapped_column(String(200))
+    claimed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
 class LeadRep(Base):
     """A seller's allocation rules. No row means the defaults: available, no limits."""
 

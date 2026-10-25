@@ -331,3 +331,128 @@ def thumbnail_html(kit: Kit, title: str, accent: str, badge: str, screen_png: Pa
         f"<div class='lg svgfit'>{kit.svg('horizontal-mono-white')}</div>"
     )
     return kit.page(body, css, 1280, 720)
+
+
+# Step-card icons: simple 24x24 line drawings (no third-party marks), drawn in light mint.
+ICONS = {
+    "link": (
+        "<path d='M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1'/>"
+        "<path d='M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1'/>"
+    ),
+    "tester": (
+        "<circle cx='9' cy='8' r='4'/><path d='M2 21a7 7 0 0 1 14 0'/><path d='m16 11 2 2 4-4'/>"
+    ),
+    "store": (
+        "<path d='M5 8h14l-1 12H6z'/>"
+        "<path d='M9 8V6a3 3 0 0 1 6 0v2'/>"
+        "<path d='M12 11v6'/>"
+        "<path d='m9 14 3 3 3-3'/>"
+    ),
+    "install": ("<path d='M12 3v12'/><path d='m7 10 5 5 5-5'/><path d='M5 21h14'/>"),
+    "uninstall": ("<path d='M4 7h16'/><path d='M9 7V4h6v3'/><path d='M6 7l1 13h10l1-13'/>"),
+    "shield": ("<path d='M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z'/><path d='m9 12 2 2 4-4'/>"),
+    "saved": (
+        "<path d='M7 18a5 5 0 0 1-.5-10A6 6 0 0 1 18 9a4 4 0 0 1 0 9z'/>"
+        "<path d='m9.5 13 2 2 3.5-3.5'/>"
+    ),
+    "bell": (
+        "<path d='M6 8a6 6 0 0 1 12 0c0 7 3 8 3 8H3s3-1 3-8'/><path d='M10 20a2 2 0 0 0 4 0'/>"
+    ),
+    "phone": ("<rect x='6' y='2' width='12' height='20' rx='3'/><path d='M11 18h2'/>"),
+    "account": (
+        "<circle cx='12' cy='12' r='9'/>"
+        "<circle cx='12' cy='10' r='3'/>"
+        "<path d='M6.5 18a6 6 0 0 1 11 0'/>"
+    ),
+    "refresh": (
+        "<path d='M20 12a8 8 0 0 1-14 5'/>"
+        "<path d='M4 12a8 8 0 0 1 14-5'/>"
+        "<path d='M18 3v4h-4'/>"
+        "<path d='M6 21v-4h4'/>"
+    ),
+    "warning": ("<path d='M12 3 2 20h20z'/><path d='M12 10v4'/><path d='M12 17h.01'/>"),
+    "switch": (
+        "<path d='M4 7h13'/><path d='m14 4 3 3-3 3'/><path d='M20 17H7'/><path d='m10 14-3 3 3 3'/>"
+    ),
+    "report": (
+        "<path d='M8 9a4 4 0 0 1 8 0v6a4 4 0 0 1-8 0z'/>"
+        "<path d='M12 9v10'/>"
+        "<path d='M4 11h4M16 11h4M5 17l3-1M19 17l-3-1M9 5 7 3M15 5l2-2'/>"
+    ),
+}
+
+
+def _icon(name: str) -> str:
+    return (
+        "<svg viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' "
+        f"stroke-linecap='round' stroke-linejoin='round'>{ICONS.get(name, ICONS['phone'])}</svg>"
+    )
+
+
+def step_html(kit: Kit, w: int, h: int, step: str, title: str, chips: list[str], icon: str) -> str:
+    """A step card for things only a real phone shows (Play, Android prompts): the step number,
+    what to do in a short line, the exact button words as pills, and a line icon. 16:9 puts the
+    icon on the right; 9:16 stacks everything and keeps the lower third free for captions."""
+    tall = h > w
+    chip_html = "".join(f"<span class='p'>{escape(c)}</span>" for c in chips)
+    css = (
+        f".st{{font-weight:600;font-size:{40 if tall else 34}px;letter-spacing:.12em;"
+        f"text-transform:uppercase;color:{MINT_LIGHT};animation:rise .5s .05s both}}"
+        f".t{{margin-top:22px;font-weight:700;font-size:{96 if tall else 92}px;line-height:1.04;"
+        "letter-spacing:-.02em;text-wrap:balance;animation:rise .55s .15s both}"
+        ".ps{margin-top:40px;display:flex;flex-wrap:wrap;gap:20px;animation:rise .5s .35s both}"
+        f".p{{padding:{20 if tall else 16}px 34px {16 if tall else 12}px;border-radius:999px;"
+        f"background:#fff;color:{DEEP};font-weight:700;font-size:{48 if tall else 40}px;"
+        "box-shadow:0 14px 40px rgba(0,0,0,.25),0 0 0 4px rgba(124,247,207,.35)}"
+        f".ic{{color:{MINT_LIGHT};animation:pop2 .55s .2s cubic-bezier(.2,.9,.3,1.4) both}}"
+        ".ic svg{width:100%;height:100%;filter:drop-shadow(0 0 40px rgba(61,235,176,.45))}"
+        ".ring{position:absolute;border-radius:50%;background:rgba(255,255,255,.06);"
+        "box-shadow:inset 0 0 0 3px rgba(124,247,207,.25)}"
+        "@keyframes pop2{from{transform:scale(.6);opacity:0}to{transform:none;opacity:1}}"
+        "@keyframes rise{from{transform:translateY(40px);opacity:0}to{transform:none;opacity:1}}"
+        ".lg{position:absolute;opacity:.9}"
+    )
+    if tall:
+        css += (
+            ".blk{position:absolute;left:96px;right:96px;top:640px}"
+            ".ring{left:330px;top:200px;width:420px;height:420px}"
+            ".ic{position:absolute;left:420px;top:290px;width:240px;height:240px}"
+            ".lg{left:96px;top:96px;width:330px}"
+        )
+    else:
+        css += (
+            ".blk{position:absolute;left:150px;top:300px;width:1050px}"
+            ".ring{right:170px;top:290px;width:500px;height:500px}"
+            ".ic{position:absolute;right:270px;top:390px;width:300px;height:300px}"
+            ".lg{left:150px;bottom:90px;width:300px}"
+        )
+    body = (
+        "<div class='ground'></div><div class='grain'></div>"
+        f"<div class='ring'></div><div class='ic'>{_icon(icon)}</div>"
+        f"<div class='blk'><div class='st'>{escape(step)}</div><div class='t'>{escape(title)}</div>"
+        f"<div class='ps'>{chip_html}</div></div>"
+        f"<div class='lg svgfit'>{kit.svg('horizontal-mono-white')}</div>"
+    )
+    return kit.page(body, css, w, h)
+
+
+def reel_intro_html(kit: Kit, number: str, title: str, kicker: str) -> str:
+    """9:16 opening card for reels that start with a title rather than a screen: the mark builds,
+    then the title."""
+    css = BARS_CSS + (
+        ".mk{position:absolute;left:96px;top:300px;width:200px;height:200px}"
+        ".wm{position:absolute;left:96px;top:540px;width:560px;animation:fade .45s .4s both}"
+        f".k{{position:absolute;left:96px;top:760px;font-weight:600;font-size:40px;"
+        "letter-spacing:.12em;text-transform:uppercase;"
+        f"color:{MINT_LIGHT};animation:rise .5s .5s both}}"
+        ".t{position:absolute;left:96px;right:96px;top:830px;font-weight:700;font-size:104px;"
+        "line-height:1.04;letter-spacing:-.02em;text-wrap:balance;animation:rise .6s .65s both}"
+    )
+    body = (
+        "<div class='ground'></div><div class='grain'></div>"
+        f"<div class='mk'>{_bars()}</div><div class='wm svgfit'>"
+        f"{kit.svg('wordmark-mono-white')}</div>"
+        f"<div class='k'>{escape(kicker)} · {escape(number)}</div>"
+        f"<div class='t'>{escape(title)}</div>"
+    )
+    return kit.page(body, css, 1080, 1920)

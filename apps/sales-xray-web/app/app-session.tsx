@@ -36,6 +36,8 @@ const SHELL_ROUTES = new Set([
   "/coaching",
   // Sales Xray CRM: the seller's lead desk (owner order 16 Oct 2026).
   "/leads",
+  // Notes, all written on the seller's leads (owner, 25 Oct 2026).
+  "/leads/notes",
   // Chats: WhatsApp, Messenger and Instagram in one inbox (owner, 20 Oct 2026).
   "/chats",
   // Settings and each of its sections (owner, 20 Oct 2026).

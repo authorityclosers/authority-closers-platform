@@ -504,7 +504,7 @@ def test_workbench_routes_action_changes_and_overlays_action_for_historical_sour
 
 def test_workbench_jobs_use_cached_proofs_and_foreground_dependency_failures() -> None:
     jobs = yaml.safe_load((ROOT / ".github/workflows/workbench-checks.yml").read_text())["jobs"]
-    for name in ("py-tests", "visual", "e2e"):
+    for name in ("py-tests", "visual", "matrix", "e2e"):
         steps = jobs[name]["steps"]
         required = [s for s in steps if s.get("uses") == "./.github/actions/ci-prerequisites"]
         assert len(required) == 1

@@ -13,7 +13,7 @@
  * apps' own marks), and a long hold opens quick actions.
  */
 
-import { Hand, Inbox, Phone, X, type LucideIcon } from "lucide-react";
+import { Hand, Inbox, Mail, Phone, X, type LucideIcon } from "lucide-react";
 import { useRef, useState, type ReactNode } from "react";
 
 import { ChannelMark } from "../chats/channel-mark";
@@ -99,7 +99,11 @@ export type RowActions = {
   onLog?: (row: LeadRow) => void;
   onMessage?: (row: LeadRow) => void;
   onHold?: (row: LeadRow) => void;
+  /** The card's own buttons: one tap to call, WhatsApp or email (owner, 24 Oct 2026). */
+  onTap?: (row: LeadRow, channel: QuickChannel) => void;
 };
+
+export type QuickChannel = "call" | "whatsapp" | "email";
 
 export function LeadLine({
   row,
@@ -127,6 +131,25 @@ export function LeadLine({
     onHold: actions?.onHold ? () => actions.onHold?.(row) : undefined,
   });
   const sub = [row.interest, row.company, row.city].filter(Boolean).join(" · ");
+  const tap = actions?.onTap;
+  const tags = (
+    <>
+      <Badge
+        tone={
+          row.stage === "won"
+            ? "good"
+            : row.stage === "lost"
+              ? "bad"
+              : "neutral"
+        }
+      >
+        {row.stage_label}
+      </Badge>
+      <span className={styles.leadOwner}>
+        {showOwner ? (row.owner_name ?? "No owner yet") : sourceText(row)}
+      </span>
+    </>
+  );
   return (
     <li
       ref={rowRef}
@@ -153,7 +176,11 @@ export function LeadLine({
           </span>
         </span>
       ) : null}
-      <div ref={face} className={styles.leadFace}>
+      <div
+        ref={face}
+        className={styles.leadFace}
+        data-quick={tap ? "" : undefined}
+      >
         <button
           type="button"
           className={styles.leadButton}
@@ -178,23 +205,56 @@ export function LeadLine({
               {whyLine(row)}
             </span>
           </span>
-          <span className={styles.leadEnd}>
-            <Badge
-              tone={
-                row.stage === "won"
-                  ? "good"
-                  : row.stage === "lost"
-                    ? "bad"
-                    : "neutral"
-              }
-            >
-              {row.stage_label}
-            </Badge>
-            <span className={styles.leadOwner}>
-              {showOwner ? (row.owner_name ?? "No owner yet") : sourceText(row)}
+          {tap ? null : <span className={styles.leadEnd}>{tags}</span>}
+        </button>
+        {tap ? (
+          // Beside the card's tap area, never inside it: the stage above the
+          // buttons on a phone. A lead with no number shows them greyed, with why.
+          <span className={styles.leadEnd} data-quick="">
+            <span className={styles.leadTags}>{tags}</span>
+            <span className={styles.leadQuick}>
+              <button
+                type="button"
+                className={styles.quickAct}
+                data-channel="call"
+                aria-label={
+                  reachable
+                    ? `Call ${row.name}`
+                    : `No number to call ${row.name}`
+                }
+                disabled={!reachable}
+                onClick={() => tap(row, "call")}
+              >
+                <Phone size={16} aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                className={styles.quickAct}
+                data-channel="whatsapp"
+                aria-label={
+                  reachable
+                    ? `WhatsApp ${row.name}`
+                    : `No number to WhatsApp ${row.name}`
+                }
+                disabled={!reachable}
+                onClick={() => tap(row, "whatsapp")}
+              >
+                <ChannelMark channel="whatsapp" size={18} />
+              </button>
+              {row.has_email ? (
+                <button
+                  type="button"
+                  className={styles.quickAct}
+                  data-channel="email"
+                  aria-label={`Email ${row.name}`}
+                  onClick={() => tap(row, "email")}
+                >
+                  <Mail size={16} aria-hidden="true" />
+                </button>
+              ) : null}
             </span>
           </span>
-        </button>
+        ) : null}
       </div>
     </li>
   );

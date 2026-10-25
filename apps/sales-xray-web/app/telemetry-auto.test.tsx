@@ -20,12 +20,17 @@ vi.mock("./leads/native-phone", () => ({
 import { telemetry } from "./telemetry";
 import {
   actionOf,
+  elementOf,
   endpointOf,
   errorFacts,
   fingerprint,
+  placeOf,
+  seenSoFar,
+  styleOf,
   syncPhone,
   targetOf,
   TelemetryAuto,
+  zoneOf,
 } from "./telemetry-auto";
 
 (
@@ -182,7 +187,13 @@ it("reports a rage tap and a screen change with the time on the last screen", as
       new MouseEvent("click", { bubbles: true, clientX: 10, clientY: 10 }),
     );
   expect(tracked(track, "sx.tap_issue")).toEqual([
-    { kind: "rage", target: "button", screen: "leads" },
+    {
+      kind: "rage",
+      target: "button",
+      screen: "leads",
+      zone: "r1c1",
+      where: expect.stringMatching(/^[0-9a-f]{8}$/),
+    },
   ]);
   now = 6_000;
   nav.pathname = "/calls";
@@ -192,6 +203,7 @@ it("reports a rage tap and a screen change with the time on the last screen", as
     from: "leads",
     nav: "push",
     stay_ms: 5_000,
+    seen_ms: 5_000,
   });
   await act(async () => root.unmount());
   nav.pathname = "/leads";
@@ -243,4 +255,66 @@ it("tells the phone app the switch once the server answers, and sends its events
     ["sx.app_launch", { start: "cold", ms: 2400 }],
     ["sx.permission_snapshot", { calls: "granted" }],
   ]);
+});
+
+it("names where a tap landed by zone, code name and place, never by its words", () => {
+  expect(zoneOf(10, 10, 390, 844)).toBe("r1c1");
+  expect(zoneOf(389, 843, 390, 844)).toBe("r4c3");
+  expect(zoneOf(200, 430, 390, 844)).toBe("r3c2");
+  expect(zoneOf(10, 10, 0, 0)).toBeNull();
+  html(`
+    <section class="leads-table-module__x1Y2z__row">
+      <span id="chip" class="leads-table_stageChip__AbC12">Priya Sample · Interested</span>
+    </section>
+    <div data-sx-feature="workspace_menu"><b id="menu">Sunrise Rooftops</b></div>
+    <p id="plain" class="plain">9876543210</p>`);
+  const chip = host.querySelector("#chip")!;
+  expect(styleOf(chip)).toBe("leads-table.stagechip");
+  expect(elementOf(chip)).toBe("leads-table.stagechip");
+  expect(elementOf(host.querySelector("#menu")!)).toBe("workspace_menu");
+  expect(elementOf(host.querySelector("#plain")!)).toBeNull();
+  const place = placeOf(chip);
+  expect(place).toMatch(/^[0-9a-f]{8}$/);
+  // Two taps on the same chip in another row share the place.
+  expect(placeOf(chip)).toBe(place);
+  for (const value of [elementOf(chip), place])
+    expect(value).not.toMatch(/priya|sunrise|9876/i);
+});
+
+it("counts only the time a screen was on view, and says where the page went away", async () => {
+  expect(seenSoFar({ seen: 4_000, visibleSince: null }, 9_000)).toBe(4_000);
+  expect(seenSoFar({ seen: 4_000, visibleSince: 8_000 }, 9_000)).toBe(5_000);
+  const track = vi.spyOn(telemetry, "track");
+  const flush = vi.spyOn(telemetry, "flush").mockResolvedValue(undefined);
+  const visibility = vi.spyOn(document, "visibilityState", "get");
+  visibility.mockReturnValue("visible");
+  const root = await mount();
+  // Two seconds on Leads, then a call in the dialler for ten seconds.
+  now = 3_000;
+  visibility.mockReturnValue("hidden");
+  document.dispatchEvent(new Event("visibilitychange"));
+  expect(tracked(track, "sx.screen_hidden")).toEqual([
+    { screen: "leads", kind: "background" },
+  ]);
+  now = 13_000;
+  visibility.mockReturnValue("visible");
+  document.dispatchEvent(new Event("visibilitychange"));
+  // Out of view again within half a minute: not sent twice.
+  now = 14_000;
+  visibility.mockReturnValue("hidden");
+  document.dispatchEvent(new Event("visibilitychange"));
+  visibility.mockReturnValue("visible");
+  now = 15_000;
+  document.dispatchEvent(new Event("visibilitychange"));
+  expect(tracked(track, "sx.screen_hidden")).toHaveLength(1);
+  now = 16_000;
+  window.dispatchEvent(new Event("pagehide"));
+  // Seen: 2 s, then 1 s, then 1 s: never the time in the dialler.
+  expect(tracked(track, "sx.screen_hidden")[1]).toEqual({
+    screen: "leads",
+    kind: "exit",
+    seen_ms: 4_000,
+  });
+  expect(flush).toHaveBeenCalledWith(true);
+  await act(async () => root.unmount());
 });

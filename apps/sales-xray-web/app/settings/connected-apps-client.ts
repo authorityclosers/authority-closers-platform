@@ -44,6 +44,16 @@ export type Review = {
   worksNow: string;
   after: string | null;
 };
+/** Why an app can't do its whole job yet, and the one fix (connected_apps.Blocker). */
+export type Blocker = {
+  /** The card's one quiet line. */
+  short: string;
+  reason: string;
+  fix: string;
+  /** A page in this app where the fix is done, and the link's words. */
+  page: string | null;
+  action: string | null;
+};
 export type AppHealth = {
   app: AppKey;
   name: string;
@@ -61,6 +71,7 @@ export type AppHealth = {
   tests: TestOffer[];
   /** Meta lead ads: the review of Sales Xray, and what works before it ends. */
   review: Review | null;
+  blockers: Blocker[];
 };
 export type StepState = "done" | "waiting" | "failed" | "skipped";
 export type TestResult = {
@@ -202,6 +213,20 @@ function parseApp(value: unknown): AppHealth | null {
             after: text(review.after),
           }
         : null,
+    blockers: (Array.isArray(value.blockers) ? value.blockers : [])
+      .filter(isRecord)
+      .filter((item) => text(item.short) && text(item.reason) && text(item.fix))
+      .map((item) => {
+        const page = ownPage(item.page);
+        const action = text(item.action);
+        return {
+          short: item.short as string,
+          reason: item.reason as string,
+          fix: item.fix as string,
+          page: page && action ? page : null,
+          action: page && action ? action : null,
+        };
+      }),
   };
 }
 

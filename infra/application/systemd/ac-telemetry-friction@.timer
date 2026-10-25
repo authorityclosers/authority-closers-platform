@@ -1,0 +1,10 @@
+[Unit]
+Description=Mondays 07:00 IST: Sales X-Ray weekly friction report (%i)
+
+[Timer]
+OnCalendar=Mon *-*-* 01:30:00 UTC
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

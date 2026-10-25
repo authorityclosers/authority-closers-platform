@@ -41,6 +41,7 @@ import {
   Star,
   Timer,
   UserCheck,
+  UserSearch,
   UsersRound,
   Workflow,
   X,
@@ -94,6 +95,7 @@ const ICONS: Record<NavIcon, LucideIcon> = {
   offers: Sparkles,
   bugs: Bug,
   feedback: MessageSquareHeart,
+  sellers: UserSearch,
 };
 
 export function AcMark({ size = 20 }: { size?: number }) {

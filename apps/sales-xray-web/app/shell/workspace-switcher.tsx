@@ -77,6 +77,8 @@ export function WorkspaceSwitcher({
         type="button"
         className={styles.trigger}
         data-loading={pending ? "" : undefined}
+        // Opening the menu counts for the friction report (switch or not).
+        data-sx-feature={open ? undefined : "workspace_menu"}
         onClick={() => setOpen(!open)}
         aria-haspopup="menu"
         aria-expanded={open}

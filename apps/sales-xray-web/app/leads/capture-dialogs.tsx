@@ -20,6 +20,7 @@ import {
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 
 import { displayName } from "../display-name";
+import { useFlow } from "../telemetry-flows";
 import { Button, Dialog, Field, kitStyles, Segmented } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
 import { several, usePipelines } from "./use-pipelines";
@@ -242,6 +243,17 @@ export function AddLeadDialog({
   // A teammate's lead: Add lead would refuse it, so it isn't offered.
   const teammates = existing !== null && !existing.lead_id;
 
+  // Adding a lead in the weekly friction report: opened, typed, told it is
+  // already a lead, Add refused for something missing, added or closed.
+  const flow = useFlow("add_lead", { active: open, via: "sheet" });
+  const leadStep = existing ? "duplicate" : dirty ? "form" : null;
+  useEffect(() => {
+    if (open && leadStep) flow.step(leadStep);
+  }, [flow, open, leadStep]);
+  useEffect(() => {
+    if (!open) flow.cancel();
+  }, [flow, open]);
+
   // Owner, 22 Oct: adding a lead must be low effort. An empty form starts in
   // the name box with the keyboard up; a filled-in one waits to be checked.
   useEffect(() => {
@@ -292,6 +304,7 @@ export function AddLeadDialog({
   const save = async () => {
     if (!form.name.trim() && !form.phone.trim()) {
       setError("Add a name or a phone number.");
+      flow.blocked("form");
       return;
     }
     setSaving(true);
@@ -306,6 +319,7 @@ export function AddLeadDialog({
         pipeline: pipeline || undefined,
       };
       const detail = await addLead(lead, command.current);
+      flow.done({ step: "save" });
       onAdded(detail.lead.lead_id);
     } catch (reason) {
       setError(
