@@ -297,6 +297,12 @@ class LeadEventView(Model):
     task_action: str | None = None
     task_kind: str | None = None
     due_at: datetime | None = None
+    # A change an AI app or an API key made (docs/product/ai-writes.md): which one
+    # ("ChatGPT", "API key sxk_live_ab12"), its change id, and whether this viewer may
+    # still undo it (7 days; the person who made it, the lead's owner or a manager).
+    app_label: str | None = None
+    change_id: UUID | None = None
+    can_undo: bool = False
 
 
 class RepOption(Model):
@@ -467,7 +473,10 @@ class StageChoice(Model):
 
 
 TaskKind = Literal["call_back", "whatsapp", "email", "send_file", "meeting", "other"]
-TaskSource = Literal["seller", "after_call", "note", "message", "commitment"]
+# "assistant": sent from ChatGPT, Claude, an API key or the CLI (docs/product/ai-writes.md).
+TaskSource = Literal["seller", "after_call", "note", "message", "commitment", "assistant"]
+# How long a change an AI app made can be undone (owner order, 25 Oct 2026).
+APP_CHANGE_UNDO_DAYS = 7
 TaskSnoozeChoice = Literal["15m", "1h", "evening", "tomorrow"]
 TaskBucket = Literal["overdue", "today", "upcoming"]
 

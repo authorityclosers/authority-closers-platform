@@ -31,8 +31,18 @@ from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations.api_http import STAGES, ApiError, NewLeadBody, Reader, make_opener
+from ac_platform.integrations.api_http import (
+    STAGES,
+    ApiError,
+    NewLeadBody,
+    NoteBody,
+    Reader,
+    TaskBody,
+    UndoBody,
+    make_opener,
+)
 from ac_platform.integrations.oauth_http import DEFAULT_SCOPES
+from ac_platform.lead_desk.tasks import TASK_KINDS
 
 PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 VERSION = "1.0.0"
@@ -40,7 +50,9 @@ MAX_BODY = 65536
 INSTRUCTIONS = (
     "Sales X-Ray holds this person's sales calls (with reports and the facts found in "
     "them) and their leads. List calls or leads first, then read one by its id. Quote "
-    "facts as Sales X-Ray gives them; withheld parts of a call are never shown."
+    "facts as Sales X-Ray gives them; withheld parts of a call are never shown. With "
+    "permission, notes and tasks can be added to a lead; each shows which app sent it "
+    "and can be undone for 7 days."
 )
 
 _ID = {"type": "string", "description": "The id from a list."}
@@ -49,6 +61,30 @@ _SEARCHABLE = ("calls:read", "leads:read")
 # Every hint explicit, as the ChatGPT and Claude directories ask: nothing deletes or
 # overwrites, and every tool stays inside this person's own workspace (a closed world).
 _READS = {"readOnlyHint": True, "destructiveHint": False, "openWorldHint": False}
+# Writes add to a lead's history and never delete or overwrite (undo is its own tool);
+# the same request_id again changes nothing.
+_WRITES = {
+    "readOnlyHint": False,
+    "destructiveHint": False,
+    "idempotentHint": True,
+    "openWorldHint": False,
+}
+_REQUEST = {
+    "type": "string",
+    "minLength": 8,
+    "maxLength": 80,
+    "description": "A new string of 8 to 80 characters for this change; the same one "
+    "again changes nothing.",
+}
+_PREVIEW = {
+    "type": "boolean",
+    "description": "true to see what would change, without changing it.",
+}
+_WHEN = {
+    "type": "string",
+    "format": "date-time",
+    "description": "Date and time with its time zone, e.g. 2026-10-27T10:00:00+05:30.",
+}
 SEARCH_LIMIT = 20
 TOOLS: tuple[dict[str, Any], ...] = (
     {
@@ -176,6 +212,79 @@ TOOLS: tuple[dict[str, Any], ...] = (
         },
         "annotations": {**_READS, "readOnlyHint": False, "idempotentHint": True},
         "scope": "leads:write",
+    },
+    {
+        "name": "add_note",
+        "title": "Add a note to a lead",
+        "description": (
+            "Adds a note to one lead, as this person. The lead's history shows which app "
+            "sent it, and it can be undone for 7 days."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_id": _ID,
+                "note": {"type": "string", "minLength": 1, "maxLength": 1000},
+                "request_id": _REQUEST,
+                "preview": _PREVIEW,
+            },
+            "required": ["lead_id", "note", "request_id"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:notes",
+    },
+    {
+        "name": "add_task",
+        "title": "Add a task to a lead",
+        "description": (
+            "Adds a task or reminder to one lead: call back, WhatsApp, email, send a file, "
+            "a meeting or other. It goes on the lead owner's list, shows which app sent it, "
+            "and can be undone for 7 days."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_id": _ID,
+                "kind": {"type": "string", "enum": list(TASK_KINDS)},
+                "due": _WHEN,
+                "title": {"type": "string", "maxLength": 200},
+                "note": {"type": "string", "maxLength": 1000},
+                "ends_at": _WHEN,
+                "remind_before_minutes": {"type": "integer", "minimum": 0, "maximum": 1440},
+                "request_id": _REQUEST,
+                "preview": _PREVIEW,
+            },
+            "required": ["lead_id", "kind", "due", "request_id"],
+        },
+        "annotations": _WRITES,
+        "scope": "leads:tasks",
+    },
+    {
+        "name": "list_my_changes",
+        "title": "Changes this app made",
+        "description": (
+            "The notes and tasks this connection added in the last 30 days, newest first, "
+            "and whether each can still be undone."
+        ),
+        "inputSchema": {"type": "object", "properties": {"lead_id": _ID}},
+        "annotations": _READS,
+        "scope": ("leads:notes", "leads:tasks"),
+    },
+    {
+        "name": "undo_change",
+        "title": "Undo a change this app made",
+        "description": (
+            "Undoes one change this connection made, within 7 days: a note stops showing, "
+            "an open task is cancelled. Both stay in the lead's history. A task someone "
+            "has changed since is not undone."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"change_id": _ID, "request_id": _REQUEST},
+            "required": ["change_id"],
+        },
+        "annotations": {**_WRITES, "destructiveHint": True},
+        "scope": ("leads:notes", "leads:tasks"),
     },
 )
 _BY_NAME = {tool["name"]: tool for tool in TOOLS}
@@ -336,7 +445,43 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
             raise ApiError(422, "argument", "Lead fields must be short text.") from None
         answer, _ = await reader.add_lead(body)
         return answer
+    if name == "add_note":
+        note = _body(NoteBody, args, ("note", "request_id", "preview"))
+        answer, _ = await reader.add_note(_uuid(args, "lead_id"), note)
+        return answer
+    if name == "add_task":
+        fields = (
+            "kind",
+            "due",
+            "title",
+            "note",
+            "ends_at",
+            "remind_before_minutes",
+            "request_id",
+            "preview",
+        )
+        task = _body(TaskBody, args, fields)
+        answer, _ = await reader.add_task(_uuid(args, "lead_id"), task)
+        return answer
+    if name == "list_my_changes":
+        return await reader.changes(_uuid(args, "lead_id") if args.get("lead_id") else None)
+    if name == "undo_change":
+        undo = _body(UndoBody, args, ("request_id",))
+        return await reader.undo_change(_uuid(args, "change_id"), undo)
     raise KeyError(name)
+
+
+def _body(model: Any, args: dict[str, Any], fields: tuple[str, ...]) -> Any:
+    """Only the fields a tool takes; anything else is refused, never dropped."""
+    extra = sorted(set(args) - set(fields) - {"lead_id", "change_id"})
+    if extra:
+        raise ApiError(422, "field_not_allowed", f"Not a field this tool takes: {extra[0]}.")
+    try:
+        return model(**{key: args[key] for key in fields if args.get(key) is not None})
+    except ValueError as error:
+        first = error.errors()[0] if hasattr(error, "errors") else {}
+        where = ".".join(str(part) for part in first.get("loc", ())) or "arguments"
+        raise ApiError(422, "argument", f"{where}: {first.get('msg', 'not valid')}") from None
 
 
 def _reply(ident: Any, result: Any) -> dict[str, Any]:

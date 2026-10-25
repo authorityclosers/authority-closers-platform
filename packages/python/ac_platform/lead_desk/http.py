@@ -30,6 +30,7 @@ from ac_platform.conversation_intelligence.synthetic_import_models import (
 from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
+from ac_platform.integrations.ai_writes import IN_APP, AiWrites, AiWritesSettings
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import finder, push, simulation
 from ac_platform.lead_desk import tasks as task_book
@@ -493,6 +494,40 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
             if action == "undo":
                 return await book.undo(task_id, command)
             return await book.cancel(task_id, command)
+
+    # Changes from AI apps and API keys (docs/product/ai-writes.md): the list, undo,
+    # and the owner's switch.
+    @router.get("/ai-changes")
+    async def ai_changes(
+        request: Request, response: Response, lead_id: UUID | None = None
+    ) -> dict[str, Any]:
+        no_query(request, frozenset({"lead_id"}))
+        async with desk_for(request, response) as lead_desk:
+            return await AiWrites(lead_desk, IN_APP).changes(lead_id=lead_id)
+
+    @router.post("/ai-changes/{change_id}/undo")
+    async def undo_ai_change(
+        change_id: UUID, request: Request, response: Response
+    ) -> dict[str, Any]:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await AiWrites(lead_desk, IN_APP).undo(change_id)
+
+    @router.get("/ai-writes")
+    async def ai_writes(request: Request, response: Response) -> dict[str, Any]:
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await AiWrites(lead_desk, IN_APP).describe()
+
+    @router.put("/ai-writes")
+    async def save_ai_writes(
+        body: AiWritesSettings, request: Request, response: Response
+    ) -> dict[str, Any]:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await AiWrites(lead_desk, IN_APP).save_settings(
+                body.expected_revision, body.model_dump(exclude={"expected_revision"})
+            )
 
     @router.post("/leads/{lead_id}/notes", response_model=LeadDetail, response_model_by_alias=True)
     async def add_note(

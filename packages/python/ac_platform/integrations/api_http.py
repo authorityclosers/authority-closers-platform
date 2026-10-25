@@ -38,7 +38,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, FastAPI, Request
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy import select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,7 +47,10 @@ from ac_platform.call_data.models import CallObject
 from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule
 from ac_platform.http.routes import RouteContext
 from ac_platform.integrations import keys, oauth
+from ac_platform.integrations.ai_writes import AiWriteError, AiWrites, Door
+from ac_platform.integrations.models import IntegrationOAuthClient
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.lead_desk.contracts import TaskKind
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
 
@@ -69,6 +72,34 @@ class ApiError(Exception):
     def __init__(self, status: int, code: str, message: str, retry_after: int | None = None):
         super().__init__(code)
         self.status, self.code, self.message, self.retry_after = status, code, message, retry_after
+
+
+class NoteBody(BaseModel):
+    """A note an app adds to a lead (docs/product/ai-writes.md). Only these fields."""
+
+    model_config = ConfigDict(extra="forbid")
+    note: str = Field(min_length=1, max_length=1000)
+    request_id: str = Field(min_length=8, max_length=80)
+    preview: bool = False
+
+
+class TaskBody(BaseModel):
+    """A task or reminder an app adds to a lead. Only these fields; its owner is the lead's."""
+
+    model_config = ConfigDict(extra="forbid")
+    kind: TaskKind
+    due: AwareDatetime
+    title: str | None = Field(default=None, max_length=200)
+    note: str | None = Field(default=None, max_length=1000)
+    ends_at: AwareDatetime | None = None
+    remind_before_minutes: int | None = Field(default=None, ge=0, le=1440)
+    request_id: str = Field(min_length=8, max_length=80)
+    preview: bool = False
+
+
+class UndoBody(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: str | None = Field(default=None, min_length=8, max_length=80)
 
 
 class NewLeadBody(BaseModel):
@@ -326,6 +357,72 @@ class Reader:
         result: dict[str, Any] = detail.model_dump(mode="json", by_alias=True)
         return result
 
+    async def _writes(self) -> AiWrites:
+        """Changes from this caller, behind the AI-write guardrails (ai-writes.md)."""
+        desk = self._desk()
+        if self.key.prefix.startswith("app "):
+            name = await self.session.scalar(
+                select(IntegrationOAuthClient.name).where(
+                    IntegrationOAuthClient.client_id == self.key.prefix[4:]
+                )
+            )
+            door = Door(
+                via="connection",
+                door_id=self.key.key_id,
+                label=(name or "An AI app")[:80],
+                scopes=self.key.scopes,
+            )
+        else:
+            door = Door(
+                via="key",
+                door_id=self.key.key_id,
+                label=f"API key {self.key.prefix}",
+                scopes=self.key.scopes,
+            )
+        return AiWrites(desk, door)
+
+    async def _write(self, change: Any) -> tuple[dict[str, Any], int]:
+        try:
+            answer: dict[str, Any] = await change
+        except AiWriteError as error:
+            raise ApiError(error.status, error.code, str(error)) from None
+        except DeskError as error:
+            raise ApiError(error.status, "lead_desk", str(error)) from None
+        fresh = not (answer.get("preview") or answer.get("replayed"))
+        return answer, 201 if fresh else 200
+
+    async def add_note(self, lead_id: UUID, body: NoteBody) -> tuple[dict[str, Any], int]:
+        writes = await self._writes()
+        return await self._write(
+            writes.note(lead_id, body.note, request_id=body.request_id, preview=body.preview)
+        )
+
+    async def add_task(self, lead_id: UUID, body: TaskBody) -> tuple[dict[str, Any], int]:
+        writes = await self._writes()
+        return await self._write(
+            writes.task(
+                lead_id,
+                kind=body.kind,
+                starts_at=body.due,
+                ends_at=body.ends_at,
+                title=body.title,
+                note=body.note,
+                remind_before_minutes=body.remind_before_minutes,
+                request_id=body.request_id,
+                preview=body.preview,
+            )
+        )
+
+    async def changes(self, lead_id: UUID | None = None) -> dict[str, Any]:
+        writes = await self._writes()
+        answer, _ = await self._write(writes.changes(lead_id=lead_id))
+        return answer
+
+    async def undo_change(self, change_id: UUID, body: UndoBody) -> dict[str, Any]:
+        writes = await self._writes()
+        answer, _ = await self._write(writes.undo(change_id, request_id=body.request_id))
+        return answer
+
     async def add_lead(self, body: NewLeadBody) -> tuple[dict[str, Any], int]:
         self.require("leads:write")
         record = {
@@ -463,5 +560,30 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
         async with open_reader(request) as reader:
             answer, status = await reader.add_lead(body)
             return done(answer, status)
+
+    # AI writes (docs/product/ai-writes.md): notes and tasks, what was changed, and undo.
+    @router.post("/leads/{lead_id}/notes")
+    async def add_note(lead_id: UUID, body: NoteBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, status = await reader.add_note(lead_id, body)
+            return done(answer, status)
+
+    @router.post("/leads/{lead_id}/tasks")
+    async def add_task(lead_id: UUID, body: TaskBody, request: Request) -> JSONResponse:
+        async with open_reader(request) as reader:
+            answer, status = await reader.add_task(lead_id, body)
+            return done(answer, status)
+
+    @router.get("/changes")
+    async def changes(request: Request, lead_id: UUID | None = None) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.changes(lead_id))
+
+    @router.post("/changes/{change_id}/undo")
+    async def undo_change(
+        change_id: UUID, request: Request, body: UndoBody | None = None
+    ) -> JSONResponse:
+        async with open_reader(request) as reader:
+            return done(await reader.undo_change(change_id, body or UndoBody()))
 
     application.include_router(router)

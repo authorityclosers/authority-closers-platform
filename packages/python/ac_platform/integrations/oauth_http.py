@@ -77,7 +77,14 @@ REGISTER_WORDS = {
 # What an MCP host gets when it asks for no scope: reading, never writing.
 DEFAULT_SCOPES = "calls:read reports:read leads:read"
 # The MCP tools' scopes, which the resource metadata offers (webhooks:manage is for the CLI).
-MCP_SCOPES = ("calls:read", "reports:read", "leads:read", "leads:write")
+MCP_SCOPES = (
+    "calls:read",
+    "reports:read",
+    "leads:read",
+    "leads:write",
+    "leads:notes",
+    "leads:tasks",
+)
 RESOURCES = ("/v1/mcp", "/v1/api")
 DISCOVERY = {"Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*"}
 REGISTER_EACH = RateLimitRule(

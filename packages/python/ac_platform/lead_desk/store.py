@@ -38,6 +38,7 @@ from ac_platform.lead_desk.capture import (
     normalise_phone,
 )
 from ac_platform.lead_desk.contracts import (
+    APP_CHANGE_UNDO_DAYS,
     PHONE_CHECKS,
     ActivityItem,
     ActivityPage,
@@ -381,6 +382,10 @@ def _strings(values: Any) -> tuple[str, ...]:
     if not isinstance(values, list):
         return ()
     return tuple(str(item) for item in values if isinstance(item, str) and item.strip())
+
+
+# An undo of a change an AI app made: the marker event's pointer (ai-writes.md).
+UNDO_OF = "undo_of"
 
 
 class LeadDesk:
@@ -1165,11 +1170,12 @@ class LeadDesk:
         more = len(rows) > limit
         rows = rows[:limit]
         hidden = await self._private_calls(after) if who != self.viewer.person_id else frozenset()
+        removed = await self._undone(str(event.id) for event, _ in rows if event.kind == "note")
         names = await self._names([who])
         labels: dict[str, journeys.Journey] = {}
         items: list[ActivityItem] = []
         for event, lead in rows:
-            if str(event.id) in hidden:
+            if str(event.id) in hidden or str(event.id) in removed:
                 continue
             key = journeys.pipeline_of(lead)
             if key not in labels:
@@ -1214,6 +1220,12 @@ class LeadDesk:
         names = await self._names(people)
         day_end = self._day_start() + timedelta(days=1)
         hidden = await self._private_calls(lead_id=lead.id)
+        # Changes an AI app made and someone undid (docs/product/ai-writes.md).
+        undone = frozenset(
+            str(event.data[UNDO_OF])
+            for event in events
+            if event.kind == "edited" and isinstance(event.data.get(UNDO_OF), str)
+        )
         # A recording that names its call joins that call's row (owner, 22 Oct 2026).
         joined = self._joined_recordings(events)
         absorbed = {str(recording.id) for recording in joined.values()}
@@ -1262,9 +1274,18 @@ class LeadDesk:
             fields=fields,
             source_fields=self._source_fields(lead.payload),
             events=tuple(
-                self._event_view(event, names, hidden=hidden, recording=joined.get(str(event.id)))
+                self._event_view(
+                    event,
+                    names,
+                    hidden=hidden,
+                    recording=joined.get(str(event.id)),
+                    undone=undone,
+                    lead_owner=lead.owner_person_id,
+                )
                 for event in events
                 if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
+                and not (event.kind == "edited" and UNDO_OF in event.data)
+                and not (event.kind == "note" and str(event.id) in undone)
                 and (str(event.id) not in hidden or event.actor_person_id == self.viewer.person_id)
                 and str(event.id) not in absorbed
             ),
@@ -1363,9 +1384,22 @@ class LeadDesk:
         *,
         hidden: frozenset[str] = frozenset(),
         recording: LeadEvent | None = None,
+        undone: frozenset[str] = frozenset(),
+        lead_owner: UUID | None = None,
     ) -> LeadEventView:
         phone_call = event.kind == "call" and event.data.get("via") == "phone"
         data = event.data
+        by_app = data.get("by_app") if isinstance(data.get("by_app"), dict) else None
+        change_id = self._uuid(by_app.get("change")) if by_app else None
+        can_undo = (
+            change_id is not None
+            and str(event.id) not in undone
+            and event.created_at >= self.now - timedelta(days=APP_CHANGE_UNDO_DAYS)
+            and (
+                self.viewer.can_manage
+                or self.viewer.person_id in {event.actor_person_id, lead_owner}
+            )
+        )
         to, previous = self._uuid(data.get("to")), self._uuid(data.get("from"))
         stage = data.get("stage") if isinstance(data.get("stage"), str) else None
         reason = data.get("reason") if isinstance(data.get("reason"), str) else None
@@ -1435,6 +1469,9 @@ class LeadDesk:
             starts_at=when("starts_at") if meeting else None,
             from_starts_at=when("from_starts_at") if meeting else None,
             mode_label=meeting_rows.MODE_LABELS.get(text("mode") or "") if meeting else None,
+            app_label=str(by_app["label"])[:80] if by_app and by_app.get("label") else None,
+            change_id=change_id,
+            can_undo=can_undo,
         )
 
     # ----- capture ---------------------------------------------------------------
@@ -2934,7 +2971,9 @@ class LeadDesk:
         await self.db.flush()
         return await self.detail(lead.id)
 
-    async def note(self, lead_id: UUID, command: NoteCommand) -> LeadDetail:
+    async def note(
+        self, lead_id: UUID, command: NoteCommand, *, by_app: Mapping[str, Any] | None = None
+    ) -> LeadDetail:
         seen = await self._command_seen(command.command_id)
         if seen is not None:
             return await self.detail(seen.lead_id)
@@ -2945,12 +2984,49 @@ class LeadDesk:
         self._event(
             lead,
             "note",
-            {"note": command.note},
+            # by_app: the AI app or API key that sent it, and its change (ai-writes.md).
+            {"note": command.note, **({"by_app": dict(by_app)} if by_app else {})},
             actor=self.viewer.person_id,
             command_id=command.command_id,
         )
         await self.db.flush()
         return await self.detail(lead.id)
+
+    async def undo_app_change(
+        self, lead_id: UUID, event_id: UUID, command_id: UUID, *, change_id: UUID
+    ) -> LeadEvent:
+        """Undo a change an AI app or an API key made (docs/product/ai-writes.md): a
+        marker event pointing at it, never a deletion. A note it added stops showing; the
+        history keeps both. The AI-write service decides who may."""
+        seen = await self._command_seen(command_id)
+        if seen is not None:
+            return seen
+        lead = await self._lead(lead_id, lock=True)
+        lead.updated_at = self.now
+        event = self._event(
+            lead,
+            "edited",
+            {UNDO_OF: str(event_id), "change": str(change_id)},
+            actor=self.viewer.person_id,
+            command_id=command_id,
+        )
+        await self.db.flush()
+        return event
+
+    async def _undone(self, event_ids: Iterable[str]) -> frozenset[str]:
+        """Which of these events an undo marker points at."""
+        ids = list(event_ids)
+        if not ids:
+            return frozenset()
+        marked = LeadEvent.data[UNDO_OF].as_string()
+        rows = await self.db.scalars(
+            select(marked).where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.kind == "edited",
+                marked.in_(ids),
+            )
+        )
+        return frozenset(str(row) for row in rows if row)
 
     async def follow_up(self, lead_id: UUID, command: FollowUp) -> LeadDetail:
         """When to call next, set from the list without a call (long-press)."""
