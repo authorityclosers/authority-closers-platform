@@ -2345,3 +2345,11 @@
     height: 32px;
   }
 }
+
+/* Phones: the top bar's icons sit close, so the title keeps its room
+   (owner, 26 Oct 2026). */
+@media (max-width: 480px) {
+  .barActions {
+    gap: 4px;
+  }
+}

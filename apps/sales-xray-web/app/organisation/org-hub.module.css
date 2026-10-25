@@ -119,9 +119,10 @@
 /* Phones: the tab row scrolls sideways and fades at its end; tabs keep a
    44 px target. */
 @media (max-width: 899.98px) {
+  /* One gutter: the app's own 16 px (owner, 26 Oct 2026). */
   .hub {
     gap: 12px;
-    padding: 12px 16px 24px;
+    padding: 12px 0 24px;
   }
 
   .tabs {

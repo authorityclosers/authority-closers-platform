@@ -932,3 +932,50 @@
     grid-column: 3;
   }
 }
+
+/* Narrow phones (owner, 26 Oct 2026: the chip squeezed "Organisation" to
+   "Organis…"): the chip is the icon with its count, a 44 px target, so the
+   title keeps its room. */
+@media (max-width: 480px) {
+  .barChip,
+  .barChip[data-waiting] {
+    position: relative;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--sx-ink-2);
+  }
+
+  .barChip svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .barChipText {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .barChipCount {
+    position: absolute;
+    top: 5px;
+    right: 3px;
+    min-width: 18px;
+    height: 18px;
+    box-sizing: border-box;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--sx-accent);
+    color: var(--sx-accent-ink);
+    font-size: 11px;
+    line-height: 18px;
+    text-align: center;
+  }
+}

@@ -226,10 +226,13 @@
 }
 
 @media (max-width: 899px) {
+  /* The app already gives phones one 16 px gutter; a second one here made
+     every card float 32 px in (owner, 26 Oct 2026). */
   .shell {
     grid-template-columns: minmax(0, 1fr);
     gap: 12px;
     padding-top: 12px;
+    padding-inline: 0;
   }
 
   .nav {

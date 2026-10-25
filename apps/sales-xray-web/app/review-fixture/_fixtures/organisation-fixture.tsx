@@ -126,7 +126,18 @@ function install() {
   });
   const failing =
     new URLSearchParams(window.location.search).get("billing") === "fail";
+  // ?reviewer=1: a gold reviewer, so the top bar shows the Review chip.
+  const reviewer =
+    new URLSearchParams(window.location.search).get("reviewer") === "1";
   const ANSWERS: Record<string, () => unknown> = {
+    ...(reviewer
+      ? {
+          "/v1/sales-xray/review/badge": () => ({
+            reviewer: true,
+            waiting: 3,
+          }),
+        }
+      : {}),
     "/v1/me/sales-xray-profile": () => ({
       name: "vikram example",
       email: "vikram@fictionalhomes.in",
