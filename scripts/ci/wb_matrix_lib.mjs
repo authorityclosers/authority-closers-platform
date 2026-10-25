@@ -88,6 +88,12 @@ export const SCREENS = {
     path: "/review-fixture/alerts?level=urgent",
     steps: [{ wait: '[role="alertdialog"]' }],
   },
+  // First run: where to work after a sign-in, and setup, each step mid-screen.
+  "welcome-pick": { path: "/review-fixture/welcome?path=pick" },
+  "welcome-pick-invite": { path: "/review-fixture/welcome?path=pick&invite=1" },
+  "welcome-start": { path: "/review-fixture/welcome" },
+  "welcome-business": { path: "/review-fixture/welcome?step=business" },
+  "welcome-first": { path: "/review-fixture/welcome?step=first" },
   // Notifications in their sheet: groups, kinds, unread, and nothing waiting.
   notifications: {
     path: "/review-fixture/notifications",
