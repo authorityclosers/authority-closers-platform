@@ -128,12 +128,12 @@ export function ProcessingStatusCopy({
         </h3>
         <p>
           {reason === "short_call"
-            ? "Calls under a minute keep their transcript and lead details. Get the full report if this one matters."
+            ? "Under a minute: its transcript and lead details are saved."
             : reason === "no_conversation"
-              ? "This call had almost no conversation, so it keeps its transcript and lead details."
+              ? "Almost no conversation: its transcript and lead details are saved."
               : off
-                ? "This call is saved and logged on its lead. No AI has read it."
-                : "The transcript and lead facts are saved for the CRM. Coaching and the report are off for this seller’s calls."}
+                ? "Saved and logged on its lead. No AI has read it."
+                : "Its transcript and lead facts are saved. No report for this seller’s calls."}
         </p>
         {progress.ai_skip.can_upgrade && progress.recording_id ? (
           <AnalysisRetryAction

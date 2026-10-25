@@ -514,3 +514,52 @@
     animation: none;
   }
 }
+
+/* Phones (owner, Admin #15, 26 Oct 2026: "has to scroll down to check"):
+   the three steps are one row, each a mark, its name and its time, so the
+   result above stays in view. The descriptions wait for wider screens. */
+@media (max-width: 720px) {
+  .steps {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .step {
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 4px;
+    min-height: 0;
+    padding: 10px 6px;
+    text-align: center;
+  }
+
+  .step + .step {
+    border-top: 0;
+    border-left: 1px solid var(--lx-line-soft);
+  }
+
+  .stepCopy span {
+    display: none;
+  }
+
+  .stepCopy strong {
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .stepStatus {
+    grid-column: auto;
+  }
+
+  /* A saved short call: the steps it skipped read as skipped, not as
+     trouble. */
+  .steps[data-saved-short] .step[data-state="attention"] .marker {
+    border-color: var(--lx-line-strong);
+    background: transparent;
+    color: var(--lx-muted);
+  }
+
+  .steps[data-saved-short] .step[data-state="attention"] .stepStatus {
+    color: var(--lx-muted);
+    font-weight: 500;
+  }
+}
