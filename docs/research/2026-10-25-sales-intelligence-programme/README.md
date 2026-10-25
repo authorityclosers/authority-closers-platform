@@ -17,6 +17,10 @@ when load and revenue grow.
 | `05-scale-and-aws-plan.md` | Plan only: a cost model per seller and per organisation, triggers to move, a phased AWS (Mumbai) plan with spend held to a share of revenue |
 | `05a-aws-unit-prices.md` | Verified AWS, R2 and alternative unit prices (Mumbai, 25 Oct 2026) behind chapter 5 |
 | `06-ideation-backlog.md` | 27 ranked ideas for v0.90–v0.92 (problem, evidence, idea, impact, effort, the test that proves it), with a short list for the owner |
+| `07-usability-test-kit.md` | Usability test kit for Play testers on v0.89: setup, session script, five tasks (take a lead, call, log a result, add a task, find a note) in English, Hindi and Marathi, what to watch, scoring, privacy |
+| `07a-questionnaires.md` | SEQ, UMUX-Lite and the all-positive SUS in English, Hindi and Marathi (drafts for a native check), with scoring |
+| `07b-whatsapp-video-guide.md` | One page for the moderator: running a session on WhatsApp video |
+| `07c-score-sheet.csv` | The score sheet: one row per task per tester, plus questionnaire answers |
 
 The lab itself: `docs/product/telemetry-friction-lab.md` (design and the flow contract for
 builders); Admin → Product telemetry → Friction; the Monday markdown in
