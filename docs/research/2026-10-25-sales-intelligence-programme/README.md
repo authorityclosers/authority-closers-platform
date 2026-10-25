@@ -16,6 +16,7 @@ when load and revenue grow.
 | `04-telemetry-lab.md` | The measurement loop: how the new friction telemetry answers the research questions, and what is still to wire |
 | `05-scale-and-aws-plan.md` | Plan only: a cost model per seller and per organisation, triggers to move, a phased AWS (Mumbai) plan with spend held to a share of revenue |
 | `05a-aws-unit-prices.md` | Verified AWS, R2 and alternative unit prices (Mumbai, 25 Oct 2026) behind chapter 5 |
+| `06-ideation-backlog.md` | 27 ranked ideas for v0.90–v0.92 (problem, evidence, idea, impact, effort, the test that proves it), with a short list for the owner |
 
 The lab itself: `docs/product/telemetry-friction-lab.md` (design and the flow contract for
 builders); Admin → Product telemetry → Friction; the Monday markdown in
