@@ -24,7 +24,6 @@ import dynamic from "next/dynamic";
 import {
   ArrowLeft,
   Building2,
-  ChevronDown,
   Settings as SettingsIcon,
   ListTodo,
   NotebookPen,
@@ -121,6 +120,7 @@ import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
 import { TakingSwitch } from "./taking-switch";
 import { MoreViews, ViewSwitch, ViewTools } from "./view-switch";
+import { PipelinePicker } from "./pipeline-picker";
 import { several, usePipelines } from "./use-pipelines";
 
 /** To call's pipeline, remembered per seller and workspace on this device. */
@@ -1332,23 +1332,11 @@ export function LeadsRoute() {
               />
               {section === "now" && several(pipes) ? (
                 <ViewTools>
-                  <label className={styles.pipelineChip}>
-                    <select
-                      aria-label="Pipeline to call"
-                      value={toCallPipeline ?? ""}
-                      onChange={(event) =>
-                        chooseToCall(event.target.value || null)
-                      }
-                    >
-                      <option value="">All pipelines</option>
-                      {pipes.pipelines.map((item) => (
-                        <option key={item.key} value={item.key}>
-                          {item.name}
-                        </option>
-                      ))}
-                    </select>
-                    <ChevronDown size={14} aria-hidden="true" />
-                  </label>
+                  <PipelinePicker
+                    pipelines={pipes.pipelines}
+                    value={toCallPipeline}
+                    onChange={chooseToCall}
+                  />
                 </ViewTools>
               ) : null}
               {filterable || stageView ? (
