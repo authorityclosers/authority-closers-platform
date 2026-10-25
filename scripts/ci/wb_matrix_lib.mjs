@@ -88,6 +88,21 @@ export const SCREENS = {
     path: "/review-fixture/alerts?level=urgent",
     steps: [{ wait: '[role="alertdialog"]' }],
   },
+  // Notifications in their sheet: groups, kinds, unread, and nothing waiting.
+  notifications: {
+    path: "/review-fixture/notifications",
+    steps: [
+      { click: 'button[aria-label="Notifications"]' },
+      { wait: "dialog[open]" },
+    ],
+  },
+  "notifications-empty": {
+    path: "/review-fixture/notifications?empty=1",
+    steps: [
+      { click: 'button[aria-label="Notifications"]' },
+      { wait: "dialog[open]" },
+    ],
+  },
   "alert-urgent-long": {
     path: "/review-fixture/alerts?level=urgent&long=1",
     steps: [{ wait: '[role="alertdialog"]' }],
