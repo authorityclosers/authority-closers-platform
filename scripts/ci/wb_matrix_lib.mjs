@@ -66,6 +66,9 @@ export const SCREENS = {
     ],
   },
   home: { path: "/review-fixture/home" },
+  // Fictional call analysis numbers: the sliding figures and the attention dot.
+  "home-analysis": { path: "/review-fixture/home?analysis=1" },
+  "home-mine": { path: "/review-fixture/home?view=mine&analysis=1" },
 };
 
 /** The screens a request asks for: screen names or fixture paths ("/review-fixture/..."); none means all. */
