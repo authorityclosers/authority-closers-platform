@@ -88,7 +88,7 @@ Rules for the change:
 - **Lead deletion stays with Owner and Admin.**
 - **Invites can offer any role except Owner.** Only Owner and Admin change roles.
   An Admin cannot make another Admin into an Owner.
-- **Migration 0134** (number to confirm with the orchestrator): widen the
+- **Migration 0134**: widen the
   `memberships.role` and `organisation_invites.role` checks with `manager`,
   `viewer` and `finance`. Rollback while no row uses them.
 - **Web:** Organisation → Members shows the role names above, each with a
@@ -150,7 +150,7 @@ Contract: `docs/architecture/pulse-identity-contract.md`. In short:
   - the link is revocable from either side;
   - tokens are sealed in `integration_secrets`;
   - every link, sync and switch is audited on both sides.
-- **Migration 0136** (to confirm): `pulse_org_links`, plus `pulse` in the
+- **Migration 0137**: `pulse_org_links`, plus `pulse` in the
   provider names if the identity tables check them.
 
 ## 4. Every member completes their profile
@@ -177,7 +177,7 @@ Contract: `docs/architecture/pulse-identity-contract.md`. In short:
   - events keep using the internal person id, which is pseudonymous;
   - the user id is for people, never the telemetry key, so a person can change
     it without breaking history.
-- **Migration 0135** (to confirm): `handle` (unique, case-insensitive), `title`
+- **Migration 0136**: `handle` (unique, case-insensitive), `title`
   and `team` on the profile, and a `person_photos` table (one current photo per
   person, its source and SHA-256).
 
@@ -189,11 +189,11 @@ Contract: `docs/architecture/pulse-identity-contract.md`. In short:
 | 1 | Owner transfer: sheet, typed name checked on the server, emails | — | — |
 | 2 | Roles A: the capability map, every check moved, no behaviour change | — | — |
 | 3 | Roles B: Sales manager, Viewer and Finance; the read-only guard; Members UI | 0134 | 2 |
-| 4 | Profile A: user id, title, team, photo upload, completion card | 0135 | — |
+| 4 | Profile A: user id, title, team, photo upload, completion card | 0136 | — |
 | 5 | Profile B: avatars on history, notes and tasks (with the builder) | — | 4 |
 | 6 | Sign in with Pulse (generic OIDC provider) | — | Pulse OIDC live |
-| 7 | Pulse org link and initial profile sync | 0136 | 6, Pulse org-link API |
+| 7 | Pulse org link and initial profile sync | 0137 | 6, Pulse org-link API |
 | 8 | Pulse webhooks: live sync | — | 7 |
 | 9 | Work signals to Pulse (switches) | — | 7 |
 
-Slices 1, 2 and 4 can start now. Slices 6–9 wait for the Pulse card.
+Slices 1, 2 and 4 can start now. Slices 6–9 wait for the Pulse card (pulsehq, Pulse product development, ab590555-4d2c-4069-b3bb-47b896d71620). Migration numbers from the orchestrator, 25 Oct 2026 (Lead OS holds 0133 and 0135).
