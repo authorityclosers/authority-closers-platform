@@ -378,6 +378,7 @@ it("refreshes ownership permissions and uses member additions after a transfer",
   await click("Members");
   await select("Role for the new person", "admin");
   await click("Make Dipak the owner");
+  await typeOrganisationName("Authority Closers");
   org().role = "admin";
   await confirm();
   expect(host.querySelector("header")?.textContent).toContain(
