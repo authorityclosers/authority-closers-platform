@@ -1360,10 +1360,34 @@ a.repName {
     max-width: 96px;
   }
 
+  /* Phones (owner, 25 Oct 2026: the name squeezed beside the stage pill):
+     the name and its lines take the row's width; Call, WhatsApp and Email sit
+     on a line under them, the stage at its end. */
+  .leadFace[data-quick] {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "main main"
+      "quick tags";
+    padding-bottom: 10px;
+  }
+
+  .leadFace[data-quick] .leadButton {
+    grid-area: main;
+    padding-bottom: 6px;
+  }
+
   .leadEnd[data-quick] {
-    display: grid;
-    justify-items: end;
-    gap: 6px;
+    display: contents;
+  }
+
+  .leadFace[data-quick] .leadQuick {
+    grid-area: quick;
+    /* Under the text: the row's 12 px padding, the 34 px avatar, its 10 px gap. */
+    padding-left: 56px;
+  }
+
+  .leadFace[data-quick] .leadTags {
+    grid-area: tags;
     padding-right: 12px;
   }
 
@@ -2745,6 +2769,8 @@ a.repName {
 /* Leads → Views: a saved stage, pipeline, owner and search (22 Oct 2026). */
 .listTools {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   min-width: 0;
   align-items: center;
   gap: 6px;
@@ -4981,6 +5007,9 @@ a.repName {
 /* A stage's leads: one panel, the count above the rows. */
 .listPanel {
   display: grid;
+  /* One column no wider than the panel (owner, 25 Oct 2026: at 360 px the
+     toolbar's chips made it 364 px and every row lost its right edge). */
+  grid-template-columns: minmax(0, 1fr);
   min-width: 0;
   overflow: hidden;
   border: 1px solid var(--sx-line);
@@ -4990,6 +5019,7 @@ a.repName {
 
 .listHead {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;

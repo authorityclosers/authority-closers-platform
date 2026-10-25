@@ -320,6 +320,50 @@ export function FilterSheet({
           apply(draft);
         }}
       >
+        {/* Pipeline first: for a team with several, the choice that matters most
+            (orchestrator, 25 Oct 2026); then whose leads. */}
+        {pipes.length === 2 ? (
+          <div className={styles.filterGroup}>
+            <span className={styles.stepLabel}>Pipeline</span>
+            <Segmented
+              label="Pipeline"
+              items={[
+                { key: "", label: "All" },
+                ...pipes.map((item) => ({ key: item.key, label: item.name })),
+              ]}
+              value={draft.pipeline ?? ""}
+              onChange={(key) => setDraft({ ...draft, pipeline: key || null })}
+            />
+          </div>
+        ) : pipes.length > 2 ? (
+          // Up to eight pipelines: a list, not a row of buttons, on a phone.
+          <Field label="Pipeline">
+            <select
+              value={draft.pipeline ?? ""}
+              onChange={(event) =>
+                setDraft({ ...draft, pipeline: event.target.value || null })
+              }
+            >
+              <option value="">All pipelines</option>
+              {pipes.map((item) => (
+                <option key={item.key} value={item.key}>
+                  {item.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+        ) : null}
+        {canPickWho ? (
+          <div className={styles.filterGroup}>
+            <span className={styles.stepLabel}>Whose leads</span>
+            <Segmented
+              label="Whose leads"
+              items={WHO}
+              value={draft.who}
+              onChange={(who) => setDraft({ ...draft, who })}
+            />
+          </div>
+        ) : null}
         <Field label="Name or number">
           <input
             type="search"
@@ -369,48 +413,6 @@ export function FilterSheet({
             ))}
           </select>
         </Field>
-        {canPickWho ? (
-          <div className={styles.filterGroup}>
-            <span className={styles.stepLabel}>Whose leads</span>
-            <Segmented
-              label="Whose leads"
-              items={WHO}
-              value={draft.who}
-              onChange={(who) => setDraft({ ...draft, who })}
-            />
-          </div>
-        ) : null}
-        {pipes.length === 2 ? (
-          <div className={styles.filterGroup}>
-            <span className={styles.stepLabel}>Pipeline</span>
-            <Segmented
-              label="Pipeline"
-              items={[
-                { key: "", label: "All" },
-                ...pipes.map((item) => ({ key: item.key, label: item.name })),
-              ]}
-              value={draft.pipeline ?? ""}
-              onChange={(key) => setDraft({ ...draft, pipeline: key || null })}
-            />
-          </div>
-        ) : pipes.length > 2 ? (
-          // Up to eight pipelines: a list, not a row of buttons, on a phone.
-          <Field label="Pipeline">
-            <select
-              value={draft.pipeline ?? ""}
-              onChange={(event) =>
-                setDraft({ ...draft, pipeline: event.target.value || null })
-              }
-            >
-              <option value="">All pipelines</option>
-              {pipes.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : null}
       </form>
     </Sheet>
   );
