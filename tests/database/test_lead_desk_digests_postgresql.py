@@ -132,6 +132,23 @@ def test_digest_sweep_ledger_and_banner(postgres_harness: Any, tmp_path: Path) -
             assert item["words"] == f"Fictional Later Today: follow-up in {item['minutes']} min"
             here.as_admin()
             assert (await here.client.get(f"{BASE}/soon")).json()["item"] is None  # not theirs
+            # Outside work hours, the banner stays quiet.
+            hour = now.hour
+            start, end = ("13:00", "14:00") if hour < 12 or hour >= 15 else ("06:00", "07:00")
+            revision = (await here.client.get(f"{BASE}/team")).json()["settings"]["revision"]
+            hours = await here.client.put(
+                f"{BASE}/work-hours",
+                json={
+                    "expected_revision": revision,
+                    "days": [0, 1, 2, 3, 4, 5, 6],
+                    "start": start,
+                    "end": end,
+                },
+                headers=WRITE,
+            )
+            assert hours.status_code == 200, hours.text
+            here.as_seller()
+            assert (await here.client.get(f"{BASE}/soon")).json()["item"] is None
 
     run(exercise())
 

@@ -2,8 +2,9 @@
 demo: "in the app, a red top banner such as <lead> follow-up in 1 hour, with a haptic").
 
 The soonest of this person's own: a lead's next call, an open task, a booked meeting they
-host, due from five minutes ago to an hour from now. Read on the person's own session, so it
-may name the lead; a push never does.
+host, due from five minutes ago to an hour from now; nothing outside the workspace's work hours
+(the app's quiet time; every hour counts when none are set). Read on the person's own
+session, so it may name the lead; a push never does.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from uuid import UUID
 
 from sqlalchemy import and_, select
 
+from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk.contracts import Soon, SoonItem
 from ac_platform.lead_desk.models import Lead, LeadMeeting, LeadTask
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
@@ -32,6 +34,9 @@ def words(name: str, what: str, minutes: int) -> str:
 
 
 async def soon(desk: LeadDesk) -> Soon:
+    _, config = await desk.settings()
+    if not work_hours.inside(work_hours.parse(config), desk.now):
+        return Soon(item=None, generated_at=desk.now)
     me = desk.viewer.person_id
     start, end = desk.now - BEHIND, desk.now + AHEAD
     found: list[tuple[datetime, str, UUID, str, str | None]] = []

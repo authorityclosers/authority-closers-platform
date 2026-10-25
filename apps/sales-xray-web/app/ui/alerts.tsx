@@ -8,6 +8,8 @@
  * - urgent: a larger card in the middle with the one thing to do, in the
  *   urgent colour with the urgent haptic; it stays until done or put off.
  * One of each at a time: a newer alert of a level replaces the older one.
+ * A banner may carry the urgent emphasis (red, the urgent haptic) for work due
+ * within the hour (leads/due-soon.tsx): still up top, still leaving by itself.
  */
 
 import { BellRing, Siren, X } from "lucide-react";
@@ -31,6 +33,8 @@ export type AppAlert = Readonly<{
   timeout?: number;
   /** The urgent card's way to put it off ("Later"). */
   laterLabel?: string;
+  /** A banner in the urgent colour, with the urgent haptic. */
+  emphasis?: "urgent";
 }>;
 
 type Shown = Readonly<{ banner: AppAlert | null; urgent: AppAlert | null }>;
@@ -48,7 +52,12 @@ export function raiseAlert(alert: AppAlert) {
   const again = shown[slot]?.id === alert.id;
   shown = { ...shown, [slot]: alert };
   emit();
-  if (!again) haptic(alert.level === "urgent" ? "urgent" : "tap");
+  if (!again)
+    haptic(
+      alert.level === "urgent" || alert.emphasis === "urgent"
+        ? "urgent"
+        : "tap",
+    );
 }
 
 export function clearAlert(id: string) {
@@ -102,8 +111,9 @@ function Banner({ alert }: { alert: AppAlert }) {
   };
   return (
     <div
-      className={styles.banner}
+      className={`${styles.banner} ${alert.emphasis === "urgent" ? styles.bannerUrgent : ""}`}
       role="status"
+      data-emphasis={alert.emphasis}
       data-capture-skip=""
       onPointerEnter={hold}
       onPointerLeave={free}
