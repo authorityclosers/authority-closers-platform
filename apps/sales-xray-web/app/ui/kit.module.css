@@ -52,7 +52,7 @@
   overflow: hidden;
   color: var(--sx-ink);
   font: var(--sx-text-title);
-  letter-spacing: -0.015em;
+  letter-spacing: var(--sx-tracking-title);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

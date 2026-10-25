@@ -849,12 +849,10 @@
 }
 
 .pageHeading h1 {
+  font: var(--sx-text-title);
+  letter-spacing: var(--sx-tracking-title);
   margin: 0;
   color: var(--lx-ink);
-  font-size: 24px;
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  line-height: 1.2;
 }
 
 .pageHeading p {
@@ -1095,10 +1093,6 @@
 
   .pageHeading {
     padding: var(--lx-space-4) var(--lx-space-4) 0;
-  }
-
-  .pageHeading h1 {
-    font-size: 24px;
   }
 
   .content {
