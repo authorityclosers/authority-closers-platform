@@ -418,3 +418,96 @@ def find(cards: Sequence[Card], *, minimum: Band = "possible") -> list[Pair]:
                 pairs.append(pair)
     pairs.sort(key=lambda pair: (-pair.score, str(pair.first), str(pair.second)))
     return pairs
+
+
+# ----- merging (section 3 and 4 of the design; the store applies these) ------------------
+
+# How far a lead has come, by its stage's milestone: a merge keeps the furthest. Won is
+# furthest; then the open milestones in order; a closed Lost, then Junk, come last.
+MILESTONES: Final[tuple[str, ...]] = (
+    "disqualified",
+    "lost",
+    "lead",
+    "unreachable",
+    "contacted",
+    "other",
+    "qualified",
+    "appointment_booked",
+    "appointment_done",
+    "proposal",
+    "application",
+    "negotiation",
+    "won",
+)
+ACTIVE_WINDOW: Final = timedelta(days=14)
+
+
+@dataclass(frozen=True, slots=True)
+class Side:
+    """What a merge reads of one of the two leads."""
+
+    lead_id: UUID
+    human_activity: int
+    received_at: datetime
+    owner: UUID | None = None
+    assigned_at: datetime | None = None
+    milestone: str = "lead"
+    # Each seller's last own action on this lead (a call, a note, a result, a message…).
+    touched: tuple[tuple[UUID, datetime], ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class OwnerChoice:
+    person_id: UUID | None
+    # active: the one seller who worked on it lately; asked: two did, the most recent by
+    # default; chosen: a manager picked; first: nobody lately, the earliest assignee;
+    # nobody: neither lead had an owner.
+    why: Literal["active", "asked", "chosen", "first", "nobody"]
+    others: tuple[UUID, ...] = ()
+
+
+def survivor(a: Side, b: Side) -> tuple[Side, Side]:
+    """The lead kept and the lead merged into it: the most human activity, then the earliest
+    received."""
+    kept, gone = sorted(
+        (a, b), key=lambda side: (-side.human_activity, side.received_at, str(side.lead_id))
+    )
+    return kept, gone
+
+
+def owner_after(a: Side, b: Side, now: datetime, *, chosen: UUID | None = None) -> OwnerChoice:
+    """Who has the merged lead: the seller active on either in the last 14 days; with two,
+    the most recent unless a manager chose; with none, the earliest assignee."""
+    recent: dict[UUID, datetime] = {}
+    for side in (a, b):
+        for person, at in side.touched:
+            if now - at <= ACTIVE_WINDOW and (person not in recent or at > recent[person]):
+                recent[person] = at
+    ranked = sorted(recent, key=lambda person: (-recent[person].timestamp(), str(person)))
+    if chosen is not None and (chosen in recent or chosen in {a.owner, b.owner}):
+        return OwnerChoice(chosen, "chosen", tuple(p for p in ranked if p != chosen))
+    if len(ranked) >= 2:
+        return OwnerChoice(ranked[0], "asked", tuple(ranked[1:]))
+    if ranked:
+        return OwnerChoice(ranked[0], "active")
+    owned = [side for side in (a, b) if side.owner is not None]
+    if owned:
+        first = min(
+            owned, key=lambda side: (side.assigned_at or side.received_at, str(side.lead_id))
+        )
+        return OwnerChoice(first.owner, "first")
+    return OwnerChoice(None, "nobody")
+
+
+def furthest(a: Side, b: Side) -> Side:
+    """The side whose stage has come furthest (Won first; Lost and Junk last)."""
+
+    def rank(side: Side) -> int:
+        return MILESTONES.index(side.milestone) if side.milestone in MILESTONES else 2
+
+    return a if rank(a) >= rank(b) else b
+
+
+def task_key(title: str, starts_at: datetime) -> tuple[str, str]:
+    """Two open tasks that are one: the same words and the same minute."""
+    return (" ".join(title.lower().split()), starts_at.replace(second=0, microsecond=0).isoformat())

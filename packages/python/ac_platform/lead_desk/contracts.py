@@ -658,6 +658,44 @@ class Distribution(Model):
     words: str
 
 
+class MergeLeads(Command):
+    """An owner or manager merges two leads that are one person (duplicates): the lead with
+    the most human work is kept unless ``keep`` names it; ``owner_person_id`` picks who has it
+    when two sellers worked on them lately."""
+
+    command_id: UUID
+    lead_ids: tuple[UUID, UUID]
+    keep: UUID | None = None
+    owner_person_id: UUID | None = None
+
+
+class UndoMerge(Command):
+    command_id: UUID
+
+
+class MergeView(Model):
+    """A merge: the lead kept and the lead merged into it, who has it now and why in one
+    line, what moved, and until when it can be undone."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    merge_id: UUID
+    kept_lead_id: UUID
+    kept_name: str
+    merged_lead_id: UUID
+    merged_name: str
+    owner_person_id: UUID | None
+    owner_name: str | None
+    owner_reason: str
+    # active, asked, chosen, first or nobody (dupes.OwnerChoice).
+    owner_why: str
+    # Others who worked on the lead in the last 14 days ("worked before").
+    also_worked: tuple[str, ...] = ()
+    moved: dict[str, int] = Field(default_factory=dict)
+    created_at: datetime
+    undo_until: datetime
+    undone_at: datetime | None = None
+
+
 class SearchResult(Model):
     """A few words, everywhere a seller looks (v0.89): leads, notes and open tasks."""
 

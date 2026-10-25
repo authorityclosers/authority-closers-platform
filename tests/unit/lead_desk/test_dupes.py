@@ -14,13 +14,19 @@ import pytest
 from ac_platform.lead_desk.dupes import (
     RANK,
     Card,
+    OwnerChoice,
+    Side,
     company_key,
     find,
     fold_email,
+    furthest,
     jaro_winkler,
     last10,
     name_similarity,
+    owner_after,
     score,
+    survivor,
+    task_key,
 )
 
 T0 = datetime(2026, 10, 25, 10, 0, tzinfo=UTC)
@@ -185,3 +191,52 @@ def test_two_organisations_are_never_compared() -> None:
     with pytest.raises(ValueError, match="one organisation"):
         find([card(1, tenant_id=first, **same), card(2, tenant_id=second, **same)])
     assert len(find([card(1, tenant_id=first, **same), card(2, tenant_id=first, **same)])) == 1
+
+
+# ----- merge rules ---------------------------------------------------------------------
+
+DIPAK, KAVYA = UUID(int=201), UUID(int=202)
+
+
+def side(n: int, **fields: object) -> Side:
+    fields.setdefault("human_activity", 0)
+    fields.setdefault("received_at", T0)
+    return Side(lead_id=UUID(int=n), **fields)  # type: ignore[arg-type]
+
+
+def test_the_lead_kept_has_the_most_human_work_then_came_first() -> None:
+    busy, quiet = side(1, human_activity=5), side(2, human_activity=1)
+    assert survivor(quiet, busy) == (busy, quiet)
+    early, late = side(3, received_at=T0), side(4, received_at=T0 + timedelta(days=1))
+    assert survivor(late, early) == (early, late)
+
+
+def test_who_has_the_lead_after_a_merge() -> None:
+    now = T0 + timedelta(days=20)
+    lately = side(1, touched=((DIPAK, now - timedelta(days=2)),), owner=KAVYA)
+    old = side(2, touched=((KAVYA, now - timedelta(days=30)),), owner=KAVYA)
+    assert owner_after(lately, old, now) == OwnerChoice(DIPAK, "active")
+    both = side(5, touched=((KAVYA, now - timedelta(days=1)),))
+    choice = owner_after(lately, both, now)
+    assert choice == OwnerChoice(KAVYA, "asked", (DIPAK,))
+    assert owner_after(lately, both, now, chosen=DIPAK) == OwnerChoice(DIPAK, "chosen", (KAVYA,))
+    # Nobody lately: the earliest assignee.
+    first = side(6, owner=DIPAK, assigned_at=T0)
+    second = side(7, owner=KAVYA, assigned_at=T0 + timedelta(days=1))
+    assert owner_after(second, first, now) == OwnerChoice(DIPAK, "first")
+    assert owner_after(side(8), side(9), now) == OwnerChoice(None, "nobody")
+
+
+def test_the_stage_kept_is_the_furthest() -> None:
+    won, demo = side(1, milestone="won"), side(2, milestone="appointment_done")
+    assert furthest(demo, won) is won
+    open_, lost = side(3, milestone="contacted"), side(4, milestone="lost")
+    assert furthest(lost, open_) is open_
+    junk = side(5, milestone="disqualified")
+    assert furthest(junk, lost) is lost
+
+
+def test_one_task_written_twice_is_one() -> None:
+    at = T0.replace(second=31)
+    assert task_key("Call  back Asha", at) == task_key("call back asha", T0)
+    assert task_key("Call back", T0) != task_key("Call back", T0 + timedelta(minutes=1))

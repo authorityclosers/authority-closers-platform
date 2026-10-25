@@ -32,7 +32,7 @@ from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.integrations.ai_writes import IN_APP, AiWrites, AiWritesSettings
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk import finder, push, simulation
+from ac_platform.lead_desk import finder, merging, push, simulation
 from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk import team as team_engine
 from ac_platform.lead_desk.contracts import (
@@ -66,6 +66,8 @@ from ac_platform.lead_desk.contracts import (
     LeadSince,
     LeadSort,
     Me,
+    MergeLeads,
+    MergeView,
     MessageSent,
     MovePipeline,
     MyDayView,
@@ -102,6 +104,7 @@ from ac_platform.lead_desk.contracts import (
     TaskView,
     Team,
     TeamTargets,
+    UndoMerge,
     WorkDay,
     WorkHoursCommand,
 )
@@ -351,6 +354,22 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await team_engine.distribute_leads(lead_desk, command)
+
+    @router.post("/duplicates/merge", response_model=MergeView, response_model_by_alias=True)
+    async def merge_leads(command: MergeLeads, request: Request, response: Response) -> MergeView:
+        """Owners and managers merge two leads that are one person; undone within 30 days."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await merging.merge(lead_desk, command)
+
+    @router.post("/merges/{merge_id}/undo", response_model=MergeView, response_model_by_alias=True)
+    async def undo_merge(
+        merge_id: UUID, command: UndoMerge, request: Request, response: Response
+    ) -> MergeView:
+        """Put a merge back: every moved row returns to the lead merged away."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await merging.unmerge(lead_desk, merge_id, command)
 
     @router.post("/leads/delete", response_model=LeadsDeleted, response_model_by_alias=True)
     async def delete_leads(

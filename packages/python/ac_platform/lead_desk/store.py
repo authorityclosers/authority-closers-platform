@@ -133,6 +133,8 @@ from ac_platform.lead_desk.vocabulary import (
     CHANNEL_LABELS,
     CLOSED_STAGES,
     IMPORTED_LOST,
+    MERGED_DUPLICATE,
+    MERGED_WORDS,
     MESSAGE_TEMPLATES,
     NEEDS_FOLLOW_UP,
     OPEN_STAGES,
@@ -559,6 +561,20 @@ class LeadDesk:
             raise DeskError(404, "This lead isn't on your desk.")
         return lead
 
+    async def _live(self, lead: Lead, *, lock: bool = False) -> Lead:
+        """The lead itself, or the lead it was merged into (followed to the last one)."""
+        seen = {lead.id}
+        while lead.merged_into_id is not None and lead.merged_into_id not in seen:
+            query = select(Lead).where(
+                Lead.tenant_id == self.tenant_id, Lead.id == lead.merged_into_id
+            )
+            survivor = await self.db.scalar(query.with_for_update() if lock else query)
+            if survivor is None:
+                break
+            seen.add(survivor.id)
+            lead = survivor
+        return lead
+
     async def _command_seen(self, command_id: UUID) -> LeadEvent | None:
         seen: LeadEvent | None = await self.db.scalar(
             select(LeadEvent).where(
@@ -689,6 +705,8 @@ class LeadDesk:
             return None
         if lead.outcome_reason == IMPORTED_LOST:
             return "Imported"
+        if lead.outcome_reason == MERGED_DUPLICATE:
+            return MERGED_WORDS
         journey = self._journeys.get(journeys.pipeline_of(lead))
         stage = journey.resolve(lead.stage, lead.step) if journey is not None else None
         reasons = dict(transitions.reasons_of(stage)) if stage is not None else {}
@@ -1174,12 +1192,14 @@ class LeadDesk:
             LeadEvent.kind.in_(WORK_KINDS),
             LeadEvent.created_at >= after,
             LeadEvent.created_at < upto,
-            # A new stage list placing leads is not the person's work (AUT-2218, 25 Oct
-            # 2026: "8 stage moves" credited to the admin who approved the install).
+            # A new stage list placing leads, or a merge keeping the books, is not the
+            # person's work (AUT-2218, 25 Oct 2026: "8 stage moves" credited to the admin
+            # who approved the install).
             or_(
                 LeadEvent.kind != "stage",
-                func.coalesce(LeadEvent.data["source"].as_string(), "")
-                != transitions.STAGES_CHANGED,
+                func.coalesce(LeadEvent.data["source"].as_string(), "").not_in(
+                    tuple(transitions.BOOKKEEPING)
+                ),
             ),
             self._visible(),
         ]
@@ -1550,7 +1570,7 @@ class LeadDesk:
                 )
             )
             if known is not None:
-                return known, "known"
+                return await self._live(known), "known"
         existing = None
         if found.phone:
             existing = await self.db.scalar(
@@ -1569,6 +1589,8 @@ class LeadDesk:
                 .with_for_update()
             )
         if existing is not None:
+            # A lead merged into another: the record joins the lead it went into.
+            existing = await self._live(existing, lock=True)
             await self._repeat(
                 existing, found, payload, source, source_label, actor, reps, command_id
             )

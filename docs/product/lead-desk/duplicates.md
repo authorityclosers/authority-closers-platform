@@ -65,6 +65,26 @@ only add to the queue, never merge.
 - **Audit:** an event for every merge and unmerge.
 - **Unmerge:** possible for 30 days. Every moved row's id is recorded with the merge.
 
+**As built (D3, `lead_desk/merging.py`):**
+- The lead merged away closes as **Junk, "Merged into another lead"** (reason key `merged`), and
+  `merged_into_id` points to the kept lead. Every queue, the lead rules, alerts, the SLA and the
+  reports already leave Junk out, so nothing double-counts it.
+- Its moves and the kept lead's stage move carry source `merge`. These are bookkeeping
+  (`transitions.stages_changed`): never progress, an ad conversion or a seller's work. Partner
+  webhooks never send stage moves.
+- **Moved with the lead:** history, meetings, tasks, WhatsApp and social messages, AI reply drafts,
+  and calls.
+- **Kept where they were made:** ad conversions, partner events, SLA records and read marks.
+- **Two open meetings:** the merged lead's meeting is cancelled first, with a history line, so the
+  kept lead has one.
+- **Repeats:** a new record that matches the merged lead (its phone) joins the kept lead (`_live`
+  in the store).
+- **Unmerge:** moves every recorded row back. It restores the merged lead's stage, and the kept
+  lead's stage and owner if nobody changed them since. It clears the fields the merge filled where
+  they are unchanged, and reopens the task and meeting it cancelled.
+- **"Worked before":** a history line names the other sellers. Their view access to the kept lead
+  comes with D4.
+
 ## 4. Who gets the merged lead
 
 - **One seller active:** the seller with the most recent human activity on either lead in the last 14
