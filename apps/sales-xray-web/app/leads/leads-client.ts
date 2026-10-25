@@ -32,6 +32,8 @@ export type LeadRow = {
   language: string | null;
   interest: string | null;
   phone_last4: string | null;
+  /** The whole number, when the organisation shows full numbers in lists. */
+  phone?: string | null;
   stage: Stage;
   stage_label: string;
   source: string;
@@ -239,6 +241,8 @@ export type LeadPage = {
   next_offset: number | null;
   /** Every stage's count for the same people and search (the stage tabs). */
   stage_counts?: Record<string, number>;
+  /** Leads per seller ("none": nobody's) for the same filters, without the seller picked. */
+  owner_counts?: Record<string, number>;
 };
 
 export type RepView = {
@@ -247,7 +251,12 @@ export type RepView = {
   role: string;
   revision: number;
   available: boolean;
-  max_open: number;
+  /** The seller's open-lead limit; null: no limit. */
+  max_open: number | null;
+  /** The organisation's default applies (the seller has no rules of their own yet). */
+  default_cap?: boolean;
+  /** Open leads beyond the limit (a manual assign or an import may go past it). */
+  over_capacity?: number;
   languages: string[];
   areas: string[];
   interests: string[];
@@ -290,6 +299,10 @@ export type Team = {
     reassign_minutes: number;
     default_country: string;
     work_hours?: WorkHours | null;
+    /** The open-lead limit of sellers with no rules of their own; null: no limit. */
+    default_max_open?: number | null;
+    /** Lists show whole phone numbers. */
+    show_full_phones?: boolean;
   };
   by_stage: Record<string, number>;
   by_source: Record<string, number>;
@@ -309,6 +322,10 @@ export type ImportPreview = {
   repeats_in_file: number;
   /** Numbers in the file that are already leads: kept there, never added again. */
   known_leads?: number;
+  /** The CRM whose export this is, when its headers say so ("Zoho CRM"). */
+  detected?: string | null;
+  /** Rows that make a lead with the columns matched. */
+  importable?: number;
 };
 
 export type ImportResult = {
@@ -323,6 +340,8 @@ export type ImportResult = {
   /** What matched no stage or teammate (the first ten). */
   unmatched_stages?: string[];
   unmatched_owners?: string[];
+  /** People the import took past their open-lead limit, said plainly. */
+  warnings?: string[];
 };
 
 export type SourceView = {
@@ -1260,7 +1279,8 @@ export function saveRep(
   rep: Pick<RepView, "person_id" | "revision">,
   rules: {
     available: boolean;
-    max_open: number;
+    /** null: no limit. */
+    max_open: number | null;
     languages: string[];
     areas: string[];
     interests: string[];
@@ -1274,7 +1294,14 @@ export function saveRep(
 
 export function saveSettings(
   revision: number,
-  settings: { auto_reassign: boolean; reassign_minutes: number },
+  settings: {
+    auto_reassign: boolean;
+    reassign_minutes: number;
+    /** Sent: the default open-lead limit (null: no limit). Left out: kept. */
+    default_max_open?: number | null;
+    /** Sent: whether lists show whole phone numbers. Left out: kept. */
+    show_full_phones?: boolean;
+  },
 ) {
   return request<Team>(
     "/settings",
@@ -1374,6 +1401,7 @@ export function commitImport(
       rows: preview.rows,
       assign,
       ...(pipeline ? { pipeline } : {}),
+      ...(preview.detected ? { source_name: preview.detected } : {}),
     }),
   );
 }

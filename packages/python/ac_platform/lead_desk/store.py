@@ -188,6 +188,9 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "auto_reassign": False,
     "reassign_minutes": 10,
     "default_country": "91",
+    "show_full_phones": False,
+    # The open-lead limit of a seller with no rules of their own; None: no limit.
+    "default_max_open": DEFAULT_MAX_OPEN,
 }
 IST = ZoneInfo("Asia/Kolkata")
 # The pipeline board (Lead OS): cards per column per page.
@@ -225,6 +228,16 @@ class _Rep:
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+def default_cap(config: Mapping[str, Any]) -> int | None:
+    """The open-lead limit of a seller with no rules of their own; None: no limit."""
+    value = config.get("default_max_open", DEFAULT_MAX_OPEN)
+    return int(value) if value is not None else None
+
+
+def over_cap(open_leads: int, cap: int | None) -> int:
+    return max(0, open_leads - cap) if cap is not None else 0
 
 
 def _team_config(config: Mapping[str, Any]) -> dict[str, Any]:
@@ -430,6 +443,7 @@ class LeadDesk:
         return {person.id: person_name(person) for person in people}
 
     async def _reps(self) -> list[_Rep]:
+        cap = default_cap((await self.settings())[1])
         members = (
             await self.db.execute(
                 select(Membership.person_id, Membership.role, Person)
@@ -483,7 +497,7 @@ class LeadDesk:
                         person_id=person_id,
                         name=person_name(person),
                         available=row.available if row else True,
-                        max_open=row.max_open if row else DEFAULT_MAX_OPEN,
+                        max_open=row.max_open if row else cap,
                         open_leads=int(loads.get(person_id, 0)),
                         languages=_strings(row.languages) if row else (),
                         areas=_strings(row.areas) if row else (),
@@ -614,7 +628,14 @@ class LeadDesk:
             return "open", "Call booked"
         return "open", self._stage_label(lead)
 
-    def _row(self, lead: Lead, names: Mapping[UUID, str], day_end: datetime) -> LeadRow:
+    def _row(
+        self,
+        lead: Lead,
+        names: Mapping[UUID, str],
+        day_end: datetime,
+        *,
+        full_phone: bool = False,
+    ) -> LeadRow:
         kind, why = self._why(lead, day_end)
         result_label = (
             STAGE_LABELS.get(lead.last_result) or REASON_LABELS.get(lead.last_result)
@@ -630,6 +651,7 @@ class LeadDesk:
             language=lead.language,
             interest=lead.interest,
             phone_last4=lead.phone[-4:] if lead.phone else None,
+            phone=lead.phone if full_phone else None,
             stage=lead.stage,
             stage_label=self._stage_label(lead),
             step=self._step(lead),
@@ -677,7 +699,8 @@ class LeadDesk:
             await self._labels(key)
         names = await self._names(lead.owner_person_id for lead in leads)
         day_end = self._day_start() + timedelta(days=1)
-        return tuple(self._row(lead, names, day_end) for lead in leads)
+        full = bool((await self.settings())[1].get("show_full_phones"))
+        return tuple(self._row(lead, names, day_end, full_phone=full) for lead in leads)
 
     # ----- the desk --------------------------------------------------------------
 
@@ -996,11 +1019,13 @@ class LeadDesk:
         if pipeline is not None:
             # One pipeline's leads: its stage tabs, counts and calling queue.
             where.append(journeys.lead_in((await self._pipeline(pipeline)).key))
+        chosen: Any = None
         if owner is not None:
             # One seller's leads, for their profile (owner, 21 Oct 2026): the team list only.
             if scope != "team":
                 raise DeskError(422, "Choose the team's leads to see one seller's.")
-            where.append(Lead.owner_person_id == owner)
+            chosen = Lead.owner_person_id == owner
+            where.append(chosen)
         if test_only:
             # Test and sample leads (sandbox seed, practice workspaces, Meta's testing
             # tool): easy to find and clear.
@@ -1031,6 +1056,19 @@ class LeadDesk:
             where.append(Lead.stage.in_(OPEN_STAGES))
         elif stage is not None:
             where.append(Lead.stage == stage)
+        owner_counts: dict[str, int] = {}
+        if scope == "team":
+            # Per seller for the same filters, the seller picked left out (25 Oct 2026).
+            owner_counts = {
+                str(person) if person is not None else "none": int(count)
+                for person, count in (
+                    await self.db.execute(
+                        select(Lead.owner_person_id, func.count())
+                        .where(*(item for item in where if item is not chosen))
+                        .group_by(Lead.owner_person_id)
+                    )
+                ).all()
+            }
         total = int(await self.db.scalar(select(func.count()).where(*where)) or 0)
         order: tuple[Any, ...] = (
             (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at)
@@ -1050,6 +1088,7 @@ class LeadDesk:
             total=total,
             next_offset=offset + limit if offset + limit < total else None,
             stage_counts=stage_counts,
+            owner_counts=owner_counts,
         )
 
     def _list_filters(
@@ -1494,7 +1533,8 @@ class LeadDesk:
         pipeline: str | None = None,
     ) -> tuple[Lead | None, Literal["created", "repeat", "known", "skipped"]]:
         """Store one record as a lead. The same record again (same source id) is "known"
-        and changes nothing; another record with the same phone is a "repeat". A new lead
+        and changes nothing; another record with the same phone, or with no phone and the
+        same email, is a "repeat". A new lead
         goes to the pipeline picked, else the one that takes its source (pipelines.route)."""
         _, config = await self.settings()
         found = extract(record, mapping, default_country=config["default_country"])
@@ -1516,6 +1556,16 @@ class LeadDesk:
             existing = await self.db.scalar(
                 select(Lead)
                 .where(Lead.tenant_id == self.tenant_id, Lead.phone == found.phone)
+                .with_for_update()
+            )
+        elif found.email and not test_data:
+            # No usable phone: the same email is the same person (universal intake). Test
+            # data never merges: testing tools send the same dummy address every time.
+            existing = await self.db.scalar(
+                select(Lead)
+                .where(Lead.tenant_id == self.tenant_id, Lead.email == found.email)
+                .order_by(Lead.created_at)
+                .limit(1)
                 .with_for_update()
             )
         if existing is not None:
@@ -2520,7 +2570,26 @@ class LeadDesk:
             words += ". " + " ".join(
                 f"{count} not moved: {reason}" for reason, count in sorted(why.items())
             ).rstrip(".")
+        if command.action == "assign" and command.person_id is not None and done:
+            # A manager may give past a seller's limit; it is said, never hidden.
+            beyond = await self.over_limit([command.person_id])
+            if beyond:
+                words += ". " + " ".join(beyond).rstrip(".")
         return BulkDone(done=done, skipped=skipped, words=words + ".")
+
+    async def over_limit(self, people: Iterable[UUID]) -> list[str]:
+        """For each of these sellers now past their open-lead limit, one plain line."""
+        wanted = set(people)
+        lines: list[str] = []
+        for rep in await self._reps():
+            state = rep.state
+            beyond = over_cap(state.open_leads, state.max_open)
+            if state.person_id in wanted and beyond:
+                lines.append(
+                    f"{state.name} now has {state.open_leads} open leads, {beyond} over "
+                    f"their limit of {state.max_open}."
+                )
+        return lines
 
     async def match(self, phone: str) -> LeadMatch:
         """Whether this number is already a lead, said before Add lead (a repeat joins
@@ -3794,6 +3863,8 @@ class LeadDesk:
                     revision=rep.row.revision if rep.row else 0,
                     available=rep.state.available,
                     max_open=rep.state.max_open,
+                    default_cap=rep.row is None,
+                    over_capacity=over_cap(rep.state.open_leads, rep.state.max_open),
                     languages=rep.state.languages,
                     areas=rep.state.areas,
                     interests=rep.state.interests,
@@ -3812,6 +3883,8 @@ class LeadDesk:
                 reassign_minutes=int(config["reassign_minutes"]),
                 default_country=str(config["default_country"]),
                 work_hours=hours_view(work_hours.parse(config), self.now),
+                show_full_phones=bool(config.get("show_full_phones")),
+                default_max_open=default_cap(config),
                 nudges=bool(_team_config(config).get("nudges")),
                 nudges_off_for=tuple(
                     UUID(str(person)) for person in _team_config(config).get("nudges_off_for") or ()
@@ -4070,7 +4143,7 @@ class LeadDesk:
                 person_id=me,
                 revision=0,
                 available=True,
-                max_open=DEFAULT_MAX_OPEN,
+                max_open=default_cap((await self.settings())[1]),
                 languages=[],
                 areas=[],
                 interests=[],
@@ -4109,6 +4182,10 @@ class LeadDesk:
         config.update(
             auto_reassign=command.auto_reassign, reassign_minutes=command.reassign_minutes
         )
+        if command.show_full_phones is not None:
+            config["show_full_phones"] = command.show_full_phones
+        if "default_max_open" in command.model_fields_set:
+            config["default_max_open"] = command.default_max_open
         if row is None:
             row = LeadDeskSettings(tenant_id=self.tenant_id, revision=0, config={})
             self.db.add(row)

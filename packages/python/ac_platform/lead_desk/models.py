@@ -134,6 +134,10 @@ class Lead(Base):
     # history keeps every reason).
     stage_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     outcome_reason: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # Merged into another lead (duplicates, migration 0134): kept, shown as "Merged into …",
+    # and opening it goes to that lead. Both null for a lead of its own.
+    merged_into_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    merged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class LeadEvent(Base):
@@ -422,6 +426,122 @@ class LeadNudge(Base):
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+def _pair_keys(name: str) -> tuple[ForeignKeyConstraint, ForeignKeyConstraint]:
+    return (
+        ForeignKeyConstraint(
+            ["first_lead_id"], ["lead_desk_leads.id"], name=f"fk_{name}_first", ondelete="CASCADE"
+        ),
+        ForeignKeyConstraint(
+            ["second_lead_id"],
+            ["lead_desk_leads.id"],
+            name=f"fk_{name}_second",
+            ondelete="CASCADE",
+        ),
+    )
+
+
+class LeadDuplicatePair(Base):
+    """Two leads the duplicate engine says may be one person (migration 0134): derived
+    data, rewritten by each scan; the first lead's id sorts before the second's."""
+
+    __tablename__ = "lead_desk_duplicate_pairs"
+    __table_args__ = (
+        *_pair_keys("lead_desk_dup_pair"),
+        CheckConstraint(
+            "band IN ('certain', 'probable', 'possible')", name="lead_desk_dup_pair_band"
+        ),
+        CheckConstraint("first_lead_id < second_lead_id", name="lead_desk_dup_pair_order"),
+        Index(
+            "uq_lead_desk_dup_pair",
+            "tenant_id",
+            "first_lead_id",
+            "second_lead_id",
+            unique=True,
+        ),
+        Index("ix_lead_desk_dup_pair_band", "tenant_id", "band", "score"),
+        Index("ix_lead_desk_dup_pair_second", "tenant_id", "second_lead_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    first_lead_id: Mapped[UUID] = mapped_column(Uuid)
+    second_lead_id: Mapped[UUID] = mapped_column(Uuid)
+    score: Mapped[int] = mapped_column(Integer)
+    band: Mapped[str] = mapped_column(String(10))
+    reasons: Mapped[list[str]] = mapped_column(JSON)
+    against: Mapped[list[str]] = mapped_column(JSON)
+    computed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadDuplicateDecision(Base):
+    """What a person decided about a pair (migration 0134), append-only: "not the same"
+    keeps the pair out of every later scan; a merge and an unmerge are recorded too."""
+
+    __tablename__ = "lead_desk_duplicate_decisions"
+    __table_args__ = (
+        *_pair_keys("lead_desk_dup_decision"),
+        CheckConstraint(
+            "decision IN ('not_same', 'merged', 'unmerged')", name="lead_desk_dup_decision_kind"
+        ),
+        CheckConstraint("first_lead_id < second_lead_id", name="lead_desk_dup_decision_order"),
+        Index(
+            "ix_lead_desk_dup_decision_pair",
+            "tenant_id",
+            "first_lead_id",
+            "second_lead_id",
+            "decided_at",
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    first_lead_id: Mapped[UUID] = mapped_column(Uuid)
+    second_lead_id: Mapped[UUID] = mapped_column(Uuid)
+    decision: Mapped[str] = mapped_column(String(10))
+    merge_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    decided_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    note: Mapped[str | None] = mapped_column(String(300), nullable=True)
+
+
+class LeadMerge(Base):
+    """One merge (migration 0134): the lead kept, the lead merged into it, who has it now
+    and why, and every row moved, by kind, so an unmerge within 30 days puts them back."""
+
+    __tablename__ = "lead_desk_merges"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["survivor_lead_id"],
+            ["lead_desk_leads.id"],
+            name="fk_lead_desk_merge_survivor",
+            ondelete="CASCADE",
+        ),
+        ForeignKeyConstraint(
+            ["merged_lead_id"],
+            ["lead_desk_leads.id"],
+            name="fk_lead_desk_merge_merged",
+            ondelete="CASCADE",
+        ),
+        CheckConstraint("survivor_lead_id <> merged_lead_id", name="lead_desk_merge_two"),
+        Index("uq_lead_desk_merge_command", "tenant_id", "command_id", unique=True),
+        Index("ix_lead_desk_merge_merged", "tenant_id", "merged_lead_id"),
+        Index("ix_lead_desk_merge_survivor", "tenant_id", "survivor_lead_id"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    survivor_lead_id: Mapped[UUID] = mapped_column(Uuid)
+    merged_lead_id: Mapped[UUID] = mapped_column(Uuid)
+    owner_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    owner_reason: Mapped[str] = mapped_column(String(300))
+    moved: Mapped[dict[str, Any]] = mapped_column(JSON)
+    decided_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    command_id: Mapped[UUID] = mapped_column(Uuid)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    undone_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    undone_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+
+
 class LeadRep(Base):
     """A seller's allocation rules. No row means the defaults: available, no limits."""
 
@@ -433,14 +553,17 @@ class LeadRep(Base):
             name="fk_lead_desk_rep_member",
         ),
         CheckConstraint("revision >= 1", name="lead_desk_rep_revision"),
-        CheckConstraint("max_open BETWEEN 1 AND 1000", name="lead_desk_rep_cap"),
+        # No limit is NULL (migration 20261025_0133).
+        CheckConstraint(
+            "max_open IS NULL OR max_open BETWEEN 1 AND 1000", name="lead_desk_rep_cap"
+        ),
     )
 
     tenant_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     person_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
     revision: Mapped[int] = mapped_column(Integer)
     available: Mapped[bool] = mapped_column(Boolean)
-    max_open: Mapped[int] = mapped_column(Integer)
+    max_open: Mapped[int | None] = mapped_column(Integer, nullable=True)
     languages: Mapped[list[str]] = mapped_column(JSON)
     areas: Mapped[list[str]] = mapped_column(JSON)
     interests: Mapped[list[str]] = mapped_column(JSON)

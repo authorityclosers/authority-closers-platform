@@ -213,8 +213,9 @@ def check(
 ) -> Move:
     """The move to ``step`` if this person may make it with what they gave; else refused.
 
-    Imports skip the stage list's moves (the file says where each lead stands) but never
-    a required reason."""
+    Imports skip the stage list's moves and what a seller gives with a move (a follow-up
+    time, a meeting, why a call didn't connect): the file says where each lead stands. They
+    never skip a Lost or Junk reason ("Imported" when the file gives none)."""
     target = journey.stage_for(step)
     if target is None or target.archived:
         raise MoveRefused(422, "Pick one of your current stages.")
@@ -241,7 +242,11 @@ def check(
             if move.action == "reopen"
             else "Only an owner or admin can mark a closed lead as Junk.",
         )
-    missing = [need for need in move.needs if not _has(need, given)]
+    missing = [
+        need
+        for need in move.needs
+        if not _has(need, given) and (source != "import" or need == REASON)
+    ]
     if given.reason is not None and not (source == "import" and given.reason == IMPORTED_LOST):
         keys = {key for key, _ in move.reasons}
         if move.reasons and given.reason not in keys:
