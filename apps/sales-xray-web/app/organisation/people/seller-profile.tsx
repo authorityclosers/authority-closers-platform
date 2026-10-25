@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   ListChecks,
   SlidersHorizontal,
+  Smartphone,
   Users,
 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
@@ -50,6 +51,13 @@ import {
   type RepView,
   type Team,
 } from "../../leads/leads-client";
+import {
+  LIMIT_RULE,
+  LimitField,
+  limitDraft,
+  overBy,
+  readLimit,
+} from "../../leads/limit-field";
 import { phoneDot } from "../../leads/phone-setup-words";
 import { notify } from "../../notice-center";
 import styles from "./seller-profile.module.css";
@@ -169,28 +177,48 @@ export function SellerSections({
 
   return (
     <DsScope className={styles.scope}>
-      {rep || level ? (
+      {rep || (level && !canManage) ? (
         <div className={styles.today}>
-          <div className={styles.tags}>
-            {rep ? (
-              <Tag hue={rep.available ? "green" : "slate"}>
-                {rep.available ? "Takes new leads" : "Away"}
-              </Tag>
-            ) : null}
-            {rep ? <Tag hue="sky">{phoneDot(rep.phone).label}</Tag> : null}
-            {level ? (
-              <Tag hue={LEVEL_HUE[level.level]}>
-                AI on calls: {LEVEL_NAMES[level.level]}
-                {level.own ? "" : " (default)"}
-              </Tag>
-            ) : null}
-          </div>
+          {/* Quiet chips (owner, 25 Oct 2026): only what needs a look. A
+              manager finds the phone app and AI on calls under Settings. */}
+          {(rep && !rep.available) || (level && !canManage) ? (
+            <div className={styles.tags}>
+              {rep && !rep.available ? (
+                <Tag hue="slate">Not taking leads</Tag>
+              ) : null}
+              {level && !canManage ? (
+                <Tag hue={LEVEL_HUE[level.level]}>
+                  AI on calls: {LEVEL_NAMES[level.level]}
+                  {level.own ? "" : " (default)"}
+                </Tag>
+              ) : null}
+            </div>
+          ) : null}
+          {rep && overBy(rep) > 0 ? (
+            <p className={styles.over} role="status">
+              {`Over limit by ${overBy(rep)}`}
+              {canManage ? (
+                <>
+                  <span aria-hidden="true">·</span>
+                  <button
+                    type="button"
+                    className={styles.overChange}
+                    onClick={() => setTab("settings")}
+                  >
+                    Change
+                  </button>
+                </>
+              ) : null}
+            </p>
+          ) : null}
           {rep ? (
             <StatStrip>
               <Stat
                 value={rep.open_leads}
-                unit={`/ ${rep.max_open}`}
-                label="Open leads"
+                unit={rep.max_open === null ? undefined : `/ ${rep.max_open}`}
+                label={
+                  rep.max_open === null ? "Open leads, no limit" : "Open leads"
+                }
               />
               <Stat value={rep.due_now} label="Due now" />
               <Stat value={rep.calls_today} label="Calls today" />
@@ -387,8 +415,21 @@ function SellerSettings({
           onSaved={onCallAi}
         />
       ) : null}
+      {rep ? (
+        <Card title="Phone app" icon={<Smartphone aria-hidden />} hue="sky">
+          <p className={styles.quiet}>{phoneWords(rep)}</p>
+        </Card>
+      ) : null}
     </div>
   );
+}
+
+/** The phone app's state in one line, with what is left to set up. */
+function phoneWords(rep: RepView): string {
+  const dot = phoneDot(rep.phone);
+  return dot.missing.length
+    ? `${dot.label} · To finish: ${dot.missing.join(", ")}`
+    : dot.label;
 }
 
 function RulesCard({
@@ -399,22 +440,15 @@ function RulesCard({
   onTeam: (team: Team) => void;
 }) {
   const [available, setAvailable] = useState(rep.available);
-  const [cap, setCap] = useState(String(rep.max_open));
+  const [cap, setCap] = useState(() => limitDraft(rep.max_open));
   const [languages, setLanguages] = useState(rep.languages.join(", "));
   const [areas, setAreas] = useState(rep.areas.join(", "));
   const [interests, setInterests] = useState(rep.interests.join(", "));
   const [saving, setSaving] = useState(false);
   const save = async () => {
-    const max = Number(cap);
-    if (!Number.isInteger(max) || max < 1 || max > 1000) {
-      problem(
-        "seller-rules",
-        "Not saved",
-        new LeadsError(
-          "Open-lead limit is a whole number from 1 to 1000.",
-          422,
-        ),
-      );
+    const max = readLimit(cap);
+    if (max === undefined) {
+      problem("seller-rules", "Not saved", new LeadsError(LIMIT_RULE, 422));
       return;
     }
     setSaving(true);
@@ -456,14 +490,13 @@ function RulesCard({
         Takes new leads now
       </label>
       <div className={styles.fields}>
-        <label className={styles.field}>
-          <span>Most open leads at once</span>
-          <input
-            inputMode="numeric"
-            value={cap}
-            onChange={(event) => setCap(event.target.value)}
-          />
-        </label>
+        <LimitField
+          id={`limit-${rep.person_id}`}
+          label="Most open leads at once"
+          hint={rep.default_cap ? "Organisation default" : undefined}
+          draft={cap}
+          onChange={setCap}
+        />
         <label className={styles.field}>
           <span>Languages</span>
           <input

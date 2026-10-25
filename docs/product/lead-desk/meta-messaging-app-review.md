@@ -137,6 +137,59 @@ send (they watch the test phone).
    Business Asset User Profile Access added to the Messenger use case first.
 6. Owner: uploads, password, declarations, Submit.
 
+## 8. WhatsApp coexistence: the business keeps its WhatsApp Business app (owner, 25 Oct 2026)
+
+Owner, 25 Oct 2026, verbatim: "Keep the WhatsApp Business app on the Redmi 13 and add the
+same number to the API with coexistence once Meta approves our Messaging app; use the test
+number for test messages until then."
+
+What it is: Meta's "Onboard WhatsApp Business app users" feature of Embedded Signup. The
+business connects the number it already uses in the WhatsApp Business app; it keeps using
+the app one-to-one, Sales Xray sends and receives through Cloud API, and messages stay in
+sync both ways. No new number, no re-registration.
+
+Requirements (Meta's docs, read 25 Oct 2026):
+| Requirement | Us |
+|---|---|
+| We are a Solution Partner or Tech Provider | Tech Provider accepted 20 Oct; access verification still in review |
+| Embedded Signup with session logging, `extras.featureType = "whatsapp_business_app_onboarding"`, `sessionInfoVersion: "3"`; Embedded Signup v2 is retired on 15 Oct 2026, use v4 | `whatsapp/cloud.py` opens the dialog by redirect with `extras={"setup":{}}`: add the feature type (and check the redirect flow carries it; otherwise the connect page uses the JS SDK popup) |
+| WhatsApp Business app 2.24.17 or newer on the business's phone | the Redmi 13 runs 2.26.41.77 |
+| Webhooks: also `history`, `smb_app_state_sync` and `smb_message_echoes` (and `account_offboarded`) | add them to the app's WhatsApp webhook fields and the inbox handler |
+| Within 24 hours of onboarding, start the contacts and history sync (SMB App Data API), or the business must offboard and start again | a job right after connect; the WhatsApp card shows "Syncing your WhatsApp history" until done |
+| Skip phone-number registration (the number is already registered) | `connect_number` must not call `/register` for these |
+| Countries: not Cuba, Iran, North Korea, Syria or the sanctioned regions of Ukraine | India is fine |
+
+What changes for the business on its phone: 1:1 chats, contacts and history sync; group
+chats don't sync; disappearing, view-once and live-location messages are turned off in 1:1
+chats; broadcast lists become read-only; linked companion devices are unlinked once and can
+be re-linked (not WhatsApp for Windows or WearOS); calls, catalogue, status, labels and quick
+replies are unchanged. Throughput is fixed at 20 messages a second. Messages sent from the
+app stay free; messages sent through the API are charged at Meta's rates (paid by the
+business, as for any number).
+
+For App Review: no extra permission; the WhatsApp screencast shows the "Connect your
+existing WhatsApp Business account" choice in Embedded Signup alongside a new number, and
+the review notes say Sales Xray supports both. Build before recording: the feature type, the
+three webhook fields, the sync job and the skipped registration (one api task, one web task
+for the card's sync state).
+
+Business profile for this number (owner, 25 Oct 2026: brand it Sales X-Ray, by Authority
+Closers: the product's messaging account for testers, onboarding, nudges and support; AC's own
+selling stays on the sellers' numbers). The same values go on the test number now
+(side notes `meta-suite-20261025/wa-profile.py`) and on the Redmi 13 number after coexistence:
+| Field | Value |
+|---|---|
+| Display name | Sales X-Ray (Meta's display-name check matches the website's brand) |
+| Profile photo | the Sales X-Ray icon, `brand-20261023/icon/sales-xray-icon-1024.png` (the art at /icons/icon-512.png), via the Resumable Upload API |
+| About (139 max) | Sales X-Ray: calls, leads and AI coaching for sales teams. |
+| Description | Sales X-Ray is a sales CRM and AI call-coaching app for sales teams, by Authority Closers. This number sends Sales X-Ray updates and answers your questions about the app. |
+| Email | admin@authorityclosers.com |
+| Website | https://salesxray.authorityclosers.com |
+| Vertical | PROF_SERVICES (Professional Services) |
+
+Until approval: Meta's test number +1 555 656 0179 (WABA 1000985176354249) for test
+messages; steps in the side notes `meta-suite-20261025/whatsapp-test-number-steps.md`.
+
 ## Escalation without resubmitting
 
 Resubmitting or cancelling puts a submission at the back of the queue. Meta's App

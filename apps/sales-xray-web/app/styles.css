@@ -3400,3 +3400,16 @@ html[data-sx-app] .sx-web-only {
 [data-sx-pressed] {
   opacity: 0.68;
 }
+
+/* Focus rings for keyboards only (owner, 25 Oct 2026: "a glowing green border
+   around all buttons" after each click). ui/focus-mode.ts marks a page used by
+   tap or click; there the shared ring and any focus outline fade. A key such
+   as Tab brings them back; text fields keep their own focused border. */
+:root:root[data-sx-input="pointer"] {
+  --lx-ring-focus: 0 0 0 0 transparent;
+  --sx-focus-ring: 0 0 0 0 transparent;
+}
+
+:root[data-sx-input="pointer"] :focus-visible {
+  outline-color: transparent;
+}

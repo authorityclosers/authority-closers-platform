@@ -176,6 +176,10 @@ JUNK_REASONS: Final[tuple[tuple[str, str], ...]] = (
 )
 # Lost leads that come in by import have no reason given (DESIGN §2.4).
 IMPORTED_LOST: Final[str] = "imported"
+# A lead merged into another is Junk with this reason (duplicates; the lead it went into
+# carries its history on).
+MERGED_DUPLICATE: Final[str] = "merged"
+MERGED_WORDS: Final[str] = "Merged into another lead"
 
 TEMPLATE_KEYS: Final[frozenset[str]] = frozenset(key for key, _, _ in MESSAGE_TEMPLATES)
 TEMPLATE_LABELS: Final[dict[str, str]] = {key: label for key, label, _ in MESSAGE_TEMPLATES}

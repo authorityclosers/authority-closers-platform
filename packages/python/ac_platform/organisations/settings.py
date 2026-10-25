@@ -10,6 +10,7 @@ from sqlalchemy.exc import DBAPIError
 from ac_platform.kernel.errors import AuthorizationDenied, ResourceConflict
 from ac_platform.organisations.service import OrganisationCommandError, OrganisationService
 from ac_platform.tenancy.models import Organisation, Tenant
+from ac_platform.tenancy.roles import can
 
 
 class OrganisationDetails(BaseModel):
@@ -50,7 +51,7 @@ def settings_result(tenant: Tenant, organisation: Organisation) -> dict[str, obj
 
 class OrganisationSettingsService(OrganisationService):
     async def authorize_edit(self, tenant_id: UUID, actor_person_id: UUID) -> Organisation:
-        if (await self._actor(tenant_id, actor_person_id)).role not in {"owner", "admin"}:
+        if not can((await self._actor(tenant_id, actor_person_id)).role, "org.manage"):
             raise AuthorizationDenied("Only owners and admins can change organisation settings.")
         # The registry lock is held; refresh values loaded earlier by authentication.
         row = await self.session.scalar(

@@ -88,7 +88,18 @@ def test_the_mcp_server_lists_and_calls_tools() -> None:
     names = {
         t["name"] for t in sx.handle(api, {"id": 2, "method": "tools/list"})["result"]["tools"]
     }
-    assert names == {"whoami", "list_calls", "call_facts", "list_leads", "get_lead", "add_lead"}
+    assert names == {
+        "whoami",
+        "list_calls",
+        "call_facts",
+        "list_leads",
+        "get_lead",
+        "add_lead",
+        "add_note",
+        "add_task",
+        "list_my_changes",
+        "undo_change",
+    }
     facts = sx.handle(
         api,
         {
@@ -120,3 +131,31 @@ def test_the_mcp_server_lists_and_calls_tools() -> None:
     lines = [json.loads(line) for line in out.getvalue().splitlines()]
     assert lines[0] == {"jsonrpc": "2.0", "id": 7, "result": {}}
     assert lines[1]["error"]["code"] == -32700
+
+
+def test_notes_tasks_and_undo_from_the_command_line(capsys: pytest.CaptureFixture) -> None:
+    env = {"SX_API_KEY": KEY, "SX_API_BASE": "https://salesxray.example.test/v1/api"}
+    fake = Fake(
+        {
+            ("POST", "/leads/l1/notes"): (201, {"change_id": "c1", "status": "applied"}),
+            ("POST", "/leads/l1/tasks"): (201, {"change_id": "c2", "status": "applied"}),
+            ("GET", "/changes"): (200, {"changes": []}),
+            ("POST", "/changes/c1/undo"): (200, {"change_id": "c1", "status": "undone"}),
+        }
+    )
+    assert sx.main(["note", "l1", "Wants a demo", "--request-id", "req-cli-0001"], env, fake) == 0
+    assert json.loads(fake.seen[0][3]) == {
+        "note": "Wants a demo",
+        "request_id": "req-cli-0001",
+        "preview": False,
+    }
+    task = ["task", "l1", "--kind", "call_back", "--due", "2026-10-27T10:00:00+05:30"]
+    assert sx.main(task, env, fake) == 0
+    sent = json.loads(fake.seen[1][3])
+    assert sent["kind"] == "call_back" and sent["due"] == "2026-10-27T10:00:00+05:30"
+    assert sent["request_id"].startswith("sx-") and "title" not in sent  # one is made
+    assert sx.main(["changes", "--lead", "l1"], env, fake) == 0
+    assert fake.seen[2][1].endswith("/changes?lead_id=l1")
+    capsys.readouterr()
+    assert sx.main(["undo", "c1"], env, fake) == 0
+    assert json.loads(capsys.readouterr().out)["status"] == "undone"

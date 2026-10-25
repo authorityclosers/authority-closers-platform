@@ -311,6 +311,7 @@ jobs:
             ${{ runner.temp }}/wb-matrix/report.md
             ${{ runner.temp }}/wb-matrix/matrix.json
             ${{ runner.temp }}/wb-matrix/sheet-*.jpg
+            ${{ runner.temp }}/wb-matrix/page-*.jpg
           if-no-files-found: warn
           retention-days: 1
 

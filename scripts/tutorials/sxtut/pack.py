@@ -202,6 +202,14 @@ def publish(
         board = boards[tid]
         lib = root / "library" / tid
         name = video_name(n, entry["title"])
+        if entry.get("coming"):
+            # Owner, 25 Oct 2026: nothing with the old screens goes to testers. The sheet keeps
+            # the row with a note; its files leave the folder (publish.sh moves them to Old
+            # versions).
+            videos.append(
+                {**entry, "number": n, "name": name, "phone": {}, "wide": {}, "seconds": {}}
+            )
+            continue
         edit = out / "Editable files" / name
         proj = edit / "Project files"
         for src in (lib / "editor" / "clips").glob("*.mp4"):
@@ -249,7 +257,7 @@ def publish(
         videos.append(row)
     (out / "Editable files").mkdir(parents=True, exist_ok=True)
     (out / "Editable files" / "About these files.txt").write_text(ABOUT, encoding="utf-8")
-    keep = ("name", "sheet", "optin")
+    keep = ("name", "sheet", "optin", "coming")
     manifest = {**{k: catalogue[k] for k in keep}, "videos": videos}
     (out / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8"

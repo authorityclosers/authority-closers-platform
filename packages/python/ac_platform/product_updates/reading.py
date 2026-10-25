@@ -17,6 +17,7 @@ from ac_platform.conversation_intelligence.internal_tester import InternalTester
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.product_updates.models import Notification, ProductUpdate, UpdateSeen
 from ac_platform.tenancy.models import Membership, Organisation
+from ac_platform.tenancy.roles import roles_with
 
 FEATURE_REGISTRY: dict[str, Callable[[AsyncSession, ActorContext], Awaitable[bool]]] = {}
 
@@ -94,7 +95,7 @@ class ProductUpdatesReading:
                     .join(Organisation, Organisation.tenant_id == Membership.tenant_id)
                     .where(
                         Membership.person_id == self.actor.person_id,
-                        Membership.role.in_(("owner", "admin")),
+                        Membership.role.in_(roles_with("org.manage")),
                         Membership.status == "active",
                         Membership.ended_at.is_(None),
                     )

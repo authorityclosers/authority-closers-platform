@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { AcquisitionShell } from "../../acquisition-shell";
 import { useWorkspaceAccess } from "../../workspace-access";
+import { OrgHubFrame } from "../org-hub";
 import { filtersFrom, type Filters, type View } from "./insights-data";
 import {
   InsightsSkeleton,
@@ -55,23 +56,25 @@ export function InsightsPage({
       active="insights"
       mobileFit={false}
     >
-      {tenantId ? (
-        <InsightsView
-          key={tenantId}
-          filters={current}
-          view={view}
-          initial={seeded ? initial : null}
-          initialCalls={seeded ? initialCalls : null}
-        />
-      ) : access?.authenticated === false ? (
-        <InsightsView
-          key="signed-out"
-          filters={filters}
-          initial={{ status: 401, body: null }}
-        />
-      ) : (
-        <InsightsSkeleton />
-      )}
+      <OrgHubFrame current="insights">
+        {tenantId ? (
+          <InsightsView
+            key={tenantId}
+            filters={current}
+            view={view}
+            initial={seeded ? initial : null}
+            initialCalls={seeded ? initialCalls : null}
+          />
+        ) : access?.authenticated === false ? (
+          <InsightsView
+            key="signed-out"
+            filters={filters}
+            initial={{ status: 401, body: null }}
+          />
+        ) : (
+          <InsightsSkeleton />
+        )}
+      </OrgHubFrame>
     </AcquisitionShell>
   );
 }

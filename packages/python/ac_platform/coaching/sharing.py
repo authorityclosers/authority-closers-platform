@@ -22,6 +22,7 @@ from uuid import UUID
 from pydantic import AwareDatetime, model_validator
 
 from ac_platform.coaching.contracts import Model
+from ac_platform.tenancy.roles import can
 
 OrgRole = Literal["owner", "admin", "member"]
 Access = Literal["own", "shared_with_admin", "shared_with_coach", "denied"]
@@ -128,7 +129,7 @@ def rep_coaching_access(
         return "denied"
     if rep_person_id in assigned_reps(viewer, duties, assignments, now):
         return "shared_with_coach"
-    if viewer.org_role in ("owner", "admin"):
+    if can(viewer.org_role, "team.view"):
         return "shared_with_admin"
     return "denied"
 
@@ -138,4 +139,4 @@ def may_manage_coaching_duties(actor: Viewer) -> bool:
 
     A coach cannot grant duties, assign reps, change roles or touch billing.
     """
-    return actor.org_role in ("owner", "admin")
+    return can(actor.org_role, "members.manage")

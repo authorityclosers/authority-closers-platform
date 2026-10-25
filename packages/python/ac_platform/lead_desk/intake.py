@@ -22,13 +22,16 @@ from ac_platform.conversation_intelligence.synthetic_import_models import (
     ConversationSandboxOrganisation,
     ConversationSyntheticRecord,
 )
+from ac_platform.identity.models import Person
 from ac_platform.lead_desk.capture import (
+    CRM_EXPORTS,
     FIELDS,
     REFERENCE_KEYS,
     CaptureError,
     clean,
+    detect_crm,
+    extract,
     language_name,
-    normalise_phone,
     read_csv,
     read_file,
     suggest_mapping,
@@ -67,6 +70,11 @@ STAGE_HEADERS: Final[tuple[str, ...]] = (
     "status",
     "lead_status",
     "pipeline_stage",
+    # Other CRMs' exports (universal intake, 25 Oct 2026).
+    "deal_stage",
+    "lifecycle_stage",
+    "current_stage",
+    "disposition",
 )
 OWNER_HEADERS: Final[tuple[str, ...]] = (
     "owner",
@@ -82,7 +90,136 @@ OWNER_HEADERS: Final[tuple[str, ...]] = (
     "counselor",
     "caller",
     "agent",
+    "contact_owner",
+    "deal_owner",
+    "sales_owner",
+    "owner_name",
+    "lead_owner_name",
+    "person_owner",
+    "account_owner",
+    "assigned_user",
 )
+# What other CRMs call their statuses, by the kind of stage each means here (universal
+# intake): a file's "Attempted to Contact" lands in Not Connected, "Closed Won" in Won.
+STATUS_KINDS: Final[dict[str, str]] = {
+    **dict.fromkeys(
+        (
+            "open",
+            "fresh",
+            "fresh_lead",
+            "new_lead",
+            "not_contacted",
+            "uncontacted",
+            "untouched",
+            "unattended",
+            "yet_to_contact",
+            "pending",
+        ),
+        "new",
+    ),
+    **dict.fromkeys(
+        (
+            "attempted_to_contact",
+            "attempted",
+            "no_answer",
+            "not_answered",
+            "unanswered",
+            "not_reachable",
+            "unreachable",
+            "switched_off",
+            "ringing",
+            "busy",
+            "rnr",
+            "dnp",
+            "did_not_pick",
+            "not_picked",
+            "call_not_picked",
+        ),
+        "not_connected",
+    ),
+    **dict.fromkeys(
+        (
+            "contacted",
+            "followup",
+            "follow_up_required",
+            "callback",
+            "call_back",
+            "in_progress",
+            "working",
+            "nurturing",
+            "nurture",
+            "in_discussion",
+            "discussion",
+            "connected",
+        ),
+        "follow_up",
+    ),
+    **dict.fromkeys(
+        (
+            "qualified",
+            "prospect",
+            "sales_qualified_lead",
+            "marketing_qualified_lead",
+            "sql",
+            "mql",
+            "opportunity",
+            "negotiation",
+            "proposal",
+            "quotation_sent",
+            "quote_sent",
+            "demo_scheduled",
+            "site_visit",
+            "site_visit_scheduled",
+            "visit_scheduled",
+            "demo_done",
+            "site_visit_done",
+            "meeting_done",
+        ),
+        "interested",
+    ),
+    **dict.fromkeys(
+        (
+            "closed_won",
+            "converted",
+            "customer",
+            "enrolled",
+            "admission",
+            "booked",
+            "booking_done",
+            "sold",
+            "paid",
+            "deal_won",
+        ),
+        "won",
+    ),
+    **dict.fromkeys(
+        (
+            "closed_lost",
+            "not_interested",
+            "not_qualified",
+            "unqualified",
+            "dead",
+            "lost_lead",
+            "deal_lost",
+            "dropped",
+            "rejected",
+        ),
+        "lost",
+    ),
+    **dict.fromkeys(
+        (
+            "junk_lead",
+            "spam",
+            "fake",
+            "invalid",
+            "invalid_number",
+            "wrong_number",
+            "disqualified",
+        ),
+        "junk",
+    ),
+}
+CRM_NAMES: Final[frozenset[str]] = frozenset(name for name, _ in CRM_EXPORTS)
 # Names that matched nothing are said back, the first this many.
 UNMATCHED_SHOWN: Final[int] = 10
 
@@ -102,19 +239,26 @@ def suggest_columns(headers: Iterable[str], taken: Mapping[str, str]) -> dict[st
 
 def match_stage(journey: journeys.Journey, text: str) -> journeys.Stage | None:
     """The pipeline's stage a sheet names: by its label or key, else by its kind's word
-    ("Interested", "Won", "Lost"), the first live stage of that kind."""
+    ("Interested", "Won", "Lost") or another CRM's word for it ("Closed Won"), the first
+    live stage of that kind."""
     wanted = header_key(text)
     live = [stage for stage in journey.stages if not stage.archived]
     for stage in live:
         if wanted in (header_key(stage.label), header_key(stage.key)):
             return stage
-    return next((stage for stage in live if stage.kind == wanted), None)
+    kind = wanted if any(stage.kind == wanted for stage in live) else STATUS_KINDS.get(wanted)
+    return next((stage for stage in live if stage.kind == kind), None)
 
 
-def people_index(people: Iterable[tuple[UUID, str]]) -> dict[str, UUID | None]:
-    """Who an owner column can name: a teammate's full name, or a first name only one
-    teammate has. Two people with the same name match neither (None)."""
+def people_index(
+    people: Iterable[tuple[UUID, str]], emails: Iterable[tuple[UUID, str]] = ()
+) -> dict[str, UUID | None]:
+    """Who an owner column can name: a teammate's full name, their email, or a first name
+    only one teammate has. Two people with the same name match neither (None)."""
     index: dict[str, UUID | None] = {}
+    for person_id, email in emails:
+        if email and header_key(email):
+            index[header_key(email)] = person_id
     firsts: dict[str, set[UUID]] = {}
     for person_id, name in people:
         whole = header_key(name)
@@ -163,24 +307,26 @@ class Intake:
         mapping = suggest_mapping(sheet.headers)
         mapping.update(suggest_columns(sheet.headers, mapping))
         _, config = await self.desk.settings()
-        phones: list[str] = []
-        if "phone" in mapping:
-            phones = [
-                phone
-                for row in sheet.rows
-                if (
-                    phone := normalise_phone(
-                        row.get(mapping["phone"]), default_country=config["default_country"]
-                    )
-                )
-                is not None
-            ]
+        fields = {name: header for name, header in mapping.items() if name in FIELDS}
+        found = [
+            extract(row, fields, default_country=config["default_country"]) for row in sheet.rows
+        ]
+        phones = [item.phone for item in found if item.phone is not None]
+        emails = {item.email for item in found if item.phone is None and item.email}
         known = 0
         if phones:
             known = (
                 await self.db.scalar(
                     select(func.count(func.distinct(Lead.phone))).where(
                         Lead.tenant_id == self.tenant_id, Lead.phone.in_(set(phones))
+                    )
+                )
+            ) or 0
+        if emails:
+            known += (
+                await self.db.scalar(
+                    select(func.count(func.distinct(Lead.email))).where(
+                        Lead.tenant_id == self.tenant_id, Lead.email.in_(emails)
                     )
                 )
             ) or 0
@@ -194,6 +340,8 @@ class Intake:
             with_phone=len(phones),
             repeats_in_file=len(phones) - len(set(phones)),
             known_leads=known,
+            detected=detect_crm(sheet.headers),
+            importable=sum(1 for item in found if item.name or item.phone or item.email),
         )
 
     async def commit(self, command: ImportCommand) -> ImportResult:
@@ -212,18 +360,31 @@ class Intake:
         owner_header = (
             (command.mapping.get("owner") or None) if self.desk.viewer.can_manage else None
         )
-        people = (
-            people_index((rep.state.person_id, rep.state.name) for rep in reps)
-            if owner_header
-            else {}
-        )
+        people: dict[str, UUID | None] = {}
+        if owner_header:
+            team = [rep.state.person_id for rep in reps]
+            emails = (
+                await self.db.execute(
+                    select(Person.id, Person.email).where(
+                        Person.id.in_(team), Person.email.is_not(None)
+                    )
+                )
+            ).tuples()
+            people = people_index(
+                ((rep.state.person_id, rep.state.name) for rep in reps),
+                ((person_id, str(email)) for person_id, email in emails),
+            )
         journeys_read: dict[str, journeys.Journey] = {}
         staged = owned = 0
         missing_stages: dict[str, None] = {}
         missing_owners: dict[str, None] = {}
         outcomes: list[str] = []
         leads: list[Lead | None] = []
-        label = f"File: {command.file_name}"[:120]
+        label = (
+            f"{command.source_name} export: {command.file_name}"
+            if command.source_name in CRM_NAMES
+            else f"File: {command.file_name}"
+        )[:120]
         for index, row in enumerate(command.rows):
             record = {str(k)[:120]: str(v)[:1000] for k, v in row.items() if v not in (None, "")}
             named = clean(row.get(owner_header)) if owner_header else None
@@ -279,8 +440,14 @@ class Intake:
                     via="api",
                 )
         await self.db.flush()
+        given = {
+            lead.owner_person_id
+            for lead, outcome in zip(leads, outcomes, strict=True)
+            if lead is not None and outcome == "created" and lead.owner_person_id is not None
+        }
         return _result(outcomes, leads).model_copy(
             update={
+                "warnings": tuple(await self.desk.over_limit(given)) if given else (),
                 "staged": staged,
                 "owned": owned,
                 "unmatched_stages": tuple(missing_stages)[:UNMATCHED_SHOWN],

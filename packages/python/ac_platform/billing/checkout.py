@@ -92,6 +92,7 @@ from ac_platform.payments.registry import PaymentProviderRegistry, UnknownPaymen
 from ac_platform.plans.models import Plan
 from ac_platform.providers.ports import ProviderError
 from ac_platform.tenancy.models import Membership, Organisation
+from ac_platform.tenancy.roles import can, roles_with
 
 CHECKOUT_VALIDITY = timedelta(minutes=30)
 # Razorpay needs a total cycle count; ten years of renewals is "until cancelled" in practice.
@@ -234,11 +235,17 @@ class CheckoutService:
         )
         if organisation is None or membership is None:
             raise BillingForbidden("Select an organisation you belong to first.")
-        if membership.role not in {"owner", "admin"} or (write and membership.role != "owner"):
+        if not can(membership.role, "billing.view") or (
+            write and not can(membership.role, "billing.pay")
+        ):
             raise BillingForbidden("Only the organisation owner can manage its billing.")
         account = await ledger.organisation_account(tenant_id=caller.tenant_id, create=True)
         return ResolvedAccount(
-            account, "organisation", caller.tenant_id, membership.role == "owner", caller.person_id
+            account,
+            "organisation",
+            caller.tenant_id,
+            can(membership.role, "billing.pay"),
+            caller.person_id,
         )
 
     async def account_by_id(
@@ -259,13 +266,17 @@ class CheckoutService:
                 Membership.person_id == caller.person_id,
                 Membership.status == "active",
                 Membership.ended_at.is_(None),
-                Membership.role.in_(("owner", "admin")),
+                Membership.role.in_(roles_with("billing.view")),
             )
         )
-        if membership is None or (write and membership.role != "owner"):
+        if membership is None or (write and not can(membership.role, "billing.pay")):
             return None
         return ResolvedAccount(
-            account, "organisation", account.tenant_id, membership.role == "owner", caller.person_id
+            account,
+            "organisation",
+            account.tenant_id,
+            can(membership.role, "billing.pay"),
+            caller.person_id,
         )
 
     # ---- provider ---------------------------------------------------------

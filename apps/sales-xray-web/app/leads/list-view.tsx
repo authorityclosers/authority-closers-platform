@@ -10,6 +10,7 @@
 import {
   List,
   ListChecks,
+  X,
   SearchX,
   Table2,
   UserPlus,
@@ -67,6 +68,8 @@ export function ListView({
   stage,
   stageLabel,
   scope,
+  owner = null,
+  onOwnerCounts,
   query,
   onOpen,
   version,
@@ -92,6 +95,10 @@ export function ListView({
   /** The tab's own words, for the count and the empty list. */
   stageLabel: string;
   scope: Scope;
+  /** One seller's leads (team scope, owners and admins): the seller chips. */
+  owner?: string | null;
+  /** Leads per seller for these filters, when the server counts them. */
+  onOwnerCounts?: (counts: Record<string, number>) => void;
   /** Search words, already settled (the page waits for typing to stop). */
   query: string;
   onOpen: (leadId: string) => void;
@@ -167,9 +174,12 @@ export function ListView({
   } | null>(null);
   const [loadingAll, setLoadingAll] = useState(false);
   // Actions on the ticked leads: a fresh sheet each time.
-  const [bulk, setBulk] = useState<{ round: number; open: boolean } | null>(
-    null,
-  );
+  const [columnsSlot, setColumnsSlot] = useState<HTMLElement | null>(null);
+  const [bulk, setBulk] = useState<{
+    round: number;
+    open: boolean;
+    step?: "assign" | "stage";
+  } | null>(null);
   const [confirm, setConfirm] = useState<{
     round: number;
     open: boolean;
@@ -179,8 +189,27 @@ export function ListView({
   // answered the list shows its skeleton. A refresh of the same question
   // (pull down, back in the app) keeps the rows on screen meanwhile.
   const moreKey = JSON.stringify(refine ?? null);
-  const question = JSON.stringify([scope, stage, query, pipeline, moreKey]);
-  const key = JSON.stringify([scope, stage, query, pipeline, moreKey, version]);
+  const question = JSON.stringify([
+    scope,
+    owner,
+    stage,
+    query,
+    pipeline,
+    moreKey,
+  ]);
+  const key = JSON.stringify([
+    scope,
+    owner,
+    stage,
+    query,
+    pipeline,
+    moreKey,
+    version,
+  ]);
+  const ownerCounts = useRef(onOwnerCounts);
+  useEffect(() => {
+    ownerCounts.current = onOwnerCounts;
+  });
   const page = loaded?.question === question ? loaded.page : null;
   const rows = loaded?.question === question ? loaded.rows : [];
   const error = failed?.key === key ? failed.message : null;
@@ -225,6 +254,7 @@ export function ListView({
   );
   const ask = {
     scope,
+    owner: owner ?? undefined,
     stage: stage === TEST ? null : stage,
     search: query,
     test: stage === TEST,
@@ -237,6 +267,7 @@ export function ListView({
     readLeads(
       {
         scope,
+        owner: owner ?? undefined,
         stage: stage === TEST ? null : stage,
         search: query,
         test: stage === TEST,
@@ -250,6 +281,10 @@ export function ListView({
         setLoaded({ key, question, page: next, rows: next.leads });
         if (next.stage_counts && stage !== TEST)
           counts.current?.(next.stage_counts);
+        const owners = (
+          next as typeof next & { owner_counts?: Record<string, number> }
+        ).owner_counts;
+        if (owners && Object.keys(owners).length) ownerCounts.current?.(owners);
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
@@ -262,7 +297,7 @@ export function ListView({
         });
       });
     return () => controller.abort();
-  }, [key, question, scope, stage, query, pipeline, moreKey]);
+  }, [key, question, scope, owner, stage, query, pipeline, moreKey]);
 
   const more = async () => {
     if (!page?.next_offset || loadingMore) return;
@@ -394,21 +429,37 @@ export function ListView({
           </span>
           <span className={styles.listTools}>
             {selecting ? null : tools}
-            {rows.length ? (
-              <button
-                type="button"
-                className={styles.statusChip}
-                aria-pressed={asTable}
-                title={asTable ? "Show as a list" : "Show as a table"}
-                onClick={() => chooseLayout(asTable ? "list" : "table")}
+            {/* The table's Columns sit here, beside the layout they belong to. */}
+            {asTable && !selecting ? (
+              <span className={styles.columnsSlot} ref={setColumnsSlot} />
+            ) : null}
+            {rows.length && !selecting ? (
+              // One switch with both choices in words (owner, 25 Oct 2026:
+              // "Done next to Table" read as one control).
+              <span
+                className={styles.layoutSwitch}
+                role="group"
+                aria-label="Show leads as"
               >
-                {asTable ? (
+                <button
+                  type="button"
+                  aria-pressed={!asTable}
+                  title="Show as a list"
+                  onClick={() => chooseLayout("list")}
+                >
                   <List size={14} aria-hidden="true" />
-                ) : (
+                  List
+                </button>
+                <button
+                  type="button"
+                  aria-pressed={asTable}
+                  title="Show as a table"
+                  onClick={() => chooseLayout("table")}
+                >
                   <Table2 size={14} aria-hidden="true" />
-                )}
-                Table
-              </button>
+                  Table
+                </button>
+              </span>
             ) : null}
             {canManage && rows.length ? (
               <button
@@ -421,7 +472,10 @@ export function ListView({
                 }}
               >
                 {selecting ? (
-                  "Done"
+                  <>
+                    <X size={14} aria-hidden="true" />
+                    Cancel
+                  </>
                 ) : (
                   <>
                     <ListChecks size={14} aria-hidden="true" />
@@ -478,6 +532,7 @@ export function ListView({
                 chosen={chosen}
                 onToggle={toggle}
                 keysRef={tableKeys}
+                columnsSlot={columnsSlot}
                 quickAdd={selecting ? null : quickAdd}
                 serverSort={
                   onSort
@@ -549,6 +604,20 @@ export function ListView({
               open: true,
             }))
           }
+          onAssign={() =>
+            setBulk((current) => ({
+              round: (current?.round ?? 0) + 1,
+              open: true,
+              step: "assign",
+            }))
+          }
+          onMove={() =>
+            setBulk((current) => ({
+              round: (current?.round ?? 0) + 1,
+              open: true,
+              step: "stage",
+            }))
+          }
         />
       ) : null}
       {bulk ? (
@@ -557,6 +626,7 @@ export function ListView({
           open={bulk.open}
           leadIds={[...chosen.keys()]}
           pipeline={pipeline}
+          initialStep={bulk.step ?? "menu"}
           onClose={() =>
             setBulk((current) => current && { ...current, open: false })
           }

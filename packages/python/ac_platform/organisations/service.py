@@ -32,6 +32,7 @@ from ac_platform.organisations.invitations import (
     invitation_policies,
 )
 from ac_platform.organisations.invite_email import enqueue_invitation_email
+from ac_platform.organisations.ownership_email import enqueue_ownership_emails
 from ac_platform.organisations.usage import invite_row, member_rows, organisation_seats
 from ac_platform.tenancy.models import (
     Membership,
@@ -43,6 +44,7 @@ from ac_platform.tenancy.models import (
     Tenant,
     TenantStatus,
 )
+from ac_platform.tenancy.roles import ASSIGNABLE_ROLES, ORG_ROLES, can
 
 _FREE_EMAIL_DOMAINS = frozenset(
     {
@@ -203,7 +205,7 @@ class OrganisationService:
                 tenant.status != TenantStatus.ACTIVE.value
                 or owner.status != MembershipStatus.ACTIVE.value
                 or owner.ended_at is not None
-                or owner.role not in {"owner", "admin", "member"}
+                or owner.role not in ORG_ROLES
             ):
                 raise ResourceConflict(
                     "Creation is recorded, but your organisation membership is no longer active."
@@ -588,9 +590,7 @@ class OrganisationService:
         return {
             row.person_id: row
             for row in rows
-            if row.status == "active"
-            and row.ended_at is None
-            and row.role in {"owner", "admin", "member"}
+            if row.status == "active" and row.ended_at is None and row.role in ORG_ROLES
         }
 
     async def change_member_role(
@@ -667,7 +667,7 @@ class OrganisationService:
         elif person_id == actor_person_id:
             if acting == "owner":
                 raise ResourceConflict("Transfer ownership first.")
-        elif acting not in {"owner", "admin"}:
+        elif not can(acting, "members.manage"):
             raise AuthorizationDenied("Organisation administration is required.")
         target = (await self._lock_members(tenant_id, person_id)).get(person_id)
         if target is None:
@@ -706,7 +706,14 @@ class OrganisationService:
         *,
         actor_person_id: UUID,
         operator_reference: str | None = None,
+        confirm_name: str | None = None,
     ) -> dict[str, object]:
+        """Make another member the owner; the owner becomes an admin.
+
+        An owner in the app types the organisation's name (``confirm_name``), checked
+        here after the owner check, so no client can do it in one click (owner, 25 Oct
+        2026). An operator gives a reason instead. Both people are emailed.
+        """
         intent = {
             "action": "transfer_ownership",
             "person_id": str(person_id),
@@ -734,6 +741,10 @@ class OrganisationService:
             owner_id = current
         elif acting != "owner":
             raise AuthorizationDenied("Only the owner can transfer ownership.")
+        if confirm_name is not None:
+            tenant = await self.session.get(Tenant, tenant_id)
+            if tenant is None or not _same_name(confirm_name, tenant.name):
+                raise DomainError("Type the organisation's name to confirm.")
         if person_id == owner_id:
             raise ResourceConflict("This person is already the owner.")
         locked = await self._lock_members(tenant_id, owner_id, person_id)
@@ -767,7 +778,7 @@ class OrganisationService:
             "owner": (await member_rows(self.session, tenant_id, person_id))[0],
             "former_owner": (await member_rows(self.session, tenant_id, owner_id))[0],
         }
-        await self._audit(
+        transferred = await self._audit(
             tenant_id,
             command_id,
             "organisation.ownership_transferred",
@@ -786,6 +797,8 @@ class OrganisationService:
             operator_reference,
             actor_person_id=actor_person_id,
         )
+        # Both people are told by email (owner, 25 Oct 2026: not one quiet click).
+        await enqueue_ownership_emails(self.session, transferred)
         return result
 
     async def request_member(
@@ -809,7 +822,7 @@ class OrganisationService:
             if acting != "operator" or require_acceptance:
                 raise AuthorizationDenied("Audited operator provisioning is required.")
             intent["invitation_policy"] = OPERATOR_INVITATION_POLICY_SCHEMA
-        if acting not in {"owner", "admin", "operator"}:
+        if acting != "operator" and not can(acting, "members.manage"):
             raise AuthorizationDenied("Organisation administration is required.")
         if acting == "admin" and role != "member":
             raise AuthorizationDenied("Only the owner can add an admin.")
@@ -1099,7 +1112,7 @@ class OrganisationService:
         operator_reference: str | None = None,
     ) -> None:
         acting = await self._acting(tenant_id, actor_person_id, operator_reference, {})
-        if acting not in {"owner", "admin", "operator"}:
+        if acting != "operator" and not can(acting, "members.manage"):
             raise AuthorizationDenied("Organisation administration is required.")
         prior = await self._command_audit(tenant_id, command_id, "organisation.invite_revoked")
         if prior is not None:
@@ -1367,8 +1380,8 @@ class OrganisationService:
         reason: str | None,
         *,
         actor_person_id: UUID | None = None,
-    ) -> None:
-        await append_audit_event(
+    ) -> AuditEvent:
+        return await append_audit_event(
             self.session,
             tenant_id=tenant_id,
             actor_person_id=actor_person_id,
@@ -1380,6 +1393,11 @@ class OrganisationService:
             reason=reason,
             request_id=str(command_id),
         )
+
+
+def _same_name(typed: str, name: str) -> bool:
+    """Typed as shown, ignoring case and extra spaces."""
+    return " ".join(typed.split()).casefold() == " ".join(name.split()).casefold()
 
 
 def _domain_result(
@@ -1404,7 +1422,7 @@ def _required_text(value: str, field: str, maximum: int) -> str:
 
 def _member_role(value: str) -> str:
     normalized = value.strip().lower()
-    if normalized not in {MembershipRole.ADMIN.value, MembershipRole.MEMBER.value}:
+    if normalized not in ASSIGNABLE_ROLES:
         raise OrganisationCommandError("member role must be admin or member")
     return normalized
 

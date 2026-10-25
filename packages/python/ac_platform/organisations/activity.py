@@ -25,6 +25,7 @@ from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.organisations.usage import member_usage
 from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.roles import ORG_ROLES
 
 MAX_CALLS = 500
 
@@ -129,7 +130,7 @@ async def organisation_activity(
             Membership.status == "active",
             Membership.ended_at.is_(None),
             # The tenant's processing principal holds a membership; it is not a person.
-            Membership.role.in_(("owner", "admin", "member")),
+            Membership.role.in_(ORG_ROLES),
         )
         .order_by(Person.email, Person.id)
     )

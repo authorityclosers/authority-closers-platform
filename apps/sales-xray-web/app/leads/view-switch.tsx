@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 
+import { haptic } from "../ui/haptics";
 import { ActionList, ActionRow } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
 import styles from "./view-switch.module.css";
@@ -61,7 +62,10 @@ export function ViewSwitch({
         type="button"
         className={styles.segment}
         aria-current={section === "now" ? "page" : undefined}
-        onClick={onNow}
+        onClick={() => {
+          haptic("tap");
+          onNow();
+        }}
       >
         <span className={styles.label}>Now</span>
         <Count value={nowCount} />
@@ -70,7 +74,10 @@ export function ViewSwitch({
         type="button"
         className={styles.segment}
         aria-current={section === "all" ? "page" : undefined}
-        onClick={onAll}
+        onClick={() => {
+          haptic("tap");
+          onAll();
+        }}
       >
         <span className={styles.label}>All leads</span>
         <Count value={allCount} />
@@ -80,7 +87,10 @@ export function ViewSwitch({
         className={styles.segment}
         aria-current={section === "more" ? "page" : undefined}
         aria-haspopup="dialog"
-        onClick={onMore}
+        onClick={() => {
+          haptic("tap");
+          onMore();
+        }}
       >
         <span className={styles.label}>{moreLabel}</span>
         <ChevronDown size={16} aria-hidden="true" />

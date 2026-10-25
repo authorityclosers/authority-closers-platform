@@ -1,0 +1,72 @@
+/* An open-lead limit: a number box and No limit on one row (owner, 25 Oct
+   2026). Tokens only; each control is 44 px tall. */
+
+.limit {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.label {
+  padding: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+}
+
+.number {
+  box-sizing: border-box;
+  width: 120px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: 10px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.number:disabled {
+  background: var(--sx-sunken);
+  color: var(--sx-muted);
+}
+
+.number:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.none {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  cursor: pointer;
+}
+
+.none input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--sx-accent);
+}
+
+.hint {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}

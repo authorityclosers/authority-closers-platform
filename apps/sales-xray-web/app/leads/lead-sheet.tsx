@@ -62,6 +62,7 @@ import {
   nextCallTime,
   peekPendingCall,
   readLead,
+  undoAppChange,
   readNext,
   reassign,
   rememberCall,
@@ -1106,6 +1107,55 @@ export function eventText(event: LeadEvent): {
   }
 }
 
+/** Undo a change an AI app made (7 days): a note stops showing, a task is cancelled. */
+function UndoAppButton({
+  event,
+  leadId,
+  onChanged,
+}: {
+  event: LeadEvent;
+  leadId: string;
+  onChanged: (next: LeadDetail) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  if (!event.can_undo || !event.change_id) return null;
+  const changeId = event.change_id;
+  const undo = async () => {
+    setBusy(true);
+    setProblem(null);
+    try {
+      await undoAppChange(changeId);
+      onChanged(await readLead(leadId));
+    } catch (reason) {
+      setProblem(
+        reason instanceof LeadsError
+          ? reason.message
+          : "Not undone. Try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <button
+        type="button"
+        className={styles.linkButton}
+        disabled={busy}
+        onClick={() => void undo()}
+      >
+        {busy ? "Undoing…" : "Undo"}
+      </button>
+      {problem ? (
+        <span className={styles.error} role="alert">
+          {problem}
+        </span>
+      ) : null}
+    </>
+  );
+}
+
 /** Mark private (Salestrail's untracked call): the seller's own phone-logged call. */
 function PrivacyButton({
   event,
@@ -1249,6 +1299,7 @@ export function dayLabel(iso: string, now: Date = new Date()): string {
 export function History({
   events,
   onChanged,
+  leadId,
   chats = [],
   brief = null,
   currentLabel = null,
@@ -1256,6 +1307,8 @@ export function History({
 }: {
   events: LeadEvent[];
   onChanged?: (next: LeadDetail) => void;
+  /** For Undo on a change an AI app made: the lead is read again after. */
+  leadId?: string;
   /** The lead's chats, one line per app per day (lead hub, 22 Oct 2026). */
   chats?: ChatDay[];
   /** Under the newest call with a Report: what that call said. */
@@ -1356,12 +1409,20 @@ export function History({
                 }
               >
                 <span className={styles.historyTitle}>
+                  {event.actor_name ? (
+                    <span className={styles.actor} aria-hidden="true">
+                      <Avatar name={event.actor_name} size={20} />
+                    </span>
+                  ) : null}
                   {text.title}
                   {event.private ? (
                     <span className={styles.privateTag}>Private</span>
                   ) : null}
                   {sourceBadge(event) ? (
                     <span className={pipe.badge}>{sourceBadge(event)}</span>
+                  ) : null}
+                  {event.app_label ? (
+                    <span className={pipe.badge}>via {event.app_label}</span>
                   ) : null}
                 </span>
                 {text.detail ? (
@@ -1373,6 +1434,13 @@ export function History({
                 ) : null}
                 {onChanged ? (
                   <PrivacyButton event={event} onChanged={onChanged} />
+                ) : null}
+                {onChanged && leadId ? (
+                  <UndoAppButton
+                    event={event}
+                    leadId={leadId}
+                    onChanged={onChanged}
+                  />
                 ) : null}
                 {event.kind === "call" && event.submission_id ? (
                   <Link
@@ -2067,7 +2135,10 @@ function NotesSection({
           {notes.map((event, index) => (
             <li key={event.event_id ?? `${event.at}-${index}`}>
               <p>{event.note}</p>
-              <small>
+              <small className={styles.noteBy}>
+                {event.actor_name ? (
+                  <Avatar name={event.actor_name} size={18} />
+                ) : null}
                 {[event.actor_name, ago(event.at)].filter(Boolean).join(" · ")}
               </small>
             </li>
@@ -2605,6 +2676,7 @@ export function LeadCard({
         <History
           events={detail.events}
           onChanged={onChanged}
+          leadId={lead.lead_id}
           chats={chats}
           brief={<LastCallBrief detail={detail} onChanged={onChanged} />}
           currentLabel={lead.stage_label}

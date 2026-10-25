@@ -217,6 +217,8 @@ export function SelectBar({
   onClear,
   onDelete,
   onActions,
+  onAssign,
+  onMove,
 }: {
   count: number;
   /** Leads in this list on the server. */
@@ -229,12 +231,17 @@ export function SelectBar({
   onDelete: () => void;
   /** Give, re-stage or move the ticked leads (owners and admins). */
   onActions?: () => void;
+  /** Assign to… and Move stage, named on the bar (owner, 25 Oct 2026). */
+  onAssign?: () => void;
+  onMove?: () => void;
 }) {
   const most = Math.min(total, DELETE_LIMIT);
   return (
     <div className={styles.bar} role="group" aria-label="Selected leads">
       <span className={styles.count} aria-live="polite">
-        {count ? `${count} selected` : "Tap leads to select them"}
+        {count
+          ? `${count} selected`
+          : "Tick the leads to change, then choose what to do"}
       </span>
       <span className={styles.barActions}>
         {count < most ? (
@@ -242,7 +249,7 @@ export function SelectBar({
             {busy
               ? "Loading…"
               : total > DELETE_LIMIT
-                ? `Select first ${DELETE_LIMIT}`
+                ? `Select the first ${DELETE_LIMIT}`
                 : total > loaded
                   ? `Select all ${total}`
                   : "Select all"}
@@ -252,9 +259,19 @@ export function SelectBar({
             Clear
           </Button>
         )}
+        {onAssign ? (
+          <Button disabled={!count || busy} onClick={onAssign}>
+            Assign to…
+          </Button>
+        ) : null}
+        {onMove ? (
+          <Button variant="ghost" disabled={!count || busy} onClick={onMove}>
+            Move stage
+          </Button>
+        ) : null}
         {onActions ? (
-          <Button disabled={!count || busy} onClick={onActions}>
-            Actions
+          <Button variant="ghost" disabled={!count || busy} onClick={onActions}>
+            {onAssign || onMove ? "More" : "Actions"}
           </Button>
         ) : null}
         <button

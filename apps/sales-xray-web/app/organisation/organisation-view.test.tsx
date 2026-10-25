@@ -214,6 +214,19 @@ async function select(label: string, value: string) {
     input.dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
+/** The ownership sheet asks for the organisation's name (owner, 25 Oct 2026). */
+async function typeOrganisationName(value: string) {
+  await act(async () => {
+    const input = host.querySelector<HTMLInputElement>(
+      'input[aria-label="Organisation name"]',
+    )!;
+    Object.getOwnPropertyDescriptor(
+      HTMLInputElement.prototype,
+      "value",
+    )!.set!.call(input, value);
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
 async function add() {
   await act(async () => {
     const input = host.querySelector<HTMLInputElement>(
@@ -275,10 +288,13 @@ it.each([
   ],
   [
     "transfer",
-    () => click("Make Dipak the owner"),
+    async () => {
+      await click("Make Dipak the owner");
+      await typeOrganisationName("Authority Closers");
+    },
     "/v1/organisation/owner",
     "POST",
-    { person_id: memberId },
+    { person_id: memberId, confirm_name: "Authority Closers" },
   ],
   [
     "revoke",
@@ -362,6 +378,7 @@ it("refreshes ownership permissions and uses member additions after a transfer",
   await click("Members");
   await select("Role for the new person", "admin");
   await click("Make Dipak the owner");
+  await typeOrganisationName("Authority Closers");
   org().role = "admin";
   await confirm();
   expect(host.querySelector("header")?.textContent).toContain(
@@ -1316,4 +1333,22 @@ it("tells a signed-out visitor how to get in, instead of loading forever", async
   expect(host.querySelector('a[href="/login"]')?.textContent).toBe("Sign in");
   expect(host.querySelector('[aria-busy="true"]')).toBeNull();
   expect(fetchMock).not.toHaveBeenCalled();
+});
+
+it("makes someone the owner only after the organisation's name is typed", async () => {
+  await render();
+  await click("Members");
+  await click("Make Dipak the owner");
+  const dialog = host.querySelector('dialog[open], [role="dialog"]')!;
+  expect(dialog.textContent).toContain("You become an admin.");
+  expect(dialog.textContent).toContain("You both get an email.");
+  const makeOwner = () =>
+    [...dialog.querySelectorAll<HTMLButtonElement>("button")].find(
+      (item) => item.textContent === "Make owner",
+    )!;
+  expect(makeOwner().disabled).toBe(true);
+  await typeOrganisationName("Authority");
+  expect(makeOwner().disabled).toBe(true);
+  await typeOrganisationName("  authority   closers ");
+  expect(makeOwner().disabled).toBe(false);
 });

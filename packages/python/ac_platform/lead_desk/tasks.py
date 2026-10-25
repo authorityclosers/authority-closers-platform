@@ -15,6 +15,7 @@ one ``task`` event on the lead, so the lead's history and My work show it.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, Final, Literal
@@ -240,7 +241,9 @@ class TaskBook:
             lead.next_action_note = None
         lead.updated_at = self.now
 
-    async def create(self, lead_id: UUID, command: TaskCommand) -> TaskView:
+    async def create(
+        self, lead_id: UUID, command: TaskCommand, *, by_app: Mapping[str, Any] | None = None
+    ) -> TaskView:
         same = await self.db.scalar(
             select(LeadTask).where(
                 LeadTask.tenant_id == self.tenant_id, LeadTask.command_id == command.command_id
@@ -284,7 +287,15 @@ class TaskBook:
             updated_at=self.now,
         )
         self.db.add(task)
-        self._event(lead, task, "created", command.command_id, command.client_at)
+        # by_app: the AI app or API key that sent it, and its change (ai-writes.md).
+        self._event(
+            lead,
+            task,
+            "created",
+            command.command_id,
+            command.client_at,
+            **({"by_app": dict(by_app)} if by_app else {}),
+        )
         await self.db.flush()
         await self.project(lead)
         await self.db.flush()

@@ -60,6 +60,20 @@ export const DEVICES = {
     isMobile: false,
     hasTouch: false,
   },
+  // Device frames (owner, 25 Oct 2026: better phones and devices): a modern phone screen at 9:19.5
+  // (360x780 at 3x, 1080x2340 frames) and a 16:10 laptop screen (1280x800 at 2x, 2560x1600).
+  phone2: {
+    viewport: { width: 360, height: 780 },
+    deviceScaleFactor: 3,
+    isMobile: true,
+    hasTouch: true,
+  },
+  laptop: {
+    viewport: { width: 1280, height: 800 },
+    deviceScaleFactor: 2,
+    isMobile: false,
+    hasTouch: false,
+  },
 };
 
 // A soft ring where the finger or mouse lands, so viewers can follow taps, and a highlight frame, both in

@@ -17,7 +17,17 @@ command-line argument, so it stays out of shell history and process lists).
     sx lead LEAD_ID
     sx add-lead --name NAME [--phone P] [--email E] [--company C] [--city C]
                 [--interest I] [--note N] [--external-id ID]
+    sx note LEAD_ID TEXT [--request-id ID] [--preview]       # needs leads:notes
+    sx task LEAD_ID --kind call_back|whatsapp|email|send_file|meeting|other
+            --due 2026-10-27T10:00:00+05:30 [--title T] [--note N] [--ends AT]
+            [--remind MINUTES] [--request-id ID] [--preview]  # needs leads:tasks
+    sx changes [--lead LEAD_ID]               # notes and tasks this key added (30 days)
+    sx undo CHANGE_ID                         # within 7 days: a note stops showing,
+                                              # an open task is cancelled
     sx mcp                                    # an MCP server on stdio (for AI assistants)
+
+A change sent again with the same --request-id changes nothing; without one, sx makes
+a new one each time. Every change shows "via API key sxk_..." in the lead's history.
 
 Output is JSON. Exit status 0 on success, 1 when the API refused (its error code and
 message are printed), 2 on a usage or connection problem.
@@ -32,6 +42,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
+import uuid
 from collections.abc import Callable
 from typing import Any
 
@@ -110,6 +121,23 @@ class Client:
 
     def add_lead(self, **fields: Any) -> Any:
         return self.call("POST", "/leads", body={k: v for k, v in fields.items() if v})
+
+    def add_note(self, lead_id: str, note: str, request_id: str, preview: bool = False) -> Any:
+        body = {"note": note, "request_id": request_id, "preview": preview}
+        return self.call("POST", f"/leads/{urllib.parse.quote(lead_id, safe='')}/notes", body=body)
+
+    def add_task(self, lead_id: str, **fields: Any) -> Any:
+        body = {k: v for k, v in fields.items() if v is not None}
+        return self.call("POST", f"/leads/{urllib.parse.quote(lead_id, safe='')}/tasks", body=body)
+
+    def changes(self, lead_id: str | None = None) -> Any:
+        return self.call("GET", "/changes", {"lead_id": lead_id})
+
+    def undo(self, change_id: str, request_id: str | None = None) -> Any:
+        body = {"request_id": request_id} if request_id else {}
+        return self.call(
+            "POST", f"/changes/{urllib.parse.quote(change_id, safe='')}/undo", body=body
+        )
 
 
 # ----- MCP (Model Context Protocol) over stdio ------------------------------------
@@ -192,6 +220,61 @@ TOOLS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "name": "add_note",
+        "description": "Adds a note to one lead. The lead's history shows it came from "
+        "this API key; it can be undone for 7 days. The same request_id again changes "
+        "nothing. Needs leads:notes.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "string"},
+                "note": {"type": "string", "maxLength": 1000},
+                "request_id": {"type": "string", "minLength": 8, "maxLength": 80},
+                "preview": {"type": "boolean"},
+            },
+            "required": ["lead_id", "note", "request_id"],
+        },
+    },
+    {
+        "name": "add_task",
+        "description": "Adds a task or reminder to one lead, for its owner. It can be "
+        "undone for 7 days. Needs leads:tasks.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "lead_id": {"type": "string"},
+                "kind": {
+                    "type": "string",
+                    "enum": ["call_back", "whatsapp", "email", "send_file", "meeting", "other"],
+                },
+                "due": {"type": "string", "description": "e.g. 2026-10-27T10:00:00+05:30"},
+                "title": {"type": "string"},
+                "note": {"type": "string"},
+                "ends_at": {"type": "string"},
+                "remind_before_minutes": {"type": "integer"},
+                "request_id": {"type": "string", "minLength": 8, "maxLength": 80},
+                "preview": {"type": "boolean"},
+            },
+            "required": ["lead_id", "kind", "due", "request_id"],
+        },
+    },
+    {
+        "name": "list_my_changes",
+        "description": "Notes and tasks this key added in the last 30 days, and whether "
+        "each can still be undone.",
+        "inputSchema": {"type": "object", "properties": {"lead_id": {"type": "string"}}},
+    },
+    {
+        "name": "undo_change",
+        "description": "Undoes one change this key made, within 7 days: a note stops "
+        "showing, an open task is cancelled. Both stay in the lead's history.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {"change_id": {"type": "string"}, "request_id": {"type": "string"}},
+            "required": ["change_id"],
+        },
+    },
 ]
 
 
@@ -209,6 +292,25 @@ def _tool(client: Client, name: str, args: dict[str, Any]) -> Any:
     if name == "add_lead":
         allowed = {t: args.get(t) for t in TOOLS[5]["inputSchema"]["properties"]}
         return client.add_lead(**allowed)
+    if name == "add_note":
+        return client.add_note(
+            str(args["lead_id"]),
+            str(args["note"]),
+            str(args["request_id"]),
+            bool(args.get("preview", False)),
+        )
+    if name == "add_task":
+        fields = ("kind", "due", "title", "note", "ends_at", "remind_before_minutes")
+        return client.add_task(
+            str(args["lead_id"]),
+            request_id=str(args["request_id"]),
+            preview=bool(args.get("preview", False)),
+            **{key: args.get(key) for key in fields},
+        )
+    if name == "list_my_changes":
+        return client.changes(args.get("lead_id"))
+    if name == "undo_change":
+        return client.undo(str(args["change_id"]), args.get("request_id"))
     raise KeyError(name)
 
 
@@ -279,6 +381,10 @@ def serve(client: Client, stdin: Any = sys.stdin, stdout: Any = sys.stdout) -> N
 # ----- command line --------------------------------------------------------------
 
 
+def _request_id() -> str:
+    return f"sx-{uuid.uuid4().hex}"
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="sx", description="Sales X-Ray from the command line.")
     parser.add_argument("--version", action="version", version=f"sx {VERSION}")
@@ -296,6 +402,24 @@ def _parser() -> argparse.ArgumentParser:
     add = commands.add_parser("add-lead")
     for name in ("name", "phone", "email", "company", "city", "interest", "note", "external-id"):
         add.add_argument(f"--{name}")
+    note = commands.add_parser("note")
+    note.add_argument("lead_id")
+    note.add_argument("text")
+    note.add_argument("--request-id")
+    note.add_argument("--preview", action="store_true")
+    task = commands.add_parser("task")
+    task.add_argument("lead_id")
+    task.add_argument("--kind", required=True)
+    task.add_argument("--due", required=True)
+    for name in ("title", "note", "ends", "request-id"):
+        task.add_argument(f"--{name}")
+    task.add_argument("--remind", type=int)
+    task.add_argument("--preview", action="store_true")
+    changes = commands.add_parser("changes")
+    changes.add_argument("--lead")
+    undo = commands.add_parser("undo")
+    undo.add_argument("change_id")
+    undo.add_argument("--request-id")
     commands.add_parser("mcp")
     return parser
 
@@ -326,6 +450,26 @@ def main(
             out = client.leads(args.stage, args.offset)
         elif args.command == "lead":
             out = client.lead(args.lead_id)
+        elif args.command == "note":
+            out = client.add_note(
+                args.lead_id, args.text, args.request_id or _request_id(), args.preview
+            )
+        elif args.command == "task":
+            out = client.add_task(
+                args.lead_id,
+                kind=args.kind,
+                due=args.due,
+                title=args.title,
+                note=args.note,
+                ends_at=args.ends,
+                remind_before_minutes=args.remind,
+                request_id=args.request_id or _request_id(),
+                preview=args.preview,
+            )
+        elif args.command == "changes":
+            out = client.changes(args.lead)
+        elif args.command == "undo":
+            out = client.undo(args.change_id, args.request_id)
         else:
             out = client.add_lead(
                 name=args.name,

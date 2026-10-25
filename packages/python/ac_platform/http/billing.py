@@ -70,6 +70,7 @@ from ac_platform.kernel.errors import DomainError
 from ac_platform.payments.ports import PaymentEventRejected
 from ac_platform.payments.registry import UnknownPaymentProviderError
 from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.roles import roles_with
 
 MAX_IDEMPOTENCY_KEY_LENGTH = 128
 MAX_REASON_LENGTH = 500
@@ -374,7 +375,7 @@ async def _invoice_account(
         membership = exists().where(
             Membership.tenant_id == BillingAccount.tenant_id,
             Membership.person_id == actor.person_id,
-            Membership.role.in_(("owner", "admin")),
+            Membership.role.in_(roles_with("billing.view")),
             Membership.status == "active",
             Membership.ended_at.is_(None),
         )

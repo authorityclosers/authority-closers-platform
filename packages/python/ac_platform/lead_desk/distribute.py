@@ -52,7 +52,8 @@ class LeadSpot:
 class Seller:
     person_id: UUID
     open_leads: int
-    max_open: int
+    # None: no limit.
+    max_open: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -99,7 +100,8 @@ def distribute(
     keyed = {_key(name): list(people) for name, people in (groups or {}).items()}
 
     def room(person: UUID) -> bool:
-        return holds[person] < by_id[person].max_open
+        cap = by_id[person].max_open
+        return cap is None or holds[person] < cap
 
     def pick(pool: Sequence[UUID]) -> UUID | None:
         open_pool = [person for person in pool if person in by_id and room(person)]

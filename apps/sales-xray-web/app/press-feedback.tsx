@@ -12,6 +12,8 @@
  */
 import { useEffect } from "react";
 
+import { installFocusMode } from "./ui/focus-mode";
+
 export const PRESS_DELAY_MS = 60;
 export const PRESS_SHOW_MS = 120;
 /** A finger that moves this far is scrolling, not pressing. */
@@ -114,8 +116,9 @@ export function watchPresses(doc: Document): () => void {
   };
 }
 
-/** Mounted once, in the root layout. */
+/** Mounted once, in the root layout; it also keeps focus rings for keyboards. */
 export function PressFeedback() {
   useEffect(() => watchPresses(document), []);
+  useEffect(() => installFocusMode(document), []);
   return null;
 }

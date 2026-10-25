@@ -34,7 +34,13 @@ from ac_platform.lead_desk.journey.model import Journey, Stage, lead_in
 from ac_platform.lead_desk.journey.templates import FUNNEL_ORDER
 from ac_platform.lead_desk.journey.transitions import reasons_of, stages_changed
 from ac_platform.lead_desk.models import Lead, LeadEvent, LeadMeeting
-from ac_platform.lead_desk.vocabulary import IMPORTED_LOST, OPEN_STAGES, OVERDUE_AFTER
+from ac_platform.lead_desk.vocabulary import (
+    IMPORTED_LOST,
+    MERGED_DUPLICATE,
+    MERGED_WORDS,
+    OPEN_STAGES,
+    OVERDUE_AFTER,
+)
 
 MAX_LEADS: Final[int] = 20_000
 PERIODS: Final[frozenset[int]] = frozenset({7, 30, 90})
@@ -211,6 +217,7 @@ def compute(
     junk = {fact.lead_id for fact in leads if fact.stage == "junk"}
     words = dict(reasons or {})
     words.setdefault(IMPORTED_LOST, "Imported")
+    words.setdefault(MERGED_DUPLICATE, MERGED_WORDS)
 
     # Now: each lead in exactly one column.
     columns: Counter[str] = Counter()

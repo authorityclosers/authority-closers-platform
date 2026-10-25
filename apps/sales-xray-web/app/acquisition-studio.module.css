@@ -359,7 +359,7 @@
 }
 @media (max-width: 1100px) {
   .app[data-stage="upload"][data-selected="true"] .layout {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 @media (max-width: 620px) {
@@ -773,8 +773,9 @@
 .uploadActions > :first-child {
   min-width: 0;
 }
+/* minmax: the column shrinks to the screen; one wide card can't push it out. */
 .withReport {
-  grid-template-columns: 1fr;
+  grid-template-columns: minmax(0, 1fr);
 }
 .withProcessing {
   grid-template-columns: minmax(0, 1fr);
@@ -1080,7 +1081,7 @@
 }
 .reportMenu button {
   display: flex;
-  min-height: 40px;
+  min-height: 44px;
   align-items: center;
   gap: 10px;
   padding: 8px 10px;
@@ -3644,4 +3645,12 @@
     grid-area: actions;
     align-self: center;
   }
+}
+
+/* The About note's mail link: a full thumb target without moving its line
+   (Report fit, owner program 25 Oct 2026). */
+.reportMenu details a {
+  display: inline-block;
+  padding-block: 12px;
+  margin-block: -12px;
 }

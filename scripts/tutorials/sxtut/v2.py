@@ -296,10 +296,30 @@ def _sync(spec: dict | None, lang: str, v: Voiced | None) -> float:
 ZOOM_KINDS = {"tap", "highlight", "focus", "type", "fill", "paste", "select", "hover"}
 
 
+# Device frames (owner, 25 Oct 2026): shots captured on "phone2" (9:19.5) or "laptop" (16:10) sit in
+# a drawn phone or laptop (brand.device_stage_html); reels keep a caption band above the phone and
+# the camera moves only in the picture under it.
+# (format, device) -> (stage art, width, height, hole)
+FRAMED = {
+    ("youtube", "phone2"): ("stage-phone2", brand.STAGE_W, brand.STAGE_H, brand.YT_PHONE_HOLE),
+    ("youtube", "laptop"): ("stage-laptop", brand.STAGE_W, brand.STAGE_H, brand.YT_LAPTOP_HOLE),
+    ("reel", "phone2"): ("reel-stage", brand.REEL_W, brand.REEL_PIC_H, brand.REEL_PHONE_HOLE),
+}
+
+
+def stage_art(fmt: str, shot: dict | None) -> list[str]:
+    """The drawn art a recorded item sits in: its device stage, and the caption band in reels."""
+    framed = FRAMED.get((fmt, shot["device"])) if shot else None
+    if framed:
+        return [framed[0], "band"] if fmt == "reel" else [framed[0]]
+    return ["stage"] if fmt == "youtube" and shot and shot["device"] != "wide" else []
+
+
 def geometry(fmt: str, shot: dict) -> tuple[int, int, object]:
     """The frame the camera moves in (width, height) and a box mapper from clip pixels into it."""
-    if fmt == "youtube" and shot["device"] != "wide":
-        h = brand.PHONE_HOLE
+    framed = FRAMED.get((fmt, shot["device"]))
+    if framed or (fmt == "youtube" and shot["device"] != "wide"):
+        _, sw, sh, h = framed or ("stage", brand.STAGE_W, brand.STAGE_H, brand.PHONE_HOLE)
         s = h["w"] / shot["width"]
 
         def to_stage(b: dict) -> dict:
@@ -310,7 +330,7 @@ def geometry(fmt: str, shot: dict) -> tuple[int, int, object]:
                 "h": b["h"] * s,
             }
 
-        return brand.STAGE_W, brand.STAGE_H, to_stage
+        return sw, sh, to_stage
     return shot["width"], shot["height"], lambda b: b
 
 
@@ -420,26 +440,24 @@ def render_item(it: Item, fmt: str, take_dir: Path, art: dict, out: Path) -> Non
         f"stop_mode=clone:stop_duration={hold:.3f}"
     )
     w, h, _ = geometry(fmt, it.shot)
-    zp = camera.zoompan(it.keys, w, h, f["w"], f["h"], FPS)
-    if fmt == "youtube" and it.shot["device"] != "wide":
-        ph = brand.PHONE_HOLE
+    framed = FRAMED.get((fmt, it.shot["device"]))
+    band = bool(framed) and fmt == "reel"
+    zp = camera.zoompan(it.keys, w, h, f["w"], brand.REEL_PIC_H if band else f["h"], FPS)
+    if framed or (fmt == "youtube" and it.shot["device"] != "wide"):
+        name, _, _, ph = framed or ("stage", 0, 0, brand.PHONE_HOLE)
+        loop = ["-loop", "1", "-framerate", str(FPS), "-t", f"{it.dur + 1:.3f}", "-i"]
         fc = (
             f"[1:v]{pre},scale={ph['w']}:{ph['h']}:flags=lanczos,setsar=1[c];"
             f"color=c=0x0B4A44:s={w}x{h}:r={FPS}:d={it.dur + 1:.3f}[g];"
             f"[g][c]overlay={ph['x']}:{ph['y']}[b];[0:v]format=rgba[st];"
-            f"[b][st]overlay=0:0,{zp},format=yuv420p[v]"
+            f"[b][st]overlay=0:0,{zp}"
         )
-        inputs = [
-            "-loop",
-            "1",
-            "-framerate",
-            str(FPS),
-            "-t",
-            f"{it.dur + 1:.3f}",
-            "-i",
-            str(art["stage"]),
-        ]
-        inputs += ["-i", str(clip)]
+        inputs = [*loop, str(art[name]), "-i", str(clip)]
+        if band:
+            # The caption band sits above the picture; finish() burns the captions into it.
+            fc += f",pad={f['w']}:{f['h']}:0:{brand.REEL_BAND}[z];[z][2:v]overlay=0:0"
+            inputs += [*loop, str(art["band"])]
+        fc += ",format=yuv420p[v]"
     else:
         fc = f"[0:v]{pre},scale={w}:{h},setsar=1,{zp},format=yuv420p[v]"
         inputs = ["-i", str(clip)]
@@ -466,6 +484,12 @@ def picture(items: list[Item], fmt: str, take_dir: Path, art: dict, work: Path) 
             render.mtime(take_dir / it.shot["clip"]) if it.shot else "",
             render.mtime(art.get(art_key(it))) if it.shot is None else "",
             render.mtime(art.get("stage")),
+            # Framed shots also depend on their device stage and band (others keep their old keys).
+            *(
+                [render.mtime(art.get(n)) for n in stage_art(fmt, it.shot)]
+                if it.shot and FRAMED.get((fmt, it.shot["device"]))
+                else []
+            ),
         )
         if not render.fresh(part, key):
             render_item(it, fmt, take_dir, art, part)
@@ -593,7 +617,10 @@ CAPTION_BANDS = {
 
 
 def caption_spot(it: Item) -> str:
-    """Bottom captions, unless what the beat points at would sit under them; then the top."""
+    """Bottom captions, unless what the beat points at would sit under them; then the top. Framed
+    shots have the caption band above the phone."""
+    if it.shot and FRAMED.get(("reel", it.shot["device"])):
+        return "Band"
     if it.kind != "beat" or not it.keys:
         return "Reel"
     w, h, to = geometry("reel", it.shot)
@@ -655,6 +682,9 @@ def reel_ass(items: list[Item], track: str, font: str) -> str:
     # White on a Deep teal box (BorderStyle 3: the outline colour fills the box, padded by Outline).
     look = f"{font},132,&H00FFFFFF,&H00FFFFFF,&H14444A0B,&H00000000,-1,0,0,0,100,100,0,0,3,20,0"
     style = f"Style: Reel,{look},2,100,100,420,1\nStyle: ReelTop,{look},8,100,100,290,1"
+    if "Band" in spots:
+        # In the band above a framed phone: one line, centred in the band's REEL_BAND pixels.
+        style += f"\nStyle: Band,{look},8,90,90,{(brand.REEL_BAND - 150) // 2},1"
     head = [
         "[Script Info]",
         "ScriptType: v4.00+",
@@ -841,6 +871,22 @@ def art_for(
                     ),
                 }
             )
+    # Device frames for the shots that use them (phone footage joins the phone in framed boards).
+    devices = {
+        "phone2" if s["device"] == "footage" and board.get("frames") else s["device"]
+        for s in board["shots"]
+    }
+    for (f, device), (name, sw, sh, hole) in FRAMED.items():
+        if f != fmt or device not in devices:
+            continue
+        kind = "phone" if device == "phone2" else "laptop"
+        html = brand.device_stage_html(kit, sw, sh, hole, kind)
+        stills.append({"name": name, "html": html, "width": sw, "height": sh, "transparent": True})
+        if fmt == "reel":
+            html = brand.reel_band_html(kit)
+            stills.append(
+                {"name": "band", "html": html, "width": brand.REEL_W, "height": brand.REEL_BAND}
+            )
     cards_dir = work.parent / "art"
     render.render_cards(repo, stills, cards_dir)
     render_motion(repo, motion, cards_dir)
@@ -918,11 +964,17 @@ def finish(
         png = art.get(f"hook-{lang}") if hook.kind == "hook" else None
         if png:
             t0, t1 = 0.1, max(1.2, hook.dur - 0.05)
+            # Framed reels keep the band for captions: the hook title goes over the phone instead.
+            y = (
+                brand.REEL_BAND + 60
+                if hook.shot and FRAMED.get(("reel", hook.shot["device"]))
+                else 150
+            )
             inputs += ["-loop", "1", "-framerate", str(FPS), "-t", f"{t1 - t0:.3f}", "-i", str(png)]
             chain.append(
                 f"[{k}:v]format=rgba,setpts=PTS+{t0:.3f}/TB,fade=t=in:st={t0:.3f}:d=0.2:alpha=1,"
                 f"fade=t=out:st={t1 - 0.25:.3f}:d=0.25:alpha=1[o{k}];"
-                f"{label}[o{k}]overlay=x=0:y=150:eof_action=pass[b{k}]"
+                f"{label}[o{k}]overlay=x=0:y={y}:eof_action=pass[b{k}]"
             )
             label = f"[b{k}]"
             k += 1
@@ -1007,29 +1059,41 @@ def thumbnail(
 # is padded to the reel frame with the app's black and gets mint tap rings, so the build treats it
 # like a take.
 REEL_W, REEL_H = 1170, 2078
+FRAME_PHONE = (1080, 2340)  # framed boards ("frames": true): footage keeps the phone's 9:19.5
 RING = 150
 
 
-def footage_frame(f: dict) -> tuple[int, int, int, int, int, float]:
-    """(left, top, cropped width, cropped height, side pad, scale to the reel frame) for a portrait
-    recording; "crop" is [top, bottom] or [top, bottom, left, right] (black bars, status bar)."""
+def footage_frame(
+    f: dict, target: tuple[int, int] = (REEL_W, REEL_H)
+) -> tuple[int, int, int, int, int, int, float]:
+    """(left, top, cropped width, cropped height, side pad, top pad, scale to the target frame) for
+    a portrait recording; "crop" is [top, bottom] or [top, bottom, left, right] (black bars, status
+    bar). A cut narrower than the target is padded at the sides; a wider one (a 9:19.5 phone with
+    its status bar cropped, in the 9:19.5 frame) gets black where the bars were."""
     w, h = f["size"]
     top, bottom, left, right = [*f.get("crop", []), 0, 0, 0, 0][:4]
     cw, ch = w - left - right, h - top - bottom
-    full = round(ch * REEL_W / REEL_H)
-    if full < cw:
-        raise ValueError(f"{f['file']} is wider than 9:16 after cropping: crop its sides")
-    return left, top, cw, ch, (full - cw) // 2, REEL_W / full
+    tw, th = target
+    full = round(ch * tw / th)
+    if full >= cw:
+        return left, top, cw, ch, (full - cw) // 2, 0, tw / full
+    full_h = round(cw * th / tw)
+    share = top / (top + bottom) if top + bottom else 0.5
+    return left, top, cw, ch, 0, round((full_h - ch) * share), tw / cw
+
+
+def footage_target(board: dict) -> tuple[int, int]:
+    return FRAME_PHONE if board.get("frames") else (REEL_W, REEL_H)
 
 
 def footage_shot(board: dict, sspec: dict) -> dict:
     """The take entry for a footage shot: times from the cut's start, boxes in reel pixels."""
     f = sspec["footage"]
-    left, top, _, _, pad, s = footage_frame(f)
+    left, top, _, _, pad, pad_top, s = footage_frame(f, footage_target(board))
 
     def box(b: list[float]) -> dict:
         x, y, w, h = b
-        return {"x": (x - left + pad) * s, "y": (y - top) * s, "w": w * s, "h": h * s}
+        return {"x": (x - left + pad) * s, "y": (y - top + pad_top) * s, "w": w * s, "h": h * s}
 
     beats = []
     for b in sspec["beats"]:
@@ -1042,7 +1106,8 @@ def footage_shot(board: dict, sspec: dict) -> dict:
         beats.append({"id": b["id"], "t0": round(p["at"] - f["from"], 3), "events": evs})
     return {
         "id": sspec["id"],
-        "device": "footage",
+        # In a framed board the recording sits in the drawn phone like any "phone2" take.
+        "device": "phone2" if board.get("frames") else "footage",
         "clip": f"clips/{board['id']}--{sspec['id']}.mp4",
         "seconds": round(f["to"] - f["from"], 3),
         "beats": beats,
@@ -1064,13 +1129,17 @@ def prepare_footage(board: dict, sspec: dict, src_dir: Path, take_dir: Path) -> 
         }
         for b in sspec["beats"]
     ]
-    key = _key(f, phones, render.mtime(src), REEL_W, RING)
+    target = footage_target(board)
+    extra = [target] if board.get("frames") else []  # older cuts keep their keys
+    key = _key(f, phones, render.mtime(src), REEL_W, RING, *extra)
     if render.fresh(out, key):
         return out
     if not src.exists():
         raise FileNotFoundError(f"phone recording {src} is missing")
     out.parent.mkdir(parents=True, exist_ok=True)
-    left, top, cw, ch, pad, _ = footage_frame(f)
+    left, top, cw, ch, pad, pad_top, _ = footage_frame(f, target)
+    # Padded at the sides to the target's shape, or (a wider cut) above and below.
+    pad_h = ch if pad else max(ch, round(cw * target[1] / target[0]))
     t0, dur = f["from"], f["to"] - f["from"]
     # Phones record only when the screen changes: make the frame rate steady before trimming, or
     # the cut would start at the first change after "from" and every time after it would shift.
@@ -1089,8 +1158,9 @@ def prepare_footage(board: dict, sspec: dict, src_dir: Path, take_dir: Path) -> 
         )
         last = f"u{i}"
     chain.append(
-        f"[{last}]crop={cw}:{ch}:{left}:{top},pad={cw + 2 * pad}:{ch}:{pad}:0:black,"
-        f"scale={REEL_W}:{REEL_H}:flags=lanczos,setsar=1[f]"
+        f"[{last}]crop={cw}:{ch}:{left}:{top},"
+        f"pad={cw + 2 * pad}:{pad_h}:{pad}:{pad_top}:black,"
+        f"scale={target[0]}:{target[1]}:flags=lanczos,setsar=1[f]"
     )
     last = "f"
     taps = [ev for bt in shot["beats"] for ev in bt["events"] if ev["do"] == "tap"]

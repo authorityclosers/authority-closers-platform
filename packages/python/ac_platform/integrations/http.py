@@ -36,9 +36,10 @@ from ac_platform.integrations.errors import IntegrationError
 from ac_platform.integrations.models import IntegrationOAuthGrant
 from ac_platform.kernel.errors import DomainError
 from ac_platform.tenancy.models import Membership, Organisation
+from ac_platform.tenancy.roles import roles_with
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
-MANAGER_ROLES = frozenset({"owner", "admin"})
+MANAGER_ROLES = frozenset(roles_with("org.manage"))
 
 WORDS = {
     "name": "Give the key a name of up to 80 characters.",

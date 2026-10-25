@@ -11,6 +11,11 @@ so production stays inside the logical backup bound; history summaries are
 optional and bounded. Dry-run by default. One transaction, idempotent replay,
 refuses changed content, writes one audit event naming the approver.
 
+Another organisation (AUT-2222, the AI-directory reviewer's) takes the same calls only once an
+approved data change has marked it a sandbox: `--target-name <its exact name>
+--seller-person-id <its member>`. Its calls then belong to that one member, and no fictional
+seller is made (their reserved emails belong to AC Sandbox's people).
+
 Runtime-injected AC_DATABASE_URL must name the environment's ac_platform database
 and AC_ENVIRONMENT must match --environment. No provider transport, schema change,
 login credential or paid job.
@@ -89,6 +94,13 @@ from ac_platform.outbox.models import Job
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
 
 TARGET = UUID("90ec1979-0d85-4829-ba8d-cabde2a9a9d3")  # replaced by --target-tenant at runtime
+# Replaced by --target-name. Another name (the AI-directory reviewer's fictional organisation,
+# AUT-2222) is accepted only once an approved data change has marked it a sandbox.
+SANDBOX_NAME = "AC Sandbox"
+TARGET_NAME = SANDBOX_NAME
+# Replaced by --seller-person-id, for another organisation only: its calls belong to this one
+# member, and no fictional seller is made (their reserved emails already belong to AC Sandbox's).
+SELLER: UUID | None = None
 ENVIRONMENT = "development"  # replaced by --environment at runtime
 ENVIRONMENTS = ("development", "staging", "production")
 NAMESPACE = UUID("1dfdfac9-bfa2-49ab-b061-d98776454e0f")
@@ -785,8 +797,15 @@ async def target(db: AsyncSession, approver: UUID) -> None:
     tenant = await db.scalar(select(Tenant).where(Tenant.id == TARGET).with_for_update(read=True))
     member = await db.get(Membership, (TARGET, approver))
     if (
+        TARGET_NAME != SANDBOX_NAME
+        and await db.get(ConversationSandboxOrganisation, TARGET) is None
+    ):
+        raise ValueError(
+            "Only an organisation already marked as a sandbox may take synthetic calls."
+        )
+    if (
         tenant is None
-        or tenant.name != "AC Sandbox"
+        or tenant.name != TARGET_NAME
         or tenant.status != "active"
         or await db.get(Organisation, TARGET) is None
         or member is None
@@ -795,8 +814,20 @@ async def target(db: AsyncSession, approver: UUID) -> None:
         or member.ended_at is not None
     ):
         raise ValueError(
-            "The exact active AC Sandbox and its current approving owner are required."
+            "The exact active sandbox organisation and its current approving owner are required."
         )
+    # AC Sandbox keeps its fictional sellers; any other sandbox names its one seller.
+    if (TARGET_NAME == SANDBOX_NAME) != (SELLER is None):
+        raise ValueError("Name the seller for another sandbox organisation, and only for it.")
+    if SELLER is not None:
+        seller = await db.get(Membership, (TARGET, SELLER))
+        if (
+            seller is None
+            or seller.role not in {"owner", "admin", "member"}
+            or seller.status != "active"
+            or seller.ended_at is not None
+        ):
+            raise ValueError("The seller must be an active member of the sandbox organisation.")
 
 
 async def load(
@@ -874,7 +905,9 @@ async def load(
             person_id = identifier("person", rep["person_id"])
             person = await db.get(Person, person_id)
             fields = rep["fields"]
-            if person is None:
+            if SELLER is not None:
+                pass  # one named seller holds the calls; no fictional person is made
+            elif person is None:
                 db.add(
                     Person(
                         id=person_id,
@@ -1028,7 +1061,7 @@ async def load(
                 await record_outcome(
                     db,
                     submission=submission,
-                    owner_id=identifier("person", bundle.metadata["rep_id"]),
+                    owner_id=SELLER or identifier("person", bundle.metadata["rep_id"]),
                     deal=bundle.report.get("where_the_deal_stands"),
                     at=bundle.occurred_at + timedelta(milliseconds=bundle.metadata["duration_ms"]),
                     apply=apply,
@@ -1047,7 +1080,7 @@ async def load(
                 counts=counts,
             )
             continue
-        owner_id = identifier("person", bundle.metadata["rep_id"])
+        owner_id = SELLER or identifier("person", bundle.metadata["rep_id"])
         usage_id, lease_id, job_id = (identifier(kind, key) for kind in ("usage", "lease", "job"))
         at = bundle.occurred_at
         db.add(
@@ -1264,9 +1297,11 @@ async def load(
 
 
 async def execute(args: argparse.Namespace) -> dict:
-    global TARGET, ENVIRONMENT
+    global TARGET, ENVIRONMENT, TARGET_NAME, SELLER
     TARGET = args.target_tenant
     ENVIRONMENT = args.environment
+    TARGET_NAME = args.target_name
+    SELLER = args.seller_person_id
     url = hosted_database_url(
         os.environ.get("AC_DATABASE_URL", ""),
         environment=args.environment,
@@ -1301,6 +1336,17 @@ def main() -> None:
     parser.add_argument("--environment", choices=ENVIRONMENTS, required=True)
     parser.add_argument(
         "--target-tenant", type=UUID, required=True, help="AC Sandbox organisation id"
+    )
+    parser.add_argument(
+        "--target-name",
+        default=SANDBOX_NAME,
+        help="the organisation's exact name; another than AC Sandbox must already be a sandbox",
+    )
+    parser.add_argument(
+        "--seller-person-id",
+        type=UUID,
+        default=None,
+        help="another sandbox only: the member whose calls these are (no fictional sellers made)",
     )
     parser.add_argument("--expect-db-host", required=True, help="environment PostgreSQL host")
     parser.add_argument("--per-business", type=int, default=0, help="0 = all calls per seller")

@@ -22,6 +22,8 @@ Nudges (team engine) go in the same pass, under the same lock, as their own urge
 with no lead in it (``nudge_push``).
 
 A second run of the same loop sends gold review alerts to the same phones (``review_push``).
+
+The duplicate scan (``duplicate_scan``) runs beside them every six hours.
 """
 
 from __future__ import annotations
@@ -422,7 +424,7 @@ def attach(
     """Run the sender for the API's lifetime by wrapping the app's own lifespan."""
     if environment in {"local", "test"}:
         return
-    from ac_platform.lead_desk import review_push
+    from ac_platform.lead_desk import duplicate_scan, review_push
 
     inner = application.router.lifespan_context
 
@@ -437,6 +439,9 @@ def attach(
                     name="gold-review-alerts",
                 ),
                 asyncio.create_task(run_hours_release(sessions, stop), name="lead-desk-hours"),
+                asyncio.create_task(
+                    duplicate_scan.run_scans(sessions, stop), name="lead-desk-duplicates"
+                ),
             ]
             try:
                 yield state

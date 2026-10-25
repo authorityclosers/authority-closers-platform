@@ -547,6 +547,7 @@ export function OrganisationView({
                   }}
                   canManage={canManage}
                   isOwner={live && myRole === "owner"}
+                  orgName={name}
                   yourPersonId={access?.context?.personId ?? null}
                   onMissing={() => setMissing(true)}
                 />
@@ -1374,11 +1375,17 @@ function WeekBars({
   );
 }
 
+/** Typed as shown, ignoring case and extra spaces (the server checks the same). */
+export const sameName = (typed: string, name: string) =>
+  typed.trim().replace(/\s+/g, " ").toLowerCase() ===
+  name.trim().replace(/\s+/g, " ").toLowerCase();
+
 function MembersPanel({
   members,
   reload,
   canManage,
   isOwner,
+  orgName = "",
   yourPersonId,
   onMissing,
 }: {
@@ -1386,6 +1393,8 @@ function MembersPanel({
   reload: () => void;
   canManage: boolean;
   isOwner: boolean;
+  /** Typed to confirm an ownership transfer. */
+  orgName?: string;
   yourPersonId: string | null;
   onMissing: () => void;
 }) {
@@ -1398,9 +1407,14 @@ function MembersPanel({
     message: string;
     verb: string;
     danger?: boolean;
-    action: () => Promise<unknown>;
+    /** What happens, one line each (an ownership transfer). */
+    points?: string[];
+    /** A name that must be typed before the change goes ahead. */
+    typeName?: string;
+    action: (typed: string) => Promise<unknown>;
     added?: boolean;
   } | null>(null);
+  const [typed, setTyped] = useState("");
   // The confirmation keeps its words while its sheet slides away.
   const [shownConfirm, setShownConfirm] = useState(confirming);
   if (confirming && confirming !== shownConfirm) setShownConfirm(confirming);
@@ -1579,11 +1593,17 @@ function MembersPanel({
                 className={
                   shownConfirm?.danger ? styles.danger : styles.primary
                 }
-                disabled={busy || !confirming}
+                disabled={
+                  busy ||
+                  !confirming ||
+                  (confirming.typeName !== undefined &&
+                    (!confirming.typeName ||
+                      !sameName(typed, confirming.typeName)))
+                }
                 onClick={() => {
                   const current = confirming;
                   if (!current) return;
-                  void run(current.action).then((saved) => {
+                  void run(() => current.action(typed)).then((saved) => {
                     if (saved) {
                       if (current.added) setEmail("");
                       setConfirming(null);
@@ -1597,6 +1617,27 @@ function MembersPanel({
           }
         >
           <p className={styles.confirmMessage}>{shownConfirm?.message}</p>
+          {shownConfirm?.points ? (
+            <ul className={styles.footnote}>
+              {shownConfirm.points.map((point) => (
+                <li key={point}>{point}</li>
+              ))}
+            </ul>
+          ) : null}
+          {shownConfirm?.typeName !== undefined ? (
+            <label className={styles.field}>
+              <span className={styles.footnote}>
+                Type <strong>{shownConfirm.typeName}</strong> to confirm
+              </span>
+              <input
+                value={typed}
+                autoComplete="off"
+                spellCheck={false}
+                aria-label="Organisation name"
+                onChange={(event) => setTyped(event.target.value)}
+              />
+            </label>
+          ) : null}
         </Sheet>
 
         <div className={styles.memberTable} role="table" aria-label="People">
@@ -1726,13 +1767,23 @@ function MembersPanel({
                           title="Make owner"
                           aria-label={`Make ${name} the owner`}
                           disabled={busy || confirming !== null}
-                          onClick={() =>
+                          onClick={() => {
+                            setTyped("");
                             setConfirming({
-                              message: `Make ${name} the owner? You will become an admin.`,
-                              verb: "Transfer ownership",
-                              action: () => transferOwnership(member.personId),
-                            })
-                          }
+                              message: `Make ${name} the owner of ${orgName}?`,
+                              points: [
+                                `${name} gets everything, including billing and closing the organisation.`,
+                                "You become an admin.",
+                                `Only ${name} can give ownership back.`,
+                                "You both get an email.",
+                              ],
+                              typeName: orgName,
+                              verb: "Make owner",
+                              danger: true,
+                              action: (confirmName) =>
+                                transferOwnership(member.personId, confirmName),
+                            });
+                          }}
                         >
                           <Crown size={15} />
                         </button>

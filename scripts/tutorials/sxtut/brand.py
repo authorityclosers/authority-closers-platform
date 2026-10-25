@@ -178,6 +178,108 @@ def stage_html(kit: Kit) -> str:
     return kit.page(body, BARS_CSS + css, STAGE_W, STAGE_H, transparent=True)
 
 
+# Device frames (owner, 25 Oct 2026: "screen ratios ... kinda ugly, need better mobile and
+# devices"):
+# a generic modern phone with a 9:19.5 screen and thin bezel, and a 16:10 laptop, no brand marks, on
+# the brand ground with a soft shadow. Reels keep a caption band above the phone, so captions never
+# sit on the app. Holes are in the pixels of each stage.
+REEL_W, REEL_H, REEL_BAND = 1080, 1920, 330
+REEL_PIC_H = REEL_H - REEL_BAND  # the picture under the band, where the camera moves
+REEL_PHONE_HOLE = {"x": 194, "y": 32, "w": 692, "h": 1500, "r": 76}
+# On the 16:9 stage the phone stands just right of centre and the laptop above the lower edge, so
+# the chapter tag (bottom left; titles up to 28 characters) never covers a screen.
+YT_PHONE_HOLE = {"x": 1240, "y": 108, "w": 648, "h": 1404, "r": 70}
+YT_LAPTOP_HOLE = {"x": 520, "y": 110, "w": 1840, "h": 1150, "r": 14}
+
+
+def _hole(sw: int, sh: int, h: dict) -> str:
+    """A CSS mask that keeps everything but the rounded screen hole."""
+    x, y, w, hh, r = h["x"], h["y"], h["w"], h["h"], h["r"]
+    d = (
+        f"M0 0H{sw}V{sh}H0Z M{x + r} {y}H{x + w - r}A{r} {r} 0 0 1 {x + w} {y + r}"
+        f"V{y + hh - r}A{r} {r} 0 0 1 {x + w - r} {y + hh}H{x + r}A{r} {r} 0 0 1 {x} {y + hh - r}"
+        f"V{y + r}A{r} {r} 0 0 1 {x + r} {y}Z"
+    )
+    svg = (
+        f"<svg xmlns='http://www.w3.org/2000/svg' width='{sw}' height='{sh}'>"
+        f"<path fill-rule='evenodd' d='{d}'/></svg>"
+    )
+    return "url(data:image/svg+xml;base64," + base64.b64encode(svg.encode()).decode() + ")"
+
+
+def device_stage_html(kit: Kit, sw: int, sh: int, hole: dict, device: str = "phone") -> str:
+    """A stage of sw x sh with a phone or laptop around a transparent screen hole the clip shows
+    through: graphite body, a thin light rim, soft shadow and a faint mint glow."""
+    x, y, w, hh, r = hole["x"], hole["y"], hole["w"], hole["h"], hole["r"]
+    if device == "phone":
+        b = max(12, round(w * 0.022))  # thin bezel
+        body = (
+            f"<div class='dev' style='left:{x - b}px;top:{y - b}px;width:{w + 2 * b}px;"
+            f"height:{hh + 2 * b}px;border-radius:{r + b}px'></div>"
+            f"<div class='btn' style='left:{x + w + b - 1}px;top:{y + hh * 0.2:.0f}px;"
+            f"height:{hh * 0.09:.0f}px'></div>"
+            f"<div class='btn' style='left:{x + w + b - 1}px;top:{y + hh * 0.33:.0f}px;"
+            f"height:{hh * 0.15:.0f}px'></div>"
+        )
+    else:
+        b, top = round(w * 0.016), round(w * 0.022)  # lid bezel, a little more on top for a camera
+        deck_w, deck_h = round(w * 1.16), round(w * 0.028)
+        body = (
+            f"<div class='dev' style='left:{x - b}px;top:{y - top}px;width:{w + 2 * b}px;"
+            f"height:{hh + top + b}px;border-radius:{r + b}px {r + b}px 6px 6px'></div>"
+            f"<div class='cam' style='left:{x + w / 2 - 5:.0f}px;"
+            f"top:{y - top / 2 - 5:.0f}px'></div>"
+            f"<div class='deck' style='left:{x + w / 2 - deck_w / 2:.0f}px;top:{y + hh + b}px;"
+            f"width:{deck_w}px;height:{deck_h}px'><i></i></div>"
+        )
+    css = (
+        f".all{{position:absolute;inset:0;-webkit-mask:{_hole(sw, sh, hole)};"
+        f"mask:{_hole(sw, sh, hole)}}}"
+        ".dev{position:absolute;background:linear-gradient(160deg,#1E2726,#0E1413 60%);"
+        "box-shadow:inset 0 0 0 2px rgba(255,255,255,.14),0 40px 120px rgba(0,0,0,.42),"
+        "0 0 220px rgba(61,235,176,.16)}"
+        ".btn{position:absolute;width:7px;border-radius:0 4px 4px 0;background:#1B2423;"
+        "box-shadow:inset -1px 0 0 rgba(255,255,255,.18)}"
+        ".cam{position:absolute;width:10px;height:10px;border-radius:50%;background:#2B3534}"
+        ".deck{position:absolute;border-radius:0 0 26px 26px;"
+        "background:linear-gradient(#3A4544,#1A2221);box-shadow:0 30px 60px rgba(0,0,0,.45)}"
+        ".deck i{position:absolute;left:44%;width:12%;top:0;height:30%;border-radius:0 0 12px 12px;"
+        "background:#232C2B}"
+        ".motif{position:absolute;opacity:.07}"
+    )
+    m = round(sw * 0.18)
+    page = (
+        "<div class='all'><div class='ground'></div><div class='grain'></div>"
+        f"<div class='motif' style='left:{round(sw * 0.05)}px;bottom:{round(sh * 0.06)}px;"
+        f"width:{m}px;height:{m}px'>{_bars('bars still')}</div>"
+        f"<div class='motif' style='right:{round(sw * 0.05)}px;top:{round(sh * 0.05)}px;"
+        f"width:{m}px;height:{m}px'>{_bars('bars still')}</div>"
+        f"{body}</div>"
+    )
+    return kit.page(page, BARS_CSS + css, sw, sh, transparent=True)
+
+
+def reel_band_html(kit: Kit, sample: str = "") -> str:
+    """The reel's caption band (1080 x REEL_BAND): the captions are drawn into it, never on the
+    app. A mint hairline separates it from the phone below. `sample` is for template stills."""
+    css = (
+        ".band{position:absolute;inset:0;background:linear-gradient(180deg,#083A35,#0B4A44)}"
+        ".line{position:absolute;left:0;right:0;bottom:0;height:3px;"
+        "background:linear-gradient(90deg,transparent,rgba(61,235,176,.55),transparent)}"
+        ".cap{position:absolute;left:60px;right:60px;top:0;bottom:0;display:flex;"
+        "align-items:center;justify-content:center;text-align:center;font-weight:700;"
+        "font-size:74px;line-height:1.12;text-wrap:balance}"
+        f".cap b{{color:{MINT}}}"
+    )
+    return kit.page(
+        f"<div class='band'></div><div class='grain'></div><div class='line'></div>"
+        f"<div class='cap'><div>{sample}</div></div>",
+        css,
+        REEL_W,
+        REEL_BAND,
+    )
+
+
 def _kicker(kicker: str, number: str) -> str:
     return f"{kicker} · {number}" if number else kicker
 

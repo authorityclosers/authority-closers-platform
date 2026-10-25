@@ -34,8 +34,9 @@ from ac_platform.identity.models import Person
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.organisations.activity import _mask_email
 from ac_platform.tenancy.models import Membership, Organisation
+from ac_platform.tenancy.roles import roles_with
 
-LEADS = ("owner", "admin")
+LEADS = roles_with("team.view")
 FOCUS_CHANGED = "Your focus changed. Reload Coaching and try again."
 
 # The learner's (focus skill, mission origin) as My coaching shows them now,

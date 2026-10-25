@@ -32,6 +32,8 @@ export type LeadRow = {
   language: string | null;
   interest: string | null;
   phone_last4: string | null;
+  /** The whole number, when the organisation shows full numbers in lists. */
+  phone?: string | null;
   stage: Stage;
   stage_label: string;
   source: string;
@@ -180,6 +182,11 @@ export type LeadEvent = {
   starts_at?: string | null;
   from_starts_at?: string | null;
   mode_label?: string | null;
+  /** A change an AI app or an API key made (ai-writes, 25 Oct 2026): which one, and
+   * whether this person may still undo it (7 days). */
+  app_label?: string | null;
+  change_id?: string | null;
+  can_undo?: boolean;
 };
 
 export type LeadDetail = {
@@ -234,6 +241,8 @@ export type LeadPage = {
   next_offset: number | null;
   /** Every stage's count for the same people and search (the stage tabs). */
   stage_counts?: Record<string, number>;
+  /** Leads per seller ("none": nobody's) for the same filters, without the seller picked. */
+  owner_counts?: Record<string, number>;
 };
 
 export type RepView = {
@@ -242,7 +251,12 @@ export type RepView = {
   role: string;
   revision: number;
   available: boolean;
-  max_open: number;
+  /** The seller's open-lead limit; null: no limit. */
+  max_open: number | null;
+  /** The organisation's default applies (the seller has no rules of their own yet). */
+  default_cap?: boolean;
+  /** Open leads beyond the limit (a manual assign or an import may go past it). */
+  over_capacity?: number;
   languages: string[];
   areas: string[];
   interests: string[];
@@ -285,6 +299,10 @@ export type Team = {
     reassign_minutes: number;
     default_country: string;
     work_hours?: WorkHours | null;
+    /** The open-lead limit of sellers with no rules of their own; null: no limit. */
+    default_max_open?: number | null;
+    /** Lists show whole phone numbers. */
+    show_full_phones?: boolean;
   };
   by_stage: Record<string, number>;
   by_source: Record<string, number>;
@@ -304,6 +322,10 @@ export type ImportPreview = {
   repeats_in_file: number;
   /** Numbers in the file that are already leads: kept there, never added again. */
   known_leads?: number;
+  /** The CRM whose export this is, when its headers say so ("Zoho CRM"). */
+  detected?: string | null;
+  /** Rows that make a lead with the columns matched. */
+  importable?: number;
 };
 
 export type ImportResult = {
@@ -318,6 +340,8 @@ export type ImportResult = {
   /** What matched no stage or teammate (the first ten). */
   unmatched_stages?: string[];
   unmatched_owners?: string[];
+  /** People the import took past their open-lead limit, said plainly. */
+  warnings?: string[];
 };
 
 export type SourceView = {
@@ -1255,7 +1279,8 @@ export function saveRep(
   rep: Pick<RepView, "person_id" | "revision">,
   rules: {
     available: boolean;
-    max_open: number;
+    /** null: no limit. */
+    max_open: number | null;
     languages: string[];
     areas: string[];
     interests: string[];
@@ -1269,7 +1294,14 @@ export function saveRep(
 
 export function saveSettings(
   revision: number,
-  settings: { auto_reassign: boolean; reassign_minutes: number },
+  settings: {
+    auto_reassign: boolean;
+    reassign_minutes: number;
+    /** Sent: the default open-lead limit (null: no limit). Left out: kept. */
+    default_max_open?: number | null;
+    /** Sent: whether lists show whole phone numbers. Left out: kept. */
+    show_full_phones?: boolean;
+  },
 ) {
   return request<Team>(
     "/settings",
@@ -1307,6 +1339,14 @@ export type CallReport = {
     missed: number;
   }[];
 };
+
+/** Undo a change an AI app made: a note stops showing, an open task is cancelled. */
+export function undoAppChange(changeId: string) {
+  return request<{ status: string }>(
+    `/ai-changes/${encodeURIComponent(changeId)}/undo`,
+    json("POST", {}),
+  );
+}
 
 /** Hides a call the seller's phone logged from everyone else, or shows it again. */
 export function setCallPrivacy(
@@ -1361,6 +1401,7 @@ export function commitImport(
       rows: preview.rows,
       assign,
       ...(pipeline ? { pipeline } : {}),
+      ...(preview.detected ? { source_name: preview.detected } : {}),
     }),
   );
 }

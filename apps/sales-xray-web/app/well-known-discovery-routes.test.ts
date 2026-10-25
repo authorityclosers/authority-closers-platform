@@ -9,6 +9,7 @@ const ROUTES = [
   "oauth-authorization-server/route.discovery.ts",
   "openid-configuration/route.discovery.ts",
   "oauth-protected-resource/[[...resource]]/route.discovery.ts",
+  "openai-apps-challenge/route.discovery.ts",
 ];
 
 describe("/.well-known discovery routes", () => {

@@ -54,6 +54,7 @@ from ac_platform.integrations import first_party, oauth, scopes
 from ac_platform.integrations.errors import IntegrationError
 from ac_platform.kernel.errors import DomainError
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
+from ac_platform.tenancy.roles import ORG_ROLES, can
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
@@ -77,7 +78,14 @@ REGISTER_WORDS = {
 # What an MCP host gets when it asks for no scope: reading, never writing.
 DEFAULT_SCOPES = "calls:read reports:read leads:read"
 # The MCP tools' scopes, which the resource metadata offers (webhooks:manage is for the CLI).
-MCP_SCOPES = ("calls:read", "reports:read", "leads:read", "leads:write")
+MCP_SCOPES = (
+    "calls:read",
+    "reports:read",
+    "leads:read",
+    "leads:write",
+    "leads:notes",
+    "leads:tasks",
+)
 RESOURCES = ("/v1/mcp", "/v1/api")
 DISCOVERY = {"Cache-Control": "public, max-age=300", "Access-Control-Allow-Origin": "*"}
 REGISTER_EACH = RateLimitRule(
@@ -230,7 +238,7 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
                 )
             ).first()
         )
-        if row is None or row.role not in {"owner", "admin"}:
+        if row is None or not can(row.role, "org.manage"):
             raise HTTPException(
                 403,
                 "Open the organisation you want to connect, as its owner or admin.",
@@ -276,7 +284,7 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
         ).first()
         if row is None:
             raise refused
-        role = row.role if row.role in {"owner", "admin"} else "member"
+        role = row.role if row.role in ORG_ROLES else "member"
         return actor, {
             "id": str(actor.tenant_id),
             "kind": "organisation",

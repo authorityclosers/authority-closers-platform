@@ -15,6 +15,8 @@ export const SCOPES = [
   "reports:read",
   "leads:read",
   "leads:write",
+  "leads:notes",
+  "leads:tasks",
   "webhooks:manage",
 ] as const;
 
@@ -24,6 +26,8 @@ export const MCP_SCOPES = [
   "reports:read",
   "leads:read",
   "leads:write",
+  "leads:notes",
+  "leads:tasks",
 ] as const;
 
 const AUTH_METHODS = ["none", "client_secret_basic", "client_secret_post"];
