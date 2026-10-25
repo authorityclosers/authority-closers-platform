@@ -55,6 +55,8 @@ import { KIND_WORDS } from "../leads/stage-tabs";
 import { several, usePipelines } from "../leads/use-pipelines";
 import { ActionList, ActionRow, Avatar, Delta, Segmented } from "../ui/kit";
 import { NeedsYou } from "./needs-you";
+import { ShareOut } from "../leads/assign-sheet";
+import { TargetsPanel } from "../leads/targets-panel";
 import { TakingSwitch } from "../leads/taking-switch";
 import type { HomeDesk } from "./my-day-client";
 import { DayNumbers, DoNowRow, NextUp, TeamPoolCard, useMyDay } from "./my-day";
@@ -359,6 +361,11 @@ function TeamHome({ desk }: { desk: Desk | null }) {
         </ActionList>
       </section>
 
+      {/* Targets and nudges (owner program, 25 Oct 2026, section 2). */}
+      <div className={styles.block}>
+        <TargetsPanel />
+      </div>
+
       <section className={styles.block} aria-labelledby="pipeline-title">
         <div className={styles.head}>
           <h2 id="pipeline-title">Open leads by stage</h2>
@@ -485,6 +492,7 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
   // Read beside the desk, so both land together (Lead OS's team engine).
   const myDay = useMyDay();
   const [now] = useState(() => Date.now());
+  const [sharing, setSharing] = useState(false);
   if (state.status === "loading" || myDay.status === "loading")
     return <TodaySkeleton />;
   if (state.status === "error")
@@ -576,7 +584,20 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
             ) : null}
           </>
         ) : mineNone && desk.team_pool?.open ? (
-          <TeamPoolCard desk={desk} />
+          <>
+            <TeamPoolCard desk={desk} onShare={() => setSharing(true)} />
+            {desk.me.can_manage ? (
+              <ShareOut
+                open={sharing}
+                target={{
+                  kind: "unassigned",
+                  count: desk.team_pool?.unassigned ?? 0,
+                }}
+                onClose={() => setSharing(false)}
+                onDone={() => setSharing(false)}
+              />
+            ) : null}
+          </>
         ) : (
           <>
             <div className={styles.caughtUp}>

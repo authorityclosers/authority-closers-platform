@@ -11,7 +11,8 @@
  * today's numbers sit beside yesterday's. Owners see Needs you (two leads past
  * the first-response target, two with no owner) and Team | My day
  * (`?view=mine`). `&pipelines=2`: two pipelines, each with its own stages, and
- * a switch above the open leads by stage.
+ * a switch above the open leads by stage. Owners also see Targets (two sellers
+ * with targets, one without) and can share out leads from My day (`&none=1`).
  */
 
 import type { CallActivity, CallSummary } from "../../dashboard/dashboard-data";
@@ -137,9 +138,107 @@ function myDay(now: number, mode: Mode) {
   };
 }
 
+const REPS = [
+  [SELLER, "kavya fictional", 21, 40, true],
+  [SECOND, "RAHUL EXAMPLE", 26, 40, true],
+  [THIRD, "priya sample", 12, 30, false],
+].map(([person_id, name, open_leads, max_open, available]) => ({
+  person_id,
+  name,
+  role: "member",
+  revision: 1,
+  available,
+  max_open,
+  languages: [],
+  areas: [],
+  interests: [],
+  open_leads,
+  due_now: 2,
+  calls_today: 9,
+  connected_today: 4,
+}));
+
+const progress = (
+  metric: string,
+  target: number,
+  done: number,
+  behind: boolean,
+) => ({
+  metric,
+  period: "day",
+  target,
+  done,
+  pace: 0.65,
+  expected: target * 0.65,
+  behind,
+  short: behind ? Math.ceil(target * 0.65 - done) : 0,
+});
+
+/** The team engine: the team, targets, and a share-out plan (no lead names). */
+function teamAnswers(path: string): unknown {
+  if (path === "/v1/lead-desk/team")
+    return {
+      reps: REPS,
+      settings: {
+        revision: 3,
+        auto_reassign: false,
+        reassign_minutes: 10,
+        default_country: "IN",
+        nudges: true,
+        nudges_off_for: [THIRD],
+      },
+      by_stage: {},
+      by_source: {},
+      unassigned: 40,
+      waiting_first_call: 2,
+    };
+  if (path === "/v1/lead-desk/targets/team")
+    return {
+      schema: "lead-desk/1",
+      sellers: [
+        {
+          person_id: SELLER,
+          targets: [],
+          progress: [
+            progress("calls", 40, 18, true),
+            progress("connects", 15, 7, false),
+            progress("meetings", 2, 2, false),
+          ],
+        },
+        {
+          person_id: SECOND,
+          targets: [],
+          progress: [progress("calls", 40, 31, false)],
+        },
+      ],
+    };
+  if (path === "/v1/lead-desk/leads/distribute")
+    return {
+      rule: "even",
+      preview: true,
+      leads: 40,
+      moved: 38,
+      given: REPS.filter((rep) => rep.available).map((rep) => ({
+        person_id: rep.person_id,
+        name: rep.name,
+        leads: 19,
+        open_after: Number(rep.open_leads) + 19,
+        max_open: rep.max_open,
+      })),
+      left: { closed: 2 },
+      sources: { "Facebook ad": 28, Website: 9, "Walk-in": 3 },
+      cities: { Pune: 22, Mumbai: 18 },
+      more: false,
+      words: "38 leads given out evenly: 19 each to 2 sellers.",
+    };
+  return null;
+}
+
 function answers(now: number, path: string, mode: Mode): unknown {
   const { quiet, none } = mode;
   const empty = quiet || none;
+  const team = teamAnswers(path);
+  if (team !== null) return team;
   if (path === "/v1/lead-desk/my-day") return myDay(now, mode);
   if (path === "/v1/lead-desk")
     return {
@@ -147,7 +246,10 @@ function answers(now: number, path: string, mode: Mode): unknown {
         person_id: SELLER,
         name: "swamini fictional",
         role: "member",
-        can_manage: false,
+        // An owner's own desk manages the team (Share out leads on My day).
+        can_manage:
+          typeof window !== "undefined" &&
+          new URLSearchParams(window.location.search).get("role") !== "seller",
         taking_leads: true,
       },
       numbers: empty

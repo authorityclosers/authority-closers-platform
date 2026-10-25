@@ -106,7 +106,14 @@ export function NextUp({
 }
 
 /** No leads of mine yet: what the team has, and how new ones reach me. */
-export function TeamPoolCard({ desk }: { desk: HomeDesk }) {
+export function TeamPoolCard({
+  desk,
+  onShare,
+}: {
+  desk: HomeDesk;
+  /** Owners and managers: open Share out leads here. */
+  onShare?: () => void;
+}) {
   const pool = desk.team_pool;
   if (!pool?.open) return null;
   const leads = pool.open === 1 ? "1 open lead" : `${pool.open} open leads`;
@@ -127,16 +134,22 @@ export function TeamPoolCard({ desk }: { desk: HomeDesk }) {
             : "You aren't taking new leads. Turn it on above to get the next ones."}
         </span>
       </div>
-      <Link
-        className={home.more}
-        href={
-          desk.me.can_manage
-            ? "/leads?tab=all&stage=open&who=unassigned"
-            : "/leads"
-        }
-      >
-        {desk.me.can_manage ? "Share out leads" : "Open Leads"}
-      </Link>
+      {desk.me.can_manage && onShare ? (
+        <button type="button" className={styles.share} onClick={onShare}>
+          Share out leads
+        </button>
+      ) : (
+        <Link
+          className={home.more}
+          href={
+            desk.me.can_manage
+              ? "/leads?tab=all&stage=open&who=unassigned"
+              : "/leads"
+          }
+        >
+          {desk.me.can_manage ? "Share out leads" : "Open Leads"}
+        </Link>
+      )}
     </div>
   );
 }

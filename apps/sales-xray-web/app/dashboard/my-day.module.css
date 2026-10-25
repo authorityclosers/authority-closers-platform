@@ -34,7 +34,8 @@
   overflow-wrap: anywhere;
 }
 
-.pool > a {
+.pool > a,
+.pool > .share {
   grid-column: 2;
   justify-self: start;
   display: inline-flex;
@@ -146,4 +147,22 @@
   .bar {
     transition: width 240ms ease-out;
   }
+}
+
+/* Share out leads, the manager's one action on the no-leads card. */
+.share {
+  padding: 0 16px;
+  border: 1px solid var(--lx-teal);
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-teal-soft);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.share:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
 }

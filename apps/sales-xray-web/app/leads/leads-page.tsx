@@ -81,6 +81,8 @@ import {
 import type { LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
+import { ShareOut } from "./assign-sheet";
+import { useNudgeCard } from "./nudge-card";
 import {
   LEADS_PATH,
   LeadsError,
@@ -379,6 +381,8 @@ export function LeadsRoute() {
   const [pastedRows, setPastedRows] = useState<string | null>(null);
   const [menu, setMenu] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // Share out leads (owners and managers, Lead OS's distribute).
+  const [sharing, setSharing] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   // A settings page opened from the menu is a step of its own: Leads goes back.
   const pushedSettings = useRef(false);
@@ -826,6 +830,17 @@ export function LeadsRoute() {
   }, [authenticated, canStart]);
   useCommandSource("leads", commands);
 
+  // Opened from a nudge (?nudge=1): its words as the urgent card, with Start
+  // calling (owner program, 25 Oct 2026, section 3).
+  useNudgeCard(
+    canStart
+      ? () => {
+          setRounds((value) => ({ ...value, calling: value.calling + 1 }));
+          setCalling(true);
+        }
+      : null,
+  );
+
   if (!authenticated) {
     const loading =
       !access || access.authenticated === null || access.status === "loading";
@@ -1093,6 +1108,17 @@ export function LeadsRoute() {
   const menuItems: LeadsMenuItem[] = [
     ...(can
       ? [
+          {
+            key: "share",
+            label: "Share out leads",
+            note: desk.counts.unassigned
+              ? `${desk.counts.unassigned} with no owner, by a rule you pick`
+              : "Give leads out by a rule you pick",
+            onPick: () => {
+              setSettingsOpen(false);
+              setSharing(true);
+            },
+          },
           {
             key: "team",
             label: "Team",
@@ -1450,6 +1476,17 @@ export function LeadsRoute() {
           onClose={() => setSettingsOpen(false)}
           items={menuItems}
         />
+        {can ? (
+          <ShareOut
+            open={sharing}
+            target={{ kind: "unassigned", count: desk.counts.unassigned ?? 0 }}
+            onClose={() => setSharing(false)}
+            onDone={() => {
+              setSharing(false);
+              refresh();
+            }}
+          />
+        ) : null}
         <LeadSheet
           leadId={shownLead}
           me={desk.me}

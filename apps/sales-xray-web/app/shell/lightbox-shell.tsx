@@ -8,6 +8,7 @@ import {
   ChevronDown,
   Contact,
   GraduationCap,
+  LineChart,
   Layers,
   LayoutGrid,
   LifeBuoy,
@@ -943,6 +944,12 @@ function LightboxShellFrame({
       place("Chats", "/chats", <MessagesSquare size={17} />, "whatsapp inbox"),
       place("Calls", "/analysis/calls", <AudioLines size={17} />, "reports"),
       place("Coaching", "/coaching", <GraduationCap size={17} />),
+      place(
+        "Reports",
+        "/reports",
+        <LineChart size={17} />,
+        "call reports pipeline numbers lost first response",
+      ),
       place("Prospects", "/prospects", <Users size={17} />),
       ...(inOrganisation
         ? [

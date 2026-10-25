@@ -267,7 +267,7 @@ it("tells a seller with no leads what the team has", async () => {
   expect(text()).not.toContain("All caught up");
 });
 
-it("sends a manager with no leads to the ones with no owner", async () => {
+it("lets a manager with no leads share out the ones with no owner", async () => {
   answer({
     "/v1/lead-desk": desk({
       me: { ...desk().me, role: "admin", can_manage: true },
@@ -279,12 +279,11 @@ it("sends a manager with no leads to the ones with no owner", async () => {
   });
   await mount();
   expect(text()).toContain("You aren't taking new leads.");
-  const share = Array.from(host!.querySelectorAll("a")).find(
-    (link) => link.textContent === "Share out leads",
+  // Share out leads opens the sheet in place (Lead OS's distribute).
+  const share = Array.from(host!.querySelectorAll("button")).find(
+    (button) => button.textContent === "Share out leads",
   );
-  expect(share?.getAttribute("href")).toBe(
-    "/leads?tab=all&stage=open&who=unassigned",
-  );
+  expect(share).toBeDefined();
 });
 
 it("falls back to the desk's queue and numbers when My day doesn't load", async () => {
