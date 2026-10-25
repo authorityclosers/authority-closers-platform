@@ -47,6 +47,7 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
+from ac_platform.lead_desk import duplicate_intake
 from ac_platform.lead_desk.connectors import (
     app_return,
     google_ads,
@@ -928,11 +929,15 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             # background, a slice a minute (meta_backfill).
             imported = 0
             page_name = str(source.config.get("page_name") or "")
+            made: list[UUID] = []
             for lead in await graph.recent_leads(
                 form_ids, token, since=now - meta.PULL_DAYS * 86400
             ):
-                outcome = await meta_backfill.file_lead(desk, source, lead, page_name=page_name)
+                outcome = await meta_backfill.file_lead(
+                    desk, source, lead, page_name=page_name, made=made
+                )
                 imported += outcome == "created"
+            await duplicate_intake.after_intake(desk, made)
             source.config = {
                 **{k: v for k, v in source.config.items() if k != "last_error"},
                 "last_pulled_at": now,
@@ -1081,9 +1086,15 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                                 name=source.label,
                             ),
                         )
+                        made: list[UUID] = []
                         outcome = await meta_backfill.file_lead(
-                            desk, source, lead, page_name=str(config.get("page_name") or "")
+                            desk,
+                            source,
+                            lead,
+                            page_name=str(config.get("page_name") or ""),
+                            made=made,
                         )
+                        await duplicate_intake.after_intake(desk, made)
                         filed += outcome in {"created", "repeat"}
             except (meta.MetaError, DeskError) as error:
                 # Meta retries a delivery that fails; one bad lead must not block the rest.

@@ -2,7 +2,8 @@
 
 Turning a Page on files its last week at once and starts bringing in the rest Meta
 keeps (90 days); the puller finishes that in the background; every form on the Page
-is covered (a new form too); "Bring in older leads" again adds nothing twice.
+is covered (a new form too); "Bring in older leads" again adds nothing twice. Leads
+imported from a file before the Page was connected are linked, not made repeats.
 """
 
 import base64
@@ -14,12 +15,13 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from ac_platform.http.routes import RouteContext
 from ac_platform.lead_desk.connectors import meta, meta_pull
 from ac_platform.lead_desk.connectors.http import install_connectors_http
-from ac_platform.lead_desk.models import Lead, LeadSource
+from ac_platform.lead_desk.models import Lead, LeadEvent, LeadMerge, LeadSource
+from ac_platform.lead_desk.store import LeadDesk, Viewer
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
@@ -214,6 +216,210 @@ def test_turning_a_page_on_brings_in_all_90_days_and_every_form(
                 assert await db.scalar(select(func.count()).select_from(Lead)) == 5
                 refs = set((await db.scalars(select(Lead.source_ref))).all())
                 assert refs == {lead["id"] for leads in LEADS.values() for lead in leads}
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_leads_imported_from_a_file_first_are_linked_not_made_repeats(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Owner's demo prep, 25 Oct 2026: a team imports its Page's leads from a file (one is
+    already Lost), then connects the Page. Turning it on, the pull and bringing in older
+    leads find the same people: each lead gets one note with its Meta lead id, and no
+    follow-up, stage or repeat count changes."""
+    for name, value in ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(meta, "Graph", FakeGraph)
+    FakeGraph.forms_listed = ["fa"]
+    cfg = meta.config()
+    assert cfg is not None
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+            install_connectors_http(
+                setup.app, RouteContext(settings, setup.require_actor, setup.sessions)
+            )
+            tenant = setup.state.tenant_id
+            async with setup.sessions() as db, db.begin():
+                desk = LeadDesk(
+                    db,
+                    Viewer(
+                        person_id=setup.state.person_id,
+                        tenant_id=tenant,
+                        role="admin",
+                        name="Admin",
+                    ),
+                )
+                for lead in LEADS["fa"]:
+                    record = {answer["name"]: answer["values"][0] for answer in lead["field_data"]}
+                    await desk.ingest(
+                        record,
+                        source="csv",
+                        source_label="File: Meta leads",
+                        source_ref=f"h:{lead['id']}",
+                        actor=None,
+                    )
+                db.add(
+                    LeadSource(
+                        id=uuid4(),
+                        tenant_id=tenant,
+                        kind="meta",
+                        label="Meta · Fictional Homes",
+                        token_sha256=None,
+                        config={
+                            "page_id": "p1",
+                            "page_name": "Fictional Homes",
+                            "token": meta.seal(cfg.token_key, "page-token-1", page_id="p1"),
+                            "forms": "all",
+                        },
+                        active=False,
+                        received=0,
+                        created_by_person_id=setup.state.person_id,
+                        created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC),
+                    )
+                )
+            lost = LEADS["fa"][2]["id"]
+            async with setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(Lead).where(Lead.source_ref == f"h:{lost}").values(stage="lost")
+                )
+
+            def kept(lead: Lead) -> tuple[Any, ...]:
+                return (lead.stage, lead.next_action_at, lead.repeats, lead.revision, lead.source)
+
+            async with setup.sessions() as db:
+                before = {lead.id: kept(lead) for lead in (await db.scalars(select(Lead))).all()}
+            assert len(before) == 4
+
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                on = await client.post(f"{META}/pages/p1", json={}, headers=WRITE)
+                assert on.status_code == 200, on.text
+                assert on.json()["imported"] == 0  # this week's two are linked, not new
+
+                async with setup.sessions() as db, db.begin():
+                    source = await db.scalar(select(LeadSource).where(LeadSource.kind == "meta"))
+                    assert source is not None
+                    source.config = {**source.config, "last_pulled_at": 1}
+                await meta_pull.pull_due(setup.sessions, cfg, FakeGraph(cfg), now=int(time.time()))
+
+                again = await client.post(f"{META}/pages/p1/backfill", headers=WRITE)
+                assert again.status_code == 200, again.text
+                assert again.json()["imported"] == 0
+
+            async with setup.sessions() as db:
+                after = {lead.id: kept(lead) for lead in (await db.scalars(select(Lead))).all()}
+                assert after == before  # no new lead; Lost stays Lost; nothing reset
+                notes = (
+                    await db.scalars(
+                        select(LeadEvent).where(
+                            LeadEvent.tenant_id == tenant, LeadEvent.kind == "note"
+                        )
+                    )
+                ).all()
+                linked = {note.data["source_ref"] for note in notes if note.data.get("linked")}
+                assert len(notes) == 4 and linked == {lead["id"] for lead in LEADS["fa"]}
+                assert len({note.lead_id for note in notes}) == 4
+                repeats = await db.scalar(
+                    select(func.count()).select_from(LeadEvent).where(LeadEvent.kind == "repeat")
+                )
+                assert repeats == 0
+                source = await db.scalar(select(LeadSource).where(LeadSource.kind == "meta"))
+                assert source is not None and source.received == 0
+                assert source.config["backfill"]["created"] == 0
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_a_newer_meta_lead_with_a_known_email_is_merged_by_the_duplicate_engine(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Owner, 26 Oct 2026 (bug reports #12, #13): Meta leads go through the duplicate engine
+    as they arrive. A person who wrote in before from another number sends the form: the
+    same email is certain, so the new lead is merged into the one the team works on."""
+    for name, value in ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(meta, "Graph", FakeGraph)
+    FakeGraph.forms_listed = ["fa"]
+    now = int(time.time())
+    fresh = {
+        "id": "100000000000901",
+        "created_time": time.strftime("%Y-%m-%dT%H:%M:%S+0000", time.gmtime(now)),
+        "form_id": "fa",
+        "field_data": [
+            {"name": "full_name", "values": ["Asha Fictional"]},
+            {"name": "phone_number", "values": ["+919999011111"]},
+            {"name": "email", "values": ["asha.fictional@example.com"]},
+        ],
+    }
+    monkeypatch.setitem(LEADS, "fa", [fresh])
+    monkeypatch.setitem(CREATED, fresh["id"], now)
+    cfg = meta.config()
+    assert cfg is not None
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            tenant = setup.state.tenant_id
+            async with setup.sessions() as db, db.begin():
+                desk = LeadDesk(
+                    db,
+                    Viewer(
+                        person_id=setup.state.person_id,
+                        tenant_id=tenant,
+                        role="admin",
+                        name="Admin",
+                    ),
+                    now=datetime.fromtimestamp(now - 30 * DAY, UTC),
+                )
+                await desk.ingest(
+                    {
+                        "full_name": "Asha Fictional",
+                        "phone": "+919999022222",
+                        "email": "asha.fictional@example.com",
+                    },
+                    source="manual",
+                    actor=setup.state.person_id,
+                )
+                db.add(
+                    LeadSource(
+                        id=uuid4(),
+                        tenant_id=tenant,
+                        kind="meta",
+                        label="Meta · Fictional Homes",
+                        token_sha256=None,
+                        config={
+                            "page_id": "p1",
+                            "page_name": "Fictional Homes",
+                            "token": meta.seal(cfg.token_key, "page-token-1", page_id="p1"),
+                            "forms": "all",
+                        },
+                        active=True,
+                        received=0,
+                        created_by_person_id=setup.state.person_id,
+                        created_at=datetime.now(UTC),
+                        updated_at=datetime.now(UTC),
+                    )
+                )
+            assert await meta_pull.pull_due(setup.sessions, cfg, FakeGraph(cfg), now=now) == 1
+            async with setup.sessions() as db:
+                leads = {lead.source: lead for lead in (await db.scalars(select(Lead))).all()}
+                assert set(leads) == {"manual", "meta"}
+                assert leads["meta"].merged_into_id == leads["manual"].id
+                assert leads["manual"].merged_into_id is None
+                merges = await db.scalar(select(func.count()).select_from(LeadMerge))
+                assert merges == 1
         finally:
             await setup.engine.dispose()
 

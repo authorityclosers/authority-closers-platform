@@ -4,8 +4,13 @@ import asyncio
 import base64
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from types import SimpleNamespace
 from typing import Any
+from uuid import UUID, uuid4
 
+import pytest
+
+from ac_platform.lead_desk.capture import normalise_phone
 from ac_platform.lead_desk.connectors import meta, meta_backfill
 
 KEY = base64.urlsafe_b64encode(b"k" * 32).decode()
@@ -71,11 +76,42 @@ class Graph:
 
 
 @dataclass
+class Db:
+    """Leads already here, by phone or email, and the link notes written, by command id."""
+
+    leads: dict[str, Any] = field(default_factory=dict)
+    commands: set[UUID] = field(default_factory=set)
+
+    async def scalar(self, statement: Any) -> Any:
+        params = statement.compile().params
+        if "command_id_1" in params:
+            return uuid4() if params["command_id_1"] in self.commands else None
+        asked = next(value for key, value in params.items() if key.startswith(("phone", "email")))
+        return self.leads.get(asked)
+
+
+@dataclass
 class Desk:
     known: set[str] = field(default_factory=set)
     now: datetime = datetime(2027, 1, 15, 10, 0, tzinfo=UTC)
     filed: list[str] = field(default_factory=list)
     test_data: dict[str, bool] = field(default_factory=dict)
+    db: Db = field(default_factory=Db)
+    tenant_id: UUID = field(default_factory=uuid4)
+    notes: list[tuple[Any, dict[str, Any]]] = field(default_factory=list)
+
+    async def settings(self) -> tuple[int, dict[str, Any]]:
+        return 1, {"default_country": "91"}
+
+    async def _live(self, lead: Any) -> Any:
+        return getattr(lead, "kept", None) or lead
+
+    def _event(
+        self, lead: Any, kind: str, data: dict[str, Any], *, actor: Any, command_id: UUID
+    ) -> None:
+        assert kind == "note" and actor is None
+        self.notes.append((lead, data))
+        self.db.commands.add(command_id)
 
     async def ingest(self, record: Any, **kwargs: Any) -> tuple[None, str]:
         ref = kwargs["source_ref"]
@@ -205,3 +241,123 @@ def test_the_pages_forms_are_kept_with_their_names_and_status() -> None:
         {"id": "f1", "name": "Enquiry", "status": "ACTIVE"},
         {"id": "f2", "name": "Old", "status": ""},
     ]
+
+
+def phoned(n: int, sent: str) -> dict[str, Any]:
+    return {
+        "id": f"p-{n}",
+        "created_time": sent,
+        "form_id": "f1",
+        "field_data": [
+            {"name": "full_name", "values": [f"Lead {n}"]},
+            {"name": "phone_number", "values": [f"+91 98765 4321{n}"]},
+        ],
+    }
+
+
+SENT = "2027-01-01T09:00:00+0000"
+
+
+def phone(n: int) -> str:
+    value = normalise_phone(f"+91 987654321{n}")
+    assert value is not None
+    return value
+
+
+def imported(made: datetime, **fields: Any) -> SimpleNamespace:
+    """A lead brought in from a sheet or a file before the Page was connected."""
+    return SimpleNamespace(
+        created_at=made,
+        source="csv",
+        source_ref="h:row",
+        stage="lost",
+        next_action_at=None,
+        repeats=0,
+        revision=3,
+        **fields,
+    )
+
+
+@pytest.mark.parametrize(
+    "made", [datetime(2027, 1, 10, tzinfo=UTC), datetime(2027, 1, 1, 9, tzinfo=UTC)]
+)
+def test_a_form_sent_before_or_as_its_lead_was_made_is_linked_and_the_lead_left_alone(
+    made: datetime,
+) -> None:
+    # Owner's demo prep, 25 Oct 2026: AC's team imported its Page's leads from a file
+    # before connecting the Page; the backfill finds them again and must not make them
+    # repeats (follow-up reset to now, Lost reopened, "asked again").
+    desk, src = Desk(), source()
+    lead = imported(made)
+    desk.db.leads[phone(0)] = lead
+    before = dict(vars(lead))
+    outcome = asyncio.run(meta_backfill.file_lead(desk, src, phoned(0, SENT), page_name="P"))
+    assert outcome == "linked" and desk.filed == [] and src.received == 0
+    assert vars(lead) == before
+    [(noted, data)] = desk.notes
+    assert noted is lead
+    assert (data["source"], data["source_ref"], data["source_label"]) == (
+        "meta",
+        "p-0",
+        "Meta · Test Page",
+    )
+    assert data["submitted_at"] == "2027-01-01T09:00:00+00:00" and data["linked"] is True
+    # Read again (the next backfill, the pull): known, and still one note.
+    again = asyncio.run(meta_backfill.file_lead(desk, src, phoned(0, SENT), page_name="P"))
+    assert again == "known" and len(desk.notes) == 1 and desk.filed == []
+
+
+def test_a_link_to_a_merged_lead_goes_to_the_lead_it_went_into() -> None:
+    desk = Desk()
+    kept = imported(datetime(2027, 1, 5, tzinfo=UTC))
+    desk.db.leads[phone(0)] = imported(datetime(2027, 1, 10, tzinfo=UTC), kept=kept)
+    asyncio.run(meta_backfill.file_lead(desk, source(), phoned(0, SENT), page_name="P"))
+    assert [noted for noted, _ in desk.notes] == [kept]
+
+
+def test_a_form_sent_after_its_lead_was_made_is_still_a_repeat() -> None:
+    desk = Desk()
+    desk.db.leads[phone(1)] = imported(datetime(2026, 12, 1, tzinfo=UTC))
+    outcome = asyncio.run(meta_backfill.file_lead(desk, source(), phoned(1, SENT), page_name="P"))
+    assert outcome == "created" and desk.filed == ["p-1"] and desk.notes == []
+
+
+def test_a_meta_lead_filed_as_its_own_lead_is_left_to_intake() -> None:
+    desk = Desk(known={"p-2"})
+    desk.db.leads[phone(2)] = SimpleNamespace(
+        created_at=datetime(2027, 1, 1, 9, 0, 5, tzinfo=UTC), source="meta", source_ref="p-2"
+    )
+    outcome = asyncio.run(meta_backfill.file_lead(desk, source(), phoned(2, SENT), page_name="P"))
+    assert outcome == "known" and desk.filed == ["p-2"] and desk.notes == []
+
+
+def test_test_leads_and_unknown_send_times_go_through_intake_and_email_matches() -> None:
+    desk = Desk()
+    desk.db.leads[phone(2)] = imported(datetime(2027, 1, 10, tzinfo=UTC))
+    undated = {**phoned(2, ""), "created_time": None}
+    assert asyncio.run(meta_backfill.file_lead(desk, source(), undated, page_name="P")) == "created"
+    made_up = {
+        **phoned(3, SENT),
+        "field_data": [{"name": "full_name", "values": ["<test lead: dummy data for full_name>"]}],
+    }
+    asyncio.run(meta_backfill.file_lead(desk, source(), made_up, page_name="P"))
+    assert desk.filed == ["p-2", "p-3"] and desk.test_data["p-3"] is True
+    # No phone: the email matches, as intake matches.
+    emailed = {**phoned(4, SENT), "field_data": [{"name": "email", "values": ["asha@example.com"]}]}
+    desk.db.leads["asha@example.com"] = imported(datetime(2027, 1, 10, tzinfo=UTC))
+    assert asyncio.run(meta_backfill.file_lead(desk, source(), emailed, page_name="P")) == "linked"
+    assert meta_backfill.submitted_at({"created_time": SENT}) == datetime(2027, 1, 1, 9, tzinfo=UTC)
+    assert meta_backfill.submitted_at({"created_time": "yesterday"}) is None
+
+
+def test_bringing_in_older_leads_counts_what_it_linked() -> None:
+    desk = Desk()
+    desk.db.leads[phone(0)] = imported(datetime(2027, 1, 10, tzinfo=UTC))
+    desk.db.leads[phone(2)] = imported(datetime(2027, 1, 10, tzinfo=UTC))
+    graph = Graph(pages={"f1": [[phoned(0, SENT), phoned(1, SENT)]], "f2": [[phoned(2, SENT)]]})
+    src = source()
+    created = asyncio.run(meta_backfill.step(desk, src, graph, cfg(), now=NOW + 60))
+    state = meta_backfill.state(src.config)
+    assert state is not None
+    assert created == 1 and desk.filed == ["p-1"]
+    assert (state["state"], state["created"], state["linked"], state["seen"]) == ("done", 1, 2, 3)

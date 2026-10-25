@@ -4,6 +4,24 @@ Each fix for the demo: what changed, how it was verified, and what is still flak
 Newest first. Sessions add their own lines and commit them with the fix.
 No client names here.
 
+## Facebook lead sources (Meta-suite session): bug reports #7, #8, #10, #12, #13, #14
+
+- **Meta leads already in the leads are linked, not repeated; new ones go through the duplicate engine (P0)**, this commit.
+  - Found on production (counts only, logged as `fb10*.sql`):
+    - AC's Page was switched on at 18:23Z, 25 Oct.
+    - Its older-leads run read 102 leads and filed 100 as repeats onto the leads imported from a file.
+    - That reset 94 follow-ups to 18:24 and added "Asked again" lines. None reopened.
+    - It said "none added".
+  - What changed:
+    - A Meta lead whose person is already a lead made at or after the form was sent gets one note on that lead (Meta lead id and source). Nothing else changes.
+    - A newer form is still a repeat.
+    - New Meta leads are rescanned at once. A certain pair is merged (undo within 30 days); any other pair goes to the review queue.
+  - Verified by:
+    - `test_meta_backfill.py` and `test_duplicate_intake.py`.
+    - `test_lead_desk_meta_postgresql.py`: 4 imported leads and the Page connected give 0 new, 4 notes, and Lost stays Lost. A newer Meta lead with a known email is merged.
+    - wb-ci targeted run 40224272062.
+  - Open: putting the 100 AC leads back is a data change waiting for the owner's approval. Until v0.93 is live, nobody presses "Bring in older leads" on AC's Page.
+
 ## P0: Admin bug panel (sign-in session)
 
 Production bug panel, exported 25 Oct ~16:00Z through the logged read path (`/home/suyash/costq`,

@@ -33,6 +33,7 @@ from fastapi import FastAPI
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from ac_platform.lead_desk import duplicate_intake
 from ac_platform.lead_desk.connectors import meta, meta_backfill
 from ac_platform.lead_desk.models import LeadSource
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
@@ -42,7 +43,7 @@ log = logging.getLogger(__name__)
 PULL_EVERY = 600  # seconds between pulls of one Page
 OVERLAP = 3600  # re-read the last hour, so a lead Meta stamps late is not missed
 _TICK = 60
-_OUTCOMES = ("created", "repeat", "known", "skipped")
+_OUTCOMES = ("created", "repeat", "linked", "known", "skipped")
 
 
 class _Graph(Protocol):
@@ -62,6 +63,7 @@ class Pulled:
     fetched: int = 0
     created: int = 0
     repeat: int = 0
+    linked: int = 0
     known: int = 0
     skipped: int = 0
 
@@ -121,11 +123,13 @@ async def file(desk: LeadDesk, source: LeadSource, fetched: Fetched, *, now: int
         config = meta_backfill.remember_forms(config, fetched.listed)
     result = Pulled()
     page_name = str(config.get("page_name") or "")
+    made: list[UUID] = []
     for lead in fetched.leads:
         result.fetched += 1
-        outcome = await meta_backfill.file_lead(desk, source, lead, page_name=page_name)
+        outcome = await meta_backfill.file_lead(desk, source, lead, page_name=page_name, made=made)
         key = outcome if outcome in _OUTCOMES else "skipped"
         setattr(result, key, getattr(result, key) + 1)
+    await duplicate_intake.after_intake(desk, made)
     config["last_pulled_at"] = now
     config.pop("last_error", None)
     source.config = config
