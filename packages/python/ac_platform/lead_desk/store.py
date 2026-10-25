@@ -138,6 +138,7 @@ from ac_platform.lead_desk.vocabulary import (
     MERGED_WORDS,
     MESSAGE_TEMPLATES,
     NEEDS_FOLLOW_UP,
+    NOT_A_LEAD,
     OPEN_STAGES,
     OVERDUE_AFTER,
     REASON_LABELS,
@@ -1887,7 +1888,10 @@ class LeadDesk:
                 after,
                 move,
                 source=transitions.STAGES_CHANGED,
-                outcome_reason=lead.outcome_reason,
+                # A Junk lead going to Lost (a list with no Junk): never a real lead.
+                outcome_reason=NOT_A_LEAD
+                if lead.stage == "junk" and target.kind == "lost"
+                else lead.outcome_reason,
             )
             moved += 1
         await self.db.flush()

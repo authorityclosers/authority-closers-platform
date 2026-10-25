@@ -228,7 +228,7 @@ def test_at01_a_new_inquiry_creates_one_record_in_new(
             assert kinds.count("captured") == 1 and kinds.count("repeat") == 2
             here.as_admin()
             row = (await here.detail(lead_id))["lead"]
-            assert (row["stage"], row["step"], row["stage_label"]) == ("new", "new", "New Lead")
+            assert (row["stage"], row["step"], row["stage_label"]) == ("new", "new", "New lead")
             board = (await here.client.get(f"{BASE}/board")).json()
             new = board["groups"][0]["columns"][0]
             assert new["step"] == "new" and [c["lead_id"] for c in new["cards"]] == [lead_id]
@@ -269,7 +269,7 @@ def test_at02_to_at07_one_lead_moves_through_every_stage_on_the_same_record(
             assert needs.status_code == 422 and "follow up" in needs.json()["detail"]
             moved = await here.move(lead_id, "discussion_incomplete", nextActionAt=later(hours=6))
             assert moved.status_code == 200, moved.text
-            assert moved.json()["stepLabel"] == "Discussion Incomplete"
+            assert moved.json()["stepLabel"] == "Discussion incomplete"
 
             # 5. A meeting is booked: Meeting / Demo Scheduled, with its date, type, link.
             assert (await here.move(lead_id, "meeting_scheduled")).status_code == 422
@@ -339,12 +339,12 @@ def test_at02_to_at07_one_lead_moves_through_every_stage_on_the_same_record(
             events = (await here.detail(lead_id))["events"]
             moves = [e for e in reversed(events) if e["action"] in ("move", "close", "reopen")]
             assert [(e["from_label"], e["stage_label"]) for e in moves] == [
-                ("New Lead", "Not Connected"),
-                ("Not Connected", "Interested (In Follow-Up)"),
-                ("Interested (In Follow-Up)", "Discussion Incomplete"),
-                ("Discussion Incomplete", "Meeting / Demo Scheduled"),
-                ("Meeting / Demo Scheduled", "Demo / Zoom Meeting Completed"),
-                ("Demo / Zoom Meeting Completed", "Closed / Won"),
+                ("New lead", "Not connected"),
+                ("Not connected", "Interested"),
+                ("Interested", "Discussion incomplete"),
+                ("Discussion incomplete", "Meeting/Demo scheduled"),
+                ("Meeting/Demo scheduled", "Meeting/Demo completed"),
+                ("Meeting/Demo completed", "Won"),
             ]
             assert all(e["actor_name"] and e["move_source"] == "seller" for e in moves)
 
@@ -411,34 +411,37 @@ def test_at08_a_lead_who_declines_is_lost_with_a_reason(
     run(exercise())
 
 
-# ----- 9. Fake → Junk, apart from Lost ------------------------------------------------------
+# ----- 9. Fake → Lost, not a real lead, apart from a lost deal ------------------------------
 
 
-def test_at09_a_fake_lead_is_junk_and_kept_apart_from_lost(
+def test_at09_a_fake_lead_is_lost_as_not_a_real_lead_apart_from_a_lost_deal(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
+    # The sales team's eight stages (owner, 25 Oct 2026) keep Junk in Lost: a fake lead
+    # is Lost, "Junk / not a real lead", and never counts as a lost deal.
     async def exercise() -> None:
         async with world(postgres_harness, tmp_path) as here:
             junk = await here.add("Fictional Spam", "98765 33333")
             lost = await here.add("Fictional Kiran", "98765 44444")
-            assert (await here.move(junk, "junk")).status_code == 422
-            marked = await here.move(junk, "junk", reason="fake")
+            assert (await here.move(junk, "junk", reason="fake")).status_code == 422
+            assert (await here.move(junk, "lost")).status_code == 422
+            marked = await here.move(junk, "lost", reason="not_a_lead")
             assert marked.status_code == 200, marked.text
             closed = await here.move(lost, "lost", reason="not_interested")
             assert closed.status_code == 200, closed.text
             row = (await here.detail(junk))["lead"]
             assert (row["stage"], row["group"], row["outcome_reason_label"]) == (
-                "junk",
-                "junk",
-                "Fake enquiry",
+                "lost",
+                "lost",
+                "Junk / not a real lead",
             )
-            # A seller can't turn a Lost lead into Junk; a manager can.
-            assert (await here.move(lost, "junk", reason="fake")).status_code == 403
-            # The board keeps them in their own groups: each lead once.
+            # The board has no Junk group: both sit in Lost, each lead once.
+            here.as_admin()
             board = (await here.client.get(f"{BASE}/board")).json()
             groups = {group["group"]: group for group in board["groups"]}
-            assert [c["lead_id"] for c in groups["junk"]["columns"][0]["cards"]] == [junk]
-            assert [c["lead_id"] for c in groups["lost"]["columns"][0]["cards"]] == [lost]
+            assert "junk" not in groups
+            cards = [c["lead_id"] for c in groups["lost"]["columns"][0]["cards"]]
+            assert sorted(cards) == sorted([junk, lost])
             assert groups["active"]["count"] == 0
 
     run(exercise())
@@ -489,7 +492,7 @@ def test_at11_at12_moves_never_duplicate_and_each_lead_is_in_one_column(
             assert (await here.move(ids[1], "interested", nextActionAt=later(days=1))).is_success
             assert (await here.move(ids[2], "not_connected", ncReason="busy")).is_success
             assert (await here.move(ids[3], "lost", reason="chose_other")).is_success
-            assert (await here.move(ids[4], "junk", reason="invalid_number")).is_success
+            assert (await here.move(ids[4], "lost", reason="not_a_lead")).is_success
             # The same number again attaches to its lead, never a second record.
             again = await here.client.post(
                 f"{BASE}/leads",
@@ -513,7 +516,7 @@ def test_at11_at12_moves_never_duplicate_and_each_lead_is_in_one_column(
             assert counts == board["total"] == 5
             # A move the stage list doesn't have is refused with where it can go.
             refused = await here.move(ids[1], "won")
-            assert refused.status_code == 409 and "Meeting / Demo Scheduled" in refused.text
+            assert refused.status_code == 409 and "Meeting/Demo scheduled" in refused.text
 
     run(exercise())
 

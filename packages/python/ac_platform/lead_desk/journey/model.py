@@ -45,11 +45,13 @@ from ac_platform.lead_desk.journey.templates import (
     NEEDS,
     Kind,
     Milestone,
+    Template,
     guess_milestone,
     slug,
     template,
 )
 from ac_platform.lead_desk.models import Lead, LeadJourneyVersion
+from ac_platform.lead_desk.vocabulary import NOT_A_LEAD
 
 MAIN_PIPELINE: Final[str] = "main"
 MAX_LIVE: Final[int] = 16
@@ -138,6 +140,9 @@ class Journey:
         live = next((s for s in self.live if s.kind == kind), None)
         found = live or next((s for s in self.stages if s.kind == kind), None)
         if found is None and kind == "junk":
+            # A list that keeps Junk in Lost shows a Junk lead in Lost.
+            if self.junk_in_lost:
+                return next(s for s in self.live if s.kind == "lost")
             return JUNK
         return found
 
@@ -146,7 +151,7 @@ class Journey:
         Junk stage of its own."""
         found = self.by_key.get(step)
         if step == JUNK.key and not self.has_junk and (found is None or found.archived):
-            return JUNK
+            return None if self.junk_in_lost else JUNK
         return found
 
     @property
@@ -155,19 +160,31 @@ class Journey:
         return any(stage.kind == "junk" and not stage.archived for stage in self.stages)
 
     @property
+    def junk_in_lost(self) -> bool:
+        """Whether a lead that was never real is Lost here, "Junk / not a real lead": a list
+        with no Junk stage whose Lost takes that reason (the sales team's eight stages, owner,
+        25 Oct 2026). It has no Junk column, not even the desk's own."""
+        return not self.has_junk and any(
+            stage.kind == "lost" and any(key == NOT_A_LEAD for key, _ in stage.reasons or ())
+            for stage in self.live
+        )
+
+    @property
     def ruled(self) -> bool:
         """Whether any stage carries its own moves (the stage list's graph is in force)."""
         return any(stage.moves is not None for stage in self.live)
 
     def board(self) -> tuple[Stage, ...]:
         """The live stages as the pipeline board shows them: the open ones in the list's
-        order, then Won, Lost and Junk (the desk's own Junk when the list has none)."""
+        order, then Won, Lost and Junk (the desk's own Junk when the list has none, unless
+        it keeps Junk in Lost)."""
         live = self.live
         groups = (
             [s for s in live if s.kind not in CLOSED_KINDS],
             [s for s in live if s.kind == "won"],
             [s for s in live if s.kind == "lost"],
-            [s for s in live if s.kind == "junk"] or ([] if self.has_junk else [JUNK]),
+            [s for s in live if s.kind == "junk"]
+            or ([] if self.has_junk or self.junk_in_lost else [JUNK]),
         )
         return tuple(stage for group in groups for stage in group)
 
@@ -472,6 +489,24 @@ def check(stages: tuple[Stage, ...]) -> tuple[Stage, ...]:
     return stages
 
 
+def journey_of(profile: Template, version: int = 1) -> Journey:
+    """A profile's stages as a saved list, nothing archived (the legacy nine in tests)."""
+    stages = tuple(
+        Stage(
+            item.key,
+            item.label,
+            item.kind,
+            item.milestone,
+            needs=item.needs,
+            reasons=item.reasons,
+            rot_hours=item.rot_hours,
+            moves=item.moves,
+        )
+        for item in profile.stages
+    )
+    return Journey(version, profile.id, check(stages))
+
+
 def from_template(
     template_id: str, before: Journey, counts: Mapping[str, int]
 ) -> tuple[Stage, ...]:
@@ -519,11 +554,15 @@ def place_choices(before: Journey, after: Journey) -> dict[str, tuple[str, ...]]
     """Where a manager may put the leads of each of today's columns when a new list
     replaces it: from an open stage to any open stage; Won and Lost only to a stage of
     their own kind (closing needs a person's reason, reopening is a person's call). Junk
-    stays Junk."""
+    stays Junk; where the new list has no Junk, it goes to Lost ("Junk / not a real lead",
+    the sales team's eight stages, owner, 25 Oct 2026)."""
     board = after.board()
     choices: dict[str, tuple[str, ...]] = {}
+    no_junk = not any(s.kind == "junk" for s in after.live)
     for stage in before.board():
         if stage.kind == "junk":
+            if no_junk:
+                choices[stage.key] = tuple(s.key for s in board if s.kind == "lost")
             continue
         if stage.kind in CLOSED_KINDS:
             choices[stage.key] = tuple(s.key for s in board if s.kind == stage.kind)
@@ -625,3 +664,28 @@ def change_note(before: Journey, after: tuple[Stage, ...]) -> str:
 
 def funnel_rank(stage: Stage) -> int:
     return FUNNEL_ORDER.get(stage.milestone, 99)
+
+
+# A new organisation's first stage list: the sales team's eight stages (owner, 25 Oct 2026:
+# "make it the default for new organisations").
+NEW_ORGANISATION_TEMPLATE: Final[str] = "inside_sales_demos"
+
+
+async def start_organisation(db: AsyncSession, tenant_id: UUID, by: UUID, now: datetime) -> bool:
+    """Give a new organisation the sales team's stages, once: one that has saved a list of
+    its own keeps it. True when installed."""
+    before = await read(db, tenant_id, MAIN_PIPELINE)
+    if before.version > 0:
+        return False
+    await save(
+        db,
+        tenant_id,
+        stages=from_template(NEW_ORGANISATION_TEMPLATE, before, {}),
+        industry=NEW_ORGANISATION_TEMPLATE,
+        expected_version=before.version,
+        note="The sales team's stages, for a new organisation",
+        by=by,
+        now=now,
+        pipeline=MAIN_PIPELINE,
+    )
+    return True

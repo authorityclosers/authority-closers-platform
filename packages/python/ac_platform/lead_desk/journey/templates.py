@@ -192,91 +192,76 @@ TEMPLATES: Final[tuple[Template, ...]] = (
             _LOST,
         ),
     ),
-    # The sales team's nine stages (Lead OS, 24 Oct 2026): a lead moves straight to the
-    # stage that says where it stands, never through every stage, and Junk (fake or
-    # unusable) stays apart from Lost (a real lead who said no).
+    # The sales team's eight stages (owner, 25 Oct 2026, the team's latest list; Lead OS,
+    # 24 Oct 2026): a lead moves straight to the stage that says where it stands, never
+    # through every stage. Junk is no stage of its own: a lead that was never real is Lost,
+    # "Junk / not a real lead".
     Template(
         "inside_sales_demos",
         "Inside sales with demos",
-        "Call, book a demo, close. Junk kept apart.",
+        "Call, book a demo, close.",
         "phone",
         (
-            _r("new", "New Lead", "lead", (*_WORKING, "lost", "junk"), rot_hours=1),
+            _r("new", "New lead", "lead", (*_WORKING, "lost"), rot_hours=1),
             _r(
                 "not_connected",
-                "Not Connected",
+                "Not connected",
                 "unreachable",
-                ("interested", "discussion_incomplete", "meeting_scheduled", "lost", "junk"),
+                ("discussion_incomplete", "interested", "meeting_scheduled", "lost"),
                 ("nc_reason",),
                 rot_hours=48,
             ),
             _r(
-                "interested",
-                "Interested (In Follow-Up)",
-                "qualified",
-                ("discussion_incomplete", "meeting_scheduled", "lost", "junk"),
-                ("next_action",),
-                rot_hours=72,
-            ),
-            _r(
                 "discussion_incomplete",
-                "Discussion Incomplete",
+                "Discussion incomplete",
                 "contacted",
-                ("interested", "meeting_scheduled", "lost", "junk"),
+                ("interested", "meeting_scheduled", "lost"),
                 ("next_action",),
                 rot_hours=24,
             ),
             _r(
+                "interested",
+                "Interested",
+                "qualified",
+                ("discussion_incomplete", "meeting_scheduled", "lost"),
+                ("next_action",),
+                rot_hours=72,
+            ),
+            _r(
                 "meeting_scheduled",
-                "Meeting / Demo Scheduled",
+                "Meeting/Demo scheduled",
                 "appointment_booked",
                 (
                     "demo_completed",
                     "not_connected",
-                    "interested",
                     "discussion_incomplete",
+                    "interested",
                     "lost",
-                    "junk",
                 ),
                 ("meeting",),
             ),
             _r(
                 "demo_completed",
-                "Demo / Zoom Meeting Completed",
+                "Meeting/Demo completed",
                 "appointment_done",
-                ("won", "lost", "junk"),
+                ("won", "lost"),
                 ("next_action",),
                 rot_hours=120,
             ),
-            # A closed stage's moves are where it can be reopened to, and Junk for a
-            # manager who learns it was never a real lead.
+            # A closed stage's moves are where it can be reopened to.
             _r(
                 "won",
-                "Closed / Won",
+                "Won",
                 "won",
-                (
-                    "interested",
-                    "discussion_incomplete",
-                    "meeting_scheduled",
-                    "demo_completed",
-                    "junk",
-                ),
+                ("discussion_incomplete", "interested", "meeting_scheduled", "demo_completed"),
             ),
             _r(
                 "lost",
-                "Closed / Lost",
+                "Lost",
                 "lost",
-                (*_WORKING, "demo_completed", "junk"),
+                (*_WORKING, "demo_completed"),
                 ("reason",),
-                reasons=vocabulary.LOST_REASONS,
-            ),
-            _r(
-                "junk",
-                "Junk Lead",
-                "disqualified",
-                ("new", "not_connected", "interested", "discussion_incomplete"),
-                ("reason",),
-                reasons=vocabulary.JUNK_REASONS,
+                reasons=vocabulary.SALES_LOST_REASONS,
             ),
         ),
     ),
@@ -455,6 +440,87 @@ TEMPLATES: Final[tuple[Template, ...]] = (
 )
 TEMPLATE_IDS: Final[frozenset[str]] = frozenset(template.id for template in TEMPLATES)
 DEFAULT_TEMPLATE: Final[str] = "simple"
+
+# The sales team's nine stages as they were installed until 25 Oct 2026, with Junk a stage of
+# its own. Not offered any more (the eight replace them); kept so the stage engine's rules for
+# a list with Junk stay tested, and lists saved with them read back the same.
+LEGACY_NINE: Final[Template] = Template(
+    "inside_sales_demos",
+    "Inside sales with demos (nine stages)",
+    "Call, book a demo, close. Junk kept apart.",
+    "phone",
+    (
+        _r("new", "New Lead", "lead", (*_WORKING, "lost", "junk"), rot_hours=1),
+        _r(
+            "not_connected",
+            "Not Connected",
+            "unreachable",
+            ("interested", "discussion_incomplete", "meeting_scheduled", "lost", "junk"),
+            ("nc_reason",),
+            rot_hours=48,
+        ),
+        _r(
+            "interested",
+            "Interested (In Follow-Up)",
+            "qualified",
+            ("discussion_incomplete", "meeting_scheduled", "lost", "junk"),
+            ("next_action",),
+            rot_hours=72,
+        ),
+        _r(
+            "discussion_incomplete",
+            "Discussion Incomplete",
+            "contacted",
+            ("interested", "meeting_scheduled", "lost", "junk"),
+            ("next_action",),
+            rot_hours=24,
+        ),
+        _r(
+            "meeting_scheduled",
+            "Meeting / Demo Scheduled",
+            "appointment_booked",
+            (
+                "demo_completed",
+                "not_connected",
+                "interested",
+                "discussion_incomplete",
+                "lost",
+                "junk",
+            ),
+            ("meeting",),
+        ),
+        _r(
+            "demo_completed",
+            "Demo / Zoom Meeting Completed",
+            "appointment_done",
+            ("won", "lost", "junk"),
+            ("next_action",),
+            rot_hours=120,
+        ),
+        _r(
+            "won",
+            "Closed / Won",
+            "won",
+            ("interested", "discussion_incomplete", "meeting_scheduled", "demo_completed", "junk"),
+        ),
+        _r(
+            "lost",
+            "Closed / Lost",
+            "lost",
+            (*_WORKING, "demo_completed", "junk"),
+            ("reason",),
+            reasons=vocabulary.LOST_REASONS,
+        ),
+        _r(
+            "junk",
+            "Junk Lead",
+            "disqualified",
+            ("new", "not_connected", "interested", "discussion_incomplete"),
+            ("reason",),
+            reasons=vocabulary.JUNK_REASONS,
+        ),
+    ),
+)
 
 
 def template(template_id: str) -> Template | None:

@@ -17,6 +17,7 @@ from ac_platform.http.organisation_settings import install_organisation_settings
 from ac_platform.identity.models import Person
 from ac_platform.identity.services import TenantScopeDeniedError, normalize_email
 from ac_platform.kernel.errors import AuthorizationDenied, DomainError, ResourceNotFound
+from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.organisations.activity import organisation_activity
 from ac_platform.organisations.invitations import invitation_policies
 from ac_platform.organisations.person_activity import person_activity
@@ -352,6 +353,10 @@ def install_organisation_http(
             key,
             "self-serve-organisation:AUT-1694",
             actor_person_id=actor.person_id,
+        )
+        # Its leads start on the sales team's stages (owner, 25 Oct 2026); a retry keeps them.
+        await journeys.start_organisation(
+            auth.database, result.tenant_id, actor.person_id, datetime.now(UTC)
         )
         response.headers["cache-control"] = "private, no-store"
         response.headers["vary"] = "Cookie"

@@ -165,6 +165,14 @@ LOST_REASONS: Final[tuple[tuple[str, str], ...]] = (
     ("not_a_fit", "Not a fit"),
     (OTHER_REASON, "Other"),
 )
+# A lead that was never real, where the stage list has no Junk of its own (the sales team's
+# eight stages, owner, 25 Oct 2026): Lost with this reason.
+NOT_A_LEAD: Final[str] = "not_a_lead"
+SALES_LOST_REASONS: Final[tuple[tuple[str, str], ...]] = (
+    *LOST_REASONS[:-1],
+    (NOT_A_LEAD, "Junk / not a real lead"),
+    LOST_REASONS[-1],
+)
 JUNK_REASONS: Final[tuple[tuple[str, str], ...]] = (
     ("fake", "Fake enquiry"),
     ("invalid_number", "Wrong or invalid number"),

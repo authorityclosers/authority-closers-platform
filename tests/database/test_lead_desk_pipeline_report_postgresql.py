@@ -1,6 +1,7 @@
 """The pipeline's numbers through the HTTP API on PostgreSQL (Lead OS, spec section 9):
-each lead counted once, Junk out of every conversion, Lost reasons in the business's
-words, a seller sees only their own leads' numbers."""
+each lead counted once, Junk out of every conversion (on the sales team's eight stages, a
+fake lead is Lost "Junk / not a real lead" and counts as Junk), Lost reasons in the
+business's words, a seller sees only their own leads' numbers."""
 
 from __future__ import annotations
 
@@ -48,9 +49,10 @@ def test_each_lead_counts_once_and_junk_stays_out_of_conversions(
                 meeting={"startsAt": later(days=2), "mode": "zoom"},
             )
             assert booked.status_code == 200, booked.text
-            # Interested, then found to be junk: out of every conversion.
+            # Interested, then found to be junk (Lost, not a real lead): out of every
+            # conversion, and never a lost deal.
             assert (await here.move(ids[2], "interested", nextActionAt=later(days=1))).is_success
-            assert (await here.move(ids[2], "junk", reason="fake")).is_success
+            assert (await here.move(ids[2], "lost", reason="not_a_lead")).is_success
             assert (await here.move(ids[3], "lost", reason="price")).is_success
             assert (await here.move(ids[4], "not_connected", ncReason="did_not_pick")).is_success
 
@@ -91,12 +93,12 @@ def test_a_template_preview_shows_where_todays_leads_land(
             assert (
                 await here.move(ids[0], "discussion_incomplete", nextActionAt=later(hours=4))
             ).is_success
-            assert (await here.move(ids[1], "junk", reason="spam_test")).is_success
+            assert (await here.move(ids[1], "lost", reason="not_a_lead")).is_success
             here.as_admin()
             journey = (await here.client.get(f"{BASE}/journey")).json()
-            # The nine stages carry their moves and reasons.
+            # The eight stages carry their moves and reasons.
             by_key = {stage["key"]: stage for stage in journey["stages"]}
-            assert by_key["new"]["moves"][-1] == "junk"
+            assert by_key["new"]["moves"][-1] == "lost"
             assert by_key["lost"]["reasons"][0]["key"] == "not_interested"
             assert by_key["interested"]["rotHours"] == 72
             preview = await here.client.post(
@@ -110,9 +112,9 @@ def test_a_template_preview_shows_where_todays_leads_land(
                 for item in preview.json()["landings"]
             }
             assert landings == {
-                "New Lead": ("new", 1),
-                "Discussion Incomplete": ("follow_up", 1),
-                "Junk Lead": ("junk", 1),
+                "New lead": ("new", 1),
+                "Discussion incomplete": ("follow_up", 1),
+                "Lost": ("lost", 1),
             }
             # Nothing was saved.
             again = (await here.client.get(f"{BASE}/journey")).json()
@@ -124,7 +126,7 @@ def test_a_template_preview_shows_where_todays_leads_land(
 def test_the_template_map_puts_each_old_stage_where_the_manager_picked(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
-    """Moving a business onto the nine stages: the manager picks, per old stage, where its
+    """Moving a business onto the eight stages: the manager picks, per old stage, where its
     leads go. Each lead moves once, on the same record, with one history line; ad
     platforms and the numbers never count the rename as progress."""
 
@@ -197,7 +199,7 @@ def test_the_template_map_puts_each_old_stage_where_the_manager_picked(
                 assert (last["source"], last["from_label"], last["to_label"]) == (
                     "template",
                     "Follow-up",
-                    "Interested (In Follow-Up)",
+                    "Interested",
                 )
                 async with here.setup.sessions() as db:
                     now = await journeys.read(db, here.tenant_id, journeys.MAIN_PIPELINE)
