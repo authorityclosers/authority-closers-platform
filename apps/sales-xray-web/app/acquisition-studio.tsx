@@ -128,9 +128,11 @@ import { autoCallTitle, fallbackCallTitle } from "./call-auto-title";
 import {
   forgetAnalyseClick,
   pendingAnalyseClick,
+  readyToResume,
   rememberAnalyseClick,
 } from "./analyse-resume";
 import { openInCallWorkspace } from "./call-workspace";
+import { agreedTerms, forgetTerms, rememberTerms } from "./consent-memory";
 import { useTheme } from "./lightbox/theme-provider";
 import { NewAnalysisFooter, NewAnalysisHero } from "./new-analysis-hero";
 import { CallAudioDock } from "./call-audio-dock";
@@ -382,6 +384,16 @@ export function AcquisitionStudio({
       setResumeArmed(true);
     });
   }, [resumeIntentId, resumePolicySha]);
+  // A seller who agreed to these exact terms in this workspace finds the box
+  // ticked (owner, 26 Oct 2026); a newer policy asks again.
+  useEffect(() => {
+    const agreed = agreedTerms(accessTenantId);
+    if (!agreed || agreed !== resumePolicySha) return;
+    queueMicrotask(() => {
+      setConsent(true);
+      setConsentedPolicySha(agreed);
+    });
+  }, [accessTenantId, resumePolicySha]);
   const [token, setToken] = useState("");
   const [checkKey, setCheckKey] = useState(0);
   const [submission, setSubmission] = useState<Submission | null>(null);
@@ -1821,13 +1833,32 @@ export function AcquisitionStudio({
     uploadRef.current = upload;
   });
   useEffect(() => {
-    if (!resumeArmed || !consentCurrent || !file || busy || submission) return;
-    if (!session && !token) return;
+    if (
+      !readyToResume({
+        armed: resumeArmed,
+        consent: consentCurrent,
+        hasFile: Boolean(file),
+        busy: Boolean(busy),
+        submitted: Boolean(submission),
+        signedIn: Boolean(session || token),
+        accessStatus,
+      })
+    )
+      return;
     if (resumeFired.current) return;
     resumeFired.current = true;
     queueMicrotask(() => setResumeArmed(false));
     void uploadRef.current(true);
-  }, [resumeArmed, consentCurrent, file, busy, submission, session, token]);
+  }, [
+    resumeArmed,
+    consentCurrent,
+    file,
+    busy,
+    submission,
+    session,
+    token,
+    accessStatus,
+  ]);
 
   function settleStartNotice() {
     if (
@@ -3348,6 +3379,14 @@ export function AcquisitionStudio({
                             setConsentedPolicySha(
                               accepted ? (policy?.policy_sha256 ?? null) : null,
                             );
+                            // Remembered for this workspace and this exact
+                            // policy (owner, 26 Oct 2026: one tap next time).
+                            if (accepted && policy?.policy_sha256)
+                              rememberTerms(
+                                accessTenantId,
+                                policy.policy_sha256,
+                              );
+                            else forgetTerms(accessTenantId);
                           }}
                         />
                         <span>
