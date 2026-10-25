@@ -190,6 +190,8 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "lead_desk_duplicate_decisions",
         "lead_desk_merges",
         "integration_writes",
+        "person_photos",
+        "person_profile_details",
         "ai_spend_settings",
         "analysis_pipeline_settings",
         "one_pass_runs",

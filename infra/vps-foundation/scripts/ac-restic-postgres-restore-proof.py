@@ -712,7 +712,15 @@ DUPLICATES_PARITY_TABLES = REP_LIMIT_PARITY_TABLES + (
     "lead_desk_duplicate_decisions",
     "lead_desk_merges",
 )
+# 0135 adds each member's details (user id, title, team) and own photo: two tables.
+PROFILE_PARITY_MIGRATION_HEAD = "20261025_0135"
+PROFILE_PARITY_CONTRACT = "ac-postgres-parity-v102"
+PROFILE_PARITY_TABLES = DUPLICATES_PARITY_TABLES + ("person_photos", "person_profile_details")
 VERSIONED_PARITY_CONTRACTS = {
+    PROFILE_PARITY_MIGRATION_HEAD: (
+        PROFILE_PARITY_CONTRACT,
+        PROFILE_PARITY_TABLES,
+    ),
     DUPLICATES_PARITY_MIGRATION_HEAD: (
         DUPLICATES_PARITY_CONTRACT,
         DUPLICATES_PARITY_TABLES,

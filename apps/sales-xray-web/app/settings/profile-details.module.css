@@ -1,0 +1,60 @@
+/* Settings → Profile: the photo, user id, title and team (25 Oct 2026). */
+
+.photoRow {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 4px 0 12px;
+}
+
+.photoText {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.photoText strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.photoText > span:not(.photoActions) {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  overflow-wrap: anywhere;
+}
+
+.photoActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+/* Opened by the Change photo button; kept out of sight and out of the tab order. */
+.picker {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.progress {
+  display: grid;
+  gap: 6px;
+  padding: 0 0 12px;
+}
+
+.progress small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}

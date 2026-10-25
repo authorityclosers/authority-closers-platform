@@ -39,6 +39,7 @@ vi.mock("../organisation/organisation-view", () => ({
   },
 }));
 vi.mock("../leads/alerts-card", () => ({ AlertsCard: () => null }));
+vi.mock("./profile-details", () => ({ ProfileDetailsPanel: () => null }));
 vi.mock("./developers", () => ({
   DevelopersSection: () => <p data-testid="developers">developers</p>,
 }));

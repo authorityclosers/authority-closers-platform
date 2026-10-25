@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 import ac_platform.http.conversation as conversation_http
+import ac_platform.identity.person_photos as person_photos
 import ac_platform.identity.sales_xray_profile as profile_service
 from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction
@@ -34,7 +35,11 @@ from ac_platform.identity.sales_xray_profile import (
     require_sales_xray_profile_complete,
     update_sales_xray_profile,
 )
-from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
+from ac_platform.identity.sales_xray_profile_models import (
+    PersonPhoto,
+    PersonProfileDetails,
+    SalesXrayProfile,
+)
 from ac_platform.kernel.authz import ActorContext
 
 NOW = datetime(2026, 9, 23, 12, 0, tzinfo=UTC)
@@ -87,6 +92,8 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
     Person.__table__.create(engine)
     SalesXrayProfile.__table__.create(engine)
     PersonGoogleProfile.__table__.create(engine)
+    PersonPhoto.__table__.create(engine)
+    PersonProfileDetails.__table__.create(engine)
     # The profile-only fixture has no conversation schema. The account-deletion
     # hook still executes its label, speaker-history and Coaching-note purges in
     # this transaction.
@@ -130,6 +137,7 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
     session.commit()
     _AuditRecorder.events = []
     monkeypatch.setattr(profile_service, "AuditRepository", _AuditRecorder)
+    monkeypatch.setattr(person_photos, "AuditRepository", _AuditRecorder)
     try:
         yield _AsyncSessionAdapter(session), session
     finally:
@@ -137,6 +145,8 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
         coaching_context.drop(engine)
         speaker_map_revisions.drop(engine)
         label_revisions.drop(engine)
+        PersonProfileDetails.__table__.drop(engine)
+        PersonPhoto.__table__.drop(engine)
         PersonGoogleProfile.__table__.drop(engine)
         SalesXrayProfile.__table__.drop(engine)
         Person.__table__.drop(engine)
@@ -425,6 +435,18 @@ async def test_profile_http_surface_returns_only_204_when_current_account_is_rea
             "locale": None,
             "company_domain": None,
             "photo_url": None,
+            # The member profile (migration 0135): nothing chosen yet.
+            "handle": None,
+            "title": None,
+            "team": None,
+            "details_revision": 0,
+            "avatar_url": None,
+            "own_photo": False,
+            "completion": {
+                "done": 2,
+                "total": 6,
+                "missing": ["photo", "handle", "title", "team"],
+            },
         }
         assert read_only_calls == 3
         assert mutating_calls == 0
