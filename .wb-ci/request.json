@@ -1,0 +1,23 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "20550a81416d3c5ab9fef224e53ff05cc5a63a26",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "db/migrations/versions/20261025_0132_lead_desk_task_assistant.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/database/test_ai_writes_migration_postgresql.py",
+    "tests/database/test_model_registry.py",
+    "tests/infra/test_ai_writes_backup_parity.py",
+    "tests/infra/test_restore_drill.py",
+    "tests/infra/test_postgres_backup.py",
+    "tests/infra/test_postgres_restore_proof.py"
+  ],
+  "include_paths": [],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}
