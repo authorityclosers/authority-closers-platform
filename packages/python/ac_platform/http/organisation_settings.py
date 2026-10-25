@@ -23,6 +23,7 @@ from ac_platform.organisations.settings import (
     settings_result,
 )
 from ac_platform.tenancy.models import Organisation, Tenant
+from ac_platform.tenancy.roles import can
 
 
 class OrganisationSettingsResponse(OrganisationDetails):
@@ -70,7 +71,7 @@ def install_organisation_settings_routes(
         tenant, organisation = await rows(auth)
         if organisation is None:
             raise ResourceNotFound("No organisation selected.")
-        if auth.resolved.membership_role not in {"owner", "admin"}:
+        if not can(auth.resolved.membership_role, "org.manage"):
             raise AuthorizationDenied("Only owners and admins can read organisation settings.")
         return OrganisationSettingsResponse.model_validate(settings_result(tenant, organisation))
 

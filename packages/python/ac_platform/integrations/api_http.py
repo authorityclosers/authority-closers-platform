@@ -53,6 +53,7 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.lead_desk.contracts import TaskKind
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
+from ac_platform.tenancy.roles import ORG_ROLES, can
 
 PRIVATE = {"Cache-Control": "no-store"}
 PAGE = 50
@@ -125,7 +126,7 @@ class Caller:
 
     @property
     def sees_team(self) -> bool:
-        return self.reach == "organisation" or self.role in {"owner", "admin"}
+        return self.reach == "organisation" or can(self.role, "team.view")
 
 
 def _authenticate(
@@ -465,9 +466,7 @@ def make_opener(ctx: RouteContext) -> Any:
             raise ApiError(
                 403, "access_ended", "This person no longer has access to that workspace."
             )
-        return Caller(
-            key=key, reach="person", role=role if role in {"owner", "admin"} else "member"
-        )
+        return Caller(key=key, reach="person", role=role if role in ORG_ROLES else "member")
 
     @asynccontextmanager
     async def open_reader(request: Request) -> AsyncIterator[Reader]:

@@ -19,6 +19,7 @@ from ac_platform.conversation_intelligence.minute_account_admin import (
     require_eligible_learner,
 )
 from ac_platform.tenancy.models import Organisation
+from ac_platform.tenancy.roles import roles_with
 
 
 @dataclass(frozen=True)
@@ -78,7 +79,7 @@ class CreditReads:
                     tenant_id=tenant_id,
                     person_id=caller.person_id,
                     operations_tenant_id=self.operations_tenant_id,
-                    roles=frozenset({"owner", "admin"}),
+                    roles=frozenset(roles_with("billing.view")),
                 )
         except EligibleLearnerUnavailable as error:
             raise BillingForbidden("This caller cannot read billing credits.") from error

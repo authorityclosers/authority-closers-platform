@@ -59,6 +59,7 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import DomainError
 from ac_platform.organisations.workspace_kinds import classify_workspaces, ordered
 from ac_platform.tenancy.models import Membership, Organisation
+from ac_platform.tenancy.roles import can
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -193,7 +194,7 @@ async def organisation_reader(database: AsyncSession, actor: ActorContext, opera
         member is not None
         and member.status == "active"
         and member.ended_at is None
-        and member.role in {"owner", "admin"}
+        and can(member.role, "team.view")
     )
 
 

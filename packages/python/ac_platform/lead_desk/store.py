@@ -149,13 +149,14 @@ from ac_platform.lead_desk.vocabulary import (
     stage_after_not_connected,
 )
 from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.roles import roles_with
 
-MANAGERS = frozenset({"owner", "admin"})
+MANAGERS = frozenset(roles_with("leads.manage"))
 # A phone alert names a task due within this of now (task_push reminds up to two hours
 # before an in-person meeting).
 TASK_ALERT_WINDOW = timedelta(hours=2)
 WhyKind = Literal["due", "new", "retry", "later", "open", "closed", "waiting"]
-SELLER_ROLES = ("owner", "admin", "member")
+SELLER_ROLES = roles_with("leads.work")
 QUEUE_LIMIT = 30
 UPCOMING_LIMIT = 20
 PAGE_SIZE = 50

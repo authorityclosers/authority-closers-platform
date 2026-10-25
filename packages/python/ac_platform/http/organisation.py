@@ -30,6 +30,7 @@ from ac_platform.tenancy.models import (
     OrganisationInvite,
     Tenant,
 )
+from ac_platform.tenancy.roles import ORG_ROLES
 
 
 class OrganisationResponse(BaseModel):
@@ -248,7 +249,7 @@ def install_organisation_http(
         # Canonical authentication holds the active tenant and membership fences.
         if (
             tenant_id in {None, settings.public_learner_tenant_id, settings.operations_tenant_id}
-            or auth.resolved.membership_role not in {"owner", "admin", "member"}
+            or auth.resolved.membership_role not in ORG_ROLES
             or await auth.database.get(Organisation, tenant_id) is None
         ):
             raise no_organisation(request)

@@ -44,6 +44,7 @@ from ac_platform.tenancy.models import (
     Tenant,
     TenantStatus,
 )
+from ac_platform.tenancy.roles import ASSIGNABLE_ROLES, ORG_ROLES, can
 
 _FREE_EMAIL_DOMAINS = frozenset(
     {
@@ -204,7 +205,7 @@ class OrganisationService:
                 tenant.status != TenantStatus.ACTIVE.value
                 or owner.status != MembershipStatus.ACTIVE.value
                 or owner.ended_at is not None
-                or owner.role not in {"owner", "admin", "member"}
+                or owner.role not in ORG_ROLES
             ):
                 raise ResourceConflict(
                     "Creation is recorded, but your organisation membership is no longer active."
@@ -589,9 +590,7 @@ class OrganisationService:
         return {
             row.person_id: row
             for row in rows
-            if row.status == "active"
-            and row.ended_at is None
-            and row.role in {"owner", "admin", "member"}
+            if row.status == "active" and row.ended_at is None and row.role in ORG_ROLES
         }
 
     async def change_member_role(
@@ -668,7 +667,7 @@ class OrganisationService:
         elif person_id == actor_person_id:
             if acting == "owner":
                 raise ResourceConflict("Transfer ownership first.")
-        elif acting not in {"owner", "admin"}:
+        elif not can(acting, "members.manage"):
             raise AuthorizationDenied("Organisation administration is required.")
         target = (await self._lock_members(tenant_id, person_id)).get(person_id)
         if target is None:
@@ -823,7 +822,7 @@ class OrganisationService:
             if acting != "operator" or require_acceptance:
                 raise AuthorizationDenied("Audited operator provisioning is required.")
             intent["invitation_policy"] = OPERATOR_INVITATION_POLICY_SCHEMA
-        if acting not in {"owner", "admin", "operator"}:
+        if acting != "operator" and not can(acting, "members.manage"):
             raise AuthorizationDenied("Organisation administration is required.")
         if acting == "admin" and role != "member":
             raise AuthorizationDenied("Only the owner can add an admin.")
@@ -1113,7 +1112,7 @@ class OrganisationService:
         operator_reference: str | None = None,
     ) -> None:
         acting = await self._acting(tenant_id, actor_person_id, operator_reference, {})
-        if acting not in {"owner", "admin", "operator"}:
+        if acting != "operator" and not can(acting, "members.manage"):
             raise AuthorizationDenied("Organisation administration is required.")
         prior = await self._command_audit(tenant_id, command_id, "organisation.invite_revoked")
         if prior is not None:
@@ -1423,7 +1422,7 @@ def _required_text(value: str, field: str, maximum: int) -> str:
 
 def _member_role(value: str) -> str:
     normalized = value.strip().lower()
-    if normalized not in {MembershipRole.ADMIN.value, MembershipRole.MEMBER.value}:
+    if normalized not in ASSIGNABLE_ROLES:
         raise OrganisationCommandError("member role must be admin or member")
     return normalized
 

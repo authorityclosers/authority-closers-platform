@@ -32,12 +32,13 @@ from ac_platform.kernel.authz import ActorContext
 from ac_platform.telemetry.ingest import TelemetryConsent, TelemetryConsentStatus
 from ac_platform.telemetry.sales_xray import NOTICE_EFFECTIVE_AT, NOTICE_VERSION
 from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.roles import roles_with
 
 RESOURCE_TYPE = "sales_xray_product_analytics"
 WORKSPACE_RESOURCE = "workspace"
 WORKSPACE_ACTION = "telemetry.sales_xray_analytics_workspace.v1"
 PERSON_ACTION = "telemetry.sales_xray_analytics_person.v1"
-MANAGER_ROLES = frozenset({"owner", "admin"})
+MANAGER_ROLES = frozenset(roles_with("org.manage"))
 
 Scope = Literal["workspace", "person"]
 

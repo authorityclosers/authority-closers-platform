@@ -54,6 +54,7 @@ from ac_platform.integrations import first_party, oauth, scopes
 from ac_platform.integrations.errors import IntegrationError
 from ac_platform.kernel.errors import DomainError
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
+from ac_platform.tenancy.roles import ORG_ROLES, can
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 NO_STORE = {"Cache-Control": "no-store", "Pragma": "no-cache"}
@@ -237,7 +238,7 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
                 )
             ).first()
         )
-        if row is None or row.role not in {"owner", "admin"}:
+        if row is None or not can(row.role, "org.manage"):
             raise HTTPException(
                 403,
                 "Open the organisation you want to connect, as its owner or admin.",
@@ -283,7 +284,7 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
         ).first()
         if row is None:
             raise refused
-        role = row.role if row.role in {"owner", "admin"} else "member"
+        role = row.role if row.role in ORG_ROLES else "member"
         return actor, {
             "id": str(actor.tenant_id),
             "kind": "organisation",

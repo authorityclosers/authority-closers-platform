@@ -39,13 +39,14 @@ from ac_platform.lead_desk.models import (
 from ac_platform.lead_desk.store import counted_phone_call
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 from ac_platform.tenancy.models import Membership
+from ac_platform.tenancy.roles import roles_with
 
 log = logging.getLogger(__name__)
 
 KEY: Final[str] = "sla"
 TARGETS: Final[tuple[int, ...]] = (5, 10, 15, 30, 60, 120)
 LOOK_BACK: Final[timedelta] = timedelta(days=2)
-MANAGERS: Final[tuple[str, ...]] = ("owner", "admin")
+MANAGERS: Final[tuple[str, ...]] = roles_with("leads.manage")
 BATCH: Final[int] = 200
 
 

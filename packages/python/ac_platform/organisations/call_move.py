@@ -24,6 +24,7 @@ from ac_platform.conversation_intelligence.models import ConversationRecording a
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.kernel.errors import ResourceNotFound
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
+from ac_platform.tenancy.roles import roles_with
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,7 +74,7 @@ async def personal_call_move_candidate(
         .where(
             Membership.tenant_id == destination_tenant_id,
             Membership.person_id == actor.person_id,
-            Membership.role.in_(("owner", "admin", "member")),
+            Membership.role.in_(roles_with("leads.work")),
             Membership.status == "active",
             Membership.ended_at.is_(None),
             Tenant.status == "active",
