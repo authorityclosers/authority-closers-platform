@@ -10,7 +10,9 @@ import { resolve } from "node:path";
 import { chromium } from "playwright";
 import { waitForFixtureServer } from "./sales_xray_visual.mjs";
 import {
+  DESKTOP_SIZES,
   SIZES,
+  statesFor,
   measure,
   onSheet,
   pickScreens,
@@ -57,7 +59,9 @@ async function sheet(browser, output, key, shots) {
     ["100% dark", (s) => s.scale === 1 && s.theme === "dark"],
   ];
   const cells = [];
-  for (const size of SIZES)
+  for (const size of [...SIZES, ...DESKTOP_SIZES]) {
+    // Computer rows only for the screens that measured them.
+    if (!shots.some((item) => item.state.label === size.label)) continue;
     for (const [label, test] of columns) {
       const shot = shots.find(
         (item) => item.state.label === size.label && test(item.state),
@@ -68,6 +72,7 @@ async function sheet(browser, output, key, shots) {
           `<figcaption>${size.label} · ${label}</figcaption></figure>`,
       );
     }
+  }
   const page = await browser.newPage({
     viewport: { width: 4 * 200 + 40, height: 600 },
   });
@@ -95,8 +100,8 @@ async function main() {
     request = JSON.parse(await readFile(requestPath, "utf8"));
   } catch {}
   const screens = pickScreens(request.routes ?? []);
-  const jobs = states().flatMap((state) =>
-    screens.map(([key, screen]) => ({ key, screen, state })),
+  const jobs = screens.flatMap(([key, screen]) =>
+    statesFor(screen).map((state) => ({ key, screen, state })),
   );
   const env = Object.fromEntries(
     ["PATH", "HOME", "TMPDIR", "PLAYWRIGHT_BROWSERS_PATH"]
@@ -164,7 +169,7 @@ async function main() {
           deviceScaleFactor: zoom,
           colorScheme: state.theme,
           isMobile: state.width < 768,
-          hasTouch: true,
+          hasTouch: !state.desktop,
           locale: "en-GB",
           reducedMotion: "reduce",
           serviceWorkers: "block",
@@ -201,15 +206,19 @@ async function main() {
             });
             shots.push({ key, state, path });
           }
-          // One whole page per screen, phone size: the slice's before and after shot.
+          // One whole page per screen, phone size (and 1440 for a computer
+          // screen): the slice's before and after shot.
           if (
-            state.width === 390 &&
+            (state.width === 390 || state.width === 1440) &&
             state.scale === 1 &&
             state.mode === "app" &&
             state.theme === "light"
           )
             await page.screenshot({
-              path: resolve(output, `page-${key}.jpg`),
+              path: resolve(
+                output,
+                `page-${key}${state.width === 1440 ? "-desktop" : ""}.jpg`,
+              ),
               type: "jpeg",
               quality: 70,
               fullPage: true,

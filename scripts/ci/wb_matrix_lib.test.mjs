@@ -7,6 +7,7 @@ import {
   pickScreens,
   report,
   states,
+  statesFor,
   tagOf,
   viewportOf,
   zoomOf,
@@ -115,4 +116,14 @@ test("reports, per screen, how many states had each problem and where", () => {
   assert.match(text, /\| home \| 1 \|/);
   assert.match(text, /- spill: "WhatsApp \(text 64 in 60\)" \[lead-sheet a\]/);
   assert.match(text, /- failed: Timeout 90000ms exceeded. \[home a\]/);
+});
+
+test("adds computer states only for a screen that asks", () => {
+  assert.equal(statesFor({ path: "/x" }).length, states().length);
+  const desk = statesFor({ path: "/x", desktop: true }).filter(
+    (state) => state.desktop,
+  );
+  // 1280, 1440, 1920 x 100% and three text scales x light and dark: the computer states.
+  assert.equal(desk.length, 3 * 4 * 2);
+  assert.ok(desk.every((state) => state.mode === "text" || state.scale === 1));
 });
