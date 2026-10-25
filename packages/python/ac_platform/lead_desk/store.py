@@ -23,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
+from ac_platform.identity import person_photos
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk import allocation, deletion, duplicate_queue, reports
 from ac_platform.lead_desk import hours as work_hours
@@ -1259,6 +1260,7 @@ class LeadDesk:
         hidden = await self._private_calls(after) if who != self.viewer.person_id else frozenset()
         removed = await self._undone(str(event.id) for event, _ in rows if event.kind == "note")
         names = await self._names([who])
+        photos = await person_photos.photo_urls(self.db, [who])
         labels: dict[str, journeys.Journey] = {}
         items: list[ActivityItem] = []
         for event, lead in rows:
@@ -1273,7 +1275,7 @@ class LeadDesk:
                     lead_id=lead.id,
                     lead_name=lead.name,
                     stage_label=labels[key].label(lead.stage, lead.step),
-                    event=self._event_view(event, names),
+                    event=self._event_view(event, names, photos=photos),
                 )
             )
         return ActivityPage(
@@ -1305,6 +1307,7 @@ class LeadDesk:
                     with contextlib.suppress(ValueError):
                         people.add(UUID(value))
         names = await self._names(people)
+        photos = await person_photos.photo_urls(self.db, people)
         day_end = self._day_start() + timedelta(days=1)
         hidden = await self._private_calls(lead_id=lead.id)
         # Changes an AI app made and someone undid (docs/product/ai-writes.md).
@@ -1368,6 +1371,7 @@ class LeadDesk:
                     recording=joined.get(str(event.id)),
                     undone=undone,
                     lead_owner=lead.owner_person_id,
+                    photos=photos,
                 )
                 for event in events
                 if not (event.kind == "edited" and event.data.get(PRIVATE_CALL))
@@ -1398,9 +1402,8 @@ class LeadDesk:
             )
             if meeting is not None
             else None,
-            tasks=tuple(
-                task_book.view(task, lead.name, self.now)
-                for task in await task_book.TaskBook(self).open_for(lead.id)
+            tasks=await task_book.views(
+                self.db, await task_book.TaskBook(self).open_for(lead.id), lead.name, self.now
             ),
             duplicates=await duplicate_queue.hints(self, lead),
             merged_into=await duplicate_queue.merged_into(self, lead),
@@ -1476,6 +1479,7 @@ class LeadDesk:
         recording: LeadEvent | None = None,
         undone: frozenset[str] = frozenset(),
         lead_owner: UUID | None = None,
+        photos: Mapping[UUID, str | None] | None = None,
     ) -> LeadEventView:
         phone_call = event.kind == "call" and event.data.get("via") == "phone"
         data = event.data
@@ -1513,6 +1517,10 @@ class LeadDesk:
             kind=event.kind,
             at=event.created_at,
             actor_name=names.get(event.actor_person_id) if event.actor_person_id else None,
+            actor_person_id=event.actor_person_id,
+            actor_photo_url=(photos or {}).get(event.actor_person_id)
+            if event.actor_person_id
+            else None,
             stage=stage,
             stage_label=text("step_label")
             or (text("to_label") if moved else None)

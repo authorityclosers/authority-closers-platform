@@ -257,6 +257,9 @@ class LeadEventView(Model):
     kind: str
     at: datetime
     actor_name: str | None
+    # Who did it, for their avatar: the photo when they have one, else their initials.
+    actor_person_id: UUID | None = None
+    actor_photo_url: str | None = None
     stage: str | None = None
     stage_label: str | None = None
     reason: str | None = None
@@ -511,6 +514,9 @@ class TaskView(Model):
     overdue: bool
     # Overdue, today or upcoming, for an open task.
     bucket: TaskBucket | None
+    # Who wrote it (a person; None for the app's own), for their avatar.
+    created_by_person_id: UUID | None = None
+    created_by_photo_url: str | None = None
 
 
 class TaskList(Model):
