@@ -1409,6 +1409,11 @@ export function History({
                 }
               >
                 <span className={styles.historyTitle}>
+                  {event.actor_name ? (
+                    <span className={styles.actor} aria-hidden="true">
+                      <Avatar name={event.actor_name} size={20} />
+                    </span>
+                  ) : null}
                   {text.title}
                   {event.private ? (
                     <span className={styles.privateTag}>Private</span>
@@ -2130,7 +2135,10 @@ function NotesSection({
           {notes.map((event, index) => (
             <li key={event.event_id ?? `${event.at}-${index}`}>
               <p>{event.note}</p>
-              <small>
+              <small className={styles.noteBy}>
+                {event.actor_name ? (
+                  <Avatar name={event.actor_name} size={18} />
+                ) : null}
                 {[event.actor_name, ago(event.at)].filter(Boolean).join(" · ")}
               </small>
             </li>
