@@ -14,7 +14,7 @@
  * admin can hand leads out after hours from here.
  */
 
-import { Inbox } from "lucide-react";
+import { UserRoundCheck, UserRoundX } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { StateSwitch, type SwitchHold } from "../ui/state-switch";
@@ -107,7 +107,7 @@ export function TakingSwitch({
 
   return (
     <StateSwitch
-      icon={<Inbox size={20} />}
+      icon={on ? <UserRoundCheck size={20} /> : <UserRoundX size={20} />}
       label="Taking new leads"
       meaning="While this is on, the lead rules can give you new leads. Your open leads stay with you either way."
       onText="You're receiving new leads"

@@ -89,7 +89,9 @@
   height: 31px;
   border-radius: var(--sx-radius-pill);
   background: var(--sx-fill-strong);
-  transition: background-color var(--sx-dur-base) var(--sx-ease-out);
+  transition:
+    background-color var(--sx-dur-base) var(--sx-ease-out),
+    transform var(--sx-dur-fast, 120ms) var(--sx-ease-out);
 }
 
 .switch > span::after {
@@ -129,6 +131,15 @@
   opacity: 0.6;
 }
 
+/* A tap answers at once: pressed, then the new state while it saves (25 Oct 2026). */
+.switch:active:not(:disabled) > span {
+  transform: scale(0.94);
+}
+
+.switch[aria-busy="true"] {
+  cursor: progress;
+}
+
 /* The way past an automatic pause, or who can lift it. */
 .override {
   display: grid;
@@ -164,6 +175,7 @@
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
+  transition: transform var(--sx-dur-fast, 120ms) var(--sx-ease-out);
   -webkit-tap-highlight-color: transparent;
 }
 
@@ -171,6 +183,11 @@
 .chip[data-tone="held"] {
   background: color-mix(in oklab, var(--sx-warn) 16%, transparent);
   color: var(--lx-focus-ink);
+}
+
+.chip:active:not(:disabled) {
+  transform: scale(0.96);
+  filter: brightness(0.94);
 }
 
 .chip:focus-visible {

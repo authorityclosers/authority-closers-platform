@@ -2,6 +2,16 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+const haptic = vi.fn();
+vi.mock("./haptics", () => ({
+  haptic: (kind: string) => haptic(kind),
+  tick: () => haptic("tap"),
+}));
+const notify = vi.fn();
+vi.mock("../notice-center", () => ({
+  notify: (notice: unknown) => notify(notice),
+}));
+
 import { StateSwitch, type StateSwitchProps } from "./state-switch";
 
 (
@@ -18,6 +28,8 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
+  haptic.mockClear();
+  notify.mockClear();
 });
 
 const props = (extra: Partial<StateSwitchProps> = {}): StateSwitchProps => ({
@@ -154,4 +166,52 @@ it("offers the override behind its own question", async () => {
   expect(sheetText()).toContain("This changes work hours for the whole team.");
   await press(buttonNamed("Hand out leads now"));
   expect(run).toHaveBeenCalledOnce();
+});
+
+// Owner, 25 Oct 2026: tapping Take leads "just sits there". Every tap is felt at
+// once; the save confirms itself; a failed save says so and is felt too.
+it("answers a tap at once, then confirms the save", async () => {
+  let finish: () => void = () => undefined;
+  const onChange = vi.fn(
+    () =>
+      new Promise<void>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  await render(props({ on: false, onChange }));
+  await press(knob());
+  // The tap itself: a haptic before the save has come back, and still tappable.
+  expect(haptic).toHaveBeenCalledWith("tap");
+  expect(knob().disabled).toBe(false);
+  expect(knob().getAttribute("aria-busy")).toBe("true");
+  // A second tap while it saves changes nothing.
+  await press(knob());
+  expect(onChange).toHaveBeenCalledTimes(1);
+  await act(async () => finish());
+  expect(haptic).toHaveBeenLastCalledWith("success");
+  expect(notify).toHaveBeenCalledWith(
+    expect.objectContaining({
+      tone: "success",
+      title: "On: you're receiving new leads",
+    }),
+  );
+});
+
+it("feels and says a save that failed", async () => {
+  const onChange = vi.fn(async () => {
+    throw new Error("No connection.");
+  });
+  await render(props({ on: false, onChange }));
+  await press(knob());
+  expect(haptic).toHaveBeenLastCalledWith("error");
+  expect(notify).toHaveBeenCalledWith(
+    expect.objectContaining({ tone: "error", message: "No connection." }),
+  );
+});
+
+it("feels the chip's tap as it opens the sheet", async () => {
+  await render(props({ place: "chip" }));
+  await press(host.querySelector<HTMLButtonElement>("button")!);
+  expect(haptic).toHaveBeenCalledWith("tap");
+  expect(document.querySelector('dialog button[role="switch"]')).not.toBeNull();
 });
