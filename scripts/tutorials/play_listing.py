@@ -46,7 +46,8 @@ NAMES = {
     "Neha Fictional": "Neha Patil",
     "Karan Example": "Karan Mehta",
     "Sample Buyer": "Sanjay Bhosale",
-    "Swamini Fictional": "Swamini Gokhale",
+    # The teammate gets a new first name too: store names never reuse a real user's first name.
+    "Swamini Fictional": "Kavya Gokhale",
     "Rahul Example": "Rahul Kadam",
     "Priya Sample": "Priya Nair",
     "Vikram Example": "Vikram Shinde",
@@ -56,7 +57,7 @@ NAMES = {
     "MF": "MJ",
     "NF": "NP",
     "KE": "KM",
-    "SF": "SG",
+    "SF": "KG",
     "RE": "RK",
     "PS": "PN",
     "VE": "VS",

@@ -461,8 +461,16 @@ const PENDING = {
   state: "pending",
   since: "2026-10-19",
   worksNow:
-    "Until Meta approves Sales Xray, only Pages run by people added to our Meta app as testers can connect.",
+    "Until Meta approves Sales Xray, only people added to our Meta app as testers can connect a Page, and only test leads come through.",
   after: "Once Meta approves it, any business can connect its own Pages here.",
+};
+const AD_LEADS_WAIT = {
+  short: "Meta approval pending: test leads only for now",
+  reason:
+    "Meta is still reviewing Sales Xray (sent 19 Oct). Until it approves, only test leads come through, not leads from your ads.",
+  fix: "Bring your ad leads in now: add a Website form in Leads.",
+  page: "/leads?tab=sources",
+  action: "Add a Website form",
 };
 
 it("sets lead ads up step by step, under an honest note on Meta's review", async () => {
@@ -477,6 +485,7 @@ it("sets lead ads up step by step, under an honest note on Meta's review", async
           lastEvent: null,
           tests: [],
           review: PENDING,
+          blockers: [AD_LEADS_WAIT],
         },
       ],
     });
@@ -485,7 +494,7 @@ it("sets lead ads up step by step, under an honest note on Meta's review", async
   await act(async () => root.render(<ConnectedApps />));
   await flush();
   expect(card("meta_leads").textContent).toContain(
-    "Meta approval pending: testers’ Pages only for now",
+    "Meta approval pending: test leads only for now",
   );
   // Set up opens the steps first; the trip to Facebook waits for step 1.
   await act(async () => button(card("meta_leads"), "Set up")!.click());
@@ -495,8 +504,12 @@ it("sets lead ads up step by step, under an honest note on Meta's review", async
   const note = sheet.querySelector('[aria-label="Meta approval"]')!;
   expect(note.textContent).toContain("Waiting for Meta’s approval");
   expect(note.textContent).toContain("Sent for review 19 Oct");
-  expect(note.textContent).toContain("testers can connect");
+  expect(note.textContent).toContain("only test leads come through");
   expect(note.textContent).toContain("any business can connect");
+  // Until Meta approves, the note links to the way ad leads can come in now.
+  const fix = note.querySelector<HTMLAnchorElement>("a")!;
+  expect(fix.getAttribute("href")).toBe("/leads?tab=sources");
+  expect(fix.textContent).toContain("Add a Website form");
   const steps = [...sheet.querySelectorAll("ol > li")];
   expect(steps.map((step) => step.getAttribute("data-state"))).toEqual([
     "now",
@@ -637,7 +650,97 @@ it("reads only known apps and follows only the back end's own routes", () => {
   expect(parsed?.apps).toHaveLength(1);
   expect(parsed?.apps[0]).toMatchObject({ state: "problem", connect: null });
   expect(parsed?.apps[0].connections[0].disconnect).toBeNull();
+  expect(parsed?.apps[0].blockers).toEqual([]);
   expect(parseHealth({ apps: "x" })).toBeNull();
+});
+
+it("keeps only whole reasons, and links a fix only to this app's own pages", () => {
+  const [app] = parseHealth({
+    apps: [
+      {
+        app: "meta_leads",
+        state: "not_connected",
+        blockers: [
+          { ...AD_LEADS_WAIT, page: "https://evil.example/leads" },
+          { short: "Half a reason", reason: "No fix given." },
+          { ...AD_LEADS_WAIT, action: null },
+          "nope",
+        ],
+      },
+    ],
+  })!.apps;
+  expect(app.blockers).toHaveLength(2);
+  expect(app.blockers.map((item) => [item.page, item.action])).toEqual([
+    [null, null],
+    [null, null],
+  ]);
+});
+
+it("says in the sheet why messages don't work for everyone yet, and what to do", async () => {
+  routes["GET /v1/lead-desk/integrations/health"] = () =>
+    Response.json({
+      ...HEALTH,
+      apps: [
+        {
+          ...HEALTH.apps[1],
+          state: "not_connected",
+          connections: [],
+          lastError: null,
+          tests: [],
+          blockers: [
+            {
+              short: "Meta approval pending: our testers only for now",
+              reason:
+                "Meta hasn't approved Sales Xray for messages yet. Until it does, only people on our Meta app can connect.",
+              fix: "To try it now, ask us to add you to our Meta app.",
+              page: null,
+              action: null,
+            },
+          ],
+        },
+      ],
+    });
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  const whatsapp = card("whatsapp");
+  expect(whatsapp.textContent).toContain(
+    "Meta approval pending: our testers only for now",
+  );
+  // The card keeps one quiet line; the reason and the fix are in the sheet.
+  expect(whatsapp.textContent).not.toContain("ask us to add you");
+  await act(async () => button(whatsapp, "Connect")!.click());
+  expect(seen.trips).toEqual(["/v1/lead-desk/whatsapp/start"]);
+});
+
+it("lists each reason with its fix in the manage sheet", async () => {
+  routes["GET /v1/lead-desk/integrations/health"] = () =>
+    Response.json({
+      ...HEALTH,
+      apps: [
+        {
+          ...HEALTH.apps[1],
+          blockers: [
+            {
+              short: "No Instagram account on your Pages",
+              reason:
+                "None of your connected Pages has an Instagram professional account.",
+              fix: "Link one to the Page in Meta Business Suite, then connect again.",
+              page: "/leads?tab=sources",
+              action: "Open lead sources",
+            },
+          ],
+        },
+      ],
+    });
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  await act(async () => button(card("whatsapp"), "Manage")!.click());
+  const part = host.querySelector('[aria-label="Not working fully yet"]')!;
+  expect(part.textContent).toContain("has an Instagram professional account");
+  expect(part.textContent).toContain("Link one to the Page");
+  expect(part.querySelector("a")?.getAttribute("href")).toBe(
+    "/leads?tab=sources",
+  );
 });
 
 it("leads an app that needs attention with Reconnect, the one filled button", async () => {

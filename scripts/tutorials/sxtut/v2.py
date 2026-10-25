@@ -229,7 +229,7 @@ def word_times(words: list[str], v: Voiced) -> list[tuple[float, float]]:
 
 @dataclass
 class Item:
-    kind: str  # intro | beat | hook | outro | end
+    kind: str  # intro | beat | step | hook | outro | end
     lines: dict  # the text object (say, latn) spoken over it
     spec: dict | None = None  # storyboard beat whose picture is shown
     shot: dict | None = None  # take manifest shot
@@ -245,29 +245,38 @@ class Item:
 
 
 def sequence(board: dict, take: dict, fmt: str) -> list[Item]:
+    """The items of one video. Shots with device "card" are step cards (things only a real phone
+    shows); their beats become "step" items with no screen recording."""
     shots = {s["id"]: s for s in take["shots"]}
-    where: dict[str, tuple[dict, dict, int]] = {}
+    where: dict[str, tuple[dict, dict | None, int]] = {}
     for sspec in board["shots"]:
-        if sspec["id"] not in shots:
+        card = sspec["device"] == "card"
+        if not card and sspec["id"] not in shots:
             raise KeyError(f"shot {sspec['id']} was not captured")
         for i, b in enumerate(sspec["beats"]):
-            where[b["id"]] = (b, shots[sspec["id"]], i)
+            where[b["id"]] = (b, None if card else shots[sspec["id"]], i)
+
+    def item(bid: str, lines: dict | None = None) -> Item:
+        spec, shot, i = where[bid]
+        return Item("step" if shot is None else "beat", lines or spec, spec, shot, i)
+
+    order = [b["id"] for s in board["shots"] for b in s["beats"]]
     if fmt == "youtube":
         items = [Item("intro", board.get("intro") or {})]
-        for sspec in board["shots"]:
-            for b in sspec["beats"]:
-                if b.get("youtube", True):
-                    spec, shot, i = where[b["id"]]
-                    items.append(Item("beat", spec, spec, shot, i))
+        items += [item(bid) for bid in order if where[bid][0].get("youtube", True)]
         items.append(Item("outro", board.get("outro") or {}))
         return items
     reel = board["reel"]
-    spec, shot, i = where[reel["hook"]["beat"]]
-    items = [Item("hook", reel["hook"], spec, shot, i)]
-    for bid in reel["beats"]:
-        spec, shot, i = where[bid]
+    hook = reel["hook"]
+    if hook.get("beat"):
+        spec, shot, i = where[hook["beat"]]
+        items = [Item("hook", hook, spec, shot, i)]
+    else:
+        # No screen to open on: a 9:16 title card carries the hook line.
+        items = [Item("intro", hook)]
+    for bid in order if reel.get("all") else reel["beats"]:
         # A beat may carry a shorter line for reels ("short": {"say", "latn"}).
-        items.append(Item("beat", spec.get("short") or spec, spec, shot, i))
+        items.append(item(bid, where[bid][0].get("short")))
     items.append(Item("end", {}))
     return items
 
@@ -316,6 +325,10 @@ def lay_out(items: list[Item], fmt: str, lang: str, voices: dict) -> float:
             least, at, after = CARD[it.kind]
             it.voice_at = at
             it.dur = frames(max(least, at + speech + after if it.voice else 0.0))
+        elif it.kind == "step":
+            # The card animates in for a moment, then holds while the line is read.
+            it.voice_at = f["lead"] + 0.25
+            it.dur = frames(max(2.4, it.voice_at + speech + f["tail"] + 0.2))
         else:
             tb = it.shot["beats"][it.index]
             evs = tb["events"]
@@ -357,7 +370,7 @@ def _first_focus(it: Item, fmt: str) -> camera.State | None:
 def _plan_camera(items: list[Item], fmt: str) -> None:
     prev_end: camera.State | None = None
     for n, it in enumerate(items):
-        if it.kind in CARD:
+        if it.kind in CARD or it.kind == "step":
             prev_end = None
             continue
         w, h, to = geometry(fmt, it.shot)
@@ -391,9 +404,11 @@ def _key(*parts: object) -> str:
 def render_item(it: Item, fmt: str, take_dir: Path, art: dict, out: Path) -> None:
     f = FORMATS[fmt]
     n = round(it.dur * FPS)
-    tail = ["-frames:v", str(n), *X264, "-crf", "16", "-r", str(FPS), "-an", str(out)]
-    if it.kind in CARD:
-        card = art[it.kind]
+    # Pieces are encoded again in the final pass: fast and nearly lossless here.
+    fast = [x if x != "medium" else "veryfast" for x in X264]
+    tail = ["-frames:v", str(n), *fast, "-crf", "12", "-r", str(FPS), "-an", str(out)]
+    if it.kind in CARD or it.kind == "step":
+        card = art[art_key(it)]
         fc = f"[0:v]fps={FPS},tpad=stop_mode=clone:stop_duration={it.dur + 1:.3f},format=yuv420p[v]"
         _ffmpeg(["-i", str(card), "-filter_complex", fc, "-map", "[v]", *tail])
         return
@@ -431,6 +446,11 @@ def render_item(it: Item, fmt: str, take_dir: Path, art: dict, out: Path) -> Non
     _ffmpeg([*inputs, "-filter_complex", fc, "-map", "[v]", *tail])
 
 
+def art_key(it: Item) -> str:
+    """Which drawn card an item without a screen recording shows."""
+    return f"step-{it.spec['id']}" if it.kind == "step" else it.kind
+
+
 def picture(items: list[Item], fmt: str, take_dir: Path, art: dict, work: Path) -> Path:
     parts = []
     for i, it in enumerate(items):
@@ -444,7 +464,7 @@ def picture(items: list[Item], fmt: str, take_dir: Path, art: dict, work: Path) 
             round(it.head, 3),
             [(round(t, 3), s.z, s.cx, s.cy) for t, s in it.keys],
             render.mtime(take_dir / it.shot["clip"]) if it.shot else "",
-            render.mtime(art.get(it.kind)) if it.kind in CARD else "",
+            render.mtime(art.get(art_key(it))) if it.shot is None else "",
             render.mtime(art.get("stage")),
         )
         if not render.fresh(part, key):
@@ -659,7 +679,7 @@ def chapters(board: dict, items: list[Item], lang: str, total: float) -> list[tu
     out: list[tuple[float, str]] = []
     seen = set()
     for it in items:
-        cid = (it.spec or {}).get("chapter") if it.kind == "beat" else None
+        cid = (it.spec or {}).get("chapter") if it.kind in ("beat", "step") else None
         if cid and cid not in seen:
             seen.add(cid)
             out.append((0.0 if not out else it.start, titles.get(cid, cid)))
@@ -756,26 +776,73 @@ def art_for(
             )
     else:
         hook = board["reel"]["hook"]
-        stills.append(
-            {
-                "name": f"hook-{lang}",
-                "transparent": True,
-                "width": 1080,
-                "height": 420,
-                "html": brand.hook_html(
-                    kit, local(hook["text"], lang), local(hook.get("accent"), lang)
-                ),
-            }
-        )
+        if hook.get("beat"):
+            stills.append(
+                {
+                    "name": f"hook-{lang}",
+                    "transparent": True,
+                    "width": 1080,
+                    "height": 420,
+                    "html": brand.hook_html(
+                        kit, local(hook["text"], lang), local(hook.get("accent"), lang)
+                    ),
+                }
+            )
+        else:
+            motion.append(
+                {
+                    "name": f"rintro-{lang}",
+                    "key": "intro",
+                    "seconds": 2.4,
+                    "width": 1080,
+                    "height": 1920,
+                    "html": brand.reel_intro_html(
+                        kit,
+                        board["number"],
+                        local(hook.get("text") or board["title"], lang),
+                        "Sales X-Ray",
+                    ),
+                }
+            )
         motion.append(
             {
                 "name": f"end-{lang}",
                 "seconds": 1.8,
                 "width": 1080,
                 "height": 1920,
-                "html": brand.reel_end_html(kit, local(board["title"], lang), REEL_CTA[lang]),
+                "html": brand.reel_end_html(
+                    kit,
+                    local(board["title"], lang),
+                    # Tester how-tos go out on WhatsApp; there is no channel to point at.
+                    brand.TAGLINE if board.get("kind") == "tester" else REEL_CTA[lang],
+                ),
             }
         )
+    w, h = FORMATS[fmt]["w"], FORMATS[fmt]["h"]
+    for s in board["shots"]:
+        if s["device"] != "card":
+            continue
+        for beat in s["beats"]:
+            card = beat.get("card") or {}
+            chips = [local(c, lang) for c in card.get("chips", [])]
+            motion.append(
+                {
+                    "name": f"step-{fmt}-{beat['id']}-{lang}",
+                    "key": f"step-{beat['id']}",
+                    "seconds": 1.4,
+                    "width": w,
+                    "height": h,
+                    "html": brand.step_html(
+                        kit,
+                        w,
+                        h,
+                        local(card.get("step"), lang),
+                        local(card.get("title"), lang),
+                        chips,
+                        card.get("icon", "phone"),
+                    ),
+                }
+            )
     cards_dir = work.parent / "art"
     render.render_cards(repo, stills, cards_dir)
     render_motion(repo, motion, cards_dir)
@@ -784,7 +851,7 @@ def art_for(
             cards_dir / f"{c['name']}.png"
         )
     for c in motion:
-        art[c["name"].rsplit("-", 1)[0]] = cards_dir / f"{c['name']}.mp4"
+        art[c.get("key") or c["name"].rsplit("-", 1)[0]] = cards_dir / f"{c['name']}.mp4"
     return art
 
 
@@ -831,7 +898,7 @@ def finish(
     if fmt == "youtube":
         first: dict[str, Item] = {}
         for it in items:
-            cid = (it.spec or {}).get("chapter") if it.kind == "beat" else None
+            cid = (it.spec or {}).get("chapter") if it.kind in ("beat", "step") else None
             if cid and cid not in first:
                 first[cid] = it
         for cid, it in first.items():
@@ -850,7 +917,7 @@ def finish(
             k += 1
     else:
         hook = items[0]
-        png = art.get(f"hook-{lang}")
+        png = art.get(f"hook-{lang}") if hook.kind == "hook" else None
         if png:
             t0, t1 = 0.1, max(1.2, hook.dur - 0.05)
             inputs += ["-loop", "1", "-framerate", str(FPS), "-t", f"{t1 - t0:.3f}", "-i", str(png)]
@@ -947,7 +1014,14 @@ def build(
     voices: dict,
 ) -> list[dict]:
     tid = board["id"]
-    take = json.loads((take_dir / f"take-{tid}.json").read_text(encoding="utf-8"))
+    take_file = take_dir / f"take-{tid}.json"
+    screens = [s for s in board["shots"] if s["device"] != "card"]
+    # A video made only of step cards has nothing to record.
+    take = (
+        json.loads(take_file.read_text(encoding="utf-8"))
+        if screens or take_file.exists()
+        else {"tutorial": tid, "shots": []}
+    )
     used = {b["id"] for s in board["shots"] for b in s["beats"]}
     shown = [
         f"{b['id']}: {w}"
@@ -1125,7 +1199,7 @@ def outputs(
     )
     cue_rows = [
         {
-            "item": it.kind if it.kind != "beat" else it.spec["id"],
+            "item": it.spec["id"] if it.spec else it.kind,
             "in": timing.tc(it.start, "."),
             "out": timing.tc(it.start + it.dur, "."),
             "voice_in": timing.tc(it.start + it.voice_at, ".") if it.voice else "",

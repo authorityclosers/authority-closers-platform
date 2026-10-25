@@ -1,0 +1,299 @@
+{
+  "id": "t2-install-from-play",
+  "number": "T2",
+  "kind": "tester",
+  "title": {
+    "en": "Install from Google Play, or move from the old app",
+    "hi": "Google Play se install, ya purane app se shift",
+    "mr": "Google Play madhun install, kinva junya app varun shift"
+  },
+  "description": {
+    "en": "Install Sales X-Ray from Google Play. Had the old download-link app? Wait for All changes saved, uninstall it, then install from Play. Your leads and calls stay safe.",
+    "hi": "Google Play se Sales X-Ray install kijiye. Purana download-link wala app tha? All changes saved ka wait kijiye, use uninstall kijiye, phir Play se install. Aapke leads aur calls safe rehte hain.",
+    "mr": "Google Play madhun Sales X-Ray install kara. Juna download-link wala app hota? All changes saved chi vaat bagha, to uninstall kara, mag Play madhun install. Tumche leads aani calls safe rahtat."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "tester",
+    "Google Play",
+    "how to",
+    "Hindi",
+    "Marathi",
+    "install",
+    "update",
+    "Android app"
+  ],
+  "names": {
+    "Asha Example": "Asha Kulkarni",
+    "fictional-homes.example": "skyline.example",
+    "Sales Xray": "Sales X-Ray"
+  },
+  "next": {
+    "id": "t3-sign-in",
+    "title": {
+      "en": "Sign in inside the app",
+      "hi": "App mein sign in",
+      "mr": "App madhye sign in"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "Installing Sales X-Ray from Google Play, or moving over from the old download-link app, safely.",
+      "hi": "Google Play से Sales X-Ray install करना, या पुराने download-link वाले app से safely shift करना.",
+      "mr": "Google Play मधून Sales X-Ray install करणं, किंवा जुन्या download-link वाल्या app वरून safely shift होणं."
+    },
+    "latn": {
+      "hi": "Google Play se Sales X-Ray install karna, ya purane download-link wale app se safely shift karna.",
+      "mr": "Google Play madhun Sales X-Ray install karna, kinva junya download-link valya app varun safely shift hona."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "On Google Play.",
+      "hi": "Ab Google Play pe.",
+      "mr": "Aata Google Play var."
+    },
+    "say": {
+      "en": "Next: signing in inside the app.",
+      "hi": "अगले video में: app के अंदर sign in कैसे करें.",
+      "mr": "पुढच्या video मध्ये: app मध्येच sign in कसं करायचं."
+    },
+    "latn": {
+      "hi": "Agle video mein: app ke andar sign in kaise karein.",
+      "mr": "Pudhchya video madhye: app madhyech sign in kasa karaycha."
+    }
+  },
+  "chapters": [
+    {
+      "id": "new",
+      "title": {
+        "en": "New install",
+        "hi": "Naya install",
+        "mr": "Navin install"
+      }
+    },
+    {
+      "id": "move",
+      "title": {
+        "en": "Moving from the old app",
+        "hi": "Purane app se shift",
+        "mr": "Junya app varun shift"
+      }
+    }
+  ],
+  "reel": {
+    "all": true,
+    "hook": {
+      "text": {
+        "en": "Old app? Move to Play safely",
+        "hi": "Purana app? Play pe safe shift",
+        "mr": "Juna app? Play var safe shift"
+      },
+      "say": {
+        "en": "Moving from the old app to Google Play? Do it in this order.",
+        "hi": "पुराने app से Google Play पे जा रहे हैं? इसी order में कीजिए.",
+        "mr": "जुन्या app वरून Google Play वर जाताय? याच order मध्ये करा."
+      },
+      "latn": {
+        "hi": "Purane app se Google Play pe ja rahe hain? Isi order mein kijiye.",
+        "mr": "Junya app varun Google Play var jaatay? Yach order madhye kara."
+      }
+    }
+  },
+  "shots": [
+    {
+      "id": "steps",
+      "device": "card",
+      "beats": [
+        {
+          "id": "new-install",
+          "chapter": "new",
+          "actions": [],
+          "card": {
+            "step": "New here",
+            "title": {
+              "en": "Install from Google Play",
+              "hi": "Google Play se install",
+              "mr": "Google Play madhun install"
+            },
+            "icon": "install",
+            "chips": ["Install"]
+          },
+          "say": {
+            "en": "New to Sales X-Ray? Just open Google Play and tap Install. Updates then come through Play, like any other app.",
+            "hi": "Sales X-Ray नया है? बस Google Play खोलिए और Install दबाइए. फिर updates Play से ही आएँगे, बाकी apps की तरह.",
+            "mr": "Sales X-Ray नवीन आहे? फक्त Google Play उघडा आणि Install दाबा. मग updates Play मधूनच येतील, बाकीच्या apps सारखे."
+          },
+          "latn": {
+            "hi": "Sales X-Ray naya hai? Bas Google Play kholiye aur Install dabaiye. Phir updates Play se hi aayenge, baaki apps ki tarah.",
+            "mr": "Sales X-Ray navin aahe? Fakta Google Play ughda aani Install daba. Mag updates Play madhunach yetil, baakichya apps sarkhe."
+          }
+        },
+        {
+          "id": "why",
+          "chapter": "move",
+          "actions": [],
+          "card": {
+            "step": "Old app?",
+            "title": {
+              "en": "Why you switch once",
+              "hi": "Ek baar switch kyon",
+              "mr": "Ekda switch ka"
+            },
+            "icon": "shield",
+            "chips": []
+          },
+          "say": {
+            "en": "Had the older app from a download link? It's signed differently from the Play app, so Android can't update one into the other. You switch just once.",
+            "hi": "पहले download link वाला पुराना app था? उसका signature Play वाले app से अलग है, इसलिए Android उसे update नहीं कर सकता. बस एक बार switch करना है.",
+            "mr": "आधी download link वाला जुना app होता? त्याची signature Play च्या app पेक्षा वेगळी आहे, म्हणून Android तो update करू शकत नाही. फक्त एकदा switch करायचं."
+          },
+          "latn": {
+            "hi": "Pehle download link wala purana app tha? Uska signature Play wale app se alag hai, isliye Android use update nahi kar sakta. Bas ek baar switch karna hai.",
+            "mr": "Aadhi download link wala juna app hota? Tyachi signature Play chya app peksha vegli aahe, mhanun Android to update karu shakat nahi. Fakta ekda switch karaycha."
+          }
+        },
+        {
+          "id": "saved",
+          "chapter": "move",
+          "actions": [],
+          "card": {
+            "step": "Step 1",
+            "title": {
+              "en": "Wait for All changes saved",
+              "hi": "All changes saved ka wait",
+              "mr": "All changes saved chi vaat"
+            },
+            "icon": "saved",
+            "chips": ["All changes saved"]
+          },
+          "say": {
+            "en": "First, open the old app, and wait until it says All changes saved. That means everything you did has reached us.",
+            "hi": "पहले पुराना app खोलिए, और All changes saved आने तक रुकिए. मतलब आपका सारा काम हम तक पहुँच गया.",
+            "mr": "आधी जुना app उघडा, आणि All changes saved येईपर्यंत थांबा. म्हणजे तुमचं सगळं काम आमच्यापर्यंत पोहोचलं."
+          },
+          "latn": {
+            "hi": "Pehle purana app kholiye, aur All changes saved aane tak rukiye. Matlab aapka saara kaam hum tak pahunch gaya.",
+            "mr": "Aadhi juna app ughda, aani All changes saved yeiparyant thamba. Mhanje tumcha sagla kaam aamchyaparyant pohochla."
+          }
+        },
+        {
+          "id": "uninstall",
+          "chapter": "move",
+          "actions": [],
+          "card": {
+            "step": "Step 2",
+            "title": {
+              "en": "Uninstall the old app",
+              "hi": "Purana app uninstall",
+              "mr": "Juna app uninstall"
+            },
+            "icon": "uninstall",
+            "chips": ["App info", "Uninstall"]
+          },
+          "say": {
+            "en": "Then long-press the Sales X-Ray icon, tap App info, and Uninstall.",
+            "hi": "फिर Sales X-Ray के icon को दबाकर रखिए, App info खोलिए, और Uninstall कीजिए.",
+            "mr": "मग Sales X-Ray च्या icon वर दाबून ठेवा, App info उघडा, आणि Uninstall करा."
+          },
+          "latn": {
+            "hi": "Phir Sales X-Ray ke icon ko dabakar rakhiye, App info kholiye, aur Uninstall kijiye.",
+            "mr": "Mag Sales X-Ray chya icon var dabun theva, App info ughda, aani Uninstall kara."
+          }
+        },
+        {
+          "id": "play",
+          "chapter": "move",
+          "actions": [],
+          "card": {
+            "step": "Step 3",
+            "title": {
+              "en": "Install from Google Play",
+              "hi": "Google Play se install",
+              "mr": "Google Play madhun install"
+            },
+            "icon": "install",
+            "chips": ["Install"]
+          },
+          "say": {
+            "en": "Now install Sales X-Ray: AI Sales Coach from Google Play, and sign in. Your leads and calls are all still there.",
+            "hi": "अब Google Play से Sales X-Ray: AI Sales Coach install कीजिए, और sign in कीजिए. आपके leads और calls सब वहीं हैं.",
+            "mr": "आता Google Play मधून Sales X-Ray: AI Sales Coach install करा, आणि sign in करा. तुमचे leads आणि calls सगळे तिथेच आहेत."
+          },
+          "latn": {
+            "hi": "Ab Google Play se Sales X-Ray: AI Sales Coach install kijiye, aur sign in kijiye. Aapke leads aur calls sab wahin hain.",
+            "mr": "Aata Google Play madhun Sales X-Ray: AI Sales Coach install kara, aani sign in kara. Tumche leads aani calls sagle tithech aahet."
+          }
+        }
+      ]
+    },
+    {
+      "id": "settings",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/settings?section=notifications"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Sample data only."
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 500
+        }
+      ],
+      "beats": [
+        {
+          "id": "links",
+          "chapter": "move",
+          "actions": [
+            {
+              "do": "scrollto",
+              "target": {
+                "text": "Sales X-Ray on your phone"
+              },
+              "offset": 120,
+              "ms": 700
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "link",
+                "name": "Testers: install from Google Play"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "link",
+                "name": "No Play invite? Download the app"
+              },
+              "ms": 1400
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Both links live in Settings, under Phone and alerts. No Play invite yet? The download link works until it arrives.",
+            "hi": "दोनों links Settings में, Phone and alerts के अंदर हैं. Play invite अभी नहीं आया? तब तक download link चलेगा.",
+            "mr": "दोन्ही links Settings मध्ये, Phone and alerts मध्ये आहेत. Play invite अजून आलं नाही? तोपर्यंत download link चालेल."
+          },
+          "latn": {
+            "hi": "Dono links Settings mein, Phone and alerts ke andar hain. Play invite abhi nahi aaya? Tab tak download link chalega.",
+            "mr": "Donhi links Settings madhye, Phone and alerts madhye aahet. Play invite ajun aala nahi? Toparyant download link chalel."
+          }
+        }
+      ]
+    }
+  ]
+}

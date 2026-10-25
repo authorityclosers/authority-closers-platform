@@ -90,3 +90,44 @@ def test_the_workflow_runs_both_gates_and_reports_them() -> None:
     assert "bash scripts/validate-control-plane.sh" in control_runs
     assert "sha256sum --check --strict" in control_runs
     assert {"migrations", "control-plane"} <= set(jobs["summary"]["needs"])
+
+
+def test_the_matrix_is_opt_in_and_never_part_of_a_full_run() -> None:
+    full, _ = checks.families({"full": True, "checks": [], "changed_files": None})
+    assert "matrix" not in full and "e2e" not in full
+    assert "matrix" not in checks.families(request(["apps/sales-xray-web/app/page.tsx"]))[0]
+    asked = {**request([], ("matrix",)), "routes": ["leads-table"]}
+    assert checks.families(asked) == ({"matrix"}, False)
+
+
+def test_the_plan_publishes_the_matrix_switch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / ".wb-ci").mkdir()
+    (tmp_path / ".wb-ci/request.json").write_text(
+        json.dumps({"changed_files": [], "checks": ["matrix"], "routes": ["leads-table"]}),
+        encoding="utf-8",
+    )
+    output = tmp_path / "github-output"
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    assert checks.cmd_plan() == 0
+    published = dict(line.split("=", 1) for line in output.read_text().splitlines())
+    assert published["matrix"] == "true" and published["web"] == "false"
+
+
+def test_the_workflow_runs_the_matrix_with_one_small_artifact() -> None:
+    jobs = yaml.safe_load((ROOT / ".github/workflows/workbench-checks.yml").read_text())["jobs"]
+    assert jobs["plan"]["outputs"]["matrix"] == "${{ steps.plan.outputs.matrix }}"
+    assert jobs["matrix"]["if"] == "needs.plan.outputs.matrix == 'true'"
+    assert "needs.plan.outputs.matrix == 'true'" in jobs["ci-prerequisites"]["if"]
+    runs = "\n".join(step.get("run", "") for step in jobs["matrix"]["steps"])
+    assert "node --test scripts/ci/wb_matrix_lib.test.mjs" in runs
+    assert "node scripts/ci/wb_matrix.mjs" in runs
+    [upload] = [s for s in jobs["matrix"]["steps"] if "upload-artifact" in s.get("uses", "")]
+    assert upload["with"]["name"] == "wb-matrix" and upload["with"]["retention-days"] == 1
+    assert "matrix" in jobs["summary"]["needs"]
+    shipped = (ROOT / "scripts/ci/wb-ci").read_text()
+    assert "--matrix) checks+=(matrix)" in shipped
+    assert "scripts/ci/wb_matrix.mjs scripts/ci/wb_matrix_lib.mjs" in shipped

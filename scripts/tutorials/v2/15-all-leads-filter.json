@@ -1,0 +1,548 @@
+{
+  "id": "15-all-leads-filter",
+  "number": "15",
+  "kind": "feature",
+  "title": {
+    "en": "All leads: filter, sort and saved views",
+    "hi": "All leads: filter, sort aur saved views",
+    "mr": "All leads: filter, sort aani saved views"
+  },
+  "description": {
+    "en": "All leads in Sales X-Ray: a list that loads as you scroll, Filter and sort by follow-up, last contact or name, filter chips, saved Views, and Select to act on many leads at once.",
+    "hi": "Sales X-Ray mein All leads: scroll karte hi load hone wali list, follow-up, last contact ya naam se Filter aur sort, filter chips, saved Views, aur Select se ek saath kai leads pe kaam.",
+    "mr": "Sales X-Ray madhle All leads: scroll karta load honari list, follow-up, last contact kinva naavane Filter aani sort, filter chips, saved Views, aani Select ne ekdam anek leads var kaam."
+  },
+  "tags": [
+    "Sales X-Ray",
+    "lead management",
+    "sales CRM India",
+    "Hindi",
+    "Marathi",
+    "filters",
+    "saved views",
+    "bulk actions"
+  ],
+  "names": {
+    "Sales Xray": "Sales X-Ray",
+    "[the owner's one-line reason]": "a quick partnership idea",
+    "Can I show you in 10 minutes how": "Can I quickly show you how"
+  },
+  "next": {
+    "id": "14-my-work",
+    "title": {
+      "en": "My work and quick notes",
+      "hi": "My work aur quick notes",
+      "mr": "My work aani quick notes"
+    }
+  },
+  "intro": {
+    "say": {
+      "en": "In this video: All leads, and finding any lead in seconds.",
+      "hi": "इस video में: All leads, और कोई भी lead seconds में ढूंढना.",
+      "mr": "या video मध्ये: All leads, आणि कुठलाही lead काही seconds मध्ये शोधणं."
+    },
+    "latn": {
+      "hi": "Is video mein: All leads, aur koi bhi lead seconds mein dhoondhna.",
+      "mr": "Ya video madhye: All leads, aani kuthlahi lead kahi seconds madhye shodhna."
+    }
+  },
+  "outro": {
+    "headline": {
+      "en": "Find any lead, fast.",
+      "hi": "Koi bhi lead, turant.",
+      "mr": "Kuthlahi lead, lagech."
+    },
+    "say": {
+      "en": "Next: My work, and quick notes.",
+      "hi": "अगले video में: My work, और quick notes.",
+      "mr": "पुढच्या video मध्ये: My work, आणि quick notes."
+    },
+    "latn": {
+      "hi": "Agle video mein: My work, aur quick notes.",
+      "mr": "Pudhchya video madhye: My work, aani quick notes."
+    }
+  },
+  "chapters": [
+    {
+      "id": "list",
+      "title": {
+        "en": "All leads",
+        "hi": "All leads",
+        "mr": "All leads"
+      }
+    },
+    {
+      "id": "filter",
+      "title": {
+        "en": "Filter and sort",
+        "hi": "Filter aur sort",
+        "mr": "Filter aani sort"
+      }
+    },
+    {
+      "id": "many",
+      "title": {
+        "en": "Views and Select",
+        "hi": "Views aur Select",
+        "mr": "Views aani Select"
+      }
+    }
+  ],
+  "reel": {
+    "hook": {
+      "beat": "sort",
+      "text": {
+        "en": "Find any lead in seconds",
+        "hi": "Koi bhi lead seconds mein",
+        "mr": "Kuthlahi lead kahi seconds madhye"
+      },
+      "accent": {
+        "en": "in seconds",
+        "hi": "seconds mein",
+        "mr": "seconds madhye"
+      },
+      "say": {
+        "en": "Hundreds of leads? Find any one in seconds.",
+        "hi": "सैकड़ों leads? कोई भी seconds में ढूंढिए.",
+        "mr": "शेकडो leads? कुठलाही काही seconds मध्ये शोधा."
+      },
+      "latn": {
+        "hi": "Saikdon leads? Koi bhi seconds mein dhoondhiye.",
+        "mr": "Shekdo leads? Kuthlahi kahi seconds madhye shodha."
+      }
+    },
+    "beats": [
+      "all-tab",
+      "filter-open",
+      "search",
+      "sort",
+      "show",
+      "chips",
+      "views",
+      "select"
+    ]
+  },
+  "shots": [
+    {
+      "id": "all",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=all&stage=open"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Deal value"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "beats": [
+        {
+          "id": "all-tab",
+          "chapter": "list",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "tab",
+                "name": "All leads"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "All leads is your whole list. It loads more as you scroll, so even hundreds of leads open fast.",
+            "hi": "All leads में आपकी पूरी list है. Scroll करते ही और leads load होते हैं, तो सैकड़ों leads भी जल्दी खुलते हैं.",
+            "mr": "All leads मध्ये तुमची पूर्ण list आहे. Scroll करताच आणखी leads load होतात, म्हणजे शेकडो leads पण पटकन उघडतात."
+          },
+          "latn": {
+            "hi": "All leads mein aapki poori list hai. Scroll karte hi aur leads load hote hain, toh saikdon leads bhi jaldi khulte hain.",
+            "mr": "All leads madhye tumchi poorna list aahe. Scroll kartach aankhi leads load hotat, mhanje shekdo leads pan patkan ughadtat."
+          }
+        },
+        {
+          "id": "quick-add",
+          "chapter": "list",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "placeholder": "New lead's name"
+              },
+              "ms": 1600
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Add a lead right at the top: type a name, or paste rows from a sheet.",
+            "hi": "सबसे ऊपर से lead add कीजिए: नाम लिखिए, या sheet से rows paste कीजिए.",
+            "mr": "सगळ्यात वरून lead add करा: नाव लिहा, किंवा sheet मधून rows paste करा."
+          },
+          "latn": {
+            "hi": "Sabse upar se lead add kijiye: naam likhiye, ya sheet se rows paste kijiye.",
+            "mr": "Saglyat varun lead add kara: naav liha, kinva sheet madhun rows paste kara."
+          }
+        },
+        {
+          "id": "filter-open",
+          "chapter": "filter",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Filter leads"
+              },
+              "ms": 1300
+            }
+          ],
+          "say": {
+            "en": "Tap Filter to search and sort.",
+            "hi": "Search और sort के लिए Filter दबाइए.",
+            "mr": "Search आणि sort साठी Filter दाबा."
+          },
+          "latn": {
+            "hi": "Search aur sort ke liye Filter dabaiye.",
+            "mr": "Search aani sort saathi Filter daba."
+          },
+          "sync": {
+            "en": "Filter",
+            "hi": "Filter",
+            "mr": "Filter"
+          }
+        },
+        {
+          "id": "search",
+          "chapter": "filter",
+          "actions": [
+            {
+              "do": "type",
+              "target": {
+                "placeholder": "Name, company, city or phone"
+              },
+              "text": "Pune",
+              "delay": 120,
+              "ms": 700
+            }
+          ],
+          "say": {
+            "en": "Search by name, company, city or phone.",
+            "hi": "नाम, company, city या phone से search कीजिए.",
+            "mr": "नाव, company, city किंवा phone ने search करा."
+          },
+          "latn": {
+            "hi": "Naam, company, city ya phone se search kijiye.",
+            "mr": "Naav, company, city kinva phone ne search kara."
+          }
+        },
+        {
+          "id": "sort",
+          "chapter": "filter",
+          "actions": [
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Next follow-up"
+              },
+              "ms": 1100
+            },
+            {
+              "do": "tap",
+              "target": {
+                "role": "button",
+                "name": "Late"
+              },
+              "ms": 1100
+            }
+          ],
+          "say": {
+            "en": "Sort by next follow-up, last contact, name or newest. And filter, like only the late ones.",
+            "hi": "Next follow-up, last contact, नाम या newest से sort कीजिए. और filter भी, जैसे सिर्फ late वाले.",
+            "mr": "Next follow-up, last contact, नाव किंवा newest ने sort करा. आणि filter पण, जसं फक्त late वाले."
+          },
+          "latn": {
+            "hi": "Next follow-up, last contact, naam ya newest se sort kijiye. Aur filter bhi, jaise sirf late wale.",
+            "mr": "Next follow-up, last contact, naav kinva newest ne sort kara. Aani filter pan, jasa fakta late vale."
+          },
+          "short": {
+            "say": {
+              "en": "Sort and filter, any way you like.",
+              "hi": "जैसे चाहें sort और filter.",
+              "mr": "हवं तसं sort आणि filter."
+            },
+            "latn": {
+              "hi": "Jaise chahein sort aur filter.",
+              "mr": "Hava tasa sort aani filter."
+            }
+          }
+        },
+        {
+          "id": "show",
+          "chapter": "filter",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Show leads"
+              },
+              "ms": 1500
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Then tap Show leads.",
+            "hi": "फिर Show leads दबाइए.",
+            "mr": "मग Show leads दाबा."
+          },
+          "latn": {
+            "hi": "Phir Show leads dabaiye.",
+            "mr": "Mag Show leads daba."
+          }
+        }
+      ]
+    },
+    {
+      "id": "chips",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=all&stage=open&who=mine&q=pune"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Deal value"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        }
+      ],
+      "beats": [
+        {
+          "id": "chips",
+          "chapter": "filter",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Filter leads, 2 on"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "role": "button",
+                "name": "Remove filter Mine"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Filters that are on show as chips. Tap a chip's cross to clear it.",
+            "hi": "जो filters on हैं, वो chips में दिखते हैं. Chip का cross दबाइए, filter हट जाएगा.",
+            "mr": "जे filters on आहेत, ते chips मध्ये दिसतात. Chip चा cross दाबा, filter निघून जाईल."
+          },
+          "latn": {
+            "hi": "Jo filters on hain, woh chips mein dikhte hain. Chip ka cross dabaiye, filter hat jaayega.",
+            "mr": "Je filters on aahet, te chips madhye distat. Chip cha cross daba, filter nighun jaail."
+          },
+          "short": {
+            "say": {
+              "en": "Filters on show as chips.",
+              "hi": "On filters, chips में.",
+              "mr": "On filters, chips मध्ये."
+            },
+            "latn": {
+              "hi": "On filters, chips mein.",
+              "mr": "On filters, chips madhye."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "views",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=all&stage=open&views=1&tap=views"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Deal value"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        },
+        {
+          "do": "wait",
+          "ms": 700
+        }
+      ],
+      "beats": [
+        {
+          "id": "views",
+          "chapter": "many",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Mine in Pune"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Interested, no owner"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Use a filter often? Save it as a View, like Mine in Pune, and switch in a tap.",
+            "hi": "कोई filter बार बार लगाते हैं? उसे View बनाकर save कीजिए, जैसे Mine in Pune, और एक tap में switch कीजिए.",
+            "mr": "एखादा filter वारंवार लावता? तो View म्हणून save करा, जसं Mine in Pune, आणि एका tap मध्ये switch करा."
+          },
+          "latn": {
+            "hi": "Koi filter baar baar lagate hain? Use View banakar save kijiye, jaise Mine in Pune, aur ek tap mein switch kijiye.",
+            "mr": "Ekhada filter varanvar laavta? To View mhanun save kara, jasa Mine in Pune, aani eka tap madhye switch kara."
+          },
+          "short": {
+            "say": {
+              "en": "Save it as a View.",
+              "hi": "View बनाकर save कीजिए.",
+              "mr": "View म्हणून save करा."
+            },
+            "latn": {
+              "hi": "View banakar save kijiye.",
+              "mr": "View mhanun save kara."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "bulk",
+      "device": "reel",
+      "setup": [
+        {
+          "do": "goto",
+          "url": "/review-fixture/leads?tab=all&stage=open&tap=bulk"
+        },
+        {
+          "do": "hide",
+          "target": {
+            "text": "Deal value"
+          },
+          "collapse": true
+        },
+        {
+          "do": "wait",
+          "ms": 600
+        },
+        {
+          "do": "wait",
+          "ms": 700
+        }
+      ],
+      "beats": [
+        {
+          "id": "select",
+          "chapter": "many",
+          "actions": [
+            {
+              "do": "highlight",
+              "target": {
+                "text": "2 leads selected"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Give to a person"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            },
+            {
+              "do": "highlight",
+              "target": {
+                "text": "Send a WhatsApp template"
+              },
+              "ms": 1300
+            },
+            {
+              "do": "unhighlight"
+            }
+          ],
+          "say": {
+            "en": "Tap Select to pick many leads, then Actions: give them to a person, or send a WhatsApp template.",
+            "hi": "Select दबाकर कई leads चुनिए, फिर Actions: उन्हें किसी को दीजिए, या WhatsApp template भेजिए.",
+            "mr": "Select दाबून बरेच leads निवडा, मग Actions: ते कोणाला तरी द्या, किंवा WhatsApp template पाठवा."
+          },
+          "latn": {
+            "hi": "Select dabakar kai leads chuniye, phir Actions: unhe kisi ko dijiye, ya WhatsApp template bhejiye.",
+            "mr": "Select dabun bare leads nivda, mag Actions: te konala tari dya, kinva WhatsApp template pathva."
+          },
+          "short": {
+            "say": {
+              "en": "Select many, act once.",
+              "hi": "कई चुनिए, एक बार में काम.",
+              "mr": "बरेच निवडा, एकदाच काम."
+            },
+            "latn": {
+              "hi": "Kai chuniye, ek baar mein kaam.",
+              "mr": "Bare nivda, ekdach kaam."
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -149,6 +149,9 @@ from ac_platform.lead_desk.vocabulary import (
 from ac_platform.tenancy.models import Membership
 
 MANAGERS = frozenset({"owner", "admin"})
+# A phone alert names a task due within this of now (task_push reminds up to two hours
+# before an in-person meeting).
+TASK_ALERT_WINDOW = timedelta(hours=2)
 WhyKind = Literal["due", "new", "retry", "later", "open", "closed", "waiting"]
 SELLER_ROLES = ("owner", "admin", "member")
 QUEUE_LIMIT = 30
@@ -643,6 +646,7 @@ class LeadDesk:
             no_next_action=lead.stage in OPEN_STAGES
             and lead.stage != "new"
             and lead.next_action_at is None,
+            has_email=bool(lead.email),
         )
 
     def _reason_label(self, lead: Lead) -> str | None:
@@ -1094,6 +1098,13 @@ class LeadDesk:
             LeadEvent.kind.in_(WORK_KINDS),
             LeadEvent.created_at >= after,
             LeadEvent.created_at < upto,
+            # A new stage list placing leads is not the person's work (AUT-2218, 25 Oct
+            # 2026: "8 stage moves" credited to the admin who approved the install).
+            or_(
+                LeadEvent.kind != "stage",
+                func.coalesce(LeadEvent.data["source"].as_string(), "")
+                != transitions.STAGES_CHANGED,
+            ),
             self._visible(),
         ]
         joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
@@ -2983,6 +2994,16 @@ class LeadDesk:
             return AlertText(
                 title=f"Meeting with {name} at {clock_text(meeting.starts_at)}"[:120],
                 body=" · ".join(part for part in (mode, meeting.agenda, source) if part)[:240],
+                lead_id=lead.id,
+                url=f"/leads#lead={lead.id}",
+            )
+        # A task due about now speaks for itself (work-memory engine): "Call back Asha at
+        # 5:30 PM", its note and place.
+        task = next(iter(await task_book.TaskBook(self).open_for(lead.id)), None)
+        if task is not None and abs(task.starts_at - self.now) <= TASK_ALERT_WINDOW:
+            return AlertText(
+                title=f"{task.title} at {clock_text(task.starts_at)}"[:120],
+                body=" · ".join(part for part in (task.note, task.location, source) if part)[:240],
                 lead_id=lead.id,
                 url=f"/leads#lead={lead.id}",
             )

@@ -9,15 +9,28 @@
  * Lead OS (24 Oct 2026): how long each lead has sat in its stage, its last
  * contact, its Lost or Junk reason and when it came in; a column picker that
  * this browser remembers; a stage that asks for something opens the stage sheet.
+ * Phones and narrow panes (owner, 25 Oct 2026: "sideways scrolling is hard"):
+ * nothing scrolls sideways. Name and as many key columns as the pane holds
+ * stay in the row; the rest open under it from the row's chevron.
  */
 
-import { ArrowDown, ArrowUp, Columns3, Pencil } from "lucide-react";
 import {
+  ArrowDown,
+  ArrowUp,
+  ChevronDown,
+  Columns3,
+  Pencil,
+} from "lucide-react";
+import {
+  Fragment,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   useSyncExternalStore,
+  type CSSProperties,
   type KeyboardEvent,
+  type ReactNode,
   type RefObject,
 } from "react";
 
@@ -31,7 +44,7 @@ import {
 } from "./leads-client";
 import type { MoveOption } from "./pipeline/pipeline-client";
 import { StageSheet } from "./pipeline/stage-sheet";
-import { QuickAddRow, type PasteRows } from "./quick-add";
+import { QuickAddBar, QuickAddRow, type PasteRows } from "./quick-add";
 import {
   EDIT_COLUMNS,
   PickEditor,
@@ -145,6 +158,73 @@ function keepShown(shown: ReadonlySet<Column>) {
   }
 }
 
+/* Fitting the pane (owner, 25 Oct 2026). Below FIT_BELOW px the table keeps
+   Name, then the key columns that fit at KEY_MIN each beside NAME_MIN for the
+   name, a 44 px chevron and the tick column while selecting. Widths include
+   the cells' padding. A narrow row's Stage cell carries the next action under
+   it; with no room for a column, both go under the name. */
+const FIT_BELOW = 860;
+const NAME_MIN = 132;
+const KEY_MIN = 116;
+// "tomorrow 12:00 AM" under a stage is 124 px at 12.5 px: 144 with the cell's padding.
+const KEY_MAX = 144;
+const TAP = 44;
+/** Which columns earn a place in a narrow row first. */
+const KEY_ORDER: Column[] = [
+  "stage",
+  "next",
+  "owner",
+  "last",
+  "source",
+  "contact",
+  "age",
+  "phone",
+  "reason",
+  "created",
+  "pipeline",
+];
+
+/** The pane's width in CSS px, or 0 before it is known (a test, the server). */
+function usePaneWidth(pane: RefObject<HTMLElement | null>): number {
+  const [width, setWidth] = useState(0);
+  // Measured before the first paint, so a phone never sees the wide table.
+  useLayoutEffect(() => {
+    const node = pane.current;
+    if (!node) return;
+    const read = () => setWidth(node.clientWidth);
+    read();
+    if (typeof ResizeObserver !== "function") return;
+    const observer = new ResizeObserver(read);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [pane]);
+  return width;
+}
+
+/** The narrow layout: the key columns in the row and each one's width. */
+export function fitColumns<C extends string>(
+  width: number,
+  shown: readonly C[],
+  order: readonly C[],
+  ticks: boolean,
+): { keys: C[]; keyWidth: number } | null {
+  if (!width || width >= FIT_BELOW) return null;
+  const room = width - NAME_MIN - TAP - (ticks ? TAP : 0);
+  const ranked = order.filter((column) => shown.includes(column));
+  const count = Math.max(
+    0,
+    Math.min(ranked.length, Math.floor(room / KEY_MIN)),
+  );
+  const keys = ranked.slice(0, count);
+  return {
+    keys: shown.filter((column) => keys.includes(column)),
+    keyWidth: Math.max(
+      KEY_MIN,
+      Math.min(KEY_MAX, Math.floor(room / Math.max(1, keys.length))),
+    ),
+  };
+}
+
 /** How long a lead has sat in its stage, in words ("3 days"). */
 export function inStage(
   row: Pick<LeadRow, "stage_at">,
@@ -251,6 +331,10 @@ export function LeadsTable({
 }) {
   const [sort, setSort] = useState<{ by: Column; down: boolean } | null>(null);
   const grid = useRef<HTMLTableElement>(null);
+  const pane = useRef<HTMLDivElement | null>(null);
+  const paneWidth = usePaneWidth(pane);
+  // Narrow rows opened to show the columns that don't fit.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(() => new Set());
   // A stage that asks for something (a reason, a follow-up, the meeting).
   const [asking, setAsking] = useState<{
     lead: LeadRow;
@@ -292,6 +376,37 @@ export function LeadsTable({
       ["source", "next", "last", "age", "contact", "reason", "created"] as const
     ).filter((column) => visible.has(column)),
   ];
+  const fit = fitColumns(
+    paneWidth,
+    columns.filter((column) => column !== "name"),
+    KEY_ORDER,
+    selecting,
+  );
+  // In a narrow pane: Name and the key columns in the row, the rest under it.
+  const rowColumns: Column[] = fit ? ["name", ...fit.keys] : columns;
+  // The next action rides under the stage (or under the name, with no room
+  // for a column) rather than waiting in the opened row.
+  const nextWithStage =
+    !!fit &&
+    rowColumns.includes("stage") &&
+    !rowColumns.includes("next") &&
+    columns.includes("next");
+  const statusUnderName = !!fit && fit.keys.length === 0;
+  const underColumns: Column[] = fit
+    ? columns.filter(
+        (column) =>
+          !rowColumns.includes(column) &&
+          !(column === "next" && (nextWithStage || statusUnderName)) &&
+          !(column === "stage" && statusUnderName),
+      )
+    : [];
+  const toggleOpen = (leadId: string) =>
+    setOpened((current) => {
+      const next = new Set(current);
+      if (next.has(leadId)) next.delete(leadId);
+      else next.add(leadId);
+      return next;
+    });
   const shown = useMemo(() => {
     if (!sort) return edits.shown;
     const sign = sort.down ? -1 : 1;
@@ -377,7 +492,7 @@ export function LeadsTable({
     if (!here) return;
     const [leadId, from] = here.split(":");
     let line = shown.findIndex((row) => row.lead_id === leadId);
-    let index = columns.indexOf(from as Column);
+    let index = rowColumns.indexOf(from as Column);
     const down =
       event.key === "ArrowDown" ? 1 : event.key === "ArrowUp" ? -1 : 0;
     const across =
@@ -387,9 +502,9 @@ export function LeadsTable({
       line += down;
       index += across;
       if (line < 0 || line >= shown.length) return;
-      if (index < 0 || index >= columns.length) return;
+      if (index < 0 || index >= rowColumns.length) return;
       const next = grid.current?.querySelector<HTMLElement>(
-        `[data-cell="${cellKey(shown[line].lead_id, columns[index])}"]`,
+        `[data-cell="${cellKey(shown[line].lead_id, rowColumns[index])}"]`,
       );
       if (next) {
         next.focus();
@@ -416,11 +531,21 @@ export function LeadsTable({
               }}
             >
               <strong>{displayName(row.name)}</strong>
-              {row.company || row.city ? (
+              {statusUnderName ? (
+                <small>
+                  {row.stage_label}
+                  {columns.includes("next") && row.next_action_at ? (
+                    <span data-late={row.overdue ? "" : undefined}>
+                      {` · ${when(row.next_action_at, now)}`}
+                    </span>
+                  ) : null}
+                </small>
+              ) : row.company || row.city ? (
                 <small>{row.company ?? row.city}</small>
               ) : null}
             </button>
-            {edits.can(row, "name") ? (
+            {/* A narrow row keeps its width for the name: rename on the lead page. */}
+            {!fit && edits.can(row, "name") ? (
               <button
                 type="button"
                 className={styles.rename}
@@ -442,7 +567,20 @@ export function LeadsTable({
           <span className={styles.quiet}>No number</span>
         );
       case "stage":
-        return <span className={styles.stage}>{row.stage_label}</span>;
+        return nextWithStage ? (
+          <span className={styles.stageStack}>
+            <span className={styles.stage}>{row.stage_label}</span>
+            {row.next_action_at ? (
+              <small data-late={row.overdue ? "" : undefined}>
+                {when(row.next_action_at, now)}
+              </small>
+            ) : (
+              <small className={styles.quiet}>No next step</small>
+            )}
+          </span>
+        ) : (
+          <span className={styles.stage}>{row.stage_label}</span>
+        );
       case "pipeline":
         return pipelineNames?.get(row.pipeline ?? "main") ?? row.pipeline;
       case "owner":
@@ -480,21 +618,73 @@ export function LeadsTable({
     }
   };
 
+  const editing = (row: LeadRow, column: Column) =>
+    EDIT_COLUMNS.has(column) &&
+    edits.can(row, column as EditColumn) &&
+    edits.editing?.leadId === row.lead_id &&
+    edits.editing.column === column;
+
+  /** A cell's inside: its editor, a quiet button that starts one, or text. */
+  const body = (row: LeadRow, column: Column): ReactNode => {
+    if (editing(row, column)) return editor(row, column as EditColumn);
+    const editable =
+      EDIT_COLUMNS.has(column) && edits.can(row, column as EditColumn);
+    return editable && column !== "name" ? (
+      <button
+        type="button"
+        className={styles.cell}
+        data-cell={cellKey(row.lead_id, column)}
+        onClick={(event) => {
+          event.stopPropagation();
+          edits.start(row, column as EditColumn, true);
+        }}
+      >
+        {cell(row, column)}
+        <span className={styles.srOnly}>
+          {`, change ${LABELS[column].toLowerCase()}`}
+        </span>
+      </button>
+    ) : (
+      cell(row, column)
+    );
+  };
+
+  const across = rowColumns.length + (selecting ? 1 : 0) + (fit ? 1 : 0);
+
   return (
-    <div className={styles.wrap} ref={keysRef}>
+    <div
+      className={styles.wrap}
+      data-fit={fit ? "" : undefined}
+      ref={(node) => {
+        pane.current = node;
+        if (keysRef) keysRef.current = node;
+      }}
+    >
       <div className={styles.columnsBar}>
+        {fit && underColumns.length ? (
+          <small className={styles.columnsNote}>
+            {underColumns.length === 1
+              ? "1 more column under each row"
+              : `${underColumns.length} more columns under each row`}
+          </small>
+        ) : null}
         <button
           type="button"
           className={styles.columnsButton}
           aria-expanded={picking}
           onClick={() => setPicking((open) => !open)}
         >
-          <Columns3 size={14} aria-hidden="true" />
+          <Columns3 size={16} aria-hidden="true" />
           Columns
         </button>
         {picking ? (
           <fieldset className={styles.columnsMenu}>
             <legend className={styles.srOnly}>Columns to show</legend>
+            {fit ? (
+              <p className={styles.columnsHint}>
+                {`${rowColumns.map((column) => LABELS[column]).join(", ")} fit in each row. The rest open from the row's arrow.`}
+              </p>
+            ) : null}
             {OPTIONAL.map((column) => (
               <label key={column}>
                 <input
@@ -508,11 +698,25 @@ export function LeadsTable({
           </fieldset>
         ) : null}
       </div>
+      {fit && quickAdd ? (
+        <div className={styles.quickAbove}>
+          <QuickAddBar
+            pipeline={quickAdd.pipeline}
+            onAdded={quickAdd.onAdded}
+            onPasteRows={quickAdd.onPasteRows}
+          />
+        </div>
+      ) : null}
       <table
         ref={grid}
         className={styles.table}
         aria-label="Leads"
         onKeyDown={onGridKey}
+        style={
+          fit
+            ? ({ "--key-width": `${fit.keyWidth}px` } as CSSProperties)
+            : undefined
+        }
       >
         <thead>
           <tr>
@@ -521,7 +725,7 @@ export function LeadsTable({
                 <span className={styles.srOnly}>Select</span>
               </th>
             ) : null}
-            {columns.map((column) => {
+            {rowColumns.map((column) => {
               const server = serverSort ? SERVER_SORT[column] : undefined;
               const sorted = server
                 ? serverSort?.by === server
@@ -558,7 +762,9 @@ export function LeadsTable({
                       );
                     }}
                   >
-                    {LABELS[column]}
+                    {column === "stage" && nextWithStage
+                      ? "Stage · next"
+                      : LABELS[column]}
                     {sorted ? (
                       down ? (
                         <ArrowDown size={13} aria-hidden="true" />
@@ -570,74 +776,96 @@ export function LeadsTable({
                 </th>
               );
             })}
+            {fit ? (
+              <th scope="col" className={styles.more}>
+                <span className={styles.srOnly}>More</span>
+              </th>
+            ) : null}
           </tr>
         </thead>
         <tbody>
-          {shown.map((row) => (
-            <tr
-              key={row.lead_id}
-              data-selected={chosen?.has(row.lead_id) ? "" : undefined}
-              onClick={() =>
-                selecting ? onToggle?.(row) : onOpen(row.lead_id)
-              }
-            >
-              {selecting ? (
-                <td className={styles.pick}>
-                  <input
-                    type="checkbox"
-                    checked={chosen?.has(row.lead_id) ?? false}
-                    onChange={() => onToggle?.(row)}
-                    onClick={(event) => event.stopPropagation()}
-                    aria-label={`Select ${displayName(row.name)}`}
-                  />
-                </td>
-              ) : null}
-              {columns.map((column) => {
-                const editable =
-                  EDIT_COLUMNS.has(column) &&
-                  edits.can(row, column as EditColumn);
-                if (
-                  editable &&
-                  edits.editing?.leadId === row.lead_id &&
-                  edits.editing.column === column
-                )
-                  return (
-                    <td
-                      key={column}
-                      data-column={column}
-                      data-editing=""
-                      onClick={(event) => event.stopPropagation()}
-                    >
-                      {editor(row, column as EditColumn)}
+          {shown.map((row) => {
+            const open = fit !== null && opened.has(row.lead_id);
+            const name = displayName(row.name);
+            return (
+              <Fragment key={row.lead_id}>
+                <tr
+                  data-selected={chosen?.has(row.lead_id) ? "" : undefined}
+                  data-open={open ? "" : undefined}
+                  onClick={() =>
+                    selecting ? onToggle?.(row) : onOpen(row.lead_id)
+                  }
+                >
+                  {selecting ? (
+                    <td className={styles.pick}>
+                      <input
+                        type="checkbox"
+                        checked={chosen?.has(row.lead_id) ?? false}
+                        onChange={() => onToggle?.(row)}
+                        onClick={(event) => event.stopPropagation()}
+                        aria-label={`Select ${name}`}
+                      />
                     </td>
-                  );
-                return (
-                  <td key={column} data-column={column}>
-                    {editable && column !== "name" ? (
-                      <button
-                        type="button"
-                        className={styles.cell}
-                        data-cell={cellKey(row.lead_id, column)}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          edits.start(row, column as EditColumn, true);
-                        }}
+                  ) : null}
+                  {rowColumns.map((column) =>
+                    editing(row, column) ? (
+                      <td
+                        key={column}
+                        data-column={column}
+                        data-editing=""
+                        onClick={(event) => event.stopPropagation()}
                       >
-                        {cell(row, column)}
-                        <span className={styles.srOnly}>
-                          {`, change ${LABELS[column].toLowerCase()}`}
-                        </span>
-                      </button>
+                        {body(row, column)}
+                      </td>
                     ) : (
-                      cell(row, column)
-                    )}
-                  </td>
-                );
-              })}
-            </tr>
-          ))}
+                      <td key={column} data-column={column}>
+                        {body(row, column)}
+                      </td>
+                    ),
+                  )}
+                  {fit ? (
+                    <td className={styles.more}>
+                      {underColumns.length ? (
+                        <button
+                          type="button"
+                          className={styles.moreButton}
+                          aria-expanded={open}
+                          aria-controls={`more-${row.lead_id}`}
+                          aria-label={`${open ? "Hide" : "Show"} more about ${name}`}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            toggleOpen(row.lead_id);
+                          }}
+                        >
+                          <ChevronDown size={18} aria-hidden="true" />
+                        </button>
+                      ) : null}
+                    </td>
+                  ) : null}
+                </tr>
+                {open ? (
+                  <tr id={`more-${row.lead_id}`} className={styles.moreRow}>
+                    <td colSpan={across}>
+                      <dl className={styles.moreList}>
+                        {underColumns.map((column) => (
+                          <div
+                            key={column}
+                            data-column={column}
+                            data-editing={editing(row, column) ? "" : undefined}
+                          >
+                            <dt>{LABELS[column]}</dt>
+                            <dd>{body(row, column)}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            );
+          })}
         </tbody>
-        {quickAdd ? (
+        {quickAdd && !fit ? (
           <tfoot>
             <QuickAddRow
               pipeline={quickAdd.pipeline}

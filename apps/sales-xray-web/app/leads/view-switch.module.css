@@ -1,0 +1,88 @@
+/* Leads' views (owner, 25 Oct 2026): Now, All leads and More as three equal
+   segments on one track, 44 px tall; a view's own tools in the row under it.
+   8 pt grid. Tokens only. */
+
+.switch {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
+  max-width: 560px;
+  padding: 4px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-sunken);
+}
+
+.segment {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.segment[aria-current="page"] {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-weight: 750;
+  box-shadow: var(--lx-shadow-1);
+}
+
+.segment:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .segment:hover:not([aria-current="page"]) {
+    color: var(--sx-ink);
+  }
+}
+
+.label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.count {
+  flex: none;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-strong);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  text-align: center;
+}
+
+.segment[aria-current="page"] .count {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+/* Filter first, then the view's strip (stage chips), which scrolls inside itself. */
+.tools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.tools > :last-child:not(:first-child) {
+  flex: 1 1 auto;
+  min-width: 0;
+}

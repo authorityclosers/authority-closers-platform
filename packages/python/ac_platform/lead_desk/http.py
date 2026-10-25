@@ -31,7 +31,7 @@ from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk import push, simulation
+from ac_platform.lead_desk import finder, push, simulation
 from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk.contracts import (
     ActivityPage,
@@ -78,6 +78,7 @@ from ac_platform.lead_desk.contracts import (
     Reassign,
     RecordingCommand,
     RepRules,
+    SearchResult,
     SeedCommand,
     SettingsCommand,
     SimulationPick,
@@ -296,6 +297,25 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request, frozenset({"day", "before", "person"}))
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.activity(day=day, before=before, person=person)
+
+    @router.get("/notes", response_model=ActivityPage, response_model_by_alias=True)
+    async def list_notes(
+        request: Request,
+        response: Response,
+        q: str | None = None,
+        before: AwareDatetime | None = None,
+    ) -> ActivityPage:
+        """Notes: what people wrote on your leads, newest first; with q, what says it."""
+        no_query(request, frozenset({"q", "before"}))
+        async with desk_for(request, response) as lead_desk:
+            return await finder.notes(lead_desk, q=q, before=before)
+
+    @router.get("/search", response_model=SearchResult, response_model_by_alias=True)
+    async def search_desk(request: Request, response: Response, q: str = "") -> SearchResult:
+        """A few words across leads, notes and open tasks."""
+        no_query(request, frozenset({"q"}))
+        async with desk_for(request, response) as lead_desk:
+            return await finder.search(lead_desk, q)
 
     @router.get("/leads/match", response_model=LeadMatch, response_model_by_alias=True)
     async def match_lead(request: Request, response: Response, phone: str = "") -> LeadMatch:

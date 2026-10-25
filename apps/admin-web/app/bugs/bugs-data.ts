@@ -153,7 +153,7 @@ export type BugSummary = {
   route: string;
   boardCard: string | null;
   organisation: { id: string; name: string } | null;
-  person: { name: string | null; email: string | null };
+  person: { id: string | null; name: string | null; email: string | null };
   hasScreenshot: boolean;
   app: Record<string, string | number | boolean>;
   device: Record<string, string | number | boolean>;
@@ -241,6 +241,7 @@ export function normalizeSummary(raw: unknown): BugSummary {
         }
       : null,
     person: {
+      id: read.optionalString(person.id),
       name: read.optionalString(person.name),
       email: read.optionalString(person.email),
     },

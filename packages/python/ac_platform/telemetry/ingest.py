@@ -84,6 +84,8 @@ SALES_XRAY_ROUTE_TEMPLATES: tuple[str, ...] = (
     "/apps",
     "/developers",
     "/review",
+    # First-run setup after a first sign-in (welcome/setup-flow.tsx).
+    "/welcome",
 )
 _ALLOWED_ROUTE_TEMPLATES = frozenset(LEARNER_ROUTE_TEMPLATES + SALES_XRAY_ROUTE_TEMPLATES)
 

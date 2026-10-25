@@ -21,6 +21,7 @@ import {
 
 import { displayName } from "../display-name";
 import { notify } from "../notice-center";
+import { useFlow } from "../telemetry-flows";
 import { LeadsError, addLead, matchLead, type LeadMatch } from "./leads-client";
 import styles from "./leads-table.module.css";
 
@@ -81,8 +82,20 @@ function useQuickAdd(
     : null;
   const canAdd = !busy && name.trim().length > 0 && existing === null;
 
+  // One run per lead in the weekly friction report: typed, told it is already
+  // a lead, Enter refused, added, cleared with Escape, or left on the page.
+  const flow = useFlow("add_lead", { via: "quick" });
+  const typed = name.trim().length > 0 || digits > 0;
+  const duplicate = existing !== null;
+  useEffect(() => {
+    if (typed) flow.step(duplicate ? "duplicate" : "form");
+  }, [flow, typed, duplicate]);
+
   const submit = () => {
-    if (!canAdd) return;
+    if (!canAdd) {
+      if (!busy && typed) flow.blocked(duplicate ? "duplicate" : "form");
+      return;
+    }
     setBusy(true);
     addLead({
       source: "manual",
@@ -93,6 +106,7 @@ function useQuickAdd(
     })
       .then(
         () => {
+          flow.done({ step: "save" });
           setName("");
           setPhone("");
           setMatch(null);
@@ -117,6 +131,7 @@ function useQuickAdd(
       submit();
     } else if (event.key === "Escape" && (name || phone)) {
       event.preventDefault();
+      flow.cancel();
       setName("");
       setPhone("");
     }

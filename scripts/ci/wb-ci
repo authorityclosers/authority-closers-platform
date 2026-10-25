@@ -2,6 +2,7 @@
 # wb-ci: run workbench checks on GitHub-hosted runners instead of on ac (owner, 20 Oct 2026; full run < 5 min).
 #
 #   wb-ci [--sha <sha>] [--changed [<base>] | --full] [--web] [--py] [--visual [route ...]] [--e2e]
+#         [--matrix [screen|route ...]]
 #         [--py-tests <path> ...] [--include <path> ...] [--no-wait] [--keep]
 #   wb-ci --refresh-durations <run-id>[,<run-id>...]   rebalance the Python shards (per-file mean over the runs)
 #
@@ -10,6 +11,9 @@
 #   --web/--py/--visual   force these families (with the scope above); --visual takes optional routes
 #   --e2e        also run the release's Sales Xray browser proofs (static export + acquisition journey, ~15 min);
 #                opt-in, never part of --full. Run before every release cut and after navigation/label changes.
+#   --matrix     the visual test matrix: review fixtures at 7 sizes x font scale 85-130% x light and dark, measured
+#                (overflow, clipping, taps under 44 px, misaligned rows); a report and contact sheets, kept a day.
+#                Opt-in, never part of --full; screens by name (leads-table) or fixture path; none means all.
 #   --py-tests   one pytest job for these paths instead of the 17 shards
 #   --include    also test these uncommitted workbench files (read only; nothing in the checkout changes)
 #   --no-wait    print the run URL and return     --keep    keep the wb-ci branch after the run
@@ -37,6 +41,7 @@ CI_FILES=(.github/workflows/workbench-checks.yml .github/actions/ci-prerequisite
           .github/actions/ci-prerequisite-bundle/action.yml scripts/ci/ci_prerequisite_bundle.py
           scripts/ci/ci-prerequisite-bootstrap.json
           scripts/ci/ci_prerequisites.py scripts/ci/wb_checks.py scripts/ci/wb_screens.mjs
+          scripts/ci/wb_matrix.mjs scripts/ci/wb_matrix_lib.mjs scripts/ci/wb_matrix_lib.test.mjs
           scripts/ci/wb-python-durations.json)
 
 if [ "${1:-}" = --refresh-durations ]; then
@@ -59,11 +64,12 @@ while [ $# -gt 0 ]; do
     --py) checks+=(py); shift; mode="" ;;
     --visual) checks+=(visual); shift; mode=routes ;;
     --e2e) checks+=(e2e); shift; mode="" ;;
+    --matrix) checks+=(matrix); shift; mode=routes ;;
     --py-tests) checks+=(py); shift; mode=py_tests ;;
     --include) shift; mode=include ;;
     --no-wait) wait=0; shift; mode="" ;;
     --keep) keep=1; shift; mode="" ;;
-    -h|--help) sed -n '2,19p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,23p' "$0"; exit 0 ;;
     --*) echo "wb-ci: unknown option $1" >&2; exit 2 ;;
     *)
       case "$mode" in

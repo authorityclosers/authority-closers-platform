@@ -55,6 +55,7 @@ import { KIND_WORDS } from "../leads/stage-tabs";
 import { several, usePipelines } from "../leads/use-pipelines";
 import { ActionList, ActionRow, Avatar, Delta, Segmented } from "../ui/kit";
 import { NeedsYou } from "./needs-you";
+import { RecentlyCalled } from "./recently-called";
 import {
   FunnelSkeleton,
   OutcomesSkeleton,
@@ -555,6 +556,7 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
           </div>
         )}
       </section>
+      <RecentlyCalled />
       <dl className={styles.dayStrip} aria-label="Your day">
         <div>
           <dt>Calls</dt>

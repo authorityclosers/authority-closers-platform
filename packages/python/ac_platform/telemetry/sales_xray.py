@@ -91,6 +91,7 @@ SCREENS = frozenset(
         "apps",
         "developers",
         "review",
+        "welcome",
         "other",
     }
 )
@@ -162,6 +163,64 @@ READ_BANDS = frozenset({"under_5s", "5_30s", "30_120s", "over_120s"})
 SECTION_ACTIONS = frozenset({"expand", "collapse", "copy", "clip", "helpful", "not_helpful"})
 # The call's AI-on-calls level when the person tapped (call-ai-client.ts).
 AI_LEVELS = frozenset({"off", "data_only", "auto", "full"})
+# Where people get stuck (owner, 25 Oct 2026: "automatically find where users stop, which
+# screen they get stuck on, where they try to tap"; telemetry-flows.ts and the weekly
+# friction report, telemetry/friction.py).
+# Journeys of several steps, and the names their screens give each step: first-run setup
+# (welcome/setup-state.ts), phone setup (leads/phone-setup-steps.ts, callLog as call_log),
+# adding a lead, and "How did it go?" after a call.
+FLOWS = frozenset({"onboarding", "phone_setup", "add_lead", "log_result"})
+FLOW_OUTCOMES = frozenset({"start", "step", "blocked", "done", "skip", "cancel", "abandon", "fail"})
+FLOW_STEPS = frozenset(
+    {
+        "start",
+        "name",
+        "business",
+        "team",
+        "first",
+        "calls",
+        "notifications",
+        "recordings",
+        "battery",
+        "autostart",
+        "call_log",
+        "recorder",
+        "form",
+        "duplicate",
+        "talk",
+        "reason",
+        "stage",
+        "next",
+        "save",
+    }
+)
+# Which way into a flow: setup's path, all of phone setup or one Fix, quick add or the
+# Add lead sheet, and where "How did it go?" was asked.
+FLOW_VIAS = frozenset(
+    {"business", "solo", "join", "all", "fix", "quick", "sheet", "after_call", "lead"}
+)
+MAX_FLOW_MS = 3_600_000
+MAX_FLOW_COUNT = 20
+# An Android permission or settings screen asked for (the snapshot's names, plus the
+# settings the phone can't report), and what came of it: blocked is Android no longer
+# asking, so only the app's settings can allow it.
+PROMPT_PERMISSIONS = frozenset(
+    {
+        "calls",
+        "notifications",
+        "rec_files",
+        "all_files",
+        "folder",
+        "battery",
+        "autostart",
+        "call_log",
+        "recorder",
+    }
+)
+PROMPT_OUTCOMES = frozenset({"granted", "denied", "blocked", "not_opened", "unknown"})
+MAX_PROMPT_MS = 600_000
+# Where on the screen a rage or dead tap landed: the viewport in 4 rows of 3.
+TAP_ZONES = frozenset(f"r{row}c{column}" for row in range(1, 5) for column in range(1, 4))
 
 
 def _event(
@@ -267,15 +326,24 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
         "sx.outcome_set": _event(tokens=("outcome",), required=("outcome",), takes_call=True),
         "sx.error_shown": _event(tokens=("surface", "code"), required=("surface", "code")),
         # Performance and usage (owner, 24 Oct 2026). A screen shown, the one before it and
-        # how long that one was stayed on: flows, drop-offs and the screen heatmap.
+        # how long that one was stayed on: flows, drop-offs and the screen heatmap. Since 25
+        # Oct also how long it was seen (seen_ms, the time the page was visible: a call in
+        # the dialer doesn't count as dwell).
         "sx.screen_viewed": _event(
             values={
                 "screen": SCREENS,
                 "from": SCREENS | {"none"},
                 "nav": ("first", "push", "back", "reload"),
             },
-            numbers={"stay_ms": MAX_STAY_MS},
+            numbers={"stay_ms": MAX_STAY_MS, "seen_ms": MAX_STAY_MS},
             required=("screen", "nav"),
+        ),
+        # The page went to the background or closed on a screen, and how long that screen
+        # was seen: the last screen's dwell, and where people leave the app.
+        "sx.screen_hidden": _event(
+            values={"screen": SCREENS, "kind": ("background", "exit")},
+            numbers={"seen_ms": MAX_STAY_MS},
+            required=("screen", "kind"),
         ),
         # Tap to response: from the tap to the screen settling (no change for 150 ms), and
         # the browser's own input-to-paint time for the same tap.
@@ -323,14 +391,19 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
             numbers={"ms": MAX_LOAD_MS},
             required=("endpoint", "status", "ms"),
         ),
-        # Three or more taps in a second on one spot, or a tap that changed nothing.
+        # Three or more taps in a second on one spot, or a tap that changed nothing. Since 25
+        # Oct also where: the screen zone, the element as the code names it (its
+        # data-sx-action or data-sx-feature, or its style's name, e.g.
+        # "leads-table.stagechip"; never its words) and a fingerprint of its place on the page.
         "sx.tap_issue": _event(
             values={
                 "kind": ("rage", "dead"),
                 "target": TAP_TARGETS,
                 "action": ACTIONS,
                 "screen": SCREENS,
+                "zone": TAP_ZONES,
             },
+            labels=("element", "where"),
             required=("kind", "target"),
         ),
         # A named feature used (the screens name them), for adoption.
@@ -450,6 +523,37 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
                 "from": ("call", "chat", "rule"),
             },
             required=("action",),
+        ),
+        # A journey of several steps (telemetry-flows.ts): its start, each step reached, a
+        # Continue or Save refused for something missing (blocked), and how it ended: done,
+        # skipped, cancelled, left half way (abandon) or failed. With the step, its place,
+        # the number of steps, what was left to do and the time since the start.
+        "sx.flow": _event(
+            values={
+                "flow": FLOWS,
+                "outcome": FLOW_OUTCOMES,
+                "step": FLOW_STEPS,
+                "via": FLOW_VIAS,
+            },
+            numbers={
+                "index": MAX_FLOW_COUNT,
+                "steps": MAX_FLOW_COUNT,
+                "left": MAX_FLOW_COUNT,
+                "ms": MAX_FLOW_MS,
+            },
+            required=("flow", "outcome"),
+        ),
+        # One Android permission or settings screen asked for in phone setup (all of it,
+        # or one Fix from Settings), what came of it and how long the answer took.
+        "sx.permission_prompt": _event(
+            values={
+                "permission": PROMPT_PERMISSIONS,
+                "outcome": PROMPT_OUTCOMES,
+                "via": ("prompt", "settings"),
+                "from": ("setup", "fix"),
+            },
+            numbers={"ms": MAX_PROMPT_MS},
+            required=("permission", "outcome"),
         ),
     }
 )
@@ -587,11 +691,17 @@ __all__ = [
     "MAX_DWELL_MS",
     "NETWORKS",
     "APP_PERMISSIONS",
+    "FLOWS",
+    "FLOW_OUTCOMES",
+    "FLOW_STEPS",
+    "FLOW_VIAS",
     "NOTICES",
     "NOTICE_V1",
     "NOTICE_EFFECTIVE_AT",
     "NOTICE_VERSION",
     "PERSON_DAILY_CAP",
+    "PROMPT_OUTCOMES",
+    "PROMPT_PERMISSIONS",
     "READ_BANDS",
     "REPORT_SECTIONS",
     "RETENTION_DAYS",
@@ -601,6 +711,7 @@ __all__ = [
     "SCREENS",
     "SECTION_ACTIONS",
     "SKILLS",
+    "TAP_ZONES",
     "TIERS",
     "SalesXrayAdmission",
     "call_ref",

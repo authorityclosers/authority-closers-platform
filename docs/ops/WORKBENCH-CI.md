@@ -16,6 +16,7 @@ wb-ci --full                            # every job: lint + tsc, vitest, screens
 wb-ci --web                             # force the web jobs (scoped to the changed files unless --full)
 wb-ci --py-tests tests/core/test_x.py   # one pytest target with PostgreSQL instead of the 17 shards
 wb-ci --visual /review-fixture/shell "/?new=1&sx-fixture=auth.email"
+wb-ci --matrix leads-table lead-sheet   # the visual test matrix for these screens (none: all of them)
 wb-ci --include apps/sales-xray-web/app/x.tsx   # also test this uncommitted file
 wb-ci --sha 1a2b3c4d --full             # a specific workbench commit
 ```
@@ -82,6 +83,13 @@ summary.
   - lint: prettier, eslint, ruff, mypy, and tsc in a full run;
   - vitest;
   - visual: 390 and 1440 px, light and dark, two pages at a time;
+  - matrix (opt-in, `--matrix`, never in a full run): review fixtures at 320x640, 360x640, 360x800, 390x844,
+    412x915, 430x932 and 768x1024; font scale 100%, 85/115/130% as browser text scaling and 115/130% as the
+    Android app zooms (clamped to 1-1.2, so 130% on 360 px leaves 300 CSS px); light and dark. 84 states a
+    screen, three at a time. It measures overflow, clipped and spilling text, taps under 44 px, uneven rows and
+    `[data-sx-equal]` groups, and uploads one artifact, `wb-matrix`, for a day: `report.md` (also the job
+    summary), `matrix.json` and a JPEG contact sheet per screen. Screens are named in
+    `scripts/ci/wb_matrix_lib.mjs`. Findings don't fail the job; a matrix that could not run does.
   - 17 Python shards.
 - **A `--changed` run** gives tsc its own job.
 - **The Python shards come in two families that partition the tests:**

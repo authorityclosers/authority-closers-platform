@@ -4,14 +4,15 @@
 `wb-ci` on ac pushes a request commit to `refs/heads/wb-ci/<slot>`. The commit carries `.wb-ci/request.json`:
 
     {"schema": "wb-ci/2", "source_sha": "<workbench commit>", "full": false,
-     "checks": [] | ["web", "py", "visual", "e2e"], "changed_files": ["apps/...", ...], "routes": [], "py_tests": [],
+     "checks": [] | ["web", "py", "visual", "e2e", "matrix"], "changed_files": ["apps/...", ...], "routes": [], "py_tests": [],
      "py_shards": 17, "requested_by": "..."}
 
 Python shards come in two families that partition the tests: (a) files that may need the codec/browser/native
 prerequisites, (b) the rest, which skip that 60 s install. Each family is sharded and verified on its own by
 scripts/ci/python_test_shard.py (an exclusion file adds the other family's files).
 
-Full runs every job. Otherwise only the families the changed paths touch run (explicit `checks` force families), and
+`matrix` (the visual test matrix: 7 sizes x font scale 85-130% x light and dark, wb_matrix.mjs) runs only when
+asked for, like `e2e`; it is never part of a full run. Full runs every other job. Otherwise only the families the changed paths touch run (explicit `checks` force families), and
 lint, tsc, vitest and ruff are scoped to the changed files. Python tests always run every shard when Python changed
 (or the given `py_tests` only). Two gates run whenever their paths change, even with explicit `checks`: migrations
 (released history, recovery policy, gate fixtures, rehearsal) and control (validate-control-plane.sh).
@@ -229,7 +230,8 @@ def cmd_plan() -> int:
     # A full run does tsc inside the lint job, so 17 Python shards fit GitHub Free's 20 concurrent jobs.
     web_tasks = ["vitest"] if full else ["tsc", "vitest"]
     out(web=str("web" in fams).lower(), py=str("py" in fams).lower(), visual=str("visual" in fams).lower(),
-        e2e=str("e2e" in fams).lower(), migrations=str("migrations" in fams).lower(),
+        e2e=str("e2e" in fams).lower(), matrix=str("matrix" in fams).lower(),
+        migrations=str("migrations" in fams).lower(),
         control=str("control" in fams).lower(),
         lint=str(bool(fams & {"web", "py"})).lower(), web_matrix=json.dumps(web_tasks),
         py_matrix=json.dumps({"include": py_matrix if "py" in fams else []}),
