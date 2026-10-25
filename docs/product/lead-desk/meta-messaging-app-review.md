@@ -173,6 +173,20 @@ the review notes say Sales Xray supports both. Build before recording: the featu
 three webhook fields, the sync job and the skipped registration (one api task, one web task
 for the card's sync state).
 
+Business profile for this number (owner, 25 Oct 2026: brand it Sales X-Ray, by Authority
+Closers: the product's messaging account for testers, onboarding, nudges and support; AC's own
+selling stays on the sellers' numbers). The same values go on the test number now
+(side notes `meta-suite-20261025/wa-profile.py`) and on the Redmi 13 number after coexistence:
+| Field | Value |
+|---|---|
+| Display name | Sales X-Ray (Meta's display-name check matches the website's brand) |
+| Profile photo | the Sales X-Ray icon, `brand-20261023/icon/sales-xray-icon-1024.png` (the art at /icons/icon-512.png), via the Resumable Upload API |
+| About (139 max) | Sales X-Ray: calls, leads and AI coaching for sales teams. |
+| Description | Sales X-Ray is a sales CRM and AI call-coaching app for sales teams, by Authority Closers. This number sends Sales X-Ray updates and answers your questions about the app. |
+| Email | admin@authorityclosers.com |
+| Website | https://salesxray.authorityclosers.com |
+| Vertical | PROF_SERVICES (Professional Services) |
+
 Until approval: Meta's test number +1 555 656 0179 (WABA 1000985176354249) for test
 messages; steps in the side notes `meta-suite-20261025/whatsapp-test-number-steps.md`.
 
