@@ -28,7 +28,7 @@ from ac_platform.tenancy.models import Tenant
 from tests.database.conversation_harness import conversation_harness
 
 ROOT = Path(__file__).resolve().parents[2]
-PULSE = ("20261026_0139", "20261025_0138", "20261026_0139_pulse_link.py")
+PULSE = ("20261026_0139", "20261025_0137", "20261026_0139_pulse_link.py")
 TABLES = ("person_pulse_profiles", "pulse_org_links", "pulse_org_members", "app_call_uploads")
 
 
