@@ -214,8 +214,12 @@ it("lists every form on the Page to pick from, and brings in the picked ones' ol
     }),
   );
   await render();
-  // Bug report #8: which Facebook account the Page came through.
+  // Bug report #8: which Facebook account the Page came through, and another one.
   expect(tile().textContent).toContain("Through Fictional Owner's Facebook");
+  expect(
+    tile().querySelector('a[href="/v1/lead-desk/meta/connect?switch=1"]')
+      ?.textContent,
+  ).toBe("Use another Facebook account");
   expect(tile().textContent).toContain("Forms on this Page (3)");
   expect(tile().textContent).toContain("31 on Meta");
   expect(tile().textContent).toContain("Archived");

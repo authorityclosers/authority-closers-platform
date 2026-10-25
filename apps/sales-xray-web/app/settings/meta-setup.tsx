@@ -3,8 +3,10 @@
 /**
  * Settings -> Connected apps -> Facebook and Instagram lead ads, as one guided
  * setup (owner, 22 Oct 2026: "massive update to Meta connect and review UX"):
- * connect Facebook, turn on a Page and pick its forms, send a test lead, then
- * see what comes in. Above the steps, where Meta's review of Sales Xray stands
+ * connect Facebook, turn on the Pages (every Page at once if wanted), bring in
+ * the older leads, and, if wanted, send a test lead; then see what comes in.
+ * The test lead never holds anything up (owner's dev reports #2 and #3, 26 Oct
+ * 2026: a failed test blocked importing the old leads). Above the steps, where Meta's review of Sales Xray stands
  * and what works before it approves, in plain words
  * (lead_desk/connected_apps.meta_review).
  */
@@ -24,6 +26,7 @@ import { Button } from "../ui/kit";
 import {
   ago,
   AppsError,
+  bringOlder,
   checkPage,
   disconnect,
   readForms,
@@ -33,6 +36,7 @@ import {
   type Blocker,
   type MetaForm,
   type MetaPage,
+  type MetaRun,
   type Review,
 } from "./connected-apps-client";
 import styles from "./meta-setup.module.css";
@@ -45,6 +49,19 @@ const failed = (error: unknown) =>
     : "Check your connection and try again.";
 
 const leads = (count: number) => `${count} lead${count === 1 ? "" : "s"}`;
+
+/** Where a Page's older leads have got to: what was read, new, and already here. */
+export function runWords(run: MetaRun | null | undefined): string | null {
+  if (!run) return null;
+  if (run.state === "blocked")
+    return "Older leads stopped: see the Page's problem";
+  const found = `${leads(run.seen)} read: ${run.created} new, ${run.here} already in your leads`;
+  return run.state === "running"
+    ? `Bringing in older leads… ${found} so far`
+    : run.seen
+      ? `Older leads, last 90 days: ${found}`
+      : "Older leads: Meta has none from the last 90 days";
+}
 
 /** "19 Oct" from 2026-10-19. */
 export function day(value: string): string {
@@ -400,6 +417,7 @@ export function MetaSetup({
   const [read, setRead] = useState<MetaPage[] | null>(null);
   const [picking, setPicking] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
+  const [working, setWorking] = useState<"all" | "older" | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -451,6 +469,67 @@ export function MetaSetup({
         message: failed(error),
       });
     }
+  }
+
+  // Every Page on, every form, in one press (dev report #2: "pick all Pages and
+  // connect every form"). Each Page's last week comes in now.
+  async function turnOnAll() {
+    setWorking("all");
+    let count = 0;
+    const failures: string[] = [];
+    for (const page of pages.filter((item) => !item.active)) {
+      try {
+        count += await turnOnPage(page.pageId, "all");
+      } catch (error) {
+        failures.push(`${page.name}: ${failed(error)}`);
+      }
+    }
+    setWorking(null);
+    notify({
+      id: "meta-setup",
+      tone: failures.length ? "error" : "success",
+      title: failures.length
+        ? "Some Pages didn’t turn on"
+        : "Every Page is on, with all its forms",
+      message: failures.length
+        ? failures.join(" ")
+        : `${leads(count)} from the last week came in. Bring in the older ones below.`,
+      timeout: failures.length ? undefined : 6000,
+    });
+    changed();
+  }
+
+  // The older leads Meta keeps (90 days) from every Page that is on; leads
+  // already here are linked, never filed twice. Never waits for a test lead.
+  async function bringAllOlder() {
+    setWorking("older");
+    const failures: string[] = [];
+    let seen = 0;
+    let created = 0;
+    let here = 0;
+    for (const page of on) {
+      try {
+        const run = (await bringOlder(page.pageId))?.backfill;
+        seen += run?.seen ?? 0;
+        created += run?.created ?? 0;
+        here += run?.here ?? 0;
+      } catch (error) {
+        failures.push(`${page.name}: ${failed(error)}`);
+      }
+    }
+    setWorking(null);
+    notify({
+      id: "meta-setup",
+      tone: failures.length ? "error" : "success",
+      title: failures.length
+        ? "Some Pages’ older leads didn’t start"
+        : `${leads(seen)} read so far`,
+      message: failures.length
+        ? failures.join(" ")
+        : `${created} new, ${here} already in your leads. The rest follow in the next few minutes.`,
+      timeout: failures.length ? undefined : 8000,
+    });
+    changed();
   }
 
   async function checkNow() {
@@ -538,15 +617,71 @@ export function MetaSetup({
           ) : (
             <p>Your Pages show here once Facebook is connected.</p>
           )}
+          {pages.some((page) => !page.active) ? (
+            <div className={styles.row}>
+              <Button
+                variant="ghost"
+                disabled={working !== null}
+                onClick={() => void turnOnAll()}
+              >
+                <PlugZap size={15} aria-hidden="true" />
+                {working === "all"
+                  ? "Turning on…"
+                  : "Turn on every Page, all forms"}
+              </Button>
+            </div>
+          ) : null}
         </Step>
         <Step
           number={3}
-          title="Send a test lead"
-          state={passed ? "done" : on.length ? "now" : "later"}
+          title="Bring in the older leads"
+          state={
+            on.length && on.every((page) => page.backfill)
+              ? "done"
+              : on.length
+                ? "now"
+                : "later"
+          }
+        >
+          <p>
+            Every lead Meta still keeps, from the last 90 days and every form,
+            paused ones too. Anyone already in your leads is linked, not added
+            again.
+          </p>
+          {on.map((page) =>
+            runWords(page.backfill) ? (
+              <p key={page.pageId} className={styles.runLine}>
+                <strong>{page.name}</strong> · {runWords(page.backfill)}
+              </p>
+            ) : null,
+          )}
+          {on.length ? (
+            <div className={styles.row}>
+              <Button
+                variant="ghost"
+                disabled={
+                  working !== null ||
+                  on.some((page) => page.backfill?.state === "running")
+                }
+                onClick={() => void bringAllOlder()}
+              >
+                <RefreshCw size={15} aria-hidden="true" />
+                {working === "older"
+                  ? "Starting…"
+                  : `Bring in older leads${on.length > 1 ? " from every Page" : ""}`}
+              </Button>
+            </div>
+          ) : null}
+        </Step>
+        <Step
+          number={4}
+          title="Send a test lead (optional)"
+          state={passed ? "done" : "later"}
         >
           <p>
             Meta makes a sample lead on your form. It lands in Leads marked as a
-            test and stays out of your reports.
+            test and stays out of your reports. If the test doesn’t pass, your
+            leads still come in: nothing waits for it.
           </p>
           {on.length ? test : null}
         </Step>

@@ -951,6 +951,16 @@ function MetaTile() {
           ))}
         </ul>
       ) : null}
+      {status?.configured && status.pages.length ? (
+        <p className={styles.hint}>
+          {/* Bug report #8: another account is one press, not a dead end. */}
+          <a href={`${META}/connect?switch=1`} onClick={connect}>
+            Use another Facebook account
+          </a>{" "}
+          to add the Pages it runs. Each Page says which account it came
+          through.
+        </p>
+      ) : null}
       {note ? (
         <p className={styles.hint} role="status">
           {note}

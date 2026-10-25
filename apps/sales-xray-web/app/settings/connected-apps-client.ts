@@ -94,7 +94,31 @@ export type MetaPage = {
   forms: "all" | string[];
   formsCovered: MetaForm[];
   problem: { kind: string; text: string } | null;
+  /** Bringing in the older leads Meta keeps (90 days): what the last run read. */
+  backfill?: MetaRun | null;
 };
+/** A run of older leads: read from Meta, new, and already in the leads. */
+export type MetaRun = {
+  state: "running" | "done" | "blocked";
+  seen: number;
+  created: number;
+  here: number;
+};
+
+function parseRun(value: unknown): MetaRun | null {
+  if (!isRecord(value)) return null;
+  const state = value.state;
+  if (state !== "running" && state !== "done" && state !== "blocked")
+    return null;
+  const count = (key: string) =>
+    typeof value[key] === "number" ? (value[key] as number) : 0;
+  return {
+    state,
+    seen: count("seen"),
+    created: count("created"),
+    here: count("linked") + count("repeat") + count("known"),
+  };
+}
 
 export class AppsError extends Error {
   constructor(
@@ -458,7 +482,21 @@ function parsePage(value: unknown): MetaPage | null {
             text: problem.text as string,
           }
         : null,
+    backfill: parseRun(value.backfill),
   };
+}
+
+/**
+ * Bring in the older leads Meta keeps for a Page (90 days), from every form it
+ * takes; leads already here are linked, never filed twice. The first slice
+ * comes in now and the rest in the background.
+ */
+export async function bringOlder(pageId: string): Promise<MetaPage | null> {
+  const body = await send(
+    `${BASE}/meta/pages/${encodeURIComponent(pageId)}/backfill`,
+    { method: "POST" },
+  );
+  return isRecord(body) ? parsePage(body.page) : null;
 }
 
 /** The Facebook Pages shared with Sales Xray, on or off. */

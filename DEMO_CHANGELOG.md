@@ -6,6 +6,13 @@ No client names here.
 
 ## Facebook lead sources (Meta-suite session): bug reports #7, #8, #10, #12, #13, #14
 
+- **Connections: every Page on at once, older leads from the sheet, the test lead optional (dev #2, #3), and "Use another Facebook account" in plain sight (#8)**, this commit.
+  - What changed:
+    - The Facebook & Instagram sheet has "Turn on every Page, all forms".
+    - A new step, "Bring in the older leads", shows per Page what was read, what was new and what was already in the leads.
+    - "Send a test lead" is optional and never holds anything up.
+  - Verified by: `meta-setup.test.tsx`, `connected-apps.test.tsx` and `meta-sources.test.tsx`; wb-ci full and e2e, together with the commit before.
+
 - **Every form on every Page, picked forms' older leads or live, which account, and loading that ends (#10, #12, #13, #14, #7, #8)**, this commit.
   - What changed:
     - Sources lists every form on each Facebook Page (active, archived, draft), with "N on Meta" and whether it comes in live. Select all, or pick some, then "Bring old leads" or "Keep live".
