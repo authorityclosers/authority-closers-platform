@@ -94,6 +94,11 @@ export const SCREENS = {
   "welcome-start": { path: "/review-fixture/welcome" },
   "welcome-business": { path: "/review-fixture/welcome?step=business" },
   "welcome-first": { path: "/review-fixture/welcome?step=first" },
+  // Reports: what stands out and every kind of report, by category.
+  reports: { path: "/review-fixture/reports" },
+  "reports-seller": { path: "/review-fixture/reports?role=seller" },
+  "reports-quiet": { path: "/review-fixture/reports?quiet=1" },
+  "reports-loading": { path: "/review-fixture/reports?loading=1" },
   // Notifications in their sheet: groups, kinds, unread, and nothing waiting.
   notifications: {
     path: "/review-fixture/notifications",
