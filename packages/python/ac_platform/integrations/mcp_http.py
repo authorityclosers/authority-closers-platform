@@ -42,7 +42,7 @@ from ac_platform.integrations.api_http import (
     make_opener,
 )
 from ac_platform.integrations.oauth_http import DEFAULT_SCOPES
-from ac_platform.lead_desk.tasks import TASK_KINDS
+from ac_platform.lead_desk.commitments import TASK_KINDS
 
 PROTOCOLS = ("2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05")
 VERSION = "1.0.0"
@@ -450,7 +450,7 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
         answer, _ = await reader.add_note(_uuid(args, "lead_id"), note)
         return answer
     if name == "add_task":
-        fields = (
+        task_fields = (
             "kind",
             "due",
             "title",
@@ -460,7 +460,7 @@ async def run_tool(reader: Reader, name: str, args: dict[str, Any]) -> Any:
             "request_id",
             "preview",
         )
-        task = _body(TaskBody, args, fields)
+        task = _body(TaskBody, args, task_fields)
         answer, _ = await reader.add_task(_uuid(args, "lead_id"), task)
         return answer
     if name == "list_my_changes":
