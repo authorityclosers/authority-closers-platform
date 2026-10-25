@@ -284,7 +284,7 @@ it("shows members only their own calls and offers no actions on others", async (
   await show(ashaId, "member");
   expect(host.querySelector("h1")?.textContent).toContain("Asha Menon");
   expect(host.textContent).toContain(
-    "Only owners and admins see a teammate's calls and reports.",
+    "You see your own calls and reports here, not a teammate's.",
   );
   expect(host.querySelector("select")).toBeNull();
   expect(host.textContent).not.toContain("Remove");

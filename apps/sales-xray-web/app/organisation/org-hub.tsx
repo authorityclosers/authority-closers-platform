@@ -12,6 +12,7 @@
  * is the organisation view as before, with its own states.
  */
 
+import { can, roleLabel } from "./roles";
 import {
   BarChart3,
   Building2,
@@ -206,7 +207,6 @@ type HubWorkspace = { name: string; role: string | null };
 
 /** The organisation's name and your role, at the top of the hub and of Insights. */
 function OrgHeader({ workspace }: { workspace: HubWorkspace }) {
-  const manager = workspace.role === "owner" || workspace.role === "admin";
   return (
     <header className={styles.header}>
       <span className={styles.tile} aria-hidden="true">
@@ -215,14 +215,7 @@ function OrgHeader({ workspace }: { workspace: HubWorkspace }) {
       <div>
         <h1>{workspace.name}</h1>
         <p>
-          Organisation · Your role:{" "}
-          <b>
-            {workspace.role === "owner"
-              ? "Owner"
-              : manager
-                ? "Admin"
-                : "Member"}
-          </b>
+          Organisation · Your role: <b>{roleLabel(workspace.role)}</b>
         </p>
       </div>
     </header>
@@ -246,7 +239,7 @@ export function OrgHubFrame({
     (item) => item.tenant_id === access.context?.tenantId,
   );
   if (workspace?.kind !== "organisation") return <>{children}</>;
-  const manager = workspace.role === "owner" || workspace.role === "admin";
+  const manager = can(workspace.role, "team.view");
   const tabs = HUB_TABS.filter((tab) => manager || !tab.managers);
   return (
     <div className={styles.hub}>
@@ -274,7 +267,7 @@ export function OrganisationHub({
   if (current?.kind !== "organisation")
     return <OrganisationView initial={initial} sections={["overview"]} />;
 
-  const manager = current.role === "owner" || current.role === "admin";
+  const manager = can(current.role, "team.view");
   const tabs = HUB_TABS.filter((tab) => manager || !tab.managers);
   const asked = query?.get("tab") ?? "overview";
   const tab = tabs.find((item) => item.id === asked && !item.href) ?? tabs[0];

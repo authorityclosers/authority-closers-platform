@@ -78,7 +78,7 @@ import {
   type OrgRole,
   type Organisation,
 } from "./organisation-api";
-import { ROLE_HINT, ROLE_LABEL, rolesToGive } from "./roles";
+import { can, ROLE_HINT, ROLE_LABEL, rolesToGive } from "./roles";
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
 import { TeamPatternsSection } from "./team-patterns-section";
@@ -378,7 +378,10 @@ export function OrganisationView({
   );
   const live = org.status === "ready" && org.value.tenantId === tenantId;
   const myRole: OrgRole | null = live ? org.value.role : null;
-  const canManage = live && (myRole === "owner" || myRole === "admin");
+  // What your role may do here (Roles B: tenancy/roles.py, role-capabilities.json).
+  const canManage = live && can(myRole, "members.manage");
+  const seesTeam = live && can(myRole, "team.view");
+  const managesOrg = live && can(myRole, "org.manage");
   const refreshAccess = useCallback(() => {
     refreshOrganisation();
     access?.retry();
@@ -480,7 +483,7 @@ export function OrganisationView({
 
           {sections ? null : (
             <nav className={styles.tabs} aria-label="Organisation sections">
-              {(canManage ? TABS : MEMBER_TABS).map(({ id, label }) => (
+              {(managesOrg ? TABS : MEMBER_TABS).map(({ id, label }) => (
                 <button
                   key={id}
                   type="button"
@@ -506,7 +509,7 @@ export function OrganisationView({
                 activity={activity}
                 members={members}
                 memberCount={memberCount}
-                team={canManage}
+                team={seesTeam}
                 onInvite={() =>
                   (embedded || sections) && router
                     ? router.push("/settings/team")
@@ -514,7 +517,7 @@ export function OrganisationView({
                 }
                 retry={reloadActivity}
                 analysed={
-                  canManage && tenantId !== null ? (
+                  seesTeam && tenantId !== null ? (
                     <SectionBoundary name="Calls analysed">
                       <ReceiptActivitySection
                         key={tenantId}
@@ -542,6 +545,7 @@ export function OrganisationView({
                     reloadOrg();
                   }}
                   canManage={canManage}
+                  seesTeam={seesTeam}
                   isOwner={live && myRole === "owner"}
                   orgName={name}
                   yourPersonId={access?.context?.personId ?? null}
@@ -550,7 +554,7 @@ export function OrganisationView({
               </SectionBoundary>
             )}
 
-            {shows("integrations") && canManage && (
+            {shows("integrations") && managesOrg && (
               <SectionBoundary name="Integrations">
                 <IntegrationsPanel
                   parts={integrationParts}
@@ -558,7 +562,7 @@ export function OrganisationView({
                 />
               </SectionBoundary>
             )}
-            {sections?.includes("integrations") && live && !canManage ? (
+            {sections?.includes("integrations") && live && !managesOrg ? (
               <section className={styles.state} role="status">
                 <h2>Owners and admins only</h2>
                 <p>
@@ -581,7 +585,7 @@ export function OrganisationView({
                         <CompanyLogoPanel
                           key={`${access?.context?.sessionId}:${tenantId}`}
                           name={name}
-                          canEdit={canManage}
+                          canEdit={managesOrg}
                         />
                       </SectionBoundary>
                       <SectionBoundary name="Company details">
@@ -1380,6 +1384,7 @@ function MembersPanel({
   members,
   reload,
   canManage,
+  seesTeam = canManage,
   isOwner,
   orgName = "",
   yourPersonId,
@@ -1388,6 +1393,8 @@ function MembersPanel({
   members: Live<OrgMember[]>;
   reload: () => void;
   canManage: boolean;
+  /** Sees everyone's row (team.view), not only their own. */
+  seesTeam?: boolean;
   isOwner: boolean;
   /** Typed to confirm an ownership transfer. */
   orgName?: string;
@@ -1475,7 +1482,7 @@ function MembersPanel({
   const rows =
     members.status === "ready"
       ? members.value
-          .filter((member) => canManage || member.personId === yourPersonId)
+          .filter((member) => seesTeam || member.personId === yourPersonId)
           .sort(
             (a, b) =>
               Number(isTestEmail(a.email)) - Number(isTestEmail(b.email)) ||

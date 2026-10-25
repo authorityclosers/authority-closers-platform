@@ -5,6 +5,9 @@ owners, admins and sellers may do, and anything else may do nothing."""
 
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 import pytest
 
 from ac_platform.tenancy.roles import (
@@ -14,6 +17,9 @@ from ac_platform.tenancy.roles import (
     can,
     read_only_refusal,
     roles_with,
+)
+from ac_platform.tenancy.roles import (
+    CAPABILITIES as ROLE_CAPABILITIES,
 )
 
 CAPABILITIES = (
@@ -99,3 +105,12 @@ def test_read_only_roles_change_only_their_own(
     role: str, method: str, path: str, refused: bool
 ) -> None:
     assert read_only_refusal(role, method, path) is refused
+
+
+def test_the_web_copy_matches_the_map() -> None:
+    """Sales X-Ray's screens read role-capabilities.json; it must say what this map says."""
+    root = Path(__file__).resolve().parents[3]
+    web = json.loads(
+        (root / "apps/sales-xray-web/app/organisation/role-capabilities.json").read_text()
+    )
+    assert web == {role: sorted(capabilities) for role, capabilities in ROLE_CAPABILITIES.items()}
