@@ -20,6 +20,7 @@ Infisical, never in git.
 
 Nudges (team engine) go in the same pass, under the same lock, as their own urgent push
 with no lead in it (``nudge_push``).
+So do the day's 10:00 digest and the two-hourly sweep, counts only (``digest_push``).
 
 A second run of the same loop sends gold review alerts to the same phones (``review_push``).
 
@@ -47,7 +48,7 @@ from fastapi import FastAPI
 from sqlalchemy import and_, delete, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ac_platform.lead_desk import hours, nudge_push, task_push
+from ac_platform.lead_desk import digest_push, hours, nudge_push, task_push
 from ac_platform.lead_desk.contracts import PushConfig
 from ac_platform.lead_desk.meetings import REMIND_BEFORE
 from ac_platform.lead_desk.models import Lead, LeadDevice, LeadMeeting
@@ -314,7 +315,9 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
 
 
 async def send(
-    alerts: Sequence[Alert | nudge_push.NudgeAlert], fcm: Fcm, client: httpx.AsyncClient
+    alerts: Sequence[Alert | nudge_push.NudgeAlert | digest_push.DigestAlert],
+    fcm: Fcm,
+    client: httpx.AsyncClient,
 ) -> tuple[int, list[str]]:
     """Sends each alert to each of its phones; returns how many went and the dead tokens."""
     sent = 0
@@ -343,9 +346,10 @@ async def tick(
             text("SELECT pg_try_advisory_xact_lock(:a, :b)"), {"a": _LOCK[0], "b": _LOCK[1]}
         ):
             return 0
-        alerts: list[Alert | nudge_push.NudgeAlert] = [
+        alerts: list[Alert | nudge_push.NudgeAlert | digest_push.DigestAlert] = [
             *await collect(database, now),
             *await nudge_push.collect(database, now),
+            *await digest_push.collect(database, now),
         ]
     if not alerts:
         return 0

@@ -1438,6 +1438,30 @@ class DeviceCommand(Command):
     app_version: str | None = Field(default=None, max_length=40)
 
 
+class SoonItem(Model):
+    """One thing due within the hour, for the red banner (demo, 26 Oct 2026)."""
+
+    lead_id: UUID
+    lead_name: str
+    what: Literal["follow_up", "task", "meeting"]
+    at: datetime
+    # Whole minutes from now; 0 when it is due now.
+    minutes: int
+    # A task's own title.
+    title: str | None = None
+    # "Asha Sample: follow-up in 40 min".
+    words: str
+
+
+class Soon(Model):
+    """The soonest of this person's own follow-ups, tasks and meetings due within the hour,
+    or none."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    item: SoonItem | None
+    generated_at: datetime
+
+
 class AlertText(Model):
     """The words on a phone alert, read by the app on the seller's own session."""
 
