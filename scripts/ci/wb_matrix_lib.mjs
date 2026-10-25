@@ -108,6 +108,18 @@ export const SCREENS = {
   "calls-empty": { path: "/review-fixture/calls?empty=1" },
   "upload-picked": { path: "/review-fixture/upload?step=picked" },
   "upload-analysing": { path: "/review-fixture/upload?step=analysing" },
+  // The team engine: Share out leads from My day, and a seller's targets from Home.
+  "share-out": {
+    path: "/review-fixture/home?view=mine&none=1",
+    steps: [
+      { click: 'button:has-text("Share out leads")' },
+      { wait: "dialog[open]" },
+    ],
+  },
+  "targets-sheet": {
+    path: "/review-fixture/home",
+    steps: [{ click: 'button[aria-label^="Set "]' }, { wait: "dialog[open]" }],
+  },
   // Notifications in their sheet: groups, kinds, unread, and nothing waiting.
   notifications: {
     path: "/review-fixture/notifications",
