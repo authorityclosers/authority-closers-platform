@@ -52,6 +52,7 @@ from ac_platform.lead_desk.models import (
     LeadTask,
 )
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES, SOURCE_LABELS
+from ac_platform.tenancy.models import Membership
 
 if TYPE_CHECKING:
     from ac_platform.lead_desk.store import LeadDesk
@@ -691,13 +692,24 @@ async def nudge_now(desk: LeadDesk) -> tuple[nudge_rules.Nudge, int] | None:
 
 
 async def nudge_words(desk: LeadDesk) -> AlertText:
-    """The words on the seller's latest nudge today, read by the app on their session."""
+    """The words on the seller's latest nudge today, read by the app on their session. From
+    any workspace they still work in, not only the one open: a seller in a personal
+    workspace and an organisation gets the organisation's nudge words either way (Android,
+    25 Oct 2026)."""
     latest = await desk.db.scalar(
         select(LeadNudge)
+        .join(
+            Membership,
+            and_(
+                Membership.tenant_id == LeadNudge.tenant_id,
+                Membership.person_id == LeadNudge.person_id,
+            ),
+        )
         .where(
-            LeadNudge.tenant_id == desk.tenant_id,
             LeadNudge.person_id == desk.viewer.person_id,
             LeadNudge.window_start >= goals.day_start(desk.now),
+            Membership.status == "active",
+            Membership.ended_at.is_(None),
         )
         .order_by(LeadNudge.claimed_at.desc())
         .limit(1)
@@ -714,6 +726,6 @@ async def nudge_words(desk: LeadDesk) -> AlertText:
         title=NUDGE_TITLES.get(latest.kind, "Back to your leads"),
         body=latest.words,
         lead_id=None,
-        url="/leads",
+        url="/leads?nudge=1",
         urgency="urgent",
     )

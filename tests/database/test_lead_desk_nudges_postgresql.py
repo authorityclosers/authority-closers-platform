@@ -15,7 +15,8 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import Engine
 
-from ac_platform.lead_desk import nudge_push
+from ac_platform.lead_desk import nudge_push, team
+from ac_platform.lead_desk.store import LeadDesk, Viewer
 from tests.database.conversation_harness import conversation_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_lead_os_acceptance_postgresql import BASE, ROOT, WRITE, World, world
@@ -105,9 +106,18 @@ def test_nudges_once_a_window_in_work_hours_only(postgres_harness: Any, tmp_path
             words = await here.client.get(f"{BASE}/alert", params={"kind": "nudge"})
             assert words.status_code == 200, words.text
             body = words.json()
-            assert body["urgency"] == "urgent" and body["url"] == "/leads"
+            assert body["urgency"] == "urgent" and body["url"] == "/leads?nudge=1"
             assert body["lead_id"] is None
             assert "behind today's pace" in body["body"]
+            # With another workspace open, the words still follow the seller.
+            async with here.setup.sessions() as db:
+                elsewhere = LeadDesk(
+                    db,
+                    Viewer(
+                        person_id=here.seller.person_id, tenant_id=uuid4(), role="member", name=""
+                    ),
+                )
+                assert "behind today's pace" in (await team.nudge_words(elsewhere)).body
 
             # 11. Quiet after work.
             evening = datetime.combine(today, time(20, 0), tzinfo=IST)

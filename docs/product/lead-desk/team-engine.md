@@ -93,9 +93,12 @@ The rules:
   `{type: "lead_desk", kind: "nudge", urgency: "urgent", tenant, count}`, with no lead id and no
   words; `count` is the work waiting. The app plays its own distinct sound and shows one line,
   read on the seller's own session from `GET /alert?kind=nudge`:
-  `{title, body, url: "/leads", lead_id: null, urgency: "urgent"}`, for example "Behind pace" and
+  `{title, body, url: "/leads?nudge=1", lead_id: null, urgency: "urgent"}` (Leads shows the words as
+  the urgent card on that marker), for example "Behind pace" and
   "You're 6 calls behind today's pace." The sender (`nudge_push`) runs in the lead alerts' pass,
   under its lock, and looks at each seller at most every five minutes.
+- **Words in any workspace:** the words are the seller's latest nudge from any workspace they still
+  work in, so a seller with a personal workspace open still gets the organisation's words.
 - **Off by default.** An owner or manager turns nudges on per workspace and off per seller with
   `PUT /nudges {expected_revision, enabled, off_for}`; the team settings show `nudges` and
   `nudges_off_for`.
