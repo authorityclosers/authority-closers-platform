@@ -369,9 +369,10 @@ jobs:
 
   radar-report:
     # The radar's parts in one report: findings deduped across states, grouped by root cause (the same component,
-    # colour pair or message on any page is one group), each with a crop. ac-bug-radar reads radar.json.
+    # colour pair or message on any page is one group), each with a crop. ac-bug-radar reads radar.json. It runs when
+    # shards ran, even if one failed (the others' parts still count), not when none did (a cancelled prerequisite).
     needs: [plan, radar]
-    if: always() && needs.plan.outputs.radar == 'true'
+    if: always() && needs.plan.outputs.radar == 'true' && (needs.radar.result == 'success' || needs.radar.result == 'failure')
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:

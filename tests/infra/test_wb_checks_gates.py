@@ -178,6 +178,8 @@ def test_the_workflow_shards_the_radar_and_merges_one_report() -> None:
     assert "--shard ${{ matrix.shard }}/${{ needs.plan.outputs.radar_count }}" in runs
     report = jobs["radar-report"]
     assert report["needs"] == ["plan", "radar"] and report["if"].startswith("always()")
+    # Only when shards ran: a cancelled prerequisite must not turn into a failed report.
+    assert "needs.radar.result == 'success' || needs.radar.result == 'failure'" in report["if"]
     merge = "\n".join(step.get("run", "") for step in report["steps"])
     # Merging needs plain Node: no install, no browser.
     assert "node scripts/ci/wb_radar.mjs merge" in merge and "pnpm install" not in merge
