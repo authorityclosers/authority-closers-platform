@@ -31,6 +31,10 @@ export type ProfileDetails = Readonly<{
   avatarUrl: string | null;
   /** The person's own upload, which they can remove; a Google photo is not. */
   ownPhoto: boolean;
+  /** The character the photo is, when it is one (owner #32, 26 Oct 2026). */
+  character: string | null;
+  /** The character shown without a photo, picked from the person id. */
+  defaultCharacter: string | null;
   completion: ProfileCompletion | null;
 }>;
 
@@ -53,6 +57,9 @@ const ITEM_WORDS: Record<ProfileItem, string> = {
 const AVATAR =
   /^\/v1\/people\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/photo\?v=[0-9a-f]{8}$/;
 const HANDLE = /^[a-z0-9][a-z0-9._-]{2,29}$/;
+const CHARACTER = /^[a-z][a-z0-9-]{1,23}$/;
+const characterKey = (value: unknown) =>
+  typeof value === "string" && CHARACTER.test(value) ? value : null;
 export const PHOTO_SIZE = 256;
 export const DETAIL_MAX = 80;
 
@@ -93,6 +100,8 @@ export function profileDetails(profile: AccountProfileRecord): ProfileDetails {
     avatarUrl:
       typeof avatar === "string" && AVATAR.test(avatar) ? avatar : null,
     ownPhoto: raw.own_photo === true,
+    character: characterKey(raw.character),
+    defaultCharacter: characterKey(raw.default_character),
     completion: completionOf(raw.completion),
   };
 }
@@ -164,6 +173,19 @@ export function uploadProfilePhoto(
     method: "PUT",
     headers: { "content-type": photo.type },
     body: photo,
+    signal,
+  });
+}
+
+/** One of the characters as your photo (owner #32, 26 Oct 2026). */
+export function chooseCharacter(
+  character: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  return send(`${ACCOUNT_PROFILE_PATH}/character`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ character }),
     signal,
   });
 }

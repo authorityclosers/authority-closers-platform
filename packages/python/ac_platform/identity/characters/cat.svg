@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Cat">
+<rect width="256" height="256" fill="#F1E6FF"/>
+<polygon points="64,66 106,104 60,124" fill="#9AA0A6"/>
+<polygon points="192,66 150,104 196,124" fill="#9AA0A6"/>
+<polygon points="70,84 96,106 68,116" fill="#F6B8C8"/>
+<polygon points="186,84 160,106 188,116" fill="#F6B8C8"/>
+<ellipse cx="128" cy="152" rx="80" ry="70" fill="#9AA0A6"/>
+<ellipse cx="102" cy="146" rx="8" ry="11" fill="#2B2B2B"/>
+<ellipse cx="154" cy="146" rx="8" ry="11" fill="#2B2B2B"/>
+<polygon points="119,166 137,166 128,175" fill="#F28FA8"/>
+<line x1="58" y1="170" x2="96" y2="174" stroke="#5F6368" stroke-width="3" stroke-linecap="round"/>
+<line x1="58" y1="184" x2="96" y2="181" stroke="#5F6368" stroke-width="3" stroke-linecap="round"/>
+<line x1="198" y1="170" x2="160" y2="174" stroke="#5F6368" stroke-width="3" stroke-linecap="round"/>
+<line x1="198" y1="184" x2="160" y2="181" stroke="#5F6368" stroke-width="3" stroke-linecap="round"/>
+</svg>

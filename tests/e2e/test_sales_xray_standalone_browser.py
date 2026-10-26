@@ -663,9 +663,14 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 "button", name="Current workspace: Synthetic second Sales Xray workspace"
             ).click()
             with _navigation_window(page, navigation_windows):
-                workspace_menu.get_by_role(
-                    "menuitemradio", name=re.compile(r"Personal.*Just you")
-                ).click()
+                # The switch reloads the page once the server confirms it. Wait
+                # for that reload, as for the organisation above: tapping New
+                # analysis while it runs lost the tap or cut off the reloading
+                # page's chunks (builder, 26 Oct 2026).
+                with page.expect_event("load"):
+                    workspace_menu.get_by_role(
+                        "menuitemradio", name=re.compile(r"Personal.*Just you")
+                    ).click()
                 expect(switcher).to_be_visible()
                 page.wait_for_load_state("networkidle")
             checks.append(

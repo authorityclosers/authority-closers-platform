@@ -1,0 +1,37 @@
+{
+  "version": 1,
+  "characters": [
+    {
+      "key": "fox",
+      "label": "Fox"
+    },
+    {
+      "key": "owl",
+      "label": "Owl"
+    },
+    {
+      "key": "panda",
+      "label": "Panda"
+    },
+    {
+      "key": "cat",
+      "label": "Cat"
+    },
+    {
+      "key": "bear",
+      "label": "Bear"
+    },
+    {
+      "key": "rabbit",
+      "label": "Rabbit"
+    },
+    {
+      "key": "penguin",
+      "label": "Penguin"
+    },
+    {
+      "key": "koala",
+      "label": "Koala"
+    }
+  ]
+}

@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, undefer
 
 from ac_platform.audit.service import AuditRepository
+from ac_platform.identity import characters
 from ac_platform.identity.google_profile import read_google_profile_photo
 from ac_platform.identity.google_profile_models import PersonGoogleProfile
 from ac_platform.identity.sales_xray_profile_models import PersonPhoto
@@ -237,7 +238,55 @@ async def save_upload(
     kind = _kind(data)
     if kind is None or declared not in TYPES or kind != declared:
         raise PhotoRejected("Choose a JPEG, PNG or WebP photo.")
-    picture = resized(data)
+    return await _keep(
+        session,
+        person_id=person_id,
+        session_id=session_id,
+        tenant_id=tenant_id,
+        picture=resized(data),
+        files=files,
+        reason="Self-service profile photo.",
+    )
+
+
+async def save_character(
+    session: AsyncSession,
+    *,
+    person_id: UUID,
+    session_id: UUID | None,
+    tenant_id: UUID,
+    key: str,
+    files: PhotoFiles | None = None,
+) -> str:
+    """One of the characters as the person's photo (owner #32, 26 Oct 2026), its file byte
+    for byte, so the photo's sha256 says which character it is (characters.py)."""
+    chosen = characters.by_key(key)
+    if chosen is None:
+        raise characters.CharacterRejected("Choose one of the characters.")
+    return await _keep(
+        session,
+        person_id=person_id,
+        session_id=session_id,
+        tenant_id=tenant_id,
+        picture=chosen.data,
+        files=files,
+        reason="Chose a character.",
+        extra={"character": chosen.key},
+    )
+
+
+async def _keep(
+    session: AsyncSession,
+    *,
+    person_id: UUID,
+    session_id: UUID | None,
+    tenant_id: UUID,
+    picture: bytes,
+    files: PhotoFiles | None,
+    reason: str,
+    extra: dict[str, str] | None = None,
+) -> str:
+    """Keep a 256 px WebP as the person's photo (a file where the store is), audited."""
     sha = hashlib.sha256(picture).hexdigest()
     now = datetime.now(UTC)
     store = files or PhotoFiles.default()
@@ -259,8 +308,6 @@ async def save_upload(
     await session.flush()
     if earlier and earlier != row.storage_key:
         store.remove(earlier)
-    kind = "image/webp"
-    data = picture
     await AuditRepository(session).append(
         tenant_id=tenant_id,
         actor_person_id=person_id,
@@ -268,8 +315,13 @@ async def save_upload(
         action="sales_xray.profile.photo_updated.v1",
         resource_type="sales_xray_profile",
         resource_id=person_id,
-        payload={"revision": row.revision, "content_type": kind, "byte_size": len(data)},
-        reason="Self-service profile photo.",
+        payload={
+            "revision": row.revision,
+            "content_type": "image/webp",
+            "byte_size": len(picture),
+            **(extra or {}),
+        },
+        reason=reason,
         now=now,
     )
     return url_for(person_id, sha)

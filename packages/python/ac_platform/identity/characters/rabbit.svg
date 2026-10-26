@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Rabbit">
+<rect width="256" height="256" fill="#FFE2EB"/>
+<ellipse cx="100" cy="72" rx="17" ry="48" fill="#F4F4F4"/>
+<ellipse cx="156" cy="72" rx="17" ry="48" fill="#F4F4F4"/>
+<ellipse cx="100" cy="74" rx="8" ry="34" fill="#F6B8C8"/>
+<ellipse cx="156" cy="74" rx="8" ry="34" fill="#F6B8C8"/>
+<ellipse cx="128" cy="162" rx="74" ry="66" fill="#F4F4F4"/>
+<circle cx="104" cy="154" r="8" fill="#2B2B2B"/>
+<circle cx="152" cy="154" r="8" fill="#2B2B2B"/>
+<polygon points="121,174 135,174 128,182" fill="#F28FA8"/>
+<circle cx="94" cy="180" r="9" fill="#F9C9D6"/>
+<circle cx="162" cy="180" r="9" fill="#F9C9D6"/>
+</svg>

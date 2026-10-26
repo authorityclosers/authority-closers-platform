@@ -87,6 +87,15 @@ export const SCREENS = {
   // The sidebar on a computer (owner, dev #8, 26 Oct 2026): the ribbon of areas
   // with the panel of Home's pages, then with the panel collapsed.
   "home-desk": { path: "/review-fixture/home", desktop: true },
+  // The sidebar while the page scrolls (orchestrator, 26 Oct 2026): on a computer
+  // the page scrolls inside the frame, so the ribbon and the panel stay the
+  // window's height with the bell and settings in view. The tap on Home's last
+  // heading (plain text) scrolls it into view first.
+  "home-desk-scrolled": {
+    path: "/review-fixture/home",
+    steps: [{ click: "main h2 >> nth=-1" }],
+    desktop: true,
+  },
   "home-rail": {
     path: "/review-fixture/home",
     steps: [
@@ -186,6 +195,8 @@ export const SCREENS = {
     path: "/review-fixture/alerts?level=urgent&long=1",
     steps: [{ wait: '[role="alertdialog"]' }],
   },
+  // The public tester page (tester programme, 26 Oct 2026): no sign-in, no fixture.
+  testers: { path: "/testers" },
 };
 
 /** The screens a request asks for: screen names or fixture paths ("/review-fixture/..."); none means all. */

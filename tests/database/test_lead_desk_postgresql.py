@@ -8,7 +8,7 @@ alone see the team; a website form posts with its own key; files import.
 
 import io
 import zipfile
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -792,6 +792,13 @@ def test_a_seller_turns_new_leads_off_and_on(postgres_harness: Any, tmp_path: Pa
     run(exercise())
 
 
+def _india_day(at: datetime | None = None) -> date:
+    """The day in India (the desk's day) of a moment, or of now."""
+    from ac_platform.lead_desk import hours
+
+    return (at or datetime.now(UTC)).astimezone(hours.IST).date()
+
+
 def test_calls_the_phone_logged_by_itself_reach_their_leads(
     postgres_harness: Any, tmp_path: Path
 ) -> None:
@@ -960,17 +967,21 @@ def test_calls_the_phone_logged_by_itself_reach_their_leads(
                 assert sum(1 for e in loose.json()["events"] if e.get("recording")) == 2
 
                 desk = (await client.get(BASE)).json()
-                # The dialer call counts in My day; the missed call does not.
-                assert desk["numbers"]["calls"] == 1
-                assert desk["numbers"]["connected"] == 1
-                assert desk["numbers"]["talk_seconds"] == 192 + 40
+                # The dialer call counts in My day; the missed call does not. My day is
+                # India's today: just after midnight there, the call from 3 minutes ago is
+                # yesterday's (wb-ci at 00:02 IST, 27 Oct 2026).
+                dialled = int(_india_day(now - timedelta(minutes=3)) == _india_day())
+                assert desk["numbers"]["calls"] == dialled
+                assert desk["numbers"]["connected"] == dialled
+                assert desk["numbers"]["talk_seconds"] == 192 * dialled + 40
 
                 as_(setup.token)
                 team = (await client.get(f"{BASE}/team")).json()
                 mine = next(
                     rep for rep in team["reps"] if rep["person_id"] == str(seller.person_id)
                 )
-                assert (mine["calls_today"], mine["connected_today"]) == (1, 1)
+                dialled = int(_india_day(now - timedelta(minutes=3)) == _india_day())
+                assert (mine["calls_today"], mine["connected_today"]) == (dialled, dialled)
                 assert len((await client.get(f"{BASE}/phone-book")).json()["numbers"]) == 2
         finally:
             await setup.engine.dispose()
@@ -1280,7 +1291,6 @@ def test_a_missed_call_from_a_lead_waits_on_the_desk_until_called_back(
 def test_calls_by_seller_by_day(postgres_harness: Any, tmp_path: Path) -> None:
     """Build list row 18, 18 Oct: managers see each seller's calls per day (India time)
     for a date range, counted the way My day counts them; sellers can't read it."""
-    from ac_platform.lead_desk import hours
 
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path)
@@ -1288,7 +1298,6 @@ def test_calls_by_seller_by_day(postgres_harness: Any, tmp_path: Path) -> None:
             await _organisation(setup)
             seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
             seller_token = await _session(setup, seller)
-            today = datetime.now(hours.IST).date()
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
@@ -1304,6 +1313,7 @@ def test_calls_by_seller_by_day(postgres_harness: Any, tmp_path: Path) -> None:
                     headers=WRITE,
                 )
                 now = datetime.now(UTC)
+                today = _india_day(now)
                 calls = [
                     ("1", 3, "outgoing", 120),
                     ("2", 2, "outgoing", 0),
@@ -1336,13 +1346,21 @@ def test_calls_by_seller_by_day(postgres_harness: Any, tmp_path: Path) -> None:
                 rows = {row["person_id"]: row for row in report.json()["sellers"]}
                 mine = rows[str(seller.person_id)]
                 assert [day["day"] for day in mine["days"]] == [query["start"], query["end"]]
-                assert mine["days"][1] == {
-                    "day": query["end"],
-                    "calls": 2,
-                    "connected": 1,
-                    "talk_seconds": 120,
-                    "missed": 1,
+                # Each call on its India day: today's, or yesterday's in the first minutes
+                # after midnight there (wb-ci at 00:02 IST, 27 Oct 2026).
+                expected = {
+                    day: {"day": day, "calls": 0, "connected": 0, "talk_seconds": 0, "missed": 0}
+                    for day in (query["start"], query["end"])
                 }
+                for _, ago, direction, seconds in calls:
+                    cell = expected[str(_india_day(now - timedelta(minutes=ago)))]
+                    if direction == "missed":
+                        cell["missed"] += 1
+                    else:
+                        cell["calls"] += 1
+                        cell["connected"] += 1 if seconds else 0
+                        cell["talk_seconds"] += seconds
+                assert mine["days"] == [expected[query["start"]], expected[query["end"]]]
                 assert (mine["calls"], mine["missed"]) == (2, 1)
                 assert rows[str(setup.state.person_id)]["calls"] == 0
                 too_long = {"start": str(today - timedelta(days=100)), "end": str(today)}

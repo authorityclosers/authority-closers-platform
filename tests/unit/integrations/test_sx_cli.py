@@ -159,3 +159,10 @@ def test_notes_tasks_and_undo_from_the_command_line(capsys: pytest.CaptureFixtur
     capsys.readouterr()
     assert sx.main(["undo", "c1"], env, fake) == 0
     assert json.loads(capsys.readouterr().out)["status"] == "undone"
+
+
+def test_sx_list_leads_takes_the_organisations_own_stage_keys() -> None:
+    (tool,) = [t for t in sx.TOOLS if t["name"] == "list_leads"]
+    stage = tool["inputSchema"]["properties"]["stage"]
+    assert "enum" not in stage and stage["maxLength"] == 40
+    assert "stages" in tool["description"]

@@ -1,0 +1,109 @@
+/* Choose your character (owner #32, 26 Oct 2026): four to a row on a phone,
+   each a 64 px face over its name; the one shown now is ticked. */
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.choice {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 104px;
+  padding: 8px 4px;
+  border: 1px solid transparent;
+  border-radius: var(--sx-radius-md);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.choice img {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--sx-sunken);
+}
+
+.choice span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.choice:hover:not(:disabled) {
+  background: var(--sx-fill);
+}
+
+.choice:active:not(:disabled) {
+  transform: scale(var(--sx-press-scale));
+}
+
+.choice[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+}
+
+.choice:disabled {
+  cursor: default;
+}
+
+.choice[aria-busy] {
+  opacity: 0.72;
+}
+
+.choice:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.tick {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px;
+  border-radius: 50%;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.confirm {
+  display: grid;
+  gap: 8px;
+}
+
+.confirm p {
+  margin: 0;
+  color: var(--sx-ink-2);
+}
+
+.confirmActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.waiting {
+  margin: 0;
+  color: var(--sx-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .choice:active:not(:disabled) {
+    transform: none;
+  }
+}

@@ -1,0 +1,82 @@
+/* A calm pill at the top while Sales X-Ray updates (release-hold-banner.tsx): the
+   notice cards' glass, the brand teal, no warning colours. */
+.banner {
+  position: fixed;
+  z-index: 1200;
+  top: calc(env(safe-area-inset-top, 0px) + 10px);
+  left: 50%;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: center;
+  justify-content: center;
+  max-width: calc(100vw - 24px);
+  padding: 8px 14px;
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: 999px;
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
+  color: var(--lx-ink);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
+  transform: translateX(-50%);
+  animation: enter var(--sx-dur-sheet) var(--sx-spring) both;
+}
+
+.pulse {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lx-teal);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.actions {
+  display: inline-flex;
+  gap: 6px;
+}
+
+.primary,
+.quiet {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.primary {
+  background: var(--lx-teal);
+  color: var(--lx-on-teal);
+}
+
+.quiet {
+  background: transparent;
+  color: var(--lx-muted);
+}
+
+@keyframes enter {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .banner,
+  .pulse {
+    animation: none;
+  }
+}

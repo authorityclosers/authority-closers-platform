@@ -40,6 +40,8 @@ export type LeadRow = {
   source_label: string;
   owner_person_id: string | null;
   owner_name: string | null;
+  /** Their photo, once the server sends it; else their character (#33). */
+  owner_photo_url?: string | null;
   why: string;
   why_kind: WhyKind;
   next_action_at: string | null;
@@ -140,6 +142,9 @@ export type LeadEvent = {
     | "suggestion";
   at: string;
   actor_name: string | null;
+  /** Who did it, for their photo or character (#31), once the server sends it. */
+  actor_person_id?: string | null;
+  actor_photo_url?: string | null;
   stage: string | null;
   stage_label: string | null;
   reason: string | null;
@@ -205,6 +210,8 @@ export type LeadDetail = {
     name: string;
     open_leads: number;
     available: boolean;
+    /** Their photo, once the server sends it; else their character (#33). */
+    photo_url?: string | null;
   }[];
   call_mode: "simulated" | "phone";
   first_call_minutes?: number | null;

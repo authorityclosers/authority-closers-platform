@@ -12,6 +12,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
+from ac_platform.identity import characters
 from ac_platform.identity.google_profile import (
     GoogleProfileClaims,
     erase_google_profile,
@@ -92,6 +93,9 @@ class SalesXrayProfileSnapshot:
     details_revision: int = 0
     avatar_url: str | None = None
     own_photo: bool = False
+    # The character the photo is (owner #32), and the one shown without a photo.
+    character: str | None = None
+    default_character: str | None = None
     missing: tuple[str, ...] = field(default=COMPLETION_ITEMS)
 
     @property
@@ -154,6 +158,7 @@ def _snapshot(
     avatar_url: str | None = None,
     own_photo: bool = False,
     details: PersonProfileDetails | None = None,
+    own_sha: str | None = None,
 ) -> SalesXrayProfileSnapshot:
     name = _resolved_name(person)
     email = person.email
@@ -172,6 +177,8 @@ def _snapshot(
         "team": bool(team),
         "phone": bool(phone),
     }
+    chosen = characters.by_sha(own_sha)
+    fallback = characters.default_for(person.id)
     return SalesXrayProfileSnapshot(
         name=name,
         email=email,
@@ -192,23 +199,25 @@ def _snapshot(
         details_revision=0 if details is None else details.revision,
         avatar_url=avatar_url,
         own_photo=own_photo,
+        character=None if chosen is None else chosen.key,
+        default_character=None if fallback is None else fallback.key,
         missing=tuple(item for item in COMPLETION_ITEMS if not have[item]),
     )
 
 
 async def _extras(
     session: AsyncSession, person_id: UUID, *, lock: bool = False
-) -> tuple[str | None, bool, PersonProfileDetails | None]:
-    """The photo URL, whether it is the person's own upload (which wins), and their
-    details row."""
+) -> tuple[str | None, bool, PersonProfileDetails | None, str | None]:
+    """The photo URL, whether it is the person's own upload (which wins), their details
+    row, and their own photo's sha256 (which says whether it is a character)."""
     from ac_platform.identity.person_photos import photo_urls, url_for
 
     statement = select(PersonProfileDetails).where(PersonProfileDetails.person_id == person_id)
     details = await session.scalar(statement.with_for_update() if lock else statement)
     own = await session.scalar(select(PersonPhoto.sha256).where(PersonPhoto.person_id == person_id))
     if own is not None:
-        return url_for(person_id, own), True, details
-    return (await photo_urls(session, [person_id]))[person_id], False, details
+        return url_for(person_id, own), True, details, own
+    return (await photo_urls(session, [person_id]))[person_id], False, details, None
 
 
 async def _lock_phone_collision_key(session: AsyncSession, phone_number_e164: str) -> None:
@@ -445,7 +454,7 @@ async def update_profile_details(
     person, profile = await _read_rows(session, person_id, lock=True)
     if person.email is None or person.email_verified_at is None:
         raise SalesXrayProfileUnavailable("A verified AC account is required.")
-    avatar_url, own_photo, details = await _extras(session, person_id, lock=True)
+    avatar_url, own_photo, details, own_sha = await _extras(session, person_id, lock=True)
     current_revision = 0 if details is None else details.revision
     if expected_revision != current_revision:
         raise SalesXrayProfileRevisionConflict("Reload your profile before saving changes.")
@@ -492,4 +501,4 @@ async def update_profile_details(
             now=now,
         )
     google_profile = await read_google_profile(session, person_id)
-    return _snapshot(person, profile, google_profile, avatar_url, own_photo, details)
+    return _snapshot(person, profile, google_profile, avatar_url, own_photo, details, own_sha)

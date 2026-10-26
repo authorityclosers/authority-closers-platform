@@ -15,7 +15,7 @@ from ac_platform.conversation_intelligence.sales_xray_tenants import (
     sales_xray_workspace_served,
 )
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
-from ac_platform.identity import person_photos
+from ac_platform.identity import characters, person_photos
 from ac_platform.identity.sales_xray_profile import (
     SalesXrayProfileError,
     SalesXrayProfileHandleTaken,
@@ -62,6 +62,10 @@ class SalesXrayProfileResponse(BaseModel):
     title: str | None = None
     team: str | None = None
     details_revision: int = 0
+    # The character the photo is (owner #32, 26 Oct 2026), else null; the one shown without a
+    # photo.
+    character: str | None = None
+    default_character: str | None = None
     avatar_url: str | None = None
     own_photo: bool = False
     completion: ProfileCompletion | None = None
@@ -85,6 +89,12 @@ class SalesXrayProfileUpdate(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
     phone_number_e164: str | None = Field(max_length=16)
     expected_revision: int = Field(ge=0, strict=True)
+
+
+class CharacterChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    character: str = Field(min_length=2, max_length=24)
 
 
 async def require_sales_xray_write_profile(
@@ -179,6 +189,8 @@ def install_sales_xray_profile_http(
             title=value.title,
             team=value.team,
             details_revision=value.details_revision,
+            character=value.character,
+            default_character=value.default_character,
             avatar_url=value.avatar_url,
             own_photo=value.own_photo,
             completion=ProfileCompletion.model_validate(value.completion),
@@ -392,11 +404,85 @@ def install_sales_xray_profile_http(
             headers={"Cache-Control": "private, no-store", "Vary": "Cookie"},
         )
 
+    @router.put("/character", response_model=SalesXrayProfileResponse)
+    async def choose_character(
+        choice: CharacterChoice,
+        request: Request,
+        response: Response,
+        auth: Annotated[AuthenticatedTransaction, actor_dependency] = actor_dependency,
+    ) -> dict[str, object]:
+        """One of the characters as the person's photo (owner #32, 26 Oct 2026). It replaces
+        an uploaded photo, as the app's confirm says; removing the photo goes back to the
+        default character."""
+        headers(response)
+        actor = auth.resolved.actor
+        await require_profile_surface(request, auth)
+        require_safe_origin(request, settings)
+        if not characters.load():
+            raise HTTPException(409, "Characters are not available yet.")
+        try:
+            await person_photos.save_character(
+                auth.database,
+                person_id=actor.person_id,
+                session_id=actor.session_id,
+                tenant_id=audit_tenant(auth),
+                key=choice.character,
+            )
+        except characters.CharacterRejected as error:
+            raise HTTPException(422, str(error)) from None
+        # The profile as GET answers it: the same call with or without the Pulse link.
+        return await read_profile(request, response, auth)
+
     application.include_router(router)
 
     # Anyone's photo, for the people who share an organisation with them (avatars on
     # leads, notes, tasks and Members; 25 Oct 2026). The ?v= changes with the photo.
     people = APIRouter(prefix="/v1/people", tags=["sales-xray-profile"])
+
+    def on_app_host(request: Request) -> bool:
+        allowed_hosts = {settings.public_app_url.host}
+        if settings.sales_xray_app_url is not None:
+            allowed_hosts.add(settings.sales_xray_app_url.host)
+        return request.url.hostname in allowed_hosts
+
+    # The characters (owner #32, 26 Oct 2026): the list for the picker and each picture,
+    # which never changes for its ?v=.
+    @people.get("/characters")
+    async def character_list(
+        request: Request,
+        response: Response,
+        auth: Annotated[AuthenticatedTransaction, read_actor_dependency] = read_actor_dependency,
+    ) -> dict[str, object]:
+        if not on_app_host(request) or request.query_params:
+            raise HTTPException(404, "Characters not found.")
+        response.headers.update({"Cache-Control": "private, no-cache", "Vary": "Cookie"})
+        return {
+            "characters": [
+                {"key": item.key, "label": item.label, "url": item.url}
+                for item in characters.load()
+            ]
+        }
+
+    @people.get("/characters/{key}", response_class=Response)
+    async def character_picture(
+        key: str,
+        request: Request,
+        auth: Annotated[AuthenticatedTransaction, read_actor_dependency] = read_actor_dependency,
+    ) -> Response:
+        chosen = characters.by_key(key)
+        if not on_app_host(request) or chosen is None or set(request.query_params) - {"v"}:
+            raise HTTPException(404, "Character not found.", headers=photo_headers())
+        etag = f'"{chosen.sha256}"'
+        exact = request.query_params.get("v") == chosen.sha256[:8]
+        cache = {
+            **photo_headers(etag),
+            "Cache-Control": "private, max-age=31536000, immutable"
+            if exact
+            else "private, no-cache",
+        }
+        if if_none_match_matches(request.headers.get("if-none-match"), etag):
+            return Response(status_code=304, headers=cache)
+        return Response(content=chosen.data, media_type="image/webp", headers=cache)
 
     @people.get("/{person_id}/photo", response_class=Response)
     async def person_photo(
@@ -404,10 +490,7 @@ def install_sales_xray_profile_http(
         request: Request,
         auth: Annotated[AuthenticatedTransaction, read_actor_dependency] = read_actor_dependency,
     ) -> Response:
-        allowed_hosts = {settings.public_app_url.host}
-        if settings.sales_xray_app_url is not None:
-            allowed_hosts.add(settings.sales_xray_app_url.host)
-        if request.url.hostname not in allowed_hosts or set(request.query_params) - {"v"}:
+        if not on_app_host(request) or set(request.query_params) - {"v"}:
             raise HTTPException(404, "Photo not found.")
         viewer = auth.resolved.actor.person_id
         photo = (

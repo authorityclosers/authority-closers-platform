@@ -1,0 +1,10 @@
+[Unit]
+Description=Nightly 04:00 IST: the bug radar on the workbench head (development)
+
+[Timer]
+OnCalendar=*-*-* 22:30:00 UTC
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

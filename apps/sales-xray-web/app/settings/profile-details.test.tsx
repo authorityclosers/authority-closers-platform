@@ -118,6 +118,8 @@ it("reads the profile fields strictly and words what is missing", () => {
     handle: "priya.s",
     avatar_url: PHOTO,
     own_photo: true,
+    character: "owl",
+    default_character: "Fox <b>",
     completion: { done: 3, total: 6, missing: ["photo", "admin", "team"] },
   };
   expect(profileDetails(record as never)).toEqual({
@@ -127,6 +129,9 @@ it("reads the profile fields strictly and words what is missing", () => {
     revision: 0,
     avatarUrl: PHOTO,
     ownPhoto: true,
+    // The character the photo is; a key that isn't one is dropped (owner #32).
+    character: "owl",
+    defaultCharacter: null,
     completion: { done: 3, total: 6, missing: ["photo", "team"] },
   });
   const elsewhere = { ...PROFILE, avatar_url: "https://elsewhere.test/a.png" };
