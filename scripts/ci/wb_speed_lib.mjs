@@ -96,7 +96,7 @@ export function summarize(measures) {
       settled: [],
       results: [],
     });
-    if (m.result !== "no_change" && m.result !== "failed") at.ms.push(m.ms);
+    if (!["no_change", "failed", "left"].includes(m.result)) at.ms.push(m.ms);
     if (m.lcp !== undefined && m.lcp !== null) at.lcp.push(m.lcp);
     if (m.tbt !== undefined && m.tbt !== null) at.tbt.push(m.tbt);
     if (m.settled !== undefined && m.settled !== null)
@@ -118,6 +118,7 @@ export function summarize(measures) {
           capped: at.results.filter((r) => r === "timeout").length,
           no_change: at.results.filter((r) => r === "no_change").length,
           failed: at.results.filter((r) => r === "failed").length,
+          left: at.results.filter((r) => r === "left").length,
         },
       ]),
     ),
@@ -152,7 +153,13 @@ export function classify(rows, limits = LIMITS, rate = LOW_END) {
 }
 
 const cell = (at) =>
-  !at || at.median === null ? "–" : `${at.median}${at.capped ? "+" : ""}`;
+  !at
+    ? "–"
+    : at.median === null
+      ? at.left
+        ? "left the page"
+        : "–"
+      : `${at.median}${at.capped ? "+" : ""}`;
 
 /** The run's report: every screen and action at 1x, 4x and 6x, then what is slow. */
 export function speedMarkdown(run) {
@@ -165,12 +172,13 @@ export function speedMarkdown(run) {
       (run.source_sha
         ? ` for \`${String(run.source_sha).slice(0, 12)}\``
         : "") +
-      ". Opening a screen: its LCP, when the main content painted (settled and blocking time beside it); a tap: from the " +
-      "tap to the screen settling, as telemetry measures phones (the control tapped in brackets). " +
+      ". Opening a screen: until it is ready to use (settled, and the main thread free for 500 ms), its LCP and " +
+      "blocking time beside it; a tap, on a ready screen: from the tap to the screen settling, as telemetry measures " +
+      "phones (the control tapped in brackets). " +
       `Slow at 6x: a load over ${LIMITS.load.slow} ms or a tap over ${LIMITS.tap.slow} ms; for the builder over ` +
       `${LIMITS.load.builder} and ${LIMITS.tap.builder} ms.`,
     "",
-    "| screen | what | 1x ms | 4x ms | 6x ms | 6x settled | 6x blocking | |",
+    "| screen | what | 1x ms | 4x ms | 6x ms | 6x LCP | 6x blocking | |",
     "|---|---|---|---|---|---|---|---|",
   ];
   for (const row of rows) {
@@ -182,7 +190,7 @@ export function speedMarkdown(run) {
     lines.push(
       `| ${label} | ${ACTION_WORDS[row.action] ?? row.action}${row.control ? ` (${row.control})` : ""} | ` +
         `${cell(row.rates[1])} | ${cell(row.rates[4])} | ` +
-        `${cell(six)} | ${six?.settled_ms ?? "–"} | ${six?.tbt ?? "–"} | ${flag ? (flag.severity === "builder" ? "**for the builder**" : "slow") : ""} |`,
+        `${cell(six)} | ${six?.lcp ?? "–"} | ${six?.tbt ?? "–"} | ${flag ? (flag.severity === "builder" ? "**for the builder**" : "slow") : ""} |`,
     );
   }
   lines.push("", `#### Slow on a low-end phone (${findings.length})`, "");
@@ -192,6 +200,24 @@ export function speedMarkdown(run) {
       `- \`${f.key}\` ${SPEED_SCREENS[f.screen]?.label ?? f.screen}, ${ACTION_WORDS[f.action] ?? f.action}: ` +
         `${f.ms} ms at 6x (${f.at4 ?? "–"} at 4x, ${f.at1 ?? "–"} at 1x)${f.severity === "builder" ? ", over the builder's limit" : ""}`,
     );
+  const left = rows.filter((row) =>
+    Object.values(row.rates).some((at) => at.left),
+  );
+  if (left.length) {
+    lines.push("", "#### Taps that left the page", "");
+    for (const row of left)
+      lines.push(
+        `- ${SPEED_SCREENS[row.screen]?.label ?? row.screen}, ${ACTION_WORDS[row.action] ?? row.action}` +
+          `${row.control ? ` (${row.control})` : ""}: a full page load instead of opening in place, at ` +
+          Object.entries(row.rates)
+            .filter(([, at]) => at.left)
+            .map(
+              ([rate, at]) =>
+                `${rate}x (${at.left} of ${at.left + at.runs + at.no_change})`,
+            )
+            .join(", "),
+      );
+  }
   if (failures.length) {
     lines.push("", "#### Could not be measured", "");
     for (const failure of failures) lines.push(`- ${failure}`);
@@ -206,14 +232,19 @@ export function speedMarkdown(run) {
 
 // In the page, from before the first script: when the page last changed, LCP, blocking time and the last tap.
 export const SPEED_INIT = `(() => {
-  const s = (window.__speed = { last: 0, lcp: null, tbt: 0, tap: 0 });
+  const s = (window.__speed = { last: 0, lcp: null, tbt: 0, tap: 0, busy: 0 });
   new MutationObserver(() => { s.last = performance.now(); })
     .observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
   try {
     new PerformanceObserver((list) => { for (const e of list.getEntries()) s.lcp = Math.round(e.startTime); })
       .observe({ type: "largest-contentful-paint", buffered: true });
-    new PerformanceObserver((list) => { for (const e of list.getEntries()) s.tbt += Math.max(0, e.duration - 50); })
-      .observe({ type: "longtask", buffered: true });
+    // Long tasks: blocking time, and when the main thread was last busy (hydration changes nothing in the page).
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        s.tbt += Math.max(0, e.duration - 50);
+        s.busy = Math.max(s.busy, e.startTime + e.duration);
+      }
+    }).observe({ type: "longtask", buffered: true });
   } catch {}
   addEventListener("pointerdown", (e) => { s.tap = e.timeStamp; }, true);
 })();`;

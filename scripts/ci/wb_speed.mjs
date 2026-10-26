@@ -133,14 +133,28 @@ async function settle(page, from, quiet, cap, first = 0) {
 async function load(page, path) {
   await page.goto(origin + path, { waitUntil: "load", timeout: 90000 });
   const done = await settle(page, 0, 300, 15000);
+  // Ready: the page settled and the main thread has been free for 500 ms (hydration runs as long tasks while the
+  // page looks done; a tap before then is lost, or on a link reloads the page).
+  for (;;) {
+    const { now, busy } = await page.evaluate(() => ({
+      now: performance.now(),
+      busy: window.__speed.busy,
+    }));
+    if (now - busy >= 500 || now >= 15000) break;
+    await page.waitForTimeout(100);
+  }
+  await settle(page, 0, 150, 15000);
   const vitals = await page.evaluate(() => ({
     lcp: window.__speed.lcp,
     tbt: Math.round(window.__speed.tbt),
+    busy: window.__speed.busy,
+    last: window.__speed.last,
     loaded: performance.getEntriesByType("navigation")[0]?.loadEventEnd ?? 0,
   }));
   const settled = Math.round(Math.max(done.at, vitals.loaded));
   return {
-    ms: vitals.lcp ?? settled,
+    // A screen's time: when it is ready to use; its LCP and blocking time beside it.
+    ms: Math.round(Math.max(settled, vitals.busy, vitals.lcp ?? 0)),
     settled,
     lcp: vitals.lcp,
     tbt: vitals.tbt,
@@ -227,7 +241,9 @@ async function main() {
               }
               const timed = await tap(session.page, selector);
               fresh = !timed || timed.result === "no_change";
-              if (!timed || timed.result === "left") continue;
+              if (!timed) continue;
+              // A tap that left the page is kept (as "left", no time): on a ready page it is a link doing a
+              // full load instead of opening in place.
               measures.push({ screen: key, action, rate, run, ...timed });
             }
           } catch (error) {

@@ -157,8 +157,31 @@ test("the report lists every screen and action at each rate, and what is slow", 
   });
   assert.match(
     text,
-    /\| Leads, All \| opening the screen \| 600 \| 1900 \| 15000\+ \| 15200 \| 900 \| \*\*for the builder\*\* \|/,
+    /\| Leads, All \| opening the screen \| 600 \| 1900 \| 15000\+ \| 15000 \| 900 \| \*\*for the builder\*\* \|/,
   );
+  // A lead row that reloads the page instead of opening in place.
+  const left = summarize([
+    {
+      screen: "leads",
+      action: "lead_open",
+      rate: 6,
+      result: "left",
+      control: "li.leads__leadLine",
+    },
+    {
+      screen: "leads",
+      action: "lead_open",
+      rate: 6,
+      ms: 400,
+      result: "settled",
+    },
+  ]);
+  const leftText = speedMarkdown({ rows: left, findings: [] });
+  assert.match(
+    leftText,
+    /- Leads, All, opening a lead \(li\.leads__leadLine\): a full page load instead of opening in place, at 6x \(1 of 2\)/,
+  );
+  assert.equal(left[0].rates[6].median, 400);
   assert.match(
     text,
     /\| Leads, All \| opening a sheet \(button\.workspace-switcher__trigger\) \| – \| – \| 700 \|/,
