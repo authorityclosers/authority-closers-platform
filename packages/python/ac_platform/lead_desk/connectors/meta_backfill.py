@@ -189,6 +189,7 @@ async def file_lead(
     A lead Meta's testing tools made is test data, so it stays out of partner sends,
     SLA reports and lead stages sent back to the ad platforms like any test lead. A form
     sent before its person's lead was made is "linked" to that lead (``earlier_lead``).
+    A new lead arrives when the person sent the form (``received_at``), not when we filed it.
     A new lead's id is added to ``made``, for the duplicate engine after the batch."""
     record = meta.lead_record(lead, page_name=page_name)
     ref = str(lead.get("id") or "")[:200] or None
@@ -198,6 +199,8 @@ async def file_lead(
         earlier = await earlier_lead(desk, record, ref, sent)
         if earlier is not None:
             return await link(desk, source, earlier, ref, sent)
+    # When the person sent the form (owner's dev report #7, 26 Oct 2026: an old lead
+    # brought in later showed as new): it counts where it arrived, not today.
     filed, outcome = await desk.ingest(
         record,
         source="meta",
@@ -205,6 +208,7 @@ async def file_lead(
         source_ref=ref,
         actor=None,
         test_data=test,
+        received_at=sent,
     )
     if outcome == "created" and filed is not None and made is not None:
         made.append(filed.id)
