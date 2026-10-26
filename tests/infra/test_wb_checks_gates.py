@@ -183,8 +183,9 @@ def test_the_workflow_shards_the_radar_and_merges_one_report() -> None:
     merge = "\n".join(step.get("run", "") for step in report["steps"])
     # Merging needs plain Node: no install, no browser.
     assert "node scripts/ci/wb_radar.mjs merge" in merge and "pnpm install" not in merge
-    [upload] = [s for s in report["steps"] if "upload-artifact" in s.get("uses", "")]
-    assert upload["with"]["name"] == "wb-radar" and upload["with"]["retention-days"] == 1
+    fold = report["steps"][-1]
+    assert fold["uses"].startswith("actions/upload-artifact/merge@")
+    assert fold["with"]["name"] == "wb-radar" and fold["with"]["retention-days"] == 1
     assert {"radar", "radar-report"} <= set(jobs["summary"]["needs"])
     shipped = (ROOT / "scripts/ci/wb-ci").read_text()
     assert "--radar) checks+=(radar)" in shipped

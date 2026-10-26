@@ -23,7 +23,7 @@ That is 22 states a page. In each state the page is measured (`radarScan` in `sc
 | check | finds | severity |
 |---|---|---|
 | `overflow-element`, `overflow-page` | an element past the screen's edge (outside a scroller), or the page scrolling sideways | high on a phone |
-| `overlap` | text lines and controls drawn over each other in one layer (the page, a fixed or sticky bar, a dialog): a pill over a title | high with a control, else medium |
+| `overlap` | text lines and controls drawn over each other in one layer (the page, a fixed or sticky bar, a dialog) and one scroller: a pill over a title | high with a control, else medium |
 | `clipped-label`, `clipped-text` | a tab, button, chip or heading cut by an ellipsis, a clip or a line clamp; long data text is `clipped-text` | high when under 60% shows |
 | `text-spill` | text running visibly out of its control | medium |
 | `tap-target` | a control under 44 x 44 px on a phone (inline links in a sentence are exempt; a widening `::before`/`::after` counts) | medium under 24 px, else low |
@@ -33,12 +33,13 @@ That is 22 states a page. In each state the page is measured (`radarScan` in `sc
 
 Then every safe control is tapped once, at 390 px (and at 1280 px for computer screens). Nothing labelled Delete,
 Remove, Log out, Send, Call, WhatsApp, Pay or Upgrade is tapped, and nothing that leaves the app (tel:, mail,
-another site, a new window). A list's rows get one or two taps; every tab gets one.
+another site, a new window). A list's rows get one or two taps; every tab gets one. While a modal sheet is open,
+only its own controls are tapped.
 
 | check | finds |
 |---|---|
 | `dead-tap` | nothing changed in the page, the address, scroll, focus or checkboxes within 1 s |
-| `tab-no-switch` | a tab that does not light up, or lights up while the content below stays the same |
+| `tab-no-switch` | a tab that does not light up, or lights up while the content below stays the same (high for real tabs; low for a segmented switch, which may only set a mode) |
 | `tap-blocked` | something drawn over the control takes the tap |
 | `tap-error` | a console error, an uncaught error or a failed request after the tap |
 | `sheet-offscreen` | a sheet or dialog opened by the tap reaches past the screen's edge, or below it without scrolling |
@@ -64,7 +65,8 @@ sudo ac-bug-radar check --sha <sha>         # a release hold: groups the nightly
 ```
 
 - The artifact `wb-radar` (kept a day) holds `report.md` (also the run summary), `radar.json`, `crops/<finding>.jpg`
-  and `pages/<screen>.jpg` (each screen whole, at 390 px, 100%, light).
+  and `pages/<screen>.jpg` (each screen whole, at 390 px, 100%, light). The shards' parts are folded into it and
+  deleted, so a run leaves one artifact (the workbench storage policy).
 - Findings never fail the job. A shard fails only when over a quarter of its pages never loaded.
 - To debug against a fixture server you already run:
   `WB_RADAR_ORIGIN=http://127.0.0.1:3000 WB_RADAR_WORKERS=1 node scripts/ci/wb_radar.mjs run out .wb-ci/request.json`,
@@ -118,6 +120,11 @@ the last step:
 - A copy button with no toast is a dead tap, on purpose: it gives no feedback.
 - A centred alert dialog is a low `centred-card`.
 - A days-of-the-week multi-choice (several pressed) is not treated as tabs; a segmented switch with one pressed is.
+- Hidden content counts as hidden when Chrome says so (`checkVisibility`): a closed `<details>` menu has boxes but
+  is never painted. The first baseline listed 42 such menus as overlaps before this.
+- Overlaps are compared inside one scroller, so content scrolled under a sheet's footer is not an overlap.
+- A crawl's first tap on a fixture can wait for `next dev` to compile a lazy chunk; a page that fails to open is
+  tried once more.
 
 ## Device coverage beyond fixtures (proposed, not set up)
 

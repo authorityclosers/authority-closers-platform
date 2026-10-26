@@ -28,8 +28,23 @@ SHARD_UPLOADS = [step for step in UPLOADS if step["with"]["name"].startswith("wb
 
 
 def test_all_workbench_uploads_expire_after_one_day() -> None:
-    assert len(UPLOADS) == 5  # coverage summaries, failed shards, screenshots, e2e and the matrix
+    # coverage summaries, failed shards, screenshots, e2e, the matrix, the radar's two kinds of part
+    assert len(UPLOADS) == 7
     assert all(step["with"]["retention-days"] == 1 for step in UPLOADS)
+
+
+def test_the_radar_leaves_one_artifact_a_run() -> None:
+    """Its shard and report parts fold into wb-radar and are deleted, as the Python shards' are."""
+    radar = [step["with"]["name"] for step in UPLOADS if "radar" in step["with"]["name"]]
+    assert radar == ["wb-radar-part-${{ matrix.shard }}", "wb-radar-part-report"]
+    fold = next(
+        step
+        for step in JOBS["radar-report"]["steps"]
+        if step.get("uses", "").startswith("actions/upload-artifact/merge@")
+    )
+    assert fold["with"]["name"] == "wb-radar" and fold["with"]["pattern"] == "wb-radar-part-*"
+    assert fold["with"]["delete-merged"] is True and fold["with"]["retention-days"] == 1
+    assert fold["uses"].split("@", 1)[1] == UPLOADS[0]["uses"].split("@", 1)[1]
 
 
 def test_green_shards_publish_only_required_coverage_summaries() -> None:

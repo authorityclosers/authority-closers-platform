@@ -411,13 +411,16 @@ export function radarScan(options = {}) {
       opacities.set(el, Number(st(el).opacity) * opacity(el.parentElement));
     return opacities.get(el);
   };
+  // checkVisibility also hides what is laid out but never painted: a closed <details>'s menu (baseline 26 Oct:
+  // 42 "overlap" groups were closed menus over the report's tabs) and content-visibility: hidden.
   const shown = (el) => {
     const s = st(el);
     return (
       s.display !== "none" &&
       s.visibility !== "hidden" &&
       s.visibility !== "collapse" &&
-      opacity(el) > 0.05
+      opacity(el) > 0.05 &&
+      (!el.checkVisibility || el.checkVisibility())
     );
   };
   // Where an element's content can be seen: hidden or clipped overflow cuts it; a scroller doesn't (it scrolls).
@@ -468,6 +471,31 @@ export function radarScan(options = {}) {
     }
     return layers.get(el);
   };
+  // The box an element scrolls with. Content scrolled under a sheet's footer or a bar is by design, so overlaps
+  // count only inside one scroller.
+  const ports = new Map();
+  const portOf = (el) => {
+    if (!el || el === document.body || el === doc) return document.body;
+    if (!ports.has(el)) {
+      const p = el.parentElement;
+      const s = p && p !== document.body ? st(p) : null;
+      ports.set(
+        el,
+        s && /auto|scroll/.test(`${s.overflowX} ${s.overflowY}`)
+          ? p
+          : portOf(p),
+      );
+    }
+    return ports.get(el);
+  };
+  // A fixed bar slid off the screen until it is needed (a selection bar below the bottom edge): not drawn.
+  const parked = (el) => {
+    const r = rectOf(el);
+    if (r.t < innerHeight && r.b > 0 && r.l < W && r.r > 0) return false;
+    for (let p = el; p && p !== document.body; p = p.parentElement)
+      if (st(p).position === "fixed") return true;
+    return false;
+  };
   // Inside a box that scrolls sideways on purpose (a chip strip, a wide table).
   const inScroller = (el) => {
     for (
@@ -491,7 +519,8 @@ export function radarScan(options = {}) {
       shown(el) &&
       // Parked above or left of the page until focused (a skip link): not seen, not measured.
       rectOf(el).b > 0 &&
-      rectOf(el).r > 0,
+      rectOf(el).r > 0 &&
+      !parked(el),
   );
   const range = document.createRange();
   const texts = [];
@@ -554,7 +583,7 @@ export function radarScan(options = {}) {
     if (!el.matches(TAPPABLE)) continue;
     const r = inter(rectOf(el), clipOf(el.parentElement));
     if (r.w >= 4 && r.h >= 4)
-      items.push({ kind: "box", el, r, layer: layerOf(el) });
+      items.push({ kind: "box", el, r, layer: layerOf(el), port: portOf(el) });
   }
   for (const t of texts)
     for (const r of t.boxes)
@@ -564,6 +593,7 @@ export function radarScan(options = {}) {
         node: t.node,
         r,
         layer: layerOf(t.el),
+        port: portOf(t.el),
       });
   const labelFor = (text, control) => {
     const label = text.el.closest("label");
@@ -579,7 +609,8 @@ export function radarScan(options = {}) {
     ) {
       const a = items[i];
       const b = items[j];
-      if (a.layer !== b.layer || (a.node && a.node === b.node)) continue;
+      if (a.layer !== b.layer || a.port !== b.port) continue;
+      if (a.node && a.node === b.node) continue;
       const ox = Math.min(a.r.r, b.r.r) - Math.max(a.r.l, b.r.l);
       const oy = Math.min(a.r.b, b.r.b) - Math.max(a.r.t, b.r.t);
       if (ox < 3 || oy < 3) continue;
@@ -665,10 +696,15 @@ export function radarScan(options = {}) {
         control.matches('[role="tab"]') ||
         R.labelish(control) ||
         R.labelish(cut.box);
+      // A table cell's words are data (a name, a stage): cut on purpose, so never a label.
+      const cell = !!control.closest(
+        'td, th, [role="cell"], [role="gridcell"]',
+      );
       const label =
-        tabLike ||
-        (text.length <= 28 && words.length <= 48) ||
-        /^H[1-3]$/.test(control.tagName);
+        !cell &&
+        (tabLike ||
+          (text.length <= 28 && words.length <= 48) ||
+          /^H[1-3]$/.test(control.tagName));
       add(
         {
           check: label ? "clipped-label" : "clipped-text",
@@ -688,9 +724,10 @@ export function radarScan(options = {}) {
     // Text running visibly out of its control, nothing clipping it.
     if (!el.closest('button, a, [role="button"], [role="tab"], label'))
       continue;
+    // Beyond rounding (2 px sideways) and tall scripts' glyph boxes (4 px down, Devanagari).
     const box = rectOf(control);
     for (const b of t.boxes)
-      if (b.r > box.r + 1 || b.l < box.l - 1 || b.b > box.b + 1) {
+      if (b.r > box.r + 2 || b.l < box.l - 2 || b.b > box.b + 4) {
         add(
           {
             check: "text-spill",
@@ -919,7 +956,10 @@ export function radarFocusHit(id) {
       "[data-radar-on]{outline:2px solid #e5484d!important;outline-offset:1px!important}";
     document.head.append(style);
   }
-  els[0].scrollIntoView({ block: "center", inline: "nearest" });
+  // Scroll only what is off the screen: scrolling a sticky bar that is already in view moved it out of the crop.
+  const first = els[0].getBoundingClientRect();
+  if (first.bottom <= 0 || first.top >= innerHeight)
+    els[0].scrollIntoView({ block: "center", inline: "nearest" });
   let box = null;
   for (const el of els) {
     if (el !== document.documentElement) el.setAttribute("data-radar-on", "");
@@ -982,8 +1022,17 @@ export function radarTargets(options = {}) {
   const out = [];
   const count = new Map();
   let n = 0;
+  // While a modal sheet is open, only its controls can be tapped; the page behind its scrim is not a target.
+  const modal =
+    document.querySelector("dialog:modal") ??
+    [...document.querySelectorAll('[aria-modal="true"]')].find(
+      (d) =>
+        d.getBoundingClientRect().width > 0 && d.checkVisibility?.() !== false,
+    );
   for (const el of document.querySelectorAll(SELECTOR)) {
     el.removeAttribute("data-radar-id");
+    if (modal && !modal.contains(el)) continue;
+    if (el.checkVisibility && !el.checkVisibility()) continue; // a closed <details>'s menu
     const r = el.getBoundingClientRect();
     const s = getComputedStyle(el);
     if (
@@ -1030,11 +1079,15 @@ export function radarTargets(options = {}) {
       toggles.length > 1 &&
       toggles.filter((c) => c.getAttribute("aria-pressed") === "true")
         .length === 1;
+    // Real tabs say so (role, aria-selected, a tab list); a segmented switch may be a mode (a playback speed).
     const tabLike =
       role === "tab" ||
       el.hasAttribute("aria-selected") ||
-      /^(tablist|radiogroup)$/.test(parentRole) ||
-      pressedGroup;
+      /^(tablist|radiogroup)$/.test(parentRole)
+        ? "tab"
+        : pressedGroup
+          ? "segment"
+          : false;
     const on = (name) => el.getAttribute(name);
     const selected =
       on("aria-selected") === "true" ||
@@ -1399,6 +1452,8 @@ export const CAVEATS = [
   "Tap targets count the element and an absolute ::before/::after that widens it; a parent row that takes the tap is not counted, so a small icon inside a big tappable row is still listed (low).",
   "A dead tap is nothing changing in the page, the address, scroll, focus or checkboxes within 1 s; a copy-to-clipboard with no toast is listed on purpose (no feedback).",
   "Centred cards need a visible box (background, border or shadow); a centred alert dialog is listed as low.",
+  "A segmented switch (one of several pressed) may set a mode with no content of its own (a playback speed): when it lights up and nothing else changes it is a low tab-no-switch; real tabs (role tab) are high.",
+  "Overlap is compared inside one scroller: content scrolled under a sheet's footer is by design and not compared.",
 ];
 
 // Every cell loses names (fixture people stay out of the report too) and anything that would break the table.

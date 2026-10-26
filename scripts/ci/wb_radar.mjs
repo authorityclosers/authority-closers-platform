@@ -99,6 +99,8 @@ async function openPage(browser, screen, { size, theme, zoom }, sandboxed) {
     reducedMotion: "reduce",
     serviceWorkers: "block",
     acceptDownloads: false,
+    // A real phone lets a tapped Copy write the clipboard; headless Chromium refuses unless granted.
+    permissions: ["clipboard-read", "clipboard-write"],
   });
   await context.addInitScript((value) => {
     try {
@@ -125,11 +127,8 @@ async function openPage(browser, screen, { size, theme, zoom }, sandboxed) {
     const text = message.text();
     const at = message.location()?.url ?? "";
     if (DEV_NOISE.test(text) || DEV_NOISE.test(at) || sandboxed.has(at)) return;
-    if (
-      /Failed to load resource/.test(text) &&
-      [...sandboxed].some((url) => at.startsWith(url.split("?")[0]))
-    )
-      return;
+    // Chrome's own line for a failed load: the response and requestfailed handlers record it with its path.
+    if (/^Failed to load resource/.test(text)) return;
     events.push({
       check: "console-error",
       message: normalizeMessage(text),
@@ -145,6 +144,8 @@ async function openPage(browser, screen, { size, theme, zoom }, sandboxed) {
   );
   page.on("requestfailed", (request) => {
     if (sandboxed.has(request.url()) || DEV_NOISE.test(request.url())) return;
+    // The app cancelled it (an AbortController on unmount or a newer search): not a failure.
+    if (request.failure()?.errorText === "net::ERR_ABORTED") return;
     const path = new URL(request.url()).pathname;
     events.push({
       check: "request-failed",
@@ -171,13 +172,30 @@ async function openPage(browser, screen, { size, theme, zoom }, sandboxed) {
       severity: path.startsWith("/v1/") ? "low" : "medium",
     });
   });
-  await page.goto(origin + screen.path, {
-    waitUntil: "networkidle",
-    timeout: 90000,
-  });
-  await page.waitForTimeout(300);
-  for (const item of screen.steps ?? []) await step(page, item);
+  try {
+    await page.goto(origin + screen.path, {
+      waitUntil: "networkidle",
+      timeout: 90000,
+    });
+    await page.waitForTimeout(300);
+    for (const item of screen.steps ?? []) await step(page, item);
+  } catch (error) {
+    await context.close().catch(() => undefined);
+    throw error;
+  }
   return { context, page, events };
+}
+
+/**
+ * A page, tried twice: the first tap on a fixture can wait for next dev to compile a lazy chunk (the leads table
+ * took over 20 s on the first baseline), and the second try finds it built.
+ */
+async function openPageTwice(...args) {
+  try {
+    return await openPage(...args);
+  } catch {
+    return await openPage(...args);
+  }
 }
 
 /** A cropped, outlined screenshot of a finding's element(s), once per finding key a shard. */
@@ -263,7 +281,7 @@ async function run(args) {
     const info = pages.get(key);
     let session;
     try {
-      session = await openPage(browser, screen, load, sandboxed);
+      session = await openPageTwice(browser, screen, load, sandboxed);
       const { page } = session;
       const viewport = page.viewportSize();
       for (const state of load.states) {
@@ -339,7 +357,7 @@ async function run(args) {
     let targets = [];
     const fresh = async () => {
       await session?.context.close().catch(() => undefined);
-      session = await openPage(browser, screen, load, sandboxed);
+      session = await openPageTwice(browser, screen, load, sandboxed);
       session.flags = {
         popup: false,
         chooser: false,
@@ -456,11 +474,14 @@ async function run(args) {
           flags.download;
         const left =
           navigated || (seen.url && !seen.url.startsWith("/review-fixture"));
+        // A real tab ("tab") that does nothing is the owner's "Leads setup tabs don't switch"; a segmented switch
+        // ("segment") may be a mode with no content of its own (a playback speed), so it ranks lower.
+        const tab = target.tabLike === "tab";
         if (!anything && !target.selected)
           await shot({
             ...base,
             check: target.tabLike ? "tab-no-switch" : "dead-tap",
-            severity: target.tabLike ? "high" : "medium",
+            severity: tab ? "high" : "medium",
             selector: target.selector,
             detail: target.tabLike
               ? "tapped a tab: it did not light up and nothing else changed"
@@ -471,12 +492,13 @@ async function run(args) {
           !target.selected &&
           !left &&
           !seen.contentChanged &&
-          !seen.url
+          !seen.url &&
+          !seen.scrolled // a strip that jumps to its section
         )
           await shot({
             ...base,
             check: "tab-no-switch",
-            severity: seen.selectedNow ? "high" : "medium",
+            severity: tab && seen.selectedNow ? "high" : tab ? "medium" : "low",
             selector: target.selector,
             detail: seen.selectedNow
               ? "the tab lights up, but the content below stays the same"
@@ -493,7 +515,8 @@ async function run(args) {
                   : event.check === "request-failed"
                     ? event.severity
                     : "medium",
-              selector: target.selector,
+              // One finding per control and message (several errors after one tap stay apart).
+              selector: `${target.selector} ⇒ ${event.message}`,
               message: event.message,
               detail: event.message,
             });

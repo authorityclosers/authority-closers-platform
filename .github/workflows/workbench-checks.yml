@@ -390,16 +390,24 @@ jobs:
           merge-multiple: true
       - name: Dedupe, group and report
         run: node scripts/ci/wb_radar.mjs merge "$RUNNER_TEMP/wb-radar" .wb-ci/request.json
-      - name: Upload the report, crops and page shots
+      - name: Upload the report as one more part
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: wb-radar
+          name: wb-radar-part-report
           path: |
             ${{ runner.temp }}/wb-radar/report.md
             ${{ runner.temp }}/wb-radar/radar.json
-            ${{ runner.temp }}/wb-radar/crops/
-            ${{ runner.temp }}/wb-radar/pages/
           if-no-files-found: error
+          retention-days: 1
+      # One artifact a run, as the Python shards fold theirs (24 Oct 2026: one-day artifacts expiring one by one
+      # moved Root's inventory): the shards' crops and page shots and the report, the parts deleted.
+      - name: Fold the parts into wb-radar
+        uses: actions/upload-artifact/merge@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-radar
+          pattern: wb-radar-part-*
+          separate-directories: false
+          delete-merged: true
           retention-days: 1
 
   e2e:
