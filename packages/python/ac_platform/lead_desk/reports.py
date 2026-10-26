@@ -79,6 +79,13 @@ class LeadFact:
     created_at: datetime
     next_action_at: datetime | None
     outcome_reason: str | None
+    # When it reached the business (0139), when that differs from created_at: what counts
+    # as come in during a period. How fast it was called still reads created_at.
+    received_at: datetime | None = None
+
+    @property
+    def arrived_at(self) -> datetime:
+        return self.received_at or self.created_at
 
 
 @dataclass(frozen=True, slots=True)
@@ -265,7 +272,7 @@ def compute(
         if item.at >= since and (item.kind == "junk" or never):
             junk_moves += 1
 
-    created = [fact for fact in leads if fact.created_at >= since and fact.lead_id not in junk]
+    created = [fact for fact in leads if fact.arrived_at >= since and fact.lead_id not in junk]
     first = Conversion("new_to_connect", len(created))
     minutes: list[int] = []
     for fact in created:
@@ -314,7 +321,7 @@ def compute(
             won_at = first_at.get(fact.lead_id, {}).get("won")
             if fact.stage == "won" and won_at is not None and won_at >= since:
                 tally.won += 1
-            if fact.created_at >= since:
+            if fact.arrived_at >= since:
                 tally.created += 1
                 tally.junk += fact.lead_id in junk
                 if fact.lead_id in spoke_at and fact.lead_id not in junk:
@@ -377,6 +384,7 @@ async def pipeline_report(
             row.created_at,
             row.next_action_at,
             row.outcome_reason,
+            row.received_at,
         )
         for row in (
             await db.execute(
@@ -390,6 +398,7 @@ async def pipeline_report(
                     Lead.created_at,
                     Lead.next_action_at,
                     Lead.outcome_reason,
+                    Lead.received_at,
                 )
                 .where(*where)
                 .limit(MAX_LEADS)

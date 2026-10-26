@@ -96,6 +96,7 @@ class Desk:
     now: datetime = datetime(2027, 1, 15, 10, 0, tzinfo=UTC)
     filed: list[str] = field(default_factory=list)
     test_data: dict[str, bool] = field(default_factory=dict)
+    received: dict[str, datetime | None] = field(default_factory=dict)
     db: Db = field(default_factory=Db)
     tenant_id: UUID = field(default_factory=uuid4)
     notes: list[tuple[Any, dict[str, Any]]] = field(default_factory=list)
@@ -118,6 +119,7 @@ class Desk:
         assert kwargs["source"] == "meta" and kwargs["actor"] is None
         self.filed.append(ref)
         self.test_data[ref] = kwargs["test_data"]
+        self.received[ref] = kwargs["received_at"]
         if ref in self.known:
             return None, "known"
         self.known.add(ref)
@@ -370,3 +372,12 @@ def test_bringing_in_older_leads_counts_what_it_linked() -> None:
     state = meta_backfill.state(again.config)
     assert state is not None
     assert (state["created"], state["linked"], state["known"], state["seen"]) == (0, 0, 3, 3)
+
+
+def test_a_new_lead_arrives_when_the_person_sent_the_form() -> None:
+    # Owner's dev report #7 (26 Oct 2026): an old Meta lead brought in later showed as new.
+    desk = Desk()
+    asyncio.run(meta_backfill.file_lead(desk, source(), phoned(5, SENT), page_name="P"))
+    undated = {**phoned(6, SENT), "created_time": None}
+    asyncio.run(meta_backfill.file_lead(desk, source(), undated, page_name="P"))
+    assert desk.received == {"p-5": datetime(2027, 1, 1, 9, tzinfo=UTC), "p-6": None}

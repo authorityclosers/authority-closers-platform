@@ -161,6 +161,10 @@ DELETERS = frozenset(roles_with("leads.delete"))
 # A phone alert names a task due within this of now (task_push reminds up to two hours
 # before an in-person meeting).
 TASK_ALERT_WINDOW = timedelta(hours=2)
+# When a lead reached the business (migration 0139): the time its source gave, else when
+# it was filed. Counts of what came in read it; how fast someone called reads created_at,
+# since nobody could call a lead before it was filed (owner, 26 Oct 2026, dev report #7).
+ARRIVED = func.coalesce(Lead.received_at, Lead.created_at)
 # New leads that came in this recently are "just in" on a grouped alert: "5 new leads",
 # and from forty on "40+ new leads" (owner, 26 Oct 2026, dev report #3).
 JUST_IN = timedelta(minutes=15)
@@ -709,6 +713,7 @@ class LeadDesk:
             why_kind=kind,
             next_action_at=lead.next_action_at,
             created_at=lead.created_at,
+            received_at=lead.received_at,
             attempts=lead.attempts,
             calls=lead.calls,
             last_result=lead.last_result,
@@ -1609,11 +1614,14 @@ class LeadDesk:
         reps: list[_Rep] | None = None,
         command_id: UUID | None = None,
         pipeline: str | None = None,
+        received_at: datetime | None = None,
     ) -> tuple[Lead | None, Literal["created", "repeat", "known", "skipped"]]:
         """Store one record as a lead. The same record again (same source id) is "known"
         and changes nothing; another record with the same phone, or with no phone and the
         same email, is a "repeat". A new lead
-        goes to the pipeline picked, else the one that takes its source (pipelines.route)."""
+        goes to the pipeline picked, else the one that takes its source (pipelines.route).
+        ``received_at``: when the person sent it, when the source says (a Meta form's
+        created_time); a time ahead of now is taken as now."""
         _, config = await self.settings()
         found = extract(record, mapping, default_country=config["default_country"])
         if not (found.name or found.phone or found.email):
@@ -1683,6 +1691,7 @@ class LeadDesk:
             created_by_person_id=actor,
             created_at=self.now,
             updated_at=self.now,
+            received_at=min(received_at, self.now) if received_at is not None else None,
         )
         try:
             async with self.db.begin_nested():
@@ -3269,7 +3278,11 @@ class LeadDesk:
             )
             body = " · ".join(
                 part
-                for part in (source, lead.interest, ago_text(lead.created_at, self.now))
+                for part in (
+                    source,
+                    lead.interest,
+                    ago_text(lead.received_at or lead.created_at, self.now),
+                )
                 if part
             )
             return AlertText(
@@ -3326,6 +3339,8 @@ class LeadDesk:
                     Lead.stage == "new",
                     Lead.next_action_at.is_(None),
                     func.coalesce(Lead.assigned_at, Lead.created_at) > self.now - JUST_IN,
+                    # An old lead brought in now is not new (dev report #7).
+                    self.now - timedelta(days=1) < ARRIVED,
                     *(
                         (
                             Lead.owner_person_id == self.viewer.person_id,
@@ -4176,10 +4191,10 @@ class LeadDesk:
             where = [
                 Lead.tenant_id == self.tenant_id,
                 Lead.test_data.is_(False),
-                Lead.created_at >= since,
+                since <= ARRIVED,
             ]
             if until is not None:
-                where.append(Lead.created_at < until)
+                where.append(until > ARRIVED)
             leads = (
                 await self.db.execute(
                     select(Lead.created_at, Lead.first_contact_at).where(*where).limit(50000)

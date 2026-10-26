@@ -68,10 +68,21 @@ def _arguments(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def load_models() -> None:
+    """Every model's table, so the issue tables' foreign keys (persons, tenants) resolve when
+    this module runs on its own, as ac-bugs runs it inside the container (v0.93 production:
+    NoReferencedTableError for persons)."""
+    from ac_platform.db.models import model_metadata
+
+    model_metadata()
+
+
 async def _run(arguments: argparse.Namespace) -> dict[str, object]:
     from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
     from ac_platform.bug_reports.issues import IssueStore
+
+    load_models()
 
     url = arguments.database_url_file.read_text().strip()
     engine = create_async_engine(url, pool_pre_ping=True)

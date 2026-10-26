@@ -328,8 +328,10 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
             # A lead someone added for themselves needs no alert.
             if kind != "new" or lead.created_by_person_id != lead.owner_person_id:
                 hear.append(lead.owner_person_id)
-            # The organisation's owners hear of a lead that came in by itself.
-            if kind == "new" and lead.created_by_person_id is None:
+            # The organisation's owners hear of a lead that came in by itself, and just
+            # now: an old lead brought in later is no news (dev report #7).
+            arrived = lead.received_at or lead.created_at
+            if kind == "new" and lead.created_by_person_id is None and arrived > since:
                 hear.extend(owner for owner in owners.get(lead.tenant_id, ()) if owner not in hear)
             for person_id in hear:
                 key = (lead.tenant_id, person_id)

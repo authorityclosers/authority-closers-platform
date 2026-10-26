@@ -120,6 +120,10 @@ class Lead(Base):
     created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # When the person sent it (migration 0139), when that differs from when it was filed:
+    # a Meta form's created_time, so an old lead brought in later counts as brought in,
+    # not as new. Empty is "when it was filed" (store.ARRIVED reads both).
+    received_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # The phone alert already sent for this owner's assignment, and for this due
     # time (0095): each is sent once, and a new owner or a new time sends again.
     alerted_assigned_at: Mapped[datetime | None] = mapped_column(
