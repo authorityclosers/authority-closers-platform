@@ -1394,6 +1394,23 @@ it("never shows a signed-in account the guest trial cap while its balance loads"
   );
 });
 
+// The box is a per-call attestation (26 Oct 2026): it never comes back
+// ticked, even for the same workspace and the same terms.
+it("asks for the tick again on the next upload in the same workspace", async () => {
+  await mountWithAccountAccess();
+  await select();
+  await consent();
+  const box = () =>
+    container.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
+  expect(box().checked).toBe(true);
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  await mountWithAccountAccess();
+  await select();
+  expect(box().checked).toBe(false);
+  expect(button("Analyse my call").disabled).toBe(true);
+});
+
 it("clears consent when the selected file changes", async () => {
   await mount();
   await select();
