@@ -94,11 +94,19 @@ export function StageTabs({
 }) {
   const strip = useRef<HTMLDivElement>(null);
   // The chosen tab stays in view, also when the page opens on a later one.
+  // Only the strip scrolls: scrollIntoView would also move a clipped
+  // ancestor sideways, which reads as the page running off the right edge
+  // (production report #28, 26 Oct 2026).
   useLayoutEffect(() => {
-    const chosen = strip.current?.querySelector<HTMLElement>(
-      '[aria-selected="true"]',
-    );
-    chosen?.scrollIntoView?.({ block: "nearest", inline: "nearest" });
+    const box = strip.current;
+    const chosen = box?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!box || !chosen) return;
+    const edge = box.getBoundingClientRect();
+    const tab = chosen.getBoundingClientRect();
+    // Clear of the 24 px fade on the right, and of the left edge.
+    if (tab.right > edge.right - 24)
+      box.scrollLeft += tab.right - edge.right + 24;
+    else if (tab.left < edge.left) box.scrollLeft -= edge.left - tab.left;
   }, [current]);
   return (
     <div
