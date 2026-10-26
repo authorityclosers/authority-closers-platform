@@ -76,33 +76,22 @@ it("never asks about one thing twice, and never after don't ask again", () => {
   ).toBe(false);
 });
 
-// 26 Oct 2026: a deliberate double shake (four hard swings in 1.5 s), so a pick-up never opens it.
-it("counts a deliberate double shake, not walking or one bump", () => {
+// 26 Oct 2026 (owner, after v0.93): three swings within 1.2 s, each the other
+// way from the one before, at a normal shake's force.
+it("counts a deliberate shake, not walking or one bump", () => {
   let now = 0;
   const shaken = shakeDetector(() => now);
-  const hard = () => shaken(0, 0, 9.81 + 25);
-  const gentle = () => shaken(0, 0, 9.81 + 4);
-  expect([gentle(), gentle(), gentle(), gentle()]).toEqual([
-    false,
-    false,
-    false,
-    false,
-  ]);
-  expect(hard()).toBe(false);
-  now = 300;
-  expect(hard()).toBe(false);
-  now = 600;
-  expect(hard()).toBe(false);
-  now = 900;
-  expect(hard()).toBe(true);
+  const at = (ms: number, x: number) => {
+    now = ms;
+    return shaken(x, 0, 9.81);
+  };
+  expect([0, 16, 32].map((ms) => at(ms, 0))).not.toContain(true);
+  expect([48, 300, 600].map((ms) => at(ms, 4))).not.toContain(true);
+  expect(at(700, 16)).toBe(false);
+  expect(at(820, -16)).toBe(false);
+  expect(at(940, 16)).toBe(true);
   // Not again straight away.
-  now = 1200;
-  expect([hard(), hard(), hard()]).toEqual([false, false, false]);
-  // Swings too far apart never add up.
-  for (const at of [7000, 8600, 10200, 11800]) {
-    now = at;
-    expect(hard()).toBe(false);
-  }
+  expect([at(1060, -16), at(1180, 16), at(1300, -16)]).not.toContain(true);
 });
 
 it("finds reports fixed since the last look, and only those", () => {

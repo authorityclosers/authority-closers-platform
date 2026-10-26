@@ -375,3 +375,11 @@ def test_friction_events_take_flow_steps_prompt_outcomes_and_tap_places_only() -
         with pytest.raises(ValueError):
             check_payload_values(tap, bad)
     assert "/welcome" in SALES_XRAY_SURFACE.routes
+
+
+def test_shake_tells_its_force_and_swings_and_nothing_else() -> None:
+    """26 Oct 2026: shake to report sends how hard and how many, never where or who."""
+    shake = SALES_XRAY_EVENTS["sx.shake"]
+    assert shake.required == frozenset({"outcome"})
+    assert dict(shake.numbers) == {"peak": 200, "swings": 20}
+    assert set(shake.values["outcome"]) == {"opened", "near"}
