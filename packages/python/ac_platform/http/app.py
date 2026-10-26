@@ -12,7 +12,7 @@ from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ac_platform import __version__
-from ac_platform.application.loop_watchdog import LoopWatchdog
+from ac_platform.application.loop_watchdog import DUMP_AFTER, LoopWatchdog, settle_startup_heap
 from ac_platform.application.settings import Settings, get_settings
 from ac_platform.billing.compose import compose_billing
 from ac_platform.conversation_intelligence.hosted_runtime import compose_hosted_intake
@@ -69,6 +69,8 @@ logger = structlog.get_logger()
 settings = get_settings()
 _DEPLOYMENT_ENVIRONMENTS = {"staging", "production"}
 _MEDIA_RUNTIME_INJECTION_ENVIRONMENTS = {"local", "test"}
+# Long-running servers (not tests or a laptop).
+_LONG_RUNNING_ENVIRONMENTS = {"development", "staging", "production"}
 
 
 def _google_provider_from_settings(settings: Settings) -> OAuthIdentityProvider:
@@ -123,8 +125,13 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     logger.info(
         "application_started", release_id=settings.release_id, environment=settings.environment
     )
-    # Say what blocks the event loop, and where (24 Oct 2026).
-    watchdog = LoopWatchdog()
+    # Say what blocks the event loop, and where (24 Oct 2026). The servers also freeze
+    # their startup objects out of full collections and dump the stacks of a stall of
+    # 3 s or more (26 Oct 2026: a 3.7 s stall that nothing could name).
+    server = settings.environment in _LONG_RUNNING_ENVIRONMENTS
+    if server:
+        logger.info("startup_heap_frozen", objects=settle_startup_heap())
+    watchdog = LoopWatchdog(dump_after=DUMP_AFTER if server else None)
     watchdog.start()
     yield
     await watchdog.stop()

@@ -8,6 +8,7 @@
  */
 
 import {
+  CloudOff,
   List,
   ListChecks,
   X,
@@ -164,6 +165,8 @@ export function ListView({
   const [failed, setFailed] = useState<{ key: string; message: string } | null>(
     null,
   );
+  // "Try again" on a read that failed: the same question, asked once more.
+  const [attempt, setAttempt] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   // Select (owners and admins): tick leads, then Delete. What is ticked belongs
   // to the question it was ticked in; another filter starts with none.
@@ -205,6 +208,7 @@ export function ListView({
     pipeline,
     moreKey,
     version,
+    attempt,
   ]);
   const ownerCounts = useRef(onOwnerCounts);
   useEffect(() => {
@@ -497,9 +501,20 @@ export function ListView({
           />
         ) : null}
         {error ? (
-          <p className={styles.error} role="alert">
-            {error}
-          </p>
+          // Calm, with a way on (report #27, 26 Oct 2026): nothing is lost.
+          <InlineEmpty
+            icon={CloudOff}
+            title={error}
+            text="Your leads are safe. Try again in a moment."
+            action={
+              <Button
+                onClick={() => setAttempt((count) => count + 1)}
+                className={styles.inlineEmptyAction}
+              >
+                Try again
+              </Button>
+            }
+          />
         ) : page === null ? (
           <div
             className={styles.listSkeleton}

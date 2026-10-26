@@ -79,7 +79,13 @@ export function ViewSwitch({
           onAll();
         }}
       >
-        <span className={styles.label}>All leads</span>
+        {/* The narrowest switch shows "All"; text readers still hear "All leads". */}
+        <span className={styles.label}>
+          <span className={styles.long}>All leads</span>
+          <span className={styles.short} aria-hidden="true">
+            All
+          </span>
+        </span>
         <Count value={allCount} />
       </button>
       <button

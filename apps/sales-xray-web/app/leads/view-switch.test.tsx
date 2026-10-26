@@ -41,11 +41,18 @@ it("puts Now first, All leads beside it, and names the More view that is open", 
     />,
   );
   const buttons = [...host.querySelectorAll<HTMLButtonElement>("nav button")];
-  expect(buttons.map((button) => button.textContent)).toEqual([
-    "Now4",
-    "All leads",
-    "Board",
-  ]);
+  // What a text reader hears: the narrowest switch's short "All" is not read.
+  const spoken = (button: HTMLElement) => {
+    const copy = button.cloneNode(true) as HTMLElement;
+    copy
+      .querySelectorAll('[aria-hidden="true"]')
+      .forEach((node) => node.remove());
+    return copy.textContent;
+  };
+  expect(buttons.map(spoken)).toEqual(["Now4", "All leads", "Board"]);
+  expect(buttons[1].querySelector('[aria-hidden="true"]')?.textContent).toBe(
+    "All",
+  );
   expect(buttons[2].getAttribute("aria-current")).toBe("page");
   expect(buttons[2].getAttribute("aria-haspopup")).toBe("dialog");
   expect(buttons[0].getAttribute("aria-current")).toBeNull();
