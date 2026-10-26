@@ -1,4 +1,4 @@
-"""Migration 0139 (Pulse: profiles, org links and directory, recordings from apps): it
+"""Migration 0140 (Pulse: profiles, org links and directory, recordings from apps): it
 passes the schema gate, is reversible while unused, matches the models, its constraints
 hold (one open link per organisation, one organisation per Pulse org, a pending attempt
 carries its sealed verifier, an imported upload names its call), and history in use
@@ -28,7 +28,7 @@ from ac_platform.tenancy.models import Tenant
 from tests.database.conversation_harness import conversation_harness
 
 ROOT = Path(__file__).resolve().parents[2]
-PULSE = ("20261026_0139", "20261025_0137", "20261026_0139_pulse_link.py")
+PULSE = ("20261026_0140", "20261025_0139", "20261026_0140_pulse_link.py")
 TABLES = ("person_pulse_profiles", "pulse_org_links", "pulse_org_members", "app_call_uploads")
 
 

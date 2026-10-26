@@ -1,4 +1,4 @@
-"""Pulse tables (migration 20261026_0139; contract docs/architecture/pulse-identity-contract.md).
+"""Pulse tables (migration 20261026_0140; contract docs/architecture/pulse-identity-contract.md).
 
 - ``person_pulse_profiles``: the name, title, team and photo a person's Pulse account
   gives them here (one row per person; from their own sign-in or their org's link).
