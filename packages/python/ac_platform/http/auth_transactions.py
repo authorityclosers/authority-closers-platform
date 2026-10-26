@@ -35,7 +35,7 @@ _SALES_XRAY_APP_HANDOFF_AAD = b"ac-platform:sales-xray-app-handoff:v1"
 
 # Identity providers a sign-in transaction can be bound to. A transaction issued
 # for one provider is refused at another provider's callback.
-AUTH_PROVIDERS = frozenset({"google", "facebook", "apple"})
+AUTH_PROVIDERS = frozenset({"google", "facebook", "apple", "pulse"})
 
 
 class InvalidAuthTransaction(DomainError):

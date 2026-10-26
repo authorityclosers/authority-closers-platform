@@ -798,7 +798,21 @@ BUG_ISSUES_PARITY_TABLES = DIGESTS_PARITY_TABLES + (
 RECEIVED_PARITY_MIGRATION_HEAD = "20261025_0139"
 RECEIVED_PARITY_CONTRACT = "ac-postgres-parity-v106"
 RECEIVED_PARITY_TABLES = BUG_ISSUES_PARITY_TABLES
+# 0140 adds Pulse: profiles from Pulse, organisation links and their directory,
+# and recordings apps send for a person (four tables).
+PULSE_LINK_PARITY_MIGRATION_HEAD = "20261026_0140"
+PULSE_LINK_PARITY_CONTRACT = "ac-postgres-parity-v107"
+PULSE_LINK_PARITY_TABLES = RECEIVED_PARITY_TABLES + (
+    "person_pulse_profiles",
+    "pulse_org_links",
+    "pulse_org_members",
+    "app_call_uploads",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    PULSE_LINK_PARITY_MIGRATION_HEAD: (
+        PULSE_LINK_PARITY_CONTRACT,
+        PULSE_LINK_PARITY_TABLES,
+    ),
     RECEIVED_PARITY_MIGRATION_HEAD: (
         RECEIVED_PARITY_CONTRACT,
         RECEIVED_PARITY_TABLES,

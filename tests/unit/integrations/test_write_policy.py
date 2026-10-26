@@ -21,7 +21,8 @@ def counts(**over: object) -> policy.Counts:
 
 
 def test_defaults_notes_tasks_and_outcomes_on_and_nothing_paused() -> None:
-    assert ON == {"paused": False, "note": True, "task": True, "outcome": True}
+    # Lead updates from apps stay off until an owner turns them on (ai-writes.md).
+    assert ON == {"paused": False, "note": True, "task": True, "outcome": True, "update": False}
     # Stored values win; anything that isn't true or false keeps the default.
     assert policy.switch({"paused": True, "note": "yes"}) == {**ON, "paused": True}
 

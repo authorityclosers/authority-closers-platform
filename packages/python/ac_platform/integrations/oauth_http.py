@@ -339,7 +339,7 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
             async with asynccontextmanager(read_actor)(request) as auth:
                 client, chosen = await checked(auth, body)
                 _actor, workspace = await approver(auth, client)
-                labels = dict(scopes.SCOPES)
+                labels = {**scopes.SCOPES, **scopes.APP_SCOPES}
                 return {
                     "app": app_view(client),
                     "reach": "person" if oauth.is_platform(client) else "organisation",

@@ -28,6 +28,7 @@ from ac_platform.identity.sales_xray_profile import (
     update_sales_xray_profile,
 )
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.pulse.profile import read_profile as read_pulse_profile
 
 if TYPE_CHECKING:
     from ac_platform.http.conversation_intake import ConversationIntakeRuntime
@@ -65,6 +66,8 @@ class SalesXrayProfileResponse(BaseModel):
     avatar_url: str | None = None
     own_photo: bool = False
     completion: ProfileCompletion | None = None
+    # What the person's Pulse account says (Sign in with Pulse or their org's Pulse link).
+    pulse: dict[str, str | None] | None = None
 
 
 class ProfileDetailsUpdate(BaseModel):
@@ -162,7 +165,10 @@ def install_sales_xray_profile_http(
             return HTTPException(403, str(error), headers={"Cache-Control": "private, no-store"})
         return HTTPException(403, str(error), headers={"Cache-Control": "private, no-store"})
 
-    def response_value(value: SalesXrayProfileSnapshot) -> dict[str, object]:
+    async def response_value(
+        value: SalesXrayProfileSnapshot, database: AsyncSession, person_id: UUID
+    ) -> dict[str, object]:
+        pulse = await read_pulse_profile(database, person_id)
         return SalesXrayProfileResponse(
             name=value.name,
             email=value.email,
@@ -182,6 +188,11 @@ def install_sales_xray_profile_http(
             avatar_url=value.avatar_url,
             own_photo=value.own_photo,
             completion=ProfileCompletion.model_validate(value.completion),
+            pulse=(
+                None
+                if pulse is None
+                else {"name": pulse.name, "title": pulse.title, "team": pulse.team}
+            ),
         ).model_dump()
 
     def photo_headers(etag: str | None = None) -> dict[str, str]:
@@ -218,7 +229,7 @@ def install_sales_xray_profile_http(
             )
         except SalesXrayProfileError as error:
             raise fail_profile(error) from None
-        return response_value(value)
+        return await response_value(value, auth.database, auth.resolved.actor.person_id)
 
     @router.get("/photo", response_class=Response)
     async def read_profile_photo(
@@ -277,7 +288,7 @@ def install_sales_xray_profile_http(
             raise HTTPException(422, str(error)) from None
         except SalesXrayProfileError as error:
             raise fail_profile(error) from None
-        return response_value(value)
+        return await response_value(value, auth.database, auth.resolved.actor.person_id)
 
     @router.delete("/photo", response_model=SalesXrayProfileResponse)
     async def remove_photo(
@@ -300,7 +311,7 @@ def install_sales_xray_profile_http(
             value = await get_sales_xray_profile(auth.database, person_id=actor.person_id)
         except SalesXrayProfileError as error:
             raise fail_profile(error) from None
-        return response_value(value)
+        return await response_value(value, auth.database, auth.resolved.actor.person_id)
 
     @router.put("/details", response_model=SalesXrayProfileResponse)
     async def update_details(
@@ -338,7 +349,7 @@ def install_sales_xray_profile_http(
             raise HTTPException(
                 422, words.get(str(error), "A title or team is one line, up to 80 characters.")
             ) from None
-        return response_value(value)
+        return await response_value(value, auth.database, auth.resolved.actor.person_id)
 
     @router.put("", response_model=SalesXrayProfileResponse)
     async def update_profile(
@@ -370,7 +381,7 @@ def install_sales_xray_profile_http(
             raise HTTPException(
                 422, "Choose a valid name and explicit E.164 phone number."
             ) from None
-        return response_value(value)
+        return await response_value(value, auth.database, auth.resolved.actor.person_id)
 
     @router.get("/write-eligibility", status_code=204)
     async def write_eligibility(

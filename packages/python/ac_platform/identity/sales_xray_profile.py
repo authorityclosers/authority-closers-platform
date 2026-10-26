@@ -309,6 +309,9 @@ async def erase_sales_xray_profile(
     )
     if details is not None:
         await session.delete(details)
+    from ac_platform.pulse.profile import erase_profile as erase_pulse_profile
+
+    removed_pulse_profile = await erase_pulse_profile(session, person_id)
     if profile is None:
         return (
             removed_labels > 0
@@ -317,6 +320,7 @@ async def erase_sales_xray_profile(
             or removed_google_profile
             or removed_photo
             or details is not None
+            or removed_pulse_profile
         )
     await session.delete(profile)
     await session.flush()

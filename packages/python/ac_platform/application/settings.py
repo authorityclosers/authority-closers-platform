@@ -116,6 +116,14 @@ class Settings(BaseSettings):
     apple_sign_in_team_id: str | None = None
     apple_sign_in_key_id: str | None = None
     apple_sign_in_private_key: SecretStr | None = None
+    # Sign in with Pulse and the Pulse org link (docs/architecture/pulse-identity-contract.md).
+    # Off until the issuer, client id and secret all exist for this environment (each
+    # environment has its own Pulse client; the secret lives only in the secret store).
+    pulse_issuer: str | None = None
+    pulse_client_id: str | None = None
+    pulse_client_secret: SecretStr | None = None
+    # Seals Pulse tokens and webhook secrets; falls back to AC_INTEGRATIONS_SEAL_KEY.
+    pulse_seal_key: SecretStr | None = None
     learner_consent_version: str | None = None
     public_learner_tenant_id: UUID | None = None
     operations_tenant_id: UUID | None = None
@@ -834,6 +842,16 @@ class Settings(BaseSettings):
             and (self.apple_sign_in_key_id or "").strip()
             and key is not None
             and key.get_secret_value().strip()
+        )
+
+    @property
+    def pulse_configured(self) -> bool:
+        secret = self.pulse_client_secret
+        return bool(
+            (self.pulse_issuer or "").strip()
+            and (self.pulse_client_id or "").strip()
+            and secret is not None
+            and secret.get_secret_value().strip()
         )
 
     @property

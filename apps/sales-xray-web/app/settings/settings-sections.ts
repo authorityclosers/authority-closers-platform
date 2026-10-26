@@ -15,6 +15,7 @@ import {
   CreditCard,
   Code,
   LifeBuoy,
+  Link2,
   PhoneCall,
   Route,
   Sparkles,
@@ -41,6 +42,7 @@ export type SettingsSectionId =
   | "ai-replies"
   | "notifications"
   | "developers"
+  | "pulse"
   | "devices"
   | "help";
 
@@ -177,6 +179,15 @@ export const SETTINGS_SECTIONS: readonly SettingsSection[] = [
     managers: true,
   },
   {
+    // Owner, 25 Oct 2026: an organisation links its Pulse org.
+    id: "pulse",
+    label: "Pulse",
+    hint: "Your team's profiles from Pulse, and what you share with it",
+    icon: Link2,
+    group: "Connections",
+    managers: true,
+  },
+  {
     id: "notifications",
     label: "Phone & alerts",
     hint: "Phone setup, alerts, vibration and usage analytics",
@@ -236,6 +247,7 @@ const HUB_ADDRESSES: Partial<Record<SettingsSectionId, string>> = {
   apps: "/organisation?tab=connections&part=apps",
   "ai-replies": "/organisation?tab=connections&part=ai-replies",
   developers: "/organisation?tab=connections&part=developers",
+  pulse: "/organisation?tab=connections&part=pulse",
 };
 
 export const hubAddress = (id: SettingsSectionId): string | null =>

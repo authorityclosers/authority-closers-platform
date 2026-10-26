@@ -1,0 +1,80 @@
+.inbox {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 12px;
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+  border-radius: 12px;
+  background: var(--surface-2, rgba(124, 92, 255, 0.06));
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-weight: 600;
+}
+
+.list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+}
+
+.name {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.name small {
+  opacity: 0.7;
+}
+
+.add,
+.discard {
+  min-height: 40px;
+  min-width: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--line, rgba(127, 127, 127, 0.35));
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.add {
+  background: var(--accent, #4f37d0);
+  border-color: transparent;
+  color: var(--on-accent, #fff);
+  font-weight: 600;
+}
+
+.discard {
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+}
+
+.add:disabled,
+.discard:disabled {
+  opacity: 0.55;
+  cursor: default;
+}
+
+.problem {
+  margin: 0;
+  color: var(--bad, #b42318);
+}
