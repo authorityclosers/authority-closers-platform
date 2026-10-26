@@ -28,10 +28,15 @@ def test_scopes_are_known_sorted_and_never_empty() -> None:
         "calls:read",
         "leads:read",
     ]
-    for wrong in ([], ["calls:write"], [3]):
+    for wrong in ([], ["calls:write"], ["calls:delete"], [3]):
+        # calls:write is for a person's connected app only (scopes.APP_SCOPES).
         with pytest.raises(scopes.ScopeError):
             scopes.validate(wrong)
     assert {item["key"] for item in scopes.public()} == set(scopes.SCOPES)
+    assert scopes.validate(["calls:write", "leads:read"], app=True) == [
+        "calls:write",
+        "leads:read",
+    ]
 
 
 def test_a_sealed_secret_opens_only_for_its_own_row() -> None:

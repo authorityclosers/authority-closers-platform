@@ -18,7 +18,9 @@ export const VIEWPORT = { width: 390, height: 844 };
 export const ACTIONS = {
   lead_open: "[data-lead-row]",
   tab_switch: '[role="tab"][aria-selected="false"]',
-  sheet_open: '[aria-haspopup="dialog"]',
+  // A sheet the screen itself opens (in its main content): the shell's profile button would answer on every
+  // screen and make one cause look like seven (second run); it is timed once, on Home (profile_open).
+  sheet_open: 'main [aria-haspopup="dialog"]',
 };
 
 export const ACTION_WORDS = {
@@ -26,11 +28,16 @@ export const ACTION_WORDS = {
   lead_open: "opening a lead",
   tab_switch: "switching a tab",
   sheet_open: "opening a sheet",
+  profile_open: "opening the profile sheet",
 };
 
 // The key screens (owner: leads, a lead, calls, the Report; plus Home, Chats, the organisation and Settings).
 export const SPEED_SCREENS = {
-  home: { path: "/perf-fixture/home", label: "Home" },
+  home: {
+    path: "/perf-fixture/home",
+    label: "Home",
+    actions: { profile_open: 'header [aria-haspopup="dialog"]' },
+  },
   leads: { path: "/perf-fixture/leads?tab=all", label: "Leads, All" },
   "leads-work": {
     path: "/perf-fixture/leads?tab=work",
@@ -87,15 +94,20 @@ export function summarize(measures) {
     let row = rows.get(key);
     if (!row)
       rows.set(key, (row = { screen: m.screen, action: m.action, rates: {} }));
+    // The control a tap hit, as the code names it (the same shell button may answer on every screen).
+    if (m.control && !row.control) row.control = m.control;
     const at = (row.rates[m.rate] ??= {
       ms: [],
       lcp: [],
       tbt: [],
+      settled: [],
       results: [],
     });
-    if (m.result !== "no_change" && m.result !== "failed") at.ms.push(m.ms);
+    if (!["no_change", "failed", "left"].includes(m.result)) at.ms.push(m.ms);
     if (m.lcp !== undefined && m.lcp !== null) at.lcp.push(m.lcp);
     if (m.tbt !== undefined && m.tbt !== null) at.tbt.push(m.tbt);
+    if (m.settled !== undefined && m.settled !== null)
+      at.settled.push(m.settled);
     at.results.push(m.result);
   }
   return [...rows.values()].map((row) => ({
@@ -108,10 +120,12 @@ export function summarize(measures) {
           runs: at.ms.length,
           lcp: median(at.lcp),
           tbt: median(at.tbt),
+          settled_ms: median(at.settled),
           settled: at.results.filter((r) => r === "settled").length,
           capped: at.results.filter((r) => r === "timeout").length,
           no_change: at.results.filter((r) => r === "no_change").length,
           failed: at.results.filter((r) => r === "failed").length,
+          left: at.results.filter((r) => r === "left").length,
         },
       ]),
     ),
@@ -146,7 +160,13 @@ export function classify(rows, limits = LIMITS, rate = LOW_END) {
 }
 
 const cell = (at) =>
-  !at || at.median === null ? "–" : `${at.median}${at.capped ? "+" : ""}`;
+  !at
+    ? "–"
+    : at.median === null
+      ? at.left
+        ? "left the page"
+        : "–"
+      : `${at.median}${at.capped ? "+" : ""}`;
 
 /** The run's report: every screen and action at 1x, 4x and 6x, then what is slow. */
 export function speedMarkdown(run) {
@@ -159,7 +179,9 @@ export function speedMarkdown(run) {
       (run.source_sha
         ? ` for \`${String(run.source_sha).slice(0, 12)}\``
         : "") +
-      ". Load: from navigation to the screen settling; a tap: from the tap to the screen settling (as telemetry measures phones). " +
+      ". Opening a screen: until it is ready to use (settled, and the main thread free for 500 ms), its LCP and " +
+      "blocking time beside it; a tap, on a ready screen: from the tap to the screen settling, as telemetry measures " +
+      "phones (the control tapped in brackets). " +
       `Slow at 6x: a load over ${LIMITS.load.slow} ms or a tap over ${LIMITS.tap.slow} ms; for the builder over ` +
       `${LIMITS.load.builder} and ${LIMITS.tap.builder} ms.`,
     "",
@@ -173,7 +195,8 @@ export function speedMarkdown(run) {
       (f) => f.screen === row.screen && f.action === row.action,
     );
     lines.push(
-      `| ${label} | ${ACTION_WORDS[row.action] ?? row.action} | ${cell(row.rates[1])} | ${cell(row.rates[4])} | ` +
+      `| ${label} | ${ACTION_WORDS[row.action] ?? row.action}${row.control ? ` (${row.control})` : ""} | ` +
+        `${cell(row.rates[1])} | ${cell(row.rates[4])} | ` +
         `${cell(six)} | ${six?.lcp ?? "–"} | ${six?.tbt ?? "–"} | ${flag ? (flag.severity === "builder" ? "**for the builder**" : "slow") : ""} |`,
     );
   }
@@ -184,6 +207,24 @@ export function speedMarkdown(run) {
       `- \`${f.key}\` ${SPEED_SCREENS[f.screen]?.label ?? f.screen}, ${ACTION_WORDS[f.action] ?? f.action}: ` +
         `${f.ms} ms at 6x (${f.at4 ?? "–"} at 4x, ${f.at1 ?? "–"} at 1x)${f.severity === "builder" ? ", over the builder's limit" : ""}`,
     );
+  const left = rows.filter((row) =>
+    Object.values(row.rates).some((at) => at.left),
+  );
+  if (left.length) {
+    lines.push("", "#### Taps that left the page", "");
+    for (const row of left)
+      lines.push(
+        `- ${SPEED_SCREENS[row.screen]?.label ?? row.screen}, ${ACTION_WORDS[row.action] ?? row.action}` +
+          `${row.control ? ` (${row.control})` : ""}: a full page load instead of opening in place, at ` +
+          Object.entries(row.rates)
+            .filter(([, at]) => at.left)
+            .map(
+              ([rate, at]) =>
+                `${rate}x (${at.left} of ${at.left + at.runs + at.no_change})`,
+            )
+            .join(", "),
+      );
+  }
   if (failures.length) {
     lines.push("", "#### Could not be measured", "");
     for (const failure of failures) lines.push(`- ${failure}`);
@@ -198,14 +239,19 @@ export function speedMarkdown(run) {
 
 // In the page, from before the first script: when the page last changed, LCP, blocking time and the last tap.
 export const SPEED_INIT = `(() => {
-  const s = (window.__speed = { last: 0, lcp: null, tbt: 0, tap: 0 });
+  const s = (window.__speed = { last: 0, lcp: null, tbt: 0, tap: 0, busy: 0 });
   new MutationObserver(() => { s.last = performance.now(); })
     .observe(document, { subtree: true, childList: true, attributes: true, characterData: true });
   try {
     new PerformanceObserver((list) => { for (const e of list.getEntries()) s.lcp = Math.round(e.startTime); })
       .observe({ type: "largest-contentful-paint", buffered: true });
-    new PerformanceObserver((list) => { for (const e of list.getEntries()) s.tbt += Math.max(0, e.duration - 50); })
-      .observe({ type: "longtask", buffered: true });
+    // Long tasks: blocking time, and when the main thread was last busy (hydration changes nothing in the page).
+    new PerformanceObserver((list) => {
+      for (const e of list.getEntries()) {
+        s.tbt += Math.max(0, e.duration - 50);
+        s.busy = Math.max(s.busy, e.startTime + e.duration);
+      }
+    }).observe({ type: "longtask", buffered: true });
   } catch {}
   addEventListener("pointerdown", (e) => { s.tap = e.timeStamp; }, true);
 })();`;

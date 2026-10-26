@@ -41,6 +41,7 @@ const CONNECTION_PARTS: readonly Part[] = [
   { key: "apps", label: "Connected apps", section: "apps" },
   { key: "ai-replies", label: "AI replies", section: "ai-replies" },
   { key: "developers", label: "Developers", section: "developers" },
+  { key: "pulse", label: "Pulse", section: "pulse" },
 ];
 
 /** The tab row; Insights shows it too, so leaving for it keeps the place. */

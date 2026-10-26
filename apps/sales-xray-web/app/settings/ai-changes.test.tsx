@@ -145,6 +145,8 @@ it("lets an owner pause changes from apps, and hides the switch from others", as
       note: true,
       task: true,
       outcome: true,
+      // An older server sends no update flag: lead details from apps stay off.
+      update: false,
     },
   ]);
 

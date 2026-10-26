@@ -247,11 +247,10 @@ async def _access(
 
 def _headers(access: str, login: str | None) -> dict[str, str]:
     cfg = gads.config()
-    headers = {
-        "Authorization": f"Bearer {access}",
-        "developer-token": cfg.developer_token if cfg else "",
-        "Accept": "application/json",
-    }
+    headers = {"Authorization": f"Bearer {access}", "Accept": "application/json"}
+    # Retired by Google on 9 Sep 2026 (google_ads_api.config): sent only while set.
+    if cfg and cfg.developer_token:
+        headers["developer-token"] = cfg.developer_token
     if login:
         headers["login-customer-id"] = login
     return headers

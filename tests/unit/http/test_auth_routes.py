@@ -585,6 +585,7 @@ def test_email_code_config_and_routes_expose_a_small_surface_bound_contract() ->
         "google_enabled": True,
         "apple_enabled": False,
         "facebook_enabled": False,
+        "pulse_enabled": False,
         "expires_in_seconds": 600,
         "resend_after_seconds": 60,
     }

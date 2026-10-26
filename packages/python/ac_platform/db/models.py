@@ -77,6 +77,7 @@ from ac_platform.practice import focus_models
 from ac_platform.practice import models as practice_models
 from ac_platform.product_updates import models as product_update_models
 from ac_platform.providers import models as provider_models
+from ac_platform.pulse import models as pulse_models
 from ac_platform.tenancy import models as tenancy_models
 from ac_platform.usage_people import models as usage_people_models
 
@@ -124,6 +125,7 @@ MODEL_MODULES = (
     fx_models,
     usage_people_models,
     integration_models,
+    pulse_models,
     admin_settings_models,
     authorization_models,
     knowledge_models,

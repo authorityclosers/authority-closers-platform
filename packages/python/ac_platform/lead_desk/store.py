@@ -3091,9 +3091,17 @@ class LeadDesk:
         return await self.detail(lead.id)
 
     async def edit(
-        self, lead_id: UUID, command: LeadEdit, *, marks: Mapping[str, Any] | None = None
+        self,
+        lead_id: UUID,
+        command: LeadEdit,
+        *,
+        marks: Mapping[str, Any] | None = None,
+        by_app: Mapping[str, Any] | None = None,
     ) -> LeadDetail:
-        """``marks``: more for the history row (an undo of a call's fill names the fill)."""
+        """``marks``: more for the history row (an undo of a call's fill names the fill).
+
+        ``by_app``: the app that sent it (ai-writes.md); its undo restores ``before``.
+        """
         seen = await self._command_seen(command.command_id)
         if seen is not None:
             return await self.detail(seen.lead_id)
@@ -3125,11 +3133,14 @@ class LeadDesk:
             else:
                 updates["phone"] = None
         changed: list[str] = []
+        before: dict[str, Any] = {}
+        after: dict[str, Any] = {}
         for name, value in updates.items():
             value = value.strip() or None if isinstance(value, str) else value
             if name == "email" and value:
                 value = value.lower()
             if getattr(lead, name) != value:
+                before[name], after[name] = getattr(lead, name), value
                 setattr(lead, name, value)
                 changed.append(name)
         if not changed:
@@ -3139,7 +3150,8 @@ class LeadDesk:
         self._event(
             lead,
             "edited",
-            {"changed": changed, **(marks or {})},
+            {"changed": changed, **(marks or {})}
+            | ({"by_app": dict(by_app), "before": before, "after": after} if by_app else {}),
             actor=self.viewer.person_id,
             command_id=command.command_id,
         )

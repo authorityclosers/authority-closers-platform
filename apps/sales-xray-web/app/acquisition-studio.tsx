@@ -1,4 +1,5 @@
 "use client";
+import { AppInbox } from "./app-inbox";
 import { AnalysisAvailability } from "./analysis-availability";
 
 import {
@@ -3190,6 +3191,19 @@ export function AcquisitionStudio({
                     )}
                   </>
                 )}
+                {/* Recordings an app such as Pulse sent for this person. */}
+                {!deletionOnlyId && policy ? (
+                  <AppInbox
+                    disabled={
+                      !!busy ||
+                      !!submission ||
+                      uploadUnresolved ||
+                      reviewSelectionActive
+                    }
+                    onFile={(next) => addFiles([next])}
+                    submissionId={submission?.id ?? null}
+                  />
+                ) : null}
                 <input
                   ref={input}
                   className="visually-hidden"

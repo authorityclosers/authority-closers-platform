@@ -985,6 +985,40 @@ describe("Apple and Facebook next to Google", () => {
     );
   });
 
+  it("offers Pulse last, only when configured, on its own start path", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => Response.json({ ...everything, pulse_enabled: true })),
+    );
+    const assign = vi.fn();
+    vi.stubGlobal(
+      "open",
+      vi.fn().mockReturnValue({
+        close: vi.fn(),
+        closed: false,
+        location: { assign },
+      }),
+    );
+    await act(async () =>
+      root.render(<AccountAuth onAuthenticated={vi.fn()} />),
+    );
+    await flush();
+    expect(providerButtons()).toEqual([
+      "Continue with Google",
+      "Continue with Apple",
+      "Continue with Facebook",
+      "Continue with Pulse",
+    ]);
+    await act(async () =>
+      host.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click(),
+    );
+    await click("Continue with Pulse");
+    const started = new URL(assign.mock.calls[0][0], window.location.origin);
+    expect(started.pathname).toBe("/v1/auth/pulse/start");
+    expect(started.searchParams.get("action")).toBe("authenticate");
+    expect(host.textContent).toContain("Finish sign-in in the Pulse window.");
+  });
+
   it("tells an older phone app to update before Apple or Facebook, and never opens a window", async () => {
     vi.stubGlobal(
       "fetch",

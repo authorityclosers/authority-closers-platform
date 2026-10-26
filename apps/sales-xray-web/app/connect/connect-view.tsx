@@ -54,7 +54,23 @@ type Consent = {
     role: string | null;
   };
   scopes: { key: string; label: string }[];
+  /** Asked for, but not in this workspace's plan: never granted (tiers, 27 Oct 2026). */
+  not_included?: { key: string; label: string; comes_with: string }[];
 };
+
+/** What the app asked for that the plan doesn't include, named with its plan. */
+function NotIncluded({ items }: { items?: Consent["not_included"] }) {
+  if (!items?.length) return null;
+  return (
+    <p className={styles.small}>
+      Not in this plan:{" "}
+      {items
+        .map((item) => `${item.label} (comes with ${item.comes_with})`)
+        .join(", ")}
+      .
+    </p>
+  );
+}
 
 type View =
   | { kind: "loading" }
@@ -251,6 +267,7 @@ export function ConnectView() {
                 </li>
               ))}
             </ul>
+            <NotIncluded items={view.consent.not_included} />
             <p className={styles.small}>
               You can remove it any time in Organisation → Integrations.
               {view.consent.returns_to ? (
@@ -340,6 +357,7 @@ function PersonConsent({
           </li>
         ))}
       </ul>
+      <NotIncluded items={consent.not_included} />
       <p className={styles.small}>
         You can disconnect it any time from {app.name}.
         {consent.returns_to ? (

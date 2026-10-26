@@ -43,6 +43,7 @@ from ac_platform.identity.sales_xray_profile_models import (
     SalesXrayProfile,
 )
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.pulse.models import PersonPulseProfile
 
 NOW = datetime(2026, 9, 23, 12, 0, tzinfo=UTC)
 PERSON_ID = UUID("11111111-1111-4111-8111-111111111111")
@@ -96,6 +97,7 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
     PersonGoogleProfile.__table__.create(engine)
     PersonPhoto.__table__.create(engine)
     PersonProfileDetails.__table__.create(engine)
+    PersonPulseProfile.__table__.create(engine)
     # The profile-only fixture has no conversation schema. The account-deletion
     # hook still executes its label, speaker-history and Coaching-note purges in
     # this transaction.
@@ -149,6 +151,7 @@ def database(monkeypatch: pytest.MonkeyPatch) -> Any:
         label_revisions.drop(engine)
         PersonProfileDetails.__table__.drop(engine)
         PersonPhoto.__table__.drop(engine)
+        PersonPulseProfile.__table__.drop(engine)
         PersonGoogleProfile.__table__.drop(engine)
         SalesXrayProfile.__table__.drop(engine)
         Person.__table__.drop(engine)
@@ -453,6 +456,7 @@ async def test_profile_http_surface_returns_only_204_when_current_account_is_rea
                 "total": 6,
                 "missing": ["photo", "handle", "title", "team"],
             },
+            "pulse": None,
         }
         assert read_only_calls == 3
         assert mutating_calls == 0

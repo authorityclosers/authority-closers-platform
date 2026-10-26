@@ -191,6 +191,11 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "lead_desk_duplicate_decisions",
         "lead_desk_merges",
         "integration_writes",
+        # Pulse (migration 0139).
+        "person_pulse_profiles",
+        "pulse_org_links",
+        "pulse_org_members",
+        "app_call_uploads",
         "person_photos",
         "person_profile_details",
         "ai_spend_settings",

@@ -9,9 +9,10 @@
  * app that speaks MCP.
  */
 import { useEffect, useState } from "react";
-import { BadgeCheck, Sparkles, Unplug } from "lucide-react";
+import { BadgeCheck, Check, Lock, Sparkles, Unplug } from "lucide-react";
 
 import { dismissNotice, notify } from "../notice-center";
+import { PurchaseGate } from "../purchase-policy";
 import { readSalesXrayWorkspaces } from "../sales-xray-workspaces";
 import {
   Avatar,
@@ -28,8 +29,10 @@ import {
   accessWords,
   disconnectAiApp,
   readAiApps,
+  readAppPlan,
   usedWords,
   type AiApp,
+  type AppPlan,
 } from "./ai-apps-client";
 import { AiWritesPanel, AppChangesPanel } from "./ai-changes";
 import { CopyButton } from "./copy-button";
@@ -73,6 +76,54 @@ const STEPS: Record<Host, { steps: string[]; note?: string }> = {
 };
 
 const RETRY_MS = 5000;
+
+/**
+ * What this workspace's plan lets AI apps, the API and the CLI do (owner, 27 Oct 2026).
+ * Shown once plans apply (not while billing is off). What it doesn't include names the
+ * plan that adds it, never a price; on the web a link to the plans, in the Play app
+ * only "Ask your workspace owner" (PurchaseGate).
+ */
+function PlanPanel() {
+  const [plan, setPlan] = useState<AppPlan | null>(null);
+  useEffect(() => {
+    const control = new AbortController();
+    readAppPlan(control.signal).then(setPlan, () => undefined);
+    return () => control.abort();
+  }, []);
+  if (!plan || plan.tier === "unbilled") return null;
+  const missing = plan.rows.some((row) => !row.included);
+  return (
+    <Panel title="What your plan includes" sub={plan.label}>
+      <List label="What your plan includes">
+        {plan.rows.map((row) => (
+          <Row
+            key={row.key}
+            icon={
+              row.included ? (
+                <Check size={18} aria-hidden="true" />
+              ) : (
+                <Lock size={18} aria-hidden="true" />
+              )
+            }
+            title={row.label}
+            meta={[
+              row.included
+                ? "Included"
+                : `Comes with ${row.comesWith ?? "a higher plan"}`,
+            ]}
+          />
+        ))}
+      </List>
+      {missing ? (
+        <p className={styles.planNote}>
+          <PurchaseGate fallback="Ask your workspace owner about the plan.">
+            <a href="/plans">See plans</a>
+          </PurchaseGate>
+        </p>
+      ) : null}
+    </Panel>
+  );
+}
 
 function ConnectPanel() {
   const origin = useOrigin();
@@ -258,6 +309,7 @@ export function AiAppsSection() {
           </List>
         )}
       </Panel>
+      <PlanPanel />
       <AppChangesPanel />
       <AiWritesPanel />
       <ConnectPanel />

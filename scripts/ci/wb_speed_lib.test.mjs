@@ -29,7 +29,9 @@ test("times a phone at 1x, 4x and 6x CPU on the key screens, the actions telemet
   // telemetry-auto.tsx actionOf: a lead row, a tab, a dialog trigger.
   assert.equal(ACTIONS.lead_open, "[data-lead-row]");
   assert.match(ACTIONS.tab_switch, /role="tab"/);
-  assert.equal(ACTIONS.sheet_open, '[aria-haspopup="dialog"]');
+  // The screen's own sheets; the shell's profile sheet once, on Home.
+  assert.equal(ACTIONS.sheet_open, 'main [aria-haspopup="dialog"]');
+  assert.deepEqual(Object.keys(SPEED_SCREENS.home.actions), ["profile_open"]);
   assert.deepEqual(
     pickSpeedScreens(["report", "nope"]).map(([key]) => key),
     ["report"],
@@ -136,8 +138,17 @@ test("the report lists every screen and action at each rate, and what is slow", 
       rate: 6,
       ms: 15000,
       result: "timeout",
-      lcp: 2600,
+      lcp: 15000,
+      settled: 15200,
       tbt: 900,
+    },
+    {
+      screen: "leads",
+      action: "sheet_open",
+      rate: 6,
+      ms: 700,
+      result: "settled",
+      control: "button.workspace-switcher__trigger",
     },
   ]);
   const text = speedMarkdown({
@@ -148,7 +159,34 @@ test("the report lists every screen and action at each rate, and what is slow", 
   });
   assert.match(
     text,
-    /\| Leads, All \| opening the screen \| 600 \| 1900 \| 15000\+ \| 2600 \| 900 \| \*\*for the builder\*\* \|/,
+    /\| Leads, All \| opening the screen \| 600 \| 1900 \| 15000\+ \| 15000 \| 900 \| \*\*for the builder\*\* \|/,
+  );
+  // A lead row that reloads the page instead of opening in place.
+  const left = summarize([
+    {
+      screen: "leads",
+      action: "lead_open",
+      rate: 6,
+      result: "left",
+      control: "li.leads__leadLine",
+    },
+    {
+      screen: "leads",
+      action: "lead_open",
+      rate: 6,
+      ms: 400,
+      result: "settled",
+    },
+  ]);
+  const leftText = speedMarkdown({ rows: left, findings: [] });
+  assert.match(
+    leftText,
+    /- Leads, All, opening a lead \(li\.leads__leadLine\): a full page load instead of opening in place, at 6x \(1 of 2\)/,
+  );
+  assert.equal(left[0].rates[6].median, 400);
+  assert.match(
+    text,
+    /\| Leads, All \| opening a sheet \(button\.workspace-switcher__trigger\) \| – \| – \| 700 \|/,
   );
   assert.match(
     text,

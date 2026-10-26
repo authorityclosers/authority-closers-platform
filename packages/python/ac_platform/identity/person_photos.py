@@ -2,8 +2,9 @@
 "everyone should be prompted to keep profile pic ... business owner can identify who did
 what work"; design: docs/product/roles-owner-profile-pulse.md, section 4).
 
-Order: the photo the person uploaded in Sales X-Ray (``person_photos``; later Pulse's,
-when an organisation links Pulse), then Google's. A photo is served at
+Order: the photo the person uploaded in Sales X-Ray (``person_photos``), then Pulse's
+(Sign in with Pulse or the organisation's Pulse link; ``person_pulse_profiles``), then
+Google's. A photo is served at
 ``/v1/people/{person_id}/photo?v={first 8 of its SHA-256}``: the version changes with the
 photo, so the URL can be cached. The person sees their own; anyone else only while they
 share an active organisation.
@@ -166,6 +167,16 @@ async def photo_urls(
     )
     for person_id, sha in google.all():
         urls[person_id] = url_for(person_id, sha)
+    from ac_platform.pulse.models import PersonPulseProfile
+
+    pulse = await session.execute(
+        select(PersonPulseProfile.person_id, PersonPulseProfile.photo_sha256).where(
+            PersonPulseProfile.person_id.in_(ids),
+            PersonPulseProfile.photo_sha256.is_not(None),
+        )
+    )
+    for person_id, sha in pulse.all():
+        urls[person_id] = url_for(person_id, sha)  # Pulse's wins over Google's
     own = await session.execute(
         select(PersonPhoto.person_id, PersonPhoto.sha256).where(PersonPhoto.person_id.in_(ids))
     )
@@ -193,6 +204,11 @@ async def read_photo(
             data = bytes(own.photo)
         if data is not None:
             return Photo(data, own.content_type, own.sha256)
+    from ac_platform.pulse.profile import read_photo as read_pulse_photo
+
+    pulse = await read_pulse_photo(session, person_id)
+    if pulse is not None:
+        return Photo(pulse[0], "image/jpeg", pulse[1])
     google = await read_google_profile_photo(session, person_id)
     if google is None:
         return None

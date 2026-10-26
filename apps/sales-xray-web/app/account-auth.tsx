@@ -73,11 +73,13 @@ const PREVIEW_CONFIG: EmailCodeConfig = {
   google_enabled: true,
   apple_enabled: true,
   facebook_enabled: true,
+  pulse_enabled: true,
   expires_in_seconds: 600,
   resend_after_seconds: 60,
 };
-// The order the sign-in screen offers them in (owner, 19 Oct 2026).
-const PROVIDERS = ["google", "apple", "facebook"] as const;
+// The order the sign-in screen offers them in (owner, 19 Oct 2026); Pulse,
+// Estate Autopilots' work app, follows once it is set up here (25 Oct 2026).
+const PROVIDERS = ["google", "apple", "facebook", "pulse"] as const;
 // Decorative "x-ray" of a conversation: a scan passes over a two-speaker
 // waveform and the kinds of moment Sales Xray looks for light up. It shows no
 // data; heights are a fixed pattern so server and client render the same.
@@ -232,10 +234,40 @@ function FacebookMark() {
   );
 }
 
+function PulseMark() {
+  // Pulse's own app tile (Estate Autopilots), as on its home screen icon.
+  return (
+    <svg
+      className={styles.providerMark}
+      viewBox="0 0 32 32"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <defs>
+        <linearGradient id="sx-pulse-tile" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#7c5cff" />
+          <stop offset="1" stopColor="#4f37d0" />
+        </linearGradient>
+      </defs>
+      <rect width="32" height="32" rx="9" fill="url(#sx-pulse-tile)" />
+      <path
+        d="M8.9 13.2A9.9 9.9 0 0 1 18.8 23.1M8.9 6.2A16.9 16.9 0 0 1 25.8 23.1"
+        fill="none"
+        stroke="#ffffff"
+        strokeWidth="3.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <circle cx="8.9" cy="23.1" r="4.4" fill="#ffffff" />
+    </svg>
+  );
+}
+
 const PROVIDER_MARKS = {
   google: GoogleMark,
   apple: AppleMark,
   facebook: FacebookMark,
+  pulse: PulseMark,
 } as const;
 
 const subscribeHostname = () => () => {};

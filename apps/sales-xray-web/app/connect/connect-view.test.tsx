@@ -190,3 +190,35 @@ it("sends a person without a workspace to open one", async () => {
     "Open Sales X-Ray",
   );
 });
+
+it("says what the plan left out, by plan name and never a price", async () => {
+  stub({
+    status: 200,
+    body: {
+      app: { name: "ChatGPT", client_id: "sxc_abc", verified: false },
+      reach: "person",
+      returns_to: "chatgpt.com",
+      organisation: { id: "t1", name: "Fictional Solar Co" },
+      workspace: {
+        id: "t1",
+        kind: "organisation",
+        name: "Fictional Solar Co",
+        role: "admin",
+      },
+      scopes: [{ key: "leads:read", label: "Read leads" }],
+      not_included: [
+        {
+          key: "leads:notes",
+          label: "Add notes to leads",
+          comes_with: "Organisation",
+        },
+      ],
+    },
+  });
+  await act(async () => root.render(<ConnectView />));
+  await flush();
+  expect(host.textContent).toContain(
+    "Not in this plan: Add notes to leads (comes with Organisation).",
+  );
+  expect(host.textContent).not.toMatch(/₹|price/i);
+});

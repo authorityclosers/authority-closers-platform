@@ -163,15 +163,20 @@ accepts only requests signed with that app's App Secret (`X-Hub-Signature-256`).
 
 The API reads these from the same Infisical `/application` path for "Continue
 with Google" on the CRM's Sources tab. The connector stays off (the CRM shows
-"Coming soon") until all three exist alongside `AC_LEAD_DESK_TOKEN_KEY`, which
+"Coming soon") until the client ID and secret exist alongside `AC_LEAD_DESK_TOKEN_KEY`, which
 also seals each account's Google refresh token and webhook key. No release
 requires them. Compose forwards them to the API only.
+
+Google retired developer tokens on 9 Sep 2026. The access level (Test, Explorer,
+Basic, Standard) now belongs to the Google Cloud project that owns the OAuth
+client, so `AC_GOOGLE_ADS_DEVELOPER_TOKEN` is optional, and the API sends it only
+while it is set.
 
 | Secret                          | Constraint                                                                                                                         |
 | ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `AC_GOOGLE_ADS_CLIENT_ID`       | that environment's OAuth web client in GCP project ac-sales-xray-ads; redirect URI `<Sales Xray URL>/v1/lead-desk/google/callback` |
 | `AC_GOOGLE_ADS_CLIENT_SECRET`   | that client's secret                                                                                                               |
-| `AC_GOOGLE_ADS_DEVELOPER_TOKEN` | the project's Google Ads API developer token (Explorer access or above reaches live Ads accounts)                                  |
+| `AC_GOOGLE_ADS_DEVELOPER_TOKEN` | optional, retired by Google; the project's own level (Explorer or above) is what reaches live Ads accounts                         |
 
 `AC_GOOGLE_ADS_API_VERSION` is optional and not secret (default `v25`). Each
 environment has its own OAuth client; never copy a production value into
