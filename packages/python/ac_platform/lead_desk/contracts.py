@@ -109,6 +109,9 @@ class LeadRow(Model):
     why_kind: Literal["due", "new", "retry", "later", "open", "closed", "waiting"]
     next_action_at: datetime | None
     created_at: datetime
+    # When the person sent it, when its source said and it differs from created_at (0139):
+    # "Sent 3 Oct, brought in today".
+    received_at: datetime | None = None
     attempts: int
     calls: int
     last_result: str | None
