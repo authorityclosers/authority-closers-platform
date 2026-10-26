@@ -29,8 +29,8 @@ const TITLES: Record<PolicySlug, string> = {
 const UPDATED: Record<PolicySlug, [string, string]> = {
   pricing: ["2026-10-03", "3 October 2026"],
   terms: ["2026-10-03", "3 October 2026"],
-  // A new version (owner, 26 Oct 2026): Google receives the call audio.
-  privacy: ["2026-10-26", "26 October 2026"],
+  // A new version (owner, 27 Oct 2026): what a connected AI assistant can read.
+  privacy: ["2026-10-27", "27 October 2026"],
   refunds: ["2026-10-16", "16 October 2026"],
   delivery: ["2026-10-03", "3 October 2026"],
   contact: ["2026-10-16", "16 October 2026"],
@@ -283,6 +283,8 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "Razorpay for payments made through its hosted checkout.",
         "Google (the Gemini API, provided by Google LLC), to draft replies to messages, only for a business that switches on AI replies. See AI replies to messages, below.",
         "Google (Firebase Crashlytics, provided by Google LLC), for crash reports from the Android app. From app version 1.0.26 they follow the usage analytics switch. See Usage analytics, below.",
+        // The owner's words, verbatim (27 Oct 2026; a test pins them).
+        "When you connect an AI assistant such as ChatGPT or Claude, it can read the calls, reports and leads you allow, including your leads' contact details, only while you stay connected.",
         "Sales X-Ray does not use your recordings or reports to target advertising.",
       ],
     },
