@@ -81,12 +81,14 @@ function Waiting({
   );
 }
 
-/** Settings → Lead rules: who takes new leads, limits, reassigning, work hours. */
+/** Settings → Lead rules: who takes new leads, limits, reassigning, work
+ *  hours; only the rules, not the team's numbers (owner #38, 27 Oct 2026). */
 export function LeadRulesPane() {
   const router = useRouter();
   return (
     <div className={styles.pane}>
       <TeamView
+        rulesOnly
         onChanged={() => undefined}
         onOpen={(leadId) => router.push(leadLink(leadId))}
       />
