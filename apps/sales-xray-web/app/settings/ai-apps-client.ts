@@ -301,3 +301,42 @@ export async function saveAiWrites(
   if (!saved) throw new Error("ai_writes_shape_invalid");
   return saved;
 }
+
+/** What this workspace's plan lets apps do (developer-platform-tiers.md, slice 1). */
+export type PlanRow = {
+  key: string;
+  label: string;
+  included: boolean;
+  /** The plan that adds it, by name; never a price. */
+  comesWith: string | null;
+};
+export type AppPlan = { tier: string; label: string; rows: PlanRow[] };
+
+/** The server's answer; null for a bad shape (the panel then stays away). */
+export function parseAppPlan(value: unknown): AppPlan | null {
+  if (!record(value) || !text(value.tier) || !text(value.label)) return null;
+  if (!Array.isArray(value.includes)) return null;
+  const rows: PlanRow[] = [];
+  for (const item of value.includes) {
+    if (!record(item) || !text(item.key) || !text(item.label)) return null;
+    if (typeof item.included !== "boolean") return null;
+    rows.push({
+      key: item.key,
+      label: item.label,
+      included: item.included,
+      comesWith: text(item.comes_with) ? item.comes_with : null,
+    });
+  }
+  return { tier: value.tier, label: value.label, rows };
+}
+
+export async function readAppPlan(
+  signal: AbortSignal,
+): Promise<AppPlan | null> {
+  const response = await fetch("/v1/me/connected-apps/plan", {
+    ...READ,
+    signal,
+  });
+  if (!response.ok) return null;
+  return parseAppPlan(await response.json().catch(() => null));
+}

@@ -16,6 +16,7 @@ from collections.abc import Mapping
 from typing import Any
 
 from ac_platform.conversation_intelligence.analysis_engine import registry
+from ac_platform.integrations import tier_policy
 
 MEASURED_ROUTE = "measured"
 KINDS = ("running", "building")
@@ -118,6 +119,9 @@ DEFAULTS: dict[str, Any] = {
     # The least net revenue a sold minute may bring (owner, 23 Oct 2026, launch decision 7:
     # "never sell below ₹0.71/min").
     "price_floor_per_minute": 0.71,
+    # What each plan lets apps do: the API, MCP, ChatGPT and Claude, the CLI
+    # (integrations/tier_policy.py; owner, 27 Oct 2026).
+    "developer_platform": copy.deepcopy(tier_policy.DEFAULTS),
 }
 
 
@@ -228,4 +232,12 @@ def validate(config: Mapping[str, Any]) -> dict[str, Any]:
         "price_floor_per_minute": _number(
             merged["price_floor_per_minute"], "price_floor_per_minute", 0, 100
         ),
+        "developer_platform": _developer_platform(merged["developer_platform"]),
     }
+
+
+def _developer_platform(section: Any) -> dict[str, Any]:
+    try:
+        return tier_policy.validate(section)
+    except tier_policy.TierSettingsError as error:
+        raise SettingsError(error.code) from None

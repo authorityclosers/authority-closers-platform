@@ -50,7 +50,7 @@ from ac_platform.audit.service import AuditRepository
 from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import first_party, oauth, scopes
+from ac_platform.integrations import first_party, oauth, scopes, tiers
 from ac_platform.integrations.errors import IntegrationError
 from ac_platform.kernel.errors import DomainError
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
@@ -316,6 +316,30 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
             return await person_workspace(auth)
         return await organisation_manager(auth)
 
+    async def within_plan(
+        auth: Any, actor: Any, workspace: dict[str, Any], chosen: list[str]
+    ) -> tuple[list[str], list[dict[str, Any]]]:
+        """The asked-for scopes the workspace's plan includes, and the ones it doesn't."""
+        platform = await tiers.read_platform(auth.database)
+        tier = await tiers.workspace_tier(
+            auth.database,
+            platform,
+            billing_enabled=settings.billing_enabled,
+            tenant_id=actor.tenant_id,
+            person_id=actor.person_id,
+            personal=workspace["kind"] == "personal",
+            now=datetime.now(UTC),
+        )
+        granted, beyond = tiers.split(tier, chosen)
+        if not granted:
+            raise HTTPException(403, tiers.not_included(platform, beyond[0]), headers=PRIVATE)
+        labels = {**scopes.SCOPES, **scopes.APP_SCOPES}
+        left_out = [
+            {"key": key, "label": labels[key], "comes_with": tiers.comes_with(platform, key)}
+            for key in beyond
+        ]
+        return granted, left_out
+
     def app_view(client: Any) -> dict[str, Any]:
         platform = oauth.is_platform(client)
         known = (
@@ -337,8 +361,9 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
         response.headers.update(PRIVATE)
         try:
             async with asynccontextmanager(read_actor)(request) as auth:
-                client, chosen = await checked(auth, body)
-                _actor, workspace = await approver(auth, client)
+                client, asked = await checked(auth, body)
+                actor, workspace = await approver(auth, client)
+                chosen, left_out = await within_plan(auth, actor, workspace, asked)
                 labels = {**scopes.SCOPES, **scopes.APP_SCOPES}
                 return {
                     "app": app_view(client),
@@ -347,6 +372,8 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
                     "organisation": {"id": workspace["id"], "name": workspace["name"]},
                     "workspace": workspace,
                     "scopes": [{"key": key, "label": labels[key]} for key in chosen],
+                    # Asked for, but not in this plan: shown quietly, never granted.
+                    "not_included": left_out,
                 }
         except DomainError:
             raise HTTPException(401, "Sign in to connect this app.", headers=PRIVATE) from None
@@ -361,8 +388,9 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
             raise HTTPException(403, "Use the Sales Xray page to continue.") from None
         try:
             async with asynccontextmanager(ctx.require_actor)(request) as auth:
-                client, chosen = await checked(auth, body)
+                client, asked = await checked(auth, body)
                 actor, workspace = await approver(auth, client)
+                chosen, _left_out = await within_plan(auth, actor, workspace, asked)
                 extra = {"state": body.state} if body.state is not None else {}
                 if not body.approve:
                     return {
@@ -538,6 +566,35 @@ def install_oauth_http(application: FastAPI, ctx: RouteContext) -> None:
                 return {"apps": apps}
         except DomainError:
             raise HTTPException(401, "Sign in to see your connected apps.") from None
+
+    @mine.get("/plan")
+    async def my_plan(request: Request, response: Response) -> dict[str, Any]:
+        """What this workspace's plan lets apps do, for Settings → AI apps: no prices,
+        a plan's name for what it doesn't include."""
+        here(request)
+        response.headers.update(PRIVATE)
+        try:
+            async with asynccontextmanager(read_actor)(request) as auth:
+                actor = auth.resolved.actor
+                if actor.tenant_id is None:
+                    raise HTTPException(403, "Open a workspace first.", headers=PRIVATE)
+                platform = await tiers.read_platform(auth.database)
+                tier = await tiers.workspace_tier(
+                    auth.database,
+                    platform,
+                    billing_enabled=settings.billing_enabled,
+                    tenant_id=actor.tenant_id,
+                    person_id=actor.person_id,
+                    personal=actor.tenant_id == settings.public_learner_tenant_id,
+                    now=datetime.now(UTC),
+                )
+                return {
+                    "tier": tier.key,
+                    "label": tier.label,
+                    "includes": tiers.includes(platform, tier),
+                }
+        except DomainError:
+            raise HTTPException(401, "Sign in to see your plan.") from None
 
     @mine.post("/{grant_id}/revoke")
     async def remove_my_app(grant_id: UUID, request: Request, response: Response) -> dict[str, Any]:

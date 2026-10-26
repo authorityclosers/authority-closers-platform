@@ -31,6 +31,7 @@ from fastapi import APIRouter, FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 
 from ac_platform.http.routes import RouteContext
+from ac_platform.integrations import tiers
 from ac_platform.integrations.api_http import (
     ApiError,
     NewLeadBody,
@@ -336,6 +337,73 @@ def listed(scopes: frozenset[str]) -> list[dict[str, Any]]:
     ]
 
 
+def _needs(tool: dict[str, Any]) -> list[str]:
+    need = tool["scope"]
+    return [] if need is None else [need] if isinstance(need, str) else list(need)
+
+
+def _connection(reader: Reader) -> bool:
+    """A person's connected app (ChatGPT, Claude, Pulse), not an API key."""
+    return reader.key.prefix.startswith("app ")
+
+
+def _advertised(reader: Reader) -> bool:
+    return reader.platform.advertise_writes and _connection(reader)
+
+
+def tools_for(reader: Reader) -> list[dict[str, Any]]:
+    """What tools/list shows. Until writes are advertised (plugin 1.1, after 1.0's review),
+    exactly the tools the scopes allow, as before. Then a connected app also sees the tools
+    its plan allows but it hasn't asked for, each with its securitySchemes, so it can ask
+    for that scope when it needs it."""
+    if not _advertised(reader):
+        return listed(reader.key.scopes)
+    shown = []
+    for tool in TOOLS:
+        needs = _needs(tool)
+        if not (_allowed(tool, reader.key.scopes) or all(reader.tier.allows(s) for s in needs)):
+            continue
+        shown.append(
+            {
+                **{key: value for key, value in tool.items() if key != "scope"},
+                "annotations": {**tool["annotations"], "title": tool["title"]},
+                "securitySchemes": [{"type": "oauth2", "scopes": needs}],
+            }
+        )
+    return shown
+
+
+def _challenge(reader: Reader, tool: dict[str, Any]) -> dict[str, Any] | None:
+    """A tool whose scope this connection lacks: the MCP answer that asks the app to
+    connect again for exactly that scope (or, past the plan, the plain refusal)."""
+    if not _advertised(reader) or _allowed(tool, reader.key.scopes):
+        return None
+    needs = _needs(tool)
+    missing = [scope for scope in needs if scope not in reader.key.scopes]
+    beyond = [scope for scope in missing if not reader.tier.allows(scope)]
+    if beyond:
+        text = tiers.not_included(reader.platform, beyond[0])
+        return {"content": [{"type": "text", "text": text}], "isError": True}
+    words = ", ".join(tiers.LABELS.get(scope, scope).lower() for scope in missing)
+    metadata = f"{reader.base or ''}/.well-known/oauth-protected-resource/v1/mcp"
+    return {
+        "content": [
+            {
+                "type": "text",
+                "text": f"Sales X-Ray needs your OK to {words}. Connect again to allow it.",
+            }
+        ],
+        "isError": True,
+        "_meta": {
+            "mcp/www_authenticate": [
+                f'Bearer error="insufficient_scope", scope="{" ".join(missing)}", '
+                f'resource_metadata="{metadata}", '
+                f'error_description="This needs {" ".join(missing)}."'
+            ]
+        },
+    }
+
+
 def _uuid(args: dict[str, Any], name: str) -> UUID:
     try:
         return UUID(str(args.get(name, "")))
@@ -545,7 +613,7 @@ async def handle(reader: Reader, message: dict[str, Any]) -> dict[str, Any] | No
     if method == "ping":
         return _reply(ident, {})
     if method == "tools/list":
-        return _reply(ident, {"tools": listed(reader.key.scopes)})
+        return _reply(ident, {"tools": tools_for(reader)})
     if method == "tools/call":
         name = str(params.get("name", ""))
         raw_args = params.get("arguments")
@@ -553,6 +621,9 @@ async def handle(reader: Reader, message: dict[str, Any]) -> dict[str, Any] | No
         tool = _BY_NAME.get(name)
         if tool is None:
             return _fail(ident, -32602, f"Unknown tool: {name}")
+        challenge = _challenge(reader, tool)
+        if challenge is not None:
+            return _reply(ident, challenge)
         try:
             data = await run_tool(reader, name, args)
         except ApiError as error:

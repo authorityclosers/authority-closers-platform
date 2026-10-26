@@ -58,7 +58,7 @@ from ac_platform.call_data import facts as call_facts
 from ac_platform.call_data.models import CallObject
 from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import app_uploads, keys, oauth
+from ac_platform.integrations import app_uploads, keys, oauth, tiers
 from ac_platform.integrations.ai_writes import AiWriteError, AiWrites, Door
 from ac_platform.integrations.models import IntegrationOAuthClient
 from ac_platform.kernel.authz import ActorContext
@@ -210,10 +210,19 @@ class Reader:
     """Everything the API and the MCP server read or write, for one checked caller."""
 
     def __init__(
-        self, session: AsyncSession, caller: Caller, base: str | None, environment: str
+        self,
+        session: AsyncSession,
+        caller: Caller,
+        base: str | None,
+        environment: str,
+        tier: tiers.Tier | None = None,
+        platform: tiers.Platform | None = None,
     ) -> None:
         self.session, self.caller, self.base = session, caller, base
         self.environment = environment
+        # What the workspace's plan lets apps do (integrations/tiers.py).
+        self.platform = platform or tiers.DEFAULT_PLATFORM
+        self.tier = tier or self.platform.tier("unbilled")
 
     @property
     def key(self) -> keys.KeyContext:
@@ -222,6 +231,9 @@ class Reader:
     def require(self, scope: str) -> None:
         if scope not in self.key.scopes:
             raise ApiError(403, "scope_missing", f"This key does not have {scope}.")
+        # A plan that no longer includes it (a downgrade) stops it; the key is kept.
+        if self.tier.enforce_existing and not self.tier.allows(scope):
+            raise ApiError(403, "plan_scope", tiers.not_included(self.platform, scope))
         if not scope.endswith(":read"):
             self._refuse_read_only()
 
@@ -610,9 +622,6 @@ def make_opener(ctx: RouteContext) -> Any:
             if found is None:
                 raise ApiError(401, "key_invalid", "This API key is wrong, expired or revoked.")
             key, personal = found
-            allowed, retry, _ = await limiter.consume(str(key.key_id), RULE)
-            if not allowed:
-                raise ApiError(429, "rate_limited", "Too many requests.", retry_after=max(1, retry))
             caller = await caller_for(session, key, personal)
             if (
                 not caller.personal_workspace
@@ -622,7 +631,33 @@ def make_opener(ctx: RouteContext) -> Any:
                 is None
             ):
                 raise ApiError(403, "organisation_missing", "This organisation is not active.")
-            yield Reader(session, caller, base, settings.environment)
+            # The plan's limits: per key or connection, and per workspace (a person's own
+            # in Personal, which many people share).
+            platform = await tiers.read_platform(session)
+            tier = await tiers.workspace_tier(
+                session,
+                platform,
+                billing_enabled=settings.billing_enabled,
+                tenant_id=key.tenant_id,
+                person_id=key.acting_person_id,
+                personal=caller.personal_workspace,
+                now=now,
+            )
+            workspace = (
+                f"{key.tenant_id}:{key.acting_person_id}"
+                if caller.personal_workspace
+                else str(key.tenant_id)
+            )
+            for bucket, rule in (
+                (str(key.key_id), tiers.per_key_rule(tier)),
+                (workspace, tiers.per_workspace_rule(tier)),
+            ):
+                allowed, retry, _ = await limiter.consume(bucket, rule)
+                if not allowed:
+                    raise ApiError(
+                        429, "rate_limited", "Too many requests.", retry_after=max(1, retry)
+                    )
+            yield Reader(session, caller, base, settings.environment, tier=tier, platform=platform)
 
     return open_reader
 

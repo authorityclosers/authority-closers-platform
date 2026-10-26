@@ -31,7 +31,7 @@ from sqlalchemy import select
 from ac_platform.audit.service import AuditRepository
 from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
-from ac_platform.integrations import handover, keys, oauth, scopes, sealed, webhooks
+from ac_platform.integrations import handover, keys, oauth, scopes, sealed, tiers, webhooks
 from ac_platform.integrations.errors import IntegrationError
 from ac_platform.integrations.models import IntegrationOAuthGrant
 from ac_platform.kernel.errors import DomainError
@@ -197,6 +197,22 @@ def install_integrations_http(application: FastAPI, ctx: RouteContext) -> None:
         async with manager(request, response, write=True) as auth:
             actor = auth.resolved.actor
             now = datetime.now(UTC)
+            # What the organisation's plan lets apps do (integrations/tiers.py).
+            platform = await tiers.read_platform(auth.database)
+            tier = await tiers.workspace_tier(
+                auth.database,
+                platform,
+                billing_enabled=settings.billing_enabled,
+                tenant_id=actor.tenant_id,
+                person_id=actor.person_id,
+                personal=False,
+                now=now,
+            )
+            if not tier.api_keys:
+                raise HTTPException(403, tiers.keys_not_included(platform), headers=PRIVATE)
+            _granted, beyond = tiers.split(tier, command.scopes)
+            if beyond:
+                raise HTTPException(422, tiers.not_included(platform, beyond[0]), headers=PRIVATE)
             key, created = await auth.database.run_sync(
                 lambda session: keys.create(
                     session.connection(),

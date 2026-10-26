@@ -243,3 +243,49 @@ it("reads the server's list and words it plainly", () => {
     }),
   ).toBe("Not used yet");
 });
+
+it("shows what the plan includes, naming the plan that adds the rest", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      const body = url.endsWith("/connected-apps/plan")
+        ? {
+            tier: "trial",
+            label: "Trial",
+            includes: [
+              {
+                key: "connector_read",
+                label: "Ask ChatGPT and Claude about your calls and leads",
+                included: true,
+                comes_with: null,
+              },
+              {
+                key: "connector_writes",
+                label: "Let ChatGPT and Claude add leads, notes and tasks",
+                included: false,
+                comes_with: "Organisation",
+              },
+            ],
+          }
+        : { apps };
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }),
+  );
+  await act(async () => root.render(<AiAppsSection />));
+  await settle();
+  expect(host.textContent).toContain("What your plan includes");
+  expect(host.textContent).toContain("Included");
+  expect(host.textContent).toContain("Comes with Organisation");
+  expect(host.querySelector('a[href="/plans"]')?.textContent).toBe("See plans");
+  expect(host.textContent).not.toMatch(/₹|price/i);
+});
+
+it("leaves the plan out while plans don't apply", async () => {
+  await act(async () => root.render(<AiAppsSection />));
+  await settle();
+  expect(host.textContent).not.toContain("What your plan includes");
+});
