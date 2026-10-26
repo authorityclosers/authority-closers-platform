@@ -10,6 +10,8 @@
   padding: 4px;
   border-radius: var(--sx-radius-pill);
   background: var(--sx-sunken);
+  font-size: var(--sx-text-sm);
+  container: leads-views / inline-size;
 }
 
 .segment {
@@ -72,6 +74,56 @@
 .segment[aria-current="page"] .count {
   background: var(--sx-accent-soft);
   color: var(--sx-accent);
+}
+
+.short {
+  display: none;
+}
+
+/* A narrow switch (a small phone, or large text: orchestrator, 26 Oct 2026,
+   "N… / All le… / M…" at 320 and 360 px with 130% app zoom). The counts go
+   first, the longest label's first; then the padding narrows; at the very
+   narrowest All leads reads "All". The switch measures itself in its own
+   text size (em), so a small phone and large text both count as narrow. */
+@container leads-views (max-width: 25em) {
+  .segment:nth-child(2) .count {
+    display: none;
+  }
+}
+
+@container leads-views (max-width: 21em) {
+  .count {
+    display: none;
+  }
+
+  .segment {
+    gap: 4px;
+    padding: 0 8px;
+  }
+}
+
+@container leads-views (max-width: 18em) {
+  .segment {
+    padding: 0 4px;
+  }
+
+  .segment svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .long {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .short {
+    display: inline;
+  }
 }
 
 /* Filter first, then the view's strip (stage chips), which scrolls inside itself. */
