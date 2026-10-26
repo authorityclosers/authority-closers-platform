@@ -53,6 +53,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 MODULE = "ac_platform.bug_reports.issues_cli"
+# Runs the module after loading every model, so its foreign keys resolve; v0.93's module
+# does not load them itself (NoReferencedTableError for persons on production).
+BOOTSTRAP = (
+    "import sys; from ac_platform.db.models import model_metadata; model_metadata(); "
+    f"from {MODULE} import main; sys.exit(main(sys.argv[1:]))"
+)
 REPO = "/home/acdev/src/dev-live/authority-closers-platform"
 LOG = Path(os.environ.get("AC_BUGS_LOG", "/var/log/ac-bugs.log"))
 API_STATUS = {"fixing": "fixing", "fixed-in-next-update": "fixed_next", "solved": "solved"}
@@ -84,8 +90,8 @@ def runner(env: str) -> list[str]:
             "HOME=/root",
             "LANG=C.UTF-8",
             python,
-            "-m",
-            MODULE,
+            "-c",
+            BOOTSTRAP,
             "--database-url-file",
             "/etc/authority-closers/development/database-url-live",
         ]
@@ -95,8 +101,8 @@ def runner(env: str) -> list[str]:
         "exec",
         container,
         "python",
-        "-m",
-        MODULE,
+        "-c",
+        BOOTSTRAP,
         "--database-url-file",
         "/run/ac-sales-xray/database-url",
     ]
