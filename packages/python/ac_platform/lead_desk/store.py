@@ -1322,8 +1322,12 @@ class LeadDesk:
                 if isinstance(value, str):
                     with contextlib.suppress(ValueError):
                         people.add(UUID(value))
+        # Who the lead may go to (managers), read first so one look-up finds every photo.
+        sellers = [rep.state for rep in await self._reps()] if self.viewer.can_manage else []
         names = await self._names(people)
-        photos = await person_photos.photo_urls(self.db, people)
+        photos = await person_photos.photo_urls(
+            self.db, people | {seller.person_id for seller in sellers}
+        )
         day_end = self._day_start() + timedelta(days=1)
         hidden = await self._private_calls(lead_id=lead.id)
         # Changes an AI app made and someone undid (docs/product/ai-writes.md).
@@ -1336,17 +1340,16 @@ class LeadDesk:
         joined = self._joined_recordings(events)
         absorbed = {str(recording.id) for recording in joined.values()}
         can_edit = self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id
-        reps: tuple[RepOption, ...] = ()
-        if self.viewer.can_manage:
-            reps = tuple(
-                RepOption(
-                    person_id=rep.state.person_id,
-                    name=rep.state.name,
-                    open_leads=rep.state.open_leads,
-                    available=rep.state.available,
-                )
-                for rep in await self._reps()
+        reps = tuple(
+            RepOption(
+                person_id=seller.person_id,
+                name=seller.name,
+                open_leads=seller.open_leads,
+                available=seller.available,
+                photo_url=photos.get(seller.person_id),
             )
+            for seller in sellers
+        )
         current = journey.resolve(lead.stage, lead.step)
         moves = (
             tuple(
@@ -1371,8 +1374,15 @@ class LeadDesk:
             )
             if value
         )
+        row = self._row(lead, names, day_end)
         return LeadDetail(
-            lead=self._row(lead, names, day_end),
+            lead=row.model_copy(
+                update={
+                    "owner_photo_url": photos.get(lead.owner_person_id)
+                    if lead.owner_person_id
+                    else None
+                }
+            ),
             phone=lead.phone,
             email=lead.email,
             owner_reason=lead.owner_reason,
