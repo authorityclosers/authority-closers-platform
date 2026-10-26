@@ -63,14 +63,30 @@
   box-shadow: var(--sx-focus-ring);
 }
 
-/* A phone: one row that scrolls inside itself. */
+/* A phone: one row that scrolls inside itself, within the page's gutter and
+   fading at the right edge, as the stage tabs above it do (production report
+   #28, 26 Oct 2026: it ran off the right edge of the screen, cut mid-name). */
 @media (max-width: 899.98px) {
   .strip {
     flex-wrap: nowrap;
     overflow-x: auto;
+    overscroll-behavior-x: contain;
     scrollbar-width: none;
-    margin-inline: -16px;
-    padding-inline: 16px;
+    -webkit-mask-image: linear-gradient(
+      to right,
+      var(--lx-film) calc(100% - 24px),
+      transparent
+    );
+    mask-image: linear-gradient(
+      to right,
+      var(--lx-film) calc(100% - 24px),
+      transparent
+    );
+  }
+
+  /* The last chip can scroll clear of the fade. */
+  .strip > :last-child {
+    margin-right: 24px;
   }
 
   .strip::-webkit-scrollbar {

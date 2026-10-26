@@ -111,3 +111,51 @@ it("marks the chosen tab and reports a tap", async () => {
   await act(async () => root.unmount());
   host.remove();
 });
+
+// Production report #28 (26 Oct 2026): showing a later stage scrolls only the
+// strip, never the page or a clipped parent.
+it("scrolls only its own strip to show a later stage", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const intoView = vi.fn();
+  const original = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = intoView;
+  const rects = vi
+    .spyOn(Element.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: Element) {
+      const right = this.getAttribute("role") === "tablist" ? 300 : 480;
+      const left = this.getAttribute("role") === "tablist" ? 0 : 400;
+      return {
+        left,
+        right,
+        top: 0,
+        bottom: 44,
+        width: right - left,
+        height: 44,
+        x: left,
+        y: 0,
+        toJSON: () => ({}),
+      } as DOMRect;
+    });
+  await act(async () =>
+    root.render(
+      <StageTabs
+        tabs={[
+          { key: "desk", label: "To call", count: 2 },
+          { key: "won", label: "Won", count: 1 },
+        ]}
+        current="won"
+        onChange={() => undefined}
+      />,
+    ),
+  );
+  const strip = host.querySelector<HTMLElement>('[role="tablist"]')!;
+  // 480 - 300 + 24: the chosen tab clears the fade.
+  expect(strip.scrollLeft).toBe(204);
+  expect(intoView).not.toHaveBeenCalled();
+  rects.mockRestore();
+  Element.prototype.scrollIntoView = original;
+  await act(async () => root.unmount());
+  host.remove();
+});
