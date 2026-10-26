@@ -20,13 +20,7 @@ import type { UploadPolicy } from "../acquisition-client";
 import { displayName } from "../display-name";
 import { Badge, Button } from "../ui/kit";
 import { Sheet } from "./sheet-frame";
-import {
-  LeadsError,
-  readLead,
-  when,
-  type Desk,
-  type LeadDetail,
-} from "./leads-client";
+import { LeadsError, readLead, when, type LeadDetail } from "./leads-client";
 import {
   checkWarning,
   inPhoneApp,
@@ -81,7 +75,7 @@ export function hiddenRecordings(pending: PendingRecordings | null): boolean {
   );
 }
 
-export function RecordedCallsCard({ me }: { me: Desk["me"] }) {
+export function RecordedCallsCard() {
   const [pending, setPending] = useState<PendingRecordings | null>(null);
   const [leads, setLeads] = useState<Record<string, LeadDetail | null>>({});
   const [open, setOpen] = useState(false);
@@ -173,7 +167,6 @@ export function RecordedCallsCard({ me }: { me: Desk["me"] }) {
         ready={ready}
         silent={silent}
         leads={leads}
-        me={me}
         onPending={setPending}
         onClose={() => {
           setOpen(false);
@@ -189,7 +182,6 @@ function RecordedCallsSheet({
   ready,
   silent,
   leads,
-  me,
   onPending,
   onClose,
 }: {
@@ -197,7 +189,6 @@ function RecordedCallsSheet({
   ready: PendingRecording[];
   silent: PendingRecording[];
   leads: Record<string, LeadDetail | null>;
-  me: Desk["me"];
   onPending: (next: PendingRecordings) => void;
   onClose: () => void;
 }) {
@@ -248,7 +239,6 @@ function RecordedCallsSheet({
         await runRecordingUpload({
           lead,
           file,
-          me,
           policy,
           // The same call always reuses its upload, so a retry never saves it twice.
           attempt: item.eventId,

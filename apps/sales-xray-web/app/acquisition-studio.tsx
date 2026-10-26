@@ -2490,7 +2490,7 @@ export function AcquisitionStudio({
                           disabled={!!busy || analysisWriteBlocked}
                           onClick={() => setDeleteConfirm(true)}
                         >
-                          Request deletion
+                          Delete call
                         </button>
                       ) : (
                         <>
@@ -2500,7 +2500,7 @@ export function AcquisitionStudio({
                             disabled={!!busy || analysisWriteBlocked}
                             onClick={() => void erase()}
                           >
-                            Request recording deletion
+                            Delete recording and report
                           </button>
                           <button
                             className="text-button"
@@ -3648,7 +3648,7 @@ export function AcquisitionStudio({
                             disabled={!!busy || analysisWriteBlocked}
                             onClick={() => setDeleteConfirm(true)}
                           >
-                            Request deletion
+                            Delete call
                           </button>
                         ) : (
                           <>
@@ -3662,7 +3662,7 @@ export function AcquisitionStudio({
                               disabled={!!busy || analysisWriteBlocked}
                               onClick={() => void erase()}
                             >
-                              Request recording deletion
+                              Delete recording and report
                             </button>
                             <button
                               type="button"
@@ -3801,7 +3801,7 @@ export function AcquisitionStudio({
                         disabled={!!busy || analysisWriteBlocked}
                         onClick={() => void erase()}
                       >
-                        Request recording deletion
+                        Delete recording and report
                       </button>
                       <button
                         className={styles.reportAction}

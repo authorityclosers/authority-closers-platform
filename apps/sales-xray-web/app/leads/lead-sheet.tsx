@@ -1659,7 +1659,6 @@ function sizeLabel(bytes: number): string {
 /** After a real call: the phone's own recording becomes this lead's analysed call. */
 function RecordingUpload({
   detail,
-  me,
   onDone,
   found = null,
   waiting = false,
@@ -1670,7 +1669,6 @@ function RecordingUpload({
   onAttached,
 }: {
   detail: LeadDetail;
-  me: Me;
   onDone: (next: LeadDetail) => void;
   /** The call on this lead the recording belongs to (one the phone logged from its dialer). */
   callEventId?: string | null;
@@ -1753,7 +1751,6 @@ function RecordingUpload({
       const next = await runRecordingUpload({
         lead: detail,
         file,
-        me,
         policy,
         attempt,
         onStep: setStep,
@@ -2646,7 +2643,6 @@ export function LeadCard({
       (lead.calls > 0 || phoneCall) ? (
         <RecordingUpload
           detail={detail}
-          me={me}
           onDone={onChanged}
           found={
             phoneCall?.recording ?? waitingRecording.item?.recording ?? null

@@ -7,6 +7,7 @@ from uuid import UUID
 
 from sqlalchemy import select
 
+from ac_platform.audit.service import AuditRepository
 from ac_platform.conversation_intelligence.acquisition_source import MeasuredUpload
 from ac_platform.conversation_intelligence.application import ConversationApplication
 from ac_platform.conversation_intelligence.checkpoints import content_hash
@@ -117,6 +118,7 @@ class AcquisitionProcessing:
         policy_sha256: str,
         token: str | None = None,
         actor: ActorContext | None = None,
+        standing_consent_id: UUID | None = None,
     ) -> tuple[ProcessingActor, dict[str, Any]]:
         from ac_platform.conversation_intelligence.application import ConversationConflict
 
@@ -173,6 +175,10 @@ class AcquisitionProcessing:
             "duration_evidence_sha256": upload.source.duration_evidence_sha256,
             "usage_id": str(usage_id),
         }
+        # Analysed as it arrived: the seller's standing consent this upload relied on
+        # (call_ai.auto_consent), instead of a tick on this call.
+        if standing_consent_id is not None:
+            consent["standing_consent_event_id"] = str(standing_consent_id)
         if await self.application._replay(processing, consent_key, consent_action, consent) is None:
             await self.application._receipt(
                 processing,
@@ -182,6 +188,20 @@ class AcquisitionProcessing:
                 UUID(quote["id"]),
                 self.ownership.clock(),
             )
+            if standing_consent_id is not None:
+                # Which consent this automatic start relied on, readable later.
+                await AuditRepository(self.database).append(
+                    tenant_id=processing.tenant_id,
+                    actor_person_id=actor.person_id if actor is not None else processing.person_id,
+                    action="conversation.auto_analysis_started",
+                    resource_type="conversation_recording",
+                    resource_id=quote["recording_id"],
+                    payload={
+                        "standing_consent_event_id": str(standing_consent_id),
+                        "submission_id": str(upload.source.submission_id),
+                    },
+                    now=self.ownership.clock(),
+                )
         await intake.accept(
             processing,
             UUID(quote["id"]),

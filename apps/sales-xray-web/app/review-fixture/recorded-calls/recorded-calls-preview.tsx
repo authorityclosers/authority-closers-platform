@@ -205,14 +205,7 @@ function Preview() {
     >
       <AcquisitionShell authenticated active="leads">
         <PageHeader title="Leads" titleInBar />
-        <RecordedCallsCard
-          me={{
-            person_id: SELLER,
-            name: "Asha Fictional",
-            role: "member",
-            can_manage: false,
-          }}
-        />
+        <RecordedCallsCard />
         {status ? (
           <PhoneSetupSheet
             open={setupOpen}
