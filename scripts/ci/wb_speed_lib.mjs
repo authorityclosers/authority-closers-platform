@@ -18,7 +18,9 @@ export const VIEWPORT = { width: 390, height: 844 };
 export const ACTIONS = {
   lead_open: "[data-lead-row]",
   tab_switch: '[role="tab"][aria-selected="false"]',
-  sheet_open: '[aria-haspopup="dialog"]',
+  // A sheet the screen itself opens (in its main content): the shell's profile button would answer on every
+  // screen and make one cause look like seven (second run); it is timed once, on Home (profile_open).
+  sheet_open: 'main [aria-haspopup="dialog"]',
 };
 
 export const ACTION_WORDS = {
@@ -26,11 +28,16 @@ export const ACTION_WORDS = {
   lead_open: "opening a lead",
   tab_switch: "switching a tab",
   sheet_open: "opening a sheet",
+  profile_open: "opening the profile sheet",
 };
 
 // The key screens (owner: leads, a lead, calls, the Report; plus Home, Chats, the organisation and Settings).
 export const SPEED_SCREENS = {
-  home: { path: "/perf-fixture/home", label: "Home" },
+  home: {
+    path: "/perf-fixture/home",
+    label: "Home",
+    actions: { profile_open: 'header [aria-haspopup="dialog"]' },
+  },
   leads: { path: "/perf-fixture/leads?tab=all", label: "Leads, All" },
   "leads-work": {
     path: "/perf-fixture/leads?tab=work",

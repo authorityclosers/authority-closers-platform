@@ -233,7 +233,10 @@ async function main() {
             });
             // Each tap on a page just loaded, so one tap's change never slows the next.
             let fresh = true;
-            for (const [action, selector] of Object.entries(ACTIONS)) {
+            for (const [action, selector] of Object.entries({
+              ...ACTIONS,
+              ...(screen.actions ?? {}),
+            })) {
               if (!fresh) {
                 await session.context.close();
                 session = await open(browser, rate);

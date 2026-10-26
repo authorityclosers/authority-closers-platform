@@ -29,7 +29,9 @@ test("times a phone at 1x, 4x and 6x CPU on the key screens, the actions telemet
   // telemetry-auto.tsx actionOf: a lead row, a tab, a dialog trigger.
   assert.equal(ACTIONS.lead_open, "[data-lead-row]");
   assert.match(ACTIONS.tab_switch, /role="tab"/);
-  assert.equal(ACTIONS.sheet_open, '[aria-haspopup="dialog"]');
+  // The screen's own sheets; the shell's profile sheet once, on Home.
+  assert.equal(ACTIONS.sheet_open, 'main [aria-haspopup="dialog"]');
+  assert.deepEqual(Object.keys(SPEED_SCREENS.home.actions), ["profile_open"]);
   assert.deepEqual(
     pickSpeedScreens(["report", "nope"]).map(([key]) => key),
     ["report"],
