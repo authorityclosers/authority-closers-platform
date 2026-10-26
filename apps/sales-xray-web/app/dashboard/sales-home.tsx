@@ -34,11 +34,14 @@ import {
 } from "react";
 
 import { displayName } from "../display-name";
+import { DayTiles, MyStages } from "./day-board";
+import { FirstRun } from "./first-run";
 import { whyLine } from "../leads/desk-view";
 import { handOverLead } from "../leads/lead-handoff";
 import {
   deskSections,
   readDesk,
+  readTeam,
   readPerformance,
   when,
   type Desk,
@@ -538,35 +541,27 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
           <h2 id="today-title">Today</h2>
           <span className={styles.meta}>Who to call</span>
         </div>
-        {/* Only counts that are there: never "0 to call now". */}
-        <div className={styles.chips}>
-          {count("overdue") ? (
-            <Link className={styles.chip} data-tone="bad" href="/leads">
-              {`${count("overdue")} late`}
-            </Link>
-          ) : null}
-          {count("now") ? (
-            <Link className={styles.chip} href="/leads">
-              {`${count("now")} to call now`}
-            </Link>
-          ) : null}
-          {count("later") ? (
-            <Link className={styles.chip} href="/leads">
-              {`${count("later")} later today`}
-            </Link>
-          ) : null}
-        </div>
+        {/* The day at a glance, each tile one tap into its Leads (owner,
+            #18, 26 Oct 2026: Home was the same as Leads). */}
+        <DayTiles
+          counts={{
+            overdue: count("overdue"),
+            dueToday: count("now") + count("later"),
+            fresh: desk.counts.new,
+            calls: desk.numbers.calls,
+          }}
+        />
         {first ? (
           <>
             <ol className={styles.list}>
               {ranked
                 ? ranked
-                    .slice(0, 4)
+                    .slice(0, 2)
                     .map((item) => (
                       <DoNowRow key={item.lead_id} item={item} now={now} />
                     ))
                 : desk.queue
-                    .slice(0, 4)
+                    .slice(0, 2)
                     .map((row) => <LeadLink key={row.lead_id} row={row} />)}
             </ol>
             <Link
@@ -577,7 +572,7 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
               <PhoneCall size={18} aria-hidden="true" />
               {`Call ${displayName(first.name).split(" ")[0]}`}
             </Link>
-            {desk.queue.length > 4 ? (
+            {desk.queue.length > 2 ? (
               <Link className={styles.more} href="/leads">
                 {`See all ${desk.queue.length} for today`}
               </Link>
@@ -619,6 +614,7 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
           </>
         )}
       </section>
+      <MyStages />
       <RecentlyCalled />
       <DayNumbers desk={desk} myDay={myDay} />
     </>
@@ -669,9 +665,55 @@ const VIEWS: { key: HomeView; label: string }[] = [
   { key: "mine", label: "My day" },
 ];
 
+/** All the organisation's leads, for an owner or admin; null until read, and
+ *  still null if the read fails (Home then stays as it is). */
+function useTeamLeadCount(enabled: boolean): number | null {
+  const [total, setTotal] = useState<number | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const controller = new AbortController();
+    readTeam(controller.signal).then(
+      (team) =>
+        setTotal(
+          Object.values(team.by_stage).reduce((sum, n) => sum + n, 0) +
+            (team.unassigned ?? 0),
+        ),
+      () => undefined,
+    );
+    return () => controller.abort();
+  }, [enabled]);
+  return total;
+}
+
+/** Nothing here yet: no leads (none waiting in the team either), nothing
+ *  coming up, no calls, not the sandbox. */
+function brandNew(desk: HomeDesk): boolean {
+  return (
+    !desk.sandbox &&
+    !desk.team_pool?.open &&
+    desk.counts.open === 0 &&
+    !desk.counts.unassigned &&
+    desk.queue.length === 0 &&
+    (desk.upcoming?.length ?? 0) === 0 &&
+    desk.numbers.calls === 0
+  );
+}
+
 export function SalesHome({ manager }: { manager: boolean }) {
   const desk = useDesk();
   const [view, setView] = useHomeView();
+  const teamLeads = useTeamLeadCount(manager);
+  // A brand-new workspace: three first steps, not empty figures (owner, #20).
+  if (
+    desk.status === "ready" &&
+    brandNew(desk.desk) &&
+    (!manager || teamLeads === 0)
+  )
+    return (
+      <div className={styles.home}>
+        <FirstRun team={manager ? "invite" : null} />
+      </div>
+    );
   return (
     <div className={styles.home}>
       {manager ? (

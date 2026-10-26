@@ -1,7 +1,7 @@
 "use client";
 
 import { can } from "../organisation/roles";
-import { AlertCircle, Plus } from "lucide-react";
+import { AlertCircle } from "lucide-react";
 import Link from "next/link";
 import {
   useSyncExternalStore,
@@ -20,6 +20,7 @@ import {
   type ReadResult,
 } from "./dashboard-data";
 import { DashboardGreeting } from "./dashboard-greeting";
+import { FirstRun } from "./first-run";
 import {
   DayBars,
   DayBarsSkeleton,
@@ -171,7 +172,7 @@ export function DashboardBody({
       {sandbox?.sandbox ? <SandboxCard facts={sandbox} /> : null}
 
       {showGetStarted && !sales ? (
-        <GetStarted />
+        <FirstRun team={team ? "invite" : "create"} />
       ) : (
         <>
           {/* Sales first, call analysis second (owner, 22 Oct 2026); a
@@ -539,49 +540,6 @@ function SandboxCard({ facts }: { facts: SandboxFacts }) {
         <Link href="/organisation?tab=members">People</Link>
         <Link href="/analysis/calls">All calls</Link>
       </nav>
-    </section>
-  );
-}
-
-function GetStarted() {
-  return (
-    <section className={styles.getStarted} aria-labelledby="get-started">
-      <div className={styles.getStartedCopy}>
-        <h2 id="get-started">Analyse your first call</h2>
-        <p>
-          Upload a recording of a real sales call. Sales X-Ray transcribes it
-          and writes a report on what happened and what to do next.
-        </p>
-      </div>
-      <ol className={styles.steps}>
-        <li>
-          <b>1</b>
-          <span>
-            <strong>Upload a recording</strong>
-            An audio file from your phone or computer.
-          </span>
-        </li>
-        <li>
-          <b>2</b>
-          <span>
-            <strong>We analyse it</strong>
-            The call is transcribed and read for you.
-          </span>
-        </li>
-        <li>
-          <b>3</b>
-          <span>
-            <strong>Read your report</strong>
-            What happened on the call and the next step.
-          </span>
-        </li>
-      </ol>
-      <div className={styles.getStartedFoot}>
-        <Link className={styles.primaryAction} href="/analysis/new">
-          <Plus size={16} aria-hidden="true" />
-          <span>Analyse a call</span>
-        </Link>
-      </div>
     </section>
   );
 }

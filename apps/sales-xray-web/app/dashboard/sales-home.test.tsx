@@ -183,7 +183,9 @@ it("gives a seller today's calls with one primary action", async () => {
   });
   await mount(false);
   expect(host.querySelector("h2")?.textContent).toBe("Today");
-  expect(host.textContent).toContain("1 late");
+  // The day as tiles (owner, #18): one overdue, opening the late leads.
+  const late = host.querySelector('a[href="/leads?tab=all&due=late"]');
+  expect(late?.textContent).toBe("1Overdue");
   const primary = Array.from(host.querySelectorAll("a")).find((link) =>
     link.textContent?.startsWith("Call "),
   );
@@ -268,4 +270,62 @@ it("says so when nothing needs the owner, and switches to My day", async () => {
   await act(async () => Promise.resolve());
   expect(host.querySelector("h2")?.textContent).toBe("Today");
   expect(window.location.search).toBe("?view=mine");
+});
+
+// Owner, #20 (26 Oct 2026): a brand-new workspace starts with three steps.
+const empty = () => ({
+  ...desk([]),
+  numbers: {
+    calls: 0,
+    connected: 0,
+    talk_seconds: 0,
+    follow_ups_done: 0,
+    new_assigned: 0,
+  },
+  counts: {
+    open: 0,
+    new: 0,
+    follow_up_due: 0,
+    not_connected: 0,
+    later_today: 0,
+    unassigned: null,
+  },
+});
+const team = (byStage: Record<string, number>) => ({
+  reps: [],
+  settings: {
+    revision: 1,
+    auto_reassign: false,
+    reassign_minutes: 10,
+    default_country: "91",
+  },
+  by_stage: byStage,
+  by_source: {},
+  unassigned: 0,
+  waiting_first_call: 0,
+});
+
+it("starts a new seller with three steps, no empty figures", async () => {
+  answer({ "/v1/lead-desk": empty() });
+  await mount(false);
+  expect(host.textContent).toContain("Welcome to Sales X-Ray. Start here.");
+  expect(host.textContent).toContain("Analyse a call");
+  expect(host.textContent).not.toContain("All caught up");
+});
+
+it("starts a new organisation's owner with Add your team", async () => {
+  answer({ "/v1/lead-desk": empty(), "/v1/lead-desk/team": team({}) });
+  await mount(true);
+  await act(async () => Promise.resolve());
+  expect(host.textContent).toContain("Add your team");
+});
+
+it("keeps the team's Home for an owner whose sellers have leads", async () => {
+  answer({
+    "/v1/lead-desk": empty(),
+    "/v1/lead-desk/team": team({ new: 5 }),
+  });
+  await mount(true);
+  await act(async () => Promise.resolve());
+  expect(host.textContent).not.toContain("Welcome to Sales X-Ray");
 });
