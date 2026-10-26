@@ -2,6 +2,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+import { resetBrandingForTests } from "../shell/branding-store";
 import { WorkspaceAccessContext } from "../workspace-access";
 import { OrganisationHub } from "./org-hub";
 
@@ -207,4 +208,34 @@ it("keeps the organisation page as it was outside an organisation", async () => 
   await render("owner", "personal");
   expect(host.querySelector('nav[aria-label="Organisation"]')).toBeNull();
   expect(host.querySelector('[data-org-view="overview"]')).not.toBeNull();
+});
+
+// Owner, #25 (26 Oct 2026): the organisation's own logo in its header card.
+it("shows the organisation's logo in its header, the icon without one", async () => {
+  const logo = "/v1/organisation/logo/00000000-0000-4000-8000-0000000000aa";
+  resetBrandingForTests();
+  const fetch = vi.fn(async (input: RequestInfo | URL) =>
+    String(input).endsWith("/v1/organisation/branding")
+      ? new Response(
+          JSON.stringify({
+            tenant_id: TENANT,
+            name: "Fictional Homes",
+            logo_url: logo,
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        )
+      : new Response("{}", { status: 404 }),
+  );
+  vi.stubGlobal("fetch", fetch);
+  try {
+    await render("owner");
+    await act(async () => {
+      for (let n = 0; n < 6; n++) await Promise.resolve();
+    });
+    const header = host.querySelector("header")!;
+    expect(header.querySelector("img")?.getAttribute("src")).toBe(logo);
+  } finally {
+    vi.unstubAllGlobals();
+    resetBrandingForTests();
+  }
 });
