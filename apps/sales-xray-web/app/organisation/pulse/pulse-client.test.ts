@@ -51,7 +51,11 @@ const linked = {
     { name: "no id" },
   ],
   pulse_access: [
-    { id: "g1", scopes: ["calls:read", "leads:write"], created_at: "2026-10-20T00:00:00Z" },
+    {
+      id: "g1",
+      scopes: ["calls:read", "leads:write"],
+      created_at: "2026-10-20T00:00:00Z",
+    },
   ],
 };
 
@@ -66,7 +70,9 @@ it("reads the link, the directory and Pulse's access, keeping only its own photo
   });
   expect(state?.link?.lastSync.matched).toBe(1);
   expect(state?.members.map((member) => member.id)).toEqual(["m1", "m2"]);
-  expect(state?.members[0].photoUrl).toBe("/v1/sales-xray/pulse/members/m1/photo");
+  expect(state?.members[0].photoUrl).toBe(
+    "/v1/sales-xray/pulse/members/m1/photo",
+  );
   expect(state?.members[1].photoUrl).toBeNull();
   expect(state?.members[1].matchedBy).toBe("pulse_sign_in");
   expect(state?.access[0].scopes).toEqual(["calls:read", "leads:write"]);

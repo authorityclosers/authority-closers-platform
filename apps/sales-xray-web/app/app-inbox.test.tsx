@@ -4,8 +4,9 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { AppInbox, parseAppUploads, uploadFileName } from "./app-inbox";
 
-(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT =
-  true;
+(
+  globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
 
 let host: HTMLDivElement;
 let root: Root;
@@ -60,7 +61,9 @@ it("hands a recording from Pulse to the uploader, then marks it added", async ()
   );
   const onFile = vi.fn();
   await act(async () =>
-    root.render(<AppInbox disabled={false} onFile={onFile} submissionId={null} />),
+    root.render(
+      <AppInbox disabled={false} onFile={onFile} submissionId={null} />,
+    ),
   );
   await act(async () => {});
   expect(host.textContent).toContain("From Pulse: 1 recording for you");
@@ -89,7 +92,9 @@ it("shows nothing when no app sent anything", async () => {
     vi.fn(async () => Response.json({ uploads: [] })),
   );
   await act(async () =>
-    root.render(<AppInbox disabled={false} onFile={vi.fn()} submissionId={null} />),
+    root.render(
+      <AppInbox disabled={false} onFile={vi.fn()} submissionId={null} />,
+    ),
   );
   expect(host.textContent).toBe("");
 });

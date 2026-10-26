@@ -221,17 +221,13 @@ export async function syncPulse(): Promise<PulseState> {
 }
 
 export async function invitePulseMembers(ids: string[]): Promise<PulseState> {
-  return answer(
-    await fetch(`${API}/invite`, write({ members: ids })),
-  );
+  return answer(await fetch(`${API}/invite`, write({ members: ids })));
 }
 
 export async function savePulseSharing(
   sharing: Pick<PulseSharing, "photos" | "signals">,
 ): Promise<PulseState> {
-  return answer(
-    await fetch(`${API}/sharing`, write(sharing, "PUT")),
-  );
+  return answer(await fetch(`${API}/sharing`, write(sharing, "PUT")));
 }
 
 export async function unlinkPulse(): Promise<PulseState> {
@@ -261,7 +257,8 @@ export function pulseReturnNotice(outcome: string | null): {
       return {
         tone: "success",
         title: "Linked to Pulse",
-        message: "Your team's names, photos, titles and teams now come from Pulse.",
+        message:
+          "Your team's names, photos, titles and teams now come from Pulse.",
       };
     case "linked_sync_failed":
       return {
@@ -274,7 +271,8 @@ export function pulseReturnNotice(outcome: string | null): {
       return {
         tone: "error",
         title: "Not linked",
-        message: "Pulse didn't approve the link. A Pulse org admin must allow it.",
+        message:
+          "Pulse didn't approve the link. A Pulse org admin must allow it.",
       };
     case "org_taken":
       return {

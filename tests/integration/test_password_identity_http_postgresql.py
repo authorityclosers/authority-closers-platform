@@ -369,6 +369,7 @@ def test_email_login_code_concurrently_provisions_one_account_and_commits_failur
                 "google_enabled": False,
                 "apple_enabled": False,
                 "facebook_enabled": False,
+                "pulse_enabled": False,
                 "expires_in_seconds": int(EMAIL_LOGIN_CODE_TTL.total_seconds()),
                 "resend_after_seconds": int(EMAIL_LOGIN_RESEND_AFTER.total_seconds()),
             }

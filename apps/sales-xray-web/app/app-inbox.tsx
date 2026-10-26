@@ -119,9 +119,15 @@ export function AppInbox({
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
+    fetch(API, { ...READ, signal: controller.signal })
+      .then(async (response) => {
+        if (response.ok) setUploads(parseAppUploads(await response.json()));
+      })
+      .catch(() => {
+        // The inbox is an extra: the uploader works without it.
+      });
     return () => controller.abort();
-  }, [load]);
+  }, []);
 
   // The uploader made a call from the recording handed over: mark it added.
   useEffect(() => {

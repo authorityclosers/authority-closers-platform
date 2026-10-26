@@ -82,9 +82,15 @@ export function PulsePanel() {
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
+    readPulse(controller.signal).then(
+      (pulse) =>
+        setLoaded(pulse ? { state: "ready", pulse } : { state: "hidden" }),
+      () => {
+        if (!controller.signal.aborted) setLoaded({ state: "failed" });
+      },
+    );
     return () => controller.abort();
-  }, [load]);
+  }, []);
 
   // The way back from Pulse: one corner card, then a clean address.
   useEffect(() => {
@@ -195,9 +201,9 @@ export function PulsePanel() {
               <>
                 <p style={{ margin: 0, fontWeight: 600 }}>Not linked</p>
                 <p style={{ margin: "2px 0 0", opacity: 0.75 }}>
-                  Link your Pulse org: everyone's name, photo, job title and
-                  team come from Pulse and stay up to date. A Pulse org admin
-                  approves it on Pulse. Roles here never change.
+                  Link your Pulse org: everyone&apos;s name, photo, job title
+                  and team come from Pulse and stay up to date. A Pulse org
+                  admin approves it on Pulse. Roles here never change.
                 </p>
               </>
             )}
@@ -248,7 +254,7 @@ export function PulsePanel() {
         </div>
         {!pulse.configured && !link ? (
           <p style={{ margin: "8px 0 0", opacity: 0.75 }}>
-            Pulse isn't set up for this Sales X-Ray yet.
+            Pulse isn&apos;t set up for this Sales X-Ray yet.
           </p>
         ) : null}
       </Panel>
