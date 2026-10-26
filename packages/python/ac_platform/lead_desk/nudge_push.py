@@ -21,7 +21,7 @@ from datetime import datetime, timedelta
 from typing import Final
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, select, true
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -57,13 +57,13 @@ async def collect(
     database: AsyncSession, now: datetime, *, every: timedelta = EVERY
 ) -> list[NudgeAlert]:
     """The nudges to send now, each written to the ledger first (the caller commits)."""
-    switched = [
+    # On unless an owner or manager turned them off (report #23), so a workspace that never
+    # saved its settings gets them too.
+    off = [
         row.tenant_id
         for row in (await database.scalars(select(LeadDeskSettings))).all()
-        if dict((row.config or {}).get("team") or {}).get("nudges")
+        if not dict((row.config or {}).get("team") or {}).get("nudges", True)
     ]
-    if not switched:
-        return []
     phones: dict[tuple[UUID, UUID], list[str]] = defaultdict(list)
     for tenant_id, person_id, token in (
         await database.execute(
@@ -76,7 +76,7 @@ async def collect(
                 ),
             )
             .where(
-                LeadDevice.tenant_id.in_(switched),
+                LeadDevice.tenant_id.not_in(off) if off else true(),
                 Membership.status == "active",
                 Membership.ended_at.is_(None),
                 Membership.role.in_(SELLER_ROLES),

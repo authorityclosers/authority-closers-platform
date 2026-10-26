@@ -161,6 +161,10 @@ DELETERS = frozenset(roles_with("leads.delete"))
 # A phone alert names a task due within this of now (task_push reminds up to two hours
 # before an in-person meeting).
 TASK_ALERT_WINDOW = timedelta(hours=2)
+# New leads that came in this recently are "just in" on a grouped alert: "5 new leads",
+# and from forty on "40+ new leads" (owner, 26 Oct 2026, dev report #3).
+JUST_IN = timedelta(minutes=15)
+MANY_NEW = 40
 WhyKind = Literal["due", "new", "retry", "later", "open", "closed", "waiting"]
 SELLER_ROLES = roles_with("leads.work")
 QUEUE_LIMIT = 30
@@ -3244,10 +3248,36 @@ class LeadDesk:
     async def alert_text(self, lead_id: UUID) -> AlertText:
         """The words on a phone alert for one lead: who, why now, from where."""
         lead = await self._lead(lead_id)
-        if lead.stage in CLOSED_STAGES or lead.owner_person_id != self.viewer.person_id:
+        mine = lead.owner_person_id == self.viewer.person_id
+        # An organisation's owner hears of each new lead too, and whose it is (owner, 26
+        # Oct 2026, dev report #3).
+        told = (
+            not mine
+            and self.viewer.role == "owner"
+            and lead.stage == "new"
+            and lead.next_action_at is None
+        )
+        if lead.stage in CLOSED_STAGES or not (mine or told):
             raise DeskError(404, "This lead isn't waiting on you.")
         name = _short(lead.name)
         source = lead.source_label or SOURCE_LABELS.get(lead.source, lead.source)
+        if told:
+            seller = (
+                (await self._names([lead.owner_person_id])).get(lead.owner_person_id)
+                if lead.owner_person_id
+                else None
+            )
+            body = " · ".join(
+                part
+                for part in (source, lead.interest, ago_text(lead.created_at, self.now))
+                if part
+            )
+            return AlertText(
+                title=(f"New lead for {seller}: {name}" if seller else f"New lead: {name}")[:120],
+                body=body[:240],
+                lead_id=lead.id,
+                url=f"/leads#lead={lead.id}",
+            )
         meeting = await meeting_rows.open_meeting(self.db, self.tenant_id, lead.id)
         if meeting is not None and meeting.starts_at - self.now <= 2 * meeting_rows.REMIND_BEFORE:
             mode = meeting_rows.MODE_LABELS.get(meeting.mode, "Meeting")
@@ -3283,8 +3313,50 @@ class LeadDesk:
             title=title[:120], body=body[:240], lead_id=lead.id, url=f"/leads#lead={lead.id}"
         )
 
+    async def _just_in(self) -> int:
+        """New leads that came in within JUST_IN and wait for their first call: this
+        seller's, or for an owner, the organisation's that nobody typed in by hand."""
+        mine = self.viewer.role != "owner"
+        return int(
+            await self.db.scalar(
+                select(func.count())
+                .select_from(Lead)
+                .where(
+                    Lead.tenant_id == self.tenant_id,
+                    Lead.stage == "new",
+                    Lead.next_action_at.is_(None),
+                    func.coalesce(Lead.assigned_at, Lead.created_at) > self.now - JUST_IN,
+                    *(
+                        (
+                            Lead.owner_person_id == self.viewer.person_id,
+                            or_(
+                                Lead.created_by_person_id.is_(None),
+                                Lead.created_by_person_id != self.viewer.person_id,
+                            ),
+                        )
+                        if mine
+                        else (Lead.created_by_person_id.is_(None),)
+                    ),
+                )
+            )
+            or 0
+        )
+
     async def alert_summary(self) -> AlertText:
-        """The words on a phone alert for several leads at once."""
+        """The words on a phone alert for several leads at once: new leads just in ("5 new
+        leads", "40+ new leads"; an owner's count is the organisation's), else who to call
+        now. Counts only: a grouped alert names nobody."""
+        fresh = await self._just_in()
+        if fresh >= 2:
+            owner = self.viewer.role == "owner"
+            return AlertText(
+                title=f"{MANY_NEW}+ new leads" if fresh >= MANY_NEW else f"{fresh} new leads",
+                body="Your lead rules gave them out. Tap to see who has them."
+                if owner
+                else "Waiting for your first call. Tap to open Leads.",
+                lead_id=None,
+                url="/leads",
+            )
         badge = await self.badge()
         names = (
             await self.db.scalars(
@@ -3967,7 +4039,7 @@ class LeadDesk:
                 work_hours=hours_view(work_hours.parse(config), self.now),
                 show_full_phones=bool(config.get("show_full_phones")),
                 default_max_open=default_cap(config),
-                nudges=bool(_team_config(config).get("nudges")),
+                nudges=bool(_team_config(config).get("nudges", True)),
                 nudges_off_for=tuple(
                     UUID(str(person)) for person in _team_config(config).get("nudges_off_for") or ()
                 ),
