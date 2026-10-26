@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Bear">
+<rect width="256" height="256" fill="#FFF2D2"/>
+<circle cx="76" cy="88" r="26" fill="#9C6B43"/>
+<circle cx="180" cy="88" r="26" fill="#9C6B43"/>
+<circle cx="76" cy="88" r="13" fill="#D9B48F"/>
+<circle cx="180" cy="88" r="13" fill="#D9B48F"/>
+<ellipse cx="128" cy="152" rx="82" ry="74" fill="#9C6B43"/>
+<ellipse cx="128" cy="174" rx="36" ry="28" fill="#D9B48F"/>
+<circle cx="100" cy="142" r="8" fill="#2B2B2B"/>
+<circle cx="156" cy="142" r="8" fill="#2B2B2B"/>
+<ellipse cx="128" cy="164" rx="12" ry="9" fill="#2B2B2B"/>
+</svg>

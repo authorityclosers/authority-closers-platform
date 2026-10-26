@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Koala">
+<rect width="256" height="256" fill="#E7F1E1"/>
+<circle cx="66" cy="110" r="34" fill="#8E9AA6"/>
+<circle cx="190" cy="110" r="34" fill="#8E9AA6"/>
+<circle cx="66" cy="110" r="19" fill="#D7DEE5"/>
+<circle cx="190" cy="110" r="19" fill="#D7DEE5"/>
+<ellipse cx="128" cy="154" rx="76" ry="70" fill="#8E9AA6"/>
+<circle cx="104" cy="146" r="7" fill="#2B2B2B"/>
+<circle cx="152" cy="146" r="7" fill="#2B2B2B"/>
+<ellipse cx="128" cy="168" rx="15" ry="19" fill="#3A3F45"/>
+</svg>
