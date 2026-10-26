@@ -642,8 +642,15 @@ class Intake:
 
     @staticmethod
     async def capture(
-        database: Any, source_id: UUID, token: str, record: Mapping[str, Any], *, app_url: str
+        database: Any,
+        source_id: UUID,
+        token: str,
+        record: Mapping[str, Any],
+        *,
+        app_url: str,
+        test_data: bool = False,
     ) -> tuple[UUID | None, str]:
+        """``test_data``: the sender marked it a test (Google Ads' "Send test data")."""
         source = await database.scalar(
             select(LeadSource)
             .where(LeadSource.id == source_id, LeadSource.kind == "webhook")
@@ -680,6 +687,7 @@ class Intake:
                 source_label=source.label,
                 source_ref=reference or content_ref(record),
                 actor=None,
+                test_data=test_data,
             )
         except CaptureError as error:
             raise DeskError(422, str(error)) from None

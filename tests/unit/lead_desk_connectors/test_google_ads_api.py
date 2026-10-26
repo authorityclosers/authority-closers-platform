@@ -33,9 +33,25 @@ def ads(handler: Any) -> api.Ads:
     return api.Ads(cfg(), httpx.AsyncClient(transport=httpx.MockTransport(handler)))
 
 
-@pytest.mark.parametrize("missing", sorted(ENV))
+@pytest.mark.parametrize("missing", sorted(set(ENV) - {"AC_GOOGLE_ADS_DEVELOPER_TOKEN"}))
 def test_the_connector_stays_off_until_every_setting_exists(missing: str) -> None:
     assert api.config({**ENV, missing: " "}) is None
+
+
+def test_without_a_developer_token_it_is_on_and_sends_none() -> None:
+    """Google retired developer tokens on 9 Sep 2026: the Cloud project holds the access."""
+    env = {name: value for name, value in ENV.items() if name != "AC_GOOGLE_ADS_DEVELOPER_TOKEN"}
+    value = api.config(env)
+    assert value is not None and value.developer_token == ""
+    seen: list[httpx.Headers] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request.headers)
+        return httpx.Response(200, json={"resourceNames": []})
+
+    client = api.Ads(value, httpx.AsyncClient(transport=httpx.MockTransport(handler)))
+    asyncio.run(client.accounts("access-1"))
+    assert seen and all("developer-token" not in headers for headers in seen)
 
 
 def test_a_bad_token_key_keeps_it_off_and_the_version_can_move() -> None:

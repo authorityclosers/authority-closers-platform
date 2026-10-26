@@ -79,10 +79,13 @@ class GoogleAdsConfig:
 def config(env: Mapping[str, str] | None = None) -> GoogleAdsConfig | None:
     """AC's Google Ads app settings, or None while any is missing (the connector stays off)."""
     env = os.environ if env is None else env
+    # Google retired developer tokens on 9 Sep 2026: the Cloud project behind the OAuth
+    # client holds the access level, and a token sent in the header is ignored (a later
+    # API version rejects it). AC_GOOGLE_ADS_DEVELOPER_TOKEN is optional and sent only
+    # while set.
     names = (
         "AC_GOOGLE_ADS_CLIENT_ID",
         "AC_GOOGLE_ADS_CLIENT_SECRET",
-        "AC_GOOGLE_ADS_DEVELOPER_TOKEN",
         "AC_LEAD_DESK_TOKEN_KEY",
     )
     values = {name: (env.get(name) or "").strip() for name in names}
@@ -97,7 +100,7 @@ def config(env: Mapping[str, str] | None = None) -> GoogleAdsConfig | None:
     return GoogleAdsConfig(
         client_id=values["AC_GOOGLE_ADS_CLIENT_ID"],
         client_secret=values["AC_GOOGLE_ADS_CLIENT_SECRET"],
-        developer_token=values["AC_GOOGLE_ADS_DEVELOPER_TOKEN"],
+        developer_token=(env.get("AC_GOOGLE_ADS_DEVELOPER_TOKEN") or "").strip(),
         token_key=key,
         api_version=(env.get("AC_GOOGLE_ADS_API_VERSION") or "v25").strip(),
     )
@@ -328,11 +331,9 @@ class Ads:
         return token
 
     def _headers(self, access: str, login: str | None) -> dict[str, str]:
-        headers = {
-            "Authorization": f"Bearer {access}",
-            "developer-token": self.cfg.developer_token,
-            "Accept": "application/json",
-        }
+        headers = {"Authorization": f"Bearer {access}", "Accept": "application/json"}
+        if self.cfg.developer_token:
+            headers["developer-token"] = self.cfg.developer_token
         if login:
             headers["login-customer-id"] = login
         return headers
