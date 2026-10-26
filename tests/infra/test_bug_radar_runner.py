@@ -285,6 +285,25 @@ def test_a_release_hold_lists_groups_the_baseline_does_not_know(
     assert [op["marker"] for op in _ops(tmp_path, "ensure")] == ["radar:parent", "radar:a"]
 
 
+def test_a_cancelled_run_is_tried_again(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    radar = _load(monkeypatch, tmp_path)
+    count = tmp_path / "count"
+    wb_ci = _fake(
+        tmp_path / "wb-ci",
+        f"from pathlib import Path\np = Path({str(count)!r})\n"
+        "n = int(p.read_text()) if p.exists() else 0\n"
+        "p.write_text(str(n + 1))\n"
+        "print(f'wb-ci: run https://github.com/o/r/actions/runs/{100 + n}')\n"
+        "print('result: cancelled' if n == 0 else 'result: success')",
+    )
+    monkeypatch.setattr(radar, "WB_CI", wb_ci)
+    waits: list[float] = []
+    monkeypatch.setattr(radar.time, "sleep", waits.append)
+    assert radar.run_radar("0123456789abcdef") == ("101", "https://github.com/o/r/actions/runs/101")
+    # subprocess polls with short sleeps of its own; the radar waited once, ten minutes.
+    assert [wait for wait in waits if wait >= 1] == [600]
+
+
 def test_the_ai_review_needs_the_subscription_gate_and_files_findings_only(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys
 ) -> None:

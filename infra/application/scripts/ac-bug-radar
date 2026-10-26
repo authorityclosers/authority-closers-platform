@@ -392,20 +392,22 @@ def workbench_head() -> str:
 
 
 def run_radar(sha: str) -> tuple[str, str]:
-    """wb-ci --full --radar for `sha`; (run id, run url). Retries while the slots are busy."""
-    for attempt in range(3):
+    """wb-ci --full --radar for `sha`; (run id, run url). Retries while the slots are busy, and when GitHub cancels
+    the run: on a busy night the shared ci-prerequisites concurrency group cancels a waiting run (26 Oct: twice)."""
+    for attempt in range(4):
         done = subprocess.run(  # noqa: S603 - fixed argv
             [WB_CI, "--full", "--radar", "--sha", sha], capture_output=True, text=True, timeout=95 * 60, check=False
         )
         found = re.search(r"wb-ci: run (https://github\.com/\S+/actions/runs/(\d+))", done.stdout)
-        if found:
+        cancelled = re.search(r"^result: cancelled$", done.stdout, re.M)
+        if found and not cancelled:
             return found.group(2), found.group(1)
         why = (done.stderr or done.stdout).strip()[-300:]
-        if done.returncode == 75 or "slots busy" in why:
+        if cancelled or done.returncode == 75 or "slots busy" in why:
             time.sleep(600 * (attempt + 1))
             continue
         raise RuntimeError(f"wb-ci --radar started no run (exit {done.returncode}): {why}")
-    raise RuntimeError("wb-ci slots stayed busy; try the next night")
+    raise RuntimeError("the radar run was cancelled or found no wb-ci slot four times; try the next night")
 
 
 def download(run_id: str, dest: Path) -> None:
