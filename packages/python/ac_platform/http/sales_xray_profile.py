@@ -63,21 +63,15 @@ class SalesXrayProfileResponse(BaseModel):
     title: str | None = None
     team: str | None = None
     details_revision: int = 0
-    avatar_url: str | None = None
-    own_photo: bool = False
     # The character the photo is (owner #32, 26 Oct 2026), else null; the one shown without a
     # photo.
     character: str | None = None
     default_character: str | None = None
+    avatar_url: str | None = None
+    own_photo: bool = False
     completion: ProfileCompletion | None = None
     # What the person's Pulse account says (Sign in with Pulse or their org's Pulse link).
     pulse: dict[str, str | None] | None = None
-
-
-class CharacterChoice(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    character: str = Field(min_length=2, max_length=24)
 
 
 class ProfileDetailsUpdate(BaseModel):
@@ -98,6 +92,12 @@ class SalesXrayProfileUpdate(BaseModel):
     full_name: str = Field(min_length=1, max_length=200)
     phone_number_e164: str | None = Field(max_length=16)
     expected_revision: int = Field(ge=0, strict=True)
+
+
+class CharacterChoice(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    character: str = Field(min_length=2, max_length=24)
 
 
 async def require_sales_xray_write_profile(
@@ -195,10 +195,10 @@ def install_sales_xray_profile_http(
             title=value.title,
             team=value.team,
             details_revision=value.details_revision,
-            avatar_url=value.avatar_url,
-            own_photo=value.own_photo,
             character=value.character,
             default_character=value.default_character,
+            avatar_url=value.avatar_url,
+            own_photo=value.own_photo,
             completion=ProfileCompletion.model_validate(value.completion),
             pulse=(
                 None
@@ -297,37 +297,6 @@ def install_sales_xray_profile_http(
             )
             value = await get_sales_xray_profile(auth.database, person_id=actor.person_id)
         except person_photos.PhotoRejected as error:
-            raise HTTPException(422, str(error)) from None
-        except SalesXrayProfileError as error:
-            raise fail_profile(error) from None
-        return await response_value(value, auth.database, auth.resolved.actor.person_id)
-
-    @router.put("/character", response_model=SalesXrayProfileResponse)
-    async def choose_character(
-        choice: CharacterChoice,
-        request: Request,
-        response: Response,
-        auth: Annotated[AuthenticatedTransaction, actor_dependency] = actor_dependency,
-    ) -> dict[str, object]:
-        """One of the characters as the person's photo (owner #32, 26 Oct 2026). It replaces
-        an uploaded photo, as the app's confirm says; removing the photo goes back to the
-        default character."""
-        headers(response)
-        actor = auth.resolved.actor
-        await require_profile_surface(request, auth)
-        require_safe_origin(request, settings)
-        if not characters.load():
-            raise HTTPException(409, "Characters are not available yet.")
-        try:
-            await person_photos.save_character(
-                auth.database,
-                person_id=actor.person_id,
-                session_id=actor.session_id,
-                tenant_id=audit_tenant(auth),
-                key=choice.character,
-            )
-            value = await get_sales_xray_profile(auth.database, person_id=actor.person_id)
-        except characters.CharacterRejected as error:
             raise HTTPException(422, str(error)) from None
         except SalesXrayProfileError as error:
             raise fail_profile(error) from None
@@ -445,6 +414,35 @@ def install_sales_xray_profile_http(
             status_code=204,
             headers={"Cache-Control": "private, no-store", "Vary": "Cookie"},
         )
+
+    @router.put("/character", response_model=SalesXrayProfileResponse)
+    async def choose_character(
+        choice: CharacterChoice,
+        request: Request,
+        response: Response,
+        auth: Annotated[AuthenticatedTransaction, actor_dependency] = actor_dependency,
+    ) -> dict[str, object]:
+        """One of the characters as the person's photo (owner #32, 26 Oct 2026). It replaces
+        an uploaded photo, as the app's confirm says; removing the photo goes back to the
+        default character."""
+        headers(response)
+        actor = auth.resolved.actor
+        await require_profile_surface(request, auth)
+        require_safe_origin(request, settings)
+        if not characters.load():
+            raise HTTPException(409, "Characters are not available yet.")
+        try:
+            await person_photos.save_character(
+                auth.database,
+                person_id=actor.person_id,
+                session_id=actor.session_id,
+                tenant_id=audit_tenant(auth),
+                key=choice.character,
+            )
+        except characters.CharacterRejected as error:
+            raise HTTPException(422, str(error)) from None
+        # The profile as GET answers it: the same call with or without the Pulse link.
+        return await read_profile(request, response, auth)
 
     application.include_router(router)
 
