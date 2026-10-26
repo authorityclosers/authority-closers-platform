@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -25,6 +26,7 @@ from ac_platform.http.sales_xray_profile import (
     install_sales_xray_profile_http,
     require_sales_xray_write_profile,
 )
+from ac_platform.identity import characters
 from ac_platform.identity.application import ResolvedActorContext
 from ac_platform.identity.google_profile_models import PersonGoogleProfile
 from ac_platform.identity.models import Person
@@ -445,6 +447,10 @@ async def test_profile_http_surface_returns_only_204_when_current_account_is_rea
             "details_revision": 0,
             "avatar_url": None,
             "own_photo": False,
+            "character": None,
+            "default_character": (
+                None if not characters.load() else characters.default_for(PERSON_ID).key  # type: ignore[union-attr]
+            ),
             "completion": {
                 "done": 2,
                 "total": 6,
@@ -665,3 +671,124 @@ def test_legacy_registration_requires_an_account_profile_and_guest_cookie_is_not
     assert ready.status_code == 201
     assert ready.json()["idempotency_key"] == "profile-gate-test"
     assert calls == [_actor()]
+
+
+@pytest.mark.asyncio
+async def test_a_character_is_chosen_as_the_photo_listed_and_served(
+    database: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Owner #32 (26 Oct 2026): a chosen character is the person's photo, byte for byte, so
+    the profile says which one; removing it goes back to the default; none shipped is 409."""
+    from tests.unit.identity.test_characters import make
+
+    async_database, _ = database
+    monkeypatch.setattr(characters, "FOLDER", make(tmp_path / "c", ["otter", "panda", "robot"]))
+    characters.load.cache_clear()
+    settings = _profile_settings()
+
+    async def transaction_for(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
+        if request.cookies.get("ac_session") != "present":
+            raise HTTPException(401, "Sign in required")
+        yield AuthenticatedTransaction(
+            database=async_database,  # type: ignore[arg-type]
+            identity=object(),  # type: ignore[arg-type]
+            resolved=ResolvedActorContext(
+                actor=_actor(),
+                membership_role="learner",
+                person_revision=0,
+                session_revision=0,
+                tenant_revision=0,
+                membership_revision=0,
+            ),
+            token="test-session-token",  # noqa: S106
+        )
+
+    transaction_for.read_only = transaction_for  # type: ignore[attr-defined]
+    application = FastAPI()
+    register_problem_handlers(application)
+    install_sales_xray_profile_http(
+        application,
+        settings=settings,
+        require_actor=transaction_for,  # type: ignore[arg-type]
+    )
+    write = {"origin": str(settings.public_app_url).rstrip("/")}
+    cookies = {"ac_session": "present"}
+    panda = characters.by_key("panda")
+    assert panda is not None
+    try:
+        async with AsyncClient(
+            transport=ASGITransport(app=application), base_url=str(settings.public_app_url)
+        ) as client:
+            listed = await client.get("/v1/people/characters", cookies=cookies)
+            assert listed.status_code == 200, listed.text
+            assert [item["key"] for item in listed.json()["characters"]] == [
+                "otter",
+                "panda",
+                "robot",
+            ]
+            assert listed.json()["characters"][1] == {
+                "key": "panda",
+                "label": "Panda",
+                "url": panda.url,
+            }
+            picture = await client.get(panda.url, cookies=cookies)
+            assert picture.status_code == 200 and picture.content == panda.data
+            assert picture.headers["content-type"] == "image/webp"
+            assert "immutable" in picture.headers["cache-control"]
+            unknown = await client.get("/v1/people/characters/dragon", cookies=cookies)
+            assert unknown.status_code == 404
+            assert (await client.get("/v1/people/characters")).status_code == 401
+
+            chosen = await client.put(
+                "/v1/me/sales-xray-profile/character",
+                json={"character": "panda"},
+                headers=write,
+                cookies=cookies,
+            )
+            assert chosen.status_code == 200, chosen.text
+            body = chosen.json()
+            assert body["character"] == "panda" and body["own_photo"] is True
+            assert body["avatar_url"] == f"/v1/people/{PERSON_ID}/photo?v={panda.sha256[:8]}"
+            audit = _AuditRecorder.events[-1]
+            assert audit["action"] == "sales_xray.profile.photo_updated.v1"
+            assert audit["payload"]["character"] == "panda"  # type: ignore[index]
+            assert audit["reason"] == "Chose a character."
+            # The photo is the character's file itself.
+            mine = await client.get("/v1/me/sales-xray-profile/photo", cookies=cookies)
+            assert mine.status_code == 200 and mine.content == panda.data
+            again = await client.get("/v1/me/sales-xray-profile", cookies=cookies)
+            assert again.json()["character"] == "panda"
+
+            for wrong in ({"character": "dragon"}, {"character": "panda", "extra": 1}):
+                refused = await client.put(
+                    "/v1/me/sales-xray-profile/character",
+                    json=wrong,
+                    headers=write,
+                    cookies=cookies,
+                )
+                assert refused.status_code == 422, wrong
+
+            removed = await client.delete(
+                "/v1/me/sales-xray-profile/photo", headers=write, cookies=cookies
+            )
+            assert removed.status_code == 200, removed.text
+            fallback = characters.default_for(PERSON_ID)
+            assert fallback is not None
+            assert removed.json()["character"] is None
+            assert removed.json()["default_character"] == fallback.key
+
+            # Before the builder's files ship: nothing to list, nothing to choose.
+            monkeypatch.setattr(characters, "FOLDER", tmp_path / "none")
+            characters.load.cache_clear()
+            assert (await client.get("/v1/people/characters", cookies=cookies)).json() == {
+                "characters": []
+            }
+            early = await client.put(
+                "/v1/me/sales-xray-profile/character",
+                json={"character": "panda"},
+                headers=write,
+                cookies=cookies,
+            )
+            assert early.status_code == 409
+    finally:
+        characters.load.cache_clear()
