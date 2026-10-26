@@ -1,12 +1,12 @@
 [
   {
-    "artifact_id": 12575289319,
-    "digest": "ba9658ced9ae4398c783af04cf975dbba2387fa1c1ef9751f8ce106d610c3e2b",
+    "artifact_id": 12640243658,
+    "digest": "364b2c23271d6c21ed6e5f55670e49229407520bc8b08e7d9f0724c70e9778cc",
     "identity": "54ef77ee856ba826a13e048faf53ea88f3bb97f34234e7897fd1e0516c6309a6",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 40133074440,
-    "source_sha": "463d5e0305ebbb14ad01128d324583a44dde54d5",
-    "reviewed_source_sha": "af38174b73b862c63441a187e87112fc99e9b8d5",
-    "review": "Orchestrator 25 Oct 2026: af38174b is workbench e1b066190 plus one Lead OS commit that changes only 15 apps/sales-xray-web/app/leads files (no scripts/ci, workflow or lockfile change); producer run 40133074440 (workbench-checks.yml, push, success) on request 463d5e03, whose only parent is af38174b and which changes only .wb-ci/request.json; artifact digest from the API. Replaces the 23 Oct pin, whose artifact 12486217699 was past the 36 h reuse window and deleted (AUT-2188)."
+    "run_id": 40300895701,
+    "source_sha": "bc553a71fa50c3322b07a9b93e9b496796a67b1b",
+    "reviewed_source_sha": "f51b2734f055139653a6796238f45eeb547cbb27",
+    "review": "Orchestrator 26 Oct 2026: producer run 40300895701 (workbench-checks.yml, push to wb-ci/slot-5) on request bc553a71, whose only parent is workbench f51b2734f and which changes only .wb-ci/request.json plus seven apps/sales-xray-web/app/leads files (no scripts/ci, workflow or lockfile change). Identity 54ef77ee is unchanged from the 25 Oct pin, so the prerequisite inputs are the same; the scripts/ci and workflow changes since af38174b are wb-ci and matrix tooling outside the identity. Artifact digest from the API. Replaces the 25 Oct pin, whose artifact 12575289319 is past the 36 h reuse window (every run tried to publish a new bundle and storage admission declined)."
   }
 ]
