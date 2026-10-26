@@ -1,4 +1,5 @@
 import { earlyFetch, forgetSharedReads } from "./early-reads";
+import { isReleaseHold } from "./release-hold";
 import {
   callIdFromPath,
   callPath,
@@ -281,6 +282,7 @@ export class AcquisitionError extends Error {
       | "plan_permission"
       | "plan_stale"
       | "execution_paused"
+      | "release_hold"
       | "source_invalid"
       | "source_incomplete"
       | "source_verification"
@@ -292,31 +294,33 @@ export class AcquisitionError extends Error {
         ? "We couldn’t verify this recording’s audio. Try again; if this continues, share the request reference with the AC team."
         : reason === "execution_paused"
           ? ACQUISITION_PAUSED_MESSAGE
-          : reason === "source_invalid"
-            ? "Choose one bounded audio file and accept the current upload terms."
-            : reason === "source_incomplete"
-              ? "The complete recording was not received. Check your connection and upload again."
-              : reason === "source_storage"
-                ? "The recording could not be verified in private storage. Check your connection and upload again."
-                : status === 401
-                  ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
-                  : status === 403
-                    ? reason === "trial_allowance_insufficient"
-                      ? "This recording is longer than your remaining analysis minutes. Your recording stays private."
-                      : reason === "provider_allowance_used"
-                        ? "This analysis allowance has been used. Your recording is saved. Contact the AC team for help."
-                        : reason === "plan_stale"
-                          ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
-                          : reason === "plan_permission"
-                            ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
-                            : "This action is not available with your current access. Ask the AC team to check your permission."
-                    : status === 404
-                      ? "This call is unavailable in your current session. It may have expired or been deleted."
-                      : status === 429
-                        ? "Another call is uploading. Please try again shortly."
-                        : status === 409
-                          ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
-                          : "This request did not finish. Check your connection and try again.";
+          : reason === "release_hold"
+            ? "Sales X-Ray is updating. Try again in a minute."
+            : reason === "source_invalid"
+              ? "Choose one bounded audio file and accept the current upload terms."
+              : reason === "source_incomplete"
+                ? "The complete recording was not received. Check your connection and upload again."
+                : reason === "source_storage"
+                  ? "The recording could not be verified in private storage. Check your connection and upload again."
+                  : status === 401
+                    ? "Your guest session is no longer active. Start a new call with your available allowance, or sign in to recover saved calls."
+                    : status === 403
+                      ? reason === "trial_allowance_insufficient"
+                        ? "This recording is longer than your remaining analysis minutes. Your recording stays private."
+                        : reason === "provider_allowance_used"
+                          ? "This analysis allowance has been used. Your recording is saved. Contact the AC team for help."
+                          : reason === "plan_stale"
+                            ? "This call’s plan changed while it was being prepared. We fetched a fresh plan for you to review."
+                            : reason === "plan_permission"
+                              ? "Analysis approval is unavailable for this call. Your recording is saved. Ask the AC team to check its approval and allowance before requesting a fresh plan."
+                              : "This action is not available with your current access. Ask the AC team to check your permission."
+                      : status === 404
+                        ? "This call is unavailable in your current session. It may have expired or been deleted."
+                        : status === 429
+                          ? "Another call is uploading. Please try again shortly."
+                          : status === 409
+                            ? "Analysis is not available for this call yet. Your recording remains private; try again shortly."
+                            : "This request did not finish. Check your connection and try again.";
     super(requestId ? `${message} Request reference: ${requestId}.` : message);
   }
 }
@@ -340,6 +344,9 @@ export async function acquisition(
     : await fetch(ACQUISITION + path, request);
   if (!response.ok) {
     const requestId = response.headers.get("x-request-id") || undefined;
+    // A release the fetch layer waited out (release-hold.ts): updating, not paused.
+    if (isReleaseHold(response))
+      throw new AcquisitionError(503, "release_hold", requestId);
     if (response.status === 503) {
       const body: unknown = await response.json().catch(() => null);
       if (

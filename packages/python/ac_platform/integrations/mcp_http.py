@@ -32,7 +32,6 @@ from fastapi.responses import JSONResponse
 
 from ac_platform.http.routes import RouteContext
 from ac_platform.integrations.api_http import (
-    STAGES,
     ApiError,
     NewLeadBody,
     NoteBody,
@@ -165,14 +164,18 @@ TOOLS: tuple[dict[str, Any], ...] = (
         "name": "list_leads",
         "title": "List leads",
         "description": (
-            "Leads on the desk, 50 a page. stage is one of "
-            + ", ".join(STAGES)
-            + "; pass offset (next_offset from a page) for more."
+            "Leads on the desk, 50 a page. Each answer lists the organisation's own stages "
+            "(key and label) under stages; pass one key as stage for that stage alone, or "
+            "open for every open lead. Pass offset (next_offset from a page) for more."
         ),
         "inputSchema": {
             "type": "object",
             "properties": {
-                "stage": {"type": "string", "enum": list(STAGES)},
+                "stage": {
+                    "type": "string",
+                    "maxLength": 40,
+                    "description": "A key from stages in an answer, or open.",
+                },
                 "offset": {"type": "integer", "minimum": 0},
             },
         },

@@ -434,9 +434,10 @@
   position: relative;
   display: grid;
   align-content: start;
-  gap: 14px;
+  gap: 16px;
   box-sizing: border-box;
-  padding: 6px 4px 16px;
+  /* The sheet's own 16 px gutter is the only one (owner, #34, 26 Oct 2026). */
+  padding: 8px 0 16px;
 }
 
 .sheetClose {
@@ -478,7 +479,7 @@
 
 .card {
   display: grid;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -509,7 +510,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* The lead's own link, beside its stage and source. */
@@ -725,7 +726,7 @@
 
 .historyBlock {
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .history {
@@ -739,8 +740,8 @@
 .history li {
   position: relative;
   display: grid;
-  gap: 1px;
-  padding: 0 0 12px 18px;
+  gap: 2px;
+  padding: 0 0 12px 16px;
   border-left: 2px solid var(--sx-line);
   margin-left: 4px;
 }
@@ -812,9 +813,8 @@
 
 .story {
   display: grid;
-  gap: 6px;
-  margin-bottom: 14px;
-  padding: 12px 14px;
+  gap: 4px;
+  padding: 12px 16px;
   border-radius: var(--sx-radius-md);
   background: var(--sx-sunken);
 }
@@ -940,12 +940,14 @@
   box-shadow: var(--sx-focus-ring);
 }
 
-/* "Log this" (owner, 23 Oct 2026): the light way in to the call's question. */
+/* "Log this" (owner, 23 Oct 2026): the light way in to the call's question,
+   one quiet line under Call (#31, 26 Oct 2026). */
 .logThis {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px 10px;
+  gap: 0 4px;
+  margin: 0;
 }
 
 .logThisHint {
@@ -2347,7 +2349,7 @@ a.repName {
 .leadHead {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 14px;
+  gap: 12px;
   align-items: center;
   padding-right: 40px;
 }
@@ -2364,7 +2366,7 @@ a.repName {
   align-items: center;
   gap: 12px;
   min-height: 56px;
-  padding: 8px 18px;
+  padding: 8px 16px;
   border: 0;
   border-radius: var(--lx-radius-lg);
   background: var(--lx-gradient-primary);
@@ -2670,8 +2672,8 @@ a.repName {
 
 .panel {
   display: grid;
-  gap: 10px;
-  padding: 14px 16px;
+  gap: 12px;
+  padding: 16px;
   border: 1px solid var(--sx-line);
   border-radius: var(--lx-radius-lg);
   background: var(--sx-surface);
@@ -5706,8 +5708,8 @@ a.repName {
 }
 
 .actionBox svg {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   color: var(--kind-ink, var(--sx-ink-2));
 }
 
@@ -6257,5 +6259,302 @@ button.leadTags {
   /* A phone: the chips use the full width under the avatar. */
   .leadHead + .cardBadges {
     padding-left: 0;
+  }
+}
+
+.logThisButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--lx-strength-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.logThisButton:hover {
+  background: var(--sx-fill);
+}
+
+.logThisButton:active {
+  background: var(--sx-fill-strong);
+}
+
+.logThisButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* ---------- Notes · Calls · Story (owner, #31, 26 Oct 2026) ----------
+   One segmented row under the actions; each panel stays drawn, the others
+   hidden. The Story reads one line per event, the time on the right, grouped
+   by day. */
+.leadTabs {
+  container: lead-tabs / inline-size;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-fill);
+  font-size: var(--sx-text-sm);
+}
+
+.leadTab {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: calc(var(--sx-radius-sm) - 2px);
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    color var(--sx-dur-fast) var(--sx-ease-out),
+    background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.leadTab[aria-selected="true"] {
+  background: var(--sx-elevated);
+  color: var(--sx-ink);
+  box-shadow:
+    0 1px 3px color-mix(in oklab, var(--lx-film) 14%, transparent),
+    0 0 0 0.5px var(--sx-hairline);
+}
+
+.leadTab:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.leadTabCount {
+  min-width: 20px;
+  padding: 0 4px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* A small phone with large text: the labels stay whole, the counts go
+   (measured in the tabs' own text size, so text scaling counts too). */
+@container lead-tabs (max-width: 19em) {
+  .leadTabCount {
+    display: none;
+  }
+}
+
+.leadPanel {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.leadPanel[hidden] {
+  display: none;
+}
+
+.notesAll {
+  justify-self: start;
+  margin-left: -10px;
+}
+
+/* Each line: what happened on the left, its time on the right. */
+.history li:not(.historyDay, .historyBrief) {
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 12px;
+  align-items: baseline;
+}
+
+.history li:not(.historyDay, .historyBrief) > * {
+  grid-column: 1 / -1;
+}
+
+.history li:not(.historyDay, .historyBrief) > .historyTitle {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.history li:not(.historyDay, .historyBrief) > .historyTime {
+  grid-row: 1;
+  grid-column: 2;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The Story: one line each; what was said stays one line too. */
+.history[data-compact] .historyTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history[data-compact] .historyDetail {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+}
+
+/* ---------- Who has the lead (owner, #33, 26 Oct 2026) ----------
+   One compact row; Reassign opens its own sheet. */
+.ownerLine {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.ownerWords {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.ownerWords strong {
+  overflow-wrap: anywhere;
+}
+
+.ownerWords small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.ownerWords small:empty {
+  display: none;
+}
+
+.ownerAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.ownerAction:active {
+  background: var(--sx-fill-strong);
+}
+
+.ownerAction:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.reassignSheet {
+  display: grid;
+  gap: 8px;
+}
+
+.reassignFind {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  margin-bottom: 4px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-muted);
+}
+
+.reassignFind:focus-within {
+  box-shadow: var(--sx-focus-ring);
+}
+
+.reassignFind input {
+  flex: 1;
+  min-width: 0;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+}
+
+.reassignFind input:focus {
+  outline: none;
+}
+
+.reassignPeople {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reassignSheet .repPick {
+  box-sizing: border-box;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 12px;
+  width: 100%;
+  min-height: 56px;
+  padding: 8px 12px;
+}
+
+.reassignSheet .repPick > span:nth-child(2) {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.reassignSheet .repPickIcon {
+  width: 40px;
+  height: 40px;
+}
+
+.reassignSheet .repPick[aria-current] {
+  background: var(--sx-accent-soft);
+  opacity: 1;
+}
+
+.reassignSheet .repPick[aria-busy] {
+  opacity: 0.72;
+  cursor: progress;
+}
+
+.repTick {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leadTab {
+    transition: none;
   }
 }

@@ -1180,7 +1180,8 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
   const expandToggle = container.querySelector<HTMLButtonElement>(
     '[aria-label="Expand sidebar navigation"]',
   );
-  expect(document.activeElement).toBe(expandToggle);
+  // One toggle in one place: the same button, named for what it does now.
+  expect(expandToggle).toBe(sidebarToggle);
   await act(async () =>
     container
       .querySelector<HTMLButtonElement>(

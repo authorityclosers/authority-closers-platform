@@ -4,9 +4,12 @@
 // report.md (also the step summary), matrix.json (every state's numbers) and one JPEG contact sheet per screen.
 //
 //   node scripts/ci/wb_matrix.mjs <output-dir> [.wb-ci/request.json]
+//
+// The bug radar (wb_radar.mjs) reuses the fixture server, the same-origin guard and the taps from here.
 import { spawn } from "node:child_process";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { chromium } from "playwright";
 import { waitForFixtureServer } from "./sales_xray_visual.mjs";
 import {
@@ -24,11 +27,11 @@ import {
   zoomOf,
 } from "./wb_matrix_lib.mjs";
 
-const origin = "http://127.0.0.1:18216";
+export const origin = "http://127.0.0.1:18216";
 const WORKERS = 3;
 
 /** Same-origin reads only; nothing leaves the runner. The acquisition fixtures read one fixed review flag. */
-async function local(route) {
+export async function local(route) {
   const request = route.request();
   const url = new URL(request.url());
   if (url.origin !== origin || request.method() !== "GET") return route.abort();
@@ -42,7 +45,7 @@ async function local(route) {
 }
 
 /** Let the app frame's inner scroller run to its full height, for one whole-page shot. */
-function unclip() {
+export function unclip() {
   let tallest = null;
   for (const el of document.querySelectorAll("body *")) {
     const style = getComputedStyle(el);
@@ -67,7 +70,7 @@ function unclip() {
   }
 }
 
-async function step(page, item) {
+export async function step(page, item) {
   if (item.click) {
     const target = page.locator(item.click).first();
     if (item.optional && !(await target.count())) return;
@@ -117,18 +120,8 @@ async function sheet(browser, output, key, shots) {
   await page.close();
 }
 
-async function main() {
-  const [output, requestPath = ".wb-ci/request.json"] = process.argv.slice(2);
-  const shotsDir = resolve(output, "shots");
-  await mkdir(shotsDir, { recursive: true });
-  let request = {};
-  try {
-    request = JSON.parse(await readFile(requestPath, "utf8"));
-  } catch {}
-  const screens = pickScreens(request.routes ?? []);
-  const jobs = screens.flatMap(([key, screen]) =>
-    statesFor(screen).map((state) => ({ key, screen, state })),
-  );
+/** The review fixtures' dev server on the runner (fictional data, no API origin, no credentials). */
+export async function fixtureServer() {
   const env = Object.fromEntries(
     ["PATH", "HOME", "TMPDIR", "PLAYWRIGHT_BROWSERS_PATH"]
       .filter((key) => process.env[key])
@@ -157,6 +150,31 @@ async function main() {
       process.kill(-server.pid, "SIGTERM");
     } catch {}
   };
+  try {
+    await waitForFixtureServer(
+      `${origin}/review-fixture/shell`,
+      () => server.exitCode === null,
+    );
+  } catch (error) {
+    stop();
+    throw error;
+  }
+  return { stop };
+}
+
+async function main() {
+  const [output, requestPath = ".wb-ci/request.json"] = process.argv.slice(2);
+  const shotsDir = resolve(output, "shots");
+  await mkdir(shotsDir, { recursive: true });
+  let request = {};
+  try {
+    request = JSON.parse(await readFile(requestPath, "utf8"));
+  } catch {}
+  const screens = pickScreens(request.routes ?? []);
+  const jobs = screens.flatMap(([key, screen]) =>
+    statesFor(screen).map((state) => ({ key, screen, state })),
+  );
+  let stop = () => {};
   const started = Date.now();
   const deadline = setTimeout(
     () => {
@@ -169,10 +187,7 @@ async function main() {
   const shots = [];
   let browser;
   try {
-    await waitForFixtureServer(
-      `${origin}/review-fixture/shell`,
-      () => server.exitCode === null,
-    );
+    ({ stop } = await fixtureServer());
     browser = await chromium.launch();
     // Compile each route once, so the first measured state isn't the compile.
     const warm = await browser.newPage();
@@ -317,4 +332,4 @@ async function main() {
   process.exit(failed > jobs.length / 10 ? 1 : 0);
 }
 
-await main();
+if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) await main();

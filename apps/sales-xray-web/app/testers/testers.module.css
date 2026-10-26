@@ -1,0 +1,263 @@
+/* /testers (tester programme, 26 Oct 2026): one column, phone first, a 16 px
+   gutter, buttons 48 px tall; tokens only, light and dark. */
+
+.page {
+  box-sizing: border-box;
+  display: grid;
+  gap: 20px;
+  width: 100%;
+  max-width: 560px;
+  min-height: 100dvh;
+  margin: 0 auto;
+  padding: 16px 16px 40px;
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+  font-family: var(--lx-font-ui);
+  font-size: var(--sx-text-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.top {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.langs {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-sunken);
+}
+
+.langs button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.langs button[aria-pressed="true"] {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: var(--lx-shadow-1);
+}
+
+.hero h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  line-height: 1.2;
+}
+
+.name {
+  white-space: nowrap;
+}
+
+.hero p {
+  margin: 0;
+  color: var(--sx-ink-2);
+}
+
+.steps {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.number {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  font-weight: 750;
+}
+
+.step[data-done] .number {
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.stepBody {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.stepBody h2,
+.box h2,
+.stuck h2 {
+  margin: 0;
+  font-size: var(--sx-text-md);
+  line-height: 1.3;
+}
+
+.stepBody p,
+.box p {
+  margin: 0;
+  color: var(--sx-ink-2);
+}
+
+.stepActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.primary {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 20px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font-weight: 700;
+  text-align: center;
+  text-decoration: none;
+}
+
+.primary:active {
+  transform: scale(0.98);
+}
+
+.doneButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.doneButton[aria-pressed="true"] {
+  border-color: transparent;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.primary:focus-visible,
+.doneButton:focus-visible,
+.langs button:focus-visible,
+.stuck summary:focus-visible,
+.still a:focus-visible,
+.footer a:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.box {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+}
+
+.stuck {
+  display: grid;
+  gap: 8px;
+}
+
+.stuck details {
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.stuck summary {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 8px 16px;
+  border-radius: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.stuck details p {
+  margin: 0;
+  padding: 0 16px 14px;
+  color: var(--sx-ink-2);
+}
+
+.still {
+  margin: 4px 0 0;
+}
+
+.still a,
+.footer a {
+  color: var(--sx-accent);
+  font-weight: 600;
+}
+
+/* A 44 px tap for a one-word link. */
+.footer a {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  min-height: 44px;
+}
+
+.still a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+}
+
+.footer {
+  display: grid;
+  gap: 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.footer p {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .primary:active {
+    transform: none;
+  }
+}

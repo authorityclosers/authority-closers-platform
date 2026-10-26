@@ -105,6 +105,9 @@ class LeadRow(Model):
     source_label: str
     owner_person_id: UUID | None
     owner_name: str | None
+    # On the lead's own page only (v0.99 lead sheet): the owner's photo; None means their
+    # character, which the app picks from owner_person_id.
+    owner_photo_url: str | None = None
     why: str
     why_kind: Literal["due", "new", "retry", "later", "open", "closed", "waiting"]
     next_action_at: datetime | None
@@ -326,6 +329,8 @@ class RepOption(Model):
     name: str
     open_leads: int
     available: bool
+    # Their photo; None means their character, picked from person_id.
+    photo_url: str | None = None
 
 
 class StageSuggestion(Model):

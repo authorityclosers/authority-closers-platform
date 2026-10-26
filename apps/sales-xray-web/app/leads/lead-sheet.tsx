@@ -40,6 +40,7 @@ import {
   useLayoutEffect,
   useRef,
   useState,
+  type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
 } from "react";
@@ -69,7 +70,6 @@ import {
   readLead,
   undoAppChange,
   readNext,
-  reassign,
   rememberCall,
   takePendingCall,
   when,
@@ -79,7 +79,9 @@ import {
   type LeadEvent,
   type Stage,
 } from "./leads-client";
+import { PersonAvatar } from "../people/person-avatar";
 import { LastCallBrief } from "./call-brief-card";
+import { ReassignSheet } from "./reassign-sheet";
 import { InAppCallHint } from "./call-hint";
 import { LeadTasks } from "./lead-tasks";
 import { RemindSheet } from "./remind-sheet";
@@ -535,7 +537,7 @@ export function CallOutcome({
             setStage((current) => current ?? lastStage);
           }}
         >
-          <CheckCircle2 size={22} aria-hidden="true" />
+          <CheckCircle2 size={20} aria-hidden="true" />
           We talked
         </button>
         {/* The most common miss in one tap (Call mode, 22 Oct 2026). */}
@@ -552,7 +554,7 @@ export function CallOutcome({
             setStep(null);
           }}
         >
-          <PhoneMissed size={22} aria-hidden="true" />
+          <PhoneMissed size={20} aria-hidden="true" />
           No answer
         </button>
         <button
@@ -569,7 +571,7 @@ export function CallOutcome({
             setStep(null);
           }}
         >
-          <PhoneOff size={22} aria-hidden="true" />
+          <PhoneOff size={20} aria-hidden="true" />
           Didn&apos;t get through
         </button>
       </div>
@@ -780,24 +782,34 @@ export function CallOutcome({
 /**
  * The light way in to the call's question (owner, 23 Oct 2026: "progressive
  * rather than in your face"): after a WhatsApp, an email, a missed call or a
- * call whose end the page couldn't see, and on any lead at any time.
+ * call whose end the page couldn't see, and on any lead at any time. One quiet
+ * line under Call (owner, #31, 26 Oct 2026: "Log a call" was a lone button
+ * further down): "Called from another phone? Log it".
  */
 export function LogThis({
   hint,
   onOpen,
 }: {
-  /** What just happened, when something did: then the chip says "Log this". */
+  /** What just happened, when something did: then the line says "Log this". */
   hint: string | null;
   onOpen: () => void;
 }) {
+  const id = useId();
   return (
-    <div className={styles.logThis}>
-      <button type="button" className={styles.helperChip} onClick={onOpen}>
-        <NotebookPen size={15} aria-hidden="true" />
-        {hint ? "Log this" : "Log a call"}
+    <p className={styles.logThis}>
+      <span id={id} className={styles.logThisHint}>
+        {hint ?? "Called from another phone?"}
+      </span>
+      <button
+        type="button"
+        className={styles.logThisButton}
+        aria-describedby={id}
+        onClick={onOpen}
+      >
+        <NotebookPen size={16} aria-hidden="true" />
+        {hint ? "Log this" : "Log it"}
       </button>
-      {hint ? <span className={styles.logThisHint}>{hint}</span> : null}
-    </div>
+    </p>
   );
 }
 
@@ -1309,6 +1321,14 @@ export function dayLabel(iso: string, now: Date = new Date()): string {
   });
 }
 
+/** A line's time under its day header: "4:30 pm". */
+export function clockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString("en-IN", {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 export function History({
   events,
   onChanged,
@@ -1317,6 +1337,9 @@ export function History({
   brief = null,
   currentLabel = null,
   focusAt = null,
+  label = "History",
+  only = null,
+  compact = false,
 }: {
   events: LeadEvent[];
   onChanged?: (next: LeadDetail) => void;
@@ -1330,8 +1353,16 @@ export function History({
   currentLabel?: string | null;
   /** Opened from My work: the line made at this time is scrolled to and lit. */
   focusAt?: string | null;
+  /** What a screen reader calls the list. */
+  label?: string;
+  /** One kind only (the lead's Calls tab): no filter chips. */
+  only?: TimelineFilter | null;
+  /** The Story tab (owner, #31, 26 Oct 2026): one line per event, the time on
+   *  the right, grouped by day. */
+  compact?: boolean;
 }) {
-  const [filter, setFilter] = useState<TimelineFilter>("all");
+  const [chosen, setFilter] = useState<TimelineFilter>("all");
+  const filter = only ?? chosen;
   const list = useRef<HTMLOListElement>(null);
   useEffect(() => {
     if (!focusAt) return;
@@ -1368,10 +1399,15 @@ export function History({
       {currentLabel ? (
         <StagePath events={events} currentLabel={currentLabel} />
       ) : null}
-      {events.length > 3 ? (
+      {events.length > 3 && !only ? (
         <TimelineFilters value={filter} onChange={setFilter} />
       ) : null}
-      <ol className={styles.history} aria-label="History" ref={list}>
+      <ol
+        className={styles.history}
+        aria-label={label}
+        data-compact={compact || undefined}
+        ref={list}
+      >
         {items.map((item, position) => {
           const day = dayLabel(item.at);
           const newDay =
@@ -1424,7 +1460,12 @@ export function History({
                 <span className={styles.historyTitle}>
                   {event.actor_name ? (
                     <span className={styles.actor} aria-hidden="true">
-                      <Avatar name={event.actor_name} size={20} />
+                      <PersonAvatar
+                        personId={event.actor_person_id ?? null}
+                        name={event.actor_name}
+                        photoUrl={event.actor_photo_url}
+                        size={20}
+                      />
                     </span>
                   ) : null}
                   {text.title}
@@ -1464,7 +1505,7 @@ export function History({
                   </Link>
                 ) : null}
                 <time className={styles.historyTime} dateTime={event.at}>
-                  {when(event.at)}
+                  {clockTime(event.at)}
                 </time>
               </li>
               {index === briefAt && brief ? (
@@ -2315,16 +2356,9 @@ function NotesSection({
   const notes = detail.events
     .filter((event) => event.kind === "note" && event.note)
     .slice(0, 2);
-  const titleId = `lead-notes-${detail.lead.lead_id}`;
+  // The Notes tab names this part; "See all notes" closes it.
   return (
-    <section className={styles.notesBlock} aria-labelledby={titleId}>
-      <div className={styles.panelHead}>
-        <h3 id={titleId}>Notes</h3>
-        <Link className={styles.quietLink} href="/leads/notes">
-          See all notes
-          <ChevronRight size={16} aria-hidden="true" />
-        </Link>
-      </div>
+    <div className={styles.notesBlock}>
       {detail.can_edit ? (
         <NoteBox leadId={detail.lead.lead_id} onSaved={onSaved} />
       ) : null}
@@ -2335,7 +2369,12 @@ function NotesSection({
               <p>{event.note}</p>
               <small className={styles.noteBy}>
                 {event.actor_name ? (
-                  <Avatar name={event.actor_name} size={18} />
+                  <PersonAvatar
+                    personId={event.actor_person_id ?? null}
+                    name={event.actor_name}
+                    photoUrl={event.actor_photo_url}
+                    size={20}
+                  />
                 ) : null}
                 {[event.actor_name, ago(event.at)].filter(Boolean).join(" · ")}
               </small>
@@ -2352,7 +2391,87 @@ function NotesSection({
       ) : (
         <p className={styles.hint}>No notes yet.</p>
       )}
-    </section>
+      <Link
+        className={`${styles.quietLink} ${styles.notesAll}`}
+        href="/leads/notes"
+        prefetch={false}
+      >
+        See all notes
+        <ChevronRight size={16} aria-hidden="true" />
+      </Link>
+    </div>
+  );
+}
+
+type LeadTab = "notes" | "calls" | "story";
+
+const LEAD_TABS: { key: LeadTab; label: string }[] = [
+  { key: "notes", label: "Notes" },
+  { key: "calls", label: "Calls" },
+  { key: "story", label: "Story" },
+];
+
+/** Notes · Calls · Story under the lead's actions (owner, #31, 26 Oct 2026).
+ *  Arrow keys, Home and End move between them, as tabs do. */
+function LeadTabs({
+  id,
+  tab,
+  onTab,
+  counts,
+}: {
+  id: string;
+  tab: LeadTab;
+  onTab: (next: LeadTab) => void;
+  counts: Partial<Record<LeadTab, number>>;
+}) {
+  const keys = (event: KeyboardEvent<HTMLDivElement>) => {
+    const at = LEAD_TABS.findIndex((item) => item.key === tab);
+    const last = LEAD_TABS.length - 1;
+    const next =
+      event.key === "ArrowRight"
+        ? at === last
+          ? 0
+          : at + 1
+        : event.key === "ArrowLeft"
+          ? at === 0
+            ? last
+            : at - 1
+          : event.key === "Home"
+            ? 0
+            : event.key === "End"
+              ? last
+              : null;
+    if (next === null) return;
+    event.preventDefault();
+    onTab(LEAD_TABS[next].key);
+    document.getElementById(`${id}-${LEAD_TABS[next].key}-tab`)?.focus();
+  };
+  return (
+    <div
+      className={styles.leadTabs}
+      role="tablist"
+      aria-label="About this lead"
+      onKeyDown={keys}
+    >
+      {LEAD_TABS.map((item) => (
+        <button
+          key={item.key}
+          id={`${id}-${item.key}-tab`}
+          type="button"
+          role="tab"
+          className={styles.leadTab}
+          aria-selected={item.key === tab}
+          aria-controls={`${id}-${item.key}`}
+          tabIndex={item.key === tab ? 0 : -1}
+          onClick={() => onTab(item.key)}
+        >
+          {item.label}
+          {counts[item.key] ? (
+            <span className={styles.leadTabCount}>{counts[item.key]}</span>
+          ) : null}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -2543,21 +2662,52 @@ export function LeadCard({
   }, [intent, detail.phone, detail.email, detail.can_edit]);
   const [editing, setEditing] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [moving, setMoving] = useState(false);
+  // Reassign: its own sheet (owner, #33, 26 Oct 2026).
   const [picking, setPicking] = useState(false);
-  const [find, setFind] = useState("");
-  const others = detail.reps.filter(
-    (rep) => rep.person_id !== lead.owner_person_id,
-  );
-  const needle = find.trim().toLocaleLowerCase();
-  const shownReps = needle
-    ? others.filter((rep) => rep.name.toLocaleLowerCase().includes(needle))
-    : others;
-  const [moveError, setMoveError] = useState<string | null>(null);
   // Lead OS: the stage chip opens the stage sheet (only the moves allowed).
   const [staging, setStaging] = useState(false);
   // The subtitle shows two lines until it is tapped.
   const [subOpen, setSubOpen] = useState(false);
+  // Notes · Calls · Story; a line opened from My work opens on the Story.
+  const [tab, setTab] = useState<LeadTab>(focusAt ? "story" : "notes");
+  const [focusSeen, setFocusSeen] = useState(focusAt);
+  if (focusAt !== focusSeen) {
+    setFocusSeen(focusAt);
+    if (focusAt) setTab("story");
+  }
+  const tabsId = useId();
+  // The call's recording: above the tabs while there is one to act on now
+  // (back from a call, or the phone found or is still finding it), else in
+  // the Calls tab, so an idle "Add the recording" doesn't sit between the
+  // actions and the tabs on every lead with calls.
+  const recordingNow =
+    afterCall?.step === "recording" ||
+    phoneCall !== null ||
+    waitingRecording.item !== null;
+  const recording =
+    detail.can_edit &&
+    detail.call_mode === "phone" &&
+    me &&
+    afterCall?.step !== "outcome" &&
+    (lead.calls > 0 || phoneCall) ? (
+      <RecordingUpload
+        detail={detail}
+        onDone={onChanged}
+        found={phoneCall?.recording ?? waitingRecording.item?.recording ?? null}
+        waiting={phoneCall ? !phoneCall.final : false}
+        next={afterCall?.step === "recording"}
+        onNext={afterCall?.onNext}
+        callEventId={
+          phoneCall ? null : (waitingRecording.item?.eventId ?? null)
+        }
+        hidden={waitingRecording.hidden}
+        onAttached={phoneCall ? undefined : waitingRecording.done}
+      />
+    ) : null;
+  const tabCounts = {
+    notes: detail.events.filter((event) => event.kind === "note").length,
+    calls: detail.events.filter((event) => shows("calls", event)).length,
+  };
   const canMove = detail.can_edit && (detail.moves?.length ?? 0) > 0;
   // The lead's chats, read once for the timeline and the chat sections.
   const conversations = useLeadConversations(lead.lead_id);
@@ -2602,21 +2752,6 @@ export function LeadCard({
     : origin
       ? chatFacts(detail.source_fields)
       : detail.source_fields;
-
-  const move = async (personId: string | null) => {
-    setMoving(true);
-    setMoveError(null);
-    try {
-      onChanged(await reassign(lead, personId));
-      setPicking(false);
-    } catch (reason) {
-      setMoveError(
-        reason instanceof LeadsError ? reason.message : "Not moved. Try again.",
-      );
-    } finally {
-      setMoving(false);
-    }
-  };
 
   return (
     <div className={styles.card}>
@@ -2702,6 +2837,13 @@ export function LeadCard({
         ) : (
           <p className={styles.hint}>No phone number on this lead.</p>
         )}
+        {/* The call's own lines under Call (owner, #31, 26 Oct 2026): the
+            phone app's hint, then "Called from another phone? Log it", or
+            the call's question once it is open. */}
+        {detail.phone ? <InAppCallHint /> : null}
+        <OpenMessage.Provider value={target ? openMessage : null}>
+          {detail.can_edit && afterCall?.step !== "recording" ? outcome : null}
+        </OpenMessage.Provider>
         <div className={styles.actionGrid} data-sx-equal="lead actions">
           <ActionBox
             kind="message"
@@ -2716,7 +2858,7 @@ export function LeadCard({
             kind="message"
             channel="sms"
             label="SMS"
-            icon={<MessageSquareText size={22} aria-hidden="true" />}
+            icon={<MessageSquareText size={20} aria-hidden="true" />}
             disabled={!detail.phone}
             why="SMS: add a phone number first"
             onClick={() => openMessage(null, "sms")}
@@ -2725,7 +2867,7 @@ export function LeadCard({
             kind="message"
             channel="email"
             label="Email"
-            icon={<Mail size={22} aria-hidden="true" />}
+            icon={<Mail size={20} aria-hidden="true" />}
             href={detail.email ? `mailto:${detail.email}` : undefined}
             disabled={!detail.email}
             why="No email on this lead"
@@ -2737,17 +2879,21 @@ export function LeadCard({
                 channel="note"
                 label="Note"
                 name="Add a note"
-                icon={<NotebookPen size={22} aria-hidden="true" />}
+                icon={<NotebookPen size={20} aria-hidden="true" />}
                 onClick={() => {
-                  // The Notes field is just below: focus it there, no jump.
-                  const box = document.getElementById(
-                    `lead-note-${lead.lead_id}`,
-                  );
-                  box?.scrollIntoView?.({
-                    block: "nearest",
-                    behavior: "smooth",
+                  // The Notes field is just below, in its tab: open the tab
+                  // and focus it there, no jump.
+                  setTab("notes");
+                  window.requestAnimationFrame(() => {
+                    const box = document.getElementById(
+                      `lead-note-${lead.lead_id}`,
+                    );
+                    box?.scrollIntoView?.({
+                      block: "nearest",
+                      behavior: "smooth",
+                    });
+                    box?.focus({ preventScroll: true });
                   });
-                  box?.focus({ preventScroll: true });
                 }}
               />
               <ActionBox
@@ -2755,7 +2901,7 @@ export function LeadCard({
                 channel="remind"
                 label="Remind"
                 name="Remind me"
-                icon={<BellPlus size={22} aria-hidden="true" />}
+                icon={<BellPlus size={20} aria-hidden="true" />}
                 onClick={() => setReminding(true)}
               />
               <ActionBox
@@ -2763,7 +2909,7 @@ export function LeadCard({
                 channel="move"
                 label="Move"
                 name={`Move stage, now ${lead.stage_label}`}
-                icon={<ArrowRightLeft size={22} aria-hidden="true" />}
+                icon={<ArrowRightLeft size={20} aria-hidden="true" />}
                 disabled={!canMove}
                 why="No other stage to move to"
                 onClick={() => setStaging(true)}
@@ -2772,8 +2918,6 @@ export function LeadCard({
           ) : null}
         </div>
       </div>
-      {detail.phone ? <InAppCallHint /> : null}
-      <NotesSection detail={detail} onSaved={onChanged} />
       {detail.can_edit ? (
         <RemindSheet
           open={reminding}
@@ -2822,23 +2966,6 @@ export function LeadCard({
           </div>
         </section>
       ) : null}
-      {detail.call_mode === "simulated" && detail.can_edit ? (
-        testing ? (
-          <SimulatedCall detail={detail} onDone={onChanged} />
-        ) : (
-          <button
-            type="button"
-            className={styles.linkButton}
-            onClick={() => setTesting(true)}
-          >
-            Test workspace: try with a sample recording
-          </button>
-        )
-      ) : null}
-
-      <OpenMessage.Provider value={target ? openMessage : null}>
-        {detail.can_edit && afterCall?.step !== "recording" ? outcome : null}
-      </OpenMessage.Provider>
       {target ? (
         <MessageSheet
           key={messaging?.round ?? 0}
@@ -2853,48 +2980,85 @@ export function LeadCard({
           onLogged={onChanged}
         />
       ) : null}
-      {detail.can_edit &&
-      detail.call_mode === "phone" &&
-      me &&
-      afterCall?.step !== "outcome" &&
-      (lead.calls > 0 || phoneCall) ? (
-        <RecordingUpload
-          detail={detail}
-          onDone={onChanged}
-          found={
-            phoneCall?.recording ?? waitingRecording.item?.recording ?? null
-          }
-          waiting={phoneCall ? !phoneCall.final : false}
-          next={afterCall?.step === "recording"}
-          onNext={afterCall?.onNext}
-          callEventId={
-            phoneCall ? null : (waitingRecording.item?.eventId ?? null)
-          }
-          hidden={waitingRecording.hidden}
-          onAttached={phoneCall ? undefined : waitingRecording.done}
-        />
-      ) : null}
+      {recordingNow ? recording : null}
 
-      {/* Owner, 19 Oct: every call becomes data. What the calls told us, and
-          the few things the engine is unsure of, asked one at a time. */}
-      <CallFacts detail={detail} onChanged={onChanged} />
-
-      {/* The lead hub (approved map, slice 6, 22 Oct 2026): under the call, one
-          line of time: calls (the newest with what it said and its Report),
-          chats one line a day, notes and stage changes. Then the chats
-          themselves, then about the lead. */}
+      {/* Under the actions, three tabs (owner, #31, 26 Oct 2026): Notes, the
+          Calls (what the calls told us, then each call, the newest with what
+          it said and its Report) and the Story (the lead hub's one line of
+          time: calls, chats one line a day, notes and stage changes). Every
+          panel stays drawn, the others hidden, so nothing is more than a tap
+          away. Then the chats themselves, then about the lead. */}
       <section className={styles.historyBlock} aria-label="History">
-        <StorySoFar detail={detail} />
-        <h3 className={styles.stepLabel}>History</h3>
-        <History
-          events={detail.events}
-          onChanged={onChanged}
-          leadId={lead.lead_id}
-          chats={chats}
-          brief={<LastCallBrief detail={detail} onChanged={onChanged} />}
-          currentLabel={lead.stage_label}
-          focusAt={focusAt}
-        />
+        <LeadTabs id={tabsId} tab={tab} onTab={setTab} counts={tabCounts} />
+        <div
+          id={`${tabsId}-notes`}
+          role="tabpanel"
+          aria-labelledby={`${tabsId}-notes-tab`}
+          className={styles.leadPanel}
+          hidden={tab !== "notes"}
+        >
+          <NotesSection detail={detail} onSaved={onChanged} />
+        </div>
+        <div
+          id={`${tabsId}-calls`}
+          role="tabpanel"
+          aria-labelledby={`${tabsId}-calls-tab`}
+          className={styles.leadPanel}
+          hidden={tab !== "calls"}
+        >
+          {recordingNow ? null : recording}
+          {/* Owner, 19 Oct: every call becomes data. What the calls told
+              us, and the few things the engine is unsure of, asked one at a
+              time. */}
+          <CallFacts detail={detail} onChanged={onChanged} />
+          {detail.call_mode === "simulated" && detail.can_edit ? (
+            testing ? (
+              <SimulatedCall detail={detail} onDone={onChanged} />
+            ) : (
+              <button
+                type="button"
+                className={styles.linkButton}
+                onClick={() => setTesting(true)}
+              >
+                Test workspace: try with a sample recording
+              </button>
+            )
+          ) : null}
+          {tabCounts.calls ? (
+            <History
+              events={detail.events}
+              onChanged={onChanged}
+              leadId={lead.lead_id}
+              brief={<LastCallBrief detail={detail} onChanged={onChanged} />}
+              label="Calls"
+              only="calls"
+            />
+          ) : (
+            <p className={styles.hint}>
+              {detail.phone
+                ? "No calls yet. Tap Call to start."
+                : "No calls yet."}
+            </p>
+          )}
+        </div>
+        <div
+          id={`${tabsId}-story`}
+          role="tabpanel"
+          aria-labelledby={`${tabsId}-story-tab`}
+          className={styles.leadPanel}
+          hidden={tab !== "story"}
+        >
+          <StorySoFar detail={detail} />
+          <History
+            events={detail.events}
+            onChanged={onChanged}
+            leadId={lead.lead_id}
+            chats={chats}
+            currentLabel={lead.stage_label}
+            focusAt={focusAt}
+            compact
+          />
+        </div>
       </section>
 
       <WhatsAppThread
@@ -2965,106 +3129,53 @@ export function LeadCard({
       </section>
 
       {/* Owner, 18 Oct: "With X · 0 open leads (fewest)" and "Move to…" were
-          not intuitive. It says who has the lead, why, and offers Reassign. */}
-      <section className={styles.panel} aria-label="Owner">
-        <div className={styles.ownerRow}>
-          <Avatar name={lead.owner_name ?? "No owner"} size={32} />
-          <span>
-            <strong>
-              {!lead.owner_name
-                ? "Not assigned yet"
-                : me && lead.owner_person_id === me.person_id
-                  ? "Assigned to you"
-                  : `Assigned to ${lead.owner_name}`}
-            </strong>
-            {ownerNote(detail.owner_reason) ? (
-              <small>{ownerNote(detail.owner_reason)}</small>
-            ) : null}
-            <small>
-              {firstCallWords(detail.first_call_minutes, ago(lead.created_at))}
-            </small>
-          </span>
-          {detail.can_assign && detail.reps.length ? (
-            <Button
-              aria-expanded={picking}
-              disabled={moving}
-              onClick={() => {
-                setMoveError(null);
-                setPicking((open) => !open);
-              }}
-            >
-              <Shuffle size={14} aria-hidden="true" />
-              {lead.owner_name ? "Reassign" : "Assign"}
-            </Button>
-          ) : null}
-        </div>
-        {picking ? (
-          <div
-            className={styles.reassignList}
-            role="group"
-            aria-label={lead.owner_name ? "Reassign to" : "Assign to"}
+          not intuitive. It says who has the lead, why, and offers Reassign:
+          one compact row whose Reassign opens its own sheet (owner, #33,
+          26 Oct 2026). */}
+      <section className={styles.ownerLine} aria-label="Owner">
+        <PersonAvatar
+          personId={lead.owner_person_id}
+          name={lead.owner_name ?? "No owner"}
+          photoUrl={lead.owner_photo_url}
+          size={40}
+        />
+        <span className={styles.ownerWords}>
+          <strong>
+            {!lead.owner_name
+              ? "Not assigned yet"
+              : me && lead.owner_person_id === me.person_id
+                ? "Assigned to you"
+                : `Assigned to ${lead.owner_name}`}
+          </strong>
+          <small>
+            {[
+              ownerNote(detail.owner_reason),
+              firstCallWords(detail.first_call_minutes, ago(lead.created_at)),
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+          </small>
+        </span>
+        {detail.can_assign && detail.reps.length ? (
+          <button
+            type="button"
+            className={styles.ownerAction}
+            aria-haspopup="dialog"
+            onClick={() => setPicking(true)}
           >
-            <span className={styles.stepLabel}>
-              {lead.owner_name ? "Reassign to" : "Assign to"}
-            </span>
-            <button
-              type="button"
-              className={styles.repPick}
-              disabled={moving}
-              onClick={() => void move(null)}
-            >
-              <span className={styles.repPickIcon} aria-hidden="true">
-                <Shuffle size={15} />
-              </span>
-              <span>
-                <strong>Let the lead rules pick</strong>
-                <small>
-                  Whoever is free, fits this lead and has the fewest open leads
-                </small>
-              </span>
-            </button>
-            {others.length > 6 ? (
-              <input
-                className={styles.repFind}
-                type="search"
-                value={find}
-                placeholder="Find a person"
-                aria-label="Find a person"
-                onChange={(event) => setFind(event.target.value)}
-              />
-            ) : null}
-            <div className={styles.repPeople}>
-              {shownReps.map((rep) => (
-                <button
-                  key={rep.person_id}
-                  type="button"
-                  className={styles.repPick}
-                  disabled={moving}
-                  onClick={() => void move(rep.person_id)}
-                >
-                  <Avatar name={rep.name} size={28} />
-                  <span>
-                    <strong>{rep.name}</strong>
-                    <small>
-                      {rep.open_leads} open lead
-                      {rep.open_leads === 1 ? "" : "s"}
-                      {rep.available ? "" : " · away now"}
-                    </small>
-                  </span>
-                </button>
-              ))}
-              {shownReps.length ? null : (
-                <p className={styles.hint}>Nobody by that name.</p>
-              )}
-            </div>
-          </div>
-        ) : null}
-        {moveError ? (
-          <p className={styles.error} role="alert">
-            {moveError}
-          </p>
+            <Shuffle size={20} aria-hidden="true" />
+            {lead.owner_name ? "Reassign" : "Assign"}
+          </button>
         ) : null}
       </section>
+      {detail.can_assign && detail.reps.length ? (
+        <ReassignSheet
+          open={picking}
+          detail={detail}
+          onClose={() => setPicking(false)}
+          onMoved={onChanged}
+        />
+      ) : null}
 
       {detail.can_assign ? (
         <PipelinePanel detail={detail} onChanged={onChanged} />
@@ -3647,8 +3758,8 @@ function WhatsAppGlyph() {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="22"
-      height="22"
+      width="20"
+      height="20"
       aria-hidden="true"
       fill="currentColor"
     >

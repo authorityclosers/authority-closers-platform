@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Panda">
+<rect width="256" height="256" fill="#E6F4E8"/>
+<circle cx="76" cy="86" r="26" fill="#2B2B2B"/>
+<circle cx="180" cy="86" r="26" fill="#2B2B2B"/>
+<ellipse cx="128" cy="150" rx="82" ry="74" fill="#FFFFFF"/>
+<ellipse cx="100" cy="144" rx="20" ry="26" fill="#2B2B2B"/>
+<ellipse cx="156" cy="144" rx="20" ry="26" fill="#2B2B2B"/>
+<circle cx="102" cy="140" r="6" fill="#FFFFFF"/>
+<circle cx="154" cy="140" r="6" fill="#FFFFFF"/>
+<ellipse cx="128" cy="172" rx="11" ry="8" fill="#2B2B2B"/>
+</svg>

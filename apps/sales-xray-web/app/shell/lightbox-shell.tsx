@@ -27,12 +27,12 @@ import {
   Users,
   UsersRound,
 } from "lucide-react";
-import Form from "next/form";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import {
   createContext,
+  Fragment,
   Suspense,
   useCallback,
   useContext,
@@ -76,6 +76,13 @@ import { RailTip } from "./rail-tip";
 import { usePlacePrefetch, useHoverPrefetch } from "./route-prefetch";
 import { ScreenLink } from "./screen-link";
 import { useGlide, useScreenMotion } from "./screen-transition";
+import {
+  ALL_LEADS_HREF,
+  areaFor,
+  pageHere,
+  sidebarAreas,
+} from "./sidebar-areas";
+import { can } from "../organisation/roles";
 import { warmCallsList } from "../calls-cache";
 import { RouteLoading } from "./route-loading";
 import {
@@ -240,8 +247,6 @@ const subscribeNothing = () => () => {};
 // A rail icon's name for text readers and tests. Hidden inline, so it stays
 // hidden even when the page draws before its stylesheet (dev recompiles);
 // the visible label floats above every layer on hover or focus (rail-tip.tsx).
-/** Every open lead (owner, 23 Oct 2026: "All leads one tap from anywhere"). */
-const ALL_LEADS_HREF = "/leads?tab=all&stage=open";
 /** The organisation hub's Team tab: members, invites and roles. */
 const TEAM_HREF = "/organisation?tab=team";
 /** Where each organisation setting lives in the hub (org-hub.tsx). */
@@ -449,10 +454,6 @@ function LightboxShellFrame({
   const [recentsOpen, setRecentsOpen] = useState(cached.recentsOpen);
 
   const switcherRef = useRef<HTMLDivElement>(null);
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const collapseButtonRef = useRef<HTMLButtonElement>(null);
-  const expandButtonRef = useRef<HTMLButtonElement>(null);
-  const focusTogglePendingRef = useRef(false);
   const accountHref = authenticated ? "/account" : "/login";
   const accountLabel = authenticated ? "Account" : "Profile & account";
   const visibleHero = heroStage ?? (welcome ? "welcome" : undefined);
@@ -472,6 +473,9 @@ function LightboxShellFrame({
   // Reports has its own row in the sidebar; elsewhere it belongs to Home.
   const reportsHere =
     shownPath === "/reports" || Boolean(shownPath?.startsWith("/reports/"));
+  // The sidebar's ribbon lights the area this place belongs to (none for
+  // Account), and the panel lists that area's pages.
+  const litArea = areaFor(place, reportsHere);
   // Every Settings page says Settings, even while its section loads.
   const pageTitle = resolvePageTitle(
     place,
@@ -512,7 +516,7 @@ function LightboxShellFrame({
   const barTitle = place === "dashboard" && !pageName ? "Home" : pageTitle;
   // The selected capsule glides to the new place, on the rail and the tabs.
   const tabBarRef = useRef<HTMLElement | null>(null);
-  useGlide(railRef, `.${styles.stripBtnActive} .${styles.railPill}`, place);
+  useGlide(railRef, `.${styles.areaActive} .${styles.railPill}`, litArea);
   useGlide(tabBarRef, `[aria-current="page"] .${styles.tabPill}`, phoneTab);
   // ...and, once quiet, the calls list Home and Calls open with.
   usePlacePrefetch(authenticated && !loading, () => {
@@ -522,7 +526,6 @@ function LightboxShellFrame({
 
   const toggleCollapsed = () => {
     const next = !collapsed;
-    focusTogglePendingRef.current = true;
     setCollapsed(next);
     updateShellState({ collapsed: next });
     markSidebar(next);
@@ -531,13 +534,30 @@ function LightboxShellFrame({
     } catch {}
   };
 
-  useLayoutEffect(() => {
-    // Only a toggle action moves focus, after the visible control is ready.
-    if (!focusTogglePendingRef.current) return;
-    focusTogglePendingRef.current = false;
-    const target = collapsed ? expandButtonRef : collapseButtonRef;
-    target.current?.focus({ preventScroll: true });
-  }, [collapsed]);
+  // "[" shows or hides the panel on a computer, as in Linear (Ctrl B is the
+  // bug reporter's), unless someone is typing or a dialog is open.
+  const toggleLatest = useRef(toggleCollapsed);
+  useEffect(() => {
+    toggleLatest.current = toggleCollapsed;
+  });
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "[" || event.defaultPrevented) return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.closest(
+          'input, textarea, select, [contenteditable]:not([contenteditable="false"]), dialog[open], [role="dialog"]',
+        )
+      )
+        return;
+      if (!window.matchMedia("(min-width: 900px)").matches) return;
+      event.preventDefault();
+      toggleLatest.current();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   // Ctrl K or ⌘K opens the command bar from anywhere (slice 9 of the new
   // map): places, actions, settings, leads and calls in one search.
@@ -897,6 +917,35 @@ function LightboxShellFrame({
   // 2026: "if organisation is clicked there should be clearly visible all
   // management options").
   const orgHere = place === "organisation";
+  // The sidebar's areas and pages, from one list (sidebar-areas.ts).
+  const areas = sidebarAreas({
+    organisation: inOrganisation,
+    team: inOrganisation || orgHere,
+    manager: can(
+      workspaces.find((workspace) => workspace.tenant_id === effectiveTenantId)
+        ?.role,
+      "team.view",
+    ),
+  });
+  // Account belongs to no area: the panel keeps Home's pages there.
+  const shownArea = areas.find((item) => item.key === litArea) ?? areas[0];
+  // One page and nothing under it: the ribbon already names it.
+  const listed =
+    shownArea.key === "results" ||
+    shownArea.pages.length > 1 ||
+    Boolean(shownArea.pages[0]?.subs?.length);
+  // Every place in the sidebar, pages and sub-places, for the ribbon's
+  // prefetch list below.
+  const sidebarPlaces = [
+    ...new Set(
+      areas.flatMap((item) =>
+        item.pages.flatMap((page) => [
+          page.href,
+          ...(page.subs ?? []).map((sub) => sub.href),
+        ]),
+      ),
+    ),
+  ];
   const branding = useBranding(inOrganisation);
   // Confirmed signed out (not merely unknown yet): nothing personal to show.
   const guest = !authenticated && !sessionPending && !loading;
@@ -1311,221 +1360,80 @@ function LightboxShellFrame({
         <div className={styles.iconStrip} ref={railRef}>
           <div className={styles.stripTop}>
             <div className={styles.logoSlot}>
-              <BrandLockup href={homeHref} markOnly={true} />
-              {collapsed && (
-                <button
-                  type="button"
-                  ref={expandButtonRef}
-                  className={styles.logoExpandBtn}
-                  onClick={toggleCollapsed}
-                  aria-label="Expand sidebar navigation"
-                  aria-expanded={false}
-                  aria-controls="sales-xray-sidebar-panel"
-                  title="Expand navigation"
-                >
-                  <PanelLeftOpen size={18} aria-hidden="true" />
-                </button>
-              )}
+              {/* Always on screen now (the open sidebar used to hide it): it
+                  prefetches nothing, so a move never cuts off its load. */}
+              <BrandLockup href={homeHref} markOnly={true} prefetch={false} />
             </div>
           </div>
+          {/* The ribbon (owner, dev #8, 26 Oct 2026: "cluttered, no clean
+              distinctions"): the areas, each an icon over its name, the one
+              you are in lit; the panel beside it lists that area's pages.
+              Work's icon carries what waits there: late or due calls and
+              unread chats. */}
           <div className={styles.stripNav}>
-            {/* The places in groups, as Pulse draws them (owner, 25 Oct 2026:
-                "group what belongs together on the user's journey"): the
-                day's work, the organisation, then how it is going. Collapsed,
-                a hairline stands for each group's title. */}
-            <div className={styles.stripGroup} role="group" aria-label="Work">
-              <span
-                className={styles.stripGroupTitle}
-                data-first=""
-                aria-hidden="true"
-              >
-                Work
-              </span>
-              <ScreenLink
-                className={`${styles.stripBtn}${place === "dashboard" && !reportsHere ? ` ${styles.stripBtnActive}` : ""}`}
-                href="/dashboard"
-                aria-label="Home"
-                data-rail-tip="Home"
-                aria-current={
-                  place === "dashboard" && !reportsHere ? "page" : undefined
-                }
-              >
-                <LayoutGrid size={20} strokeWidth={1.75} aria-hidden="true" />
-                <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>Home</span>
-              </ScreenLink>
-              <ScreenLink
-                className={`${styles.stripBtn}${place === "leads" ? ` ${styles.stripBtnActive}` : ""}`}
-                href="/leads"
-                aria-label="Leads"
-                data-rail-tip="Leads"
-                aria-current={place === "leads" ? "page" : undefined}
-              >
-                <LeadsTabIcon
-                  size={20}
-                  strokeWidth={1.75}
-                  live={leadsBadgeLive}
-                />
-                <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>Leads</span>
-              </ScreenLink>
-              {inOrganisation ? (
-                <SubPlace
-                  label="All leads"
-                  href={ALL_LEADS_HREF}
-                  path="/leads"
-                  tab="all"
-                />
-              ) : null}
-              <ScreenLink
-                className={`${styles.stripBtn}${place === "chats" ? ` ${styles.stripBtnActive}` : ""}`}
-                href="/chats"
-                aria-label="Chats"
-                data-rail-tip="Chats"
-                aria-current={place === "chats" ? "page" : undefined}
-              >
-                <ChatsTabIcon
-                  size={20}
-                  strokeWidth={1.75}
-                  live={leadsBadgeLive}
-                />
-                <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>Chats</span>
-              </ScreenLink>
-              <ScreenLink
-                className={`${styles.stripBtn}${place === "analyse" ? ` ${styles.stripBtnActive}` : ""}`}
-                href={newAnalysisHref}
-                aria-label="New analysis"
-                data-rail-tip="New analysis"
-                aria-current={place === "analyse" ? "page" : undefined}
-              >
-                <Plus size={20} strokeWidth={1.75} aria-hidden="true" />
-                <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>New analysis</span>
-              </ScreenLink>
-              <ScreenLink
-                className={`${styles.stripBtn}${place === "calls" ? ` ${styles.stripBtnActive}` : ""}`}
-                href="/analysis/calls"
-                aria-label="Calls"
-                data-rail-tip="Calls"
-                aria-current={place === "calls" ? "page" : undefined}
-              >
-                <AudioLines size={20} strokeWidth={1.75} aria-hidden="true" />
-                <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>Calls</span>
-              </ScreenLink>
-              <ScreenLink
-                className={`${styles.stripBtn}${place === "prospects" ? ` ${styles.stripBtnActive}` : ""}`}
-                href="/prospects"
-                aria-label="Prospects"
-                data-rail-tip="Prospects"
-                aria-current={place === "prospects" ? "page" : undefined}
-              >
-                <Users size={20} strokeWidth={1.75} aria-hidden="true" />
-                <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>Prospects</span>
-              </ScreenLink>
-            </div>
-            {/* Owner, 23 Oct 2026: team and organisation were "too hidden";
-                the organisation comes right after the daily places. */}
-            {inOrganisation || orgHere || place === "insights" ? (
-              <div
-                className={styles.stripGroup}
-                role="group"
-                aria-label="Organisation"
-              >
-                <span className={styles.stripGroupTitle} aria-hidden="true">
-                  Organisation
-                </span>
-                {inOrganisation || orgHere ? (
-                  <ScreenLink
-                    className={`${styles.stripBtn}${orgHere ? ` ${styles.stripBtnActive}` : ""}`}
-                    href="/organisation"
-                    aria-label="Organisation overview"
-                    data-rail-tip="Organisation"
-                    aria-current={orgHere ? "page" : undefined}
-                  >
-                    <Building2
-                      size={20}
-                      strokeWidth={1.75}
-                      aria-hidden="true"
-                    />
+            {areas.map((item) => {
+              const lit = item.key === litArea;
+              const Icon = item.icon;
+              return (
+                <ScreenLink
+                  key={item.key}
+                  className={`${styles.area}${lit ? ` ${styles.areaActive}` : ""}`}
+                  href={item.href}
+                  data-area={item.key}
+                  aria-current={lit ? "true" : undefined}
+                >
+                  <span className={styles.areaLabel}>{item.label}</span>
+                  <span className={styles.areaIcon}>
+                    {item.key === "work" ? (
+                      <LeadsTabIcon
+                        size={20}
+                        strokeWidth={1.75}
+                        live={leadsBadgeLive}
+                        withChats
+                      />
+                    ) : (
+                      <Icon size={20} strokeWidth={1.75} aria-hidden="true" />
+                    )}
                     <span className={styles.railPill} aria-hidden="true" />
-                    <span style={RAIL_NAME_STYLE}>Overview</span>
-                  </ScreenLink>
-                ) : null}
-                {inOrganisation ? (
-                  <SubPlace
-                    label="Team"
-                    href={TEAM_HREF}
-                    path="/organisation"
-                    tab="team"
-                  />
-                ) : null}
-                {orgAdmin || place === "insights" ? (
-                  <ScreenLink
-                    className={`${styles.stripBtn}${place === "insights" ? ` ${styles.stripBtnActive}` : ""}`}
-                    href="/organisation/insights"
-                    aria-label="Insights"
-                    data-rail-tip="Insights"
-                    aria-current={place === "insights" ? "page" : undefined}
-                  >
-                    <BarChart3
-                      size={20}
-                      strokeWidth={1.75}
-                      aria-hidden="true"
-                    />
-                    <span className={styles.railPill} aria-hidden="true" />
-                    <span style={RAIL_NAME_STYLE}>Insights</span>
-                  </ScreenLink>
-                ) : null}
-              </div>
-            ) : null}
-            <div
-              className={styles.stripGroup}
-              role="group"
-              aria-label="Performance"
+                  </span>
+                </ScreenLink>
+              );
+            })}
+          </div>
+          <div className={styles.stripBottom}>
+            {/* Hide or show the panel: one button, in the same place in
+                both states, named with its key (orchestrator, 26 Oct
+                2026: the open sidebar had no visible way to collapse). */}
+            <button
+              type="button"
+              className={`${styles.stripBtn} ${styles.panelToggle}`}
+              onClick={toggleCollapsed}
+              aria-label={
+                collapsed
+                  ? "Expand sidebar navigation"
+                  : "Collapse sidebar navigation"
+              }
+              aria-expanded={!collapsed}
+              aria-controls="sales-xray-sidebar-panel"
+              aria-keyshortcuts="["
+              data-rail-tip={
+                collapsed ? "Show the panel  [" : "Hide the panel  ["
+              }
             >
-              <span className={styles.stripGroupTitle} aria-hidden="true">
-                Performance
-              </span>
-              {/* Every report in one place (owner, 25 Oct 2026). */}
-              <ScreenLink
-                className={`${styles.stripBtn}${reportsHere ? ` ${styles.stripBtnActive}` : ""}`}
-                href="/reports"
-                aria-label="Reports"
-                data-rail-tip="Reports"
-                aria-current={reportsHere ? "page" : undefined}
-              >
-                <LineChart size={20} strokeWidth={1.75} aria-hidden="true" />
-                <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>Reports</span>
-              </ScreenLink>
-              <ScreenLink
-                className={`${styles.stripBtn}${place === "coaching" ? ` ${styles.stripBtnActive}` : ""}`}
-                href="/coaching"
-                aria-label="Coaching"
-                data-rail-tip="Coaching"
-                aria-current={place === "coaching" ? "page" : undefined}
-              >
-                <GraduationCap
+              {collapsed ? (
+                <PanelLeftOpen
                   size={20}
                   strokeWidth={1.75}
                   aria-hidden="true"
                 />
-                <span className={styles.railPill} aria-hidden="true" />
-                <span style={RAIL_NAME_STYLE}>Coaching</span>
-              </ScreenLink>
-              {/* Gold reviewers (owner, 19 Oct); nothing for anyone else. */}
-              <ReviewRailLink
-                live={leadsBadgeLive}
-                className={styles.stripBtn}
-                activeClassName={styles.stripBtnActive}
-                nameStyle={RAIL_NAME_STYLE}
-              />
-            </div>
-          </div>
-          <div className={styles.stripBottom}>
+              ) : (
+                <PanelLeftClose
+                  size={20}
+                  strokeWidth={1.75}
+                  aria-hidden="true"
+                />
+              )}
+            </button>
             {bell}
             <Link
               className={`${styles.stripBtn}${place === "account" ? ` ${styles.stripBtnActive}` : ""}`}
@@ -1544,10 +1452,11 @@ function LightboxShellFrame({
           </div>
         </div>
 
-        {/* Open, the sidebar names every place: no hover labels then. */}
-        <RailTip rail={railRef} off={!collapsed} />
+        {/* The areas carry their names; the foot's icons name themselves
+            on hover or focus. */}
+        <RailTip rail={railRef} />
 
-        {/* 248px Panel */}
+        {/* The panel: the current area's pages */}
         <div
           id="sales-xray-sidebar-panel"
           className={styles.panel}
@@ -1580,51 +1489,92 @@ function LightboxShellFrame({
                 }
               />
             )}
-            <button
-              type="button"
-              ref={collapseButtonRef}
-              className={styles.collapseBtn}
-              onClick={toggleCollapsed}
-              aria-label="Collapse sidebar navigation"
-              aria-expanded={!collapsed}
-              aria-controls="sales-xray-sidebar-panel"
-              title="Collapse navigation"
-            >
-              <PanelLeftClose size={16} aria-hidden="true" />
-            </button>
           </div>
 
-          {/* Enter opens Calls filtered by the text; the box then clears.
-              Signed out there are no calls to search. */}
+          {/* One search (owner, dev #8): the pill opens the command bar,
+              which finds places, leads and calls. Signed out there is
+              nothing to search. */}
           {!guest && (
-            <Form
-              action={CALLS_PATH}
-              role="search"
-              className={`${styles.searchBox} ${styles.panelSearch}`}
-              onSubmit={(event) => {
-                const form = event.currentTarget;
-                window.setTimeout(() => {
-                  form.reset();
-                  searchInputRef.current?.blur();
-                }, 0);
-              }}
+            <button
+              type="button"
+              className={styles.searchPill}
+              onClick={() => setCommandOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={commandOpen}
+              aria-keyshortcuts="Control+K Meta+K"
             >
-              <Search
-                size={15}
-                className={styles.searchIcon}
-                aria-hidden="true"
-              />
-              <input
-                ref={searchInputRef}
-                type="search"
-                name="q"
-                className={styles.searchInput}
-                placeholder="Search calls…"
-                aria-label="Search calls"
-                enterKeyHint="search"
-              />
-            </Form>
+              <Search size={15} aria-hidden="true" />
+              Search
+              <kbd aria-hidden="true">{shortcut}</kbd>
+            </button>
           )}
+          <ScreenLink
+            className={styles.panelNew}
+            href={newAnalysisHref}
+            aria-label="New analysis"
+            aria-current={place === "analyse" ? "page" : undefined}
+          >
+            <Plus size={16} strokeWidth={2} aria-hidden="true" />
+            New analysis
+          </ScreenLink>
+
+          {/* The area's title, then its pages; sub-places sit under their
+              page as text, lined up with its name. A new area's rows slide
+              in (the list is keyed by the area). */}
+          {listed ? (
+            <div
+              key={shownArea.key}
+              className={styles.areaNav}
+              role="group"
+              aria-label={shownArea.label}
+              data-area-panel={shownArea.key}
+            >
+              <p className={styles.areaTitle} aria-hidden="true">
+                {shownArea.label}
+              </p>
+              {shownArea.pages.map((page, index) => {
+                const Icon = page.icon;
+                const row = (here: boolean) => (
+                  <ScreenLink
+                    className={styles.place}
+                    href={page.href}
+                    // The rows mount when the area changes, on the press
+                    // itself: a burst of prefetches there would be cut off by
+                    // the move. A press warms the place it opens.
+                    prefetch={false}
+                    aria-label={page.name ?? page.label}
+                    data-place={page.key}
+                    aria-current={here ? "page" : undefined}
+                    style={{ "--i": index } as CSSProperties}
+                  >
+                    <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
+                    <span>{page.label}</span>
+                  </ScreenLink>
+                );
+                return (
+                  <Fragment key={page.key}>
+                    {page.hubTab ? (
+                      <HubPlace section={page.hubTab} place={place} row={row} />
+                    ) : (
+                      row(pageHere(page.key, place, reportsHere))
+                    )}
+                    {page.subs?.map((sub) => (
+                      <SubPlace key={sub.href} {...sub} />
+                    ))}
+                  </Fragment>
+                );
+              })}
+              {/* Gold reviewers (owner, 19 Oct); nothing for anyone else. */}
+              {shownArea.key === "results" ? (
+                <ReviewRailLink
+                  live={leadsBadgeLive}
+                  className={styles.place}
+                  activeClassName=""
+                  nameStyle={{}}
+                />
+              ) : null}
+            </div>
+          ) : null}
 
           {/* Recents Section */}
           {salesXrayEnabled && !guest && (
@@ -2139,6 +2089,17 @@ function LightboxShellFrame({
           }}
         />
       ) : null}
+      {/* Every place in the sidebar, as the open sidebar used to list them
+          all: Next prefetches a link on screen, and the panel shows one area
+          at a time, so these links (out of sight, out of reach, and last, so
+          a page's own links come first) keep each place ready from the
+          start, the way the old list did. The panel's rows prefetch nothing
+          of their own. Computers only: phones never showed the sidebar. */}
+      <div className={styles.prefetchOnly} aria-hidden="true" inert>
+        {sidebarPlaces.map((href) => (
+          <Link key={href} href={href} tabIndex={-1} />
+        ))}
+      </div>
     </div>
   );
 }
@@ -2237,6 +2198,41 @@ type SubPlaceProps = {
   tab: string;
 };
 
+/** A hub section's row, lit by the ?tab= the hub shows (read under Suspense,
+ *  as useSearchParams asks of a static page). */
+function HubPlace({
+  section,
+  place,
+  row,
+}: {
+  section: string;
+  place: string | undefined;
+  row: (here: boolean) => ReactNode;
+}) {
+  return (
+    <Suspense
+      fallback={row(pageHere("", place, false, { section, tab: null }))}
+    >
+      <LiveHubPlace section={section} place={place} row={row} />
+    </Suspense>
+  );
+}
+
+function LiveHubPlace({
+  section,
+  place,
+  row,
+}: {
+  section: string;
+  place: string | undefined;
+  row: (here: boolean) => ReactNode;
+}) {
+  const params = useSearchParams();
+  return row(
+    pageHere("", place, false, { section, tab: params?.get("tab") ?? null }),
+  );
+}
+
 function SubPlace(props: SubPlaceProps) {
   return (
     <Suspense fallback={<SubPlaceLink {...props} here={false} />}>
@@ -2263,8 +2259,11 @@ function SubPlaceLink({
 }: SubPlaceProps & { here: boolean }) {
   return (
     <ScreenLink
-      className={`${styles.stripBtn} ${styles.stripSub}`}
+      className={styles.placeSub}
       href={href}
+      // Mounted with its area, like the panel's rows: no prefetch of its own.
+      prefetch={false}
+      data-sub=""
       aria-current={here ? "page" : undefined}
     >
       {label}

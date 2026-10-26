@@ -15,13 +15,14 @@ import {
   useState,
   type FormEvent,
 } from "react";
-import { Camera, Trash2 } from "lucide-react";
+import { Camera, PawPrint, Trash2 } from "lucide-react";
 
 import {
   readAccountProfile,
   type AccountProfileRecord,
 } from "../account-profile-client";
 import { notify } from "../notice-center";
+import { useCharacters } from "../people/characters";
 import { openSettings } from "../settings-open";
 import {
   invalidateShellProfile,
@@ -42,6 +43,7 @@ import {
   type ProfileCompletion,
   type ProfileDetails,
 } from "./profile-details-client";
+import { CharacterSheet } from "./character-sheet";
 import styles from "./profile-details.module.css";
 
 type Draft = { handle: string; title: string; team: string };
@@ -88,6 +90,9 @@ export function ProfileDetailsPanel() {
   });
   const [problems, setProblems] = useState<Problems>({});
   const [busy, setBusy] = useState<"save" | "photo" | null>(null);
+  // Choose your character (owner #32, 26 Oct 2026); none until they ship.
+  const characters = useCharacters();
+  const [choosing, setChoosing] = useState(false);
 
   const apply = useCallback((next: AccountProfileRecord) => {
     setProfile(next);
@@ -125,6 +130,11 @@ export function ProfileDetailsPanel() {
     draft.team !== saved.team;
   const name = profile.name?.trim() || profile.email;
   const completion = details.completion;
+  // Without a photo, the character picked for this person.
+  const avatarUrl =
+    details.avatarUrl ??
+    characters.find((item) => item.key === details.defaultCharacter)?.url ??
+    null;
 
   const edit = (key: keyof Draft, value: string) => {
     setDraft((current) => ({ ...current, [key]: value }));
@@ -269,7 +279,7 @@ export function ProfileDetailsPanel() {
             disabled={busy !== null}
             onClick={() => picker.current?.click()}
           >
-            <Avatar name={name} photoUrl={details.avatarUrl} size={72} />
+            <Avatar name={name} photoUrl={avatarUrl} size={72} />
             <span className={styles.avatarBadge} aria-hidden="true">
               <Camera size={13} />
             </span>
@@ -290,6 +300,16 @@ export function ProfileDetailsPanel() {
                     ? "Change photo"
                     : "Add photo"}
               </Button>
+              {characters.length ? (
+                <Button
+                  variant="secondary"
+                  disabled={busy !== null}
+                  onClick={() => setChoosing(true)}
+                >
+                  <PawPrint size={15} aria-hidden="true" />
+                  Choose a character
+                </Button>
+              ) : null}
               {details.ownPhoto ? (
                 <Button
                   variant="ghost"
@@ -316,6 +336,19 @@ export function ProfileDetailsPanel() {
             />
           </div>
         </div>
+        <CharacterSheet
+          open={choosing}
+          current={
+            details.character ??
+            (details.avatarUrl ? null : details.defaultCharacter)
+          }
+          replacesPhoto={details.avatarUrl !== null && !details.character}
+          onClose={() => setChoosing(false)}
+          onChosen={() => {
+            setChoosing(false);
+            void photoDone("Character saved");
+          }}
+        />
         {completion && completion.done < completion.total ? (
           <Progress completion={completion} />
         ) : null}

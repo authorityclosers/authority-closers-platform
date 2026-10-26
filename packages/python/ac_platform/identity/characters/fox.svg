@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256" role="img" aria-label="Fox">
+<rect width="256" height="256" fill="#FFE8D6"/>
+<polygon points="66,58 104,118 52,126" fill="#F28C38"/>
+<polygon points="190,58 152,118 204,126" fill="#F28C38"/>
+<polygon points="74,88 92,114 66,117" fill="#FFF3E6"/>
+<polygon points="182,88 164,114 190,117" fill="#FFF3E6"/>
+<ellipse cx="128" cy="150" rx="80" ry="70" fill="#F28C38"/>
+<ellipse cx="100" cy="172" rx="34" ry="26" fill="#FFF8F0"/>
+<ellipse cx="156" cy="172" rx="34" ry="26" fill="#FFF8F0"/>
+<circle cx="100" cy="142" r="8" fill="#2B2B2B"/>
+<circle cx="156" cy="142" r="8" fill="#2B2B2B"/>
+<ellipse cx="128" cy="170" rx="10" ry="8" fill="#2B2B2B"/>
+</svg>

@@ -5,6 +5,9 @@ import path from "node:path";
 // destination, cookies, credentials or arbitrary URL from a query parameter.
 const configured = process.env.AC_CONVERSATION_API_ORIGIN;
 const staticPreview = process.env.AC_SALES_XRAY_STATIC_PREVIEW === "1";
+// The speed check's build only (wb-ci --speed): app/perf-fixture/**/page.perf.tsx serves the review fixtures'
+// fictional screens in production mode. Every other build, deployments included, leaves those files out.
+const perfFixtures = process.env.AC_SALES_XRAY_PERF_FIXTURES === "1";
 const reviewRequested =
   process.env.NODE_ENV === "development" &&
   process.env.AC_SALES_XRAY_REVIEW === "1";
@@ -30,17 +33,21 @@ const devAllowedOrigins = (process.env.AC_SALES_XRAY_DEV_ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
-/** Route and page file extensions; "discovery.ts" only outside the static preview. */
-export function pageExtensions(preview: boolean): string[] {
+/** Route and page file extensions; "discovery.ts" only outside the static preview, "perf.tsx" only for the speed check. */
+export function pageExtensions(preview: boolean, perf = false): string[] {
   const base = ["tsx", "ts", "jsx", "js"];
-  return preview ? base : [...base, "discovery.ts"];
+  return [
+    ...base,
+    ...(preview ? [] : ["discovery.ts"]),
+    ...(perf ? ["perf.tsx"] : []),
+  ];
 }
 const config: NextConfig = {
   ...(devAllowedOrigins.length ? { allowedDevOrigins: devAllowedOrigins } : {}),
   output: staticPreview ? "export" : "standalone",
   // The OAuth/MCP discovery handlers (app/.well-known/**/route.discovery.ts) read the request
   // host, so they cannot be static: the static preview leaves them out, every real build keeps them.
-  pageExtensions: pageExtensions(staticPreview),
+  pageExtensions: pageExtensions(staticPreview, perfFixtures),
   ...(staticPreview ? { trailingSlash: true } : {}),
   outputFileTracingRoot: path.join(__dirname, "../.."),
   reactStrictMode: true,

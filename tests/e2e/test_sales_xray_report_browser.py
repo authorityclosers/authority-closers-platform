@@ -555,3 +555,61 @@ def test_real_browser_durable_worker_report_playback(
 ) -> None:
     evidence = Path(os.environ.get("AC_SALES_XRAY_BROWSER_EVIDENCE_DIR", str(tmp_path)))
     _exercise_browser(durable_live_backend, evidence)
+
+
+@pytest.mark.e2e
+def test_real_browser_waits_out_a_release_hold(live_backend: BrowserBackend) -> None:
+    """A release (owner, 27 Oct 2026): while the edge holds requests, the saved calls read
+    waits behind the calm banner and loads when the release ends, with no error shown."""
+    held: list[str] = []
+    errors: list[str] = []
+    with sync_playwright() as playwright, ExitStack() as cleanup:
+        browser = playwright.chromium.launch(headless=True)
+        cleanup.callback(browser.close)
+        context = browser.new_context(
+            viewport={"width": 390, "height": 844}, service_workers="block"
+        )
+        cleanup.callback(context.close)
+        context.add_cookies(
+            [
+                {
+                    "name": live_backend.cookie_name,
+                    "value": live_backend.cookie_value,
+                    "url": live_backend.origin,
+                    "httpOnly": True,
+                    "sameSite": "Lax",
+                }
+            ]
+        )
+
+        def edge(route: Any) -> None:
+            url = route.request.url
+            if not url.startswith(live_backend.origin + "/"):
+                route.abort()
+            elif urlsplit(url).path == "/v1/conversation/recordings" and len(held) < 3:
+                held.append(url)
+                route.fulfill(
+                    status=503,
+                    headers={
+                        "Retry-After": "30",
+                        "X-Authority-Closers-Route": "release-hold-production",
+                    },
+                    content_type="text/plain",
+                    body="Authority Closers production is completing a reviewed release.",
+                )
+            else:
+                route.continue_()
+
+        context.route("**/*", edge)
+        page = context.new_page()
+        page.on("pageerror", lambda error: errors.append(str(error)[:300]))
+        page.goto(live_backend.origin)
+        banner = page.get_by_role("status").filter(
+            has_text="Updating Sales X-Ray, back in a moment"
+        )
+        expect(banner).to_be_visible()
+        expect(page.get_by_role("heading", name="Saved calls")).to_be_visible(timeout=30_000)
+        expect(page.locator(".recording-history-item").first).to_be_visible(timeout=30_000)
+        expect(banner).to_have_count(0)
+        assert len(held) == 3
+        assert not errors, errors

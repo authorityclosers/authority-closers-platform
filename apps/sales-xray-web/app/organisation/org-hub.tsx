@@ -13,18 +13,7 @@
  */
 
 import { can, roleLabel } from "./roles";
-import {
-  BarChart3,
-  Building2,
-  CreditCard,
-  LayoutGrid,
-  Lightbulb,
-  Plug,
-  Route,
-  Sparkles,
-  UsersRound,
-  type LucideIcon,
-} from "lucide-react";
+import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
@@ -38,100 +27,8 @@ import { ActionList, ActionRow, Segmented } from "../ui/kit";
 import { useWorkspaceAccess } from "../workspace-access";
 import type { ServerOrganisation } from "./organisation-seed";
 import { OrganisationView } from "./organisation-view";
+import { HUB_PATH, HUB_TABS, hubHref, type HubTab } from "./hub-tabs";
 import styles from "./org-hub.module.css";
-
-export const HUB_PATH = "/organisation";
-
-type HubTab = {
-  id: string;
-  label: string;
-  /** What the area is for, in the Overview list. */
-  note: string;
-  icon: LucideIcon;
-  /** Opens its own page instead of a tab here. */
-  href?: string;
-  managers?: true;
-};
-
-export const HUB_TABS: readonly HubTab[] = [
-  {
-    id: "overview",
-    label: "Overview",
-    note: "Everything your organisation can set and see",
-    icon: LayoutGrid,
-  },
-  {
-    id: "team",
-    label: "Team",
-    note: "Members, invites and who can do what",
-    icon: UsersRound,
-  },
-  {
-    id: "analytics",
-    label: "Analytics",
-    note: "Calls and activity over the last 30 days, person by person",
-    icon: BarChart3,
-  },
-  {
-    id: "insights",
-    label: "Insights",
-    note: "What your team's calls show: skills, objections, coaching",
-    icon: Lightbulb,
-    href: "/organisation/insights",
-    managers: true,
-  },
-  {
-    id: "leads",
-    label: "Leads setup",
-    note: "Who gets new leads, your stages and where leads come from",
-    icon: Route,
-    managers: true,
-  },
-  {
-    id: "connections",
-    label: "Connections",
-    note: "Lead ads, WhatsApp and Instagram, AI replies, API keys",
-    icon: Plug,
-    managers: true,
-  },
-  {
-    id: "call-ai",
-    label: "AI on calls",
-    note: "How much AI reads each seller's recorded calls",
-    icon: Sparkles,
-    managers: true,
-  },
-  {
-    id: "company",
-    label: "Company",
-    note: "Name, logo, details and your email domains",
-    icon: Building2,
-  },
-  {
-    id: "plan",
-    label: "Plan & billing",
-    note: "Your plan, analysis time and invoices",
-    icon: CreditCard,
-    href: "/settings/plan",
-    managers: true,
-  },
-];
-
-/** A tab's address: its own page, or the hub with ?tab=. */
-export function hubHref(
-  tab: HubTab,
-  part?: string,
-  base: string = HUB_PATH,
-): string {
-  if (tab.href) return tab.href;
-  const query = [
-    tab.id === "overview" ? "" : `tab=${tab.id}`,
-    part ? `part=${part}` : "",
-  ]
-    .filter(Boolean)
-    .join("&");
-  return query ? `${base}?${query}` : base;
-}
 
 type Part = { key: string; label: string; section: SettingsSectionId };
 

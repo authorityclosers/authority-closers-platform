@@ -24,6 +24,7 @@ import { InitialSessionProvider } from "./initial-session";
 import { DisplayDatesProvider } from "./display-clock";
 import { serverDisplayDates, serverSession } from "./server-reads";
 import { NoticeCenter } from "./notice-center";
+import { ReleaseHoldBanner } from "./release-hold-banner";
 import { TelemetryAuto } from "./telemetry-auto";
 import { PressFeedback } from "./press-feedback";
 export const metadata: Metadata = {
@@ -119,6 +120,8 @@ export default async function Layout({
             </InitialSessionProvider>
             <UploadIndicator />
             <NoticeCenter />
+            {/* Releases: one fetch layer waits them out behind a calm banner. */}
+            <ReleaseHoldBanner />
             {/* Usage and performance telemetry, sent only for people it is on for. */}
             <TelemetryAuto />
             <PressFeedback />

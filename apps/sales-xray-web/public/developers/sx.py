@@ -13,7 +13,7 @@ command-line argument, so it stays out of shell history and process lists).
     sx me                                     # the key's organisation and scopes
     sx calls [--before CALL_ID]               # calls, newest first, 50 a page
     sx facts CALL_ID                          # the facts found in one call
-    sx leads [--stage open|new|...] [--offset N]
+    sx leads [--stage KEY|open] [--offset N]  # KEY: one of the stages each page lists
     sx lead LEAD_ID
     sx add-lead --name NAME [--phone P] [--email E] [--company C] [--city C]
                 [--interest I] [--note N] [--external-id ID]
@@ -170,21 +170,18 @@ TOOLS: list[dict[str, Any]] = [
     },
     {
         "name": "list_leads",
-        "description": "Leads in the organisation's Lead Desk, newest change first.",
+        "description": (
+            "Leads in the organisation's Lead Desk, newest change first. Each answer lists "
+            "the organisation's own stages (key and label) under stages; pass one key as "
+            "stage for that stage alone, or open for every open lead."
+        ),
         "inputSchema": {
             "type": "object",
             "properties": {
                 "stage": {
                     "type": "string",
-                    "enum": [
-                        "open",
-                        "new",
-                        "not_connected",
-                        "follow_up",
-                        "interested",
-                        "won",
-                        "lost",
-                    ],
+                    "maxLength": 40,
+                    "description": "A key from stages in an answer, or open.",
                 },
                 "offset": {"type": "integer", "minimum": 0},
             },

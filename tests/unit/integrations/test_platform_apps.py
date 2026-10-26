@@ -352,3 +352,12 @@ def test_the_web_discovery_documents_list_the_same_scopes() -> None:
     source = (ROOT / "apps/sales-xray-web/app/oauth-discovery.ts").read_text(encoding="utf-8")
     assert _ts_list(source, "SCOPES") == list(scopes.SCOPES)
     assert _ts_list(source, "MCP_SCOPES") == list(MCP_SCOPES)
+
+
+def test_list_leads_takes_the_organisations_own_stage_keys() -> None:
+    """Each organisation's own stages, which every answer lists, not a fixed list (the
+    sales team's eight, 26 Oct 2026)."""
+    (tool,) = [t for t in mcp_http.listed(frozenset({"leads:read"})) if t["name"] == "list_leads"]
+    stage = tool["inputSchema"]["properties"]["stage"]
+    assert "enum" not in stage and stage["maxLength"] == 40
+    assert "stages" in tool["description"]

@@ -293,7 +293,20 @@ it("never claims privacy in the shell chrome; each saved report states it", asyn
   expect(host.textContent).not.toContain("Private to your account");
 });
 
-it("collapses the rail from its own toggle and keeps focus on the visible toggle", async () => {
+// One toggle hides or shows the panel, in the same place in both states, and
+// "[" does the same on a computer (orchestrator, 26 Oct 2026).
+it("hides and shows the panel from one toggle at the ribbon's foot, and with [", async () => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn((query: string) => ({
+      matches: query.includes("min-width: 900px"),
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+      addListener: () => undefined,
+      removeListener: () => undefined,
+    })),
+  );
   await act(async () =>
     root.render(
       <AcquisitionShell authenticated={false}>
@@ -301,38 +314,56 @@ it("collapses the rail from its own toggle and keeps focus on the visible toggle
       </AcquisitionShell>,
     ),
   );
-  const toggle = host.querySelector<HTMLButtonElement>(
-    'button[aria-label="Collapse sidebar navigation"]',
-  )!;
+  const toggles = host.querySelectorAll<HTMLButtonElement>(
+    'button[aria-controls="sales-xray-sidebar-panel"]',
+  );
+  expect(toggles).toHaveLength(1);
+  const toggle = toggles[0];
   const panel = document.getElementById(toggle.getAttribute("aria-controls")!)!;
   expect(panel).not.toBeNull();
-  expect(panel.contains(toggle)).toBe(true);
+  // In the ribbon, so it stays where it is when the panel goes.
+  expect(panel.contains(toggle)).toBe(false);
+  expect(toggle.getAttribute("aria-label")).toBe("Collapse sidebar navigation");
+  expect(toggle.getAttribute("aria-expanded")).toBe("true");
+  expect(toggle.getAttribute("aria-keyshortcuts")).toBe("[");
   expect(panel.hasAttribute("inert")).toBe(false);
   toggle.focus();
-  expect.soft(toggle.getAttribute("aria-expanded")).toBe("true");
   await act(async () => toggle.click());
   expect(host.querySelector('[data-sidebar-collapsed="true"]')).not.toBeNull();
   expect(localStorage.getItem("sx.sidebar.collapsed")).toBe("true");
-  const expand = host.querySelector<HTMLButtonElement>(
-    'button[aria-label="Expand sidebar navigation"]',
-  )!;
-  expect(expand).not.toBeNull();
   // DOM coverage of the native keyboard exclusion; browser Tab proof is separate.
   expect(panel.hasAttribute("inert")).toBe(true);
   // Signed out, the panel offers sign-in where the workspace would be.
   expect(panel.querySelector('a[href="/login"]')?.textContent).toContain(
     "Sign in",
   );
-  expect(expand.getAttribute("aria-controls")).toBe(panel.id);
-  expect(expand.closest("[inert]")).toBeNull();
-  expect.soft(expand.getAttribute("aria-expanded")).toBe("false");
-  expect.soft(document.activeElement).toBe(expand);
-  expand.focus();
-  await act(async () => expand.click());
+  // The same button, named for what it does now, still focused.
+  expect(toggle.getAttribute("aria-label")).toBe("Expand sidebar navigation");
+  expect(toggle.getAttribute("aria-expanded")).toBe("false");
+  expect(toggle.closest("[inert]")).toBeNull();
+  expect(document.activeElement).toBe(toggle);
+  await act(async () => toggle.click());
   expect(host.querySelector('[data-sidebar-collapsed="false"]')).not.toBeNull();
   expect(localStorage.getItem("sx.sidebar.collapsed")).toBe("false");
   expect(panel.hasAttribute("inert")).toBe(false);
-  expect.soft(document.activeElement).toBe(toggle);
+
+  // "[" hides it, and shows it again...
+  const press = (target: EventTarget) =>
+    act(async () => {
+      target.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "[", bubbles: true }),
+      );
+    });
+  await press(document.body);
+  expect(host.querySelector('[data-sidebar-collapsed="true"]')).not.toBeNull();
+  await press(document.body);
+  expect(host.querySelector('[data-sidebar-collapsed="false"]')).not.toBeNull();
+  // ...but not while someone types.
+  const field = document.createElement("input");
+  document.body.append(field);
+  await press(field);
+  expect(host.querySelector('[data-sidebar-collapsed="false"]')).not.toBeNull();
+  field.remove();
 });
 
 it("offers the theme control in the account menu only when the theme is released", async () => {

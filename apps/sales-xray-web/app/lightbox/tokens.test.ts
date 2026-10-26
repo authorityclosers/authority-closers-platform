@@ -594,7 +594,6 @@ describe("Lightbox token derivative", () => {
 
       // Desktop layout (1280px)
       testCoarseStyles(shellCss, {
-        collapseBtn: { minHeight: 44, minWidth: 44 },
         panelSearch: { minHeight: 44 },
         recentsViewAll: { minHeight: 44 },
         workspaceTrigger: { minHeight: 44 },
@@ -606,7 +605,6 @@ describe("Lightbox token derivative", () => {
       testCoarseStyles(
         shellCss,
         {
-          collapseBtn: { minHeight: 44, minWidth: 44 },
           panelSearch: { minHeight: 44 },
           recentsViewAll: { minHeight: 44 },
         },

@@ -119,8 +119,17 @@ it("names Google (Gemini) for AI-drafted replies, and what is never sent", () =>
   expect(markup).toContain(
     "does not send Google the answers given in Facebook or Instagram lead forms",
   );
-  // Dated 26 Oct 2026: a new version naming Google for the call audio (the owner approved it).
-  expect(markup).toContain('dateTime="2026-10-26"');
+  // Dated 27 Oct 2026: a new version saying what a connected AI assistant can read (the
+  // owner approved it).
+  expect(markup).toContain('dateTime="2026-10-27"');
+});
+
+it("says what a connected AI assistant can read, in the owner's words", () => {
+  const markup = renderToStaticMarkup(<PolicyPage slug="privacy" />);
+  // Approved verbatim by the owner, 27 Oct 2026 (the ChatGPT and Claude directories).
+  expect(markup).toContain(
+    "When you connect an AI assistant such as ChatGPT or Claude, it can read the calls, reports and leads you allow, including your leads&#x27; contact details, only while you stay connected.",
+  );
 });
 
 it("names the AI providers for call analysis, OpenAI with its training and retention terms", () => {
