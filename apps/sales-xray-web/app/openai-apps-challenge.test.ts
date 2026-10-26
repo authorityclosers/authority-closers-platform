@@ -40,6 +40,18 @@ describe("ChatGPT domain verification", () => {
     expect(GET(request("example.com")).status).toBe(404);
   });
 
+  it("answers OpenAI's token on the production domain only (portal, 27 Oct 2026)", async () => {
+    expect(PRODUCTION_CHALLENGE).toBe(
+      "n_uv0N5uDalm5S7pWaa_0a7TPI-ZIIBakradLS-xitM",
+    );
+    const answer = GET(request(PRODUCTION_HOST));
+    expect(answer.status).toBe(200);
+    expect(await answer.text()).toBe(PRODUCTION_CHALLENGE);
+    expect(GET(request("salesxray-staging.authorityclosers.com")).status).toBe(
+      404,
+    );
+  });
+
   it("keeps the production token to the production host", () => {
     expect(challengeToken("salesxray-staging.authorityclosers.com", "")).toBe(
       null,

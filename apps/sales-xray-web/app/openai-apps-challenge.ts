@@ -12,8 +12,9 @@
  * With neither, the address is a plain 404.
  */
 
-/** The production domain's token from OpenAI's portal; empty until it shows one. */
-export const PRODUCTION_CHALLENGE = "";
+/** The production domain's token from OpenAI's portal (27 Oct 2026). */
+export const PRODUCTION_CHALLENGE =
+  "n_uv0N5uDalm5S7pWaa_0a7TPI-ZIIBakradLS-xitM";
 export const PRODUCTION_HOST = "salesxray.authorityclosers.com";
 
 // What a portal token looks like: one printable word, no spaces or markup.
