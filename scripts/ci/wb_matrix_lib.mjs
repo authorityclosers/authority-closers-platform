@@ -53,6 +53,9 @@ const asTable = [
 export const SCREENS = {
   "leads-desk": { path: "/review-fixture/leads" },
   "leads-all": { path: "/review-fixture/leads?tab=all", desktop: true },
+  // Leads, All, Open on a phone (production report #28, 26 Oct 2026): the stage
+  // tabs and the seller chips scroll inside their own strips, nothing past the edge.
+  "leads-all-open": { path: "/review-fixture/leads?tab=all&stage=open" },
   "leads-table": {
     path: "/review-fixture/leads?tab=all",
     steps: asTable,
