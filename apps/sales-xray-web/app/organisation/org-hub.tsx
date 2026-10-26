@@ -29,6 +29,8 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
+import { useBranding } from "../shell/branding-store";
+import { OrgLogo } from "../shell/org-logo";
 import { AcquisitionShell } from "../acquisition-shell";
 import { SettingsSectionView } from "../settings/sections";
 import type { SettingsSectionId } from "../settings/settings-sections";
@@ -217,10 +219,13 @@ type HubWorkspace = { name: string; role: string | null };
 
 /** The organisation's name and your role, at the top of the hub and of Insights. */
 function OrgHeader({ workspace }: { workspace: HubWorkspace }) {
+  // Its own logo where it has one, as the workspace switcher shows it
+  // (owner, 26 Oct 2026); the building icon only without one.
+  const logo = useBranding()?.logoUrl ?? null;
   return (
     <header className={styles.header}>
       <span className={styles.tile} aria-hidden="true">
-        <Building2 size={20} />
+        <OrgLogo src={logo} fallback={<Building2 size={20} />} />
       </span>
       <div>
         <h1>{workspace.name}</h1>
