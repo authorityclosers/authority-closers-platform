@@ -410,6 +410,13 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
         "sx.feature_used": _event(
             values={"screen": SCREENS}, tokens=("feature",), required=("feature",)
         ),
+        # Shake to report (26 Oct 2026): opened, or a near miss (two swings, not three), with
+        # the strongest swing's force in m/s² and the swings counted, to tune from real phones.
+        "sx.shake": _event(
+            values={"outcome": ("opened", "near")},
+            numbers={"peak": 200, "swings": 20},
+            required=("outcome",),
+        ),
         # Lead OS (24 Oct 2026, asked by the Lead OS session): the pipeline board and sheet.
         # A stage move: how it was made, whether an AI suggestion made it, the stage kinds
         # either side, how many required fields it asked for, and the wait from opening the

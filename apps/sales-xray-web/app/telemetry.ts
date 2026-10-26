@@ -193,6 +193,9 @@ export type TelemetryEvents = {
     where?: string;
   };
   "sx.feature_used": { feature: string; screen?: Screen };
+  /** Shake to report: opened, or a near miss (two swings, not three); the
+   * strongest swing in m/s² and the swings, to tune from real phones. */
+  "sx.shake": { outcome: "opened" | "near"; peak: number; swings: number };
   // Lead OS (24 Oct 2026): the pipeline board, stage sheet and lead sheet.
   /** One stage move; wait is from opening the stage sheet to Save. */
   "sx.lead_stage_moved": {
@@ -467,6 +470,7 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.api_slow",
   "sx.tap_issue",
   "sx.feature_used",
+  "sx.shake",
   "sx.lead_stage_moved",
   "sx.board_drag",
   "sx.lead_open_to_action",

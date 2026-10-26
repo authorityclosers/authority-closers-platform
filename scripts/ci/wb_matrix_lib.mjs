@@ -81,6 +81,19 @@ export const SCREENS = {
     ],
   },
   home: { path: "/review-fixture/home" },
+  // The sidebar on a computer (owner, dev #8, 26 Oct 2026): the ribbon of areas
+  // with the panel of Home's pages, then with the panel collapsed.
+  "home-desk": { path: "/review-fixture/home", desktop: true },
+  "home-rail": {
+    path: "/review-fixture/home",
+    steps: [
+      {
+        click: 'button[aria-label="Collapse sidebar navigation"]:visible',
+        optional: true,
+      },
+    ],
+    desktop: true,
+  },
   // Fictional call analysis numbers: the sliding figures and the attention dot.
   "home-analysis": { path: "/review-fixture/home?analysis=1" },
   "home-mine": { path: "/review-fixture/home?view=mine&analysis=1" },
