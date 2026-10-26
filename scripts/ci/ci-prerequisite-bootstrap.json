@@ -1,12 +1,1 @@
-[
-  {
-    "artifact_id": 12640243658,
-    "digest": "364b2c23271d6c21ed6e5f55670e49229407520bc8b08e7d9f0724c70e9778cc",
-    "identity": "54ef77ee856ba826a13e048faf53ea88f3bb97f34234e7897fd1e0516c6309a6",
-    "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 40300895701,
-    "source_sha": "bc553a71fa50c3322b07a9b93e9b496796a67b1b",
-    "reviewed_source_sha": "f51b2734f055139653a6796238f45eeb547cbb27",
-    "review": "Orchestrator 26 Oct 2026: producer run 40300895701 (workbench-checks.yml, push to wb-ci/slot-5) on request bc553a71, whose only parent is workbench f51b2734f and which changes only .wb-ci/request.json plus seven apps/sales-xray-web/app/leads files (no scripts/ci, workflow or lockfile change). Identity 54ef77ee is unchanged from the 25 Oct pin, so the prerequisite inputs are the same; the scripts/ci and workflow changes since af38174b are wb-ci and matrix tooling outside the identity. Artifact digest from the API. Replaces the 25 Oct pin, whose artifact 12575289319 is past the 36 h reuse window (every run tried to publish a new bundle and storage admission declined)."
-  }
-]
+[]
