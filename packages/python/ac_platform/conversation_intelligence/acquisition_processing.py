@@ -189,11 +189,12 @@ class AcquisitionProcessing:
                 self.ownership.clock(),
             )
             if standing_consent_id is not None:
-                # Which consent this automatic start relied on, readable later.
+                # Which consent this upload relied on, readable later; the analysis
+                # itself starts when its plan is accepted (conversation.auto_analysis_started).
                 await AuditRepository(self.database).append(
                     tenant_id=processing.tenant_id,
                     actor_person_id=actor.person_id if actor is not None else processing.person_id,
-                    action="conversation.auto_analysis_started",
+                    action="conversation.auto_upload_accepted",
                     resource_type="conversation_recording",
                     resource_id=quote["recording_id"],
                     payload={

@@ -45,18 +45,29 @@ Reading the choice:
 
 ## When a call starts by itself
 
-The app uploads a found recording with `X-Upload-Consent: standing` instead of `accepted`.
-The server accepts it only when all three hold:
+A call is analysed in two steps, as in the studio: its recording is uploaded, then its
+processing plan is quoted and accepted. With the consent on, the app does both without
+a tap:
+1. It uploads the found recording with `X-Upload-Consent: standing` instead of `accepted`.
+2. It accepts the plan (`POST …/submissions/{id}/plan`) with `X-Upload-Consent: standing`.
+
+At each step the server checks that all three hold:
 - the seller's own consent in this organisation is on;
 - it was given for the same upload terms now in force, so a new AI provider or a new
   retention asks again;
 - the seller's AI level is not Off.
 
-Otherwise the server answers 409, and the call waits for its tap. The server checks again
-after the bytes arrive, so turning it off mid-upload holds that call too.
+The plan step also requires the call to be the seller's own: a consent never starts
+someone else's call. Otherwise the server answers 409, and the call waits for its tap.
+The upload is checked again after the bytes arrive, so turning it off mid-upload holds
+that call too.
 
-A started call's consent receipt includes the consent event. A separate audit event,
-`conversation.auto_analysis_started`, names it in readable form.
+What gets recorded:
+- **The upload's consent receipt** includes the consent event, and an audit event
+  `conversation.auto_upload_accepted` names it.
+- **The plan's own receipt** stays exactly as for a tap, because the workers re-verify it
+  before every paid stage. A separate audit event, `conversation.auto_analysis_started`,
+  names the consent event and the plan it accepted.
 
 ## API
 
@@ -76,6 +87,7 @@ Any member, for themselves only, inside an organisation.
   - on and off for oneself, newest wins;
   - an AI level of Off holds the call;
   - new words ask again;
-  - an upload starts by itself only with a current consent for these terms, and names the
-    consent;
+  - an upload is taken only with a current consent for these terms, and names the consent;
+  - a plan is accepted without a tap only on one's own call with a current consent, and its
+    start names the consent;
   - turning off stops new automatic starts.
