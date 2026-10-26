@@ -189,8 +189,8 @@ for (const fact of facts.facts) console.log(fact.label, fact.display);`,
       {
         name: "stage",
         where: "query",
-        type: "open | new | not_connected | follow_up | interested | won | lost",
-        text: "Only leads in this stage.",
+        type: "a stage key | open",
+        text: "Only leads in this stage: one of your organisation's own stages, which every answer lists under stages, or open for every open lead.",
       },
       {
         name: "limit",
@@ -220,14 +220,21 @@ console.log(page.total, page.leads.map((lead) => lead.name));`,
       "interest": "Weekend batch",
       "phone_last4": "0000",
       "stage": "new",
-      "stage_label": "New",
+      "step": "new",
+      "stage_label": "New lead",
       "source_label": "Website form",
       "owner_name": "Neha",
       "created_at": "2026-10-20T08:01:00+00:00"
     }
   ],
   "total": 41,
-  "next_offset": 20
+  "next_offset": 20,
+  "stages": [
+    { "key": "new", "label": "New lead" },
+    { "key": "not_connected", "label": "Not connected" },
+    { "key": "meeting_scheduled", "label": "Meeting/Demo scheduled" },
+    "…"
+  ]
 }`,
     notes:
       "Shortened: each lead carries more fields (next action, attempts, last result). Phone numbers show their last four digits here; GET /leads/{id} has the lead in full.",
@@ -690,7 +697,11 @@ export const ERRORS: [number, string, string][] = [
   [404, "cursor_missing", "The before id is not in this list."],
   [404, "not_here", "The API is served on the Sales X-Ray address only."],
   [422, "lead_empty", "A new lead needs at least a name, phone or email."],
-  [422, "stage_unknown", "stage is not one of the stages listed above."],
+  [
+    422,
+    "stage_unknown",
+    "stage is not open or one of your organisation's stages.",
+  ],
   [
     429,
     "rate_limited",

@@ -6,7 +6,8 @@ Base address: ``https://<sales x-ray host>/v1/api``.
 - GET  /calls               calls, newest first (calls:read)
 - GET  /calls/{id}          one call, with its facts when reports:read is held (calls:read)
 - GET  /calls/{id}/facts    the facts found in one call (reports:read)
-- GET  /leads               leads, newest change first (leads:read)
+- GET  /leads               leads, newest change first, with the organisation's own
+                            stages; ``stage`` is one of their keys, or open (leads:read)
 - GET  /leads/{id}          one lead (leads:read)
 - GET  /duplicates          leads that may be one person, the likeliest first, with counts
                             (leads:read; an organisation's owners and admins)
@@ -47,7 +48,7 @@ from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, FastAPI, Request
+from fastapi import APIRouter, FastAPI, Query, Request
 from fastapi.responses import JSONResponse
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 from sqlalchemy import select, tuple_
@@ -62,7 +63,9 @@ from ac_platform.integrations.ai_writes import AiWriteError, AiWrites, Door
 from ac_platform.integrations.models import IntegrationOAuthClient
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.lead_desk import duplicate_queue
-from ac_platform.lead_desk.contracts import TaskKind
+from ac_platform.lead_desk.contracts import LeadPage, LeadRow, TaskKind
+from ac_platform.lead_desk.journey import model as journeys
+from ac_platform.lead_desk.journey import pipelines
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
 from ac_platform.tenancy.roles import ORG_ROLES, READ_ONLY_ROLES, can
@@ -77,8 +80,9 @@ RULE = RateLimitRule(
     refill_seconds=60.0,
 )
 _NIL = UUID(int=0)
-STAGES = ("open", "new", "not_connected", "follow_up", "interested", "won", "lost")
-Stage = Literal["open", "new", "not_connected", "follow_up", "interested", "won", "lost"]
+# The desk's own kinds of stage, which callers from before the organisations' own stages
+# still filter by; a stage key of the organisation's comes first.
+KINDS = ("new", "not_connected", "follow_up", "interested", "won", "lost")
 
 
 class ApiError(Exception):
@@ -383,21 +387,65 @@ class Reader:
         limit: int = 50,
         search: str | None = None,
     ) -> dict[str, Any]:
+        """A page of leads, with the organisation's own stages (key and label) that
+        ``stage`` filters by: one of their keys, or ``open`` for every open lead (the sales
+        team's eight stages, orchestrator, 26 Oct 2026)."""
         self.require("leads:read")
-        if stage is not None and stage not in STAGES:
-            raise ApiError(422, "stage_unknown", f"stage is one of {', '.join(STAGES)}.")
+        desk = self._desk()
+        stages = await self.stages()
+        keys = [item["key"] for item in stages]
+        offset, limit = max(0, offset), max(1, min(50, limit))
         try:
-            page = await self._desk().leads(
-                scope="team" if self.caller.sees_team else "mine",
-                stage=stage,
-                search=search,
-                offset=max(0, offset),
-                limit=max(1, min(50, limit)),
-            )
+            if stage is not None and stage in keys:
+                page = await self._stage_page(desk, stage, offset, limit, search)
+            elif stage is None or stage == "open" or stage in KINDS:
+                page = await desk.leads(
+                    scope="team" if self.caller.sees_team else "mine",
+                    stage=stage,
+                    search=search,
+                    offset=offset,
+                    limit=limit,
+                )
+            else:
+                raise ApiError(422, "stage_unknown", f"stage is one of open, {', '.join(keys)}.")
         except DeskError as error:
             raise ApiError(error.status, "lead_desk", str(error)) from None
         result: dict[str, Any] = page.model_dump(mode="json", by_alias=True)
+        result["stages"] = stages
         return result
+
+    async def stages(self) -> list[dict[str, str]]:
+        """The organisation's own stages, each pipeline's in its board's order, each key
+        once (the first pipeline's label)."""
+        found: dict[str, dict[str, str]] = {}
+        for pipeline in await pipelines.listed(self.session, self.key.tenant_id):
+            journey = await journeys.read(self.session, self.key.tenant_id, pipeline.key)
+            for stage in journey.board():
+                found.setdefault(stage.key, {"key": stage.key, "label": stage.label})
+        return list(found.values())
+
+    async def _stage_page(
+        self, desk: LeadDesk, step: str, offset: int, limit: int, search: str | None
+    ) -> LeadPage:
+        """One of the organisation's own stages: its column on each pipeline's board, the
+        pipelines in their order (each lead is in exactly one column)."""
+        rows: list[LeadRow] = []
+        total, skip = 0, offset
+        for pipeline in await pipelines.listed(self.session, self.key.tenant_id):
+            board = await desk.board(
+                pipeline=pipeline.key,
+                step=step,
+                search=search,
+                cursor=skip,
+                limit=max(1, limit - len(rows)),
+            )
+            for group in board.groups:
+                for column in group.columns:
+                    total += column.count
+                    rows.extend(column.cards[: limit - len(rows)])
+                    skip = max(0, skip - column.count)
+        end = offset + len(rows)
+        return LeadPage(leads=tuple(rows), total=total, next_offset=end if end < total else None)
 
     async def lead(self, lead_id: UUID) -> dict[str, Any]:
         self.require("leads:read")
@@ -617,11 +665,12 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
     @router.get("/leads")
     async def leads(
         request: Request,
-        stage: Stage | None = None,
+        stage: str | None = Query(default=None, max_length=40),
         offset: int = 0,
         limit: int = 50,
     ) -> JSONResponse:
-        """A page of leads: ``limit`` 1-50 (default 50), ``offset`` for the next."""
+        """A page of leads: ``limit`` 1-50 (default 50), ``offset`` for the next; ``stage``
+        is one of the answer's ``stages`` keys, or open."""
         async with open_reader(request) as reader:
             return done(await reader.leads(stage, offset, limit))
 
