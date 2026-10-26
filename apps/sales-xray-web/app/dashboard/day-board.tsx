@@ -61,6 +61,8 @@ export function DayTiles({ counts }: { counts: DayCounts }) {
           <Link
             className={styles.tile}
             href={tile.href}
+            // Home's tiles prefetch nothing on their own (see first-run.tsx).
+            prefetch={false}
             data-tone={tile.bad ? "bad" : undefined}
           >
             <strong>{tile.value}</strong>
@@ -119,6 +121,7 @@ export function MyStages() {
             <li key={row.key}>
               <Link
                 href={`/leads?tab=all&stage=${encodeURIComponent(row.key)}`}
+                prefetch={false}
               >
                 <span className={styles.stageLabel}>{row.label}</span>
                 <span className={styles.track} aria-hidden="true">

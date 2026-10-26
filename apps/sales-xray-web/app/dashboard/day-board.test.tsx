@@ -6,12 +6,14 @@ vi.mock("next/link", () => ({
   default: ({
     href,
     children,
+    prefetch,
     ...rest
   }: {
     href: string;
     children: ReactNode;
+    prefetch?: boolean;
   }) => (
-    <a href={href} {...rest}>
+    <a href={href} data-prefetch={String(prefetch)} {...rest}>
       {children}
     </a>
   ),
@@ -56,6 +58,12 @@ it("counts the day in four tiles, each opening its Leads", async () => {
     { text: "3New leads", href: "/leads?tab=all&stage=new", bad: false },
     { text: "7Calls today", href: "/analysis/calls", bad: false },
   ]);
+  // They prefetch nothing on their own (v0.96 release check).
+  expect(
+    [...host.querySelectorAll("a")].every(
+      (link) => link.dataset.prefetch === "false",
+    ),
+  ).toBe(true);
 });
 
 it("lists the seller's open leads by the organisation's stages", async () => {

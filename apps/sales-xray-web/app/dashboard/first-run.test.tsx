@@ -6,12 +6,14 @@ vi.mock("next/link", () => ({
   default: ({
     href,
     children,
+    prefetch,
     ...rest
   }: {
     href: string;
     children: ReactNode;
+    prefetch?: boolean;
   }) => (
-    <a href={href} {...rest}>
+    <a href={href} data-prefetch={String(prefetch)} {...rest}>
       {children}
     </a>
   ),
@@ -79,4 +81,15 @@ it("gives a seller a call to analyse instead of a team step", async () => {
     "Analyse a call",
     "Make your first call",
   ]);
+});
+
+// v0.96 release check (26 Oct 2026): Home's links prefetch nothing on their
+// own, so moving away at once never cuts off loads they started.
+it("prefetches nothing from the first-run steps", async () => {
+  await act(async () => root.render(<FirstRun team="invite" />));
+  const links = [...host.querySelectorAll("a")];
+  expect(links.length).toBeGreaterThan(0);
+  expect(links.map((link) => link.dataset.prefetch)).toEqual(
+    links.map(() => "false"),
+  );
 });

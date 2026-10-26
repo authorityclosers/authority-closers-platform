@@ -39,13 +39,20 @@ function Step({
   );
 }
 
+// The steps prefetch nothing on their own: a new account's Home would
+// otherwise load the code of four places it may never open, and a move
+// straight away cut those loads off (v0.96 release check, 26 Oct 2026).
 export function FirstRun({ team }: { team: FirstRunTeam }) {
   return (
     <section className={styles.firstRun} aria-labelledby="first-run-title">
       <h2 id="first-run-title">Welcome to Sales X-Ray. Start here.</h2>
       <ol className={styles.steps}>
         <li>
-          <Link className={styles.step} href="/leads?import=file">
+          <Link
+            className={styles.step}
+            prefetch={false}
+            href="/leads?import=file"
+          >
             <Step
               icon={<FileUp size={20} />}
               title="Add your leads"
@@ -55,7 +62,11 @@ export function FirstRun({ team }: { team: FirstRunTeam }) {
         </li>
         <li>
           {team === "invite" ? (
-            <Link className={styles.step} href="/organisation?tab=team">
+            <Link
+              className={styles.step}
+              prefetch={false}
+              href="/organisation?tab=team"
+            >
               <Step
                 icon={<UsersRound size={20} />}
                 title="Add your team"
@@ -77,7 +88,7 @@ export function FirstRun({ team }: { team: FirstRunTeam }) {
               />
             </button>
           ) : (
-            <Link className={styles.step} href="/analysis/new">
+            <Link className={styles.step} prefetch={false} href="/analysis/new">
               <Step
                 icon={<AudioLines size={20} />}
                 title="Analyse a call"
@@ -87,7 +98,7 @@ export function FirstRun({ team }: { team: FirstRunTeam }) {
           )}
         </li>
         <li>
-          <Link className={styles.step} href="/leads">
+          <Link className={styles.step} prefetch={false} href="/leads">
             <Step
               icon={<PhoneCall size={20} />}
               title="Make your first call"
