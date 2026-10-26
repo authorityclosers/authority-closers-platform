@@ -324,7 +324,10 @@ def _wait_plan(page: Page, recording_id: str) -> dict[str, Any]:
             view["observed_stages"] = sorted(stages)
             return view
         if view.get("state") in {"held", "cancelled"}:
-            raise AssertionError(f"Plan ended in {view.get('state')}")
+            raise AssertionError(
+                f"Plan ended in {view.get('state')}: {view.get('failure_code')}"
+                f" at {view.get('current_stage')}"
+            )
         page.wait_for_timeout(200)
     raise AssertionError("Timed out waiting for the durable processing plan")
 

@@ -531,3 +531,140 @@ def test_a_seal_can_retire_profiles_to_stay_within_the_policy_cap() -> None:
         c2_route.seal(
             first, classic, one_pass, one_pass=True, retire=(c2_route.ONE_PASS_PROFILE_ID,)
         )
+
+
+GEMINI_WORDING = {
+    "privacy_revision": "sales-xray-processing-plan-v4-20261026",
+    "privacy_notice": (
+        "Your call audio and its transcript go to Google Gemini for transcription and coaching. "
+        "AC keeps audio, transcript and feedback private up to 7 days or until you delete them."
+    ),
+}
+
+
+def _gemini_bundle() -> tuple[object, object]:
+    classic, bundle = _classic()
+    for flex in (False, True):
+        one_pass = c2_route.derive_configuration(classic, flex=flex, one_pass=True)
+        bundle = c2_route.seal(bundle, classic, one_pass, flex=flex, one_pass=True)
+    return classic, bundle
+
+
+def test_a_regovern_replaces_only_the_privacy_wording_of_the_all_gemini_profiles() -> None:
+    classic, bundle = _gemini_bundle()
+    assert c2_route.gemini_profiles(bundle) == (
+        c2_route.ONE_PASS_PROFILE_ID,
+        c2_route.ONE_PASS_FLEX_PROFILE_ID,
+    )
+    sealed = c2_route.regovern(bundle, GEMINI_WORDING)
+    for policy, before in zip(
+        c2_route.acquisition_policies(sealed), c2_route.acquisition_policies(bundle), strict=True
+    ):
+        assert policy.stages == before.stages  # classic routes and their wording kept
+        for profile, old in zip(policy.profiles, before.profiles, strict=True):
+            assert profile.profile_id == old.profile_id
+            for stage, was in zip(profile.stages, old.stages, strict=True):
+                assert stage.privacy_revision == GEMINI_WORDING["privacy_revision"]
+                assert stage.privacy_notice == GEMINI_WORDING["privacy_notice"]
+                kept = {field: getattr(was, field) for field in c2_route.GEMINI_GOVERNANCE_FIELDS}
+                assert stage.model_copy(update=kept) == was  # nothing else moved
+    assert sealed.digest != bundle.digest
+    assert sealed.stages == bundle.stages and sealed.allowances == bundle.allowances
+    # The file Root installs reads back the same; re-running changes nothing.
+    assert load_hosted_approval_bundle(sealed.to_json()).digest == sealed.digest
+    assert c2_route.regovern(sealed, GEMINI_WORDING).digest == sealed.digest
+    # Every configuration stays approved exactly as before, the classic one too.
+    for flex in (False, True):
+        config = c2_route.derive_configuration(classic, flex=flex, one_pass=True)
+        assert ConversationProviderAdmin._approved_configuration(_row(config), sealed)
+    assert ConversationProviderAdmin._approved_configuration(_row(classic), sealed)
+    # Or only the profile named.
+    one = c2_route.regovern(bundle, GEMINI_WORDING, profiles=(c2_route.ONE_PASS_PROFILE_ID,))
+    standard, flex_profile = one.acquisition_policy.profiles
+    assert standard.stages[0].privacy_notice == GEMINI_WORDING["privacy_notice"]
+    assert flex_profile.stages == bundle.acquisition_policy.profiles[1].stages
+
+
+def test_a_regovern_refuses_anything_but_the_two_wording_fields() -> None:
+    _, bundle = _gemini_bundle()
+    for governance in (
+        None,
+        {},
+        {"privacy_revision": GEMINI_WORDING["privacy_revision"]},
+        {**GEMINI_WORDING, "retention_ref": "ref:retention/elsewhere"},
+        {**GEMINI_WORDING, "privacy_notice": "   "},
+        {**GEMINI_WORDING, "privacy_revision": "not an identifier!"},
+    ):
+        with pytest.raises(c2_route.SealError, match="gemini_governance_invalid"):
+            c2_route.regovern(bundle, governance)  # type: ignore[arg-type]
+    with pytest.raises(c2_route.SealError, match="not_all_gemini"):
+        c2_route.regovern(bundle, GEMINI_WORDING, profiles=("no-such-profile",))
+    with pytest.raises(c2_route.SealError, match="no_profiles"):
+        c2_route.regovern(_classic()[1], GEMINI_WORDING)  # nothing all-Gemini sealed yet
+
+
+def test_a_regovern_never_touches_a_luna_profile() -> None:
+    classic, bundle = _classic()
+    with_openai = _with_openai(classic)
+    policy = bundle.acquisition_policy
+    with_bundle = bundle.model_copy(
+        update={
+            "acquisition_policy": policy.model_copy(
+                update={
+                    "stages": tuple(
+                        stage.model_copy(update={"configuration_sha256": with_openai.digest})
+                        for stage in policy.stages
+                    )
+                }
+            )
+        }
+    )
+    luna = c2_route.derive_configuration(with_openai, flex=True, one_pass=True, luna=True)
+    sealed = c2_route.seal(
+        with_bundle, with_openai, luna, flex=True, one_pass=True, luna=GOVERNANCE
+    )
+    one_pass = c2_route.derive_configuration(with_openai, one_pass=True)
+    sealed = c2_route.seal(sealed, with_openai, one_pass, one_pass=True)
+    assert c2_route.gemini_profiles(sealed) == (c2_route.ONE_PASS_PROFILE_ID,)
+    governed = c2_route.regovern(sealed, GEMINI_WORDING)
+    luna_profile, gemini = governed.acquisition_policy.profiles
+    assert luna_profile == sealed.acquisition_policy.profiles[0]  # its OpenAI wording kept
+    assert gemini.stages[1].privacy_notice == GEMINI_WORDING["privacy_notice"]
+    with pytest.raises(c2_route.SealError, match="not_all_gemini"):
+        c2_route.regovern(sealed, GEMINI_WORDING, profiles=(c2_route.LUNA_FLEX_PROFILE_ID,))
+
+
+def test_the_host_script_regoverns_in_place(tmp_path, capsys) -> None:
+    import json
+
+    from scripts.ops import one_pass_c2_seal
+
+    _, bundle = _gemini_bundle()
+    (tmp_path / "bundle.json").write_bytes(bundle.to_json())
+    (tmp_path / "wording.json").write_text(json.dumps(GEMINI_WORDING))
+    out = tmp_path / "out"
+    arguments = [
+        "--bundle",
+        str(tmp_path / "bundle.json"),
+        "--gemini-governance",
+        str(tmp_path / "wording.json"),
+        "--out",
+        str(out),
+    ]
+    assert one_pass_c2_seal.main(arguments) == 0
+    summary = json.loads(capsys.readouterr().out)
+    sealed = load_hosted_approval_bundle((out / "hosted-approval.json").read_bytes())
+    assert (out / "hosted-approval.sha256").read_text().strip() == sealed.digest
+    assert summary["bundle_after"] == sealed.digest != summary["bundle_before"]
+    assert summary["mode"] == "regovern" and summary["everything_else_unchanged"] is True
+    assert summary["profiles"] == [c2_route.ONE_PASS_PROFILE_ID, c2_route.ONE_PASS_FLEX_PROFILE_ID]
+    assert summary["stages_changed"] == 6 * len(c2_route.acquisition_policies(sealed))
+    assert summary["wording_after"] == [GEMINI_WORDING]
+    assert GEMINI_WORDING not in summary["wording_before"]
+    # It is its own seal: nothing else rides along, and a non-Gemini profile is refused.
+    assert one_pass_c2_seal.main([*arguments, "--one-pass"]) == 2
+    assert one_pass_c2_seal.main([*arguments, "--profile", "no-such-profile"]) == 2
+    # Without it, the classic inputs are still required, and --profile alone is refused.
+    plain = ["--bundle", str(tmp_path / "bundle.json"), "--out", str(out)]
+    assert one_pass_c2_seal.main(plain) == 2
+    assert one_pass_c2_seal.main([*plain, "--profile", c2_route.ONE_PASS_PROFILE_ID]) == 2

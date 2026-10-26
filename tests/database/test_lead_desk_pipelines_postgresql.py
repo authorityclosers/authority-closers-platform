@@ -80,7 +80,7 @@ def test_pipelines_each_with_their_own_stages_and_sources(
                 assert partner["pipeline"] == "partner_outreach" and partner["version"] == 1
                 assert [s["label"] for s in partner["stages"]][:3] == [
                     "New lead",
-                    "Couldn't reach",
+                    "Not connected",
                     "Discovery call",
                 ]
                 main = (await client.get(f"{BASE}/journey")).json()

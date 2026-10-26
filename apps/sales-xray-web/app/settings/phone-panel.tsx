@@ -129,6 +129,8 @@ export function VibrationPanel() {
         note="Alert sounds follow your phone's notification settings."
         chipOn="Vibration on"
         chipOff="Vibration off"
+        // Turning vibration off is never felt; turning it on is, once saved.
+        haptics={false}
         on={chosen ?? hapticsOn()}
         onChange={async (next) => {
           setHaptics(next);

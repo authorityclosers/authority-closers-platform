@@ -47,7 +47,7 @@ const LEADS = [
     "Nashik",
     "Plot",
     "not_connected",
-    "Couldn't reach",
+    "Not connected",
     "retry",
   ],
   [

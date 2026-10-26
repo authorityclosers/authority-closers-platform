@@ -47,3 +47,33 @@ def test_the_one_click_raises_need_settings_write() -> None:
     for path in ("/v1/admin/call-data/raise", "/v1/admin/lead-desk-ai/raise"):
         assert route_scope(routes, "POST", path) == "settings:write"
         assert route_scope(routes, "GET", path) is None
+
+
+def test_bug_scopes_reach_the_bug_issues_and_nothing_else() -> None:
+    """v0.93 (owner, 25 Oct 2026): the agents ac-bugs key lists, shows and sets issues only."""
+    routes = key_routes()
+    assert {"bugs:read", "bugs:write"} <= set(SCOPES)
+    assert route_scope(routes, "GET", "/v1/admin/bugs/issues") == "bugs:read"
+    assert route_scope(routes, "GET", "/v1/admin/bugs/issues/12") == "bugs:read"
+    assert route_scope(routes, "POST", "/v1/admin/bugs/issues/12/status") == "bugs:write"
+    # v0.93 (owner, 26 Oct 2026: "admin api, cli, mcp"): reports too, by id or number, and
+    # the Admin MCP; never a report's picture or voice note, nor a change to Admin.
+    assert route_scope(routes, "GET", "/v1/admin/bugs") == "bugs:read"
+    assert route_scope(routes, "GET", "/v1/admin/bugs/9") == "bugs:read"
+    report = "/v1/admin/bugs/6d1c2a1e-3b4d-4c5e-8f6a-7b8c9d0e1f2a"
+    assert route_scope(routes, "GET", report) == "bugs:read"
+    assert route_scope(routes, "POST", "/v1/admin/bugs/9/events") == "bugs:write"
+    assert route_scope(routes, "POST", f"{report}/events") == "bugs:write"
+    assert route_scope(routes, "POST", "/v1/admin/bugs/mcp") == "bugs:read"
+    for method, path in (
+        ("GET", f"{report}/screenshot"),
+        ("GET", "/v1/admin/bugs/9/voice"),
+        ("GET", "/v1/admin/bugs/9x"),
+        ("POST", "/v1/admin/bugs/9"),
+        ("DELETE", "/v1/admin/bugs/9"),
+        ("GET", "/v1/admin/bugs/mcp/x"),
+        ("POST", "/v1/admin/bugs/issues"),
+        ("DELETE", "/v1/admin/bugs/issues/12"),
+        ("GET", "/v1/admin/bugs/issues/12/status/../../staff-keys"),
+    ):
+        assert route_scope(routes, method, path) is None, (method, path)

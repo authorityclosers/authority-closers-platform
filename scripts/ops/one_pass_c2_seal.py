@@ -29,6 +29,12 @@ professional_gate_ref, after the owner confirmed the OpenAI DPA) (owner, 21 Oct 
 - ``--brain4`` (with ``--one-pass``): the one-pass request is recipe v2, the same read plus
   the Brain 4.0 part (``one_pass.brain4_part``), on its own profiles beside v1's
   (``gemini-one-pass-v2``, ``luna-c4-one-pass-v2``, each with ``-flex``).
+- ``--gemini-governance FILE`` alone (with ``--bundle`` and ``--out``; owner, 26 Oct 2026, a new
+  privacy revision on production one-pass): a re-seal in place. FILE is Root's JSON of exactly
+  ``privacy_revision`` and ``privacy_notice``; they replace those two fields on every stage of the
+  all-Gemini profiles (``--profile`` names some instead; repeatable). Refused unless every other
+  byte of the bundle is unchanged (``c2_route.regovern``). The summary prints the wording before
+  and after.
 
 Writes ``hosted-approval.json`` (canonical bytes) and ``hosted-approval.sha256`` to
 ``--out`` and prints a content-free summary: the old and new digests, the profile added
@@ -51,8 +57,8 @@ from ac_platform.one_pass import c2_route, markers
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="one_pass_c2_seal")
     parser.add_argument("--bundle", type=Path, required=True)
-    parser.add_argument("--classic", type=Path, required=True)
-    parser.add_argument("--configuration", type=Path, required=True)
+    parser.add_argument("--classic", type=Path)
+    parser.add_argument("--configuration", type=Path)
     parser.add_argument("--out", type=Path, required=True)
     parser.add_argument(
         "--flex",
@@ -91,7 +97,27 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="with --one-pass: recipe v2, the one-pass request plus the Brain 4.0 part",
     )
+    parser.add_argument(
+        "--gemini-governance",
+        type=Path,
+        help="alone: privacy_revision and privacy_notice for the all-Gemini profiles (JSON)",
+    )
+    parser.add_argument(
+        "--profile",
+        action="append",
+        default=[],
+        metavar="PROFILE",
+        help="with --gemini-governance: only this all-Gemini profile (repeatable)",
+    )
     arguments = parser.parse_args(argv)
+    if arguments.gemini_governance is not None:
+        return _regovern(arguments)
+    if arguments.profile:
+        print(json.dumps({"refused": "profile_needs_gemini_governance"}), file=sys.stderr)
+        return 2
+    if arguments.classic is None or arguments.configuration is None:
+        print(json.dumps({"refused": "classic_and_configuration_required"}), file=sys.stderr)
+        return 2
     governance = None
     if arguments.brain4 and not arguments.one_pass:
         print(json.dumps({"refused": "brain4_needs_one_pass"}), file=sys.stderr)
@@ -210,6 +236,75 @@ def main(argv: list[str] | None = None) -> int:
                 "profiles_per_policy": [len(item.profiles) for item in policies],
                 "classic_stages_unchanged": True,
                 **openai_summary,
+            },
+            indent=2,
+        )
+    )
+    return 0
+
+
+def _wording(bundle: object, profiles: tuple[str, ...]) -> list[dict[str, str]]:
+    seen: list[dict[str, str]] = []
+    for policy in c2_route.acquisition_policies(bundle):  # type: ignore[arg-type]
+        for profile in policy.profiles:
+            if profile.profile_id in profiles:
+                for stage in profile.stages:
+                    item = {
+                        field: getattr(stage, field) for field in c2_route.GEMINI_GOVERNANCE_FIELDS
+                    }
+                    if item not in seen:
+                        seen.append(item)
+    return seen
+
+
+def _regovern(arguments: argparse.Namespace) -> int:
+    """The privacy wording of the all-Gemini profiles, re-sealed in place (nothing else)."""
+    others = (
+        arguments.classic,
+        arguments.configuration,
+        arguments.openai_governance,
+    )
+    flags = (
+        arguments.flex,
+        arguments.one_pass,
+        arguments.luna,
+        arguments.luna_c4,
+        arguments.brain4,
+        arguments.retire,
+    )
+    if any(item is not None for item in others) or any(flags):
+        print(json.dumps({"refused": "gemini_governance_is_its_own_seal"}), file=sys.stderr)
+        return 2
+    bundle = load_hosted_approval_bundle(arguments.bundle.read_bytes())
+    governance = json.loads(arguments.gemini_governance.read_text())
+    try:
+        sealed = c2_route.regovern(bundle, governance, profiles=tuple(arguments.profile) or None)
+    except c2_route.SealError as error:
+        print(json.dumps({"refused": str(error)}), file=sys.stderr)
+        return 2
+    profiles = tuple(arguments.profile) or c2_route.gemini_profiles(bundle)
+    arguments.out.mkdir(parents=True, exist_ok=True, mode=0o700)
+    (arguments.out / "hosted-approval.json").write_bytes(sealed.to_json())
+    (arguments.out / "hosted-approval.sha256").write_text(sealed.digest + "\n")
+    policies = c2_route.acquisition_policies(sealed)
+    print(
+        json.dumps(
+            {
+                "environment": sealed.environment,
+                "mode": "regovern",
+                "bundle_before": bundle.digest,
+                "bundle_after": sealed.digest,
+                "profiles": list(profiles),
+                "policies": [str(item.tenant_id) for item in policies],
+                "stages_changed": sum(
+                    len(profile.stages)
+                    for policy in policies
+                    for profile in policy.profiles
+                    if profile.profile_id in profiles
+                ),
+                "wording_before": _wording(bundle, profiles),
+                "wording_after": _wording(sealed, profiles),
+                "everything_else_unchanged": True,
             },
             indent=2,
         )

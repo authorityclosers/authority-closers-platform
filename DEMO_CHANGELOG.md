@@ -4,6 +4,52 @@ Each fix for the demo: what changed, how it was verified, and what is still flak
 Newest first. Sessions add their own lines and commit them with the fix.
 No client names here.
 
+## Facebook lead sources (Meta-suite session): bug reports #7, #8, #10, #12, #13, #14
+
+- **Sources as rows: account → Page → form, a switch per Page and per form, chips for status (#21, #22)**, this commit.
+  - What changed:
+    - Each Facebook account's Pages and every form are plain rows: a Keep live switch per form, one icon for a form's old leads, and status as chips.
+    - No paragraphs. "Another account" sits beside Add a Page.
+    - Text sits on the card's own padding.
+  - Verified by: `meta-sources.test.tsx`; wb-ci web and e2e; screenshots of `/review-fixture/meta-sources` at phone and computer sizes.
+
+- **Connections: every Page on at once, older leads from the sheet, the test lead optional (dev #2, #3), and "Use another Facebook account" in plain sight (#8)**, this commit.
+  - What changed:
+    - The Facebook & Instagram sheet has "Turn on every Page, all forms".
+    - A new step, "Bring in the older leads", shows per Page what was read, what was new and what was already in the leads.
+    - "Send a test lead" is optional and never holds anything up.
+  - Verified by: `meta-setup.test.tsx`, `connected-apps.test.tsx` and `meta-sources.test.tsx`; wb-ci full and e2e, together with the commit before.
+
+- **Every form on every Page, picked forms' older leads or live, which account, and loading that ends (#10, #12, #13, #14, #7, #8)**, this commit.
+  - What changed:
+    - Sources lists every form on each Facebook Page (active, archived, draft), with "N on Meta" and whether it comes in live. Select all, or pick some, then "Bring old leads" or "Keep live".
+    - A run says "100 leads read: 0 new, 100 already in your leads".
+    - Each Page shows the Facebook account it came through, with its photo. "Use another Facebook account" asks Facebook to sign in again.
+    - Meta, Google and Connections reads give up after 15 seconds with "Didn't load" and Try again.
+    - "Check now" keeps new leads apart from people who asked again.
+  - Found: AC's Page has 4 forms, all active, with 103 leads on Meta (a read-only probe). The last 90 days hold 99 ad leads, from 4 now-paused campaigns, and all were read. Meta keeps leads 90 days, so the May campaign's leads can't come in by API.
+  - Verified by:
+    - `meta-sources.test.tsx`, `sources-view.test.tsx` and `connected-apps-limit.test.ts`; vitest app/leads and Connections: 412 tests.
+    - `test_meta.py`, `test_meta_backfill.py` and `test_meta_pull.py`.
+    - eslint, tsc and mypy; wb-ci full and e2e (runs in the commit's notes).
+  - Open: connecting Pages from a Facebook account that isn't an app tester still needs Meta's App Review (Leads app, in review since 19 Oct). Until then, the tester workflow.
+
+- **Meta leads already in the leads are linked, not repeated; new ones go through the duplicate engine (P0)**, this commit.
+  - Found on production (counts only, logged as `fb10*.sql`):
+    - AC's Page was switched on at 18:23Z, 25 Oct.
+    - Its older-leads run read 102 leads and filed 100 as repeats onto the leads imported from a file.
+    - That reset 94 follow-ups to 18:24 and added "Asked again" lines. None reopened.
+    - It said "none added".
+  - What changed:
+    - A Meta lead whose person is already a lead made at or after the form was sent gets one note on that lead (Meta lead id and source). Nothing else changes.
+    - A newer form is still a repeat.
+    - New Meta leads are rescanned at once. A certain pair is merged (undo within 30 days); any other pair goes to the review queue.
+  - Verified by:
+    - `test_meta_backfill.py` and `test_duplicate_intake.py`.
+    - `test_lead_desk_meta_postgresql.py`: 4 imported leads and the Page connected give 0 new, 4 notes, and Lost stays Lost. A newer Meta lead with a known email is merged.
+    - wb-ci targeted run 40224272062.
+  - Open: putting the 100 AC leads back is a data change waiting for the owner's approval. Until v0.93 is live, nobody presses "Bring in older leads" on AC's Page.
+
 ## P0: Admin bug panel (sign-in session)
 
 Production bug panel, exported 25 Oct ~16:00Z through the logged read path (`/home/suyash/costq`,
@@ -56,6 +102,69 @@ org, and all are still `new`. Grouped by root cause:
     the recording from the lead.
   - Verified by: `organisation-view.test.tsx`; wb-ci --web 40212885213.
 
+### Bug status without Admin's form (before v0.93)
+
+- **`scripts/data-changes/bug-status.py`**, 8578fec86.
+  - Sets reports' status by number through Admin's own change function, with the note and one audit each naming the approver and "Claude (orchestrator)".
+  - Dry run by default, idempotent, one transaction, and v0.91-safe.
+  - Verified by: `test_bug_status_data_change_postgresql.py` and a dry run on dev (#1, #2 → fixed, rolled back).
+  - The orchestrator runs it on production once the owner approves.
+
+### v0.93 (cut 23:00Z on 26 Oct)
+
+- **Bug issues and ac-bugs (owner: reports "combined, analysed and clubbed together", marked fixed "via bugs api cli")**, 3a6518cb5 (migration 0138).
+  - What changed:
+    - Reports that look like one problem join one issue: same screen pattern, and the same newest error or else the same key words.
+    - An issue has a status: new, fixing, fixed in the next update, or solved. Each status set reaches every report on the issue.
+    - Solved puts "Fixed: <their report>" in each reporter's bell, once.
+    - `ac-bugs list|show|set|released` (`--json`) works through Admin's API with `AC_BUGS_KEY`: a staff key holding only bugs:read and bugs:write.
+    - `ac-bug-alerts@production` keeps a Pulse task per issue (marker `bug:<issue id>`).
+    - `ac-bugs-release` marks issues Solved when a release carrying their fix is live.
+    - Admin /bugs leads with Issues.
+    - Owner, 26 Oct: "admin api, cli, mcp".
+      - Admin's report routes take a number (`/v1/admin/bugs/9`), and the bugs key reaches the list, one report and its status.
+      - `ac-bugs reports | report N | report-set N`.
+      - MCP at `https://admin.authorityclosers.com/v1/admin/bugs/mcp` (list_bugs, get_bug, set_bug_status), staff keys only.
+      - Lists mask the words, and every change is audited naming the key.
+  - Verified by: `test_bug_issues_postgresql.py`, `test_issue_fingerprint.py`, `test_bug_issue_host_tools.py`, `test_staff_key_reads.py`; wb-ci --full 40245395931, --e2e 40245388557.
+- **Profile photos**, 3a6518cb5 (storage) and ec8822f6f (screens).
+  - Tap your avatar in Settings → Profile; it picks from the gallery only. The server crops and resizes the photo and keeps it as a file, and the old bytes are the read fallback.
+  - Members and a person's page show photos instead of initials.
+  - An unverified phone says what comes next.
+  - Verified by: `test_profile_details.py`, `test_organisation.py`, `profile-details.test.tsx`.
+- **#15: a report's route was "/[long]" with area "other"**, 706843908.
+  - Root cause: the long-string mask counted "/", so a call page's whole path became "[long]".
+  - Now a route is its pattern (e.g. `/analysis/calls/:id`, area Report), and the report carries the screen's name; masking is kept.
+  - Verified by: `test_bug_report_scrub.py`, `scrub.test.ts`.
+- **#11: the microphone can't be turned on (Windows Chrome)**, 20f23ddb1.
+  - Root cause: the edge's shared security headers send `microphone=()` and, being deferred, override the app's `microphone=(self)`.
+  - The Sales X-Ray page handle now sends `microphone=(self)`.
+  - The Android app before 1.0.35 says "Voice notes come in the next app update". A refusal gives the browser's own route.
+  - Verified by: `test_sales_xray_microphone_edge.py`, `voice-note.test.tsx`. **Check on staging after v0.93:** `curl -sI https://salesxray-staging.authorityclosers.com/ | grep -i permissions-policy`.
+- **#5: Ctrl B shown in the menu**, ca94ae5a0.
+  - The You menu's Report a problem row shows Ctrl B (⌘B on a Mac).
+  - A test opens the menu and reports with the shortcut.
+  - Verified by: `bug-report-entry.test.tsx`.
+- **P1: accepting the full report froze that seller's app ~28 s**, 3f7f70274.
+  - Root cause: the worker's provider call kept the seller's person and session locked, and the recording FOR UPDATE, for the whole call. Every request of that person signs in with the person FOR UPDATE, so they all queued, and the call page said "taking longer than expected".
+  - Now, during the call only:
+    - the person and session are not locked, nor are the profile, the configuration's controller, or the budget and minute accounts;
+    - the recording is held shared.
+  - Deleting the recording, withdrawing consent, revoking the lease and erasing media still wait for the call.
+  - **Change in meaning, accepted by the orchestrator, 26 Oct (for the CTO's review):** a sign-out or suspension during a call no longer waits for it. The next step re-admits with full locks and keeps nothing if that fails.
+  - Verified by: `test_inference_call_locks_postgresql.py` (a real held call: the person's sign-in and the call page go through, a delete waits) and the worker suites.
+- **Privacy page: Google for the call audio (owner-approved new version, 26 Oct)**, e32644858.
+  - "AI service providers for call analysis" names Google (Gemini API) for the call audio and transcript, and ElevenLabs only for calls before 21 Oct.
+  - The plan display never prints a sealed notice naming a provider the plan doesn't use.
+  - Root fix (notices built per stage provider) for v0.94 with the pipeline owner.
+- **Pulse bug tasks carry only the screen, the count and the Admin link**, 7e7d8b140.
+- **Shake to report opened by itself on a pick-up**, 7bdda7a40: it now needs a deliberate double shake (4 swings in 1.5 s, 20 m/s²). Verified by: `shake.test.ts`.
+- **Dev #2: the picture left an open side panel out**, ca94ae5a0.
+  - Root cause: the page copy skipped every dialog, and side panels and sheets are dialogs.
+  - Now only the reporter's own sheet is left out, and open layers are drawn over the page in order.
+  - Key-shaped text in the picture reads as a marker.
+  - Verified by: `bug-report-entry.test.tsx` (panel kept, reporter left out, key masked).
+
 ### Still flaky or open
 
 - **Recordings from phones (B, #4).**
@@ -65,6 +174,12 @@ org, and all are still `new`. Grouped by root cause:
   - Analytics could also show logged calls with no recording; not done tonight.
 - **Facebook:** connecting more than one account, a list of every form, and managing forms in one place are not built. Accounts outside the Meta app's testers can't connect until Meta's review passes.
 - **Marking the 8 reports Solved in production:** waiting for the fixes to be live and for the orchestrator's go-ahead.
+- **Ops finding (orchestrator, 26 Oct ~21:15Z): uploads were blocked since the 17 Oct reboot.**
+  - Production's media scanner couldn't scan anything after the 17 Oct 18:01Z reboot: its 8 GiB temp ext4 wasn't remounted, clamd got "Permission denied", and every scanned upload returned 503 media-scanner-unavailable.
+  - Re-run with the owner's approval at ~21:15Z (`infra/media-safety/manage.py start`, release ebe1b0bb); `prove` says ready.
+  - Follow-up after the demo: run the controller at boot (a systemd unit), so a reboot never silently blocks uploads.
+  - Before calling photos done: upload a test photo on staging after v0.93 deploys and confirm it passes the scanner.
+- **Found while fixing #11, not changed:** the Sales X-Ray handles' own `Referrer-Policy "no-referrer"` never reaches browsers. The shared block wins, so browsers get `strict-origin-when-cross-origin`, as before. Changing it is a separate decision.
 
 ## P2 onboarding and notifications (Lead OS session)
 
@@ -89,6 +204,27 @@ org, and all are still `new`. Grouped by root cause:
 - **Red banner for a follow-up due within the hour (P1 step 12)**, 5b073299b.
   - What changed: the app asks `GET /v1/lead-desk/soon` every minute and on focus. It raises a red top banner with the urgent haptic, "<lead>: follow-up in 40 min", with Open going to the lead. Once per follow-up; quiet outside work hours.
   - Verified by: `due-soon.test.tsx`, `test_lead_desk_digests_postgresql.py`; wb-ci full and e2e. The 360/390 matrix is on `/review-fixture/alerts?level=due`.
+- **Leads setup: Stages and Sources open on a tap**, 77b722e90.
+  - What changed: the part row read its part from the address only, which a bare `history.replaceState` doesn't refresh, so a tap changed the address but not the page. A tap now shows its part at once and keeps it in the address (Connections too). Every tile's note wraps to two lines, and first-call times read "22h 38m". The Sellers rows' "1/50 open" is that seller's real limit (no change).
+  - Verified by: `org-hub.test.tsx`, `words.test.ts`; wb-ci full and e2e.
+- **The sales team's eight stages**, eaf7dfa88 (v0.93): New lead, Not connected, Discussion incomplete, Interested, Meeting/Demo scheduled, Meeting/Demo completed, Won, Lost.
+  - What changed:
+    - Junk is no stage: a lead that was never real is Lost, "Junk / not a real lead". The board has no Junk column.
+    - Pipeline numbers count it, and "Merged into another lead", as Junk, never as a lost deal.
+    - New organisations start on these stages.
+    - Organisations on the old nine move by `lead-stages-template.py`, their Junk leads going to Lost with that reason (production after the owner's approval).
+  - Verified by: `test_transitions.py`, `test_journey.py`, `test_reports.py`, the acceptance, pipeline-report, merge, onboarding and stages-script database tests; wb-ci full and e2e.
+- **Onboarded sellers skip "A few details"**, eaf7dfa88: `onboard-organisation.py` now writes each person's profile phone (and name when empty), never over a phone they set, so a seller goes from Sign in with Google straight to the terms. Verified by `test_onboard_organisation_data_change_postgresql.py`.
+- **Switches answer a tap at once**, 16f0c77a4 (Admin bugs #1 and #2): Taking new leads and every switch on the same pattern give a haptic and a pressed look on the tap, show the new state before the save returns, then a short "Taking new leads: On" and a success haptic; a failed save goes back, with the error haptic and its corner card. Verified by `state-switch.test.tsx`, `phone-panel.test.tsx`; wb-ci full and e2e.
+- **The red banner on a 320 px phone**, 1c36f6d17: Open goes under the words, so a long lead name wraps between words. Verified by the 320/360 matrix; wb-ci full and e2e.
+- **After a call, the lead fills itself and can be put back** (v0.93, owner's after-call chain, server side):
+  - What already existed: name, company, city and interest filled from the call only into empty or AI-filled fields, never over a person's value; the rest asked one at a time.
+  - New:
+    - Each fill names the fact that made it and what the field held before. "Filled in for you" says `can_undo`, and `POST /v1/sales-xray/call-data/objects/{id}/undo-fill` puts the field back in one tap, only while nobody has changed it since. The fact becomes "rejected", so the same words don't fill it again.
+    - The lead's history says "filled from the call" (`via: "call"`); an undone fill and its undo are not shown.
+    - A suggested WhatsApp or SMS after the newest call, in its language (English, Hinglish, Hindi or Marathi): thanks, and the agreed next talk while it is still ahead. Fixed wording, no model; sending only opens WhatsApp or SMS, keeping the key `after_call`.
+  - Not yet: starting the analysis by itself after every call needs a standing consent (a design for the owner); the screens are the builder's.
+  - Verified by: `test_call_data_after_call_postgresql.py`, `test_call_data_http_postgresql.py`, `test_call_data_reply.py`; wb-ci full and e2e.
 - **Who did what, with their photo**, a578dd0e9: history, activity and tasks carry the person's id and photo URL for avatars. Verified by wb-ci full and e2e.
 
 ### Still flaky or open

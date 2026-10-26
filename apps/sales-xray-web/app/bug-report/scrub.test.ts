@@ -116,3 +116,18 @@ it("names the system and browser without anything personal", () => {
   expect(osFrom(edge)).toBe("Windows");
   expect(browserFrom(edge)).toBe("Edge 141");
 });
+
+// #15: "/analysis/calls/<uuid>" was "/[long]"; a route is its pattern now.
+it("keeps a route's pattern, with ids taken out and personal data masked", () => {
+  expect(
+    scrubRoute("/analysis/calls/0f8e2a4c-5b6d-4e7f-8a9b-0c1d2e3f4a5b"),
+  ).toBe("/analysis/calls/:id");
+  expect(scrubRoute("/prospects/48213/notes")).toBe("/prospects/:id/notes");
+  expect(
+    scrubRoute("/leads?lead=0f8e2a4c-5b6d-4e7f-8a9b-0c1d2e3f4a5b&tab=stages"),
+  ).toBe("/leads?lead=:id&tab=stages");
+  expect(scrubRoute("/x/a.person@example.test?q=a.person@example.test")).toBe(
+    "/x/[email]?q=[email]",
+  );
+  expect(scrubRoute("/auth/complete?code=987654")).toBe("/auth/complete?code=");
+});

@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
+from zoneinfo import ZoneInfo
 
 import httpx
 import pytest
@@ -33,11 +34,20 @@ from tests.database.test_conversation_submission_http_postgresql import ORIGIN, 
 from tests.database.test_lead_desk_postgresql import _organisation
 
 WRITE = {"Origin": ORIGIN, "Content-Type": "application/json"}
-# The fixture call plus a city said once, not confidently: asked, not filled.
+IST = ZoneInfo("Asia/Kolkata")
+# The follow-up the call agrees, two days ahead.
+AHEAD = (datetime.now(IST) + timedelta(days=2)).date().isoformat()
+# The fixture call, its follow-up ahead, plus a city said once, not confidently: asked,
+# not filled.
 WITH_CITY = {
     **ANSWER,
     "facts": [
-        *ANSWER["facts"],
+        *(
+            {**fact, "value": {**fact["value"], "date": AHEAD}}
+            if fact["type"] == "commitment.follow_up"
+            else fact
+            for fact in ANSWER["facts"]
+        ),
         {
             "type": "company.location",
             "value": {"text": "Pune"},
@@ -206,11 +216,46 @@ def test_a_call_fills_its_lead_and_asks_the_seller(postgres_harness: Any, tmp_pa
                 assert desk["lead"]["city"] == "Pune"
                 edited = [e for e in desk["events"] if e["kind"] == "edited"]
                 assert edited and edited[0]["changed"] == ["city"]
+                assert body["reply"]["language"] == "hinglish"
+                assert body["reply"]["follow_up"] == "Friday 4 PM"  # still ahead
+
+                # The follow-up kept in one tap becomes the lead's next call.
+                follow = next(q for q in body["questions"] if q["type"] == "commitment.follow_up")
+                kept_follow = await client.post(
+                    f"{BASE}/objects/{follow['object_id']}/decision",
+                    json={"command_id": str(uuid4()), "decision": "accepted"},
+                    headers=WRITE,
+                )
+                assert kept_follow.status_code == 200, kept_follow.text
+                desk = (await client.get(f"/v1/lead-desk/leads/{lead_id}")).json()
+                assert datetime.fromisoformat(desk["lead"]["next_action_at"]) == (
+                    datetime.fromisoformat(f"{AHEAD}T16:00:00+05:30")
+                )
+
+                # One tap puts back what the call filled: the company was empty before.
+                now_view = (await client.get(f"{BASE}/leads/{lead_id}")).json()
+                filled = {f["field"]: f for f in now_view["filled"]}
+                assert filled["company"]["can_undo"] is True
+                undo = f"{BASE}/objects/{filled['company']['object_id']}/undo-fill"
+                refused = await client.post(undo, json={"command_id": str(uuid4())})
+                assert refused.status_code == 403
+                undone = await client.post(undo, json={"command_id": str(uuid4())}, headers=WRITE)
+                assert undone.status_code == 200, undone.text
+                assert {f["field"] for f in undone.json()["filled"]} == {"name"}
+                twice = await client.post(undo, json={"command_id": str(uuid4())}, headers=WRITE)
+                assert twice.status_code == 409
+                desk = (await client.get(f"/v1/lead-desk/leads/{lead_id}")).json()
+                assert desk["lead"]["company"] is None
+                # The name's fill says where it came from; the undone one is not shown.
+                fills = [e for e in desk["events"] if e.get("via") == "call"]
+                assert [(e["changed"], e["fill_object_id"]) for e in fills] == [
+                    (["name"], filled["name"]["object_id"])
+                ]
                 taxonomy = await client.get(f"{BASE}/taxonomy")
                 assert taxonomy.json()["version"] == "call-taxonomy/2"
                 async with setup.sessions() as db:
                     lead = (await db.execute(select(Lead).where(Lead.id == lead_id))).scalar_one()
-                    assert (lead.name, lead.company) == ("Amit Sharma", "XYZ Digital")
+                    assert (lead.name, lead.company) == ("Amit Sharma", None)
                 # A lead that is not on this desk is not found.
                 missing = await client.get(f"{BASE}/leads/{uuid4()}")
                 assert missing.status_code == 404

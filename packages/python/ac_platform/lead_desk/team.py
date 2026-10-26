@@ -251,10 +251,12 @@ async def team_progress(desk: LeadDesk) -> tuple[SellerTargets, ...]:
 
 
 def nudges_on(config: dict[str, Any] | None, person: UUID) -> bool:
-    """Whether this seller gets nudges: on for the workspace and not off for them."""
+    """Whether this seller gets nudges: on unless an owner or manager turned them off for
+    the workspace or for this seller (owner, 26 Oct 2026, report #23: "of course nudge
+    should be already on")."""
     team = dict((config or {}).get("team") or {})
     off = {str(item) for item in team.get("nudges_off_for") or []}
-    return bool(team.get("nudges")) and str(person) not in off
+    return bool(team.get("nudges", True)) and str(person) not in off
 
 
 def _numbers(found: Sequence[goals.Fact], since: datetime, until: datetime) -> dict[str, int]:
@@ -610,8 +612,8 @@ NUDGE_TITLES: Final = {"drift": "Behind pace", "idle": "Leads waiting"}
 
 
 async def save_nudges(desk: LeadDesk, command: NudgesCommand) -> Team:
-    """An owner or manager turns nudges on for the workspace (off by default) and off for
-    chosen sellers."""
+    """An owner or manager turns nudges off or back on for the workspace (on by default)
+    and off for chosen sellers."""
     desk._require_manager()
     off = sorted({str(person) for person in command.off_for})
     members = {str(rep.state.person_id) for rep in await desk._reps()}

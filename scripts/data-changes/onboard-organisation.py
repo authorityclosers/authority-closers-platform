@@ -6,7 +6,11 @@ collect details on WhatsApp, Claude Code sets up her org, adds the sellers as Pl
 imports her leads and assigns them by called by". In one transaction, through the app's own code:
   1. an account for the owner and each seller, by their Google email, verified, with no consent
      recorded (they accept the terms at their first sign-in, and Sign in with Google joins the
-     account its verified email names);
+     account its verified email names), and their Sales X-Ray profile: the name and phone from
+     the input (+91), so a first call goes straight to review instead of "A few details before
+     we review your call" (orchestrator, 25 Oct 2026). A name or phone the person set
+     themselves is kept; a number another person's profile has is flagged for review, as the
+     app's own profile does;
   2. the organisation, as an operator creates one (``OrganisationService.create``, idempotent by
      command id), the owner as its Owner, the sellers as members; calls are made from their own
      phones (an organisation is never a sandbox here, so the desk never simulates calls);
@@ -62,9 +66,12 @@ from ac_platform.conversation_intelligence.synthetic_import_models import (
 )
 from ac_platform.identity.models import Person
 from ac_platform.identity.repositories import AsyncSqlAlchemyIdentityRepository
+from ac_platform.identity.sales_xray_profile import normalize_profile_name, validate_e164
+from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
 from ac_platform.identity.services import PersonSnapshot
-from ac_platform.lead_desk.capture import key, read_csv, suggest_mapping
+from ac_platform.lead_desk.capture import key, normalise_phone, read_csv, suggest_mapping
 from ac_platform.lead_desk.contracts import FollowUp, RepRules
+from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead, LeadRep
 from ac_platform.lead_desk.store import LeadDesk, Viewer, content_ref
 from ac_platform.organisations.service import OrganisationService
@@ -275,6 +282,57 @@ async def _account(
     return person_id, "made"
 
 
+async def _profile(db: AsyncSession, person_id: UUID, person: Member) -> str:
+    """The person's Sales X-Ray profile, from the input where it is empty: their name and
+    their phone (+91). Never over what they set themselves. What happened, in a word."""
+    row = await db.get(Person, person_id)
+    if row is None:
+        return "no_account"
+    said: list[str] = []
+    if not (row.display_name or row.first_name or "").strip():
+        row.display_name = normalize_profile_name(person.name)
+        row.revision += 1
+        said.append("name")
+    phone = normalise_phone(person.phone, default_country="91") if person.phone else None
+    try:
+        phone = validate_e164(phone)
+    except ValueError:
+        phone = None  # not a number a profile can keep; said below as no phone given
+    profile: SalesXrayProfile | None = await db.scalar(
+        select(SalesXrayProfile).where(SalesXrayProfile.person_id == person_id)
+    )
+    if phone is not None and (profile is None or profile.phone_number_e164 is None):
+        # A number another person's profile has stays for an admin to review.
+        shared = await db.scalar(
+            select(SalesXrayProfile.person_id)
+            .where(
+                SalesXrayProfile.phone_number_e164 == phone,
+                SalesXrayProfile.person_id != person_id,
+            )
+            .limit(1)
+        )
+        if profile is None:
+            db.add(
+                SalesXrayProfile(
+                    person_id=person_id,
+                    phone_number_e164=phone,
+                    admin_collision_review_required=shared is not None,
+                    revision=1,
+                )
+            )
+        else:
+            profile.phone_number_e164 = phone
+            profile.admin_collision_review_required = shared is not None
+            profile.revision += 1
+        said.append("phone")
+    elif profile is not None and profile.phone_number_e164:
+        said.append("phone_kept")
+    else:
+        said.append("no_phone_given")
+    await db.flush()
+    return "+".join(said)
+
+
 async def _readback(db: AsyncSession, tenant_id: UUID, label: str) -> dict[str, Any]:
     tenant = await db.get(Tenant, tenant_id)
     team = (
@@ -348,7 +406,13 @@ async def run(
     for person in people:
         ids[person.email], state = await _account(db, person, command_id, now)
         accounts.append(
-            {"role": person.role, "name": person.name, "email": _mask(person.email), "is": state}
+            {
+                "role": person.role,
+                "name": person.name,
+                "email": _mask(person.email),
+                "is": state,
+                "profile": await _profile(db, ids[person.email], person),
+            }
         )
     report["accounts"] = accounts
     owner = people[0]
@@ -380,6 +444,8 @@ async def run(
         )
         tenant_id = created.tenant_id
         report["organisation_is"] = "made"
+        # Its leads start on the sales team's stages, as an organisation made in the app does.
+        await journeys.start_organisation(db, tenant_id, approver.id, now)
     else:
         tenant_id = prior.tenant_id
         report["organisation_is"] = "found"

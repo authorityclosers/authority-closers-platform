@@ -37,21 +37,20 @@ afterEach(async () => {
   window.localStorage.clear();
 });
 
-it("cycles System, Light and Dark and applies each theme", async () => {
+it("switches between Light and Dark, starting Light", async () => {
   await render(true);
-  expect(button()?.getAttribute("aria-label")).toBe(
-    "Theme: System. Switch to Light.",
-  );
-  await act(async () => button()?.click());
-  expect(document.documentElement.getAttribute("data-theme")).toBe("light");
   expect(button()?.getAttribute("aria-label")).toBe(
     "Theme: Light. Switch to Dark.",
   );
   await act(async () => button()?.click());
   expect(document.documentElement.getAttribute("data-theme")).toBe("dark");
-  await act(async () => button()?.click());
   expect(button()?.getAttribute("aria-label")).toBe(
-    "Theme: System. Switch to Light.",
+    "Theme: Dark. Switch to Light.",
+  );
+  await act(async () => button()?.click());
+  expect(document.documentElement.getAttribute("data-theme")).toBe("light");
+  expect(button()?.getAttribute("aria-label")).toBe(
+    "Theme: Light. Switch to Dark.",
   );
 });
 

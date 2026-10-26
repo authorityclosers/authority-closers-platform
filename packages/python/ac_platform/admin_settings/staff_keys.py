@@ -48,7 +48,21 @@ from ac_platform.identity.application import AsyncIdentityApplication, ResolvedA
 from ac_platform.identity.models import Session
 from ac_platform.kernel.authz import ActorContext
 
-SCOPES = ("settings:read", "settings:write", "admin:read")
+SCOPES = ("settings:read", "settings:write", "admin:read", "bugs:read", "bugs:write")
+# Bug issues (owner, 25 Oct 2026, v0.93: "mark them fixed via bugs api cli"): a key may
+# hold only these, for the agents' ac-bugs; they reach the issue routes and nothing else.
+BUG_SCOPES = ("bugs:read", "bugs:write")
+# A report by its id or number (v0.93: Admin bug work by API, CLI and MCP).
+_REPORT = r"(?:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}|[0-9]{1,9})"
+BUG_ROUTES: tuple[tuple[str, re.Pattern[str], str], ...] = (
+    ("GET", re.compile(r"^/v1/admin/bugs$"), "bugs:read"),
+    ("GET", re.compile(rf"^/v1/admin/bugs/{_REPORT}$"), "bugs:read"),
+    ("POST", re.compile(rf"^/v1/admin/bugs/{_REPORT}/events$"), "bugs:write"),
+    ("POST", re.compile(r"^/v1/admin/bugs/mcp$"), "bugs:read"),
+    ("GET", re.compile(r"^/v1/admin/bugs/issues$"), "bugs:read"),
+    ("GET", re.compile(r"^/v1/admin/bugs/issues/[0-9A-Za-z-]{1,40}$"), "bugs:read"),
+    ("POST", re.compile(r"^/v1/admin/bugs/issues/[0-9A-Za-z-]{1,40}/status$"), "bugs:write"),
+)
 READ_SCOPE = "admin:read"
 _ID = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
 # The one-click raises Admin offers beside the settings: each saves through its own
@@ -106,6 +120,9 @@ def route_scope(routes: dict[tuple[str, str], str], method: str, path: str) -> s
     """The scope a key needs for this request, or None when no key may make it."""
     if BLOCKED.search(path):
         return None
+    for verb, pattern, needed in BUG_ROUTES:
+        if method == verb and pattern.match(path):
+            return needed
     scope = routes.get((method, path))
     if scope is None and method == "GET" and any(read.match(path) for read in READS):
         return READ_SCOPE
@@ -183,10 +200,16 @@ class StaffKeys:
         if not 1 <= len(label) <= 80:
             raise ConversationError("Name the key (1 to 80 characters).")
         chosen = sorted(set(scopes))
-        if not chosen or not set(chosen) <= set(SCOPES) or "settings:read" not in chosen:
+        bugs_only = set(chosen) <= set(BUG_SCOPES) and "bugs:read" in chosen
+        if (
+            not chosen
+            or not set(chosen) <= set(SCOPES)
+            or ("settings:read" not in chosen and not bugs_only)
+        ):
             raise ConversationError(
                 "Choose settings:read, with settings:write if it may change settings and"
-                " admin:read if it may read calls, organisations, the review queue and health."
+                " admin:read if it may read calls, organisations, the review queue and health;"
+                " or bugs:read and bugs:write alone for bug reports and issues."
             )
         active = await self.database.scalar(
             select(func.count())

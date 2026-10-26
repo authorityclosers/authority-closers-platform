@@ -257,102 +257,125 @@ export function ProfileDetailsPanel() {
         </Button>
       }
     >
-      <div className={styles.photoRow}>
-        <Avatar name={name} photoUrl={details.avatarUrl} size={72} />
-        <div className={styles.photoText}>
-          <strong>{name}</strong>
-          {details.handle ? <span>@{details.handle}</span> : null}
-          <span className={styles.photoActions}>
-            <Button
-              variant="secondary"
-              disabled={busy !== null}
-              onClick={() => picker.current?.click()}
-            >
-              <Camera size={15} aria-hidden="true" />
-              {busy === "photo"
-                ? "Saving…"
-                : details.avatarUrl
-                  ? "Change photo"
-                  : "Add photo"}
-            </Button>
-            {details.ownPhoto ? (
+      {/* The standard card padding (builder, 26 Oct 2026). */}
+      <div className={styles.body}>
+        <div className={styles.photoRow}>
+          {/* Tap the avatar to add or change it (owner, 26 Oct 2026); the gallery only, no
+            camera, so the app needs no camera permission. */}
+          <button
+            type="button"
+            className={styles.avatarButton}
+            aria-label={details.avatarUrl ? "Change your photo" : "Add a photo"}
+            disabled={busy !== null}
+            onClick={() => picker.current?.click()}
+          >
+            <Avatar name={name} photoUrl={details.avatarUrl} size={72} />
+            <span className={styles.avatarBadge} aria-hidden="true">
+              <Camera size={13} />
+            </span>
+          </button>
+          <div className={styles.photoText}>
+            <strong>{name}</strong>
+            {details.handle ? <span>@{details.handle}</span> : null}
+            <span className={styles.photoActions}>
               <Button
-                variant="ghost"
+                variant="secondary"
                 disabled={busy !== null}
-                onClick={() => void removePhoto()}
+                onClick={() => picker.current?.click()}
               >
-                <Trash2 size={15} aria-hidden="true" />
-                Remove
+                <Camera size={15} aria-hidden="true" />
+                {busy === "photo"
+                  ? "Saving…"
+                  : details.avatarUrl
+                    ? "Change photo"
+                    : "Add photo"}
               </Button>
-            ) : null}
-          </span>
-          <input
-            ref={picker}
-            className={styles.picker}
-            type="file"
-            accept="image/*"
-            aria-label="Choose a photo"
-            tabIndex={-1}
-            onChange={(event) => {
-              const file = event.target.files?.[0];
-              event.target.value = "";
-              void choosePhoto(file);
-            }}
-          />
+              {details.ownPhoto ? (
+                <Button
+                  variant="ghost"
+                  disabled={busy !== null}
+                  onClick={() => void removePhoto()}
+                >
+                  <Trash2 size={15} aria-hidden="true" />
+                  Remove
+                </Button>
+              ) : null}
+            </span>
+            <input
+              ref={picker}
+              className={styles.picker}
+              type="file"
+              accept="image/*"
+              aria-label="Choose a photo"
+              tabIndex={-1}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                event.target.value = "";
+                void choosePhoto(file);
+              }}
+            />
+          </div>
         </div>
+        {completion && completion.done < completion.total ? (
+          <Progress completion={completion} />
+        ) : null}
+        {profile.phone_number_e164 && !profile.phone_verified ? (
+          <p className={styles.phoneNote}>
+            Your phone number isn&apos;t verified yet. Verifying it by text
+            message is coming: it lets Sales X-Ray match your calls to you.
+            Until then your team sees the number as you entered it.
+          </p>
+        ) : null}
+        <form
+          id={formId}
+          className={styles.form}
+          onSubmit={(event) => void save(event)}
+          noValidate
+        >
+          <Field
+            label="User id"
+            hint="3 to 30 letters, digits, dots, dashes or underscores. You can change it once a month."
+            error={problems.handle}
+          >
+            <input
+              name="handle"
+              value={draft.handle}
+              maxLength={31}
+              autoCapitalize="none"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="For example, priya.s"
+              onChange={(event) => edit("handle", event.target.value)}
+            />
+          </Field>
+          <Field
+            label="Job title"
+            hint="For example, Sales manager."
+            error={problems.title}
+          >
+            <input
+              name="title"
+              value={draft.title}
+              maxLength={DETAIL_MAX}
+              autoComplete="organization-title"
+              onChange={(event) => edit("title", event.target.value)}
+            />
+          </Field>
+          <Field
+            label="Team"
+            hint="For example, Inside sales."
+            error={problems.team}
+          >
+            <input
+              name="team"
+              value={draft.team}
+              maxLength={DETAIL_MAX}
+              autoComplete="off"
+              onChange={(event) => edit("team", event.target.value)}
+            />
+          </Field>
+        </form>
       </div>
-      {completion && completion.done < completion.total ? (
-        <Progress completion={completion} />
-      ) : null}
-      <form
-        id={formId}
-        className={styles.form}
-        onSubmit={(event) => void save(event)}
-        noValidate
-      >
-        <Field
-          label="User id"
-          hint="3 to 30 letters, digits, dots, dashes or underscores. You can change it once a month."
-          error={problems.handle}
-        >
-          <input
-            name="handle"
-            value={draft.handle}
-            maxLength={31}
-            autoCapitalize="none"
-            autoComplete="off"
-            spellCheck={false}
-            placeholder="For example, priya.s"
-            onChange={(event) => edit("handle", event.target.value)}
-          />
-        </Field>
-        <Field
-          label="Job title"
-          hint="For example, Sales manager."
-          error={problems.title}
-        >
-          <input
-            name="title"
-            value={draft.title}
-            maxLength={DETAIL_MAX}
-            autoComplete="organization-title"
-            onChange={(event) => edit("title", event.target.value)}
-          />
-        </Field>
-        <Field
-          label="Team"
-          hint="For example, Inside sales."
-          error={problems.team}
-        >
-          <input
-            name="team"
-            value={draft.team}
-            maxLength={DETAIL_MAX}
-            autoComplete="off"
-            onChange={(event) => edit("team", event.target.value)}
-          />
-        </Field>
-      </form>
     </Panel>
   );
 }

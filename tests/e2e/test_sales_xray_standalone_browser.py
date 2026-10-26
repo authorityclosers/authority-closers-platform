@@ -608,10 +608,13 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
 
             switcher.click()
             with _navigation_window(page, navigation_windows):
-                workspace_menu.get_by_role(
-                    "menuitemradio",
-                    name=re.compile(r"Synthetic second Sales Xray workspace.*Organisation"),
-                ).click()
+                # The header names the tapped workspace at once (Admin #17, 26 Oct
+                # 2026): wait for the reload into it before reading its data.
+                with page.expect_event("load"):
+                    workspace_menu.get_by_role(
+                        "menuitemradio",
+                        name=re.compile(r"Synthetic second Sales Xray workspace.*Organisation"),
+                    ).click()
                 expect(
                     page.get_by_role(
                         "button",

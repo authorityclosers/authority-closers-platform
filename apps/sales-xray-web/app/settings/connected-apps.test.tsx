@@ -510,9 +510,12 @@ it("sets lead ads up step by step, under an honest note on Meta's review", async
   const fix = note.querySelector<HTMLAnchorElement>("a")!;
   expect(fix.getAttribute("href")).toBe("/leads?tab=sources");
   expect(fix.textContent).toContain("Add a Website form");
+  // Connect, turn on, older leads, and the test lead last and optional (owner's
+  // dev reports #2 and #3, 26 Oct 2026: a failed test held up the old leads).
   const steps = [...sheet.querySelectorAll("ol > li")];
   expect(steps.map((step) => step.getAttribute("data-state"))).toEqual([
     "now",
+    "later",
     "later",
     "later",
   ]);

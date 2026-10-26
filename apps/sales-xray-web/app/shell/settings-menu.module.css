@@ -282,6 +282,19 @@
   color: var(--sx-muted);
 }
 
+/* A computer's shortcut (#5): drawn from data-shortcut, so the row's text stays its label. */
+.shortcut::after {
+  content: attr(data-shortcut);
+  flex: none;
+  padding: 1px 6px;
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: 6px;
+  color: var(--sx-muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* An iOS-style switch, drawn; the row is the control. */
 .switch {
   position: relative;

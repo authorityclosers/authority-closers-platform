@@ -6,6 +6,11 @@ many calls are waiting. The app then asks Sales Xray for the words to show, on
 the seller's own session (``GET /v1/lead-desk/leads/{id}/alert``), so names and
 numbers never pass through Google.
 
+A new lead's owner in the organisation (role owner) hears of it too, in the same pass
+(owner, 26 Oct 2026, dev report #3): the app reads "New lead for Rohan: Asha" for one,
+and "5 new leads" or "40+ new leads" for several, counts only. Leads someone typed in
+by hand don't alert the owner. The sender looks every 10 seconds.
+
 Each assignment and each due time alerts once (``Lead.alerted_assigned_at`` and
 ``Lead.alerted_due_at``). A booked meeting reminds its seller before it starts, once per
 start time (``LeadMeeting.reminded_for``; Lead OS, 24 Oct 2026); it goes as a "due"
@@ -54,6 +59,7 @@ from ac_platform.lead_desk.meetings import REMIND_BEFORE
 from ac_platform.lead_desk.models import Lead, LeadDevice, LeadMeeting
 from ac_platform.lead_desk.store import LeadDesk, Viewer
 from ac_platform.lead_desk.vocabulary import OPEN_STAGES
+from ac_platform.tenancy.models import Membership
 
 log = logging.getLogger(__name__)
 
@@ -61,6 +67,7 @@ SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 WINDOW = timedelta(hours=2)
 BATCH = 200
 _TICK = 30
+_ALERTS_TICK = 10  # new leads reach the phone within seconds (dev report #3)
 _LOCK = (1802, 1262)  # one sender across API processes and slots
 _HOURS_TICK = 60
 _HOURS_LOCK = (1802, 1263)  # one work-hours release across processes
@@ -207,6 +214,37 @@ def _has_device() -> Any:
     )
 
 
+def _owner_has_device() -> Any:
+    """An owner of the lead's organisation has a phone for alerts."""
+    return exists().where(
+        LeadDevice.tenant_id == Lead.tenant_id,
+        Membership.tenant_id == Lead.tenant_id,
+        Membership.person_id == LeadDevice.person_id,
+        Membership.role == "owner",
+        Membership.status == "active",
+        Membership.ended_at.is_(None),
+    )
+
+
+async def _owners(database: AsyncSession, tenant_ids: set[UUID]) -> dict[UUID, list[UUID]]:
+    """Each organisation's owners."""
+    if not tenant_ids:
+        return {}
+    found: dict[UUID, list[UUID]] = defaultdict(list)
+    for tenant_id, person_id in (
+        await database.execute(
+            select(Membership.tenant_id, Membership.person_id).where(
+                Membership.tenant_id.in_(tenant_ids),
+                Membership.role == "owner",
+                Membership.status == "active",
+                Membership.ended_at.is_(None),
+            )
+        )
+    ).tuples():
+        found[tenant_id].append(person_id)
+    return found
+
+
 async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
     """Finds the alerts to send now and marks them sent (the caller commits)."""
     since = now - WINDOW
@@ -215,17 +253,14 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
         await database.scalars(
             select(Lead)
             .where(
-                owned,
+                Lead.owner_person_id.is_not(None),
+                Lead.stage.in_(OPEN_STAGES),
+                or_(_has_device(), _owner_has_device()),
                 Lead.assigned_at > since,
                 Lead.assigned_at <= now,
                 or_(
                     Lead.alerted_assigned_at.is_(None),
                     Lead.alerted_assigned_at < Lead.assigned_at,
-                ),
-                # A lead someone added for themselves needs no alert.
-                or_(
-                    Lead.created_by_person_id.is_(None),
-                    Lead.created_by_person_id != Lead.owner_person_id,
                 ),
             )
             .order_by(Lead.assigned_at)
@@ -274,6 +309,9 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
         meeting.reminded_for = meeting.starts_at
         reminded.append(lead)
     promised = await task_push.collect(database, now)
+    owners = await _owners(
+        database, {lead.tenant_id for lead in assigned if lead.created_by_person_id is None}
+    )
     alerts: dict[tuple[UUID, UUID], Alert] = {}
     seen: set[UUID] = set()
     for kind, leads in (("new", assigned), ("due", due), ("due", reminded), ("due", promised)):
@@ -286,9 +324,17 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
             if lead.id in seen or lead.owner_person_id is None:
                 continue
             seen.add(lead.id)
-            key = (lead.tenant_id, lead.owner_person_id)
-            alert = alerts.setdefault(key, Alert(tenant_id=key[0], person_id=key[1]))
-            alert.leads.append((kind, lead.id))  # type: ignore[arg-type]
+            hear: list[UUID] = []
+            # A lead someone added for themselves needs no alert.
+            if kind != "new" or lead.created_by_person_id != lead.owner_person_id:
+                hear.append(lead.owner_person_id)
+            # The organisation's owners hear of a lead that came in by itself.
+            if kind == "new" and lead.created_by_person_id is None:
+                hear.extend(owner for owner in owners.get(lead.tenant_id, ()) if owner not in hear)
+            for person_id in hear:
+                key = (lead.tenant_id, person_id)
+                alert = alerts.setdefault(key, Alert(tenant_id=key[0], person_id=key[1]))
+                alert.leads.append((kind, lead.id))  # type: ignore[arg-type]
     if not alerts:
         return []
     devices: dict[tuple[UUID, UUID], list[str]] = defaultdict(list)
@@ -376,8 +422,10 @@ async def run_push_sender(
     first_delay: int = _TICK,
     send_pass: Pass = tick,
     what: str = "lead desk",
+    every: int = _TICK,
 ) -> None:
-    """Every 30 seconds, send the alerts that are due. Does nothing until FCM is set up."""
+    """Every ``every`` seconds (30 by default), send the alerts that are due. Does nothing
+    until FCM is set up."""
     with suppress(TimeoutError):
         await asyncio.wait_for(stop.wait(), timeout=first_delay)
     fcm: Fcm | None = None
@@ -394,7 +442,7 @@ async def run_push_sender(
                 except Exception:  # noqa: BLE001 - the loop must survive a bad tick
                     log.warning("%s alert tick failed", what)
             with suppress(TimeoutError):
-                await asyncio.wait_for(stop.wait(), timeout=_TICK)
+                await asyncio.wait_for(stop.wait(), timeout=every)
 
 
 async def run_hours_release(
@@ -437,7 +485,9 @@ def attach(
         async with inner(app) as state:
             stop = asyncio.Event()
             tasks = [
-                asyncio.create_task(run_push_sender(sessions, stop), name="lead-desk-alerts"),
+                asyncio.create_task(
+                    run_push_sender(sessions, stop, every=_ALERTS_TICK), name="lead-desk-alerts"
+                ),
                 asyncio.create_task(
                     run_push_sender(sessions, stop, send_pass=review_push.tick, what="gold review"),
                     name="gold-review-alerts",

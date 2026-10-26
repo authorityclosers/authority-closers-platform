@@ -5,6 +5,7 @@ import base64
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import FastAPI
@@ -58,11 +59,23 @@ class Graph:
         return self.leads
 
 
+class NoLeads:
+    """No lead here yet: every Meta lead goes to intake."""
+
+    async def scalar(self, statement: Any) -> None:
+        return None
+
+
 @dataclass
 class Desk:
     outcomes: list[str]
     now: datetime = datetime(2027, 1, 15, 10, 0, tzinfo=UTC)
     filed: list[dict[str, Any]] = field(default_factory=list)
+    db: NoLeads = field(default_factory=NoLeads)
+    tenant_id: UUID = field(default_factory=uuid4)
+
+    async def settings(self) -> tuple[int, dict[str, Any]]:
+        return 1, {"default_country": "91"}
 
     async def ingest(self, record: Any, **kwargs: Any) -> tuple[None, str]:
         self.filed.append({"record": record, **kwargs})
@@ -118,8 +131,8 @@ def test_every_pull_keeps_the_pages_forms_so_the_page_can_show_them() -> None:
     src = source()
     asyncio.run(meta_pull.pull_source(Desk([]), src, Graph([]), cfg(), now=NOW))
     assert src.config["form_list"] == [
-        {"id": "f1", "name": "A", "status": "ACTIVE"},
-        {"id": "f2", "name": "B", "status": "ACTIVE"},
+        {"id": "f1", "name": "A", "status": "ACTIVE", "leads": None},
+        {"id": "f2", "name": "B", "status": "ACTIVE", "leads": None},
     ]
 
 

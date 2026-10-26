@@ -31,6 +31,21 @@ export function installReportShortcut(): () => void {
   return () => window.removeEventListener("keydown", onKeyDown, true);
 }
 
+/**
+ * The shortcut as this computer writes it ("Ctrl B", "⌘B" on a Mac), for the
+ * menus to show (#5, 26 Oct 2026); none on a touch screen, where there are no keys.
+ */
+export function reportShortcut(): { label: string; keys: string } | null {
+  if (
+    typeof window === "undefined" ||
+    !window.matchMedia?.("(pointer: fine)").matches
+  )
+    return null;
+  return /Macintosh|Mac OS X/.test(navigator.userAgent)
+    ? { label: "⌘B", keys: "Meta+B" }
+    : { label: "Ctrl B", keys: "Control+B" };
+}
+
 /** What the person was looking at when they chose Report on an error card. */
 export type ReportAbout = Readonly<{ title: string; reference?: string }>;
 

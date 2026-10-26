@@ -664,7 +664,7 @@ class GuestOwnership:
 
 
 async def admit_processing_actor(
-    database: AsyncSession, actor: ProcessingActor, now: datetime
+    database: AsyncSession, actor: ProcessingActor, now: datetime, *, lock_person: bool = True
 ) -> ConversationAcquisitionUsage:
     sessions = AcquisitionSessions(
         database, tenant_id=actor.tenant_id, policy_revision="processing-lease-v1"
@@ -697,12 +697,14 @@ async def admit_processing_actor(
             ConversationProcessingPrincipal, lease.principal_id, populate_existing=True
         )
     )
-    person = await database.scalar(
-        select(Person)
-        .where(Person.id == actor.person_id)
-        .with_for_update(read=True)
-        .execution_options(populate_existing=True)
+    # The worker's provider call reads the person without a lock (lock_person=False): the
+    # lease and its advisory lock fence that call, and the person's own requests go on.
+    person_query = (
+        select(Person).where(Person.id == actor.person_id).execution_options(populate_existing=True)
     )
+    if lock_person:
+        person_query = person_query.with_for_update(read=True)
+    person = await database.scalar(person_query)
     member = await database.get(
         Membership, (actor.tenant_id, actor.person_id), populate_existing=True
     )

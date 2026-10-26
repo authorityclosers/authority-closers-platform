@@ -9,6 +9,7 @@
  */
 
 import {
+  BadgeCheck,
   Bell,
   BellRing,
   CheckCheck,
@@ -33,6 +34,7 @@ const KINDS: Record<Kind, { icon: LucideIcon; tone: string; verb: string }> = {
   report_ready: { icon: FileCheck2, tone: "report", verb: "Open report" },
   analysis_paused: { icon: PauseCircle, tone: "paused", verb: "See why" },
   invite_received: { icon: UserPlus, tone: "invite", verb: "Open invite" },
+  bug_solved: { icon: BadgeCheck, tone: "solved", verb: "Open" },
   updates: { icon: Sparkles, tone: "news", verb: "What's new" },
 };
 

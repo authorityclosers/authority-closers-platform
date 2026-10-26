@@ -325,7 +325,9 @@ def test_the_template_map_picks_where_todays_leads_go() -> None:
     assert {"interested", "discussion_incomplete", "meeting_scheduled"} <= set(choices["follow_up"])
     assert not {"won", "lost", "junk"} & set(choices["follow_up"])
     assert (choices["won"], choices["lost"]) == (("won",), ("lost",))
-    assert "junk" not in choices
+    # The sales team's eight keep Junk in Lost: today's Junk goes to Lost.
+    assert choices["junk"] == ("lost",)
+    assert check_places(before, after, {"junk": "lost"}) == {"junk": "lost"}
     places = check_places(before, after, {"follow_up": "interested"})
     # Picked: Follow-up's leads go to Interested (In Follow-Up). Left out: their kind's
     # stage, Discussion Incomplete.

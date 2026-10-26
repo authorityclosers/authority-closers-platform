@@ -17,6 +17,12 @@ its map), done once, in one transaction, for one organisation:
 Nothing is deleted. A dry run (the default) reads in a read-only transaction and takes no
 locks; a rerun after apply finds nothing to do.
 
+A template that changed since an organisation installed it (owner, 25 Oct 2026: the sales
+team's eight stages, Junk no longer a stage) installs again the same way: its stages renamed and
+ordered as the template says, and the map placing the leads (Junk to Lost, "Junk / not a real
+lead", where the new list has no Junk). An organisation whose live stages already read as the
+template's is "already_applied".
+
 Run inside the API container with the deployed settings (its filesystem is read-only, so
 the input goes inline):
     docker exec -i <api> python - '<input JSON>' [--apply] < lead-stages-template.py
@@ -140,7 +146,12 @@ async def run(
     counts = await journeys.lead_counts(db, tenant_id, before)
     stages = journeys.from_template(template_id, before, counts)
     after = journeys.Journey(before.version + 1, template_id, stages, pipeline=key)
-    if before.industry == template_id:
+    # Installed already, as the template reads today: nothing to do. A template that changed
+    # since (renamed, reordered, a stage gone) installs again with the map.
+    current = before.industry == template_id and [
+        (stage.key, stage.label) for stage in before.live
+    ] == [(item.key, item.label) for item in profile.stages]
+    if current:
         # A rerun after apply: the map was for the old list. Some old keys are new keys
         # too ("interested"), so applying it again would move leads already placed.
         wanted = {}
@@ -175,7 +186,7 @@ async def run(
     report["map"] = places
     report["landings"] = landings
     report["leads"] = sum(item["leads"] for item in landings)
-    if before.industry == template_id:
+    if current:
         # Installed already: the list is this template's and its leads were placed then.
         report["status"] = "already_applied"
         return report

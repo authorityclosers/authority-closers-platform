@@ -130,10 +130,16 @@ import type { Command } from "../ui/command-bar";
 import { useRegisteredCommands } from "../ui/command-registry";
 import { handOverLead } from "../leads/lead-handoff";
 import { leavingOverlay } from "../ui/back-close";
-import { tick } from "../ui/haptics";
+import { haptic, tick } from "../ui/haptics";
 import { DueSoonWatch } from "../leads/due-soon";
 import { LeadsTabIcon } from "../leads/leads-badge";
 import { ReviewBarChip, ReviewRailLink } from "../review/review-badge";
+import {
+  cancelSwitch,
+  finishSwitch,
+  markSwitchFeedback,
+  markSwitchStart,
+} from "./switch-timing";
 import styles from "./lightbox-shell.module.css";
 
 export type LightboxShellProps = {
@@ -349,6 +355,10 @@ function LightboxShellFrame({
   const workspaces = access?.workspaces ?? [];
   const workspacesSettled = access?.status === "ready";
   const [workspaceReloadPending, setWorkspaceReloadPending] = useState(false);
+  // A tapped workspace, shown at once while the switch is on its way (the ref
+  // holds it between a tap and the next render, so two quick taps switch once).
+  const [switchingTo, setSwitchingTo] = useState<string | null>(null);
+  const switching = useRef<string | null>(null);
   // The confirmed server context owns selection across mounts and sessions.
   const effectiveTenantId = access?.context?.tenantId ?? null;
   const salesXrayEnabled =
@@ -455,6 +465,9 @@ function LightboxShellFrame({
   // While a tapped place's outline stands in, the rail, tab bar and title
   // already show that place, so their highlight glides with the move.
   const shownPath = standIn ?? pathname;
+  // What the page slot shows its outline for: a tapped place, or this page
+  // while a tapped workspace loads.
+  const outline = standIn ?? (switchingTo ? pathname : null);
   const place = shellActiveFor(shownPath, active);
   // Reports has its own row in the sidebar; elsewhere it belongs to Home.
   const reportsHere =
@@ -718,6 +731,13 @@ function LightboxShellFrame({
     };
   }, [switcherOpen]);
 
+  // A switch that reloaded into this workspace: how long it took (Admin #17).
+  useEffect(() => {
+    if (!workspacesSettled || !effectiveTenantId) return;
+    const frame = requestAnimationFrame(() => finishSwitch(effectiveTenantId));
+    return () => cancelAnimationFrame(frame);
+  }, [workspacesSettled, effectiveTenantId]);
+
   /** True once the page is moving into the workspace. */
   async function handleSelectWorkspace(
     tenantId: string,
@@ -728,6 +748,20 @@ function LightboxShellFrame({
       if (next) window.location.assign(next);
       return Boolean(next);
     }
+    // One switch at a time; the second tap waits for the first.
+    if (switching.current) return false;
+    switching.current = tenantId;
+    // The tap answers at once (owner, 25 Oct 2026, Admin #17: switching
+    // "feels slow"): a haptic, the switcher closes, and the header names the
+    // new workspace over the page's outline while the context changes and
+    // the page reloads into it.
+    tick();
+    markSwitchStart(tenantId);
+    setSwitcherOpen(false);
+    setSwitchingTo(tenantId);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => markSwitchFeedback()),
+    );
     // Nothing read for the old workspace may answer a read for the new one,
     // and the next page reads conversations only once Sales Xray is known on.
     dropEarlyReads();
@@ -769,7 +803,11 @@ function LightboxShellFrame({
         return true;
       }
     } catch {}
-    // Nothing changed: say so in the corner, never fail silently.
+    // Nothing changed: the old workspace comes back, and the corner says so.
+    switching.current = null;
+    setSwitchingTo(null);
+    cancelSwitch();
+    haptic("error");
     notify({
       id: "workspace-switch",
       tone: "error",
@@ -1154,10 +1192,15 @@ function LightboxShellFrame({
   const currentWorkspace = workspaces.find(
     (workspace) => workspace.tenant_id === effectiveTenantId,
   );
-  const workspaceLabel = currentWorkspace
-    ? currentWorkspace.kind === "personal"
+  // A tapped workspace is named at once, before its page arrives.
+  const shownWorkspace =
+    (switchingTo &&
+      workspaces.find((workspace) => workspace.tenant_id === switchingTo)) ||
+    currentWorkspace;
+  const workspaceLabel = shownWorkspace
+    ? shownWorkspace.kind === "personal"
       ? "Personal"
-      : currentWorkspace.name
+      : shownWorkspace.name
     : null;
   // Phones: the bar's workspace name opens the Workspace sheet when there
   // is another workspace, an invitation or Create to offer.
@@ -1516,7 +1559,7 @@ function LightboxShellFrame({
             ) : (
               <WorkspaceSwitcher
                 workspaces={workspaces}
-                currentId={effectiveTenantId}
+                currentId={switchingTo ?? effectiveTenantId}
                 personName={profileName}
                 branding={branding}
                 pending={chromePending}
@@ -1850,16 +1893,18 @@ function LightboxShellFrame({
             resetKey={pathname}
           >
             {/* A tapped place shows its outline at once, while the router
-                fetches it; the page underneath stays mounted until then. */}
-            {standIn ? (
+                fetches it; the page underneath stays mounted until then. A
+                switch of workspace shows this page's outline until the page
+                reloads into the new one. */}
+            {outline ? (
               <StandInContext.Provider value>
-                <RouteLoading pathname={standIn} />
+                <RouteLoading pathname={outline} />
               </StandInContext.Provider>
             ) : null}
             <div
               className={styles.pageSlot}
               data-page-slot=""
-              data-standing-in={standIn ? "" : undefined}
+              data-standing-in={outline ? "" : undefined}
             >
               {children}
             </div>

@@ -53,6 +53,7 @@ import {
 } from "./native-phone";
 import {
   ALL_FILES_EXPLAINER,
+  PRIVATE_DIALLER_EXPLAINER,
   CHECK_TODO,
   FOLDER_EXPLAINER,
   explainerFor,
@@ -65,6 +66,8 @@ import {
   done,
   flowSteps,
   folderPick,
+  markPrivateDiallerSeen,
+  privateDialler,
   type FlowStep,
 } from "./phone-setup-steps";
 import {
@@ -159,14 +162,16 @@ export function flowScreen(
       away: true,
     };
   }
-  const words =
-    step === "recordings" && allFiles(status)
+  const privately = step === "recordings" && privateDialler(status);
+  const words = privately
+    ? PRIVATE_DIALLER_EXPLAINER
+    : step === "recordings" && allFiles(status)
       ? ALL_FILES_EXPLAINER
       : step === "recordings" && folderPick(status)
         ? FOLDER_EXPLAINER
         : explainerFor(step, status.store);
   // Android won't show its question again: the button opens the settings.
-  const stuck = blocked(step, status);
+  const stuck = !privately && blocked(step, status);
   return {
     icon:
       step === "calls" ? Phone : step === "notifications" ? Bell : FileAudio,
@@ -177,7 +182,7 @@ export function flowScreen(
     reads: nothing(words?.reads) ? undefined : words?.reads,
     sends: nothing(words?.sends) ? undefined : words?.sends,
     action: stuck ? "Open settings" : (words?.allow ?? "Allow"),
-    away: stuck || (step === "recordings" && allFiles(status)),
+    away: stuck || (!privately && step === "recordings" && allFiles(status)),
   };
 }
 
@@ -187,6 +192,11 @@ async function act(
   recorder: CallRecorderStatus | null,
   sim: string,
 ): Promise<unknown> {
+  // A private dialler's recordings: nothing to ask, said once.
+  if (step === "recordings" && privateDialler(status)) {
+    markPrivateDiallerSeen();
+    return undefined;
+  }
   if (blocked(step, status))
     return setupOpen(
       step === "notifications" ? "notifications" : "appSettings",

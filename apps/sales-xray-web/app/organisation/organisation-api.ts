@@ -354,6 +354,30 @@ export async function readMembers(signal?: AbortSignal): Promise<OrgMember[]> {
   return parseMembers(await call("/members", { signal }));
 }
 
+const PHOTO =
+  /^\/v1\/people\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/photo\?v=[0-9a-f]{8}$/;
+
+/** Each member's photo URL by person id (v0.93); only well-formed ones. */
+export function parseMemberPhotos(value: unknown): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(obj(obj(value).photos)).filter(
+      (entry): entry is [string, string] =>
+        typeof entry[1] === "string" && PHOTO.test(entry[1]),
+    ),
+  );
+}
+
+/** Photos are a nicety: when they can't be read, initials stay. */
+export async function readMemberPhotos(
+  signal?: AbortSignal,
+): Promise<Record<string, string>> {
+  try {
+    return parseMemberPhotos(await call("/members/photos", { signal }));
+  } catch {
+    return {};
+  }
+}
+
 const counts = (item: Record<string, unknown>): ActivityCounts => ({
   calls: num(item.calls),
   recordedMinutes: num(item.recorded_minutes),

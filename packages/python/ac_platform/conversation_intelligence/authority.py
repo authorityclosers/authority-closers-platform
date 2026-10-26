@@ -99,6 +99,7 @@ from ac_platform.conversation_intelligence.provider_admin import (
     CONTROL_ACCOUNTS,
     lock_provider_configuration,
 )
+from ac_platform.conversation_intelligence.provider_call import in_provider_call
 from ac_platform.conversation_intelligence.provider_registry import (
     DispatchRequest,
     ProviderRegistryError,
@@ -892,12 +893,15 @@ class ConversationAuthority:
         # owner loses the verified identity or active operations membership.
         # This checks current authorization, not the historical browser session:
         # signing out normally does not erase a valid saved configuration.
-        controller = await app.database.scalar(
+        controller_query = (
             select(Person)
             .where(Person.id == selected.person_id)
-            .with_for_update(read=True)
             .execution_options(populate_existing=True)
         )
+        # Read, not locked, while the worker's provider call runs (provider_call.py).
+        if not in_provider_call():
+            controller_query = controller_query.with_for_update(read=True)
+        controller = await app.database.scalar(controller_query)
         membership = await app.database.scalar(
             select(Membership)
             .where(

@@ -1,5 +1,6 @@
 """Lead OS reports (spec section 9): each lead counted once, conversions from history with
-skipped stages passed, Junk out of every conversion, Lost reasons, overdue and no next step."""
+skipped stages passed, Junk out of every conversion, Lost reasons, overdue and no next step;
+a Lost lead that was never a deal (junk, or merged into another lead) counts as Junk."""
 
 from __future__ import annotations
 
@@ -7,14 +8,25 @@ from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 from ac_platform.lead_desk import reports
-from ac_platform.lead_desk.journey.model import Journey, default_journey, from_template
+from ac_platform.lead_desk.journey.model import (
+    Journey,
+    default_journey,
+    from_template,
+    journey_of,
+)
+from ac_platform.lead_desk.journey.templates import LEGACY_NINE
 from ac_platform.lead_desk.reports import LeadFact, Moved
+from ac_platform.lead_desk.vocabulary import MERGED_DUPLICATE, NOT_A_LEAD
 
 NOW = datetime(2026, 10, 24, 12, 0, tzinfo=UTC)
 SELLER = uuid4()
 
 
 def nine() -> Journey:
+    return journey_of(LEGACY_NINE)
+
+
+def eight() -> Journey:
     return Journey(
         1, "inside_sales_demos", from_template("inside_sales_demos", default_journey(), {})
     )
@@ -186,3 +198,36 @@ def test_history_reads_v2_moves_and_legacy_results() -> None:
     found = reports.history(journey, rows)
     assert [item.milestone for item in found] == ["unreachable", "appointment_booked", None]
     assert [item.spoke for item in found] == [False, True, True]
+
+
+# Orchestrator, 25 Oct 2026: merges and junk never look like lost deals.
+def test_lost_leads_that_were_never_deals_count_as_junk() -> None:
+    journey = eight()
+    leads = {
+        "real": fact("lost", "lost", reason="price"),
+        "junk": fact("lost", "lost", reason=NOT_A_LEAD),
+        "merged": fact("lost", "lost", reason=MERGED_DUPLICATE),
+        "won": fact("won", "won"),
+    }
+    history = [
+        moved(leads["real"], 1, journey, "lost", reason="price"),
+        moved(leads["junk"], 1, journey, "lost", reason=NOT_A_LEAD),
+        moved(leads["merged"], 1, journey, "lost", reason=MERGED_DUPLICATE),
+        moved(leads["won"], 1, journey, "won"),
+    ]
+    report = reports.compute(
+        journey,
+        list(leads.values()),
+        history,
+        [],
+        now=NOW,
+        days=30,
+        reasons=reports.reason_words(journey),
+    )
+    # All three sit in the Lost column; only the real one is a lost deal.
+    assert {stage.key: count for stage, count in report.by_stage}["lost"] == 3
+    assert report.groups == {"active": 0, "won": 1, "lost": 1, "junk": 2}
+    assert report.lost_now == [("Price or budget", 1)]
+    assert report.lost_moves == [("Price or budget", 1)]
+    assert (report.junk_now, report.junk_moves) == (2, 2)
+    assert report.sources["meta"].junk == 2

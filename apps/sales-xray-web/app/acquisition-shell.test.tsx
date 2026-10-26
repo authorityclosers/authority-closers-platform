@@ -382,7 +382,7 @@ it("offers the theme control in the account menu only when the theme is released
     [...(menu?.querySelectorAll('input[type="radio"]') ?? [])].map(
       (input) => (input as HTMLInputElement).value,
     ),
-  ).toEqual(["system", "light", "dark"]);
+  ).toEqual(["light", "dark"]);
 });
 
 it("signed out, offers sign-in instead of a made-up workspace, Recents or initials", async () => {

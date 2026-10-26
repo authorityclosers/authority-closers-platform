@@ -5,7 +5,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetBackCloseForTests } from "../ui/back-close";
 import { parseSetup } from "./native-phone";
 import { flowScreen, flowSteps, PhoneSetupFlow } from "./phone-setup-flow";
-import { explainerFor, FOLDER_EXPLAINER } from "./phone-setup-words";
+import {
+  explainerFor,
+  FOLDER_EXPLAINER,
+  PRIVATE_DIALLER_EXPLAINER,
+} from "./phone-setup-words";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -301,5 +305,45 @@ describe("PhoneSetupFlow", () => {
     await settle();
     expect(closed).toHaveBeenCalledTimes(1);
     expect(closed.mock.calls[0][0]?.checks.battery).toBe(false);
+  });
+});
+
+// Android session P2 (26 Oct 2026): Google's Phone app keeps its recordings
+// to itself, so setup says so once and asks Android for nothing.
+describe("a private dialler", () => {
+  const google = {
+    dialer: "com.google.android.dialer",
+    dialerLabel: "Phone",
+    kind: "private",
+    maker: "google",
+    family: "xiaomi",
+    sdk: 33,
+    folders: [],
+    canRead: true,
+    allFiles: false,
+    setting: null,
+    recording: "private",
+    newestMs: null,
+    otherDialers: [],
+  };
+
+  afterEach(() => window.localStorage.clear());
+
+  it("says the recordings are private, with OK and no fine print", () => {
+    const status = parseSetup(setup(NONE, { recorderProfile: google }))!;
+    const screen = flowScreen("recordings", status, null);
+    expect(screen.title).toBe("Call recordings");
+    expect(screen.why).toBe(PRIVATE_DIALLER_EXPLAINER.why);
+    expect(screen.action).toBe("OK");
+    expect(screen.away).toBe(false);
+    expect(screen.reads).toBeUndefined();
+    expect(screen.sends).toBeUndefined();
+  });
+
+  it("keeps the step until it has been seen once", () => {
+    const status = parseSetup(setup(NONE, { recorderProfile: google }))!;
+    expect(flowSteps(status, null)).toContain("recordings");
+    window.localStorage.setItem("sales-xray:private-dialler-seen", "1");
+    expect(flowSteps(status, null)).not.toContain("recordings");
   });
 });

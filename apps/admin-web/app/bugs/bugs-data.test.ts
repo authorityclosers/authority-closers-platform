@@ -162,3 +162,35 @@ it("keeps the reporter's id, so the bug opens their days", () => {
   expect(person).toEqual({ id: ORG, name: "Asha Fictional", email: null });
   expect(normalizeDetail({}).person.id).toBeNull();
 });
+
+// v0.93: issues come strictly, an unknown status reads as New, never report words.
+it("reads bug issues with their reports", async () => {
+  const { normalizeIssues } = await import("./bugs-data");
+  const [issue] = normalizeIssues({
+    issues: [
+      {
+        id: "i1",
+        number: 3,
+        screen: "/leads",
+        status: "fixed_next",
+        came_back: true,
+        count: 2,
+        last_seen: "2026-10-26T04:30:00+00:00",
+        devices: { CPH2793: 2, bad: "x" },
+        commit: "a572dd29f",
+        release: null,
+        reports: [{ id: "r1", number: 7 }],
+      },
+    ],
+  });
+  expect(issue).toMatchObject({
+    number: 3,
+    status: "fixed_next",
+    cameBack: true,
+    devices: { CPH2793: 2 },
+    reports: [{ id: "r1", number: 7 }],
+  });
+  expect(normalizeIssues({ issues: [{ status: "odd" }] })[0].status).toBe(
+    "new",
+  );
+});

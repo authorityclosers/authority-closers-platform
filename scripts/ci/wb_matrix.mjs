@@ -203,6 +203,14 @@ async function main() {
         });
         const errors = [];
         try {
+          // The app's own theme choice, as a person would pick it in Settings.
+          await context.addInitScript((theme) => {
+            try {
+              window.localStorage.setItem("sales-xray:theme", theme);
+            } catch {
+              /* storage blocked: the page stays on its default */
+            }
+          }, state.theme);
           await context.route("**/*", local);
           const page = await context.newPage();
           page.on("console", (message) => {

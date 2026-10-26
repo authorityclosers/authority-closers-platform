@@ -68,6 +68,7 @@ import {
   readActivity,
   readMembers,
   ORG_ROLES,
+  readMemberPhotos,
   readOrganisation,
   removeMember,
   revokeInvite,
@@ -1481,6 +1482,13 @@ function MembersPanel({
     });
   };
 
+  // Members' photos (v0.93), read once; initials while they load or when there are none.
+  const [photos, setPhotos] = useState<Record<string, string>>({});
+  useEffect(() => {
+    const control = new AbortController();
+    void readMemberPhotos(control.signal).then(setPhotos);
+    return () => control.abort();
+  }, []);
   const rows =
     members.status === "ready"
       ? members.value
@@ -1672,7 +1680,22 @@ function MembersPanel({
               >
                 <span role="cell" className={styles.person}>
                   <i className={styles.avatar} aria-hidden="true">
-                    {initials(name)}
+                    {member.personId && photos[member.personId] ? (
+                      // eslint-disable-next-line @next/next/no-img-element -- Private, session-bound photo; already 256 px.
+                      <img
+                        src={photos[member.personId]}
+                        alt=""
+                        loading="lazy"
+                        style={{
+                          width: "100%",
+                          height: "100%",
+                          borderRadius: "inherit",
+                          objectFit: "cover",
+                        }}
+                      />
+                    ) : (
+                      initials(name)
+                    )}
                   </i>
                   <span className={styles.personName}>
                     <b>

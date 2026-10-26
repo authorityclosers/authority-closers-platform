@@ -139,7 +139,7 @@ def suggestions(config: Mapping[str, Any], journey: Journey) -> list[dict[str, A
                 if milestone == "other":
                     continue  # an inside task, not a step of a sale
             if milestone in ("lead", "unreachable"):
-                continue  # the first stage and Couldn't reach are there already
+                continue  # the first stage and Not connected are there already
             if ref in taken_refs or name.casefold() in taken_names or name.casefold() in seen:
                 continue
             seen.add(name.casefold())

@@ -34,6 +34,8 @@ export function StaffKeys({ data }: { data: StaffKeysData }) {
   const [name, setName] = useState("");
   const [write, setWrite] = useState(false);
   const [reads, setReads] = useState(false);
+  // Bugs only (v0.93): what ac-bugs and the Admin MCP need, and nothing else.
+  const [bugs, setBugs] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [made, setMade] = useState<{ key: string; row: StaffKey } | null>(null);
@@ -47,11 +49,13 @@ export function StaffKeys({ data }: { data: StaffKeysData }) {
       "/v1/admin/staff-keys",
       {
         name: name.trim(),
-        scopes: [
-          "settings:read",
-          ...(write ? ["settings:write"] : []),
-          ...(reads ? ["admin:read"] : []),
-        ],
+        scopes: bugs
+          ? ["bugs:read", "bugs:write"]
+          : [
+              "settings:read",
+              ...(write ? ["settings:write"] : []),
+              ...(reads ? ["admin:read"] : []),
+            ],
       },
       newKey(),
     );
@@ -66,6 +70,7 @@ export function StaffKeys({ data }: { data: StaffKeysData }) {
     setName("");
     setWrite(false);
     setReads(false);
+    setBugs(false);
     router.refresh();
   };
 
@@ -183,6 +188,15 @@ export function StaffKeys({ data }: { data: StaffKeysData }) {
               onChange={(event) => setReads(event.target.checked)}
             />
             May read calls and health (no call content)
+          </label>
+          <label className={styles.check}>
+            <input
+              type="checkbox"
+              checked={bugs}
+              onChange={(event) => setBugs(event.target.checked)}
+            />
+            Bugs only: read reports and issues and set their status (ac-bugs,
+            the Admin MCP)
           </label>
           <button
             type="submit"

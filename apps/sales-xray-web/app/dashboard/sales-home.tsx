@@ -399,7 +399,7 @@ function TeamHome({ desk }: { desk: Desk | null }) {
 /**
  * A pipeline's own name for each kind of stage, where it has one stage of that
  * kind (Redmi, 22 Oct 2026: Home read "New / Not contacted" while Leads read
- * "New enquiry / Couldn't reach").
+ * "New enquiry / Not connected").
  */
 function useStageNames(pipeline: string): Partial<Record<Kind, string>> {
   const [names, setNames] = useState<{

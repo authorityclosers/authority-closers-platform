@@ -73,6 +73,7 @@ import {
   type CallActivity,
   type CallSummary,
 } from "./dashboard/dashboard-data";
+import { displayName } from "./display-name";
 import styles from "./account-view.module.css";
 
 type Loaded<T> =
@@ -834,7 +835,7 @@ function ThemeRow() {
   // The theme control is only released where the provider is enabled.
   if (!theme) return null;
   return (
-    <Row label="Theme" hint="System follows your device setting.">
+    <Row label="Theme" hint="Light is the default.">
       <label className={styles.selectWrap}>
         <span className={styles.srOnly}>Theme</span>
         <select
@@ -866,7 +867,9 @@ function ProfileSummary({ profile }: { profile: AccountProfileRecord }) {
       <dl className={styles.facts}>
         <div className={styles.row}>
           <dt className={styles.rowLabel}>Name</dt>
-          <dd>{profile.name ?? "Not provided yet"}</dd>
+          <dd>
+            {profile.name ? displayName(profile.name) : "Not provided yet"}
+          </dd>
         </div>
         <div className={styles.row}>
           <dt className={styles.rowLabel}>Email</dt>

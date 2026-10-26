@@ -44,7 +44,7 @@ const view: JourneyView = {
   meanings: {},
   stages: [
     stage("new", "New enquiry", "new"),
-    stage("not_connected", "Couldn't reach", "not_connected"),
+    stage("not_connected", "Not connected", "not_connected"),
     stage("contacted", "Contacted", "follow_up"),
     stage("site_visit_booked", "Site visit booked", "interested"),
     stage("booked", "Booked", "won"),

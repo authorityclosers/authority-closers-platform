@@ -74,7 +74,7 @@ function jsonHeaders() {
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
-    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "permissions-policy": "camera=(), microphone=(self), geolocation=()",
   };
 }
 
@@ -681,7 +681,7 @@ function writeReviewAsset(response, body, contentType) {
     "content-length": Buffer.byteLength(body),
     "content-security-policy": REVIEW_CSP,
     "content-type": contentType,
-    "permissions-policy": "camera=(), microphone=(), geolocation=()",
+    "permissions-policy": "camera=(), microphone=(self), geolocation=()",
     "referrer-policy": "no-referrer",
     "x-content-type-options": "nosniff",
     "x-frame-options": "DENY",
@@ -776,7 +776,7 @@ function responseHeaders(
   headers["x-frame-options"] = localCanvas ? "SAMEORIGIN" : "DENY";
   if (localCanvas)
     headers["content-security-policy"] = "frame-ancestors 'self'";
-  headers["permissions-policy"] = "camera=(), microphone=(), geolocation=()";
+  headers["permissions-policy"] = "camera=(), microphone=(self), geolocation=()";
   if (allowLocationOrigin && rewriteLocationOrigin) {
     const location = upstream.headers.get("location");
     if (location) {

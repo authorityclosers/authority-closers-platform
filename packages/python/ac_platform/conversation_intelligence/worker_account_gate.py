@@ -15,6 +15,7 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 )
 from ac_platform.conversation_intelligence.canary import recording_is_marked_canary
 from ac_platform.conversation_intelligence.models import ConversationRecording
+from ac_platform.conversation_intelligence.provider_call import in_provider_call
 from ac_platform.outbox.models import Job, JobStatus, RecoveryStatus
 from ac_platform.outbox.repository import RecoveryStateRepository
 
@@ -69,6 +70,7 @@ async def require_recording_owner_profile(
     recording: ConversationRecording,
     *,
     now: datetime,
+    lock: bool = True,
 ) -> None:
     """Require a current complete canonical profile for this recording owner."""
 
@@ -81,13 +83,14 @@ async def require_recording_owner_profile(
         )
     ):
         return
-    await require_person_profile(session, person_id=person_id)
+    await require_person_profile(session, person_id=person_id, lock=lock)
 
 
 async def require_person_profile(
     session: AsyncSession,
     *,
     person_id: UUID | None,
+    lock: bool = True,
 ) -> None:
     """Check a resolved canonical person without substituting a service actor."""
 
@@ -106,19 +109,23 @@ async def require_person_profile(
     # The profile service update locks the same canonical Person row FOR
     # UPDATE. Take a fresh shared lock on both inputs before its reads: this
     # refreshes any identity-map values and serializes profile changes through
-    # provider execution transactions that remain open around the effect.
-    await session.scalar(
-        select(Person)
-        .where(Person.id == person_id)
-        .with_for_update(read=True)
-        .execution_options(populate_existing=True)
-    )
-    await session.scalar(
-        select(SalesXrayProfile)
-        .where(SalesXrayProfile.person_id == person_id)
-        .with_for_update(read=True)
-        .execution_options(populate_existing=True)
-    )
+    # the transaction. The provider call's own transaction reads without locks
+    # (lock=False): a shared lock on the person held for the call froze every
+    # request of that person (demo P1, 26 Oct 2026), and a profile change during
+    # the call is outside this check, as for the local worker's native work.
+    if lock and not in_provider_call():
+        await session.scalar(
+            select(Person)
+            .where(Person.id == person_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
+        await session.scalar(
+            select(SalesXrayProfile)
+            .where(SalesXrayProfile.person_id == person_id)
+            .with_for_update(read=True)
+            .execution_options(populate_existing=True)
+        )
     try:
         profile = await get_sales_xray_profile(session, person_id=person_id)
     except SalesXrayProfileUnavailable as error:
