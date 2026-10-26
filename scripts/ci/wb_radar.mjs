@@ -27,6 +27,7 @@ import {
   pickRadarScreens,
   radarArm,
   radarChanged,
+  radarCovered,
   radarFocusHit,
   radarLoads,
   radarMark,
@@ -412,6 +413,11 @@ async function run(args) {
             .catch(() => undefined);
           raw.push(await keep(page, viewport, { ...finding, hit: "tap" }));
         };
+        // A sheet that opened by itself since the list was made covers this control: not a person's tap.
+        if (await page.evaluate(radarCovered, target.id).catch(() => false)) {
+          info.skipped.covered = (info.skipped.covered ?? 0) + 1;
+          continue;
+        }
         await page.evaluate(radarArm);
         await page.waitForTimeout(300);
         await page.evaluate(radarMark, target.id);

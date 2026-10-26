@@ -310,7 +310,34 @@ export function parseColor(value) {
   return rgba;
 }
 
+/**
+ * The sheet that covers the page now, or null: the last modal dialog (with two open, a composer over the lead sheet,
+ * the last is on top), else the last open dialog whose own box or a child's (its scrim, its panel) covers a quarter
+ * of the screen (a sheet opened with show(); a small popover does not count).
+ */
+export function openSheet() {
+  const screen = document.documentElement.clientWidth * innerHeight;
+  const big = (d) =>
+    d.checkVisibility?.() !== false &&
+    [d, ...d.children].some((c) => {
+      const r = c.getBoundingClientRect();
+      return r.width * r.height >= 0.25 * screen;
+    });
+  return (
+    [...document.querySelectorAll("dialog:modal")].at(-1) ??
+    [
+      ...document.querySelectorAll(
+        'dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"]',
+      ),
+    ]
+      .filter(big)
+      .at(-1) ??
+    null
+  );
+}
+
 const SHARED = {
+  openSheet,
   luminance,
   contrastRatio,
   over,
@@ -632,12 +659,13 @@ export function radarScan(options = {}) {
       const ox = Math.min(a.r.r, b.r.r) - Math.max(a.r.l, b.r.l);
       const oy = Math.min(a.r.b, b.r.b) - Math.max(a.r.t, b.r.t);
       if (ox < 4 || oy < 4) continue;
-      if (
-        a.kind === "box" &&
-        b.kind === "box" &&
-        (a.el.contains(b.el) || b.el.contains(a.el))
-      )
-        continue;
+      if (a.kind === "box" && b.kind === "box") {
+        if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
+        // Two controls' boxes touching at a corner (a sheet's close button over a wide row's edge) hide nothing:
+        // count them when the overlap is a real share of the smaller one.
+        const smaller = Math.min(a.r.w * a.r.h, b.r.w * b.r.h);
+        if (ox * oy < 0.15 * smaller) continue;
+      }
       const [box, text] = a.kind === "box" ? [a, b] : [b, a];
       if (box.kind === "box" && text.kind === "text") {
         if (
@@ -1049,24 +1077,7 @@ export function radarTargets(options = {}) {
   const count = new Map();
   let n = 0;
   // While a modal sheet is open, only its controls can be tapped; the page behind its scrim is not a target.
-  // A sheet opened with show() rather than showModal() still covers the page: the last open one that is at least a
-  // quarter of the screen counts too (a small popover does not).
-  const big = (d) => {
-    const r = d.getBoundingClientRect();
-    return (
-      d.checkVisibility?.() !== false &&
-      r.width * r.height >= 0.25 * W * innerHeight
-    );
-  };
-  const modal =
-    document.querySelector("dialog:modal") ??
-    [
-      ...document.querySelectorAll(
-        'dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"]',
-      ),
-    ]
-      .filter(big)
-      .at(-1);
+  const modal = R.openSheet();
   for (const el of document.querySelectorAll(SELECTOR)) {
     el.removeAttribute("data-radar-id");
     if (modal && !modal.contains(el)) continue;
@@ -1148,6 +1159,16 @@ export function radarTargets(options = {}) {
     out.push({ id, selector, label, index, role, tabLike, selected, skip });
   }
   return out;
+}
+
+/**
+ * Runs in the page: a sheet that opened by itself after the list was made (a prompt that waits for the page to
+ * settle) now covers control `id`, so a tap would land on the sheet.
+ */
+export function radarCovered(id) {
+  const sheet = window.__radar.openSheet();
+  const el = document.querySelector(`[data-radar-id="${id}"]`);
+  return !!(sheet && el && !sheet.contains(el));
 }
 
 /** Runs in the page: start watching; changes made before radarMark() (clocks, sliding figures) are the page's own. */
