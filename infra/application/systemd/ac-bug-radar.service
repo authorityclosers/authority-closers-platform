@@ -1,0 +1,12 @@
+[Unit]
+Description=Bug radar: every Sales X-Ray review screen checked on GitHub's runners, kept as AC Pulse cards (development)
+Documentation=file:///home/acdev/src/dev-live/authority-closers-platform/docs/ops/BUG-RADAR.md
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-bug-radar nightly
+Nice=10
+IOSchedulingClass=idle
+# Up to 4 h waiting for a release cut or ship to finish, then about 20 min on GitHub (wb-ci may wait for a slot).
+TimeoutStartSec=7h

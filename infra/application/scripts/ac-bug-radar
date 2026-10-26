@@ -1,0 +1,574 @@
+#!/usr/bin/env python3
+"""ac-bug-radar: the bug radar's nightly sweep of the Sales X-Ray screens, kept as AC Pulse cards (the orchestrator for
+the owner, 26 Oct 2026: spot UI bugs 100-200x faster; machines check every screen state on every build, people and
+telemetry cover the rest).
+
+Every night (ac-bug-radar.timer, development only) it runs `wb-ci --full --radar` for the workbench's head (the code dev
+serves) on GitHub's runners, never on ac, and downloads the report (artifact wb-radar: report.md, radar.json, crops) to
+/var/lib/ac-bug-radar/runs/<when>/. Each group (one root cause: a component, a colour pair or a message, on any page)
+keeps one AC Pulse card, marker radar:<group id>, under "Bug radar":
+- a new group of medium or high severity becomes a card (at most 10 a night; the rest wait on the parent's notes);
+- a group that is gone while all its pages were checked marks its card done; one that comes back reopens it.
+Cards carry the check, the component, the pages, numbers and where to look: never a name, an amount or report text.
+
+  ac-bug-radar nightly [--dry-run]               the timer's run (waits while a release cut or ship runs)
+  ac-bug-radar baseline [--cards N] [--dry-run]  the first run: every group recorded; cards for the N to fix first
+  ac-bug-radar check [--sha S]                   a release hold: the groups the nightly baseline doesn't know;
+                                                 exit 1 when one is high severity; no cards, no state
+  ac-bug-radar ingest <run-dir> [--baseline] [--cards N] [--dry-run]   apply a downloaded run
+  ac-bug-radar card <group id> ...               give known groups a card now (from the last run)
+Options: --ai N   after the cards, N pages' screenshots reviewed with the sales-xray-ux rubric through the Claude
+                  subscription (claude -p as acdev, never an API key) while the usage guard's gate is open;
+                  findings only, on the parent card. Off unless asked (or AC_BUG_RADAR_AI_PAGES=N).
+
+State: /var/lib/ac-bug-radar/state.json (groups, their cards and the last runs); runs kept for 14 days.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import time
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+REPO = "authorityclosers/authority-closers-platform"
+WB = "/home/acdev/src/dev-live/authority-closers-platform"
+WB_CI = os.environ.get("AC_BUG_RADAR_WB_CI", "/usr/local/bin/wb-ci")
+PULSE = os.environ.get("AC_BUG_RADAR_PULSE", "/usr/local/bin/ac-pulse-tasks")
+GH = os.environ.get("AC_BUG_RADAR_GH", "gh")
+STATE = Path(os.environ.get("AC_BUG_RADAR_STATE", "/var/lib/ac-bug-radar"))
+SHIP_LOG = Path(os.environ.get("AC_BUG_RADAR_SHIP_LOG", "/var/log/ac-ship.log"))
+GATE = Path(os.environ.get("AC_BUG_RADAR_GATE", "/var/lib/ac-usage-guard/strike-gate.json"))
+CLAUDE = os.environ.get("AC_BUG_RADAR_CLAUDE", "/home/acdev/.local/bin/claude")
+CACHE = Path(os.environ.get("AC_BUG_RADAR_CACHE", "/home/acdev/.cache/ac-bug-radar"))
+HQ = "edbfc873-6012-4001-923e-ba05fb231d00"  # Revenue: AC features in AC Pulse HQ
+PARENT_MARKER = "radar:parent"
+DEV = "https://salesxray-dev.authorityclosers.com"
+SEVERITY = {"high": 3, "medium": 2, "low": 1}
+NIGHTLY_CARDS = 10
+KEEP_DAYS = 14
+# What each check means, in a card's words (the same as the report's).
+CHECKS = {
+    "overflow-element": "past the screen's edge",
+    "overflow-page": "the page scrolls sideways",
+    "overlap": "drawn over each other",
+    "clipped-label": "label cut short",
+    "clipped-text": "text cut short",
+    "text-spill": "text runs out of its control",
+    "tap-target": "tap target under 44 px",
+    "contrast": "faint text",
+    "centred-card": "narrow card centred on a phone",
+    "console-error": "console error",
+    "page-error": "uncaught error",
+    "request-failed": "failed request",
+    "dead-tap": "tap does nothing",
+    "tab-no-switch": "tab does not switch",
+    "tap-blocked": "something covers the control",
+    "tap-error": "error after a tap",
+    "sheet-offscreen": "sheet opens off-screen",
+}
+# Checks the tap crawler makes: a page counts as checked for them only when it was crawled.
+CRAWL_CHECKS = {"dead-tap", "tab-no-switch", "tap-blocked", "tap-error", "sheet-offscreen"}
+COMMON = re.compile(
+    r"^(All|Now|More|Lead|Leads|Call|Calls|Review|Team|Home|Settings|Search|Notifications|Save|Edit|New|Open|Add|Show"
+    r"|Set|My|Your)$"
+)
+
+
+def names_out(text: str) -> str:
+    """Two capitalised words in a row are a name ("[name]"); amounts become "[amount]". Same rule as the report's."""
+
+    def one(match: re.Match[str]) -> str:
+        words = match.group(0).split(" ")
+        kept = []
+        while len(words) > 1 and COMMON.match(words[0]):
+            kept.append(words.pop(0))
+        return " ".join([*kept, "[name]" if len(words) > 1 else words[0]])
+
+    text = re.sub(r"[₹$€£]\s?[\d.,]+(\s?(k|K|L|lakh|cr|crore))?|\b(Rs\.?|INR|USD)\s?[\d.,]+", "[amount]", str(text or ""))
+    return re.sub(r"\b[A-Z][a-z]+(?: [A-Z][a-z]+)+(?:'s)?", one, text)
+
+
+def now() -> datetime:
+    return datetime.now(UTC)
+
+
+def stamp(at: datetime | None = None) -> str:
+    return (at or now()).strftime("%Y%m%dT%H%MZ")
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# AC Pulse
+
+
+def pulse(ops: list[dict], *, dry: bool) -> list[dict]:
+    """One request, one transaction; each op's answer."""
+    request = {"actor": "ac-bug-radar", "dry": dry, "ops": ops}
+    done = subprocess.run(  # noqa: S603 - fixed argv
+        [PULSE, "--batch", "-"],
+        input=json.dumps(request, ensure_ascii=False),
+        capture_output=True,
+        text=True,
+        timeout=180,
+        check=False,
+    )
+    if done.returncode != 0:
+        raise RuntimeError(f"ac-pulse-tasks refused (exit {done.returncode}): {done.stderr.strip()[-200:]}")
+    answer = json.loads(done.stdout)
+    return [item.get("r", item) for item in answer.get("results", [])]
+
+
+def ensure_task(marker: str, title: str, notes: str, parent: str, *, dry: bool) -> str | None:
+    """The task with this marker (made if missing), under `parent`; its id."""
+    [found] = pulse([{"op": "ensure", "marker": marker, "fields": {"title": title, "notes": notes}}], dry=dry)
+    task = found.get("id")
+    if task and not dry:
+        fields: dict = {"title": title, "notes": notes}
+        if found.get("created") or found.get("parentId") != parent:
+            fields["parentId"] = parent
+        pulse([{"op": "save", "id": task, "fields": fields}], dry=False)
+    return task
+
+
+def parent_task(state: dict, *, dry: bool) -> str | None:
+    notes = "\n".join(
+        [
+            "The bug radar checks every Sales X-Ray review screen each night (wb-ci --radar on GitHub's runners, never",
+            "on ac): 320, 360, 390 and 1280 px; 100% and 130% text; light and dark; every safe control tapped once.",
+            "Each card below is one root cause (a component, a colour pair or a message) on any page.",
+            "Cards close themselves when a later run no longer finds them.",
+            "Reports and crops on ac: /var/lib/ac-bug-radar/runs/<when>/report.md. How it works: ac-bug-radar --help.",
+            f"Marker: {PARENT_MARKER}",
+        ]
+    )
+    if state.get("parent"):
+        return state["parent"]
+    task = ensure_task(PARENT_MARKER, "Bug radar: Sales X-Ray screens checked every night", notes, HQ, dry=dry)
+    if task and not dry:
+        state["parent"] = task
+    return task
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Cards
+
+
+def component(group: dict) -> str:
+    """The group's component in a few words: its CSS-module part and element, or its message."""
+    rest = group["key"].split(" | ", 1)[-1]
+    if group["check"] in ("console-error", "page-error", "request-failed", "tap-error", "overflow-page"):
+        return names_out(rest)[:70]
+    parts = [p.strip() for p in re.split(r" ⟂ | … ", rest)]
+    short = []
+    for part in parts:
+        module = re.search(r"\.([\w-]+__[\w-]+)", part)
+        short.append(module.group(1) if module else part.split("[")[0].split(".")[0])
+    return " / ".join(dict.fromkeys(short))[:70]
+
+
+def card_text(group: dict, findings: dict[str, dict], run: dict) -> tuple[str, str]:
+    mine = [findings[key] for key in group["findings"] if key in findings]
+    example = mine[0] if mine else {}
+    pages = group["pages"]
+    title = (
+        f"[dev] Radar: {CHECKS.get(group['check'], group['check'])} · {component(group)} · "
+        f"{len(pages)} page{'' if len(pages) == 1 else 's'}"
+    )
+    where = example.get("where", [])
+    lines = [
+        f"Check: {group['check']} ({CHECKS.get(group['check'], '')}), {group['severity']}",
+        f"Component: {names_out(group['key'].split(' | ', 1)[-1])[:300]}",
+        f"Pages ({len(pages)}): {', '.join(pages[:12])}{' …' if len(pages) > 12 else ''}",
+        f"Where: {'; '.join(where[:4])}{f' (+{len(where) - 4})' if len(where) > 4 else ''}",
+        f"Example: {names_out(example.get('label', ''))[:60]} — {names_out(example.get('detail', ''))[:160]}",
+    ]
+    if example.get("context"):
+        lines.append(f"After: {names_out(example['context'])[:80]}")
+    if example.get("path"):
+        lines.append(f"Fixture on dev: {DEV}{example['path']}")
+    if group.get("crop"):
+        lines.append(f"Crop on ac: {run['dir']}/{group['crop']}")
+    lines += [
+        f"Run: {run.get('url') or run['dir']} for {str(run.get('sha') or '?')[:12]}; report on ac: {run['dir']}/report.md",
+        f"Marker: radar:{group['id']}",
+    ]
+    return title, "\n".join(lines)
+
+
+def checked_everywhere(group: dict, pages: dict[str, dict]) -> bool:
+    """Every page the group was last seen on was checked fully this run (and crawled, for the tap checks)."""
+    for key in group.get("pages", []):
+        page = pages.get(key)
+        if not page or page.get("failed") or not page.get("loads"):
+            return False
+        if group["check"] in CRAWL_CHECKS and not page.get("crawled"):
+            return False
+    return True
+
+
+def load_state() -> dict:
+    try:
+        return json.loads((STATE / "state.json").read_text())
+    except (OSError, json.JSONDecodeError):
+        return {"groups": {}, "runs": []}
+
+
+def save_state(state: dict) -> None:
+    STATE.mkdir(parents=True, exist_ok=True)
+    tmp = STATE / "state.json.tmp"
+    tmp.write_text(json.dumps(state, indent=1, ensure_ascii=False))
+    tmp.replace(STATE / "state.json")
+
+
+def plan(state: dict, radar: dict, *, baseline: bool, cards: int, min_severity: str = "medium") -> dict:
+    """What a run changes: cards to make or reopen, cards to close, groups recorded without a card."""
+    floor = SEVERITY[min_severity]
+    known = state.get("groups", {})
+    pages = {p["key"]: p for p in radar.get("pages", [])}
+    present = {g["id"]: g for g in radar["groups"]}
+    make, reopen, record, close, gone = [], [], [], [], []
+    budget = cards
+    for group in radar["groups"]:  # worst first
+        old = known.get(group["id"])
+        serious = SEVERITY.get(group["severity"], 0) >= floor
+        # Carded, or recorded on purpose (a baseline's debt, a low one): nothing to do. "waiting" is a serious group
+        # over a night's cap: it gets its card on a later night.
+        if old and old.get("status") in ("open", "known"):
+            continue
+        if old and old.get("status") == "fixed" and old.get("task"):
+            reopen.append(group)
+        elif serious and budget > 0:
+            make.append(group)
+            budget -= 1
+        else:
+            record.append(group)
+    for gid, old in known.items():
+        if gid in present or old.get("status") == "fixed" or "check" not in old:
+            continue
+        if checked_everywhere(old, pages):
+            (close if old.get("task") else gone).append(gid)
+    waiting = [g for g in record if SEVERITY.get(g["severity"], 0) >= floor and not baseline]
+    return {"make": make, "reopen": reopen, "record": record, "close": close, "gone": gone, "waiting": waiting}
+
+
+def apply(state: dict, radar: dict, run: dict, actions: dict, *, dry: bool) -> None:
+    findings = {f["key"]: f for f in radar.get("findings", [])}
+    groups = state.setdefault("groups", {})
+    seen = now().isoformat(timespec="seconds")
+    parent = parent_task(state, dry=dry) if (actions["make"] or actions["reopen"] or actions["close"]) else state.get("parent")
+    for group in actions["make"] + actions["reopen"]:
+        title, notes = card_text(group, findings, run)
+        if dry:
+            print(json.dumps({"card": f"radar:{group['id']}", "title": title}, ensure_ascii=False))
+            continue
+        task = ensure_task(f"radar:{group['id']}", title, notes, parent or HQ, dry=False)
+        if group in actions["reopen"]:
+            pulse([{"op": "move", "id": task, "status": "open", "note": f"Came back in radar run {run['stamp']}."}], dry=False)
+        old = groups.get(group["id"], {})
+        groups[group["id"]] = {
+            **old,
+            "status": "open",
+            "task": task,
+            "came_back": old.get("came_back", 0) + (1 if group in actions["reopen"] else 0),
+        }
+    closing = [
+        {
+            "op": "close",
+            "marker": f"radar:{gid}",
+            "status": "done",
+            "note": f"Fixed: not found in radar run {run['stamp']} for {str(run.get('sha') or '?')[:12]}, with all its pages checked.",
+        }
+        for gid in actions["close"]
+    ]
+    if closing:
+        if dry:
+            for op in closing:
+                print(json.dumps({"close": op["marker"]}))
+        else:
+            pulse(closing, dry=False)
+    for gid in actions["close"] + actions["gone"]:
+        groups[gid] = {**groups[gid], "status": "fixed", "fixed_at": seen}
+    waiting = {g["id"] for g in actions["waiting"]}
+    for group in radar["groups"]:
+        old = groups.get(group["id"], {})
+        status = old.get("status")
+        if group["id"] in waiting:
+            status = "waiting"
+        elif status not in ("open", "known"):
+            status = "known"
+        groups[group["id"]] = {
+            **old,
+            "key": group["key"],
+            "check": group["check"],
+            "severity": group["severity"],
+            "pages": group["pages"],
+            "states": group["states"],
+            "status": status,
+            "first_seen": old.get("first_seen", seen),
+            "last_seen": seen,
+        }
+    if actions["waiting"] and parent and not dry:
+        lines = [f"Radar run {run['stamp']}: {len(actions['waiting'])} more new groups wait for a card (cap {NIGHTLY_CARDS} a night):"]
+        lines += [f"- {g['severity']} {g['check']}: {component(g)} ({len(g['pages'])} pages), radar:{g['id']}" for g in actions["waiting"][:20]]
+        lines.append("Give one a card: sudo ac-bug-radar card <group id>.")
+        pulse([{"op": "comment", "taskId": parent, "body": "\n".join(lines)}], dry=False)
+
+
+def ingest(run_dir: Path, *, baseline: bool, cards: int, dry: bool, url: str | None = None) -> dict:
+    radar = json.loads((run_dir / "radar.json").read_text())
+    state = load_state()
+    run = {"dir": str(run_dir), "stamp": run_dir.name, "sha": radar.get("source_sha"), "url": url}
+    actions = plan(state, radar, baseline=baseline, cards=cards)
+    apply(state, radar, run, actions, dry=dry)
+    summary = {
+        "at": now().isoformat(timespec="seconds"),
+        "dir": str(run_dir),
+        "url": url,
+        "sha": radar.get("source_sha"),
+        "groups": len(radar["groups"]),
+        "findings": len(radar.get("findings", [])),
+        "cards": len(actions["make"]),
+        "reopened": len(actions["reopen"]),
+        "closed": len(actions["close"]),
+        "fixed_without_card": len(actions["gone"]),
+        "waiting": len(actions["waiting"]),
+        "baseline": baseline,
+    }
+    if not dry:
+        state["runs"] = (state.get("runs", []) + [summary])[-60:]
+        state["last_run"] = str(run_dir)
+        save_state(state)
+    print(json.dumps(summary, ensure_ascii=False))
+    return summary
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# Running the radar on GitHub
+
+
+def ship_busy() -> str | None:
+    """A release cut or ship running now (it holds wb-ci slots 2-6): why, or None."""
+    found = subprocess.run(  # noqa: S603 - fixed argv
+        ["pgrep", "-f", "/usr/local/sbin/ac-ship( |$)"], capture_output=True, text=True, check=False
+    )
+    if found.stdout.strip():
+        return "ac-ship is running"
+    try:
+        lines = [line for line in SHIP_LOG.read_text(errors="ignore").splitlines() if " === " in line]
+    except OSError:
+        return None
+    if not lines:
+        return None
+    last = lines[-1]
+    if re.search(r"=== (cut|ship) ", last) and not re.search(r"\b(done|failed|stopped|aborted)\b", last):
+        try:
+            at = datetime.strptime(last.split(" ", 1)[0], "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=UTC)
+        except ValueError:
+            return None
+        if now() - at < timedelta(hours=3):
+            return f"the release log's last step is still open: {last[:120]}"
+    return None
+
+
+def acdev(argv: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+    prefix = (
+        []
+        if os.environ.get("AC_BUG_RADAR_AS_IS")
+        else ["sudo", "-n", "-u", "acdev", "env", "HOME=/home/acdev", "PATH=/home/acdev/.local/bin:/usr/local/bin:/usr/bin:/bin"]
+    )
+    return subprocess.run([*prefix, *argv], capture_output=True, text=True, timeout=timeout, check=False)  # noqa: S603
+
+
+def workbench_head() -> str:
+    done = acdev(["git", "-C", WB, "rev-parse", "HEAD"], 60)
+    if done.returncode != 0:
+        raise RuntimeError(f"cannot read the workbench head: {done.stderr.strip()[-200:]}")
+    return done.stdout.strip()
+
+
+def run_radar(sha: str) -> tuple[str, str]:
+    """wb-ci --full --radar for `sha`; (run id, run url). Retries while the slots are busy."""
+    for attempt in range(3):
+        done = subprocess.run(  # noqa: S603 - fixed argv
+            [WB_CI, "--full", "--radar", "--sha", sha], capture_output=True, text=True, timeout=95 * 60, check=False
+        )
+        found = re.search(r"wb-ci: run (https://github\.com/\S+/actions/runs/(\d+))", done.stdout)
+        if found:
+            return found.group(2), found.group(1)
+        why = (done.stderr or done.stdout).strip()[-300:]
+        if done.returncode == 75 or "slots busy" in why:
+            time.sleep(600 * (attempt + 1))
+            continue
+        raise RuntimeError(f"wb-ci --radar started no run (exit {done.returncode}): {why}")
+    raise RuntimeError("wb-ci slots stayed busy; try the next night")
+
+
+def download(run_id: str, dest: Path) -> None:
+    cache = CACHE / run_id
+    acdev(["rm", "-rf", str(cache)], 60)
+    done = acdev([GH, "run", "download", run_id, "-R", REPO, "-n", "wb-radar", "-D", str(cache)], 600)
+    if done.returncode != 0:
+        raise RuntimeError(f"no wb-radar artifact in run {run_id}: {done.stderr.strip()[-200:]}")
+    if dest.exists():
+        shutil.rmtree(dest)
+    shutil.copytree(cache, dest)
+    acdev(["rm", "-rf", str(cache)], 60)
+
+
+def prune() -> None:
+    cutoff = now() - timedelta(days=KEEP_DAYS)
+    for folder in (STATE / "runs").glob("*"):
+        try:
+            when = datetime.strptime(folder.name.split("-", 1)[-1] if folder.name.startswith("check-") else folder.name, "%Y%m%dT%H%MZ")
+        except ValueError:
+            continue
+        if when.replace(tzinfo=UTC) < cutoff:
+            shutil.rmtree(folder, ignore_errors=True)
+
+
+def sweep(sha: str | None, folder: str) -> tuple[Path, str]:
+    """Run the radar on GitHub and bring its report here."""
+    sha = sha or workbench_head()
+    run_id, url = run_radar(sha)
+    dest = STATE / "runs" / folder
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    download(run_id, dest)
+    return dest, url
+
+
+def wait_for_ship(limit_hours: float = 4) -> None:
+    deadline = now() + timedelta(hours=limit_hours)
+    while (why := ship_busy()) and now() < deadline:
+        print(f"ac-bug-radar: waiting, {why}", flush=True)
+        time.sleep(300)
+    if why := ship_busy():
+        raise RuntimeError(f"a release kept running for {limit_hours} h ({why}); skipped tonight")
+
+
+# ---------------------------------------------------------------------------------------------------------------
+# The optional AI review (subscription only)
+
+
+AI_PROMPT = """You review one screen of Sales X-Ray, a sales CRM, for UI problems a person would notice.
+First read the rubric: {skill}. Then look at the screenshot: {shot} (a 390 px phone, 100% text, light theme,
+fictional data; the screen is "{page}").
+Machine checks already cover overflow past the edge, overlapping text, cut labels, small taps, faint text and console
+errors; report only what they miss (layout, hierarchy, spacing, wording, states, the rubric's rules).
+Reply with JSON only, no prose: {{"findings": [{{"problem": "...", "where": "...", "severity": "high|medium|low",
+"rule": "the rubric item"}}]}}. At most 5 findings, no praise, no names or amounts. Nothing wrong: {{"findings": []}}."""
+
+
+def ai_review(run_dir: Path, pages: int, state: dict, *, dry: bool) -> list[dict]:
+    try:
+        gate = json.loads(GATE.read_text())
+    except (OSError, json.JSONDecodeError):
+        gate = {}
+    if not gate.get("claude_ok"):
+        print(f"ac-bug-radar: AI review skipped, the Claude subscription gate is closed ({gate.get('reason', 'no gate')})")
+        return []
+    shots = sorted((run_dir / "pages").glob("*.jpg"))
+    if not shots:
+        return []
+    start = state.get("ai_cursor", 0) % len(shots)
+    chosen = (shots[start:] + shots[:start])[:pages]
+    results = []
+    for shot in chosen:
+        prompt = AI_PROMPT.format(skill=f"{WB}/.claude/skills/sales-xray-ux/SKILL.md", shot=shot, page=shot.stem)
+        if dry:
+            print(json.dumps({"ai": shot.stem}))
+            continue
+        done = acdev(
+            [CLAUDE, "-p", "--model", "sonnet", "--allowedTools", "Read", "--output-format", "text", prompt], 300
+        )
+        text = done.stdout.strip()
+        found = re.search(r"\{.*\}", text, re.S)
+        try:
+            items = json.loads(found.group(0)).get("findings", []) if found else []
+        except json.JSONDecodeError:
+            items = []
+        for item in items[:5]:
+            results.append({"page": shot.stem, **{k: names_out(str(item.get(k, "")))[:200] for k in ("problem", "where", "severity", "rule")}})
+    state["ai_cursor"] = start + len(chosen)
+    if results and not dry:
+        (run_dir / "ai.json").write_text(json.dumps(results, indent=1, ensure_ascii=False))
+        with (run_dir / "report.md").open("a") as report:
+            report.write(f"\n#### AI review (Claude subscription, {len(chosen)} pages, findings only)\n\n")
+            for r in results:
+                report.write(f"- {r['severity']} {r['page']}: {r['problem']} ({r['where']}; {r['rule']})\n")
+        if state.get("parent"):
+            body = [f"AI review of {len(chosen)} screens (radar run {run_dir.name}), findings only, no cards:"]
+            body += [f"- {r['severity']} {r['page']}: {r['problem']} ({r['where']})" for r in results[:15]]
+            pulse([{"op": "comment", "taskId": state["parent"], "body": "\n".join(body)}], dry=False)
+    return results
+
+
+# ---------------------------------------------------------------------------------------------------------------
+
+
+def option(argv: list[str], name: str, default: str | None = None) -> str | None:
+    return argv[argv.index(name) + 1] if name in argv and argv.index(name) + 1 < len(argv) else default
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] in ("-h", "--help"):
+        print(__doc__)
+        return 0 if argv else 2
+    command, rest = argv[0], argv[1:]
+    dry = "--dry-run" in rest
+    ai_pages = int(option(rest, "--ai") or os.environ.get("AC_BUG_RADAR_AI_PAGES") or 0)
+    if command in ("nightly", "baseline"):
+        wait_for_ship()
+        dest, url = sweep(None, stamp())
+        baseline = command == "baseline"
+        cards = int(option(rest, "--cards", "15" if baseline else str(NIGHTLY_CARDS)))
+        ingest(dest, baseline=baseline, cards=cards, dry=dry, url=url)
+        if ai_pages:
+            state = load_state()
+            ai_review(dest, ai_pages, state, dry=dry)
+            if not dry:
+                save_state(state)
+        prune()
+        return 0
+    if command == "ingest" and rest and not rest[0].startswith("--"):
+        baseline = "--baseline" in rest
+        cards = int(option(rest, "--cards", "15" if baseline else str(NIGHTLY_CARDS)))
+        ingest(Path(rest[0]), baseline=baseline, cards=cards, dry=dry, url=option(rest, "--url"))
+        return 0
+    if command == "check":
+        dest, url = sweep(option(rest, "--sha"), f"check-{stamp()}")
+        radar = json.loads((dest / "radar.json").read_text())
+        known = load_state().get("groups", {})
+        new = [g for g in radar["groups"] if g["id"] not in known or known[g["id"]].get("status") == "fixed"]
+        print(f"ac-bug-radar check: {len(radar['groups'])} groups, {len(new)} not in the nightly baseline; {url}")
+        for g in new:
+            print(f"  {g['severity']:6} {g['check']:16} {component(g)} ({len(g['pages'])} pages) radar:{g['id']}")
+        return 1 if any(g["severity"] == "high" for g in new) else 0
+    if command == "card" and rest:
+        state = load_state()
+        run_dir = Path(state.get("last_run", ""))
+        radar = json.loads((run_dir / "radar.json").read_text())
+        wanted = [g for g in radar["groups"] if g["id"] in rest]
+        if not wanted:
+            print("ac-bug-radar: none of those groups is in the last run", file=sys.stderr)
+            return 1
+        run = {"dir": str(run_dir), "stamp": run_dir.name, "sha": radar.get("source_sha"), "url": None}
+        actions = {"make": wanted, "reopen": [], "record": [], "close": [], "gone": [], "waiting": []}
+        apply(state, radar, run, actions, dry=dry)
+        if not dry:
+            save_state(state)
+        return 0
+    print(__doc__)
+    return 2
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main(sys.argv[1:]))
+    except RuntimeError as error:
+        print(f"ac-bug-radar: {error}", file=sys.stderr)
+        raise SystemExit(1) from None

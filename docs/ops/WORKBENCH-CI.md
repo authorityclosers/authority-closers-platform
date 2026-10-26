@@ -17,6 +17,7 @@ wb-ci --web                             # force the web jobs (scoped to the chan
 wb-ci --py-tests tests/core/test_x.py   # one pytest target with PostgreSQL instead of the 17 shards
 wb-ci --visual /review-fixture/shell "/?new=1&sx-fixture=auth.email"
 wb-ci --matrix leads-table lead-sheet   # the visual test matrix for these screens (none: all of them)
+wb-ci --radar                           # the bug radar: every fixture checked and tapped (docs/ops/BUG-RADAR.md)
 wb-ci --include apps/sales-xray-web/app/x.tsx   # also test this uncommitted file
 wb-ci --sha 1a2b3c4d --full             # a specific workbench commit
 ```
@@ -90,6 +91,11 @@ summary.
     `[data-sx-equal]` groups, and uploads one artifact, `wb-matrix`, for a day: `report.md` (also the job
     summary), `matrix.json` and a JPEG contact sheet per screen. Screens are named in
     `scripts/ci/wb_matrix_lib.mjs`. Findings don't fail the job; a matrix that could not run does.
+  - radar (opt-in, `--radar`, never in a full run): the bug radar. Every fixture page at 320, 360, 390 and 1280 px,
+    100% and 130% text and light and dark, checked in the page, then every safe control tapped once. Five shard
+    jobs (`radar (0..4)`) and `radar-report`, which merges them into one artifact, `wb-radar`, for a day: `report.md`,
+    `radar.json`, crops and page shots. `ac-bug-radar` runs it every night and keeps AC Pulse cards. See
+    `docs/ops/BUG-RADAR.md`.
   - 17 Python shards.
 - **A `--changed` run** gives tsc its own job.
 - **The Python shards come in two families that partition the tests:**

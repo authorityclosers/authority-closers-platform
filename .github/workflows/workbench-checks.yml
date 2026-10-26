@@ -6,7 +6,8 @@ name: Workbench checks
 # Fixed slot names keep each slot's caches warm (Actions caches are scoped to the branch name).
 # No secrets, no deploys, no real databases: PostgreSQL runs in throwaway containers with local passwords, as in
 # Application validation. Full layout: lint, tsc, vitest, visual and 16 Python shards = 20 jobs (the plan's limit).
-# Opt-in families, never in a full run: e2e (the release's browser proofs) and matrix (the visual test matrix).
+# Opt-in families, never in a full run: e2e (the release's browser proofs), matrix (the visual test matrix) and radar
+# (the bug radar).
 # See docs/ops/WORKBENCH-CI.md.
 on:
   push:
@@ -36,6 +37,9 @@ jobs:
       visual: ${{ steps.plan.outputs.visual }}
       e2e: ${{ steps.plan.outputs.e2e }}
       matrix: ${{ steps.plan.outputs.matrix }}
+      radar: ${{ steps.plan.outputs.radar }}
+      radar_shards: ${{ steps.plan.outputs.radar_shards }}
+      radar_count: ${{ steps.plan.outputs.radar_count }}
       migrations: ${{ steps.plan.outputs.migrations }}
       control: ${{ steps.plan.outputs.control }}
       web_matrix: ${{ steps.plan.outputs.web_matrix }}
@@ -115,7 +119,7 @@ jobs:
     env:
       PREREQ_PUBLICATION_OWNER: ci-prerequisite-publication-v3
     needs: plan
-    if: needs.plan.outputs.py == 'true' || needs.plan.outputs.visual == 'true' || needs.plan.outputs.e2e == 'true' || needs.plan.outputs.matrix == 'true'
+    if: needs.plan.outputs.py == 'true' || needs.plan.outputs.visual == 'true' || needs.plan.outputs.e2e == 'true' || needs.plan.outputs.matrix == 'true' || needs.plan.outputs.radar == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     outputs:
@@ -315,6 +319,88 @@ jobs:
           if-no-files-found: warn
           retention-days: 1
 
+  radar:
+    # Opt-in (`wb-ci --radar [screen|route ...]`; the orchestrator for the owner, 26 Oct 2026: find the UI bugs the
+    # owner reports by hand on every build, without a person clicking). Every review fixture at 320, 360, 390 and
+    # 1280 px, 100% and 130% text and light and dark, checked in the page (overflow, overlap, cut labels, taps under
+    # 44 px, faint text, centred cards, console errors, failed requests), then every safe control tapped once (dead
+    # taps, tabs that don't switch, errors after a tap, sheets off-screen). Pages are sharded; radar-report merges them.
+    needs: [plan, ci-prerequisites]
+    if: needs.plan.outputs.radar == 'true'
+    name: radar (${{ matrix.shard }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.radar_shards) }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Check the radar's own logic
+        run: node --test scripts/ci/wb_radar_lib.test.mjs
+      - name: Install locked Node dependencies
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate && pnpm install --frozen-lockfile
+      - name: Require cached locked Node browser
+        timeout-minutes: 13
+        uses: ./.github/actions/ci-prerequisites
+        with:
+          bundle: ${{ needs.ci-prerequisites.outputs.bundle }}
+          components: browser
+          python: python3
+          node-browser: "true"
+      - name: Check and tap this shard's pages, fictional data only
+        timeout-minutes: 42
+        run: >-
+          node scripts/ci/wb_radar.mjs run "$RUNNER_TEMP/wb-radar" .wb-ci/request.json
+          --shard ${{ matrix.shard }}/${{ needs.plan.outputs.radar_count }}
+      - name: Upload this shard's part
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-radar-part-${{ matrix.shard }}
+          path: ${{ runner.temp }}/wb-radar/
+          if-no-files-found: warn
+          retention-days: 1
+
+  radar-report:
+    # The radar's parts in one report: findings deduped across states, grouped by root cause (the same component,
+    # colour pair or message on any page is one group), each with a crop. ac-bug-radar reads radar.json.
+    needs: [plan, radar]
+    if: always() && needs.plan.outputs.radar == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Download every shard's part
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: wb-radar-part-*
+          path: ${{ runner.temp }}/wb-radar
+          merge-multiple: true
+      - name: Dedupe, group and report
+        run: node scripts/ci/wb_radar.mjs merge "$RUNNER_TEMP/wb-radar" .wb-ci/request.json
+      - name: Upload the report, crops and page shots
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-radar
+          path: |
+            ${{ runner.temp }}/wb-radar/report.md
+            ${{ runner.temp }}/wb-radar/radar.json
+            ${{ runner.temp }}/wb-radar/crops/
+            ${{ runner.temp }}/wb-radar/pages/
+          if-no-files-found: error
+          retention-days: 1
+
   e2e:
     # Opt-in (`wb-ci --e2e`), never part of --full: the release's Sales Xray browser proofs from application.yml
     # (static export journeys and the production-standalone acquisition journey), so navigation or label drift shows
@@ -487,7 +573,7 @@ jobs:
         run: bash scripts/validate-control-plane.sh
 
   summary:
-    needs: [plan, ci-prerequisites, lint, web, py-tests, visual, matrix, e2e, migrations, control-plane]
+    needs: [plan, ci-prerequisites, lint, web, py-tests, visual, matrix, radar, radar-report, e2e, migrations, control-plane]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5
