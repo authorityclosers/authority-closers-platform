@@ -19,6 +19,7 @@ import {
   isLarge,
   labelish,
   leaves,
+  moduleOf,
   namesOut,
   normalizeMessage,
   over,
@@ -350,6 +351,32 @@ test("groups by root cause: one component, colour pair or message on any page", 
   assert.equal(
     componentOf("nav > a.lightbox-shell__bottomLink"),
     "a.lightbox-shell__bottomLink",
+  );
+  // Siblings of one component that spill together are one group; one width on several pages is one group.
+  assert.equal(
+    moduleOf("main > div.coaching__card > p.coaching__lead"),
+    "coaching",
+  );
+  assert.equal(moduleOf("main > p"), null);
+  assert.equal(
+    groupKeyOf({
+      check: "overflow-element",
+      selector: "div.coaching__framework",
+      page: "a",
+    }),
+    groupKeyOf({
+      check: "overflow-element",
+      selector: "div.x > p.coaching__lead",
+      page: "b",
+    }),
+  );
+  assert.equal(
+    groupKeyOf({
+      check: "overflow-page",
+      detail: "the page is 297 px wide in 267",
+      page: "report",
+    }),
+    "overflow-page | the page is 297 px wide in 267",
   );
   const contrast = {
     check: "contrast",

@@ -581,9 +581,27 @@ export function radarScan(options = {}) {
   const items = [];
   for (const el of all) {
     if (!el.matches(TAPPABLE)) continue;
-    const r = inter(rectOf(el), clipOf(el.parentElement));
-    if (r.w >= 4 && r.h >= 4)
-      items.push({ kind: "box", el, r, layer: layerOf(el), port: portOf(el) });
+    // An inline link that wraps is two line boxes, not their union (which covers the next link).
+    const pieces =
+      st(el).display === "inline"
+        ? [...el.getClientRects()].map((b) => ({
+            l: b.left,
+            t: b.top,
+            r: b.right,
+            b: b.bottom,
+          }))
+        : [rectOf(el)];
+    for (const piece of pieces) {
+      const r = inter(piece, clipOf(el.parentElement));
+      if (r.w >= 4 && r.h >= 4)
+        items.push({
+          kind: "box",
+          el,
+          r,
+          layer: layerOf(el),
+          port: portOf(el),
+        });
+    }
   }
   for (const t of texts)
     for (const r of t.boxes)
@@ -613,7 +631,7 @@ export function radarScan(options = {}) {
       if (a.node && a.node === b.node) continue;
       const ox = Math.min(a.r.r, b.r.r) - Math.max(a.r.l, b.r.l);
       const oy = Math.min(a.r.b, b.r.b) - Math.max(a.r.t, b.r.t);
-      if (ox < 3 || oy < 3) continue;
+      if (ox < 4 || oy < 4) continue;
       if (
         a.kind === "box" &&
         b.kind === "box" &&
@@ -752,7 +770,8 @@ export function radarScan(options = {}) {
       )
         continue;
       const r = rectOf(el);
-      if (r.w < 1 || r.h < 1) continue;
+      // A visually hidden input (1 x 1, opened by its label or a button) is not what a person taps.
+      if (r.w < 4 && r.h < 4) continue;
       const s = st(el);
       if (
         el.tagName === "A" &&
@@ -1023,12 +1042,24 @@ export function radarTargets(options = {}) {
   const count = new Map();
   let n = 0;
   // While a modal sheet is open, only its controls can be tapped; the page behind its scrim is not a target.
+  // A sheet opened with show() rather than showModal() still covers the page: the last open one that is at least a
+  // quarter of the screen counts too (a small popover does not).
+  const big = (d) => {
+    const r = d.getBoundingClientRect();
+    return (
+      d.checkVisibility?.() !== false &&
+      r.width * r.height >= 0.25 * W * innerHeight
+    );
+  };
   const modal =
     document.querySelector("dialog:modal") ??
-    [...document.querySelectorAll('[aria-modal="true"]')].find(
-      (d) =>
-        d.getBoundingClientRect().width > 0 && d.checkVisibility?.() !== false,
-    );
+    [
+      ...document.querySelectorAll(
+        'dialog[open], [role="dialog"], [role="alertdialog"], [aria-modal="true"]',
+      ),
+    ]
+      .filter(big)
+      .at(-1);
   for (const el of document.querySelectorAll(SELECTOR)) {
     el.removeAttribute("data-radar-id");
     if (modal && !modal.contains(el)) continue;
@@ -1371,16 +1402,33 @@ export function groupKeyOf(f) {
     case "tap-error":
       return `${f.check} | ${f.message ?? f.selector}`;
     case "overflow-page":
-      return `overflow-page | ${f.page}`;
+      // The same width in the same viewport on several pages is one cause (the shell), whatever the page.
+      return `overflow-page | ${f.detail}`;
     case "overlap":
       return `overlap | ${String(f.selector)
         .split(" ⟂ ")
         .map(componentOf)
         .sort()
         .join(" ⟂ ")}`;
+    case "overflow-element":
+    case "tap-target":
+    case "text-spill":
+    case "centred-card":
+      // Siblings of one component spill or shrink together: one CSS module, one group.
+      return `${f.check} | ${moduleOf(f.selector) ?? componentOf(f.selector)}`;
     default:
       return `${f.check} | ${componentOf(f.selector)}`;
   }
+}
+
+/** The CSS module an element path ends in ("coaching" for ….coaching__compare), or null. */
+export function moduleOf(selector) {
+  const parts = String(selector).split(" > ").reverse();
+  for (const part of parts) {
+    const found = /\.([\w-]+?)__[\w-]+/.exec(part);
+    if (found) return found[1];
+  }
+  return null;
 }
 
 /** Groups, the worst first: severity, then how many pages, then how many states. */
