@@ -36,6 +36,12 @@ export type AnalysisStartRequest = Readonly<{
   reportLanguage: string;
   supportsLanguage: boolean;
   paused: boolean;
+  /**
+   * Accept the plan under the seller's standing consent ("Analyse my calls
+   * automatically", owner, 26 Oct 2026), not a tap on this call; the server
+   * accepts it only while that consent is on for these terms.
+   */
+  standing?: boolean;
 }>;
 
 export type AnalysisStartPhase = "checking" | "starting";
@@ -60,6 +66,8 @@ export type AnalysisStartOutcome =
       kind: "needs_action";
       reason: AnalysisStartReason;
       message: string;
+      /** The server's answer that stopped the start (409: no standing consent). */
+      status?: number;
     }>;
 
 const COPY: Record<Exclude<AnalysisStartReason, "start_failed">, string> = {
@@ -92,6 +100,9 @@ function needsAction(
         : error instanceof AcquisitionError
           ? error.message
           : "Your recording is saved, but analysis could not be started. Open the call to try again.",
+    ...(reason === "start_failed" && error instanceof AcquisitionError
+      ? { status: error.status }
+      : {}),
   };
 }
 
@@ -312,6 +323,7 @@ export async function startAnalysis(
           // The server replays this key: a second send reuses the one original
           // acceptance and cannot make another consent or reservation.
           "Idempotency-Key": `accept-plan:${shown.id}`,
+          ...(request.standing ? { "X-Upload-Consent": "standing" } : {}),
         },
         body: JSON.stringify({
           plan_id: shown.id,
