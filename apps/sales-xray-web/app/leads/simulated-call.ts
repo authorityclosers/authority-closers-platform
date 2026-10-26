@@ -1,20 +1,26 @@
 /**
- * Calls on a lead that become Sales Xray calls, through the existing
- * recording import (the same consent, file checks, plan and analysis as any
- * upload):
+ * Calls on a lead that become Sales Xray calls (the same consent, file
+ * checks, plan and analysis as any upload):
  *
- * - a real call's recording, picked by the seller after the call, saved as
- *   their call and put on the lead;
- * - in a test workspace, a simulated call: the API picks a fictional
- *   recording that matches the lead, saved as the lead owner's call. Nobody
- *   is dialled.
+ * - a real call's recording, picked by the seller after the call, uploaded
+ *   as their own call as the studio does, and put on the lead;
+ * - in a test workspace, a simulated call through the recording import: the
+ *   API picks a fictional recording that matches the lead, saved as the lead
+ *   owner's call. Nobody is dialled.
  */
 
 import {
+  AcquisitionError,
   acquisition,
   parsePolicy,
+  parseSubmission,
+  record,
+  submissionPath,
+  type Submission,
   type UploadPolicy,
 } from "../acquisition-client";
+import { startAnalysis } from "../analysis-start";
+import { captureHeader } from "../capture-source";
 import { previewImportFolder } from "../bulk-import-client";
 import { inventoryImportFiles } from "../bulk-import-files";
 import { readCallLabel, renameCall } from "../call-label-client";
@@ -181,15 +187,87 @@ export async function runSimulatedCall({
   });
 }
 
+const hex = (bytes: ArrayBuffer | Uint8Array) =>
+  Array.from(new Uint8Array(bytes), (n) =>
+    n.toString(16).padStart(2, "0"),
+  ).join("");
+
+/** A call id fixed by its key: the key's SHA-256, shaped as a version 4 UUID. */
+export async function attemptId(key: string): Promise<string> {
+  const bytes = new Uint8Array(
+    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key)),
+  ).slice(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const id = hex(bytes);
+  return `${id.slice(0, 8)}-${id.slice(8, 12)}-${id.slice(12, 16)}-${id.slice(16, 20)}-${id.slice(20)}`;
+}
+
 /**
- * Saves a real call's recording as the seller's call and puts it on the lead.
- * With `callEventId` (a call already on the lead, such as one the phone logged
- * from its dialer) the recording joins that call's row.
+ * The seller's own upload of a recording, with the consent they ticked for
+ * this call: a try that was already saved is found first, never sent again.
+ * Unlike the studio's upload, it leaves the studio's open call alone.
+ */
+async function sendOwnSource({
+  id,
+  file,
+  sha,
+  policySha,
+  signal,
+}: {
+  id: string;
+  file: File;
+  sha: string;
+  policySha: string;
+  signal: AbortSignal;
+}): Promise<Submission> {
+  const mismatch = () =>
+    new LeadsError(
+      "The saved call doesn't match this recording. Pick the recording again.",
+      0,
+    );
+  try {
+    const saved = parseSubmission(
+      record(await acquisition(submissionPath(id), { signal })),
+    );
+    if (saved.id !== id || saved.sha !== sha) throw mismatch();
+    return saved;
+  } catch (error) {
+    if (!(error instanceof AcquisitionError && error.status === 404))
+      throw error;
+  }
+  const bound = parseSubmission(
+    record(
+      await acquisition(`${submissionPath(id)}/source`, {
+        method: "PUT",
+        signal,
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "X-Source-SHA256": sha,
+          "X-Upload-Policy": policySha,
+          "X-Upload-Consent": "accepted",
+          ...captureHeader(file),
+        },
+        body: file,
+      }),
+    ),
+  );
+  if (bound.id !== id || bound.sha !== sha) throw mismatch();
+  return bound;
+}
+
+/**
+ * Saves a real call's recording as the seller's own call, puts it on the lead
+ * and starts its analysis, as the studio does: the seller's own upload, on
+ * the terms they ticked for this call. It went through the recording import
+ * before, which only owners and admins may use, so a seller's tap failed
+ * there (26 Oct 2026). With `callEventId` (a call already on the lead, such
+ * as one the phone logged from its dialer) the recording joins that call's
+ * row.
  */
 export async function runRecordingUpload({
   lead,
   file,
-  me,
   policy,
   onStep,
   signal,
@@ -198,7 +276,6 @@ export async function runRecordingUpload({
 }: {
   lead: LeadDetail;
   file: File;
-  me: { person_id: string; name: string };
   policy: UploadPolicy;
   onStep: (step: SimulationStep) => void;
   signal: AbortSignal;
@@ -206,42 +283,58 @@ export async function runRecordingUpload({
   callEventId?: string | null;
 }): Promise<LeadDetail> {
   onStep("saving");
-  const selection = await inventoryImportFiles([file], { signal });
-  if (selection.error !== null) throw new LeadsError(selection.error, 0);
-  const preview = await previewImportFolder(selection.data.manifest, signal);
-  if (preview.error !== null) throw new LeadsError(preview.error, 0);
-  if (!preview.data.members.some((member) => member.personId === me.person_id))
-    throw new LeadsError(
-      "Your calls can't be saved in this workspace yet. Ask an owner to add you as a member.",
-      0,
-    );
-  const confirmed = await confirmImport({
-    selection: selection.data,
-    preview: preview.data,
-    folders: Object.fromEntries(
-      preview.data.folders.map((folder) => [folder.folder, me.person_id]),
-    ),
-    policySha: policy.policy_sha256,
-    key: `lead-recording:${lead.lead.lead_id}:${attempt}`,
+  // One call per attempt: trying again finds the call the first try saved
+  // (the upload reads before it sends) instead of saving it twice.
+  const id = await attemptId(`lead-recording:${lead.lead.lead_id}:${attempt}`);
+  const sha = hex(
+    await crypto.subtle.digest("SHA-256", await file.arrayBuffer()),
+  );
+  let bound: Submission;
+  try {
+    bound = await sendOwnSource({
+      id,
+      file,
+      sha,
+      policySha: policy.policy_sha256,
+      signal,
+    });
+  } catch (error) {
+    if (signal.aborted || error instanceof LeadsError) throw error;
+    throw error instanceof AcquisitionError
+      ? new LeadsError(error.message, error.status)
+      : new LeadsError(
+          "The recording didn't upload. Check your connection and try again.",
+          0,
+        );
+  }
+  // Put the call on the lead first, so closing the page never loses it.
+  onStep("linking");
+  // One command per attempt too: trying again never puts the call on the lead
+  // twice.
+  const linked = await attachRecording(
+    lead,
+    bound.id,
     signal,
-  });
-  if (confirmed.error !== null) throw new LeadsError(confirmed.error, 0);
-  return drive({
-    batch: confirmed.data,
-    selection: selection.data,
-    link: async (submissionId, linkSignal) => {
-      const next = await attachRecording(
-        lead,
-        submissionId,
-        linkSignal,
-        callEventId,
-      );
-      await nameCall(submissionId, `${lead.lead.name} · call`, linkSignal);
-      return next;
+    callEventId,
+    await attemptId(`lead-recording-attach:${lead.lead.lead_id}:${attempt}`),
+  );
+  await nameCall(bound.id, `${lead.lead.name} · call`, signal);
+  const started = await startAnalysis(
+    {
+      bound,
+      sourceSha256: sha,
+      policySha256: policy.policy_sha256,
+      // An English report, as the recording import started it.
+      reportLanguage: "en",
+      supportsLanguage: true,
+      paused: false,
     },
-    onStep,
     signal,
-  });
+    onStep,
+  );
+  if (started.kind === "needs_action") throw new LeadsError(started.message, 0);
+  onStep("starting");
+  return linked;
 }
 
 /** Runs the import until the call is on the lead and its analysis has started. */
@@ -334,6 +427,7 @@ function attachRecording(
   submissionId: string,
   signal: AbortSignal,
   callEventId: string | null,
+  command: string = commandId(),
 ) {
   return json<LeadDetail>(
     `${API}/leads/${encodeURIComponent(lead.lead.lead_id)}/recordings`,
@@ -341,7 +435,7 @@ function attachRecording(
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
-        command_id: commandId(),
+        command_id: command,
         submission_id: submissionId,
         ...(callEventId ? { call_event_id: callEventId } : {}),
       }),

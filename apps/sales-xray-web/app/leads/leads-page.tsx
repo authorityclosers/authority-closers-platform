@@ -1490,7 +1490,7 @@ export function LeadsRoute() {
                   <PhoneAppBanner onOpen={() => begin("apps", setApps)} />
                   <AlertsCard />
                   <PhoneLogCard as="offer" />
-                  <RecordedCallsCard me={desk.me} />
+                  <RecordedCallsCard />
                   <UnknownCallsCard onSave={setUnknownLead} />
                   {/* Owner, 20 Oct: chats live in Chats; the desk links there. */}
                   <DeskChats />

@@ -29,6 +29,7 @@ from starlette.responses import StreamingResponse
 
 from ac_platform.application.settings import Settings
 from ac_platform.audit.service import AuditRepository
+from ac_platform.call_ai import auto_consent
 from ac_platform.call_ai import policy as call_ai_policy
 from ac_platform.call_ai import store as call_ai_store
 from ac_platform.conversation_intelligence.acquisition_activity import (
@@ -231,6 +232,12 @@ def install_submission_http(
     ):
         raise ValueError("Hosted source preflight requires the bounded native socket helper.")
     router = APIRouter(prefix="/v1/conversation/acquisition", tags=["conversation-acquisition"])
+    # The upload terms in force, for the automatic-analysis consent's "ask again".
+    setattr(
+        application.state,
+        auto_consent.UPLOAD_TERMS_STATE,
+        lambda: upload_policy(runtime.policy)["policy_sha256"],
+    )
     cookie_name = "__Host-ac_xray_guest" if settings.secure_cookies else "ac_xray_guest"
     capacity = anyio.CapacityLimiter(1)
     public = settings.public_learner_tenant_id
@@ -355,6 +362,23 @@ def install_submission_http(
             yield await bind_import_request(
                 owner, request, policy_sha256=upload_policy(runtime.policy)["policy_sha256"]
             )
+
+    async def _standing_consent(owner: _Owner, policy_sha256: str) -> UUID:
+        """The standing consent an upload marked "standing" relies on: the seller's own,
+        in their organisation, for these upload terms, with their AI level not Off."""
+        actor = owner.actor
+        found = (
+            None
+            if actor is None
+            or actor.tenant_id is None
+            or isinstance(owner.ownership, ImportOwnership)
+            else await auto_consent.may_start(
+                owner.ownership.database, actor.tenant_id, actor.person_id, policy_sha256
+            )
+        )
+        if found is None:
+            raise fail(409, "Automatic analysis isn't on for you here. Tap Analyse this call.")
+        return found
 
     dependency = Depends(current_owner, scope="function")
     read_require_actor = getattr(require_actor, "read_only", require_actor)
@@ -653,6 +677,9 @@ def install_submission_http(
         lengths = request.headers.getlist("content-length")
         hashes = request.headers.getlist("x-source-sha256")
         policies = request.headers.getlist("x-upload-policy")
+        # "accepted": this call's own tick. "standing": the seller's standing consent to have
+        # their calls analysed as they arrive (call_ai.auto_consent), checked below.
+        consents = request.headers.getlist("x-upload-consent")
         if (
             len(lengths) != 1
             or re.fullmatch(r"[1-9][0-9]{0,8}", lengths[0]) is None
@@ -664,7 +691,7 @@ def install_submission_http(
             or _SHA.fullmatch(hashes[0]) is None
             or len(policies) != 1
             or policies[0] != upload_policy(runtime.policy)["policy_sha256"]
-            or request.headers.getlist("x-upload-consent") != ["accepted"]
+            or consents not in (["accepted"], ["standing"])
         ):
             raise fail(
                 422,
@@ -681,9 +708,12 @@ def install_submission_http(
         # Authenticate before accepting bytes. No database transaction remains
         # open during network streaming or isolated native decoding.
         actor_binding: tuple[UUID, UUID, UUID | None] | None = None
+        standing_consent: UUID | None = None
         async with asynccontextmanager(current_owner)(request) as owner:
             await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
             actor_binding = _actor_binding(owner.actor)
+            if consents == ["standing"]:
+                standing_consent = await _standing_consent(owner, policies[0])
             if isinstance(owner.ownership, ImportOwnership):
                 reused = await owner.ownership.existing_source(
                     submission_id,
@@ -781,9 +811,15 @@ def install_submission_http(
                             )
                             if reused is not None:
                                 return reused
+                        if consents == ["standing"]:
+                            # Turned off while the bytes streamed: this call waits for a tap.
+                            standing_consent = await _standing_consent(owner, policies[0])
                         service = AcquisitionProcessing(owner.ownership, runtime)
                         actor, quote = await service.prepare(
-                            measured, policy_sha256=policies[0], **owner.arguments
+                            measured,
+                            policy_sha256=policies[0],
+                            standing_consent_id=standing_consent,
+                            **owner.arguments,
                         )
                         with path.open("rb") as source:
                             await service.application.store_source(

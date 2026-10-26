@@ -3674,3 +3674,8 @@
   padding-block: 12px;
   margin-block: -12px;
 }
+
+/* The report menu's Delete call reads as what it does (owner, 26 Oct 2026). */
+.reportMenuSupport[data-tone="danger"] {
+  color: var(--lx-danger);
+}

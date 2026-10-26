@@ -6,6 +6,9 @@
 - PUT /default               the organisation's default (owners and admins)
 - PUT /people/{person_id}    one person's own level, or back to the default with
                              ``level: null`` (owners and admins)
+- GET/POST /auto-analysis    the caller's own standing consent to have their calls
+                             analysed as they arrive (``auto_consent``; any member, for
+                             themselves only)
 
 Each save is a new settings revision (``expected_revision`` guards against two people
 saving at once) and an audit event with old and new. Only the organisation's owners and
@@ -19,24 +22,25 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Annotated, Any, Literal
 from uuid import UUID
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
-from pydantic import BaseModel, ConfigDict
+from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, Response
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from ac_platform.audit.service import AuditRepository
-from ac_platform.call_ai import policy, store
+from ac_platform.call_ai import auto_consent, policy, store
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
 from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk.store import MANAGERS, person_name
-from ac_platform.tenancy.models import Membership, Organisation
+from ac_platform.tenancy.models import Membership, Organisation, Tenant
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
+OUTSIDE = "AI on calls is set inside an organisation."
 LevelName = Literal["off", "data_only", "auto", "full"]
 # What each level does, in the app's words (no prices: never on a user screen).
 HINTS: dict[str, str] = {
@@ -62,6 +66,15 @@ class PersonCommand(BaseModel):
     level: LevelName | None
 
 
+class AutoAnalysisCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    decision: Literal["granted", "withdrawn"]
+    # Turning on: the words' hash as shown, and the upload terms' hash in force.
+    policy_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    upload_policy_sha256: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    language: Literal["en", "hi", "mr"] = "en"
+
+
 def levels() -> list[dict[str, str]]:
     return [
         {"id": level, "name": policy.NAMES[level], "hint": HINTS[level]} for level in policy.LEVELS
@@ -82,9 +95,10 @@ def install_call_ai_http(application: FastAPI, ctx: RouteContext) -> None:
 
     @asynccontextmanager
     async def workspace(
-        request: Request, response: Response, *, write: bool = False
+        request: Request, response: Response, *, write: bool = False, own: bool = False
     ) -> AsyncIterator[tuple[Any, UUID, UUID, str]]:
-        """(auth, tenant, person, role) for a member of the current organisation."""
+        """(auth, tenant, person, role) for a member of the current organisation; ``own``:
+        a write any member makes for themselves."""
         response.headers.update(PRIVATE)
         same_host(request)
         if request.query_params:
@@ -106,9 +120,7 @@ def install_call_ai_http(application: FastAPI, ctx: RouteContext) -> None:
                     settings.operations_tenant_id,
                     settings.public_learner_tenant_id,
                 ):
-                    raise HTTPException(
-                        403, "AI on calls is set inside an organisation.", headers=PRIVATE
-                    )
+                    raise HTTPException(403, OUTSIDE, headers=PRIVATE)
                 role = await auth.database.scalar(
                     select(Membership.role)
                     .join(Organisation, Organisation.tenant_id == Membership.tenant_id)
@@ -121,10 +133,8 @@ def install_call_ai_http(application: FastAPI, ctx: RouteContext) -> None:
                     )
                 )
                 if role is None:
-                    raise HTTPException(
-                        403, "AI on calls is set inside an organisation.", headers=PRIVATE
-                    )
-                if write and role not in MANAGERS:
+                    raise HTTPException(403, OUTSIDE, headers=PRIVATE)
+                if write and not own and role not in MANAGERS:
                     raise HTTPException(
                         403,
                         "Only the organisation's owners and admins can change AI on calls.",
@@ -137,6 +147,8 @@ def install_call_ai_http(application: FastAPI, ctx: RouteContext) -> None:
             ) from None
         except policy.SettingsError as error:
             raise HTTPException(422, str(error), headers=PRIVATE) from None
+        except auto_consent.ConsentError as error:
+            raise HTTPException(error.status, str(error), headers=PRIVATE) from None
         except DomainError:
             raise HTTPException(401, "Sign in to see this.", headers=PRIVATE) from None
 
@@ -206,6 +218,91 @@ def install_call_ai_http(application: FastAPI, ctx: RouteContext) -> None:
             now=now,
         )
         return await view(auth, tenant_id, person_id, role, after)
+
+    def terms_in_force(request: Request) -> str | None:
+        """The upload terms' hash in force, from the upload routes (None where they are not
+        mounted: the upload itself checks the terms anyway)."""
+        terms = getattr(request.app.state, auto_consent.UPLOAD_TERMS_STATE, None)
+        return terms() if callable(terms) else None
+
+    async def organisation_name(auth: Any, tenant_id: UUID) -> str:
+        name = await auth.database.scalar(select(Tenant.name).where(Tenant.id == tenant_id))
+        return str(name or "this organisation")
+
+    async def auto_view(
+        request: Request, auth: Any, tenant_id: UUID, person_id: UUID
+    ) -> dict[str, Any]:
+        found = await auto_consent.standing(auth.database, tenant_id, person_id)
+        level = await auto_consent.level(auth.database, tenant_id, person_id)
+        shown = auto_consent.notice("en")
+        state = found.state
+        current = terms_in_force(request)
+        # Upload terms changed since (another provider, another retention): ask again.
+        if state == "on" and current is not None and found.terms_sha256 != current:
+            state = "ask"
+        return {
+            "schema": "sales-xray-auto-analysis/1",
+            "state": state,
+            "since": found.at.isoformat() if found.at else None,
+            # The upload terms agreed with: another hash in force now means asking again.
+            "terms_sha256": found.terms_sha256,
+            "ai_level": level,
+            "can_start": state == "on" and level != "off",
+            "notice": {
+                **shown,
+                "text": shown["text"].format(organisation=await organisation_name(auth, tenant_id)),
+            },
+            "pending_languages": list(auto_consent.PENDING_LANGUAGES),
+        }
+
+    @router.get("/auto-analysis")
+    async def read_auto_analysis(request: Request, response: Response) -> dict[str, Any]:
+        try:
+            async with workspace(request, response) as (auth, tenant_id, person_id, _):
+                return await auto_view(request, auth, tenant_id, person_id)
+        except HTTPException as error:
+            # A personal workspace: nothing to offer, said plainly (the app hides it all).
+            if error.status_code == 403 and error.detail == OUTSIDE:
+                return {
+                    "schema": "sales-xray-auto-analysis/1",
+                    "state": "unavailable",
+                    "can_start": False,
+                }
+            raise
+
+    @router.post("/auto-analysis")
+    async def choose_auto_analysis(
+        command: AutoAnalysisCommand,
+        request: Request,
+        response: Response,
+        idempotency_key: Annotated[
+            str | None, Header(alias="Idempotency-Key", max_length=128)
+        ] = None,
+    ) -> dict[str, Any]:
+        async with workspace(request, response, write=True, own=True) as (
+            auth,
+            tenant_id,
+            person_id,
+            _,
+        ):
+            await auto_consent.record(
+                auth.database,
+                tenant_id=tenant_id,
+                person_id=person_id,
+                session_id=auth.resolved.actor.session_id,
+                decision=command.decision,
+                language=command.language,
+                policy_sha256=command.policy_sha256,
+                upload_policy_sha256=command.upload_policy_sha256,
+                shown_text=auto_consent.notice(command.language)["text"].format(
+                    organisation=await organisation_name(auth, tenant_id)
+                )
+                if command.decision == "granted"
+                else None,
+                idempotency_key=idempotency_key,
+                now=datetime.now(UTC),
+            )
+            return await auto_view(request, auth, tenant_id, person_id)
 
     @router.get("")
     async def read(request: Request, response: Response) -> dict[str, Any]:

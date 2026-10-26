@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { resetBackCloseForTests } from "../ui/back-close";
-import type { Desk, LeadDetail } from "./leads-client";
+import type { LeadDetail } from "./leads-client";
 import {
   checkWarning,
   parseCheck,
@@ -116,12 +116,6 @@ const PENDING = {
   needsAllFiles: false,
   allFilesSupported: true,
 };
-const ME: Desk["me"] = {
-  person_id: "p1",
-  name: "Test Seller",
-  role: "member",
-  can_manage: false,
-};
 
 let root: Root;
 let host: HTMLDivElement;
@@ -188,7 +182,7 @@ it("describes each call the way the call log does", () => {
 });
 
 it("shows nothing in a browser", async () => {
-  await act(async () => root.render(<RecordedCallsCard me={ME} />));
+  await act(async () => root.render(<RecordedCallsCard />));
   expect(host.innerHTML).toBe("");
 });
 
@@ -206,7 +200,7 @@ it("analyses a recorded dialer call on its own call, after the terms are agreed"
       return { data: btoa("ID3 fake audio"), eof: true };
     return pending;
   });
-  await act(async () => root.render(<RecordedCallsCard me={ME} />));
+  await act(async () => root.render(<RecordedCallsCard />));
   expect(host.textContent).toContain("1 lead call recorded");
   await act(async () => button("Analyse")!.click());
   // Names show with capitals; the silent one is flagged, not offered.
@@ -223,7 +217,6 @@ it("analyses a recorded dialer call on its own call, after the terms are agreed"
   expect(vi.mocked(runRecordingUpload).mock.calls[0][0]).toMatchObject({
     callEventId: "e1",
     attempt: "e1",
-    me: { person_id: "p1" },
   });
   expect(
     sent
@@ -239,7 +232,7 @@ it("asks for All files access when the phone hides its recordings", async () => 
     needsAllFiles: true,
     allFilesSupported: true,
   }));
-  await act(async () => root.render(<RecordedCallsCard me={ME} />));
+  await act(async () => root.render(<RecordedCallsCard />));
   expect(host.textContent).toContain("Your phone hides its call recordings");
   await act(async () => button("Allow")!.click());
   expect(

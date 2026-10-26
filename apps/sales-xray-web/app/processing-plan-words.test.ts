@@ -63,3 +63,52 @@ it("leaves out a notice that names a provider the plan does not use", () => {
     ]),
   ).toEqual([wrong]);
 });
+
+// Whatever a plan holds, the notices it shows are exactly those naming only
+// providers that have a line (the Sign-in session, 26 Oct 2026): none naming
+// a provider the lines leave out, and none dropped that matches them. Who a
+// notice names is read here on its own terms, not with the module's patterns.
+it("shows exactly the notices whose providers have a line", () => {
+  const providers = [
+    "elevenlabs",
+    "google-gemini",
+    "openai",
+    "anthropic",
+    "approved-provider",
+  ];
+  const notices = [
+    NOTICE,
+    "Your audio goes to ElevenLabs for transcription.",
+    "Your call audio and its transcript go to Google Gemini for transcription and coaching.",
+    "OpenAI prepares the coaching notes.",
+    "Claude, by Anthropic, reviews the transcript.",
+    "Your audio goes to ElevenLabs; Google Gemini writes the report.",
+  ];
+  const named: Record<string, RegExp> = {
+    ElevenLabs: /elevenlabs/i,
+    "Google Gemini": /google|gemini/i,
+    OpenAI: /openai/i,
+    Anthropic: /anthropic|claude/i,
+  };
+  for (const audio of providers)
+    for (const report of providers)
+      for (const first of notices)
+        for (const second of notices) {
+          const stages = [
+            { stage: "C2", provider: audio, privacy_notice: first },
+            { stage: "C5", provider: report, privacy_notice: second },
+          ];
+          const lines = providerLines(stages);
+          const hasLine = (name: string) =>
+            lines.some((line) => line.endsWith(`: ${name}`));
+          const expected = [...new Set([first, second])].filter((notice) =>
+            Object.entries(named).every(
+              ([name, pattern]) => !pattern.test(notice) || hasLine(name),
+            ),
+          );
+          expect(
+            privacyNotices(stages),
+            `${audio} and ${report}: ${first} | ${second}`,
+          ).toEqual(expected);
+        }
+});

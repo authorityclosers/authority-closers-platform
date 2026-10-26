@@ -4,7 +4,9 @@
  * Settings → Privacy (owner, 24 Oct 2026, telemetry option B: on by default,
  * a per-person opt-out, and owners and admins can turn it off for the
  * workspace). Usage analytics, in the words of the privacy page's notice; the
- * switches save to /v1/telemetry/preferences (an audit record each time).
+ * switches save to /v1/telemetry/preferences (an audit record each time). Then
+ * "Analyse my calls automatically", the seller's standing consent (owner,
+ * 26 Oct 2026; auto-analysis-panel.tsx).
  */
 import { Activity, Building2, FlaskConical } from "lucide-react";
 import Link from "next/link";
@@ -14,6 +16,7 @@ import { tellPhoneTelemetry } from "../leads/native-phone";
 import { telemetry } from "../telemetry";
 import { Panel, Skeleton } from "../ui/kit";
 import { StateSwitch } from "../ui/state-switch";
+import { AutoAnalysisPanel } from "./auto-analysis-panel";
 import styles from "./sections.module.css";
 
 export type AnalyticsPreferences = {
@@ -212,6 +215,8 @@ export function PrivacySettings() {
           </p>
         </div>
       </Panel>
+      {/* Calls analysed as they arrive, with the seller's own consent. */}
+      <AutoAnalysisPanel />
     </div>
   );
 }

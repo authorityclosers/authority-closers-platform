@@ -236,14 +236,15 @@ it("shows one Get started panel for a brand-new account instead of zero figures"
       }),
   });
   await renderPage(true);
-  expect(host.querySelector("h2#get-started")?.textContent).toBe(
-    "Analyse your first call",
+  // A brand-new account: one welcome line and three one-tap steps (owner, #20).
+  expect(host.querySelector("h2#first-run-title")?.textContent).toBe(
+    "Welcome to Sales X-Ray. Start here.",
   );
   expect(host.querySelector('[aria-label="Dashboard figures"]')).toBeNull();
   expect(host.querySelectorAll("ol li")).toHaveLength(3);
-  expect(host.querySelector('a[href="/analysis/new"]')?.textContent).toContain(
-    "Analyse a call",
-  );
+  expect(
+    host.querySelector('a[href="/leads?import=file"]')?.textContent,
+  ).toContain("Add your leads");
 });
 
 it("says a failed read did not load instead of keeping a skeleton forever", async () => {
@@ -331,7 +332,7 @@ it("never paints Not loaded for reads cancelled by a re-run of the page effect",
   expect(host.querySelector('[role="alert"]')).toBeNull();
   await act(async () => pending.forEach((answer) => answer()));
   expect(host.textContent).not.toContain("Not loaded");
-  expect(host.querySelector("h2#get-started")).not.toBeNull();
+  expect(host.querySelector("h2#first-run-title")).not.toBeNull();
 });
 
 it("says which figures are the owner's own and which are the team's", async () => {

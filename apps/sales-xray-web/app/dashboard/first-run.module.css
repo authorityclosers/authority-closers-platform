@@ -1,0 +1,82 @@
+/* A brand-new workspace's Home (owner, #20, 26 Oct 2026): one welcome line and
+   three one-tap steps, as rows of a single list. Tokens only. */
+
+.firstRun {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.firstRun h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-headline);
+}
+
+.steps {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  list-style: none;
+}
+
+.steps li + li {
+  border-top: 1px solid var(--sx-line);
+}
+
+.step {
+  display: flex;
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 64px;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.step:hover {
+  background: var(--sx-sunken);
+}
+
+.step:focus-visible {
+  outline: none;
+  box-shadow: inset var(--sx-focus-ring);
+}
+
+.icon {
+  display: grid;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.words {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.words strong {
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+}
+
+.words small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}

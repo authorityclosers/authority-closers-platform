@@ -1,0 +1,125 @@
+/* A seller's day at a glance (owner, #18, 26 Oct 2026): four tiles in two
+   columns on a phone, four across on a computer; then leads by stage as
+   bars. Tokens only; every row and tile is a 44 px target or more. */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 900px) {
+  .tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.tile {
+  display: grid;
+  gap: 2px;
+  min-height: 64px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.tile:hover {
+  background: var(--sx-sunken);
+}
+
+.tile:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.tile strong {
+  font-size: 24px;
+  font-weight: 750;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.tile[data-tone="bad"] strong {
+  color: var(--sx-bad);
+}
+
+.stages {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.stages h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-panel);
+}
+
+.skeleton {
+  display: grid;
+  gap: 10px;
+}
+
+.stageList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stageList a {
+  display: grid;
+  grid-template-columns: minmax(0, 9em) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.stageList a:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.stageLabel {
+  overflow: hidden;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+}
+
+.bar {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sx-accent);
+}
+
+.stageCount {
+  min-width: 2ch;
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
