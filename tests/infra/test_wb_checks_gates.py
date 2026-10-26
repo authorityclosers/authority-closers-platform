@@ -190,3 +190,26 @@ def test_the_workflow_shards_the_radar_and_merges_one_report() -> None:
     shipped = (ROOT / "scripts/ci/wb-ci").read_text()
     assert "--radar) checks+=(radar)" in shipped
     assert "scripts/ci/wb_radar.mjs scripts/ci/wb_radar_lib.mjs" in shipped
+
+
+def test_the_speed_check_is_opt_in_and_builds_its_own_production_screens() -> None:
+    full, _ = checks.families({"full": True, "checks": [], "changed_files": None})
+    assert "speed" not in full
+    nightly = {"full": True, "checks": ["radar", "speed"], "changed_files": None}
+    assert checks.families(nightly) == ({"radar", "speed"}, True)
+    jobs = yaml.safe_load((ROOT / ".github/workflows/workbench-checks.yml").read_text())["jobs"]
+    assert jobs["plan"]["outputs"]["speed"] == "${{ steps.plan.outputs.speed }}"
+    assert jobs["speed"]["if"] == "needs.plan.outputs.speed == 'true'"
+    assert "needs.plan.outputs.speed == 'true'" in jobs["ci-prerequisites"]["if"]
+    [build] = [s for s in jobs["speed"]["steps"] if "build" in s.get("run", "")]
+    # The fixture screens exist only in this build (next.config.ts pageExtensions).
+    assert build["env"]["AC_SALES_XRAY_PERF_FIXTURES"] == "1"
+    runs = "\n".join(step.get("run", "") for step in jobs["speed"]["steps"])
+    assert "node --test scripts/ci/wb_speed_lib.test.mjs" in runs
+    assert "node scripts/ci/wb_speed.mjs" in runs
+    [upload] = [s for s in jobs["speed"]["steps"] if "upload-artifact" in s.get("uses", "")]
+    assert upload["with"]["name"] == "wb-speed" and upload["with"]["retention-days"] == 1
+    assert "speed" in jobs["summary"]["needs"]
+    shipped = (ROOT / "scripts/ci/wb-ci").read_text()
+    assert "--speed) checks+=(speed)" in shipped
+    assert "scripts/ci/wb_speed.mjs scripts/ci/wb_speed_lib.mjs" in shipped

@@ -6,8 +6,8 @@ name: Workbench checks
 # Fixed slot names keep each slot's caches warm (Actions caches are scoped to the branch name).
 # No secrets, no deploys, no real databases: PostgreSQL runs in throwaway containers with local passwords, as in
 # Application validation. Full layout: lint, tsc, vitest, visual and 16 Python shards = 20 jobs (the plan's limit).
-# Opt-in families, never in a full run: e2e (the release's browser proofs), matrix (the visual test matrix) and radar
-# (the bug radar).
+# Opt-in families, never in a full run: e2e (the release's browser proofs), matrix (the visual test matrix), radar
+# (the bug radar) and speed (the speed check).
 # See docs/ops/WORKBENCH-CI.md.
 on:
   push:
@@ -40,6 +40,7 @@ jobs:
       radar: ${{ steps.plan.outputs.radar }}
       radar_shards: ${{ steps.plan.outputs.radar_shards }}
       radar_count: ${{ steps.plan.outputs.radar_count }}
+      speed: ${{ steps.plan.outputs.speed }}
       migrations: ${{ steps.plan.outputs.migrations }}
       control: ${{ steps.plan.outputs.control }}
       web_matrix: ${{ steps.plan.outputs.web_matrix }}
@@ -119,7 +120,7 @@ jobs:
     env:
       PREREQ_PUBLICATION_OWNER: ci-prerequisite-publication-v3
     needs: plan
-    if: needs.plan.outputs.py == 'true' || needs.plan.outputs.visual == 'true' || needs.plan.outputs.e2e == 'true' || needs.plan.outputs.matrix == 'true' || needs.plan.outputs.radar == 'true'
+    if: needs.plan.outputs.py == 'true' || needs.plan.outputs.visual == 'true' || needs.plan.outputs.e2e == 'true' || needs.plan.outputs.matrix == 'true' || needs.plan.outputs.radar == 'true' || needs.plan.outputs.speed == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     outputs:
@@ -410,6 +411,52 @@ jobs:
           delete-merged: true
           retention-days: 1
 
+  speed:
+    # Opt-in (`wb-ci --speed [screen ...]`; the owner, 27 Oct 2026, via the orchestrator: "on low-end devices with the
+    # worst processors this app might be slow"): the key screens of a production build (app/perf-fixture, built only
+    # here) timed at 1x, 4x and 6x CPU, loads and taps, one run at a time. One small artifact for a day.
+    needs: [plan, ci-prerequisites]
+    if: needs.plan.outputs.speed == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Check the speed check's own logic
+        run: node --test scripts/ci/wb_speed_lib.test.mjs
+      - name: Install locked Node dependencies
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate && pnpm install --frozen-lockfile
+      - name: Require cached locked Node browser
+        timeout-minutes: 13
+        uses: ./.github/actions/ci-prerequisites
+        with:
+          bundle: ${{ needs.ci-prerequisites.outputs.bundle }}
+          components: browser
+          python: python3
+          node-browser: "true"
+      - name: Build Sales X-Ray for the speed check (production; the fixture screens exist only in this build)
+        env:
+          AC_SALES_XRAY_PERF_FIXTURES: "1"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter @ac/sales-xray-web build
+      - name: Time the key screens at 1x, 4x and 6x CPU, fictional data only
+        timeout-minutes: 42
+        run: node scripts/ci/wb_speed.mjs "$RUNNER_TEMP/wb-speed" .wb-ci/request.json
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: wb-speed
+          path: |
+            ${{ runner.temp }}/wb-speed/report.md
+            ${{ runner.temp }}/wb-speed/speed.json
+          if-no-files-found: warn
+          retention-days: 1
+
   e2e:
     # Opt-in (`wb-ci --e2e`), never part of --full: the release's Sales Xray browser proofs from application.yml
     # (static export journeys and the production-standalone acquisition journey), so navigation or label drift shows
@@ -582,7 +629,7 @@ jobs:
         run: bash scripts/validate-control-plane.sh
 
   summary:
-    needs: [plan, ci-prerequisites, lint, web, py-tests, visual, matrix, radar, radar-report, e2e, migrations, control-plane]
+    needs: [plan, ci-prerequisites, lint, web, py-tests, visual, matrix, radar, radar-report, speed, e2e, migrations, control-plane]
     if: always()
     runs-on: ubuntu-24.04
     timeout-minutes: 5

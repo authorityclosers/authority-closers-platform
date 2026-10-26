@@ -4,7 +4,7 @@
 `wb-ci` on ac pushes a request commit to `refs/heads/wb-ci/<slot>`. The commit carries `.wb-ci/request.json`:
 
     {"schema": "wb-ci/2", "source_sha": "<workbench commit>", "full": false,
-     "checks": [] | ["web", "py", "visual", "e2e", "matrix", "radar"], "changed_files": ["apps/...", ...], "routes": [], "py_tests": [],
+     "checks": [] | ["web", "py", "visual", "e2e", "matrix", "radar", "speed"], "changed_files": ["apps/...", ...], "routes": [], "py_tests": [],
      "py_shards": 17, "requested_by": "..."}
 
 Python shards come in two families that partition the tests: (a) files that may need the codec/browser/native
@@ -13,7 +13,8 @@ scripts/ci/python_test_shard.py (an exclusion file adds the other family's files
 
 `matrix` (the visual test matrix: 7 sizes x font scale 85-130% x light and dark, wb_matrix.mjs) and `radar` (the bug
 radar: every fixture checked for overflow, overlap, cut labels, small taps, faint text and errors, and every safe
-control tapped once; wb_radar.mjs, sharded by page) run only when asked for, like `e2e`; neither is part of a full run. Full runs every other job. Otherwise only the families the changed paths touch run (explicit `checks` force families), and
+control tapped once; wb_radar.mjs, sharded by page) and `speed` (the key screens of a production build timed at 1x, 4x
+and 6x CPU; wb_speed.mjs) run only when asked for, like `e2e`; none is part of a full run. Full runs every other job. Otherwise only the families the changed paths touch run (explicit `checks` force families), and
 lint, tsc, vitest and ruff are scoped to the changed files. Python tests always run every shard when Python changed
 (or the given `py_tests` only). Two gates run whenever their paths change, even with explicit `checks`: migrations
 (released history, recovery policy, gate fixtures, rehearsal) and control (validate-control-plane.sh).
@@ -235,6 +236,7 @@ def cmd_plan() -> int:
     radar_count = max(1, min(RADAR_SHARDS, len(req["routes"]) or RADAR_SHARDS))
     out(web=str("web" in fams).lower(), py=str("py" in fams).lower(), visual=str("visual" in fams).lower(),
         e2e=str("e2e" in fams).lower(), matrix=str("matrix" in fams).lower(), radar=str("radar" in fams).lower(),
+        speed=str("speed" in fams).lower(),
         radar_shards=json.dumps(list(range(radar_count))), radar_count=str(radar_count),
         migrations=str("migrations" in fams).lower(),
         control=str("control" in fams).lower(),

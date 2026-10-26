@@ -97,6 +97,36 @@ are untouched: the radar is not a person reporting.
 - Give a known group a card later: `sudo ac-bug-radar card <group id>`.
 - State: `/var/lib/ac-bug-radar/state.json`.
 
+## The speed check (slow phones)
+
+The orchestrator for the owner, 27 Oct 2026: "on low-end devices with the worst processors this app might be slow".
+Telemetry can't name the low-end phones yet: Chrome caps memory at 8 GB and budget phones have 8 cores, so every phone
+reports tier "high". So the speed check times the screens in a lab instead.
+
+What it does:
+- **Build:** a production build of Sales X-Ray made with `AC_SALES_XRAY_PERF_FIXTURES=1`. Only that build has
+  `app/perf-fixture/[screen]/page.perf.tsx` (next.config.ts `pageExtensions`). It shows the review fixtures' fictional
+  screens with production React; every other build, deployments included, leaves the file out.
+- **Screens:** Home; Leads (All, My work, board); Calls; the Report; Chats; the organisation; Settings.
+- **CPU:** 1x, 4x (about a mid-range phone, Lighthouse's mobile setting) and 6x (a low-end phone), through Chromium's
+  CPU throttling. The phone is 390 px.
+- **Runs:** three of each, one at a time, so nothing shares the CPU. The median counts.
+- **What is timed, as telemetry times real phones:**
+  - opening the screen: navigation to settled (no change for 300 ms), with LCP and blocking time;
+  - each tap telemetry names (open a lead, switch a tab, open a sheet): from the tap to settled (150 ms quiet).
+- **Slow at 6x:** a screen over 3 s or a tap over 1 s. "For the builder": over 5 s and 2 s.
+
+```bash
+ssh ac wb-ci --speed                  # every screen; artifact wb-speed (report.md, speed.json)
+ssh ac wb-ci --speed leads report     # some screens
+```
+
+The nightly `ac-bug-radar` run carries it (`wb-ci --full --radar --speed`):
+- What is slow keeps a card, marker `perf:<screen>:<action>`, under "Speed check: Sales X-Ray on slow phones, every
+  night". Its title says "for the builder" over the builder's limit.
+- A card closes when a later night measures it fast enough, and reopens if it slows again.
+- Reports: `/var/lib/ac-bug-radar/runs/<when>/speed/`.
+
 ## The optional AI review
 
 `ac-bug-radar nightly --ai N` (or `AC_BUG_RADAR_AI_PAGES=N` in the unit's environment) is off unless asked. It is

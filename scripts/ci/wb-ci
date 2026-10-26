@@ -2,7 +2,7 @@
 # wb-ci: run workbench checks on GitHub-hosted runners instead of on ac (owner, 20 Oct 2026; full run < 5 min).
 #
 #   wb-ci [--sha <sha>] [--changed [<base>] | --full] [--web] [--py] [--visual [route ...]] [--e2e]
-#         [--matrix [screen|route ...]] [--radar [screen|route ...]]
+#         [--matrix [screen|route ...]] [--radar [screen|route ...]] [--speed [screen ...]]
 #         [--py-tests <path> ...] [--include <path> ...] [--no-wait] [--keep]
 #   wb-ci --refresh-durations <run-id>[,<run-id>...]   rebalance the Python shards (per-file mean over the runs)
 #
@@ -18,6 +18,8 @@
 #                overflow, overlap, cut labels, small taps, faint text, centred cards and errors, then every safe
 #                control tapped once (dead taps, tabs that don't switch, sheets off-screen); 5 shards, ~15 min.
 #                Opt-in, never part of --full; artifact wb-radar (report.md, radar.json, crops). See ac-bug-radar.
+#   --speed      the speed check: the key screens of a production build at 1x, 4x and 6x CPU (loads and taps);
+#                opt-in, never part of --full; artifact wb-speed (report.md, speed.json). See docs/ops/BUG-RADAR.md.
 #   --py-tests   one pytest job for these paths instead of the 17 shards
 #   --include    also test these uncommitted workbench files (read only; nothing in the checkout changes)
 #   --no-wait    print the run URL and return     --keep    keep the wb-ci branch after the run
@@ -47,6 +49,7 @@ CI_FILES=(.github/workflows/workbench-checks.yml .github/actions/ci-prerequisite
           scripts/ci/ci_prerequisites.py scripts/ci/wb_checks.py scripts/ci/wb_screens.mjs
           scripts/ci/wb_matrix.mjs scripts/ci/wb_matrix_lib.mjs scripts/ci/wb_matrix_lib.test.mjs
           scripts/ci/wb_radar.mjs scripts/ci/wb_radar_lib.mjs scripts/ci/wb_radar_lib.test.mjs
+          scripts/ci/wb_speed.mjs scripts/ci/wb_speed_lib.mjs scripts/ci/wb_speed_lib.test.mjs
           scripts/ci/wb-python-durations.json)
 
 if [ "${1:-}" = --refresh-durations ]; then
@@ -71,11 +74,12 @@ while [ $# -gt 0 ]; do
     --e2e) checks+=(e2e); shift; mode="" ;;
     --matrix) checks+=(matrix); shift; mode=routes ;;
     --radar) checks+=(radar); shift; mode=routes ;;
+    --speed) checks+=(speed); shift; mode=routes ;;
     --py-tests) checks+=(py); shift; mode=py_tests ;;
     --include) shift; mode=include ;;
     --no-wait) wait=0; shift; mode="" ;;
     --keep) keep=1; shift; mode="" ;;
-    -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,29p' "$0"; exit 0 ;;
     --*) echo "wb-ci: unknown option $1" >&2; exit 2 ;;
     *)
       case "$mode" in

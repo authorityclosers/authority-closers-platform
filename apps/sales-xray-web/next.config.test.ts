@@ -60,6 +60,26 @@ it("keeps the Turbopack review alias out of production and ordinary development"
   }
 });
 
+it("builds the speed check's fixture pages only when asked", async () => {
+  vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "0");
+  vi.stubEnv("AC_SALES_XRAY_PERF_FIXTURES", "");
+  vi.resetModules();
+  const { default: ordinary, pageExtensions } = await import("./next.config");
+  expect(ordinary.pageExtensions).not.toContain("perf.tsx");
+  expect(pageExtensions(true)).toEqual(["tsx", "ts", "jsx", "js"]);
+  vi.stubEnv("AC_SALES_XRAY_PERF_FIXTURES", "1");
+  vi.resetModules();
+  const { default: speed } = await import("./next.config");
+  expect(speed.pageExtensions).toEqual([
+    "tsx",
+    "ts",
+    "jsx",
+    "js",
+    "discovery.ts",
+    "perf.tsx",
+  ]);
+});
+
 it("allows extra dev origins only when explicitly configured", async () => {
   vi.stubEnv("AC_SALES_XRAY_DEV_ALLOWED_ORIGINS", "");
   vi.resetModules();

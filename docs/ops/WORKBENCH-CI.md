@@ -18,6 +18,7 @@ wb-ci --py-tests tests/core/test_x.py   # one pytest target with PostgreSQL inst
 wb-ci --visual /review-fixture/shell "/?new=1&sx-fixture=auth.email"
 wb-ci --matrix leads-table lead-sheet   # the visual test matrix for these screens (none: all of them)
 wb-ci --radar                           # the bug radar: every fixture checked and tapped (docs/ops/BUG-RADAR.md)
+wb-ci --speed                           # the speed check: key screens at 1x/4x/6x CPU, production build (same doc)
 wb-ci --include apps/sales-xray-web/app/x.tsx   # also test this uncommitted file
 wb-ci --sha 1a2b3c4d --full             # a specific workbench commit
 ```

@@ -285,6 +285,79 @@ def test_a_release_hold_lists_groups_the_baseline_does_not_know(
     assert [op["marker"] for op in _ops(tmp_path, "ensure")] == ["radar:parent", "radar:a"]
 
 
+def _speed(tmp_path: Path, name: str, findings: list[dict], measured: list[str]) -> Path:
+    folder = tmp_path / "runs" / name / "speed"
+    folder.mkdir(parents=True)
+    rows = []
+    for key in measured:
+        _, screen, action = key.split(":")
+        rows.append({"screen": screen, "action": action, "rates": {"6": {"median": 400}}})
+    (folder / "speed.json").write_text(json.dumps({"rows": rows, "findings": findings}))
+    return folder
+
+
+def _slow(screen: str, action: str, ms: int, severity: str = "slow") -> dict:
+    return {
+        "key": f"perf:{screen}:{action}",
+        "screen": screen,
+        "action": action,
+        "label": "Leads, All",
+        "words": "opening a lead",
+        "path": "/perf-fixture/leads?tab=all",
+        "severity": severity,
+        "ms": ms,
+        "limit": 1000,
+        "builder": 2000,
+        "at4": ms // 2,
+        "at1": ms // 6,
+    }
+
+
+def test_slow_screens_become_speed_cards_and_close_when_fast(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    radar = _load(monkeypatch, tmp_path)
+    run = {"dir": "/runs/r1", "stamp": "r1", "sha": "0123456789abcdef", "url": None}
+    state: dict = {}
+    first = [_slow("leads", "lead_open", 1300), _slow("report", "load", 5600, "builder")]
+    measured = ["perf:leads:lead_open", "perf:report:load", "perf:home:load"]
+    counts = radar.speed_ingest(_speed(tmp_path, "r1", first, measured), run, state, dry=False)
+    assert counts == {"slow": 2, "cards": 2, "updated": 0, "reopened": 0, "closed": 0}
+    ensured = {op["marker"]: op["fields"]["title"] for op in _ops(tmp_path, "ensure")}
+    assert set(ensured) == {"perf:parent", "perf:leads:lead_open", "perf:report:load"}
+    assert ensured["perf:report:load"].endswith("slow on a low-end phone · for the builder")
+    notes = next(
+        op["fields"]["notes"]
+        for op in _ops(tmp_path, "ensure")
+        if op["marker"] == "perf:leads:lead_open"
+    )
+    assert "1300 ms with the CPU at 6x" in notes and "650 ms at 4x" in notes
+    assert "/review-fixture/leads?tab=all" in notes and notes.endswith(
+        "Marker: perf:leads:lead_open"
+    )
+    parents = {op["id"]: op["fields"].get("parentId") for op in _ops(tmp_path, "save")}
+    assert parents["task-perf:parent"] == radar.HQ
+    assert parents["task-perf:leads:lead_open"] == "task-perf:parent"
+    # Night 2: opening a lead is fast; the report load wasn't measured, so it stays open.
+    (tmp_path / "pulse.log").unlink()
+    radar.speed_ingest(
+        _speed(tmp_path, "r2", [], ["perf:leads:lead_open"]),
+        {**run, "stamp": "r2"},
+        state,
+        dry=False,
+    )
+    assert [op["marker"] for op in _ops(tmp_path, "close")] == ["perf:leads:lead_open"]
+    assert state["speed"]["perf:report:load"]["status"] == "open"
+    # Night 3: slow again: its card reopens.
+    (tmp_path / "pulse.log").unlink()
+    again = [_slow("leads", "lead_open", 1500)]
+    counts = radar.speed_ingest(
+        _speed(tmp_path, "r3", again, measured), {**run, "stamp": "r3"}, state, dry=False
+    )
+    assert counts["reopened"] == 1
+    assert _ops(tmp_path, "move")[0]["id"] == "task-perf:leads:lead_open"
+
+
 def test_a_cancelled_run_is_tried_again(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     radar = _load(monkeypatch, tmp_path)
     count = tmp_path / "count"

@@ -11,6 +11,11 @@ keeps one AC Pulse card, marker radar:<group id>, under "Bug radar":
 - a group that is gone while all its pages were checked marks its card done; one that comes back reopens it.
 Cards carry the check, the component, the pages, numbers and where to look: never a name, an amount or report text.
 
+The same night's run also carries the speed check (`--speed`, the orchestrator for the owner, 27 Oct 2026): the key
+screens of a production build timed with the CPU at 4x and 6x. What is slow at 6x keeps a card, marker
+perf:<screen>:<action>, under "Speed check" ("for the builder" over 2 s for a tap, 5 s for a screen); it closes when a
+later night measures it fast enough. Its report is in runs/<when>/speed/.
+
   ac-bug-radar nightly [--dry-run]               the timer's run (waits while a release cut or ship runs)
   ac-bug-radar baseline [--cards N] [--dry-run]  the first run: every group recorded; cards for the N to fix first
   ac-bug-radar check [--sha S]                   a release hold: the groups the nightly baseline doesn't know;
@@ -348,6 +353,108 @@ def ingest(run_dir: Path, *, baseline: bool, cards: int, dry: bool, url: str | N
 
 
 # ---------------------------------------------------------------------------------------------------------------
+# The speed check's cards (orchestrator, 27 Oct 2026: slow ones become Pulse cards, perf:<screen>:<action>, and
+# anything over 2 s goes to the builder)
+
+SPEED_PARENT_MARKER = "perf:parent"
+
+
+def speed_parent(state: dict, *, dry: bool) -> str | None:
+    if state.get("speed_parent"):
+        return state["speed_parent"]
+    notes = "\n".join(
+        [
+            "Every night the speed check times the key Sales X-Ray screens of a production build (fictional data)",
+            "with the CPU slowed to 4x (a mid-range phone) and 6x (a low-end phone): opening each screen, and the",
+            "taps telemetry measures on real phones (open a lead, switch a tab, open a sheet).",
+            "A card below is a screen or tap slow at 6x; 'for the builder' is over 2 s for a tap, 5 s for a screen.",
+            "Cards close themselves when a later night measures them fast enough.",
+            "Reports on ac: /var/lib/ac-bug-radar/runs/<when>/speed/report.md.",
+            f"Marker: {SPEED_PARENT_MARKER}",
+        ]
+    )
+    task = ensure_task(SPEED_PARENT_MARKER, "Speed check: Sales X-Ray on slow phones, every night", notes, HQ, dry=dry)
+    if task and not dry:
+        state["speed_parent"] = task
+    return task
+
+
+def speed_text(finding: dict, run: dict) -> tuple[str, str]:
+    builder = finding["severity"] == "builder"
+    title = f"[dev] Speed: {finding['label']}, {finding['words']}, slow on a low-end phone" + (
+        " · for the builder" if builder else ""
+    )
+    lines = [
+        f"{finding['label']}, {finding['words']}: {finding['ms']} ms with the CPU at 6x (a low-end phone); "
+        f"{finding.get('at4') or '–'} ms at 4x, {finding.get('at1') or '–'} ms at 1x.",
+        f"Slow means over {finding['limit']} ms at 6x; over {finding['builder']} ms it is for the builder.",
+        "Measured on a production build of the fictional screens (wb-ci --speed), a 390 px phone, median of 3 runs.",
+    ]
+    if finding.get("path"):
+        dev = finding["path"].replace("/perf-fixture/", "/review-fixture/").replace("/review-fixture/report", "/review-fixture/report/story")
+        lines.append(f"Same screen on dev (development build, slower): {DEV}{dev}")
+    lines += [
+        f"Report on ac: {run['dir']}/speed/report.md; run: {run.get('url') or '?'} for {str(run.get('sha') or '?')[:12]}",
+        f"Marker: {finding['key']}",
+    ]
+    return title, "\n".join(lines)
+
+
+def speed_ingest(speed_dir: Path, run: dict, state: dict, *, dry: bool) -> dict:
+    """Cards for what is slow at 6x; a card closes when its measure was taken and is fast enough, and reopens when
+    it is slow again."""
+    data = json.loads((speed_dir / "speed.json").read_text())
+    measured = {
+        f"perf:{row['screen']}:{row['action']}"
+        for row in data.get("rows", [])
+        if (row.get("rates", {}).get("6") or {}).get("median") is not None
+    }
+    found = {finding["key"]: finding for finding in data.get("findings", [])}
+    known = state.setdefault("speed", {})
+    seen = now().isoformat(timespec="seconds")
+    counts = {"slow": len(found), "cards": 0, "updated": 0, "reopened": 0, "closed": 0}
+    for key, finding in found.items():
+        old = known.get(key, {})
+        if old.get("status") == "open" and old.get("severity") == finding["severity"]:
+            known[key] = {**old, "ms": finding["ms"], "last_seen": seen}
+            continue
+        title, notes = speed_text(finding, run)
+        if dry:
+            print(json.dumps({"card": key, "title": title}, ensure_ascii=False))
+            continue
+        task = ensure_task(key, title, notes, speed_parent(state, dry=False) or HQ, dry=False)
+        if old.get("status") == "fixed" and old.get("task"):
+            pulse([{"op": "move", "id": task, "status": "open", "note": f"Slow again in run {run['stamp']}."}], dry=False)
+            counts["reopened"] += 1
+        elif old:
+            counts["updated"] += 1
+        else:
+            counts["cards"] += 1
+        known[key] = {
+            "status": "open",
+            "task": task,
+            "severity": finding["severity"],
+            "ms": finding["ms"],
+            "first_seen": old.get("first_seen", seen),
+            "last_seen": seen,
+        }
+    for key, old in list(known.items()):
+        if old.get("status") != "open" or key in found or key not in measured:
+            continue
+        if dry:
+            print(json.dumps({"close": key}))
+            continue
+        pulse(
+            [{"op": "close", "marker": key, "status": "done", "note": f"Fast enough now in run {run['stamp']}."}],
+            dry=False,
+        )
+        known[key] = {**old, "status": "fixed", "fixed_at": seen}
+        counts["closed"] += 1
+    print(json.dumps({"speed": counts}))
+    return counts
+
+
+# ---------------------------------------------------------------------------------------------------------------
 # Running the radar on GitHub
 
 
@@ -391,12 +498,13 @@ def workbench_head() -> str:
     return done.stdout.strip()
 
 
-def run_radar(sha: str) -> tuple[str, str]:
-    """wb-ci --full --radar for `sha`; (run id, run url). Retries while the slots are busy, and when GitHub cancels
-    the run: on a busy night the shared ci-prerequisites concurrency group cancels a waiting run (26 Oct: twice)."""
+def run_radar(sha: str, checks: tuple[str, ...] = ("--radar",)) -> tuple[str, str]:
+    """wb-ci --full --radar (and --speed) for `sha`; (run id, run url). Retries while the slots are busy, and when
+    GitHub cancels the run: on a busy night the shared ci-prerequisites concurrency group cancels a waiting run
+    (26 Oct: twice)."""
     for attempt in range(4):
         done = subprocess.run(  # noqa: S603 - fixed argv
-            [WB_CI, "--full", "--radar", "--sha", sha], capture_output=True, text=True, timeout=95 * 60, check=False
+            [WB_CI, "--full", *checks, "--sha", sha], capture_output=True, text=True, timeout=95 * 60, check=False
         )
         found = re.search(r"wb-ci: run (https://github\.com/\S+/actions/runs/(\d+))", done.stdout)
         cancelled = re.search(r"^result: cancelled$", done.stdout, re.M)
@@ -410,12 +518,12 @@ def run_radar(sha: str) -> tuple[str, str]:
     raise RuntimeError("the radar run was cancelled or found no wb-ci slot four times; try the next night")
 
 
-def download(run_id: str, dest: Path) -> None:
-    cache = CACHE / run_id
+def download(run_id: str, dest: Path, name: str = "wb-radar") -> None:
+    cache = CACHE / f"{run_id}-{name}"
     acdev(["rm", "-rf", str(cache)], 60)
-    done = acdev([GH, "run", "download", run_id, "-R", REPO, "-n", "wb-radar", "-D", str(cache)], 600)
+    done = acdev([GH, "run", "download", run_id, "-R", REPO, "-n", name, "-D", str(cache)], 600)
     if done.returncode != 0:
-        raise RuntimeError(f"no wb-radar artifact in run {run_id}: {done.stderr.strip()[-200:]}")
+        raise RuntimeError(f"no {name} artifact in run {run_id}: {done.stderr.strip()[-200:]}")
     if dest.exists():
         shutil.rmtree(dest)
     shutil.copytree(cache, dest)
@@ -433,13 +541,18 @@ def prune() -> None:
             shutil.rmtree(folder, ignore_errors=True)
 
 
-def sweep(sha: str | None, folder: str) -> tuple[Path, str]:
-    """Run the radar on GitHub and bring its report here."""
+def sweep(sha: str | None, folder: str, *, speed: bool = False) -> tuple[Path, str]:
+    """Run the radar (and the speed check) on GitHub and bring the reports here; the speed report in speed/."""
     sha = sha or workbench_head()
-    run_id, url = run_radar(sha)
+    run_id, url = run_radar(sha, ("--radar", "--speed") if speed else ("--radar",))
     dest = STATE / "runs" / folder
     dest.parent.mkdir(parents=True, exist_ok=True)
     download(run_id, dest)
+    if speed:
+        try:
+            download(run_id, dest / "speed", "wb-speed")
+        except RuntimeError as error:  # the radar's cards still move; the speed cards wait for the next night
+            print(f"ac-bug-radar: {error}", file=sys.stderr)
     return dest, url
 
 
@@ -525,10 +638,16 @@ def main(argv: list[str]) -> int:
     ai_pages = int(option(rest, "--ai") or os.environ.get("AC_BUG_RADAR_AI_PAGES") or 0)
     if command in ("nightly", "baseline"):
         wait_for_ship()
-        dest, url = sweep(None, stamp())
+        dest, url = sweep(None, stamp(), speed=True)
         baseline = command == "baseline"
         cards = int(option(rest, "--cards", "15" if baseline else str(NIGHTLY_CARDS)))
-        ingest(dest, baseline=baseline, cards=cards, dry=dry, url=url)
+        summary = ingest(dest, baseline=baseline, cards=cards, dry=dry, url=url)
+        if (dest / "speed" / "speed.json").exists():
+            state = load_state()
+            run = {"dir": str(dest), "stamp": dest.name, "sha": summary.get("sha"), "url": url}
+            speed_ingest(dest / "speed", run, state, dry=dry)
+            if not dry:
+                save_state(state)
         if ai_pages:
             state = load_state()
             ai_review(dest, ai_pages, state, dry=dry)
