@@ -186,6 +186,8 @@ export const SCREENS = {
     path: "/review-fixture/alerts?level=urgent&long=1",
     steps: [{ wait: '[role="alertdialog"]' }],
   },
+  // The public tester page (tester programme, 26 Oct 2026): no sign-in, no fixture.
+  testers: { path: "/testers" },
 };
 
 /** The screens a request asks for: screen names or fixture paths ("/review-fixture/..."); none means all. */
