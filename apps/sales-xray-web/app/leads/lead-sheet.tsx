@@ -9,16 +9,19 @@
 
 import {
   ArrowRightLeft,
+  ArrowUp,
   BellPlus,
+  Check,
   CheckCircle2,
+  ChevronRight,
   History as HistoryIcon,
+  Link2,
   Mail,
   MessageCircle,
   MessageSquareText,
   Mic,
   NotebookPen,
   Pencil,
-  Link2,
   Phone,
   PhoneMissed,
   PhoneOff,
@@ -34,6 +37,7 @@ import {
   useContext,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type MouseEvent,
@@ -42,6 +46,7 @@ import {
 
 import { callHref, type UploadPolicy } from "../acquisition-client";
 import { notify } from "../notice-center";
+import { haptic } from "../ui/haptics";
 import { useFlow } from "../telemetry-flows";
 import { CallFacts } from "../call-engine/call-facts";
 import { Avatar, Badge, Button, Empty, Field } from "../ui/kit";
@@ -2174,7 +2179,23 @@ function EditDetails({
   );
 }
 
-function NoteBox({
+const NOTE_MAX = 1000;
+
+/** Words in a note, as a person counts them. */
+export function wordCount(text: string): number {
+  const words = text.trim();
+  return words ? words.split(/\s+/).length : 0;
+}
+
+/**
+ * The note composer (owner, #30, 26 Oct 2026: "the underline looks ugly…
+ * micro-interactions… a word count and an animated counter"). The field grows
+ * with what is typed (no resize grip); its foot counts words and characters,
+ * each number easing in as it changes; the send button sits inside the field
+ * and comes alive once there is text, with a press, a haptic and a "Saved"
+ * check when the note is on the lead.
+ */
+export function NoteBox({
   leadId,
   onSaved,
 }: {
@@ -2183,15 +2204,33 @@ function NoteBox({
 }) {
   const [note, setNote] = useState("");
   const [saving, setSaving] = useState(false);
+  // Counts the notes saved here, so each "Saved" plays afresh.
+  const [saved, setSaved] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const field = useRef<HTMLTextAreaElement>(null);
+  const words = wordCount(note);
+  const filled = note.trim().length > 0;
+
+  // Grows with the note, up to about eight lines, then scrolls.
+  useLayoutEffect(() => {
+    const box = field.current;
+    if (!box) return;
+    box.style.height = "auto";
+    box.style.height = `${Math.min(box.scrollHeight, 220)}px`;
+  }, [note]);
+
   const save = async () => {
-    if (!note.trim()) return;
+    if (!filled || saving) return;
+    haptic("tap");
     setSaving(true);
     setError(null);
     try {
       onSaved(await addNote(leadId, note.trim()));
       setNote("");
+      setSaved((count) => count + 1);
+      haptic("success");
     } catch (reason) {
+      haptic("error");
       setError(
         reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
       );
@@ -2199,23 +2238,61 @@ function NoteBox({
       setSaving(false);
     }
   };
-  // A field that looks like one (owner, 25 Oct 2026: the bar under History
-  // didn't read as something to type into).
+
   return (
-    <div className={styles.noteBox}>
+    <div className={styles.noteBox} data-filled={filled ? "" : undefined}>
       <textarea
+        ref={field}
         id={`lead-note-${leadId}`}
         aria-label="Add a note"
-        rows={3}
+        aria-describedby={`lead-note-count-${leadId}`}
+        rows={2}
         value={note}
-        maxLength={1000}
+        maxLength={NOTE_MAX}
         placeholder="Type a note: what they said, what you agreed"
         onChange={(event) => setNote(event.target.value)}
+        onKeyDown={(event) => {
+          // Ctrl or ⌘ Enter adds it, as in a chat.
+          if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+            event.preventDefault();
+            void save();
+          }
+        }}
       />
-      <div className={styles.noteSave}>
-        <Button onClick={save} disabled={saving || !note.trim()}>
-          {saving ? "Adding…" : "Add note"}
-        </Button>
+      <div className={styles.noteFoot}>
+        <span
+          id={`lead-note-count-${leadId}`}
+          className={styles.noteCount}
+          data-near={note.length > NOTE_MAX - 100 ? "" : undefined}
+        >
+          {filled ? (
+            <>
+              <span key={`w${words}`} className={styles.countPop}>
+                {words}
+              </span>{" "}
+              {words === 1 ? "word" : "words"} ·{" "}
+              <span key={`c${note.length}`} className={styles.countPop}>
+                {note.length}
+              </span>
+              /{NOTE_MAX}
+            </>
+          ) : saved ? (
+            <span key={saved} className={styles.noteSaved} role="status">
+              <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+              Saved
+            </span>
+          ) : null}
+        </span>
+        <button
+          type="button"
+          className={styles.noteSend}
+          aria-label={saving ? "Adding the note" : "Add note"}
+          aria-busy={saving || undefined}
+          disabled={saving || !filled}
+          onClick={() => void save()}
+        >
+          <ArrowUp size={18} strokeWidth={2.25} aria-hidden="true" />
+        </button>
       </div>
       {error ? (
         <p className={styles.error} role="alert">
@@ -2243,8 +2320,9 @@ function NotesSection({
     <section className={styles.notesBlock} aria-labelledby={titleId}>
       <div className={styles.panelHead}>
         <h3 id={titleId}>Notes</h3>
-        <Link className={styles.linkButton} href="/leads/notes">
+        <Link className={styles.quietLink} href="/leads/notes">
           See all notes
+          <ChevronRight size={16} aria-hidden="true" />
         </Link>
       </div>
       {detail.can_edit ? (
@@ -2478,6 +2556,8 @@ export function LeadCard({
   const [moveError, setMoveError] = useState<string | null>(null);
   // Lead OS: the stage chip opens the stage sheet (only the moves allowed).
   const [staging, setStaging] = useState(false);
+  // The subtitle shows two lines until it is tapped.
+  const [subOpen, setSubOpen] = useState(false);
   const canMove = detail.can_edit && (detail.moves?.length ?? 0) > 0;
   // The lead's chats, read once for the timeline and the chat sections.
   const conversations = useLeadConversations(lead.lead_id);
@@ -2540,29 +2620,43 @@ export function LeadCard({
 
   return (
     <div className={styles.card}>
+      {/* One header row (owner, #29, 26 Oct 2026: the avatar floated beside
+          a four-line subtitle, the × sat alone in its corner and the lead's
+          age was a line of its own): the avatar, the name and the × on one
+          line, the subtitle two lines until tapped, then one row of chips
+          with the stage, the source and why to call now. */}
       <header className={styles.leadHead}>
-        <Avatar name={lead.name} size={52} />
+        <Avatar name={lead.name} size={40} />
         <div className={styles.cardTitle}>
           <h2>{lead.name}</h2>
-          {sub ? <p>{sub}</p> : null}
-          <div className={styles.cardBadges}>
-            {canMove ? (
-              <button
-                type="button"
-                className={pipe.stageButton}
-                aria-label={`Stage: ${lead.stage_label}. Move this lead`}
-                onClick={() => setStaging(true)}
-              >
-                <Badge tone={stageTone(lead.stage)}>{lead.stage_label}</Badge>
-              </button>
-            ) : (
-              <Badge tone={stageTone(lead.stage)}>{lead.stage_label}</Badge>
-            )}
-            <Badge>{sourceText(lead)}</Badge>
-          </div>
+          {sub ? (
+            <button
+              type="button"
+              className={styles.leadSub}
+              aria-expanded={subOpen}
+              onClick={() => setSubOpen((open) => !open)}
+            >
+              {sub}
+            </button>
+          ) : null}
         </div>
       </header>
-      <p className={styles.why}>{whyLine(lead)}</p>
+      <div className={styles.cardBadges}>
+        {canMove ? (
+          <button
+            type="button"
+            className={pipe.stageButton}
+            aria-label={`Stage: ${lead.stage_label}. Move this lead`}
+            onClick={() => setStaging(true)}
+          >
+            <Badge tone={stageTone(lead.stage)}>{lead.stage_label}</Badge>
+          </button>
+        ) : (
+          <Badge tone={stageTone(lead.stage)}>{lead.stage_label}</Badge>
+        )}
+        <Badge>{sourceText(lead)}</Badge>
+        <span className={styles.leadWhy}>{whyLine(lead)}</span>
+      </div>
       <SuggestedStage detail={detail} onChanged={onChanged} />
       <MeetingCard detail={detail} onChanged={onChanged} />
       <LeadTasks detail={detail} onChanged={onChanged} />

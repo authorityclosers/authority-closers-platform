@@ -7,6 +7,7 @@
  * phone's own dialler is never seen. In a browser there is nothing to say.
  */
 
+import { Info } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
 import styles from "./leads.module.css";
@@ -14,7 +15,7 @@ import { inPhoneApp } from "./native-phone";
 
 export const IN_APP_CALL = "Call from Sales X-Ray";
 export const IN_APP_CALL_HINT =
-  "Only calls from here are logged and get their recording.";
+  "Calls made here are logged, with their recording.";
 
 const still = () => () => undefined;
 
@@ -23,13 +24,15 @@ export function useInPhoneApp(): boolean {
   return useSyncExternalStore(still, inPhoneApp, () => false);
 }
 
-/** The one line under a call button, in the phone app only. */
+/** The one line under a call button, in the phone app only: a hint, not a
+ *  warning (owner, #30, 26 Oct 2026: it read like an error). */
 export function InAppCallHint() {
   const inApp = useInPhoneApp();
   if (!inApp) return null;
   return (
-    <p className={styles.hint} data-call-hint="">
-      {IN_APP_CALL_HINT}
+    <p className={styles.callHint} data-call-hint="">
+      <Info size={14} aria-hidden="true" />
+      <span>{IN_APP_CALL_HINT}</span>
     </p>
   );
 }
