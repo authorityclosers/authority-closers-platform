@@ -568,6 +568,7 @@ export function ReportHeader({
                   <button
                     type="button"
                     className={styles.reportMenuSupport}
+                    data-tone="danger"
                     disabled={busy || deletionDisabled}
                     onClick={(event) => {
                       closeMenu(event);
@@ -575,7 +576,7 @@ export function ReportHeader({
                     }}
                   >
                     <Trash2 size={16} aria-hidden="true" />
-                    Request deletion
+                    Delete call
                   </button>
                 </>
               )}

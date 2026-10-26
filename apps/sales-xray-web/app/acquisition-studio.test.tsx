@@ -1253,7 +1253,7 @@ it("uses one upload consent, auto-accepts the same call's quote, then shows the 
     overflow?.querySelector('summary[aria-label="More report actions"]'),
   ).not.toBeNull();
   expect(overflow?.textContent).toContain("Download report");
-  expect(overflow?.textContent).toContain("Request deletion");
+  expect(overflow?.textContent).toContain("Delete call");
   expect(container.textContent).not.toContain("Your call, clearly.");
   expect(container.textContent).not.toMatch(/\d\d:\d\d\.\d{3}/);
   expect(
@@ -3732,9 +3732,9 @@ it("requires explicit deletion and waits for server acceptance", async () => {
     '["s1:I will send the fictional brochure."]',
   );
   await mount();
-  await click("Request deletion");
+  await click("Delete call");
   expect(calls.some((call) => call.init.method === "DELETE")).toBe(false);
-  await click("Request recording deletion");
+  await click("Delete recording and report");
   expect(localStorage.getItem("ac.xray.submission.v1")).toBeNull();
   expect(localStorage.getItem(`ac.xray.facts.v1:${submissionId}`)).toBeNull();
   expect(
@@ -3756,9 +3756,9 @@ it("keeps an explicit deletion-only recovery when a saved call is unavailable", 
   ).toBeNull();
   expect(container.textContent).toContain("Saved call unavailable");
   expect(container.textContent).not.toContain(envelope.report.content.summary);
-  await click("Request deletion");
+  await click("Delete call");
   expect(calls.some((call) => call.init.method === "DELETE")).toBe(false);
-  await click("Request recording deletion");
+  await click("Delete recording and report");
   expect(
     calls.some(
       (call) =>
@@ -3779,8 +3779,8 @@ it("can forget a saved selector when owner-authorized deletion is denied", async
   localStorage.setItem(`ac.xray.speakers.v1:${submissionId}`, "{}");
   localStorage.setItem(`ac.xray.promises-done.v1:${submissionId}`, "[]");
   await mount();
-  await click("Request deletion");
-  await click("Request recording deletion");
+  await click("Delete call");
+  await click("Delete recording and report");
   expect(localStorage.getItem("ac.xray.submission.v1")).toBe(submissionId);
   expect(localStorage.getItem(`ac.xray.facts.v1:${submissionId}`)).toBe("{}");
   expect(localStorage.getItem(`ac.xray.speakers.v1:${submissionId}`)).toBe(

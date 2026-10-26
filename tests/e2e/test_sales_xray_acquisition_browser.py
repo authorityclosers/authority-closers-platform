@@ -1025,10 +1025,10 @@ def test_compiled_account_required_upload_profile_otp_report_relogin_and_deletio
                     # Download and deletion live in the report's overflow menu.
                     await report_actions.get_by_label("More report actions", exact=True).click()
                     await report_actions.get_by_role(
-                        "button", name="Request deletion", exact=True
+                        "button", name="Delete call", exact=True
                     ).click()
                     await library_page.get_by_role(
-                        "button", name="Request recording deletion", exact=True
+                        "button", name="Delete recording and report", exact=True
                     ).click()
                     await expect(
                         library_page.get_by_text("Deletion requested.", exact=False)
