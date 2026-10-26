@@ -217,7 +217,7 @@ org, and all are still `new`. Grouped by root cause:
 - **Onboarded sellers skip "A few details"**, eaf7dfa88: `onboard-organisation.py` now writes each person's profile phone (and name when empty), never over a phone they set, so a seller goes from Sign in with Google straight to the terms. Verified by `test_onboard_organisation_data_change_postgresql.py`.
 - **Switches answer a tap at once**, 16f0c77a4 (Admin bugs #1 and #2): Taking new leads and every switch on the same pattern give a haptic and a pressed look on the tap, show the new state before the save returns, then a short "Taking new leads: On" and a success haptic; a failed save goes back, with the error haptic and its corner card. Verified by `state-switch.test.tsx`, `phone-panel.test.tsx`; wb-ci full and e2e.
 - **The red banner on a 320 px phone**, 1c36f6d17: Open goes under the words, so a long lead name wraps between words. Verified by the 320/360 matrix; wb-ci full and e2e.
-- **After a call, the lead fills itself and can be put back** (v0.93, owner's after-call chain, server side):
+- **After a call, the lead fills itself and can be put back**, 8c2922a3c (v0.93, owner's after-call chain, server side):
   - What already existed: name, company, city and interest filled from the call only into empty or AI-filled fields, never over a person's value; the rest asked one at a time.
   - New:
     - Each fill names the fact that made it and what the field held before. "Filled in for you" says `can_undo`, and `POST /v1/sales-xray/call-data/objects/{id}/undo-fill` puts the field back in one tap, only while nobody has changed it since. The fact becomes "rejected", so the same words don't fill it again.
@@ -225,9 +225,41 @@ org, and all are still `new`. Grouped by root cause:
     - A suggested WhatsApp or SMS after the newest call, in its language (English, Hinglish, Hindi or Marathi): thanks, and the agreed next talk while it is still ahead. Fixed wording, no model; sending only opens WhatsApp or SMS, keeping the key `after_call`.
   - Not yet: starting the analysis by itself after every call needs a standing consent (a design for the owner); the screens are the builder's.
   - Verified by: `test_call_data_after_call_postgresql.py`, `test_call_data_http_postgresql.py`, `test_call_data_reply.py`; wb-ci full and e2e.
+- **A kept follow-up becomes the next call**, 9d136cb24: when a seller keeps (or corrects) the follow-up a call agreed, the lead's next call is set to its date, at its time or 10:00 IST. This happens only while the date is ahead and the lead has no next call. Verified by `test_call_data_http_postgresql.py`; wb-ci full and e2e.
+- **New-lead push for the meeting (dev #3)**, 89e94768c:
+  - What changed:
+    - When the lead rules give out a new lead, its seller and the organisation's owners get a push within 10 seconds.
+    - One lead reads "New lead: Asha" for the seller and "New lead for Rohan: Asha" for the owner, and opens the lead.
+    - Several at once read "5 new leads", and from forty on "40+ new leads". These carry counts only and open Leads.
+    - A lead someone typed in by hand doesn't alert the owner.
+    - It works with today's Android app: the words come from the existing alert routes.
+  - Open: the lock screen should hide names until unlocked. That means Android visibility private, with a public version "New lead", in the phone app 1.0.35.
+  - Verified by: `test_lead_desk_new_lead_push_postgresql.py`, `test_lead_desk_postgresql.py`; wb-ci full and e2e.
+- **Nudges on by default (report #23)**, 89e94768c:
+  - What changed:
+    - Nudges are on for every workspace and seller unless an owner or manager turned them off.
+    - Home shows one row, "Nudges and alerts: On", which asks before turning off. "Who gets them" folds under it.
+  - Verified by: `test_lead_desk_nudges_postgresql.py`, `test_team_facts.py`, `targets-panel.test.tsx`; wb-ci full and e2e.
+- **Switching organisation answers at once (Admin #17)**, 36bb9011d:
+  - What changed:
+    - The tap gives a haptic and closes the switcher.
+    - The header names the new organisation over the page's outline while the switch happens, never a blank screen.
+    - A failed switch puts the old organisation back, with its corner card.
+    - Each switch logs "[sx-switch] tap to feedback N ms, tap to usable N ms".
+  - Before and after times: the phone session measures them on production, before and after v0.93. The phones were on hold tonight.
+  - Switching without a reload is v0.94.
+  - Verified by: `workspace-switch.test.tsx`, `switch-timing.test.ts`; wb-ci full and e2e.
+- **"Not connected", and no Junk tab (report #19)**, e48f16aed:
+  - What changed:
+    - The app says "Not connected" everywhere it said "Couldn't reach".
+    - Leads shows no Junk tab where the stage list has no Junk: junk leads are Lost, "Junk / not a real lead".
+  - Open question for the sales lead: may a not-connected lead ever become Junk?
+  - Verified by: `stage-tabs.test.tsx` and the label tests; wb-ci full and e2e.
 - **Who did what, with their photo**, a578dd0e9: history, activity and tasks carry the person's id and photo URL for avatars. Verified by wb-ci full and e2e.
 
 ### Still flaky or open
 
 - The digest and sweep need the Android build that shows these two push kinds, and FCM delivery on each phone brand. Production gets them with v0.92 (it is at migration 0130 tonight).
 - Onboarding: a "called by" spelling nobody listed goes to the owner. Check the printed map in the dry run before applying.
+- The eight stages on production (AC, Sunrise Rooftops, AC Sandbox): owner-approved; the snapshot and the dry run are done (179 leads, no Junk), and the apply waits for the go. Dev is done.
+- Old Meta leads brought in later still count as new until received_at (migration 0139) lands, early v0.94.
