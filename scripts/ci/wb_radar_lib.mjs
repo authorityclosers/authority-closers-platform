@@ -957,11 +957,13 @@ export function radarScrollSave() {
   window.__radarScroll = kept;
 }
 export function radarScrollRestore() {
+  // "instant" for the same reason as in radarFocusHit: the next scan must not measure a page still scrolling.
+  const to = (el, left, top) =>
+    el?.scrollTo({ left, top, behavior: "instant" });
   for (const el of document.querySelectorAll("*"))
-    if (el.scrollTop || el.scrollLeft) el.scrollTo(0, 0);
-  document.scrollingElement?.scrollTo(0, 0);
-  for (const [el, top, left] of window.__radarScroll ?? [])
-    el.scrollTo(left, top);
+    if (el.scrollTop || el.scrollLeft) to(el, 0, 0);
+  to(document.scrollingElement, 0, 0);
+  for (const [el, top, left] of window.__radarScroll ?? []) to(el, left, top);
 }
 
 /** Runs in the page: the marked element(s) scrolled into view and outlined; their box in the viewport. */
@@ -978,7 +980,12 @@ export function radarFocusHit(id) {
   // Scroll only what is off the screen: scrolling a sticky bar that is already in view moved it out of the crop.
   const first = els[0].getBoundingClientRect();
   if (first.bottom <= 0 || first.top >= innerHeight)
-    els[0].scrollIntoView({ block: "center", inline: "nearest" });
+    // "instant": the app's scroll-behavior: smooth would still be moving when the box is measured.
+    els[0].scrollIntoView({
+      behavior: "instant",
+      block: "center",
+      inline: "nearest",
+    });
   let box = null;
   for (const el of els) {
     if (el !== document.documentElement) el.setAttribute("data-radar-on", "");
