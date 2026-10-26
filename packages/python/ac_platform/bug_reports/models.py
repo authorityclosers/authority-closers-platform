@@ -45,6 +45,10 @@ SEVERITIES = ("blocker", "high", "medium", "low")
 EVENT_KINDS = ("status", "severity", "area", "note", "board")
 ACTORS = ("reporter", "staff", "board")
 SCREENSHOT_TYPES = ("image/png", "image/jpeg", "image/webp")
+# Issues (v0.93, owner 25 Oct 2026): reports that look like one problem.
+ISSUE_STATUSES = ("new", "fixing", "fixed_next", "solved")
+ISSUE_EVENT_KINDS = ("status", "note", "reopened")
+ISSUE_ACTORS = ("system", "staff", "agent", "release")
 
 
 class BugReport(Base):
@@ -185,6 +189,85 @@ class BugReportAttachment(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
 
+class BugIssue(Base):
+    """Reports that look like one problem (one fingerprint): written once."""
+
+    __tablename__ = "bug_issues"
+    __table_args__ = (
+        UniqueConstraint("fingerprint", name="uq_bug_issue_fingerprint"),
+        UniqueConstraint("number", name="uq_bug_issue_number"),
+        CheckConstraint("length(fingerprint) = 64", name="bug_issue_fingerprint"),
+        CheckConstraint("number >= 1", name="bug_issue_number"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    number: Mapped[int] = mapped_column(Integer)
+    fingerprint: Mapped[str] = mapped_column(String(64))
+    route: Mapped[str] = mapped_column(String(200))
+    area: Mapped[str] = mapped_column(String(32))
+    signature: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class BugIssueReport(Base):
+    """Which issue a report belongs to: one row per report, written once."""
+
+    __tablename__ = "bug_issue_reports"
+    __table_args__ = (
+        ForeignKeyConstraint(["bug_id"], ["bug_reports.id"], name="fk_bug_issue_report_bug"),
+        ForeignKeyConstraint(["issue_id"], ["bug_issues.id"], name="fk_bug_issue_report_issue"),
+        Index("ix_bug_issue_report_issue", "issue_id", "created_at"),
+    )
+
+    bug_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    issue_id: Mapped[UUID] = mapped_column(Uuid)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class BugIssueEvent(Base):
+    """An issue's append-only history: status, notes, the fix's commit and release, who."""
+
+    __tablename__ = "bug_issue_events"
+    __table_args__ = (
+        ForeignKeyConstraint(["issue_id"], ["bug_issues.id"], name="fk_bug_issue_event_issue"),
+        ForeignKeyConstraint(
+            ["actor_person_id"], ["persons.id"], name="fk_bug_issue_event_actor_person"
+        ),
+        CheckConstraint("kind IN ('status', 'note', 'reopened')", name="bug_issue_event_kind"),
+        CheckConstraint(
+            "status IS NULL OR status IN ('new', 'fixing', 'fixed_next', 'solved')",
+            name="bug_issue_event_status",
+        ),
+        CheckConstraint(
+            "(kind = 'status') = (status IS NOT NULL) AND (kind = 'status' OR note IS NOT NULL)",
+            name="bug_issue_event_shape",
+        ),
+        CheckConstraint(
+            "commit_sha IS NULL OR length(commit_sha) BETWEEN 7 AND 40",
+            name="bug_issue_event_commit",
+        ),
+        CheckConstraint(
+            "actor IN ('system', 'staff', 'agent', 'release')"
+            " AND (actor = 'staff') = (actor_person_id IS NOT NULL)",
+            name="bug_issue_event_actor",
+        ),
+        Index("ix_bug_issue_event_issue", "issue_id", "created_at"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    issue_id: Mapped[UUID] = mapped_column(Uuid)
+    kind: Mapped[str] = mapped_column(String(16))
+    status: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    note: Mapped[str | None] = mapped_column(String(2000), nullable=True)
+    commit_sha: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    release: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    app_update: Mapped[bool] = mapped_column(Boolean, default=False)
+    actor: Mapped[str] = mapped_column(String(16))
+    actor_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    actor_name: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
 class BugReportHistoryError(RuntimeError):
     """A bug report or its history was about to be changed or deleted."""
 
@@ -192,6 +275,9 @@ class BugReportHistoryError(RuntimeError):
 @event.listens_for(BugReport, "before_update")
 @event.listens_for(BugReportEvent, "before_update")
 @event.listens_for(BugReportAttachment, "before_update")
+@event.listens_for(BugIssue, "before_update")
+@event.listens_for(BugIssueReport, "before_update")
+@event.listens_for(BugIssueEvent, "before_update")
 def _refuse_update(_mapper: object, _connection: object, _target: object) -> None:
     raise BugReportHistoryError("Bug reports and their history are append-only.")
 
@@ -199,5 +285,8 @@ def _refuse_update(_mapper: object, _connection: object, _target: object) -> Non
 @event.listens_for(BugReport, "before_delete")
 @event.listens_for(BugReportEvent, "before_delete")
 @event.listens_for(BugReportAttachment, "before_delete")
+@event.listens_for(BugIssue, "before_delete")
+@event.listens_for(BugIssueReport, "before_delete")
+@event.listens_for(BugIssueEvent, "before_delete")
 def _refuse_delete(_mapper: object, _connection: object, _target: object) -> None:
     raise BugReportHistoryError("Bug reports and their history are append-only.")

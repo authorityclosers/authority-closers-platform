@@ -39,3 +39,29 @@ export function pendingAnalyseClick(
 export function forgetAnalyseClick() {
   pending = null;
 }
+
+/**
+ * Whether a remembered click may continue now (owner, 26 Oct 2026: one tap).
+ * Right after "Save and analyse my call" the account view reloads; asking for
+ * access then reopens the details step and drops the click, so it waits until
+ * the workspace is ready again ("ready", or no workspace check at all).
+ */
+export function readyToResume(state: {
+  armed: boolean;
+  consent: boolean;
+  hasFile: boolean;
+  busy: boolean;
+  submitted: boolean;
+  signedIn: boolean;
+  accessStatus: string | null | undefined;
+}): boolean {
+  return (
+    state.armed &&
+    state.consent &&
+    state.hasFile &&
+    !state.busy &&
+    !state.submitted &&
+    state.signedIn &&
+    (state.accessStatus == null || state.accessStatus === "ready")
+  );
+}

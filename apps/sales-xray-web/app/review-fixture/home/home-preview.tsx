@@ -406,7 +406,7 @@ function answers(now: number, path: string, mode: Mode): unknown {
     const stages: [string, string][] = partner
       ? [
           ["New", "new"],
-          ["Couldn't reach", "not_connected"],
+          ["Not connected", "not_connected"],
           ["Spoke to owner", "follow_up"],
           ["Interested", "interested"],
           ["Partner signed", "won"],
@@ -414,7 +414,7 @@ function answers(now: number, path: string, mode: Mode): unknown {
         ]
       : [
           ["New enquiry", "new"],
-          ["Couldn't reach", "not_connected"],
+          ["Not connected", "not_connected"],
           ["Counselled", "follow_up"],
           ["Session booked", "interested"],
           ["Enrolled", "won"],

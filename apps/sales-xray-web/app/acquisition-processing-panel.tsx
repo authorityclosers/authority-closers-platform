@@ -274,6 +274,11 @@ export function AcquisitionProcessingPanel({
   const started =
     serverStartedAt(stageTimes) ?? (startedAt ? Date.parse(startedAt) : NaN);
   const now = useNow(working && Number.isFinite(started));
+  // A call saved without a report on purpose (short, little talk, or the
+  // seller's AI level) is a result, not a problem (owner, 26 Oct 2026).
+  const savedShort = Boolean(
+    progress?.run_state === "failed" && progress.ai_skip,
+  );
   const elapsed =
     now !== null && Number.isFinite(started)
       ? formatElapsed(now - started)
@@ -409,8 +414,14 @@ export function AcquisitionProcessingPanel({
       </div>
 
       <div className={styles.head}>
-        <span className={styles.signal} data-phase={phase} aria-hidden="true">
-          {phase === "attention" ? (
+        <span
+          className={styles.signal}
+          data-phase={savedShort ? "done" : phase}
+          aria-hidden="true"
+        >
+          {savedShort ? (
+            <Check size={16} strokeWidth={2.6} />
+          ) : phase === "attention" ? (
             <AlertTriangle size={16} strokeWidth={2.2} />
           ) : phase === "done" ? (
             <Check size={16} strokeWidth={2.6} />
@@ -478,7 +489,11 @@ export function AcquisitionProcessingPanel({
         }
       />
 
-      <ol className={styles.steps} aria-label="Processing stages">
+      <ol
+        className={styles.steps}
+        aria-label="Processing stages"
+        data-saved-short={savedShort ? "" : undefined}
+      >
         {PROCESSING_STEPS.map((step, index) => {
           const state = states[index];
           const start = live.times.start[index];

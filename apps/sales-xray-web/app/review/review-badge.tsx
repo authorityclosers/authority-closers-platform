@@ -20,6 +20,9 @@ import styles from "./review.module.css";
 const EVERY_MS = 2 * 60 * 1000;
 const AGAIN_MS = 20 * 1000;
 const STORE = "sx-review-badge";
+/** Review's own pages: /review and below, not every path that starts so. */
+const onReview = (path: string | null | undefined) =>
+  path != null && /^\/review(\/|$)/.test(path);
 const SEEN = "sx-review-seen";
 
 let current: Badge | null = remembered();
@@ -69,7 +72,7 @@ function announce(next: Badge) {
     return;
   }
   if (next.newest_at <= seen) return;
-  if (window.location.pathname.startsWith("/review")) return;
+  if (onReview(window.location.pathname)) return;
   keep(SEEN, next.newest_at);
   notify({
     id: "review-new-report",
@@ -177,7 +180,7 @@ export function ReviewRailLink({
   nameStyle: CSSProperties;
 }) {
   const badge = useReviewBadge(live);
-  const active = usePathname()?.startsWith("/review") ?? false;
+  const active = onReview(usePathname());
   if (!badge || (!badge.reviewer && !badge.metrics)) return null;
   const label = badge.waiting ? `Review, ${badge.waiting} waiting` : "Review";
   return (
@@ -201,7 +204,7 @@ export function ReviewRailLink({
 /** Phones keep five tabs (owner, 17 Oct); a reviewer gets a chip in the top bar. */
 export function ReviewBarChip({ live }: { live: boolean }) {
   const badge = useReviewBadge(live);
-  const active = usePathname()?.startsWith("/review") ?? false;
+  const active = onReview(usePathname());
   if (!badge?.reviewer || active) return null;
   return (
     <Link
@@ -212,7 +215,11 @@ export function ReviewBarChip({ live }: { live: boolean }) {
       aria-label={badge.waiting ? `Review, ${badge.waiting} waiting` : "Review"}
     >
       <ClipboardCheck size={16} strokeWidth={2} aria-hidden="true" />
-      <span>{badge.waiting > 0 ? badge.waiting : "Review"}</span>
+      {badge.waiting > 0 ? (
+        <span className={styles.barChipCount}>{badge.waiting}</span>
+      ) : (
+        <span className={styles.barChipText}>Review</span>
+      )}
     </Link>
   );
 }

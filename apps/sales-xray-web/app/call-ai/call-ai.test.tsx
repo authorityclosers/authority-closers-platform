@@ -210,7 +210,7 @@ it("says a short call keeps its transcript and lead details, with Get full repor
     }),
   );
   expect(host.textContent).toContain("Short call: transcript and lead details");
-  expect(host.textContent).toContain("Calls under a minute");
+  expect(host.textContent).toContain("Under a minute");
   expect(host.textContent).not.toContain("Data only");
   expect(
     [...host.querySelectorAll("button")].some(

@@ -68,13 +68,14 @@ afterEach(async () => {
 });
 
 describe("theme preference", () => {
-  it("treats missing or unknown values as System and resolves it from the device", () => {
-    expect(parseThemePreference(null)).toBe("system");
-    expect(parseThemePreference("sepia")).toBe("system");
+  it("treats missing, unknown or old System values as Light, whatever the device", () => {
+    expect(parseThemePreference(null)).toBe("light");
+    expect(parseThemePreference("sepia")).toBe("light");
+    expect(parseThemePreference("system")).toBe("light");
     expect(parseThemePreference("dark")).toBe("dark");
-    expect(resolveTheme("system", true)).toBe("dark");
-    expect(resolveTheme("system", false)).toBe("light");
+    expect(resolveTheme("system", true)).toBe("light");
     expect(resolveTheme("light", true)).toBe("light");
+    expect(resolveTheme("dark", false)).toBe("dark");
   });
 
   it("releases the control in development and explicit previews, not production", () => {
@@ -109,12 +110,12 @@ describe("pre-paint theme script", () => {
     expect(html.style.colorScheme).toBe("dark");
   });
 
-  it("follows the device for System and ignores an unknown stored value", () => {
+  it("is light for an unknown or old System value, even on a dark device", () => {
     mediaQuery(true);
-    localStorage.setItem(THEME_STORAGE_KEY, "sepia");
+    localStorage.setItem(THEME_STORAGE_KEY, "system");
     run();
-    expect(html.getAttribute("data-theme")).toBe("dark");
-    expect(html.getAttribute("data-theme-preference")).toBe("system");
+    expect(html.getAttribute("data-theme")).toBe("light");
+    expect(html.getAttribute("data-theme-preference")).toBe("light");
   });
 
   it("falls back to light when storage is blocked and matchMedia is missing", () => {
@@ -129,7 +130,7 @@ describe("pre-paint theme script", () => {
     expect(storage).toHaveBeenCalled();
     storage.mockRestore();
     expect(html.getAttribute("data-theme")).toBe("light");
-    expect(html.getAttribute("data-theme-preference")).toBe("system");
+    expect(html.getAttribute("data-theme-preference")).toBe("light");
   });
 });
 
@@ -159,27 +160,26 @@ describe("ThemeProvider and ThemeControl", () => {
     expect(html.getAttribute("data-theme-preference")).toBe("dark");
   });
 
-  it("follows the device live while System is selected", async () => {
+  it("offers Light and Dark only, and stays light when the device turns dark", async () => {
     const device = mediaQuery(false);
-    localStorage.setItem(THEME_STORAGE_KEY, "dark");
     await mount();
-    await act(async () => radio("system").click());
-    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
+    expect(host.querySelector('input[value="system"]')).toBeNull();
+    expect(radio("light").checked).toBe(true);
     expect(html.getAttribute("data-theme")).toBe("light");
 
     await act(async () => device.change(true));
-    expect(html.getAttribute("data-theme")).toBe("dark");
-    expect(html.getAttribute("data-theme-preference")).toBe("system");
+    expect(html.getAttribute("data-theme")).toBe("light");
 
+    await act(async () => radio("dark").click());
     await act(async () => radio("light").click());
-    await act(async () => device.change(true));
+    expect(localStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
     expect(html.getAttribute("data-theme")).toBe("light");
   });
 
   it("picks up a choice made in another tab", async () => {
     mediaQuery(false);
     await mount();
-    expect(radio("system").checked).toBe(true);
+    expect(radio("light").checked).toBe(true);
     await act(async () => {
       localStorage.setItem(THEME_STORAGE_KEY, "dark");
       window.dispatchEvent(
@@ -206,8 +206,8 @@ describe("ThemeProvider and ThemeControl", () => {
     write.mockRestore();
     expect(originalStorage.getItem(THEME_STORAGE_KEY)).toBeNull();
     // A successful write clears the page-only fallback for later tests.
-    await act(async () => writeThemePreference("system"));
-    expect(radio("system").checked).toBe(true);
+    await act(async () => writeThemePreference("light"));
+    expect(radio("light").checked).toBe(true);
   });
 
   it("renders no control and leaves the document light when the control is not released", async () => {

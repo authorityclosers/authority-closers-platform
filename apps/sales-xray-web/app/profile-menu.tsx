@@ -8,7 +8,6 @@ import {
   FolderOpen,
   LogOut,
   Mail,
-  Monitor,
   Moon,
   MoreHorizontal,
   Palette,
@@ -52,12 +51,11 @@ function initials(name: string | null): string {
 }
 
 const THEME_CHOICES = [
-  { value: "system", label: "System", Icon: Monitor },
   { value: "light", label: "Light", Icon: Sun },
   { value: "dark", label: "Dark", Icon: Moon },
 ] as const;
 
-/** One compact row: the label, then three icon choices (native radios). */
+/** One compact row: the label, then Light and Dark (native radios). */
 function ThemeRow() {
   const theme = useTheme();
   if (!theme) return null;

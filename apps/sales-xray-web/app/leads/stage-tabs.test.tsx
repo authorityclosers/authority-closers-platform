@@ -48,21 +48,41 @@ it("names the tabs by the business's own stages, with every stage's count", () =
     { key: "interested", label: "Interested", count: 3 },
     { key: "won", label: "Booked", count: 1 },
     { key: "lost", label: "Lost", count: 0 },
-    // Junk (Lead OS): fake or unusable, kept apart from Lost, always there.
-    { key: "junk", label: "Junk", count: 0 },
   ]);
+});
+
+// Owner, 26 Oct 2026: the sales team's eight stages have no Junk, so no Junk tab;
+// a list with a Junk stage, or junk leads left from before, keeps it.
+it("shows Junk only where the list has it or junk leads remain", () => {
+  const eight = { stages: [stage("New lead", "new"), stage("Lost", "lost")] };
+  expect(stageTabs(eight, { new: 2 }).map((tab) => tab.key)).toEqual([
+    "open",
+    "new",
+    "won",
+    "lost",
+  ]);
+  const withJunk = { stages: [...eight.stages, stage("Junk", "junk")] };
+  expect(stageTabs(withJunk, null).at(-1)).toEqual({
+    key: "junk",
+    label: "Junk",
+    count: undefined,
+  });
+  expect(stageTabs(eight, { junk: 3 }).at(-1)).toEqual({
+    key: "junk",
+    label: "Junk",
+    count: 3,
+  });
 });
 
 it("falls back to the desk's kinds, without counts until they arrive", () => {
   expect(stageTabs(null, null)).toEqual([
     { key: "open", label: "All leads", count: undefined },
     { key: "new", label: "New", count: undefined },
-    { key: "not_connected", label: "Couldn't reach", count: undefined },
+    { key: "not_connected", label: "Not connected", count: undefined },
     { key: "follow_up", label: "Follow up", count: undefined },
     { key: "interested", label: "Interested", count: undefined },
     { key: "won", label: "Won", count: undefined },
     { key: "lost", label: "Lost", count: undefined },
-    { key: "junk", label: "Junk", count: undefined },
   ]);
 });
 

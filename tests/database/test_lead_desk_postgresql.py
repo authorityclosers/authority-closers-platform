@@ -622,7 +622,8 @@ def test_booked_calls_ready_messages_and_phone_alerts(
                 assert text["url"] == f"/leads#lead={asha_id}"
                 assert "Solar rooftop" in text["body"]
                 summary = (await client.get(f"{BASE}/alert")).json()
-                assert summary["title"] == "2 leads to call now"
+                # Both just came in for her: "2 new leads" (dev report #3), counts only.
+                assert summary["title"] == "2 new leads"
                 as_(other_token)
                 assert (await client.get(f"{BASE}/leads/{asha_id}/alert")).status_code == 404
                 as_(seller_token)

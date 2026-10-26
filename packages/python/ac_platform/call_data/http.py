@@ -2,7 +2,11 @@
 
 - GET  /leads/{lead_id}            a lead's facts from its calls, its open questions
 - POST /objects/{object_id}/decision  a person's accept, edit or reject (writes the
-  lead through the Lead Desk's own edit, so its owner and revision rules apply)
+  lead through the Lead Desk's own edit, so its owner and revision rules apply; a
+  kept follow-up with a date ahead sets the lead's next call when it has none)
+- POST /objects/{object_id}/undo-fill  one tap puts back a lead field the engine
+  filled, while nobody has changed it since (the fact is rejected, so the same
+  words don't fill it again)
 - GET  /prospect-facts?lead_id=|call_id=  the agreed read for Prospect's Information
 - GET  /taxonomy                   every type the engine knows, for the web app
 
@@ -13,6 +17,7 @@ workspace's owners and admins.
 
 from __future__ import annotations
 
+import contextlib
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
@@ -24,14 +29,14 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from ac_platform.call_data import facts, taxonomy
+from ac_platform.call_data import facts, taxonomy, undo
 from ac_platform.call_data.models import CallObject
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
 from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk.contracts import LeadEdit
+from ac_platform.lead_desk.contracts import FollowUp, LeadEdit
 from ac_platform.lead_desk.store import MANAGERS, DeskError, LeadDesk, Viewer, person_name
 from ac_platform.tenancy.models import Membership
 
@@ -44,6 +49,11 @@ class DecisionCommand(BaseModel):
     command_id: UUID
     decision: Literal["accepted", "edited", "rejected"]
     value: dict[str, Any] | None = Field(default=None)
+
+
+class UndoFillCommand(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    command_id: UUID
 
 
 def install_call_data_http(application: FastAPI, ctx: RouteContext) -> None:
@@ -195,6 +205,21 @@ def install_call_data_http(application: FastAPI, ctx: RouteContext) -> None:
                         ),
                     )
                     written = True
+            # A follow-up the person kept becomes the lead's next call when it has none
+            # (owner, 25 Oct 2026, the after-call chain); a next call already set stays.
+            if detail is not None and decided.next_call is not None:
+                lead = (await desk.detail(detail.lead.lead_id)).lead
+                if lead.next_action_at is None:
+                    # A closed lead keeps no next call; the answer still counts.
+                    with contextlib.suppress(DeskError):
+                        await desk.follow_up(
+                            lead.lead_id,
+                            FollowUp(
+                                command_id=uuid5(command.command_id, "next-call"),
+                                expected_revision=lead.revision,
+                                at=decided.next_call,
+                            ),
+                        )
             try:
                 await database.run_sync(
                     lambda session: facts.save_decision(
@@ -209,6 +234,22 @@ def install_call_data_http(application: FastAPI, ctx: RouteContext) -> None:
             if found.lead_id is None:
                 return {"schema": facts.LEAD_SCHEMA, "decided": str(object_id)}
             return await lead_view(auth, viewer, found.lead_id)
+
+    @router.post("/objects/{object_id}/undo-fill")
+    async def undo_fill(
+        object_id: UUID, command: UndoFillCommand, request: Request, response: Response
+    ) -> dict[str, Any]:
+        no_query(request)
+        async with workspace(request, response, write=True) as (auth, viewer):
+            try:
+                lead_id = await undo.undo_fill(
+                    auth.database, viewer, object_id, command.command_id, datetime.now(UTC)
+                )
+            except IntegrityError:
+                raise HTTPException(
+                    409, "Someone answered this already. Refresh to see it.", headers=PRIVATE
+                ) from None
+            return await lead_view(auth, viewer, lead_id)
 
     @router.get("/prospect-facts")
     async def prospect_facts(
@@ -247,6 +288,10 @@ _WORDS = {
     "fact_replaced": "A newer reading of the call replaced this fact. Refresh to see it.",
     "fact_type_retired": "This kind of fact is no longer used.",
     "already_answered": "This was answered already.",
+    "fill_gone": "This was already changed or removed. Refresh to see it.",
+    "fill_old": "This was filled before undo was possible. Change it on the lead instead.",
+    "fill_changed": "Someone changed this field since. Nothing was undone.",
+    "fill_name": "A lead needs a name. Change it on the lead instead.",
 }
 
 

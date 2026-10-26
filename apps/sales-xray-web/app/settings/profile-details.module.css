@@ -1,5 +1,46 @@
 /* Settings → Profile: the photo, user id, title and team (25 Oct 2026). */
 
+/* The card body: the standard card padding, like the other settings cards. */
+.body {
+  display: grid;
+  padding: 14px 16px 16px;
+}
+
+.avatarButton {
+  position: relative;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  cursor: pointer;
+}
+
+.avatarButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.avatarBadge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--sx-surface);
+  border-radius: 50%;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.phoneNote {
+  margin: 0 0 12px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
 .photoRow {
   display: flex;
   align-items: center;

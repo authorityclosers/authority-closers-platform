@@ -154,7 +154,17 @@
 	}
 	@staging_sales_xray host salesxray-staging.authorityclosers.com
 	handle @staging_sales_xray {
-		import base_security_headers
+		# base_security_headers, but this site may use the microphone itself (voice notes, #11,
+		# 26 Oct 2026). Like the snippet, the block deletes Server, so Caddy applies it last:
+		# it wins over the header lines below and over the app's own headers.
+		header {
+			-Server
+			Strict-Transport-Security "max-age=31536000; includeSubDomains"
+			X-Content-Type-Options "nosniff"
+			X-Frame-Options "DENY"
+			Referrer-Policy "strict-origin-when-cross-origin"
+			Permissions-Policy "camera=(), microphone=(self), geolocation=(), payment=(), usb=()"
+		}
 		header X-Authority-Closers-Route "sales-xray-staging"
 		header Cache-Control "no-store"
 		header Referrer-Policy "no-referrer"

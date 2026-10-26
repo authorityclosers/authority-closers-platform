@@ -15,12 +15,16 @@
  *   until when, and offers the override when there is one.
  * - The chip (a page header) never flips on a tap: it opens the same row in a
  *   sheet, so a stray tap can't stop someone's leads.
+ * - A tap answers at once (owner, 25 Oct 2026: tapping Take leads "just sits
+ *   there"): a haptic on the tap itself, a pressed look, the new state shown
+ *   before the save comes back, then a short confirmation and a success haptic;
+ *   a failed save puts it back, with the error haptic and its corner card.
  */
 
 import { useId, useState, type ReactNode } from "react";
 
 import { notify } from "../notice-center";
-import { tick } from "./haptics";
+import { haptic, tick } from "./haptics";
 import { Button } from "./kit";
 import { Sheet } from "./sheet";
 import styles from "./state-switch.module.css";
@@ -76,6 +80,8 @@ export type StateSwitchProps = {
   onChange: (next: boolean) => Promise<void>;
   place?: "row" | "chip";
   busy?: boolean;
+  /** Whether a tap is felt: off for the switch that turns vibration itself off. */
+  haptics?: boolean;
 };
 
 type Step = null | "status" | "off" | "override";
@@ -96,6 +102,7 @@ export function StateSwitch(props: StateSwitchProps) {
     onChange,
     place = "row",
     busy = false,
+    haptics = true,
   } = props;
   const [step, setStep] = useState<Step>(null);
   const [saving, setSaving] = useState(false);
@@ -106,13 +113,21 @@ export function StateSwitch(props: StateSwitchProps) {
   const stateText = !on ? offText : held ? held.title : onText;
   const back: Step = place === "chip" ? "status" : null;
 
-  const save = async (run: () => Promise<void>, after: Step) => {
+  const save = async (run: () => Promise<void>, after: Step, done?: string) => {
     setSaving(true);
     try {
       await run();
-      tick();
+      haptic("success");
       setStep(after);
+      if (done)
+        notify({
+          id: `switch-${label}`,
+          tone: "success",
+          // "On" alone says little: "Vibration: On".
+          title: done.length < 16 ? `${label}: ${done}` : done,
+        });
     } catch (reason) {
+      haptic("error");
       // A corner card, as every error in the app (owner, 29 Sep).
       notify({
         id: `switch-${label}`,
@@ -129,9 +144,12 @@ export function StateSwitch(props: StateSwitchProps) {
   };
 
   const flip = () => {
+    // A tap while the last one saves changes nothing; every tap is felt.
+    if (saving) return;
+    if (haptics) tick();
     if (on && confirmOff) setStep("off");
-    else if (on) void save(() => onChange(false), back);
-    else void save(() => onChange(true), back);
+    else if (on) void save(() => onChange(false), back, offText);
+    else void save(() => onChange(true), back, onText);
   };
 
   const row = (
@@ -157,8 +175,9 @@ export function StateSwitch(props: StateSwitchProps) {
         aria-checked={on}
         aria-label={label}
         aria-describedby={stateId}
+        aria-busy={saving || undefined}
         className={styles.switch}
-        disabled={busy || saving}
+        disabled={busy}
         onClick={flip}
       >
         <span aria-hidden="true" />
@@ -204,6 +223,7 @@ export function StateSwitch(props: StateSwitchProps) {
                     ? () => onChange(false)
                     : (held?.override?.run ?? (async () => undefined)),
                   back,
+                  step === "off" ? offText : "Done",
                 )
               }
             >
@@ -239,7 +259,10 @@ export function StateSwitch(props: StateSwitchProps) {
           aria-haspopup="dialog"
           aria-label={`${label}: ${stateText}`}
           disabled={busy}
-          onClick={() => setStep("status")}
+          onClick={() => {
+            if (haptics) tick();
+            setStep("status");
+          }}
         >
           <span className={styles.dot} aria-hidden="true" />
           {!on ? chipOff : held ? held.chip : chipOn}

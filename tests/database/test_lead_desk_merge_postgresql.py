@@ -1,7 +1,7 @@
 """Merging duplicate leads on PostgreSQL (docs/product/lead-desk/duplicates.md, D3):
 - the lead with the most human work is kept, and the other's history and tasks move to it;
 - its empty fields fill from the other, the furthest stage is kept, the other closes as
-  Junk "merged" and points to the kept one;
+  Lost "merged" (the sales team's eight stages keep Junk in Lost) and points to the kept one;
 - with two sellers active, the most recent has it and the other is named;
 - an open task written twice becomes one; the bookkeeping moves are never progress or a
   conversion; one audit event; a retry is one merge; a seller may not merge;
@@ -111,7 +111,7 @@ def test_merge_keeps_the_story_and_an_unmerge_puts_it_back(
             assert again.json()["merge_id"] == view["merge_id"]
 
             gone, kept_lead = await here.stored(other), await here.stored(kept)
-            assert gone.merged_into_id == UUID(kept) and gone.stage == "junk"
+            assert gone.merged_into_id == UUID(kept) and gone.stage == "lost"
             assert gone.outcome_reason == "merged"
             assert kept_lead.email == "twin@example.com" and kept_lead.stage == "interested"
             assert kept_lead.owner_person_id == seller

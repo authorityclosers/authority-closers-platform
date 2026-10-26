@@ -165,6 +165,14 @@ LOST_REASONS: Final[tuple[tuple[str, str], ...]] = (
     ("not_a_fit", "Not a fit"),
     (OTHER_REASON, "Other"),
 )
+# A lead that was never real, where the stage list has no Junk of its own (the sales team's
+# eight stages, owner, 25 Oct 2026): Lost with this reason.
+NOT_A_LEAD: Final[str] = "not_a_lead"
+SALES_LOST_REASONS: Final[tuple[tuple[str, str], ...]] = (
+    *LOST_REASONS[:-1],
+    (NOT_A_LEAD, "Junk / not a real lead"),
+    LOST_REASONS[-1],
+)
 JUNK_REASONS: Final[tuple[tuple[str, str], ...]] = (
     ("fake", "Fake enquiry"),
     ("invalid_number", "Wrong or invalid number"),
@@ -181,8 +189,16 @@ IMPORTED_LOST: Final[str] = "imported"
 MERGED_DUPLICATE: Final[str] = "merged"
 MERGED_WORDS: Final[str] = "Merged into another lead"
 
-TEMPLATE_KEYS: Final[frozenset[str]] = frozenset(key for key, _, _ in MESSAGE_TEMPLATES)
-TEMPLATE_LABELS: Final[dict[str, str]] = {key: label for key, label, _ in MESSAGE_TEMPLATES}
+# The reply drafted after a call in the call's language (call_data.reply): its words
+# come with the lead's facts, and like the others only its key is kept.
+AFTER_CALL_REPLY: Final[str] = "after_call"
+TEMPLATE_KEYS: Final[frozenset[str]] = frozenset(
+    {*(key for key, _, _ in MESSAGE_TEMPLATES), AFTER_CALL_REPLY}
+)
+TEMPLATE_LABELS: Final[dict[str, str]] = {
+    **{key: label for key, label, _ in MESSAGE_TEMPLATES},
+    AFTER_CALL_REPLY: "After the call",
+}
 
 
 def retry_after(reason: str, attempts: int) -> timedelta | None:

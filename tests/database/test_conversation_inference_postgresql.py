@@ -426,11 +426,13 @@ def test_profile_change_after_dispatch_marker_uses_uncertainty_reconciliation(
             require_profile = inference_worker_module.require_person_profile
             checks = 0
 
-            async def profile_changes_between_fences(database: Any, *, person_id: UUID) -> None:
+            async def profile_changes_between_fences(
+                database: Any, *, person_id: UUID, lock: bool = True
+            ) -> None:
                 nonlocal checks
                 checks += 1
                 if checks == 1:
-                    await require_profile(database, person_id=person_id)
+                    await require_profile(database, person_id=person_id, lock=lock)
                 else:
                     raise AccountProfileRequired(PROFILE_INCOMPLETE_HOLD_REASON)
 

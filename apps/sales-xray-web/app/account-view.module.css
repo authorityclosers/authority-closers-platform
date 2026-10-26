@@ -955,3 +955,18 @@
     text-align: left;
   }
 }
+
+/* Phones (owner, 26 Oct 2026: rows were 82 px with a big gap): a panel's
+   edge is its 16 px padding, and a row is 48 px. */
+@media (max-width: 899.98px) {
+  .panel {
+    gap: 10px;
+    padding: 16px;
+  }
+
+  .row {
+    box-sizing: border-box;
+    min-height: 48px;
+    padding: 6px 0;
+  }
+}

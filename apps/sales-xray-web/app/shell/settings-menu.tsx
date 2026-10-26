@@ -57,7 +57,7 @@ import { createPortal } from "react-dom";
 
 import type { Allowance } from "../acquisition-client";
 import { useSalesXraySignOut } from "../account-navigation";
-import { openBugReport } from "../bug-report/open";
+import { openBugReport, reportShortcut } from "../bug-report/open";
 import { UpdateRating } from "../feedback/update-rating";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { phoneCallsOpener, useInApp } from "../in-app-client";
@@ -111,12 +111,15 @@ function Row({
   badge,
   href,
   checked,
+  shortcut,
   onClick,
 }: {
   icon: ReactNode;
   label: string;
   value?: string;
   badge?: string;
+  /** A computer's keyboard shortcut, drawn after the label (kept out of its text). */
+  shortcut?: { label: string; keys: string } | null;
   /** A page: a link that closes the menu. */
   href?: string;
   /** Renders the row as an on/off switch. */
@@ -131,6 +134,13 @@ function Row({
       <span className={styles.rowLabel}>{label}</span>
       {badge ? <span className={styles.badge}>{badge}</span> : null}
       {value ? <span className={styles.rowValue}>{value}</span> : null}
+      {shortcut ? (
+        <span
+          className={styles.shortcut}
+          data-shortcut={shortcut.label}
+          aria-hidden="true"
+        />
+      ) : null}
       {checked !== undefined ? (
         <span className={styles.switch} data-on={checked || undefined} />
       ) : (
@@ -149,6 +159,7 @@ function Row({
       type="button"
       className={styles.row}
       onClick={onClick}
+      aria-keyshortcuts={shortcut?.keys}
       {...(checked === undefined
         ? {}
         : { role: "switch", "aria-checked": checked })}
@@ -566,6 +577,7 @@ export function SettingsMenu({
         <Row
           icon={<Bug size={17} />}
           label="Report a problem"
+          shortcut={reportShortcut()}
           onClick={() => {
             onClose();
             openBugReport();

@@ -184,8 +184,9 @@ A pipeline set is a named group of passes over the call and its objects.
 
 | Route | Purpose |
 |---|---|
-| `GET /v1/sales-xray/call-data/leads/{id}` | A lead's facts across its calls, open questions, fills and pipeline states (Lead Desk visibility) |
+| `GET /v1/sales-xray/call-data/leads/{id}` | A lead's facts across its calls, open questions, fills (`can_undo`), pipeline states, and `reply`: a WhatsApp or SMS after the newest call in its language (English, Hinglish, Hindi or Marathi; fixed wording, no model; the page fills `{my_name}` and `{org}`; sending only opens WhatsApp or SMS) (Lead Desk visibility) |
 | `POST /v1/sales-xray/call-data/objects/{id}/decision` | Accept, edit or reject (`command_id` idempotent) |
+| `POST /v1/sales-xray/call-data/objects/{id}/undo-fill` | One tap puts back a lead field the engine filled, while it still holds the filled value (a person's later change always wins); the fact becomes the person's `rejected`, so the same words don't fill it again (`command_id` idempotent). The lead read's `filled[].can_undo` says when |
 | `GET /v1/sales-xray/call-data/prospect-facts?lead_id=` or `?call_id=` | `prospect-facts/1` for Prospect's Information |
 | `GET /v1/sales-xray/call-data/taxonomy` | The registry |
 | `GET /v1/admin/conversation/calls/{recording_id}/data-map` | Admin call map |

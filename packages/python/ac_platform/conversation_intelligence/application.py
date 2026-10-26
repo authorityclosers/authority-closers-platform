@@ -49,6 +49,7 @@ from ac_platform.conversation_intelligence.processing_actor import (
     ConversationActor,
     ProcessingActor,
 )
+from ac_platform.conversation_intelligence.provider_call import in_provider_call
 from ac_platform.conversation_intelligence.sensitive_segments import withhold
 from ac_platform.conversation_intelligence.sensitive_segments_store import withheld_plan_for
 from ac_platform.conversation_intelligence.signals import NATIVE_SOURCE_SHA256, _feature_metadata
@@ -118,8 +119,15 @@ class ConversationApplication:
         self.clock = clock
 
     async def admit(
-        self, actor: ConversationActor, *, shared_identity_locks: bool = False
+        self,
+        actor: ConversationActor,
+        *,
+        shared_identity_locks: bool = False,
+        identity_locks: bool = True,
     ) -> datetime:
+        """Checks the actor is current. ``identity_locks=False`` (only the worker's provider
+        call) reads the person and session without locking them, so a long call never holds
+        that person's own requests; every other caller keeps the canonical locks."""
         tx = self.database.get_transaction()
         sync_tx = tx.sync_transaction if tx is not None else None
         if sync_tx is None or sync_tx.origin is not SessionTransactionOrigin.BEGIN:
@@ -130,25 +138,30 @@ class ConversationApplication:
             from ac_platform.conversation_intelligence.guest_ownership import admit_processing_actor
 
             now = utc(self.clock())
-            await admit_processing_actor(self.database, actor, now)
+            await admit_processing_actor(
+                self.database, actor, now, lock_person=identity_locks and not in_provider_call()
+            )
             return now
         # The same person/session locks as existing AC commands serialize revocation
         # and idempotency. Never trust a previously hydrated actor as current authority.
-        person = await self.database.scalar(
+        person_query = (
             select(Person)
             .where(Person.id == actor.person_id)
-            .with_for_update(read=shared_identity_locks)
             .execution_options(populate_existing=True)
         )
-        session = await self.database.scalar(
+        session_query = (
             select(IdentitySession)
             .where(
                 IdentitySession.id == actor.session_id,
                 IdentitySession.person_id == actor.person_id,
             )
-            .with_for_update(read=shared_identity_locks)
             .execution_options(populate_existing=True)
         )
+        if identity_locks and not in_provider_call():
+            person_query = person_query.with_for_update(read=shared_identity_locks)
+            session_query = session_query.with_for_update(read=shared_identity_locks)
+        person = await self.database.scalar(person_query)
+        session = await self.database.scalar(session_query)
         tenant = await self.database.scalar(
             select(Tenant)
             .where(Tenant.id == actor.tenant_id)
@@ -184,7 +197,7 @@ class ConversationApplication:
         return now
 
     async def _recording(
-        self, actor: ConversationActor, recording_id: UUID
+        self, actor: ConversationActor, recording_id: UUID, *, shared: bool = False
     ) -> ConversationRecording:
         recording = await self.database.scalar(
             select(ConversationRecording)
@@ -193,7 +206,9 @@ class ConversationApplication:
                 ConversationRecording.tenant_id == actor.tenant_id,
                 ConversationRecording.person_id == actor.person_id,
             )
-            .with_for_update()
+            # Shared while the worker's provider call re-checks (provider_call.py), so a
+            # nested call never upgrades the lock its scope already holds.
+            .with_for_update(read=shared or in_provider_call())
             .execution_options(populate_existing=True)
         )
         if recording is None:
@@ -398,9 +413,13 @@ class ConversationApplication:
         recording_id: UUID,
         *,
         shared_identity_locks: bool = False,
+        identity_locks: bool = True,
+        shared_recording: bool = False,
     ) -> dict[str, Any]:
-        now = await self.admit(actor, shared_identity_locks=shared_identity_locks)
-        recording = await self._recording(actor, recording_id)
+        now = await self.admit(
+            actor, shared_identity_locks=shared_identity_locks, identity_locks=identity_locks
+        )
+        recording = await self._recording(actor, recording_id, shared=shared_recording)
         if recording.state in {"deleting", "deleted"}:
             raise ConversationNotFound("Recording not found.")
         await self._permission(actor, recording.permission_id, recording.source_sha256, now)

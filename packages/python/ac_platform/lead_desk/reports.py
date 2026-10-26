@@ -11,6 +11,9 @@ Every number counts distinct leads, never rows of history:
 - **Lost reasons** (leads Lost now, and moves into Lost in the period), **Junk** (now, in
   the period, and the share of each source's leads that turned out Junk: lead quality
   for the ad engine), **overdue** follow-ups and **open leads with no next step**.
+- A Lost lead that was never a deal counts as Junk, never as Lost: "Junk / not a real lead"
+  (the sales team's eight stages keep Junk in Lost) and "Merged into another lead" (a
+  duplicate). So merges and junk never look like lost deals (orchestrator, 25 Oct 2026).
 - The same per seller (the lead's owner now) and per source.
 
 Counts only: no money, no prices. Test leads stay out. The core (:func:`compute`) is
@@ -38,6 +41,7 @@ from ac_platform.lead_desk.vocabulary import (
     IMPORTED_LOST,
     MERGED_DUPLICATE,
     MERGED_WORDS,
+    NOT_A_LEAD,
     OPEN_STAGES,
     OVERDUE_AFTER,
 )
@@ -54,6 +58,8 @@ STEPS: Final[tuple[tuple[str, str, str], ...]] = (
     ("held_to_won", "appointment_done", "won"),
 )
 NOT_RECORDED: Final[str] = "Not recorded"
+# Lost reasons that say the lead was never a deal: counted as Junk.
+NOT_A_DEAL: Final[frozenset[str]] = frozenset({NOT_A_LEAD, MERGED_DUPLICATE})
 CONVERSION_WORDS: Final[dict[str, str]] = {
     "new_to_connect": "New lead to a first conversation",
     "interested_to_meeting": "Interested to a meeting booked",
@@ -214,7 +220,11 @@ def compute(
     """Every number, from the leads as they stand, their history and their meetings."""
     since = now - timedelta(days=days)
     by_id = {fact.lead_id: fact for fact in leads}
-    junk = {fact.lead_id for fact in leads if fact.stage == "junk"}
+    junk = {
+        fact.lead_id
+        for fact in leads
+        if fact.stage == "junk" or (fact.stage == "lost" and fact.outcome_reason in NOT_A_DEAL)
+    }
     words = dict(reasons or {})
     words.setdefault(IMPORTED_LOST, "Imported")
     words.setdefault(MERGED_DUPLICATE, MERGED_WORDS)
@@ -229,6 +239,11 @@ def compute(
     groups: Counter[str] = Counter()
     for stage, count in by_stage:
         groups[group_of.get(stage.kind, "active")] += count
+    # Lost leads that were never deals sit in the Lost column but count as Junk.
+    never = sum(1 for fact in leads if fact.stage == "lost" and fact.lead_id in junk)
+    if never:
+        groups["lost"] -= never
+        groups["junk"] += never
 
     # History per lead: the first time it reached each milestone, its first talk.
     first_at: dict[UUID, dict[str, datetime]] = defaultdict(dict)
@@ -244,9 +259,10 @@ def compute(
                 if 0 <= rank <= _rank(item.milestone):
                     first_at[item.lead_id].setdefault(name, item.at)
             first_at[item.lead_id].setdefault(item.milestone, item.at)
-        if item.at >= since and item.kind == "lost":
+        never = item.kind == "lost" and item.reason in NOT_A_DEAL
+        if item.at >= since and item.kind == "lost" and not never:
             lost_moves[words.get(item.reason or "", NOT_RECORDED)] += 1
-        if item.at >= since and item.kind == "junk":
+        if item.at >= since and (item.kind == "junk" or never):
             junk_moves += 1
 
     created = [fact for fact in leads if fact.created_at >= since and fact.lead_id not in junk]
@@ -278,7 +294,9 @@ def compute(
     show_rate = round(held.count("done") / len(held), 3) if held else None
 
     lost_now = Counter(
-        words.get(fact.outcome_reason or "", NOT_RECORDED) for fact in leads if fact.stage == "lost"
+        words.get(fact.outcome_reason or "", NOT_RECORDED)
+        for fact in leads
+        if fact.stage == "lost" and fact.lead_id not in junk
     )
 
     sellers: dict[UUID | None, Group] = defaultdict(Group)
@@ -298,8 +316,8 @@ def compute(
                 tally.won += 1
             if fact.created_at >= since:
                 tally.created += 1
-                tally.junk += fact.stage == "junk"
-                if fact.lead_id in spoke_at and fact.stage != "junk":
+                tally.junk += fact.lead_id in junk
+                if fact.lead_id in spoke_at and fact.lead_id not in junk:
                     tally.connected += 1
                     tally.first_minutes.append(
                         max(

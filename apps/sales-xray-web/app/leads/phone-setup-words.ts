@@ -324,3 +324,15 @@ export function phoneDot(
     missing,
   };
 }
+
+/**
+ * Google's Phone app keeps call recordings to itself (Android session, 26 Oct
+ * 2026): the same words as the app's after-call dialog, nothing to allow.
+ */
+export const PRIVATE_DIALLER_EXPLAINER: Explainer = {
+  title: "Call recordings",
+  reads: "Nothing",
+  sends: "Nothing",
+  why: "Your phone uses Google's Phone app, which keeps call recordings to itself, so Sales X-Ray can't add them by itself. For a report, upload the recording from the call, or use your phone's own dialler if it has one.",
+  allow: "OK",
+};

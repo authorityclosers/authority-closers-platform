@@ -31,7 +31,7 @@ const MEANINGS: Record<string, string> = {
 };
 const KINDS: Record<string, string> = {
   new: "New lead",
-  not_connected: "Couldn't reach",
+  not_connected: "Not connected",
   follow_up: "In talks",
   interested: "Hot",
   won: "Won",
@@ -67,7 +67,7 @@ const JOURNEY = {
   meanings: MEANINGS,
   stages: [
     stage("new", "New enquiry", "new", "lead", 18),
-    stage("not_connected", "Couldn't reach", "not_connected", "unreachable", 6),
+    stage("not_connected", "Not connected", "not_connected", "unreachable", 6),
     stage("contacted", "Contacted", "follow_up", "contacted", 11),
     stage(
       "site_visit_booked",
@@ -374,7 +374,7 @@ const ADS = {
         match("booked", "Booked", "won", "won", "Booked", "on"),
         match(
           "not_connected",
-          "Couldn't reach",
+          "Not connected",
           "not_connected",
           "unreachable",
           null,
@@ -436,7 +436,7 @@ const ADS = {
         google("booked", "Booked", "won", "won", "converted_lead", "on"),
         google(
           "not_connected",
-          "Couldn't reach",
+          "Not connected",
           "not_connected",
           "unreachable",
           null,

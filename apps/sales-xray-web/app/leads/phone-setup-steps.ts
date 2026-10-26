@@ -27,6 +27,29 @@ export const folderPick = (status: SetupStatus) =>
   !status.allFilesSupported &&
   status.folderPickSupported;
 
+/** The only dialler is Google's Phone app, which keeps its recordings to itself. */
+export const privateDialler = (status: SetupStatus) =>
+  status.recorder?.kind === "private";
+
+const PRIVATE_SEEN = "sales-xray:private-dialler-seen";
+
+/** The private-recordings screen was shown once on this phone. */
+export function privateDiallerSeen(): boolean {
+  try {
+    return window.localStorage.getItem(PRIVATE_SEEN) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markPrivateDiallerSeen() {
+  try {
+    window.localStorage.setItem(PRIVATE_SEEN, "1");
+  } catch {
+    /* storage blocked: the screen shows again next time, asking nothing */
+  }
+}
+
 /** A permission Android no longer asks for: only the app's settings allow it now. */
 export const blocked = (step: FlowStep, status: SetupStatus) =>
   (step === "calls" && status.blocked.calls) ||
@@ -44,7 +67,12 @@ export function flowSteps(
   const steps: FlowStep[] = [];
   if (!done(status, "calls")) steps.push("calls");
   if (!done(status, "notifications")) steps.push("notifications");
-  if (!done(status, "recordings")) steps.push("recordings");
+  // A private dialler's recordings step is said once, then left out.
+  if (
+    !done(status, "recordings") &&
+    !(privateDialler(status) && privateDiallerSeen())
+  )
+    steps.push("recordings");
   if (!done(status, "battery")) steps.push("battery");
   if (status.autostartNeeded && !done(status, "autostart"))
     steps.push("autostart");

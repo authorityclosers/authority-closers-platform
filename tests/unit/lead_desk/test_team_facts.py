@@ -56,8 +56,11 @@ def test_follow_ups_and_meetings_come_from_their_events() -> None:
     assert count(facts, "calls") == 1
 
 
-def test_nudges_are_off_unless_the_workspace_turns_them_on() -> None:
+def test_nudges_are_on_unless_someone_turned_them_off() -> None:
+    # Owner, 26 Oct 2026 (report #23): "of course nudge should be already on".
     seller = uuid4()
-    assert not nudges_on(None, seller)
+    assert nudges_on(None, seller)
+    assert nudges_on({"team": {}}, seller)
     assert nudges_on({"team": {"nudges": True}}, seller)
-    assert not nudges_on({"team": {"nudges": True, "nudges_off_for": [str(seller)]}}, seller)
+    assert not nudges_on({"team": {"nudges": False}}, seller)
+    assert not nudges_on({"team": {"nudges_off_for": [str(seller)]}}, seller)

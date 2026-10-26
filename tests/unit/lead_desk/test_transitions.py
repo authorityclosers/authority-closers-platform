@@ -1,8 +1,10 @@
 """Lead OS (24 Oct 2026): where a lead may go from its stage, and what a seller is asked.
 
-The sales team's spec (section 3) is the table below: every pair it lists is allowed,
-every other pair is refused, and each stage asks for exactly what it needs. A stage list
-saved before Lead OS keeps letting a lead go anywhere.
+The sales team's spec (section 3) is the table below, on the nine stages it was written for
+(Junk a stage of its own, ``LEGACY_NINE``): every pair it lists is allowed, every other pair
+is refused, and each stage asks for exactly what it needs. The team's eight stages (owner,
+25 Oct 2026) keep Junk in Lost. A stage list saved before Lead OS keeps letting a lead go
+anywhere.
 """
 
 from __future__ import annotations
@@ -23,12 +25,15 @@ from ac_platform.lead_desk.journey.model import (
     default_journey,
     from_rows,
     from_template,
+    journey_of,
 )
-from ac_platform.lead_desk.journey.templates import template
+from ac_platform.lead_desk.journey.templates import LEGACY_NINE, template
 from ac_platform.lead_desk.vocabulary import (
     CLOSED_STAGES,
     JUNK_REASONS,
     LOST_REASONS,
+    NOT_A_LEAD,
+    SALES_LOST_REASONS,
     STAGES,
     stage_after_not_connected,
 )
@@ -96,6 +101,10 @@ EVERYTHING = t.Given(
 
 
 def nine() -> Journey:
+    return journey_of(LEGACY_NINE)
+
+
+def eight() -> Journey:
     stages = from_template("inside_sales_demos", default_journey(), {})
     return Journey(1, "inside_sales_demos", stages)
 
@@ -121,6 +130,40 @@ def test_the_template_has_the_specs_nine_stages_in_order() -> None:
     assert "junk" not in [stage.key for stage in journey.funnel()]
     assert journey.ruled and journey.has_junk
     assert [stage.key for stage in journey.board()] == list(NINE)
+
+
+# Owner, 25 Oct 2026: "1 New lead, 2 Not connected, 3 Discussion incomplete, 4 Interested,
+# 5 Meeting/Demo scheduled, 6 Meeting/Demo completed, 7 Won, 8 Lost".
+def test_the_sales_teams_eight_stages_keep_junk_in_lost() -> None:
+    journey = eight()
+    assert [stage.label for stage in journey.live] == [
+        "New lead",
+        "Not connected",
+        "Discussion incomplete",
+        "Interested",
+        "Meeting/Demo scheduled",
+        "Meeting/Demo completed",
+        "Won",
+        "Lost",
+    ]
+    assert not journey.has_junk and journey.junk_in_lost
+    # No Junk column, not even the desk's own, and no move offers Junk.
+    assert [stage.kind for stage in journey.board()].count("junk") == 0
+    assert journey.stage_for("junk") is None
+    for stage in journey.live:
+        assert "junk" not in {m.stage.key for m in t.moves(journey, stage, can_manage=True)}
+    # A lead that was never real is Lost, "Junk / not a real lead".
+    lost = journey.by_key["lost"]
+    assert lost.reasons == SALES_LOST_REASONS
+    assert (NOT_A_LEAD, "Junk / not a real lead") in SALES_LOST_REASONS
+    move = t.check(
+        journey, journey.by_key["new"], "lost", t.Given(reason=NOT_A_LEAD), can_manage=False
+    )
+    assert move.group == "lost"
+    # A lead still on the desk's Junk shows in Lost here.
+    assert journey.column("junk", None).key == "lost"
+    # Lists that keep Junk apart are unchanged.
+    assert not nine().junk_in_lost and not default_journey().junk_in_lost
 
 
 def test_the_template_is_named_by_industry_not_by_a_customer() -> None:
@@ -204,7 +247,7 @@ def test_a_renamed_key_is_followed_in_the_moves() -> None:
     stages = from_template("inside_sales_demos", old, {"meeting_scheduled": 3})
     by_key = {stage.key: stage for stage in stages}
     assert by_key["meeting_scheduled"].archived and by_key["meeting_scheduled"].kind == "follow_up"
-    assert by_key["meeting_scheduled_2"].label == "Meeting / Demo Scheduled"
+    assert by_key["meeting_scheduled_2"].label == "Meeting/Demo scheduled"
     assert "meeting_scheduled_2" in (by_key["new"].moves or ())
     assert "meeting_scheduled" not in (by_key["new"].moves or ())
 

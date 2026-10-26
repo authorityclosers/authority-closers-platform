@@ -64,7 +64,15 @@ it("coalesces a double click and accepts only the displayed successor plan", asy
   expect(fetch).toHaveBeenCalledTimes(1);
   expect(button().disabled).toBe(true);
   await act(async () => resolve(new Response(JSON.stringify(plan))));
-  expect(container.textContent).toContain("Providers and privacy terms");
+  // Who processes the call in plain words, each notice once, no model ids
+  // (owner, 26 Oct 2026).
+  expect(container.textContent).toContain(
+    "Audio, transcript and analysis: Synthetic provider",
+  );
+  expect(container.textContent).toContain("Privacy terms");
+  expect(container.textContent?.split("Synthetic provider only.").length).toBe(
+    2,
+  );
   // No minutes or price on a person's screen (owner, 19 Oct 2026).
   expect(container.textContent).not.toMatch(/minutes|₹|cost|price/i);
   expect(fetch).toHaveBeenCalledTimes(1);

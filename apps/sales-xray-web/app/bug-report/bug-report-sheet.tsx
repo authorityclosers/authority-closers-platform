@@ -435,6 +435,8 @@ export function BugReportSheet({
       ) : (
         <form
           id={formId}
+          // Its own picture leaves the reporter out (capture.ts).
+          data-bug-reporter=""
           className={styles.form}
           onSubmit={(event) => {
             event.preventDefault();

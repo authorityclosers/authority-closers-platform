@@ -232,6 +232,7 @@ it("explains connecting another Facebook account or Page", async () => {
   const { OtherAccountSteps } = await import("./sources-view");
   const html = renderToStaticMarkup(<OtherAccountSteps />);
   expect(html).toContain("App not active");
-  expect(html).toContain("private window");
+  // Bug report #8: a way to sign in with another account, not a dead end.
+  expect(html).toContain("/v1/lead-desk/meta/connect?switch=1");
   expect(html).toContain("Add a Page again");
 });

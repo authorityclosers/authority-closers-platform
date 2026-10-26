@@ -5951,3 +5951,36 @@ button.leadTags {
   text-decoration: underline;
   text-underline-offset: 2px;
 }
+
+/* "To call now" with up to three pipelines: one segmented control across the
+   row, each pipeline an equal part (owner, 26 Oct 2026). */
+.pipelineSwitch {
+  flex: 1 1 100%;
+  min-width: 0;
+}
+
+.pipelineSwitch > [role="group"] {
+  display: flex;
+  width: 100%;
+}
+
+.pipelineSwitch button {
+  flex: 1 1 0;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* More pipelines: the menu takes the row's whole width on a phone. */
+@media (max-width: 899.98px) {
+  .pipelineChip {
+    flex: 1 1 100%;
+    max-width: none;
+    min-height: 44px;
+  }
+
+  .pipelineChip select {
+    min-height: 44px;
+  }
+}

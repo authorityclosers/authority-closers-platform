@@ -4,17 +4,24 @@
  * The visible part of the page is copied with its computed styles into an SVG
  * foreignObject, drawn on a canvas and saved as WebP (JPEG where WebP cannot
  * be written). It is what the person sees: inner panels keep their scroll,
- * fields keep what was typed (passwords are dotted). Left out: sheets and
- * dialogs, the corner cards, anything marked data-capture-skip, video, frames
- * and pictures from other sites (blank boxes). Nothing leaves the device here;
- * the person sees the picture and chooses to send it.
+ * fields keep what was typed (passwords are dotted), and every open layer
+ * (side panels, sheets, dialogs, menus) is drawn over the page behind it, in
+ * order (dev #2, 26 Oct 2026). Tokens, keys and long opaque strings read as
+ * markers. Left out: the reporter's own sheet, the corner cards, anything
+ * marked data-capture-skip, video, frames and pictures from other sites (blank
+ * boxes). Nothing leaves the device here; the person sees the picture and
+ * chooses to send it.
  *
  * Fails quietly: any problem, or more than ten seconds, gives null, and the
  * reporter offers "Choose a picture" instead.
  */
 
+import { maskSecrets } from "./scrub";
+
 const SKIP =
-  "dialog, [data-capture-skip], script, noscript, template, iframe, video, audio, object, embed, link, meta, style";
+  "[data-capture-skip], script, noscript, template, iframe, video, audio, object, embed, link, meta, style";
+/** Marks the reporter's own sheet, which its picture leaves out. */
+export const REPORTER_MARK = "data-bug-reporter";
 const SVG_NS = "http://www.w3.org/2000/svg";
 const MAX_NODES = 8000;
 const MAX_EDGE = 1600;
@@ -33,7 +40,42 @@ type Run = {
   pseudo: string[];
   images: Array<[HTMLImageElement, HTMLImageElement]>;
   serial: number;
+  /** Open top-layer copies (modal dialogs, popovers), drawn last over the page. */
+  layers: Element[];
 };
+
+/** A modal dialog or an open popover: the browser draws it over everything. */
+function onTopLayer(element: Element): boolean {
+  for (const selector of [":modal", ":popover-open"]) {
+    try {
+      if (element.matches(selector)) return true;
+    } catch {
+      // An older browser without that layer.
+    }
+  }
+  return false;
+}
+
+/** A modal's dimmed backdrop, when it has one. */
+function backdropOf(element: Element): HTMLElement | null {
+  let style: CSSStyleDeclaration;
+  try {
+    style = getComputedStyle(element, "::backdrop");
+  } catch {
+    return null;
+  }
+  const color = style.getPropertyValue("background-color");
+  const image = style.getPropertyValue("background-image");
+  const clear =
+    !color || color === "transparent" || color === "rgba(0, 0, 0, 0)";
+  if (clear && (!image || image === "none")) return null;
+  const backdrop = document.createElement("div");
+  backdrop.setAttribute(
+    "style",
+    `position:fixed;inset:0;background-color:${color || "transparent"};background-image:${image || "none"}`,
+  );
+  return backdrop;
+}
 
 function defaultsFor(run: Run, element: Element): Map<string, string> {
   const svg = element.namespaceURI === SVG_NS;
@@ -108,11 +150,17 @@ function breathe(run: Run): Promise<void> | null {
 
 async function copyNode(run: Run, node: Node): Promise<Node | null> {
   if (node.nodeType === Node.TEXT_NODE) {
-    return document.createTextNode(node.textContent ?? "");
+    return document.createTextNode(maskSecrets(node.textContent ?? ""));
   }
   if (node.nodeType !== Node.ELEMENT_NODE) return null;
   const element = node as Element;
   if (element.matches(SKIP) || run.budget <= 0) return null;
+  // The reporter's own sheet is not part of the screen it reports.
+  if (
+    element.localName === "dialog" &&
+    element.querySelector(`[${REPORTER_MARK}]`)
+  )
+    return null;
   run.budget -= 1;
   await breathe(run);
   const style = getComputedStyle(element);
@@ -150,9 +198,9 @@ async function copyNode(run: Run, node: Node): Promise<Node | null> {
     else if (element.type === "checkbox" || element.type === "radio") {
       if (element.checked) out.setAttribute("checked", "");
       else out.removeAttribute("checked");
-    } else out.setAttribute("value", element.value);
+    } else out.setAttribute("value", maskSecrets(element.value));
   } else if (element instanceof HTMLTextAreaElement) {
-    out.textContent = element.value;
+    out.textContent = maskSecrets(element.value);
     return out;
   } else if (element instanceof HTMLSelectElement) {
     for (const option of Array.from(out.querySelectorAll("option"))) {
@@ -172,6 +220,13 @@ async function copyNode(run: Run, node: Node): Promise<Node | null> {
   if (element instanceof HTMLSelectElement) {
     const chosen = out.querySelectorAll("option")[element.selectedIndex];
     chosen?.setAttribute("selected", "");
+  }
+  // A modal or popover goes over the whole page, as the browser draws it.
+  if (onTopLayer(element)) {
+    const backdrop = backdropOf(element);
+    if (backdrop) run.layers.push(backdrop);
+    run.layers.push(out);
+    return null;
   }
   // Inner panels keep their scroll: their children move up and left.
   const top = element.scrollTop;
@@ -342,7 +397,11 @@ function drawn(
   });
 }
 
-async function capture(): Promise<Blob | null> {
+/**
+ * The copy of the screen the picture is drawn from: the page, then each open
+ * layer over it (exported for tests).
+ */
+export async function copyScreen(): Promise<HTMLElement | null> {
   const width = window.innerWidth;
   const height = window.innerHeight;
   const frame = document.createElement("iframe");
@@ -363,6 +422,7 @@ async function capture(): Promise<Blob | null> {
       pseudo: [],
       images: [],
       serial: 0,
+      layers: [],
     };
     const page = document.createElement("div");
     page.setAttribute(
@@ -379,17 +439,35 @@ async function capture(): Promise<Blob | null> {
       if (copied) body.appendChild(copied);
     }
     page.appendChild(body);
+    // Open layers over the page, in order; outside the scrolled body, as the
+    // browser places them against the window.
+    run.layers.forEach((layer, index) => {
+      const element = layer as HTMLElement;
+      element.style.zIndex = String(2147483000 + index);
+      page.appendChild(element);
+    });
     await inlineImages(run);
-    const fonts = await fontRules().catch(() => "");
-    const markup = new XMLSerializer().serializeToString(page);
-    const svg =
-      `<svg xmlns="${SVG_NS}" width="${width}" height="${height}">` +
-      `<style>${escapeStyle(fonts + NO_SCROLLBARS + run.pseudo.join(""))}</style>` +
-      `<foreignObject x="0" y="0" width="100%" height="100%">${markup}</foreignObject></svg>`;
-    return await drawn(svg, width, height);
+    page.dataset.pseudo = run.pseudo.join("");
+    return page;
   } finally {
     frame.remove();
   }
+}
+
+async function capture(): Promise<Blob | null> {
+  const page = await copyScreen();
+  if (!page) return null;
+  const width = window.innerWidth;
+  const height = window.innerHeight;
+  const pseudo = page.dataset.pseudo ?? "";
+  delete page.dataset.pseudo;
+  const fonts = await fontRules().catch(() => "");
+  const markup = new XMLSerializer().serializeToString(page);
+  const svg =
+    `<svg xmlns="${SVG_NS}" width="${width}" height="${height}">` +
+    `<style>${escapeStyle(fonts + NO_SCROLLBARS + pseudo)}</style>` +
+    `<foreignObject x="0" y="0" width="100%" height="100%">${markup}</foreignObject></svg>`;
+  return drawn(svg, width, height);
 }
 
 /** A picture of what is on the screen now, or null. */

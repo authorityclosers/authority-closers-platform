@@ -6,17 +6,21 @@ export const themePreferences = ["system", "light", "dark"] as const;
 export type ThemePreference = (typeof themePreferences)[number];
 export type ResolvedTheme = "light" | "dark";
 
-/** A missing, unknown or unreadable value always means System. */
+/**
+ * Light and Dark only, Light by default (owner, 26 Oct 2026): a missing,
+ * unknown or unreadable value, or an old stored "system", means Light.
+ */
 export function parseThemePreference(value: unknown): ThemePreference {
-  return value === "light" || value === "dark" ? value : "system";
+  return value === "dark" ? "dark" : "light";
 }
 
+/** The device's setting no longer decides: only Dark is dark. */
 export function resolveTheme(
   preference: ThemePreference,
   systemPrefersDark: boolean,
 ): ResolvedTheme {
-  if (preference === "system") return systemPrefersDark ? "dark" : "light";
-  return preference;
+  void systemPrefersDark;
+  return preference === "dark" ? "dark" : "light";
 }
 
 /**
@@ -43,13 +47,13 @@ export function readThemePreference(): ThemePreference {
   try {
     return parseThemePreference(window.localStorage.getItem(THEME_STORAGE_KEY));
   } catch {
-    return "system";
+    return "light";
   }
 }
 
 export function writeThemePreference(preference: ThemePreference) {
   try {
-    if (preference === "system")
+    if (preference !== "dark")
       window.localStorage.removeItem(THEME_STORAGE_KEY);
     else window.localStorage.setItem(THEME_STORAGE_KEY, preference);
     unsavedPreference = null;
@@ -85,6 +89,5 @@ export function applyTheme(
  */
 export function themeInitScript(): string {
   const key = JSON.stringify(THEME_STORAGE_KEY);
-  const query = JSON.stringify(DARK_SCHEME_QUERY);
-  return `(function(){var d=document.documentElement,p="system",t="light";try{var s=window.localStorage.getItem(${key});if(s==="light"||s==="dark")p=s}catch(e){}if(p==="system"){try{if(typeof window.matchMedia==="function"&&window.matchMedia(${query}).matches)t="dark"}catch(e){}}else{t=p}d.setAttribute("data-theme",t);d.setAttribute("data-theme-preference",p);d.style.colorScheme=t})();`;
+  return `(function(){var d=document.documentElement,t="light";try{if(window.localStorage.getItem(${key})==="dark")t="dark"}catch(e){}d.setAttribute("data-theme",t);d.setAttribute("data-theme-preference",t);d.style.colorScheme=t})();`;
 }

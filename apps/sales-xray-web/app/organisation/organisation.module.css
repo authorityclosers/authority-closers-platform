@@ -2118,3 +2118,38 @@
     display: none;
   }
 }
+
+/* The Company form while it loads (owner, 26 Oct 2026: "ugly"): each input
+   is a short label and a field, as the form will draw them. */
+.formSkeleton span {
+  display: grid;
+  gap: 6px;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  animation: none;
+}
+
+.formSkeleton span::before,
+.formSkeleton span::after {
+  content: "";
+  border-radius: var(--lx-radius-sm);
+  background: var(--lx-sunken);
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+.formSkeleton span::before {
+  width: 38%;
+  height: 12px;
+}
+
+.formSkeleton span::after {
+  height: 44px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .formSkeleton span::before,
+  .formSkeleton span::after {
+    animation: none;
+  }
+}

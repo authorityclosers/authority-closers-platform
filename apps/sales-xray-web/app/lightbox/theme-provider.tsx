@@ -54,7 +54,7 @@ function EnabledThemeProvider({ children }: { children: ReactNode }) {
   const preference = useSyncExternalStore(
     subscribePreference,
     readThemePreference,
-    () => "system" as const,
+    () => "light" as const,
   );
   const prefersDark = useSyncExternalStore(
     subscribeSystem,
@@ -102,7 +102,6 @@ export function useTheme() {
 }
 
 const themeOptions = [
-  { value: "system", label: "System" },
   { value: "light", label: "Light" },
   { value: "dark", label: "Dark" },
 ] as const;
@@ -117,7 +116,7 @@ export function ThemeControl({ className }: { className?: string }) {
       value={theme.preference}
       options={themeOptions}
       onChange={theme.setPreference}
-      hint="System follows your device setting."
+      hint="Light is the default."
     />
   );
 }

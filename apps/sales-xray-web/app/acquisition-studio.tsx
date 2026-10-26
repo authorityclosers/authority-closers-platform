@@ -128,6 +128,7 @@ import { autoCallTitle, fallbackCallTitle } from "./call-auto-title";
 import {
   forgetAnalyseClick,
   pendingAnalyseClick,
+  readyToResume,
   rememberAnalyseClick,
 } from "./analyse-resume";
 import { openInCallWorkspace } from "./call-workspace";
@@ -1821,13 +1822,32 @@ export function AcquisitionStudio({
     uploadRef.current = upload;
   });
   useEffect(() => {
-    if (!resumeArmed || !consentCurrent || !file || busy || submission) return;
-    if (!session && !token) return;
+    if (
+      !readyToResume({
+        armed: resumeArmed,
+        consent: consentCurrent,
+        hasFile: Boolean(file),
+        busy: Boolean(busy),
+        submitted: Boolean(submission),
+        signedIn: Boolean(session || token),
+        accessStatus,
+      })
+    )
+      return;
     if (resumeFired.current) return;
     resumeFired.current = true;
     queueMicrotask(() => setResumeArmed(false));
     void uploadRef.current(true);
-  }, [resumeArmed, consentCurrent, file, busy, submission, session, token]);
+  }, [
+    resumeArmed,
+    consentCurrent,
+    file,
+    busy,
+    submission,
+    session,
+    token,
+    accessStatus,
+  ]);
 
   function settleStartNotice() {
     if (

@@ -384,3 +384,61 @@ export function appLine(app: BugSummary["app"]): string {
     parts.push(`web ${app.release.slice(0, 12)}`);
   return parts.join(" · ");
 }
+
+/* Issues (v0.93, owner 25 Oct 2026): reports that look like one problem. */
+export type IssueStatus = "new" | "fixing" | "fixed_next" | "solved";
+export const ISSUE_LABEL: Record<IssueStatus, string> = {
+  new: "New",
+  fixing: "Fixing",
+  fixed_next: "Fixed in the next update",
+  solved: "Solved",
+};
+export const ISSUE_TONE: Record<IssueStatus, Tone> = {
+  new: "info",
+  fixing: "warn",
+  fixed_next: "accent",
+  solved: "good",
+};
+export type BugIssue = {
+  id: string;
+  number: number;
+  screen: string;
+  status: IssueStatus;
+  cameBack: boolean;
+  count: number;
+  lastSeen: string | null;
+  devices: Record<string, number>;
+  commit: string | null;
+  release: string | null;
+  reports: { id: string; number: number }[];
+};
+
+const counts = (value: unknown): Record<string, number> =>
+  Object.fromEntries(
+    Object.entries(read.object(value)).filter(
+      (entry): entry is [string, number] => typeof entry[1] === "number",
+    ),
+  );
+
+export function normalizeIssues(raw: unknown): BugIssue[] {
+  return read.array(read.object(raw).issues).map((item) => {
+    const row = read.object(item);
+    const status = read.string(row.status, "new");
+    return {
+      id: read.string(row.id),
+      number: read.number(row.number),
+      screen: read.string(row.screen, "/"),
+      status: (status in ISSUE_LABEL ? status : "new") as IssueStatus,
+      cameBack: row.came_back === true,
+      count: read.number(row.count),
+      lastSeen: read.optionalString(row.last_seen),
+      devices: counts(row.devices),
+      commit: read.optionalString(row.commit),
+      release: read.optionalString(row.release),
+      reports: read.array(row.reports).map((report) => {
+        const one = read.object(report);
+        return { id: read.string(one.id), number: read.number(one.number) };
+      }),
+    };
+  });
+}

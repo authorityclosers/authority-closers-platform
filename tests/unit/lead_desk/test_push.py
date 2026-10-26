@@ -12,6 +12,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 
 from ac_platform.lead_desk import push
 from ac_platform.lead_desk.vocabulary import (
+    AFTER_CALL_REPLY,
     MESSAGE_TEMPLATES,
     TEMPLATE_KEYS,
 )
@@ -117,7 +118,8 @@ def test_fcm_answers(status: int, body: dict[str, Any], outcome: str) -> None:
 
 def test_ready_messages_name_only_known_placeholders() -> None:
     allowed = {"{first_name}", "{my_name}", "{org}", "{about_interest}"}
-    assert len(MESSAGE_TEMPLATES) == len(TEMPLATE_KEYS) >= 4
+    # Every key once; the after-call reply's words come from the call (call_data.reply).
+    assert len(MESSAGE_TEMPLATES) == len(TEMPLATE_KEYS - {AFTER_CALL_REPLY}) >= 4
     for _, label, text in MESSAGE_TEMPLATES:
         assert label and text.startswith("Hi {first_name}")
         found = {part[: part.index("}") + 1] for part in ("{" + p for p in text.split("{")[1:])}

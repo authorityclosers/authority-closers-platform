@@ -94,7 +94,31 @@ export type MetaPage = {
   forms: "all" | string[];
   formsCovered: MetaForm[];
   problem: { kind: string; text: string } | null;
+  /** Bringing in the older leads Meta keeps (90 days): what the last run read. */
+  backfill?: MetaRun | null;
 };
+/** A run of older leads: read from Meta, new, and already in the leads. */
+export type MetaRun = {
+  state: "running" | "done" | "blocked";
+  seen: number;
+  created: number;
+  here: number;
+};
+
+function parseRun(value: unknown): MetaRun | null {
+  if (!isRecord(value)) return null;
+  const state = value.state;
+  if (state !== "running" && state !== "done" && state !== "blocked")
+    return null;
+  const count = (key: string) =>
+    typeof value[key] === "number" ? (value[key] as number) : 0;
+  return {
+    state,
+    seen: count("seen"),
+    created: count("created"),
+    here: count("linked") + count("repeat") + count("known"),
+  };
+}
 
 export class AppsError extends Error {
   constructor(
@@ -288,6 +312,23 @@ export function parseTry(
   };
 }
 
+/**
+ * The caller's signal, or 15 seconds, whichever ends first: a request that
+ * hangs is given up and said, never an endless spinner (bug report #14, 25 Oct
+ * 2026: "this loading takes forever").
+ */
+export function limited(signal?: AbortSignal | null, ms = 15000): AbortSignal {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), ms);
+  const stop = () => {
+    clearTimeout(timer);
+    controller.abort();
+  };
+  if (signal?.aborted) stop();
+  else signal?.addEventListener("abort", stop, { once: true });
+  return controller.signal;
+}
+
 async function send(
   path: string,
   init: RequestInit & { signal?: AbortSignal } = {},
@@ -296,6 +337,7 @@ async function send(
     credentials: "same-origin",
     cache: "no-store",
     ...init,
+    signal: limited(init.signal),
     headers: {
       accept: "application/json",
       ...(init.body ? { "content-type": "application/json" } : {}),
@@ -440,7 +482,21 @@ function parsePage(value: unknown): MetaPage | null {
             text: problem.text as string,
           }
         : null,
+    backfill: parseRun(value.backfill),
   };
+}
+
+/**
+ * Bring in the older leads Meta keeps for a Page (90 days), from every form it
+ * takes; leads already here are linked, never filed twice. The first slice
+ * comes in now and the rest in the background.
+ */
+export async function bringOlder(pageId: string): Promise<MetaPage | null> {
+  const body = await send(
+    `${BASE}/meta/pages/${encodeURIComponent(pageId)}/backfill`,
+    { method: "POST" },
+  );
+  return isRecord(body) ? parsePage(body.page) : null;
 }
 
 /** The Facebook Pages shared with Sales Xray, on or off. */

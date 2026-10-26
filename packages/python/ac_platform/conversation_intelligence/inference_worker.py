@@ -66,6 +66,7 @@ from ac_platform.conversation_intelligence.models import (
     ConversationRun,
 )
 from ac_platform.conversation_intelligence.processing_actor import ProcessingActor, actor_from_row
+from ac_platform.conversation_intelligence.provider_call import provider_call
 from ac_platform.conversation_intelligence.provider_failure_observation import (
     ProviderFailureObservation,
 )
@@ -321,16 +322,19 @@ class ConversationInferenceWorker:
         # Shared by every provider consumer: organisations take turns.
         self.tenant_turns = TenantTurns()
 
-    async def _require_customer_profile(self, db: AsyncSession, scope: Scope) -> None:
+    async def _require_customer_profile(
+        self, db: AsyncSession, scope: Scope, *, lock: bool = True
+    ) -> None:
         actor = actor_from_row(scope.task)
         if isinstance(actor, ProcessingActor):
             await require_recording_owner_profile(
                 db,
                 scope.recording,
                 now=self.clock(),
+                lock=lock,
             )
         else:
-            await require_person_profile(db, person_id=actor.person_id)
+            await require_person_profile(db, person_id=actor.person_id, lock=lock)
 
     async def claim(self) -> Work | None:
         async with self.sessions() as db, db.begin():
@@ -463,6 +467,7 @@ class ConversationInferenceWorker:
         job: Job,
         *,
         allow_started_effect: bool = False,
+        during_effect: bool = False,
     ) -> Scope:
         if (
             set(job.payload) != {"schema", "run_id"}
@@ -484,9 +489,16 @@ class ConversationInferenceWorker:
             raise ConversationDenied("The provider task is no longer active.")
         application = ConversationApplication(db, clock=self.clock)
         actor = actor_from_row(task)
-        now = await application.admit(actor)
-        await application.get(actor, task.recording_id)
-        recording = await application._recording(actor, task.recording_id)
+        # During the provider call (during_effect): no lock on the caller's person or session,
+        # and the recording FOR SHARE, so that person's requests and the call's own page go on.
+        now = await application.admit(actor, identity_locks=not during_effect)
+        await application.get(
+            actor,
+            task.recording_id,
+            identity_locks=not during_effect,
+            shared_recording=during_effect,
+        )
+        recording = await application._recording(actor, task.recording_id, shared=during_effect)
         # Match command lock order: owner/session -> recording -> task.
         # Locking the task before its owner could deadlock a duplicate upload click.
         task = await db.scalar(
@@ -921,19 +933,31 @@ class ConversationInferenceWorker:
                         recovery_generation=work.recovery_generation,
                         provider_idempotency_key=key,
                     )
-                    if self.authority is None:
-                        scope = await self._scope(db, job, allow_started_effect=True)
-                    else:
-                        # Only the pause check is waived for this committed effect;
-                        # all other authority is rechecked under the current lease.
-                        with already_started_effect(
-                            environment=self.authority.environment,
-                            operations_tenant_id=self.authority.operations_tenant_id,
-                        ):
-                            scope = await self._scope(db, job, allow_started_effect=True)
-                    # The last admission before the call still checks customer identity.
-                    await self._require_customer_profile(db, scope)
-                    # Restore, revocation and deletion wait on these canonical locks.
+                    with provider_call():
+                        if self.authority is None:
+                            scope = await self._scope(
+                                db, job, allow_started_effect=True, during_effect=True
+                            )
+                        else:
+                            # Only the pause check is waived for this committed effect;
+                            # all other authority is rechecked under the current lease.
+                            with already_started_effect(
+                                environment=self.authority.environment,
+                                operations_tenant_id=self.authority.operations_tenant_id,
+                            ):
+                                scope = await self._scope(
+                                    db, job, allow_started_effect=True, during_effect=True
+                                )
+                        # The last admission before the call still checks customer
+                        # identity (read, not locked: see below).
+                        await self._require_customer_profile(db, scope, lock=False)
+                    # Held across the call: the storage fence, the job, the recording and its
+                    # permission (shared), a processing lease, the task and the run. Deleting
+                    # or restoring the recording, withdrawing consent, revoking the lease and
+                    # erasing media wait for it. The caller's person and session are not
+                    # locked: holding them froze every request of that person for the call
+                    # (demo P1, 26 Oct 2026: 28 s). A sign-out or suspension meanwhile is
+                    # caught when the next transaction re-admits with the canonical locks.
                     async with asyncio.timeout(_EFFECT_SECONDS):
                         result = await self.broker.execute(reservation, payload)
             except InferenceBrokerError as error:

@@ -15,8 +15,10 @@ from ac_platform.application.settings import Settings
 from ac_platform.http.auth import AuthenticatedTransaction, RequireActor, require_safe_origin
 from ac_platform.http.organisation_settings import install_organisation_settings_routes
 from ac_platform.identity.models import Person
+from ac_platform.identity.person_photos import photo_urls
 from ac_platform.identity.services import TenantScopeDeniedError, normalize_email
 from ac_platform.kernel.errors import AuthorizationDenied, DomainError, ResourceNotFound
+from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.organisations.activity import organisation_activity
 from ac_platform.organisations.invitations import invitation_policies
 from ac_platform.organisations.person_activity import person_activity
@@ -353,6 +355,10 @@ def install_organisation_http(
             "self-serve-organisation:AUT-1694",
             actor_person_id=actor.person_id,
         )
+        # Its leads start on the sales team's stages (owner, 25 Oct 2026); a retry keeps them.
+        await journeys.start_organisation(
+            auth.database, result.tenant_id, actor.person_id, datetime.now(UTC)
+        )
         response.headers["cache-control"] = "private, no-store"
         response.headers["vary"] = "Cookie"
         return OrganisationProfileResponse(
@@ -533,6 +539,26 @@ def install_organisation_http(
             every_member=auth.resolved.membership_role != "member",
         )
         return ActivityResponse.model_validate_json(json.dumps(rows))
+
+    @router.get("/members/photos")
+    async def member_photos(
+        auth: AuthenticatedTransaction = selected_dependency,
+    ) -> dict[str, dict[str, str]]:
+        """Each active member's photo URL (versioned), where one exists (v0.93): the
+        Members list and a person's page show photos instead of initials."""
+        actor = auth.resolved.actor
+        assert actor.tenant_id is not None
+        people = (
+            await auth.database.scalars(
+                select(Membership.person_id).where(
+                    Membership.tenant_id == actor.tenant_id,
+                    Membership.status == "active",
+                    Membership.ended_at.is_(None),
+                )
+            )
+        ).all()
+        urls = await photo_urls(auth.database, list(people))
+        return {"photos": {str(person): url for person, url in urls.items() if url}}
 
     @router.get("/members/{person_id}/activity", response_model=PersonActivityResponse)
     async def member_activity(

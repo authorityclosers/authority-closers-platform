@@ -1,0 +1,10 @@
+[Unit]
+Description=Bug issues fixed in a release that is live on production become Solved
+Documentation=file:///home/acdev/src/dev-live/authority-closers-platform/AGENTS.md
+After=network-online.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-bugs-release
+Nice=10
+TimeoutStartSec=15min

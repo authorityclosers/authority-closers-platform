@@ -49,7 +49,7 @@ beforeEach(() => {
             { key: "new", label: "New enquiry", kind: "new", archived: false },
             {
               key: "not_connected",
-              label: "Couldn't reach",
+              label: "Not connected",
               kind: "not_connected",
               archived: false,
             },
@@ -171,7 +171,7 @@ it("gives the ticked leads to one person in one request", async () => {
   expect(done).toHaveBeenCalled();
 });
 
-it("moves them to one of the stages, never to Couldn't reach", async () => {
+it("moves them to one of the stages, never to Not connected", async () => {
   await act(async () =>
     root.render(
       <BulkSheet
@@ -188,7 +188,7 @@ it("moves them to one of the stages, never to Couldn't reach", async () => {
   await flush();
   const dialog = document.querySelector("dialog")!;
   expect(dialog.textContent).toContain("Counselled");
-  expect(dialog.textContent).not.toContain("Couldn't reach");
+  expect(dialog.textContent).not.toContain("Not connected");
   await act(async () => press("Counselled").click());
   await flush();
   expect(

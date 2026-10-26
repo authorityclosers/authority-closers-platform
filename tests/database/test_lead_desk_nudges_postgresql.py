@@ -70,21 +70,31 @@ def test_nudges_once_a_window_in_work_hours_only(postgres_harness: Any, tmp_path
             )
             assert target.status_code == 200, target.text
 
-            # Off by default: behind pace with a phone, and still nothing.
+            # On by default (owner, 26 Oct 2026, report #23: "of course nudge should be
+            # already on"); an owner or manager who turns them off is kept: behind pace
+            # with a phone, and nothing.
+            assert (await here.client.get(f"{BASE}/team")).json()["settings"]["nudges"] is True
+            off_first = await here.client.put(
+                f"{BASE}/nudges",
+                json={"expected_revision": revision + 1, "enabled": False},
+                headers=WRITE,
+            )
+            assert off_first.status_code == 200, off_first.text
+            assert off_first.json()["settings"]["nudges"] is False
             assert await nudged(here, afternoon) == []
 
-            # A seller may not turn them on; an owner or manager may.
+            # A seller may not turn them back on; an owner or manager may.
             here.as_seller()
             refused = await here.client.put(
                 f"{BASE}/nudges",
-                json={"expected_revision": revision + 1, "enabled": True},
+                json={"expected_revision": revision + 2, "enabled": True},
                 headers=WRITE,
             )
             assert refused.status_code == 403
             here.as_admin()
             on = await here.client.put(
                 f"{BASE}/nudges",
-                json={"expected_revision": revision + 1, "enabled": True},
+                json={"expected_revision": revision + 2, "enabled": True},
                 headers=WRITE,
             )
             assert on.status_code == 200, on.text
@@ -128,7 +138,7 @@ def test_nudges_once_a_window_in_work_hours_only(postgres_harness: Any, tmp_path
             off = await here.client.put(
                 f"{BASE}/nudges",
                 json={
-                    "expected_revision": revision + 2,
+                    "expected_revision": revision + 3,
                     "enabled": True,
                     "off_for": [str(here.seller.person_id)],
                 },

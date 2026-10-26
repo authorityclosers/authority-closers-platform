@@ -51,7 +51,7 @@ const row = (index: number, overrides: Partial<LeadRow> = {}): LeadRow => ({
 
 const STAGES = [
   ["new_enquiry", "New enquiry", "new"],
-  ["no_answer", "Couldn't reach", "not_connected"],
+  ["no_answer", "Not connected", "not_connected"],
   ["keen", "Keen to join", "interested"],
 ] as const;
 

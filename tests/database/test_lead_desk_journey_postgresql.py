@@ -123,7 +123,7 @@ def test_a_business_own_stages_through_the_desk(postgres_harness: Any, tmp_path:
                 detail = (await client.get(f"{BASE}/leads/{lead['lead_id']}")).json()
                 labels = [choice["label"] for choice in detail["stage_choices"]]
                 assert labels[:3] == ["Contacted", "Site visit booked", "Site visit done"]
-                assert "Couldn't reach" not in labels and "New enquiry" not in labels
+                assert "Not connected" not in labels and "New enquiry" not in labels
 
                 later = (datetime.now(UTC) + timedelta(days=1)).isoformat()
                 booked = await client.post(
@@ -148,7 +148,7 @@ def test_a_business_own_stages_through_the_desk(postgres_harness: Any, tmp_path:
                 assert history[0]["kind"] == "result"
                 assert history[0]["stage_label"] == "Site visit booked"
 
-                # An archived or unknown stage is refused; so is Couldn't reach after a talk.
+                # An archived or unknown stage is refused; so is Not connected after a talk.
                 for step in ("interested_old", "not_connected"):
                     wrong = await client.post(
                         f"{BASE}/leads/{lead['lead_id']}/dispose",

@@ -225,6 +225,7 @@ def save(
                 submission_id=call.submission_id,
                 actor_person_id=None,
                 now=now,
+                object_id=object_id,
             )
         connection.execute(
             insert(CallObjectDecision).values(

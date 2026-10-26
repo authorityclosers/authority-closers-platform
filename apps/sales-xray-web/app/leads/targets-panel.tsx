@@ -5,7 +5,8 @@
  * section 2, on Lead OS's team engine): each seller's progress today against
  * the targets set for them, a sheet to set a seller's daily and weekly
  * targets, and nudges: a seller who drifts gets an urgent alert back to work,
- * inside work hours only.
+ * inside work hours only. Nudges are one row on the kit's switch, on unless
+ * someone turned them off (owner, 26 Oct 2026, report #23).
  */
 
 import { BellRing, Target } from "lucide-react";
@@ -15,6 +16,7 @@ import { METRIC_WORDS, type Metric } from "../dashboard/my-day-client";
 import { displayName } from "../display-name";
 import { notify } from "../notice-center";
 import { Sheet } from "../ui/sheet";
+import { StateSwitch } from "../ui/state-switch";
 import { Avatar } from "../ui/kit";
 import { commandId, readTeam, type RepView, type Team } from "./leads-client";
 import {
@@ -221,73 +223,86 @@ function Nudges({
   onSaved: (next: Team) => void;
 }) {
   const settings = team.settings as NudgeSettings;
-  const on = settings.nudges === true;
+  // On unless an owner or manager turned them off (owner, 26 Oct 2026, report
+  // #23: "of course nudge should be already on").
+  const on = settings.nudges !== false;
   const offFor = settings.nudges_off_for ?? [];
   const [busy, setBusy] = useState(false);
   const save = async (enabled: boolean, off: string[]) => {
     setBusy(true);
     try {
       onSaved(await saveNudges(settings.revision, enabled, off));
-    } catch {
-      notify({
-        id: "nudges",
-        tone: "error",
-        title: "Nudges weren't changed",
-        message: "Someone may have changed the team just now. Try again.",
-      });
+    } finally {
+      setBusy(false);
     }
-    setBusy(false);
   };
+  const first = (name: string) => displayName(name).split(" ")[0];
+  const skipped = team.reps.filter((rep) => offFor.includes(rep.person_id));
   return (
     <div className={styles.nudges}>
-      <div className={styles.nudgesHead}>
-        <span className={styles.nudgeIcon} aria-hidden="true">
-          <BellRing size={18} />
-        </span>
-        <span className={styles.nudgeWords}>
-          <strong>Nudges</strong>
-          <small>
-            A seller who drifts from their targets gets an urgent alert back to
-            work, in work hours only.
-          </small>
-        </span>
-        <button
-          type="button"
-          role="switch"
-          aria-checked={on}
-          aria-label="Nudges"
-          className={styles.switch}
-          disabled={busy}
-          onClick={() => void save(!on, offFor)}
-        >
-          <span />
-        </button>
-      </div>
+      <StateSwitch
+        icon={<BellRing size={20} />}
+        label="Nudges and alerts"
+        meaning="A seller who falls behind their targets, or leaves due work waiting, gets an urgent alert back to work, in work hours only."
+        onText="On: sellers who fall behind get a nudge"
+        offText="Off: nobody gets a nudge"
+        note={
+          skipped.length
+            ? `Not for ${skipped.map((rep) => first(rep.name)).join(", ")}`
+            : undefined
+        }
+        chipOn="Nudges on"
+        chipOff="Nudges off"
+        on={on}
+        busy={busy}
+        confirmOff={{
+          title: "Turn nudges off?",
+          points: [
+            "Sellers who fall behind get no alert back to work.",
+            "New-lead and due-call alerts still come.",
+            "Turn them back on here any time.",
+          ],
+          confirm: "Turn nudges off",
+          keep: "Keep nudges on",
+        }}
+        onChange={(next) => save(next, offFor)}
+      />
       {on ? (
-        <div className={styles.chips} aria-label="Nudges for">
-          {team.reps.map((rep) => {
-            const off = offFor.includes(rep.person_id);
-            return (
-              <button
-                key={rep.person_id}
-                type="button"
-                className={styles.chip}
-                aria-pressed={!off}
-                disabled={busy}
-                onClick={() =>
-                  void save(
-                    true,
-                    off
-                      ? offFor.filter((item) => item !== rep.person_id)
-                      : [...offFor, rep.person_id],
-                  )
-                }
-              >
-                {displayName(rep.name).split(" ")[0]}
-              </button>
-            );
-          })}
-        </div>
+        <details className={styles.who}>
+          <summary>Who gets them</summary>
+          <div className={styles.chips} aria-label="Nudges for">
+            {team.reps.map((rep) => {
+              const off = offFor.includes(rep.person_id);
+              return (
+                <button
+                  key={rep.person_id}
+                  type="button"
+                  className={styles.chip}
+                  aria-pressed={!off}
+                  disabled={busy}
+                  onClick={() =>
+                    void save(
+                      true,
+                      off
+                        ? offFor.filter((item) => item !== rep.person_id)
+                        : [...offFor, rep.person_id],
+                    ).catch(() =>
+                      notify({
+                        id: "nudges",
+                        tone: "error",
+                        title: "Nudges weren't changed",
+                        message:
+                          "Someone may have changed the team just now. Try again.",
+                      }),
+                    )
+                  }
+                >
+                  {first(rep.name)}
+                </button>
+              );
+            })}
+          </div>
+        </details>
       ) : null}
     </div>
   );

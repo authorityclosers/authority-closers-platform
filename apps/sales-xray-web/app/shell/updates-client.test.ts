@@ -94,7 +94,6 @@ it.each([
   { notifications: [{ ...event, body: null }], unread_count: 1 },
   { notifications: [{ ...event, href: null }], unread_count: 1 },
   { notifications: [{ ...event, href: 1 }], unread_count: 1 },
-  { notifications: [{ ...event, kind: "unknown" }], unread_count: 1 },
 ])("rejects malformed notification responses: %j", (value) => {
   expect(() => parseNotifications(value)).toThrow();
 });
@@ -201,4 +200,25 @@ it("uses exactly the four same-origin endpoints and validates each receipt", asy
   await expect(markUpdatesSeen([note.key])).rejects.toThrow(
     "invalid_seen_response",
   );
+});
+
+// v0.93: "Fixed: <your report>" shows; a kind this app does not know is left out.
+it("shows a solved report and leaves out a kind it does not know", async () => {
+  const { parseNotifications } = await import("./updates-client");
+  const base = {
+    title: "Fixed: The switch needs an icon",
+    body: "Thanks for telling us; it's in the latest update.",
+    href: "/",
+    urgent: false,
+    created_at: "2026-10-26T04:30:00Z",
+    read: false,
+  };
+  const parsed = parseNotifications({
+    notifications: [
+      { ...base, id: "a", kind: "bug_solved" },
+      { ...base, id: "b", kind: "something_new" },
+    ],
+    unread_count: 2,
+  });
+  expect(parsed.notifications.map((item) => item.id)).toEqual(["a"]);
 });

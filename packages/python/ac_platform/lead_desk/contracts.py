@@ -282,6 +282,10 @@ class LeadEventView(Model):
     # which way it went (outgoing, incoming, missed, rejected or blocked).
     via: str | None = None
     direction: str | None = None
+    # via "call": a lead field the call's data filled in by itself (owner, 25 Oct 2026),
+    # and the fact that filled it, for its one-tap undo (POST /v1/sales-xray/call-data/
+    # objects/{id}/undo-fill, while the lead's facts say can_undo).
+    fill_object_id: UUID | None = None
     # A call the phone logged: its id, so its own seller can mark it private
     # (Salestrail's untracked calls); private ones are shown to that seller only.
     event_id: UUID | None = None

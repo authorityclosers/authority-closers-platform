@@ -58,6 +58,7 @@ from ac_platform.conversation_intelligence.processing_actor import (
     actor_columns,
     same_actor,
 )
+from ac_platform.conversation_intelligence.provider_call import in_provider_call
 from ac_platform.conversation_intelligence.providers import ProviderResult
 from ac_platform.conversation_intelligence.reporting_pipeline import (
     ReportingPipeline,
@@ -497,23 +498,29 @@ class ConversationInference:
         recording: ConversationRecording,
         quote: ConversationQuote,
     ) -> tuple[ConversationMinuteAccount, ConversationBudgetAccount]:
-        budget = await self.database.scalar(
+        budget_query = (
             select(ConversationBudgetAccount)
             .where(
                 ConversationBudgetAccount.scope_id == quote.budget_scope_id,
             )
-            .with_for_update()
             .execution_options(populate_existing=True)
         )
-        minutes = await self.database.scalar(
+        minutes_query = (
             select(ConversationMinuteAccount)
             .where(
                 ConversationMinuteAccount.tenant_id == recording.tenant_id,
                 ConversationMinuteAccount.person_id == recording.person_id,
             )
-            .with_for_update()
             .execution_options(populate_existing=True)
         )
+        # While the worker's provider call runs, its re-check only reads them: the
+        # reservation is already committed (provider_call.py). Anything that saves
+        # them still locks them first.
+        if not in_provider_call():
+            budget_query = budget_query.with_for_update()
+            minutes_query = minutes_query.with_for_update()
+        budget = await self.database.scalar(budget_query)
+        minutes = await self.database.scalar(minutes_query)
         if budget is None or minutes is None:
             raise ConversationDenied("An explicitly approved processing allowance is required.")
         return minutes, budget

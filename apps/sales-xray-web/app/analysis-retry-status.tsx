@@ -12,6 +12,7 @@ import {
   type ProcessingPlan,
 } from "./processing-plan-contract";
 import { track, type AiLevel, type CallSurface } from "./telemetry";
+import { privacyNotices, providerLines } from "./processing-plan-words";
 import styles from "./analysis-retry-status.module.css";
 
 function acceptedPlan(plan: ProcessingPlan): boolean {
@@ -234,12 +235,15 @@ export function AnalysisRetryAction({
               ? "Review this full report’s approval."
               : "Review this retry’s approval."}
           </p>
+          <ul className={styles.providers} aria-label="Who processes this call">
+            {providerLines(plan.stages).map((line) => (
+              <li key={line}>{line}</li>
+            ))}
+          </ul>
           <details>
-            <summary>Providers and privacy terms</summary>
-            {plan.stages.map((stage) => (
-              <p key={stage.stage}>
-                {stage.provider} · {stage.model}: {stage.privacy_notice}
-              </p>
+            <summary>Privacy terms</summary>
+            {privacyNotices(plan.stages).map((notice) => (
+              <p key={notice}>{notice}</p>
             ))}
           </details>
         </div>
