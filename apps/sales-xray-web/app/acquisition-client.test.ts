@@ -514,3 +514,31 @@ it("accepts a two-hour policy while preserving smaller approved limits", () => {
     parsePolicy({ ...policy, maximum_call_seconds: 7201 }),
   ).toThrow();
 });
+
+it("names a release hold as an update, not paused analysis", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(
+      new Response(
+        "Authority Closers production is completing a reviewed release.",
+        {
+          status: 503,
+          headers: {
+            "content-type": "text/plain",
+            "retry-after": "30",
+            "x-authority-closers-route": "release-hold-production",
+          },
+        },
+      ),
+    ),
+  );
+  const failed = await acquisition("/submissions", {
+    method: "POST",
+    body: "{}",
+  }).catch((error: unknown) => error);
+  expect(failed).toBeInstanceOf(AcquisitionError);
+  expect(failed).toMatchObject({ status: 503, reason: "release_hold" });
+  expect(String((failed as Error).message)).toContain(
+    "Sales X-Ray is updating",
+  );
+});
