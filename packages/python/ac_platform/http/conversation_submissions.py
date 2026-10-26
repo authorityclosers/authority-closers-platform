@@ -1292,11 +1292,24 @@ def install_submission_http(
             raise fail(408, "The analysis approval was interrupted. Try again.") from None
         if runtime.authority is None:
             raise fail(409, "Provider analysis is not enabled for this upload yet.")
+        # "standing": no tap; the seller's standing consent to have their own calls
+        # analysed as they arrive (call_ai.auto_consent) accepts the plan instead.
+        consents = request.headers.getlist("x-upload-consent")
+        if consents not in ([], ["standing"]):
+            raise fail(422, "Approve the exact displayed plan and privacy terms.")
         scope = await owner.ownership.require_submission_owner(
             submission_id, **owner.arguments, allow_organisation_start=True
         )
         if not scope.claimed_account:
             raise fail(403, "Claim this saved call with the same AC account before processing it.")
+        call_owner = await owner.ownership.call_owner_person_id(submission_id)
+        standing_consent: UUID | None = None
+        if consents == ["standing"]:
+            if owner.actor is None or call_owner != owner.actor.person_id:
+                raise fail(409, "Automatic analysis covers your own calls only.")
+            standing_consent = await _standing_consent(
+                owner, upload_policy(runtime.policy)["policy_sha256"]
+            )
         await owner.ownership.ensure_processing_continuation(
             submission_id, key=key, **owner.arguments, allow_organisation_start=True
         )
@@ -1306,7 +1319,20 @@ def install_submission_http(
         accepted = await ConversationProcessingPlans(
             ConversationApplication(owner.ownership.database), runtime.authority, runtime.storage
         ).accept(actor, scope.recording_id, payload, key=key)
-        call_owner = await owner.ownership.call_owner_person_id(submission_id)
+        if standing_consent is not None and owner.actor is not None:
+            # The plan's receipt stays the plan's own; this names the consent it relied on.
+            await AuditRepository(owner.ownership.database).append(
+                tenant_id=owner.ownership.tenant_id,
+                actor_person_id=owner.actor.person_id,
+                session_id=owner.actor.session_id,
+                action="conversation.auto_analysis_started",
+                resource_type="conversation_submission",
+                resource_id=submission_id,
+                payload={
+                    "standing_consent_event_id": str(standing_consent),
+                    "plan_id": str(accepted.get("id")),
+                },
+            )
         if owner.actor is not None and call_owner != owner.actor.person_id:
             # Every start on someone else's call names who started it, for whose call.
             await AuditRepository(owner.ownership.database).append(

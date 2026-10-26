@@ -11,7 +11,9 @@ and the synthetic local providers only.
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -24,6 +26,7 @@ from ac_platform.call_ai import auto_consent
 from ac_platform.call_ai.http import install_call_ai_http
 from ac_platform.http.routes import RouteContext
 from tests.database.test_conversation_account_library_postgresql import _session
+from tests.database.test_conversation_failure_observation_postgresql import seed_measured_fixture
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run, seed
 from tests.database.test_conversation_submission_http_postgresql import (
@@ -31,9 +34,12 @@ from tests.database.test_conversation_submission_http_postgresql import (
     PREFIX,
     _headers,
     _setup,
+    _upload_for_read_test,
 )
-from tests.database.test_conversation_worker_postgresql import _wav_one_second_48k
+from tests.database.test_conversation_worker_postgresql import _reconcile, _wav_one_second_48k
 from tests.database.test_lead_desk_postgresql import _organisation
+from tests.unit.conversation_intelligence.test_acquisition_source import ValidationFixtureRuntime
+from tests.unit.conversation_intelligence.test_alignment import _signal
 
 WRITE = {"Origin": ORIGIN, "Content-Type": "application/json"}
 LEVELS = "/v1/sales-xray/call-ai"
@@ -218,9 +224,7 @@ def test_new_words_ask_again(
     run(exercise())
 
 
-def test_a_call_starts_by_itself_only_with_a_current_consent(
-    postgres_harness: Any, tmp_path: Path
-) -> None:
+def test_an_upload_relies_on_a_current_consent_only(postgres_harness: Any, tmp_path: Path) -> None:
     async def exercise() -> None:
         setup = await _setup(postgres_harness, tmp_path)
         try:
@@ -249,14 +253,14 @@ def test_a_call_starts_by_itself_only_with_a_current_consent(
                 assert (elsewhere.json()["state"], elsewhere.json()["can_start"]) == ("ask", False)
                 assert (await upload()).status_code == 409
 
-                # Agreed for these terms: it starts, and names the consent it relied on.
+                # Agreed for these terms: it's taken, and names the consent it relied on.
                 terms = (await client.get(PREFIX + "/upload-policy")).json()["policy_sha256"]
                 assert (await _turn_on(client, terms)).status_code == 200
                 started = await upload()
                 assert started.status_code == 202, started.text
                 person = setup.state.person_id
                 consents = await _events(setup, person, auto_consent.ACTION)
-                starts = await _events(setup, person, "conversation.auto_analysis_started")
+                starts = await _events(setup, person, "conversation.auto_upload_accepted")
                 assert [event.payload["standing_consent_event_id"] for event in starts] == [
                     str(consents[-1].id)
                 ]
@@ -264,7 +268,7 @@ def test_a_call_starts_by_itself_only_with_a_current_consent(
                 # Turned off: the next call waits for its tap again.
                 await client.post(AUTO, json={"decision": "withdrawn"}, headers=WRITE)
                 assert (await upload()).status_code == 409
-                assert len(await _events(setup, person, "conversation.auto_analysis_started")) == 1
+                assert len(await _events(setup, person, "conversation.auto_upload_accepted")) == 1
         finally:
             await setup.engine.dispose()
 
@@ -287,6 +291,93 @@ def test_a_personal_workspace_is_told_plainly(postgres_harness: Any, tmp_path: P
                     "state": "unavailable",
                     "can_start": False,
                 }
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_the_analysis_starts_by_itself_only_on_ones_own_call_with_a_current_consent(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """The provider analysis starts when its plan is accepted: with a standing consent,
+    the seller's own call's plan is accepted without a tap, and the start names the
+    consent; the plan's receipt stays the plan's own."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path, gemini=True)
+        setup.native.validate_source = ValidationFixtureRuntime().validate_source
+        try:
+            await _organisation(setup)
+            _install(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            seller_token = await _session(setup, seller)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+
+                def as_(token: str) -> None:
+                    client.cookies.clear()
+                    client.cookies.set(setup.settings.session_cookie_name, token)
+
+                as_(seller_token)
+                path, _ = await _upload_for_read_test(setup, client)
+                await _reconcile(setup.sessions, setup.state)
+                recording_id = UUID((await client.get(path)).json()["recording_id"])
+                await seed_measured_fixture(
+                    setup.sessions,
+                    SimpleNamespace(recording_id=recording_id),
+                    signal_payload=_signal(
+                        source_sha256=hashlib.sha256(_wav_one_second_48k()).hexdigest()
+                    ),
+                )
+                quoted = await client.post(
+                    path + "/plan/quote", headers={"Origin": ORIGIN, "Idempotency-Key": "auto"}
+                )
+                assert quoted.status_code == 201, quoted.text
+                plan = quoted.json()
+
+                async def accept(key: str) -> httpx.Response:
+                    return await client.post(
+                        path + "/plan",
+                        json={
+                            "plan_id": plan["id"],
+                            "plan_fingerprint": plan["plan_fingerprint"],
+                            "privacy_revision": plan["privacy_revision"],
+                            "accepted": True,
+                        },
+                        headers={
+                            "Origin": ORIGIN,
+                            "Idempotency-Key": key,
+                            "X-Upload-Consent": "standing",
+                        },
+                    )
+
+                # No consent yet: it waits for the tap.
+                refused = await accept("auto:1")
+                assert refused.status_code == 409
+                assert "Tap Analyse this call" in refused.text
+
+                # An admin's standing consent never starts someone else's call.
+                terms = (await client.get(PREFIX + "/upload-policy")).json()["policy_sha256"]
+                as_(setup.token)
+                assert (await _turn_on(client, terms)).status_code == 200
+                theirs = await accept("auto:2")
+                assert theirs.status_code == 409
+                assert "your own calls" in theirs.text
+
+                # The seller's own consent: the plan is accepted without a tap.
+                as_(seller_token)
+                assert (await _turn_on(client, terms)).status_code == 200
+                started = await accept("auto:3")
+                assert started.status_code == 202, started.text
+                consent = (await _events(setup, seller.person_id, auto_consent.ACTION))[-1]
+                starts = await _events(
+                    setup, seller.person_id, "conversation.auto_analysis_started"
+                )
+                assert [event.payload for event in starts] == [
+                    {"standing_consent_event_id": str(consent.id), "plan_id": plan["id"]}
+                ]
         finally:
             await setup.engine.dispose()
 

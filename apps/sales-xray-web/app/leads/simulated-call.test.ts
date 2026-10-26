@@ -155,6 +155,47 @@ it("says why when the analysis can't start, with the call already on the lead", 
   expect(sent.some((item) => item.url.endsWith("/recordings"))).toBe(true);
 });
 
+// Owner, 26 Oct 2026: "Analyse my calls automatically", the seller's standing
+// consent, on the upload and on the plan.
+it("uploads and starts under a standing consent when the card says so", async () => {
+  await runRecordingUpload({
+    lead: LEAD,
+    file: new File(["fictional audio"], "call.m4a", { type: "audio/mp4" }),
+    policy: POLICY,
+    onStep: () => undefined,
+    signal: new AbortController().signal,
+    attempt: "try-1",
+    consent: "standing",
+  });
+  const put = sent.find((item) => item.method === "PUT");
+  expect(put?.headers["x-upload-consent"]).toBe("standing");
+  expect(vi.mocked(startAnalysis).mock.calls[0]?.[0]).toMatchObject({
+    standing: true,
+  });
+});
+
+it("says the consent isn't on when the server refuses it, for the tap to follow", async () => {
+  vi.mocked(startAnalysis).mockResolvedValueOnce({
+    kind: "needs_action",
+    reason: "start_failed",
+    message: "Analysis is not available for this call yet.",
+    status: 409,
+  });
+  const refused = runRecordingUpload({
+    lead: LEAD,
+    file: new File(["fictional audio"], "call.m4a", { type: "audio/mp4" }),
+    policy: POLICY,
+    onStep: () => undefined,
+    signal: new AbortController().signal,
+    attempt: "try-1",
+    consent: "standing",
+  });
+  await expect(refused).rejects.toMatchObject({
+    status: 409,
+    message: "Automatic analysis isn't on for you here. Tap Analyse the call.",
+  });
+});
+
 it("fixes one call id per lead and attempt", async () => {
   const id = await attemptId("lead-recording:lead-1:try-1");
   expect(id).toMatch(

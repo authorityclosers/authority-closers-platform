@@ -213,12 +213,14 @@ async function sendOwnSource({
   file,
   sha,
   policySha,
+  consent,
   signal,
 }: {
   id: string;
   file: File;
   sha: string;
   policySha: string;
+  consent: UploadConsent;
   signal: AbortSignal;
 }): Promise<Submission> {
   const mismatch = () =>
@@ -245,7 +247,7 @@ async function sendOwnSource({
           "Content-Type": "application/octet-stream",
           "X-Source-SHA256": sha,
           "X-Upload-Policy": policySha,
-          "X-Upload-Consent": "accepted",
+          "X-Upload-Consent": consent,
           ...captureHeader(file),
         },
         body: file,
@@ -255,6 +257,19 @@ async function sendOwnSource({
   if (bound.id !== id || bound.sha !== sha) throw mismatch();
   return bound;
 }
+
+/**
+ * The consent an upload rests on: the seller's tick for this call, or their
+ * standing consent to have their calls analysed as they arrive ("Analyse my
+ * calls automatically", owner, 26 Oct 2026), which the server checks.
+ */
+export type UploadConsent = "accepted" | "standing";
+
+const standingOff = () =>
+  new LeadsError(
+    "Automatic analysis isn't on for you here. Tap Analyse the call.",
+    409,
+  );
 
 /**
  * Saves a real call's recording as the seller's own call, puts it on the lead
@@ -273,6 +288,7 @@ export async function runRecordingUpload({
   signal,
   attempt = crypto.randomUUID(),
   callEventId = null,
+  consent = "accepted",
 }: {
   lead: LeadDetail;
   file: File;
@@ -281,6 +297,8 @@ export async function runRecordingUpload({
   signal: AbortSignal;
   attempt?: string;
   callEventId?: string | null;
+  /** With "standing", a 409 means the consent isn't on: the card falls back to the tap. */
+  consent?: UploadConsent;
 }): Promise<LeadDetail> {
   onStep("saving");
   // One call per attempt: trying again finds the call the first try saved
@@ -296,10 +314,17 @@ export async function runRecordingUpload({
       file,
       sha,
       policySha: policy.policy_sha256,
+      consent,
       signal,
     });
   } catch (error) {
     if (signal.aborted || error instanceof LeadsError) throw error;
+    if (
+      consent === "standing" &&
+      error instanceof AcquisitionError &&
+      error.status === 409
+    )
+      throw standingOff();
     throw error instanceof AcquisitionError
       ? new LeadsError(error.message, error.status)
       : new LeadsError(
@@ -328,11 +353,15 @@ export async function runRecordingUpload({
       reportLanguage: "en",
       supportsLanguage: true,
       paused: false,
+      standing: consent === "standing",
     },
     signal,
     onStep,
   );
-  if (started.kind === "needs_action") throw new LeadsError(started.message, 0);
+  if (started.kind === "needs_action")
+    throw consent === "standing" && started.status === 409
+      ? standingOff()
+      : new LeadsError(started.message, 0);
   onStep("starting");
   return linked;
 }

@@ -430,3 +430,46 @@ describe("starting through a release or a dropped connection (19 Oct)", () => {
     expect(posts("/plan")).toHaveLength(1);
   });
 });
+
+// Owner, 26 Oct 2026: "Analyse my calls automatically". The plan is accepted
+// under the seller's standing consent, never as a tap nobody made.
+it("accepts the plan under a standing consent with its header", async () => {
+  await expect(
+    startAnalysis(
+      { ...request, standing: true },
+      new AbortController().signal,
+      () => {},
+      timing,
+    ),
+  ).resolves.toMatchObject({ kind: "accepted" });
+  const [accepted] = posts("/plan");
+  expect(new Headers(accepted?.init.headers).get("X-Upload-Consent")).toBe(
+    "standing",
+  );
+  expect(JSON.parse(String(accepted?.init.body))).toMatchObject({
+    accepted: true,
+  });
+  // A tap's acceptance carries no such header.
+  calls = [];
+  await startAnalysis(request, new AbortController().signal, () => {}, timing);
+  expect(
+    new Headers(posts("/plan")[0]?.init.headers).get("X-Upload-Consent"),
+  ).toBeNull();
+});
+
+it("says when the server refused a standing consent", async () => {
+  accept = () =>
+    response({ detail: "Automatic analysis isn't on for you here." }, 409);
+  await expect(
+    startAnalysis(
+      { ...request, standing: true },
+      new AbortController().signal,
+      () => {},
+      timing,
+    ),
+  ).resolves.toMatchObject({
+    kind: "needs_action",
+    reason: "start_failed",
+    status: 409,
+  });
+});

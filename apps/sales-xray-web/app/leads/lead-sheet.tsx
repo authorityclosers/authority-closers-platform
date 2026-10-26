@@ -94,6 +94,13 @@ import { phoneCallText } from "./phone-call-text";
 import { several, usePipelines } from "./use-pipelines";
 import { afterCall } from "./after-call";
 import {
+  afterCallStart,
+  AUTO_ANALYSIS_SETTINGS_HREF,
+  notNow,
+} from "./auto-start";
+import { readAutoAnalysis } from "../settings/auto-analysis-client";
+import { AutoAnalysisSheet } from "../settings/auto-analysis-sheet";
+import {
   MessageSetup,
   MessageSheet,
   OpenMessage,
@@ -123,6 +130,7 @@ import {
   pickSimulation,
   readUploadPolicy,
   runRecordingUpload,
+  type UploadConsent,
   runSimulatedCall,
   STEP_LABELS,
   type SimulationPick,
@@ -1698,12 +1706,23 @@ function RecordingUpload({
   const [submission, setSubmission] = useState<string | null>(null);
   // The phone's own recording of this call, once read: only it joins the call.
   const [picked, setPicked] = useState<File | null>(null);
+  // Analyse my calls automatically (owner, 26 Oct 2026): with the seller's
+  // standing consent the recording found for this call starts with no tap;
+  // without a choice yet, the sheet asks once.
+  const [automatic, setAutomatic] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const askedFor = useRef<string | null>(null);
+  const turnedOn = useRef(false);
+  const idleNow = useRef(true);
   const task = useRef<AbortController | null>(null);
   const panel = useRef<HTMLElement>(null);
   const warning = checkWarning(found);
   const silent = found?.check?.verdict === "silent";
 
   useEffect(() => () => task.current?.abort(), []);
+  useEffect(() => {
+    idleNow.current = state === "idle";
+  }, [state]);
   useEffect(() => {
     if (next)
       panel.current?.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -1740,8 +1759,13 @@ function RecordingUpload({
     }
   };
 
-  const run = async () => {
-    if (!file || !policy || !agreed) return;
+  const send = async (
+    chosen: File,
+    terms: UploadPolicy,
+    key: string,
+    consent: UploadConsent,
+    fromPhone: boolean,
+  ) => {
     const controller = new AbortController();
     task.current = controller;
     setState("running");
@@ -1750,22 +1774,41 @@ function RecordingUpload({
     try {
       const next = await runRecordingUpload({
         lead: detail,
-        file,
-        policy,
-        attempt,
+        file: chosen,
+        policy: terms,
+        attempt: key,
         onStep: setStep,
         signal: controller.signal,
-        callEventId: file === picked ? callEventId : null,
+        callEventId: fromPhone ? callEventId : null,
+        consent,
       });
       const call = next.events.find(
         (event) => event.kind === "call" && event.recording,
       );
       setSubmission(call?.submission_id ?? null);
       setState("done");
-      if (file === picked) onAttached?.();
+      if (fromPhone) onAttached?.();
       onDone(next);
     } catch (reason) {
       if (controller.signal.aborted) return;
+      if (
+        consent === "standing" &&
+        reason instanceof LeadsError &&
+        reason.status === 409
+      ) {
+        // Not on for this person here after all: today's tap, the same
+        // recording, unticked.
+        notify({
+          id: "auto-analysis",
+          tone: "info",
+          title: "Analyse this call yourself",
+          message: reason.message,
+        });
+        setAutomatic(false);
+        setAgreed(false);
+        setState("ready");
+        return;
+      }
       setError(
         reason instanceof LeadsError
           ? reason.message
@@ -1774,6 +1817,61 @@ function RecordingUpload({
       setState("error");
     }
   };
+
+  const run = () => {
+    if (file && policy && agreed)
+      void send(file, policy, attempt, "accepted", file === picked);
+  };
+
+  // The found recording, uploaded and started under the standing consent.
+  const startOnItsOwn = async () => {
+    if (!found) return;
+    setError(null);
+    setState("reading");
+    let chosen: File;
+    let terms: UploadPolicy;
+    try {
+      chosen = await readPhoneRecording(found);
+      terms = policy ?? (await readUploadPolicy());
+    } catch {
+      setError(
+        "Your phone didn't share the recording. Pick it from your files instead.",
+      );
+      setState("error");
+      return;
+    }
+    const key = crypto.randomUUID();
+    setPicked(chosen);
+    setFile(chosen);
+    setPolicy(terms);
+    setAttempt(key);
+    setAutomatic(true);
+    await send(chosen, terms, key, "standing", true);
+  };
+
+  // The latest start for the effect below, which runs once per recording.
+  const startRef = useRef(startOnItsOwn);
+  useEffect(() => {
+    startRef.current = startOnItsOwn;
+  });
+
+  // Once per recording the phone found, before anything else was done with it.
+  useEffect(() => {
+    if (!found || silent || warning || askedFor.current === found.name) return;
+    const controller = new AbortController();
+    readAutoAnalysis(controller.signal).then(
+      (view) => {
+        if (controller.signal.aborted || !idleNow.current) return;
+        askedFor.current = found.name;
+        const choice = afterCallStart(view);
+        if (choice === "start") void startRef.current();
+        else if (choice === "ask") setAsking(true);
+      },
+      // Not read: today's tap.
+      () => undefined,
+    );
+    return () => controller.abort();
+  }, [found, silent, warning]);
 
   const picker = (label: string, sub: string) => (
     <label className={styles.recordPick}>
@@ -1914,13 +2012,26 @@ function RecordingUpload({
             ))}
           </ol>
           <p className={styles.hint}>
-            Keep this open until the analysis starts.
+            {automatic ? (
+              <>
+                Analysing automatically ·{" "}
+                <Link
+                  className={styles.historyLink}
+                  href={AUTO_ANALYSIS_SETTINGS_HREF}
+                >
+                  Turn off in Settings
+                </Link>
+              </>
+            ) : (
+              "Keep this open until the analysis starts."
+            )}
           </p>
         </>
       ) : null}
       {state === "done" ? (
         <p className={styles.hint}>
-          Analysis started. The call&apos;s Report appears in a few minutes.{" "}
+          {automatic ? "Analysis started automatically." : "Analysis started."}{" "}
+          The call&apos;s Report appears in a few minutes.{" "}
           {submission ? (
             <Link className={styles.historyLink} href={callHref(submission)}>
               Open the call
@@ -1943,6 +2054,18 @@ function RecordingUpload({
           </div>
         </>
       ) : null}
+      <AutoAnalysisSheet
+        open={asking}
+        onSaved={(view) => {
+          turnedOn.current = true;
+          if (view.can_start && idleNow.current) void startOnItsOwn();
+        }}
+        onClose={() => {
+          setAsking(false);
+          if (!turnedOn.current) notNow();
+          turnedOn.current = false;
+        }}
+      />
       {onNext && state !== "running" ? (
         <div className={styles.row}>
           <Button
