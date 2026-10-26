@@ -116,6 +116,15 @@
   min-width: 0;
 }
 
+/* On a computer with the sidebar's panel open, the panel lists every section
+   in this order (orchestrator, 26 Oct 2026: "three navs at once"): one
+   section nav, so the tab row steps aside. Collapsed, it comes back. */
+@media (min-width: 900px) {
+  :global(html:not([data-sx-sidebar="collapsed"])) .tabs {
+    display: none;
+  }
+}
+
 /* Phones: the tab row scrolls sideways and fades at its end; tabs keep a
    44 px target. */
 @media (max-width: 899.98px) {

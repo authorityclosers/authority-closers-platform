@@ -19,7 +19,59 @@ vi.mock("next/link", () => ({
 import { AcquisitionShell } from "../acquisition-shell";
 import { LiveDataBanner } from "../live-data-banner";
 import { recentCallsForContext } from "./shell-store";
-import { WorkspaceAccessProvider } from "../workspace-access";
+import {
+  WorkspaceAccessProvider,
+  type WorkspaceAccessValue,
+} from "../workspace-access";
+
+// The ribbon's areas: name, address and whether it is the current one.
+const ribbon = (aside: Element | null | undefined) =>
+  Array.from(
+    aside?.querySelectorAll<HTMLAnchorElement>("a[data-area]") ?? [],
+    (link) => [
+      link.textContent,
+      link.getAttribute("href"),
+      link.getAttribute("aria-current"),
+    ],
+  );
+// The panel: its area, then its pages, each with its address and whether lit.
+const panelPages = (aside: Element | null | undefined) => {
+  const panel = aside?.querySelector("[data-area-panel]");
+  return [
+    panel?.getAttribute("aria-label"),
+    Array.from(
+      panel?.querySelectorAll<HTMLAnchorElement>("a[data-place]") ?? [],
+      (link) => [
+        link.textContent,
+        link.getAttribute("href"),
+        link.getAttribute("aria-current"),
+      ],
+    ),
+  ];
+};
+
+const ORG_OWNER: WorkspaceAccessValue = {
+  status: "ready",
+  authenticated: true,
+  context: { personId: "p", sessionId: "s", tenantId: "org-one" },
+  workspaces: [
+    {
+      tenant_id: "org-one",
+      kind: "organisation",
+      name: "Authority Closers",
+      role: "owner",
+      sales_xray_enabled: true,
+    },
+    {
+      tenant_id: "personal-one",
+      kind: "personal",
+      name: "Fictional Owner",
+      role: null,
+      sales_xray_enabled: true,
+    },
+  ],
+  retry: () => {},
+};
 
 it("only exposes cached recents for the matching account and workspace", () => {
   const cached = {
@@ -73,31 +125,30 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
       'a[aria-label="Prospects"][href="/prospects"][data-next-client-link="true"]',
     ),
   ).not.toBeNull();
-  expect(
-    desktopNav?.querySelector(
-      'a[aria-label="Reports"][href="/reports"][data-next-client-link="true"]',
-    ),
-  ).not.toBeNull();
-  // The places in groups (owner, 25 Oct 2026): the day's work, then how it
-  // is going (Reports, then Coaching); the organisation's group shows only
-  // inside an organisation.
-  const groups = Array.from(
-    desktopNav?.querySelectorAll<HTMLElement>('[role="group"]') ?? [],
-    (group) => [
-      group.getAttribute("aria-label"),
-      Array.from(
-        group.querySelectorAll<HTMLAnchorElement>("a[data-rail-tip]"),
-        (link) => link.dataset.railTip,
-      ),
-    ],
-  );
-  expect(groups).toEqual([
-    ["Work", ["Home", "Leads", "Chats", "New analysis", "Calls", "Prospects"]],
-    ["Performance", ["Reports", "Coaching"]],
+  // A ribbon of areas and a panel of the current area's pages (owner, dev
+  // #8, 26 Oct 2026): New analysis belongs to Work. Team shows only in an
+  // organisation. The ribbon marks its area as current, not as the page.
+  expect(ribbon(desktopNav)).toEqual([
+    ["Home", "/dashboard", null],
+    ["Work", "/leads", "true"],
+    ["Results", "/reports", null],
   ]);
+  expect(panelPages(desktopNav)).toEqual([
+    "Work",
+    [
+      ["Leads", "/leads", null],
+      ["Chats", "/chats", null],
+      ["Calls", "/analysis/calls", null],
+      ["Prospects", "/prospects", null],
+    ],
+  ]);
+  // New analysis is the panel's one button, lit while it is open.
   expect(
-    desktopNav?.querySelector('a[aria-label="Coaching"][href="/coaching"]'),
-  ).not.toBeNull();
+    desktopNav?.querySelectorAll('a[aria-label="New analysis"]'),
+  ).toHaveLength(1);
+  expect(desktopNav?.querySelector('[aria-current="page"]')?.textContent).toBe(
+    "New analysis",
+  );
   const mobileCalls = Array.from(
     mobileNav?.querySelectorAll<HTMLAnchorElement>(
       'a[data-next-client-link="true"]',
@@ -120,27 +171,68 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
   expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
 });
 
-it("makes the sidebar search open Calls with the typed text", () => {
+it("makes the sidebar's search the command bar's pill", () => {
   const host = document.createElement("div");
   host.innerHTML = renderToStaticMarkup(
     <AcquisitionShell authenticated active="dashboard">
       <p>Dashboard</p>
     </AcquisitionShell>,
   );
-  const form = host.querySelector<HTMLFormElement>('aside form[role="search"]');
-  expect(form?.getAttribute("action")).toBe("/analysis/calls");
+  // One search (owner, dev #8): the pill opens the command bar (Ctrl K),
+  // which finds places, leads and calls. The server cannot know the
+  // keyboard: it assumes Ctrl, not ⌘.
+  expect(host.querySelector('aside form[role="search"]')).toBeNull();
+  const pill = host.querySelector(
+    'aside button[aria-keyshortcuts^="Control+K"]',
+  );
+  expect(pill?.textContent).toContain("Search");
+  expect(pill?.getAttribute("aria-haspopup")).toBe("dialog");
+  expect(pill?.querySelector("kbd")?.textContent).toBe("Ctrl K");
+  // The top bar keeps its own for a collapsed sidebar (the styles show one
+  // at a time).
   expect(
-    form
-      ?.querySelector('input[type="search"][name="q"]')
-      ?.getAttribute("aria-label"),
-  ).toBe("Search calls");
-  // Ctrl K opens the command bar (slice 9 of the new map): its Search button
-  // in the top bar carries the shortcut, not this box. The server cannot know
-  // the keyboard: it assumes Ctrl, not ⌘.
-  expect(form?.querySelector("kbd")).toBeNull();
-  const search = host.querySelector("button[aria-keyshortcuts]");
-  expect(search?.textContent).toContain("Search");
-  expect(search?.querySelector("kbd")?.textContent).toBe("Ctrl K");
+    host.querySelectorAll('button[aria-keyshortcuts^="Control+K"]'),
+  ).toHaveLength(2);
+  // Home has one page: the panel lists nothing under its search and New
+  // analysis (orchestrator, 26 Oct 2026: "Home" over one row, "Home").
+  const aside = host.querySelector('aside[aria-label="Sales Xray navigation"]');
+  expect(ribbon(aside)[0]).toEqual(["Home", "/dashboard", "true"]);
+  expect(aside?.querySelector("[data-area-panel]")).toBeNull();
+  // One toggle at the ribbon's foot hides or shows the panel, with its key.
+  const toggle = aside?.querySelector<HTMLButtonElement>(
+    'button[aria-controls="sales-xray-sidebar-panel"]',
+  );
+  expect(toggle?.getAttribute("aria-label")).toBe(
+    "Collapse sidebar navigation",
+  );
+  expect(toggle?.getAttribute("aria-expanded")).toBe("true");
+  expect(toggle?.getAttribute("aria-keyshortcuts")).toBe("[");
+  expect(toggle?.dataset.railTip).toBe("Hide the panel  [");
+  expect(
+    aside?.querySelectorAll('button[aria-controls="sales-xray-sidebar-panel"]'),
+  ).toHaveLength(1);
+});
+
+it("lists Results' pages on Coaching", () => {
+  const host = document.createElement("div");
+  host.innerHTML = renderToStaticMarkup(
+    <AcquisitionShell authenticated active="coaching">
+      <p>Coaching</p>
+    </AcquisitionShell>,
+  );
+  const aside = host.querySelector('aside[aria-label="Sales Xray navigation"]');
+  expect(ribbon(aside).map(([label, , current]) => [label, current])).toEqual([
+    ["Home", null],
+    ["Work", null],
+    ["Results", "true"],
+  ]);
+  expect(panelPages(aside)).toEqual([
+    "Results",
+    [
+      ["Reports", "/reports", null],
+      ["Coaching", "/coaching", "page"],
+    ],
+  ]);
 });
 
 // The new map (owner, 22 Oct 2026): Home, Leads, + (Add), Chats, Calls.
@@ -214,30 +306,7 @@ it("keeps the five tabs for an unconfirmed session; signed out offers Home, New 
 it("names the current workspace in the phone header and the desktop top bar", () => {
   const host = document.createElement("div");
   host.innerHTML = renderToStaticMarkup(
-    <WorkspaceAccessProvider
-      value={{
-        status: "ready",
-        authenticated: true,
-        context: { personId: "p", sessionId: "s", tenantId: "org-one" },
-        workspaces: [
-          {
-            tenant_id: "org-one",
-            kind: "organisation",
-            name: "Authority Closers",
-            role: "owner",
-            sales_xray_enabled: true,
-          },
-          {
-            tenant_id: "personal-one",
-            kind: "personal",
-            name: "Fictional Owner",
-            role: null,
-            sales_xray_enabled: true,
-          },
-        ],
-        retry: () => {},
-      }}
-    >
+    <WorkspaceAccessProvider value={ORG_OWNER}>
       <AcquisitionShell authenticated active="calls">
         <p>Calls</p>
       </AcquisitionShell>
@@ -257,4 +326,67 @@ it("names the current workspace in the phone header and the desktop top bar", ()
   expect(phone?.getAttribute("aria-haspopup")).toBe("dialog");
   expect(phone?.querySelector("small")?.textContent).toBe("Authority Closers");
   expect(phone?.querySelector("b")?.textContent).toBe("Calls");
+  // In an organisation Team joins the ribbon, and Leads has All leads.
+  const aside = host.querySelector('aside[aria-label="Sales Xray navigation"]');
+  expect(ribbon(aside).map(([label, , current]) => [label, current])).toEqual([
+    ["Home", null],
+    ["Work", "true"],
+    ["Team", null],
+    ["Results", null],
+  ]);
+  expect(
+    Array.from(
+      aside?.querySelectorAll("[data-area-panel] a[data-sub]") ?? [],
+      (link) => [link.textContent, link.getAttribute("href")],
+    ),
+  ).toEqual([["All leads", "/leads?tab=all&stage=open"]]);
+  expect(
+    aside?.querySelector('[data-area-panel] [aria-current="page"]')
+      ?.textContent,
+  ).toBe("Calls");
+});
+
+it("lists every hub section under Team, Insights and Plan & billing included", () => {
+  const render = (active: "organisation" | "insights") => {
+    const host = document.createElement("div");
+    host.innerHTML = renderToStaticMarkup(
+      <WorkspaceAccessProvider value={ORG_OWNER}>
+        <AcquisitionShell authenticated active={active}>
+          <p>Organisation</p>
+        </AcquisitionShell>
+      </WorkspaceAccessProvider>,
+    );
+    return host.querySelector('aside[aria-label="Sales Xray navigation"]');
+  };
+  // On a computer the panel is the hub's only section nav (orchestrator,
+  // 26 Oct 2026): the hub's own list, in its order.
+  const hub = render("organisation");
+  expect(panelPages(hub)).toEqual([
+    "Team",
+    [
+      ["Overview", "/organisation", "page"],
+      ["Team", "/organisation?tab=team", null],
+      ["Analytics", "/organisation?tab=analytics", null],
+      ["Insights", "/organisation/insights", null],
+      ["Leads setup", "/organisation?tab=leads", null],
+      ["Connections", "/organisation?tab=connections", null],
+      ["AI on calls", "/organisation?tab=call-ai", null],
+      ["Company", "/organisation?tab=company", null],
+      ["Plan & billing", "/settings/plan", null],
+    ],
+  ]);
+  expect(
+    hub
+      ?.querySelector('a[data-place="organisation"]')
+      ?.getAttribute("aria-label"),
+  ).toBe("Organisation overview");
+  // Insights is one of Team's sections now, lit on its page.
+  const insights = render("insights");
+  expect(ribbon(insights).find(([label]) => label === "Team")?.[2]).toBe(
+    "true",
+  );
+  const [, rows] = panelPages(insights) as [string, string[][]];
+  expect(rows.filter((row) => row[2] === "page")).toEqual([
+    ["Insights", "/organisation/insights", "page"],
+  ]);
 });

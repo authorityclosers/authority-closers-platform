@@ -28,14 +28,18 @@ const HYPHEN =
 export function BrandLockup({
   href,
   markOnly = false,
+  prefetch,
 }: {
   href: string;
   markOnly?: boolean;
+  /** Off where the mark is always on screen (the sidebar's ribbon). */
+  prefetch?: false;
 }) {
   return (
     <Link
       className={`${styles.brand}${markOnly ? ` ${styles.markOnly}` : ""}`}
       href={href}
+      prefetch={prefetch}
       aria-label="Sales X-Ray home"
     >
       <BrandMark markOnly={markOnly} />

@@ -83,41 +83,6 @@
   transition: opacity 120ms ease;
 }
 
-.logoExpandBtn {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--lx-ink);
-  cursor: pointer;
-  opacity: 0;
-  transition:
-    opacity 120ms ease,
-    background-color 120ms ease;
-  z-index: 2;
-}
-
-.collapsed .logoSlot:hover .logoExpandBtn,
-.collapsed .logoSlot:focus-within .logoExpandBtn {
-  opacity: 1;
-  background: var(--lx-sunken);
-}
-
-.collapsed .logoSlot:hover > :first-child,
-.collapsed .logoSlot:focus-within > :first-child {
-  opacity: 0;
-}
-
-.logoExpandBtn:focus-visible {
-  outline: 2px solid var(--lx-teal);
-  outline-offset: 1px;
-  opacity: 1;
-}
-
 .stripNav {
   display: flex;
   flex-direction: column;
@@ -208,40 +173,6 @@
   margin-bottom: 18px;
   position: relative;
   width: 100%;
-}
-
-.collapseBtn {
-  display: flex;
-  width: var(--lx-control-compact-h, 32px);
-  height: var(--lx-control-compact-h, 32px);
-  min-width: var(--lx-control-compact-h, 32px);
-  min-height: var(--lx-control-compact-h, 32px);
-  flex-shrink: 0;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--lx-line);
-  border-radius: 6px;
-  background: var(--lx-surface);
-  color: var(--lx-muted);
-  cursor: pointer;
-  opacity: 1 !important;
-  box-shadow: var(--lx-shadow-1);
-  transition:
-    opacity 140ms ease,
-    background-color 140ms ease,
-    color 140ms ease,
-    border-color 140ms ease;
-}
-
-.collapseBtn:hover {
-  background: var(--lx-sunken);
-  color: var(--lx-ink);
-  border-color: var(--lx-line-strong);
-}
-
-.collapseBtn:focus-visible {
-  outline: 2px solid var(--lx-teal);
-  outline-offset: 1px;
 }
 
 /* Workspace switcher */
@@ -1242,7 +1173,8 @@
     min-width 260ms cubic-bezier(0.2, 0.7, 0.2, 1),
     padding 260ms cubic-bezier(0.2, 0.7, 0.2, 1),
     opacity 180ms ease,
-    border-color 260ms ease;
+    border-color 260ms ease,
+    visibility 0s;
 }
 
 /* The panel clips its contents while it slides, so text never rewraps. */
@@ -1253,10 +1185,22 @@
 .collapsed .panel,
 :global(html[data-sx-sidebar="collapsed"]) .panel {
   border-right: 1px solid transparent;
+  /* Gone once it has slid shut, so nothing in it is drawn or measured at
+     zero width; it opens at once (the base rule has no delay). */
+  visibility: hidden;
+  transition:
+    width 260ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    min-width 260ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    padding 260ms cubic-bezier(0.2, 0.7, 0.2, 1),
+    opacity 180ms ease,
+    border-color 260ms ease,
+    visibility 0s linear 260ms;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .panel {
+  .panel,
+  .collapsed .panel,
+  :global(html[data-sx-sidebar="collapsed"]) .panel {
     transition: none;
   }
 }
@@ -1495,20 +1439,6 @@
 .workspaceSub {
   font-size: 12px;
 }
-.collapseBtn {
-  width: var(--lx-control-compact-h, 32px);
-  height: var(--lx-control-compact-h, 32px);
-  min-width: var(--lx-control-compact-h, 32px);
-  min-height: var(--lx-control-compact-h, 32px);
-  border-color: transparent;
-  border-radius: 8px;
-  background: transparent;
-  box-shadow: none;
-}
-.collapseBtn:hover {
-  border-color: var(--lx-line);
-  background: var(--lx-surface);
-}
 .panelSearch {
   min-height: var(--lx-control-compact-h, 32px);
   height: auto;
@@ -1553,8 +1483,7 @@
 
 @media (pointer: coarse) {
   .toggle,
-  .stripBtn,
-  .collapseBtn {
+  .stripBtn {
     width: var(--lx-row-min-h, 44px);
     height: var(--lx-row-min-h, 44px);
     min-width: var(--lx-row-min-h, 44px);
@@ -1610,6 +1539,26 @@
 .stripBtn[aria-expanded="true"] {
   background: var(--lx-teal-soft);
   color: var(--lx-teal);
+}
+
+/* The panel's toggle (orchestrator, 26 Oct 2026): a plain strip button in
+   both states, with no browser border; its aria-expanded says the panel is
+   open, not that a menu is, so it never wears the open-menu tint. */
+.stripBtn.panelToggle {
+  border: 0;
+  padding: 0;
+  font: inherit;
+}
+
+.stripBtn.panelToggle[aria-expanded="true"] {
+  background: transparent;
+  color: var(--lx-ink-3);
+}
+
+.stripBtn.panelToggle:hover,
+.stripBtn.panelToggle[aria-expanded="true"]:hover {
+  background: var(--lx-sunken);
+  color: var(--lx-ink);
 }
 @keyframes news-pop {
   from {
@@ -2043,170 +1992,6 @@
   }
 }
 
-/* ---------- One sidebar (slice 9 of the new map, 22 Oct 2026) ----------
-   Open, the icon rail and the panel draw as one 248 px sidebar: where you
-   work, then the places with their names, search, recent calls, and the bell
-   and your account at the foot (Linear's model). Collapsed, the 64 px icon
-   rail stays as it was, with its hover labels. The rail's names are hidden
-   inline (see RAIL_NAME_STYLE), so showing them here needs !important. */
-@media (min-width: 900px) {
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .sidebar {
-    flex-direction: column;
-    width: 248px;
-    background: var(--lx-paper-2);
-    box-shadow: inset -0.5px 0 0 var(--sx-hairline);
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .iconStrip,
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .panel {
-    display: contents;
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripTop {
-    display: none;
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .panelHeader {
-    order: 1;
-    box-sizing: border-box;
-    gap: 2px;
-    margin: 0;
-    padding: 12px 12px 10px;
-  }
-
-  /* Drawn at 28 px so the name has the room; on a touch screen an unseen
-     edge makes the target 44 px. */
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .collapseBtn {
-    position: relative;
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
-  }
-
-  @media (pointer: coarse) {
-    :global(html:not([data-sx-sidebar="collapsed"]))
-      .shell:not(.collapsed)
-      .collapseBtn::before {
-      position: absolute;
-      inset: -8px;
-      content: "";
-    }
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripNav {
-    order: 2;
-    display: grid;
-    gap: 2px;
-    box-sizing: border-box;
-    margin: 0;
-    padding: 0 12px;
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .panelSearch {
-    order: 3;
-    box-sizing: border-box;
-    width: auto;
-    margin: 14px 12px 4px;
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .recentsSection {
-    order: 4;
-    box-sizing: border-box;
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-x: hidden;
-    overflow-y: auto;
-    padding: 0 12px;
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .panelSpacer {
-    order: 5;
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripBottom {
-    order: 6;
-    flex-direction: row;
-    gap: 4px;
-    box-sizing: border-box;
-    margin: 0;
-    padding: 8px 12px 12px;
-    border-top: 0.5px solid var(--sx-hairline);
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripBtn {
-    box-sizing: border-box;
-    width: 100%;
-    height: 36px;
-    justify-content: flex-start;
-    gap: 10px;
-    padding: 0 10px;
-    border-radius: 10px;
-    color: var(--lx-ink-3);
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripBtnActive {
-    color: var(--lx-ink);
-  }
-
-  /* The foot: the bell at its own size, then your account. */
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripBottom
-    > .stripBtn {
-    flex: 1 1 auto;
-    width: auto;
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripBtn
-    > span:last-child:not(.railPill) {
-    position: static !important;
-    width: auto !important;
-    height: auto !important;
-    margin: 0 !important;
-    overflow: hidden !important;
-    clip-path: none !important;
-    font-size: 14px;
-    font-weight: 550;
-    text-overflow: ellipsis;
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripBtnActive
-    > span:last-child:not(.railPill) {
-    font-weight: 650;
-  }
-}
-
 /* ---------- Large title and icon weights (Liquid Glass polish) ----------
    Phones: the page's large title shrinks to the bar's size once the page
    scrolls, and the bar's hairline appears (iOS's scroll edge); the bar
@@ -2265,91 +2050,363 @@
   }
 }
 
-/* All leads under Leads (owner, 23 Oct 2026: "All leads one tap from
-   anywhere"): a second line in the open sidebar, its icon under Leads' name
-   like a tree; the 64 px rail leaves it out. */
-.stripSub {
-  display: none;
-}
-
-@media (min-width: 900px) {
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripSub {
-    display: flex;
-    height: 32px;
-    /* The text lines up with Leads' label: its 10px inset, 20px icon and
-       10px gap. */
-    padding-inline-start: 40px;
-    color: var(--sx-muted);
-    font-size: var(--sx-text-sm);
-    font-weight: 500;
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripSub[aria-current="page"] {
-    color: var(--sx-accent-ink, var(--sx-accent));
-    font-weight: 650;
-  }
-}
-
-/* ---------- Groups (owner, 25 Oct 2026: Pulse's sidebar) ----------
-   A group adds no box of its own. Collapsed, its title is a short hairline
-   between the icons (none above the first group); open, the title is a
-   small heading over its places, and rows are Pulse's 32 px. */
-.stripGroup {
-  display: contents;
-}
-
-.stripGroupTitle {
-  display: block;
-  flex: none;
-  width: 24px;
-  height: 1px;
-  overflow: hidden;
-  background: var(--lx-line);
-  color: transparent;
-  font-size: 0;
-}
-
-.stripGroupTitle[data-first] {
-  display: none;
-}
-
-@media (min-width: 900px) {
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripGroupTitle {
-    display: block;
-    width: auto;
-    height: auto;
-    padding: 14px 10px 4px;
-    background: none;
-    color: var(--sx-muted);
-    font-size: var(--sx-text-xs);
-    font-weight: 650;
-    line-height: 16px;
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripGroupTitle[data-first] {
-    padding-top: 2px;
-  }
-
-  :global(html:not([data-sx-sidebar="collapsed"]))
-    .shell:not(.collapsed)
-    .stripNav
-    .stripBtn {
-    height: 32px;
-  }
-}
-
 /* Phones: the top bar's icons sit close, so the title keeps its room
    (owner, 26 Oct 2026). */
 @media (max-width: 480px) {
   .barActions {
     gap: 4px;
+  }
+}
+
+/* ---------- Ribbon and panel (owner, dev #8, 26 Oct 2026) ----------
+   Pulse's two parts in place of one long list ("cluttered, no clean
+   distinctions"): a 60 px ribbon of areas, each an icon over its name, the
+   current one in a soft accent square that glides between them; beside it a
+   232 px panel with only that area's pages. Collapsing hides the panel at
+   once (its width never animates: Pulse found it stutters) and opening
+   fades it in; the ribbon stays. One hairline parts the two. */
+@media (min-width: 900px) {
+  .sidebar {
+    background: var(--lx-paper-2);
+    box-shadow: inset -0.5px 0 0 var(--sx-hairline);
+  }
+
+  .iconStrip {
+    width: 60px;
+    min-width: 60px;
+    padding: 12px 0;
+    background: transparent;
+    box-shadow: inset -0.5px 0 0 var(--sx-hairline);
+  }
+
+  .stripNav {
+    gap: 6px;
+    margin-top: 14px;
+  }
+
+  .area {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    width: 56px;
+    padding: 2px 0 4px;
+    border-radius: 12px;
+    color: var(--lx-ink-3);
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* The name comes first for screen readers ("Work, 3 late"); the icon is
+     drawn above it. */
+  .areaIcon {
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    order: -1;
+    place-items: center;
+    width: 40px;
+    height: 32px;
+    border-radius: 10px;
+    transition:
+      background-color var(--sx-dur-fast) var(--sx-ease-out),
+      color var(--sx-dur-fast) var(--sx-ease-out),
+      transform var(--sx-dur-base) var(--sx-spring);
+  }
+
+  .area:hover .areaIcon {
+    background: var(--sx-fill);
+    color: var(--lx-ink);
+    transform: scale(1.06);
+  }
+
+  .area:active .areaIcon {
+    transform: scale(0.94);
+  }
+
+  .areaActive .areaIcon,
+  .areaActive:hover .areaIcon {
+    background: transparent;
+    color: var(--sx-accent);
+  }
+
+  .area .railPill {
+    background: var(--sx-accent-soft);
+  }
+
+  .areaActive .railPill {
+    opacity: 1;
+    transform: none;
+  }
+
+  .areaLabel {
+    color: var(--sx-muted);
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 13px;
+  }
+
+  .areaActive .areaLabel {
+    color: var(--sx-accent);
+  }
+
+  .area:focus-visible {
+    outline: none;
+    box-shadow: var(--sx-focus-ring);
+  }
+
+  .panel {
+    width: 232px;
+    min-width: 232px;
+    padding: 10px 10px 8px;
+    border-right: 0;
+    background: transparent;
+    box-shadow: none;
+    transition: opacity 160ms var(--sx-ease-out);
+  }
+
+  .panel > * {
+    min-width: 0;
+  }
+
+  .panelHeader {
+    margin-bottom: 8px;
+  }
+
+  .searchPill {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    height: 32px;
+    box-sizing: border-box;
+    margin: 0 0 6px;
+    padding: 0 6px 0 11px;
+    border: 0;
+    border-radius: 999px;
+    background: var(--sx-fill);
+    color: var(--sx-muted);
+    font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+    transition:
+      background-color var(--sx-dur-fast) var(--sx-ease-out),
+      color var(--sx-dur-fast) var(--sx-ease-out);
+  }
+
+  .searchPill:hover {
+    background: var(--sx-fill-strong);
+    color: var(--lx-ink);
+  }
+
+  .searchPill kbd {
+    margin-left: auto;
+    padding: 1px 7px;
+    border-radius: 999px;
+    background: var(--lx-surface);
+    color: var(--sx-muted);
+    font: inherit;
+    font-size: 11px;
+    line-height: 18px;
+  }
+
+  .searchPill:focus-visible {
+    outline: none;
+    box-shadow: var(--sx-focus-ring);
+  }
+
+  .panelNew {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 32px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    border-radius: 9px;
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent);
+    font-size: 13.5px;
+    font-weight: 650;
+    text-decoration: none;
+    transition:
+      background-color var(--sx-dur-fast) var(--sx-ease-out),
+      transform var(--sx-dur-base) var(--sx-spring);
+  }
+
+  .panelNew:hover {
+    background: color-mix(in oklab, var(--sx-accent) 18%, transparent);
+  }
+
+  .panelNew:active {
+    transform: scale(0.98);
+  }
+
+  .panelNew[aria-current="page"] {
+    background: color-mix(in oklab, var(--sx-accent) 22%, transparent);
+  }
+
+  .panelNew:focus-visible {
+    outline: none;
+    box-shadow: var(--sx-focus-ring);
+  }
+
+  .areaNav {
+    display: grid;
+    gap: 1px;
+    margin-top: 14px;
+  }
+
+  .areaTitle {
+    margin: 0 0 4px;
+    padding: 0 10px;
+    color: var(--lx-ink);
+    font-size: 15px;
+    font-weight: 650;
+    line-height: 20px;
+  }
+
+  .place {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 32px;
+    box-sizing: border-box;
+    padding: 0 10px;
+    border-radius: 9px;
+    color: var(--lx-ink-2, var(--lx-ink));
+    font-size: 13.5px;
+    font-weight: 500;
+    text-decoration: none;
+    animation: place-in var(--sx-dur-base) var(--sx-ease-out) both;
+    animation-delay: calc(var(--i, 0) * 24ms);
+    transition:
+      background-color var(--sx-dur-fast) var(--sx-ease-out),
+      color var(--sx-dur-fast) var(--sx-ease-out);
+  }
+
+  .place svg {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--sx-muted);
+    transition: color var(--sx-dur-fast) var(--sx-ease-out);
+  }
+
+  .place:hover {
+    background: var(--sx-fill);
+  }
+
+  .place[aria-current="page"] {
+    background: var(--sx-accent-soft);
+    color: var(--sx-accent);
+    font-weight: 600;
+  }
+
+  .place[aria-current="page"] svg {
+    color: currentColor;
+  }
+
+  .place:focus-visible,
+  .placeSub:focus-visible {
+    outline: none;
+    box-shadow: var(--sx-focus-ring);
+  }
+
+  /* Text only, lined up with its page's name: 10 px inset, 16 px icon,
+     10 px gap. Lit in the accent, with no fill. */
+  .placeSub {
+    display: flex;
+    align-items: center;
+    height: 27px;
+    box-sizing: border-box;
+    padding-inline: 36px 10px;
+    border-radius: 9px;
+    color: var(--sx-muted);
+    font-size: 12.5px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: color var(--sx-dur-fast) var(--sx-ease-out);
+  }
+
+  .placeSub:hover {
+    color: var(--lx-ink);
+  }
+
+  .placeSub[aria-current="page"] {
+    color: var(--sx-accent);
+    font-weight: 600;
+  }
+
+  @media (pointer: coarse) {
+    .place,
+    .panelNew,
+    .searchPill {
+      height: 44px;
+    }
+
+    .placeSub {
+      height: 40px;
+    }
+  }
+
+  /* Recent calls sit at the panel's foot, as Pulse pins them. */
+  .recentsSection {
+    margin-top: auto;
+    padding-top: 12px;
+  }
+
+  .panelSpacer {
+    display: none;
+  }
+
+  /* While the panel shows, its search and New analysis stand in for the
+     top bar's; collapsed, the top bar's come back. */
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .commandButton,
+  :global(html:not([data-sx-sidebar="collapsed"]))
+    .shell:not(.collapsed)
+    .newAnalysisButton {
+    display: none;
+  }
+}
+
+@keyframes place-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .place {
+    animation: none;
+  }
+
+  .areaIcon,
+  .panelNew,
+  .panel {
+    transition: none;
+  }
+}
+
+/* The shell's prefetch-only links (lightbox-shell.tsx): on screen, so Next
+   prefetches them, but one clipped pixel in a corner with nothing to see or
+   press; computers only, as the sidebar is. */
+.prefetchOnly {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .prefetchOnly {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    display: block;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    pointer-events: none;
   }
 }
