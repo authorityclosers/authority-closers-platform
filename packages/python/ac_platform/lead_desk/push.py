@@ -53,7 +53,7 @@ from fastapi import FastAPI
 from sqlalchemy import and_, delete, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ac_platform.lead_desk import digest_push, hours, nudge_push, task_push
+from ac_platform.lead_desk import digest_push, hours, nudge_push, reassign, task_push
 from ac_platform.lead_desk.contracts import PushConfig
 from ac_platform.lead_desk.meetings import REMIND_BEFORE
 from ac_platform.lead_desk.models import Lead, LeadDevice, LeadMeeting
@@ -453,7 +453,8 @@ async def run_hours_release(
     *,
     first_delay: int = _HOURS_TICK,
 ) -> None:
-    """Every minute: leads that waited for work hours go out once work starts."""
+    """Every minute: leads that waited for work hours go out once work starts, and new leads
+    nobody called in time move on where auto-reassign is on."""
     with suppress(TimeoutError):
         await asyncio.wait_for(stop.wait(), timeout=first_delay)
     while not stop.is_set():
@@ -466,6 +467,10 @@ async def run_hours_release(
                     released = await hours.release_held(database, datetime.now(UTC))
                     if released:
                         log.info("lead desk gave out %d leads at the start of work", released)
+                    # Auto-reassign on its own, not only on "Check now" (27 Oct 2026).
+                    moved = await reassign.reassign_due(database, datetime.now(UTC))
+                    if moved:
+                        log.info("lead desk moved %d leads nobody called in time", moved)
         except Exception:  # noqa: BLE001 - the loop must survive a bad pass
             log.warning("lead desk work-hours release failed")
         with suppress(TimeoutError):
