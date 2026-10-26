@@ -757,8 +757,14 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
         else None
     )
 
+    def pulse_on() -> None:
+        """App call uploads are off with the rest of Pulse until it is set up here."""
+        if not ctx.settings.pulse_configured:
+            raise ApiError(404, "pulse_off", app_uploads.PULSE_OFF)
+
     @router.post("/calls")
     async def upload_call(request: Request) -> JSONResponse:
+        pulse_on()
         async with open_reader(request) as reader:
             reader.require("calls:write")
             app = await reader.app_name()
@@ -797,6 +803,7 @@ def install_integrations_api(application: FastAPI, ctx: RouteContext) -> None:
 
     @router.get("/calls/uploads/{upload_id}")
     async def upload_state(upload_id: UUID, request: Request) -> JSONResponse:
+        pulse_on()
         async with open_reader(request) as reader:
             reader.require("calls:write")
             found = await app_uploads.status(

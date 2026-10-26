@@ -14,6 +14,10 @@ session, and a recording is personal data the person should see before it is pro
 The app must also state that the people on the call know it is recorded
 (``X-Recording-Consent: participants-informed``).
 
+All of it is off, with the rest of Pulse, until Pulse is set up here (AC_PULSE_ISSUER,
+AC_PULSE_CLIENT_ID and AC_PULSE_CLIENT_SECRET; orchestrator, 27 Oct 2026): every route below
+and POST /v1/api/calls answer 404 "Pulse isn't set up here.", and no inbox shows.
+
 Session routes (the person's own uploads in the selected workspace):
 
 - GET  /v1/sales-xray/app-uploads                  waiting recordings
@@ -304,6 +308,10 @@ class ImportedCommand(BaseModel):
     submission_id: UUID
 
 
+# What every Pulse route answers while Pulse isn't set up (pulse/http.py says the same).
+PULSE_OFF = "Pulse isn't set up here."
+
+
 def install_app_uploads_http(application: FastAPI, ctx: RouteContext) -> None:
     settings = ctx.settings
     root = inbox_root(settings.sales_xray_storage_root)
@@ -316,6 +324,8 @@ def install_app_uploads_http(application: FastAPI, ctx: RouteContext) -> None:
             request.url.hostname != settings.sales_xray_app_url.host
         ):
             raise HTTPException(404, "Not here.", headers=PRIVATE)
+        if not settings.pulse_configured:
+            raise HTTPException(404, PULSE_OFF, headers=PRIVATE)
         if write:
             try:
                 require_safe_origin(request, settings)
@@ -531,6 +541,7 @@ __all__ = [
     "UploadRefused",
     "expire",
     "inbox_root",
+    "PULSE_OFF",
     "install_app_uploads_http",
     "receive",
     "safe_file_name",

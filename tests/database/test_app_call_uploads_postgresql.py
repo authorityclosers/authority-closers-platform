@@ -18,6 +18,7 @@ from uuid import uuid4
 
 import httpx
 import pytest
+from pydantic import SecretStr
 from sqlalchemy import update
 
 from ac_platform.http.routes import RouteContext
@@ -35,6 +36,12 @@ from tests.database.test_integrations_platform_apps_postgresql import (
 from tests.database.test_lead_desk_postgresql import _organisation
 
 AUDIO = b"ID3" + bytes(range(256)) * 40  # a fictional file; never decoded here
+# Pulse set up here (fictional): app call uploads are on only then.
+PULSE_ON = {
+    "pulse_issuer": "https://pulse.example.test",
+    "pulse_client_id": "sx-test",
+    "pulse_client_secret": SecretStr("fictional-secret-0000"),
+}
 
 
 @pytest.fixture
@@ -73,6 +80,7 @@ def test_a_recording_from_pulse_waits_for_its_person(postgres_harness: Any, tmp_
                 update={
                     "public_learner_tenant_id": uuid4(),
                     "sales_xray_storage_root": str(tmp_path / "storage"),
+                    **PULSE_ON,
                 }
             )
             _install(setup, settings)
@@ -203,6 +211,67 @@ def test_a_recording_from_pulse_waits_for_its_person(postgres_harness: Any, tmp_
                 assert (
                     await person.get(f"/v1/sales-xray/app-uploads/{upload['id']}/file")
                 ).status_code == 410
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_app_recordings_are_off_until_pulse_is_set_up(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Without AC_PULSE_*: an app may still be granted calls:write, but sending a
+    recording, reading one's state and the person's inbox all answer as the rest of Pulse
+    does when it is off, so no "From Pulse" inbox shows."""
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            settings = setup.settings.model_copy(
+                update={
+                    "public_learner_tenant_id": uuid4(),
+                    "sales_xray_storage_root": str(tmp_path / "storage"),
+                }
+            )
+            assert not settings.pulse_configured
+            _install(setup, settings)
+            install_app_uploads_http(
+                setup.app, RouteContext(settings, setup.require_actor, setup.sessions)
+            )
+            transport = httpx.ASGITransport(app=setup.app)
+            async with (
+                httpx.AsyncClient(transport=transport, base_url=ORIGIN) as person,
+                httpx.AsyncClient(transport=transport, base_url=ORIGIN) as server,
+            ):
+                person.cookies.set(setup.settings.session_cookie_name, setup.token)
+                pulse = (
+                    await server.post(
+                        "/v1/oauth/register",
+                        json={"client_name": "Pulse", "redirect_uris": [PULSE_RETURN]},
+                    )
+                ).json()
+                seen, tokens, _ = await _connect(
+                    person, server, pulse, PULSE_RETURN, "calls:write leads:read"
+                )
+                assert "calls:write" in {scope["key"] for scope in seen["scopes"]}
+                bearer = f"Bearer {tokens['access_token']}"
+                off = {"error": {"code": "pulse_off", "message": "Pulse isn't set up here."}}
+                sent = await server.post(
+                    "/v1/api/calls", content=AUDIO, headers=_headers(AUDIO, Authorization=bearer)
+                )
+                assert (sent.status_code, sent.json()) == (404, off)
+                state = await server.get(
+                    f"/v1/api/calls/uploads/{uuid4()}", headers={"Authorization": bearer}
+                )
+                assert (state.status_code, state.json()) == (404, off)
+                inbox = await person.get("/v1/sales-xray/app-uploads")
+                assert inbox.status_code == 404
+                assert inbox.json()["detail"] == "Pulse isn't set up here."
+                # Everything else the connection may do still answers.
+                assert (
+                    await server.get("/v1/api/leads", headers={"Authorization": bearer})
+                ).status_code == 200
         finally:
             await setup.engine.dispose()
 
