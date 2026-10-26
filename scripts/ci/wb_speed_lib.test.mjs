@@ -136,8 +136,17 @@ test("the report lists every screen and action at each rate, and what is slow", 
       rate: 6,
       ms: 15000,
       result: "timeout",
-      lcp: 2600,
+      lcp: 15000,
+      settled: 15200,
       tbt: 900,
+    },
+    {
+      screen: "leads",
+      action: "sheet_open",
+      rate: 6,
+      ms: 700,
+      result: "settled",
+      control: "button.workspace-switcher__trigger",
     },
   ]);
   const text = speedMarkdown({
@@ -148,7 +157,11 @@ test("the report lists every screen and action at each rate, and what is slow", 
   });
   assert.match(
     text,
-    /\| Leads, All \| opening the screen \| 600 \| 1900 \| 15000\+ \| 2600 \| 900 \| \*\*for the builder\*\* \|/,
+    /\| Leads, All \| opening the screen \| 600 \| 1900 \| 15000\+ \| 15200 \| 900 \| \*\*for the builder\*\* \|/,
+  );
+  assert.match(
+    text,
+    /\| Leads, All \| opening a sheet \(button\.workspace-switcher__trigger\) \| – \| – \| 700 \|/,
   );
   assert.match(
     text,

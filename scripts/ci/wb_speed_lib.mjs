@@ -87,15 +87,20 @@ export function summarize(measures) {
     let row = rows.get(key);
     if (!row)
       rows.set(key, (row = { screen: m.screen, action: m.action, rates: {} }));
+    // The control a tap hit, as the code names it (the same shell button may answer on every screen).
+    if (m.control && !row.control) row.control = m.control;
     const at = (row.rates[m.rate] ??= {
       ms: [],
       lcp: [],
       tbt: [],
+      settled: [],
       results: [],
     });
     if (m.result !== "no_change" && m.result !== "failed") at.ms.push(m.ms);
     if (m.lcp !== undefined && m.lcp !== null) at.lcp.push(m.lcp);
     if (m.tbt !== undefined && m.tbt !== null) at.tbt.push(m.tbt);
+    if (m.settled !== undefined && m.settled !== null)
+      at.settled.push(m.settled);
     at.results.push(m.result);
   }
   return [...rows.values()].map((row) => ({
@@ -108,6 +113,7 @@ export function summarize(measures) {
           runs: at.ms.length,
           lcp: median(at.lcp),
           tbt: median(at.tbt),
+          settled_ms: median(at.settled),
           settled: at.results.filter((r) => r === "settled").length,
           capped: at.results.filter((r) => r === "timeout").length,
           no_change: at.results.filter((r) => r === "no_change").length,
@@ -159,11 +165,12 @@ export function speedMarkdown(run) {
       (run.source_sha
         ? ` for \`${String(run.source_sha).slice(0, 12)}\``
         : "") +
-      ". Load: from navigation to the screen settling; a tap: from the tap to the screen settling (as telemetry measures phones). " +
+      ". Opening a screen: its LCP, when the main content painted (settled and blocking time beside it); a tap: from the " +
+      "tap to the screen settling, as telemetry measures phones (the control tapped in brackets). " +
       `Slow at 6x: a load over ${LIMITS.load.slow} ms or a tap over ${LIMITS.tap.slow} ms; for the builder over ` +
       `${LIMITS.load.builder} and ${LIMITS.tap.builder} ms.`,
     "",
-    "| screen | what | 1x ms | 4x ms | 6x ms | 6x LCP | 6x blocking | |",
+    "| screen | what | 1x ms | 4x ms | 6x ms | 6x settled | 6x blocking | |",
     "|---|---|---|---|---|---|---|---|",
   ];
   for (const row of rows) {
@@ -173,8 +180,9 @@ export function speedMarkdown(run) {
       (f) => f.screen === row.screen && f.action === row.action,
     );
     lines.push(
-      `| ${label} | ${ACTION_WORDS[row.action] ?? row.action} | ${cell(row.rates[1])} | ${cell(row.rates[4])} | ` +
-        `${cell(six)} | ${six?.lcp ?? "–"} | ${six?.tbt ?? "–"} | ${flag ? (flag.severity === "builder" ? "**for the builder**" : "slow") : ""} |`,
+      `| ${label} | ${ACTION_WORDS[row.action] ?? row.action}${row.control ? ` (${row.control})` : ""} | ` +
+        `${cell(row.rates[1])} | ${cell(row.rates[4])} | ` +
+        `${cell(six)} | ${six?.settled_ms ?? "–"} | ${six?.tbt ?? "–"} | ${flag ? (flag.severity === "builder" ? "**for the builder**" : "slow") : ""} |`,
     );
   }
   lines.push("", `#### Slow on a low-end phone (${findings.length})`, "");
