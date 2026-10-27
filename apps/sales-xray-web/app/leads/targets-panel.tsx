@@ -9,7 +9,7 @@
  * someone turned them off (owner, 26 Oct 2026, report #23).
  */
 
-import { BellRing, Target } from "lucide-react";
+import { BellRing, ChevronDown, Target } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { METRIC_WORDS, type Metric } from "../dashboard/my-day-client";
@@ -240,36 +240,46 @@ function Nudges({
   const skipped = team.reps.filter((rep) => offFor.includes(rep.person_id));
   return (
     <div className={styles.nudges}>
-      <StateSwitch
-        icon={<BellRing size={20} />}
-        label="Nudges and alerts"
-        meaning="A seller who falls behind their targets, or leaves due work waiting, gets an urgent alert back to work, in work hours only."
-        onText="On: sellers who fall behind get a nudge"
-        offText="Off: nobody gets a nudge"
-        note={
-          skipped.length
-            ? `Not for ${skipped.map((rep) => first(rep.name)).join(", ")}`
-            : undefined
-        }
-        chipOn="Nudges on"
-        chipOff="Nudges off"
-        on={on}
-        busy={busy}
-        confirmOff={{
-          title: "Turn nudges off?",
-          points: [
-            "Sellers who fall behind get no alert back to work.",
-            "New-lead and due-call alerts still come.",
-            "Turn them back on here any time.",
-          ],
-          confirm: "Turn nudges off",
-          keep: "Keep nudges on",
-        }}
-        onChange={(next) => save(next, offFor)}
-      />
+      <div className={styles.switchArea}>
+        <StateSwitch
+          icon={<BellRing size={20} />}
+          label="Nudges and alerts"
+          meaning="A seller who falls behind their targets, or leaves due work waiting, gets an urgent alert back to work, in work hours only."
+          onText="On: sellers who fall behind get a nudge"
+          offText="Off: nobody gets a nudge"
+          note={
+            skipped.length
+              ? `Not for ${skipped.map((rep) => first(rep.name)).join(", ")}`
+              : undefined
+          }
+          chipOn="Nudges on"
+          chipOff="Nudges off"
+          on={on}
+          busy={busy}
+          confirmOff={{
+            title: "Turn nudges off?",
+            points: [
+              "Sellers who fall behind get no alert back to work.",
+              "New-lead and due-call alerts still come.",
+              "Turn them back on here any time.",
+            ],
+            confirm: "Turn nudges off",
+            keep: "Keep nudges on",
+          }}
+          onChange={(next) => save(next, offFor)}
+        />
+      </div>
       {on ? (
         <details className={styles.who}>
-          <summary>Who gets them</summary>
+          <summary>
+            <span>Who gets them</span>
+            <span className={styles.recipients}>
+              {skipped.length
+                ? `${team.reps.length - skipped.length} of ${team.reps.length} sellers`
+                : "All sellers"}
+              <ChevronDown size={16} aria-hidden="true" />
+            </span>
+          </summary>
           <div className={styles.chips} aria-label="Nudges for">
             {team.reps.map((rep) => {
               const off = offFor.includes(rep.person_id);
