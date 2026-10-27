@@ -1,0 +1,72 @@
+(credential_query_redaction) {
+	request>uri query {
+		replace code REDACTED
+		replace state REDACTED
+		replace access_token REDACTED
+		replace refresh_token REDACTED
+		replace id_token REDACTED
+		replace client_secret REDACTED
+		replace token REDACTED
+	}
+}
+
+{
+	# Route switches reload this config through a unix socket private to the
+	# container (no TCP listener). A reload swaps the config atomically and lets
+	# in-flight requests finish, so a switch never restarts the router.
+	admin unix//run/caddy/admin.sock
+	auto_https off
+	persist_config off
+	# Runtime HTTP errors can contain the original request URI too. The site
+	# access logger below is a separate destination and cannot redact these.
+	log default {
+		format filter {
+			import credential_query_redaction
+			wrap json
+		}
+	}
+}
+
+(base_security_headers) {
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+	}
+}
+
+:8080 {
+	encode zstd gzip
+
+	@health path /healthz
+	handle @health {
+		import base_security_headers
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		respond `{"status":"ok","service":"authority-closers-foundation"}` 200
+	}
+
+	# Each environment is selected by a release-owned host symlink. Application
+	# cutover changes only its selector, validates this complete config, and can
+	# restore the prior selector before any database writer is exposed.
+	import /etc/caddy/application-routes/production.caddy
+	import /etc/caddy/application-routes/staging.caddy
+
+	handle {
+		import base_security_headers
+		header Cache-Control "no-store"
+		header Content-Security-Policy "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'"
+		respond "Authority Closers infrastructure foundation is online.\n" 200
+	}
+
+	log {
+		output stdout
+		format filter {
+			import credential_query_redaction
+			wrap json
+		}
+	}
+}

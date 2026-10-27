@@ -11,7 +11,10 @@
 }
 
 {
-	admin off
+	# Route switches reload this config through a unix socket private to the
+	# container (no TCP listener). A reload swaps the config atomically and lets
+	# in-flight requests finish, so a switch never restarts the router.
+	admin unix//run/caddy/admin.sock
 	auto_https off
 	persist_config off
 	# Runtime HTTP errors can contain the original request URI too. The site

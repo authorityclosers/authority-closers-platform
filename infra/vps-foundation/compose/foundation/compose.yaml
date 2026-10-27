@@ -36,6 +36,9 @@ services:
       - /config:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000
       - /data:rw,noexec,nosuid,nodev,size=32m,uid=1000,gid=1000
       - /tmp:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000
+      # Caddy's admin socket (Caddyfile `admin unix//run/caddy/admin.sock`):
+      # only the container's own user can reach it, through `docker exec`.
+      - /run/caddy:rw,noexec,nosuid,nodev,size=1m,uid=1000,gid=1000,mode=0700
     networks:
       edge:
         ipv4_address: 172.18.0.2
