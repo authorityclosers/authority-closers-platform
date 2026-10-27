@@ -6,11 +6,20 @@
  * "pathetic"). The ⋯ beside the stage tabs opens it, on phones and computers.
  */
 
-import { FlaskConical, Import, Plug, Route, UsersRound } from "lucide-react";
+import {
+  ChartNoAxesCombined,
+  FlaskConical,
+  Import,
+  Plug,
+  Route,
+  Split,
+  UsersRound,
+} from "lucide-react";
 import type { ReactNode } from "react";
 
 import { ActionList, ActionRow } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
+import styles from "./leads-menu.module.css";
 
 export type LeadsMenuItem = {
   key: string;
@@ -21,11 +30,19 @@ export type LeadsMenuItem = {
 
 const ICONS: Record<string, ReactNode> = {
   team: <UsersRound size={20} />,
+  share: <Split size={20} />,
+  numbers: <ChartNoAxesCombined size={20} />,
   sources: <Plug size={20} />,
   stages: <Route size={20} />,
   import: <Import size={20} />,
   test: <FlaskConical size={20} />,
 };
+
+const GROUPS = [
+  { label: "Getting leads in", keys: ["sources", "import", "test"] },
+  { label: "Who works them", keys: ["team", "share"] },
+  { label: "Your pipeline", keys: ["stages", "numbers"] },
+];
 
 export function LeadsMenu({
   open,
@@ -38,17 +55,30 @@ export function LeadsMenu({
 }) {
   return (
     <Sheet open={open} onClose={onClose} title="Leads settings" wide="center">
-      <ActionList label="Leads settings">
-        {items.map((item) => (
-          <ActionRow
-            key={item.key}
-            icon={ICONS[item.key]}
-            title={item.label}
-            note={item.note}
-            onClick={item.onPick}
-          />
-        ))}
-      </ActionList>
+      <div className={styles.groups}>
+        {GROUPS.map((group) => {
+          const rows = group.keys.flatMap((key) =>
+            items.filter((item) => item.key === key),
+          );
+          if (!rows.length) return null;
+          return (
+            <section key={group.label} aria-label={group.label}>
+              <h3 className={styles.label}>{group.label}</h3>
+              <ActionList label={group.label}>
+                {rows.map((item) => (
+                  <ActionRow
+                    key={item.key}
+                    icon={ICONS[item.key]}
+                    title={item.label}
+                    note={item.note}
+                    onClick={item.onPick}
+                  />
+                ))}
+              </ActionList>
+            </section>
+          );
+        })}
+      </div>
     </Sheet>
   );
 }
