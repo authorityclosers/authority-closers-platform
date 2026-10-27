@@ -82,23 +82,34 @@ it("opens as a named modal sheet with its title, words and close button", async 
 });
 
 it("closes from the close button, Escape and a tap on the dimmed page", async () => {
-  for (const how of ["button", "escape", "scrim"] as const) {
-    const onClose = vi.fn();
-    const { dialog, root } = await mount(onClose);
-    await act(async () => {
-      if (how === "button")
-        dialog
-          .querySelector<HTMLButtonElement>('[aria-label="Close"]')!
-          .click();
-      if (how === "escape")
-        dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
-      if (how === "scrim") (dialog.firstElementChild as HTMLElement).click();
-    });
-    expect(onClose, how).toHaveBeenCalledOnce();
-    // It slides away first, then closes.
-    await vi.waitFor(() => expect(dialog.open, how).toBe(false));
-    expect(dialog.textContent, how).not.toContain("Sheet body");
-    await act(async () => root.unmount());
+  // The slide away ends on a timer: faked, so it ends at a known time inside
+  // act, never one a busy CI machine stretches past a wait (orchestrator, 27
+  // Oct 2026: Escape flaked once under load).
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    for (const how of ["button", "escape", "scrim"] as const) {
+      const onClose = vi.fn();
+      const { dialog, root } = await mount(onClose);
+      await act(async () => {
+        if (how === "button")
+          dialog
+            .querySelector<HTMLButtonElement>('[aria-label="Close"]')!
+            .click();
+        if (how === "escape")
+          dialog.dispatchEvent(new Event("cancel", { cancelable: true }));
+        if (how === "scrim") (dialog.firstElementChild as HTMLElement).click();
+      });
+      expect(onClose, how).toHaveBeenCalledOnce();
+      // It slides away first (at most 340 ms on a phone), then closes.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(400);
+      });
+      expect(dialog.open, how).toBe(false);
+      expect(dialog.textContent, how).not.toContain("Sheet body");
+      await act(async () => root.unmount());
+    }
+  } finally {
+    vi.useRealTimers();
   }
 });
 
