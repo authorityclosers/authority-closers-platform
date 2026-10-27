@@ -433,6 +433,15 @@ def test_no_main_reuses_only_exact_reviewed_bootstrap(tmp_path, monkeypatch):
     assert bundle.find_published(KEY, "foreign/project") is None
 
 
+def test_bootstrap_picks_its_identity_among_several_pins(tmp_path, monkeypatch):
+    pin, _, _, calls = pinned_bootstrap(tmp_path, monkeypatch)
+    other = dict(pin, identity="c" * 64, artifact_id=35, run_id=13)
+    bundle.BOOTSTRAP_FILE.write_text(json.dumps([other, pin]))
+    assert bundle.find_published(KEY, REPO) == pin
+    assert f"repos/{REPO}/actions/runs/13" not in calls
+    assert f"repos/{REPO}/actions/artifacts/35" not in calls
+
+
 @pytest.mark.parametrize(
     "damage", ["source", "run", "foreign", "pr", "workflow", "digest", "artifact", "review"]
 )
