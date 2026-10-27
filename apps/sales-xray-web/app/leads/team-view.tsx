@@ -56,6 +56,7 @@ import {
   readLimit,
 } from "./limit-field";
 import { phoneDot } from "./phone-setup-words";
+import { RoutingRules } from "./routing-rules";
 import styles from "./leads.module.css";
 
 const STAGE_ORDER = [
@@ -545,6 +546,8 @@ export function TeamView({
 
   return (
     <div className={styles.teamGrid}>
+      {/* Who gets which leads, first: the routing rules (Lead OS, 27 Oct 2026). */}
+      {rulesOnly ? <RoutingRules /> : null}
       {rulesOnly ? null : (
         <Tiles label="Team leads">
           <Kpi
@@ -782,6 +785,15 @@ export function TeamView({
             onChanged();
           }}
         />
+        {team.settings.strict_language === undefined ? null : (
+          <LanguagesPanel
+            team={team}
+            onSaved={(next) => {
+              setTeam(next);
+              onChanged();
+            }}
+          />
+        )}
         <WorkHoursPanel
           key={`${team.settings.revision}`}
           team={team}
@@ -843,6 +855,67 @@ export function TeamView({
         }}
       />
     </div>
+  );
+}
+
+/**
+ * Languages (Lead OS, 27 Oct 2026): a seller's languages are a preference, so
+ * a lead nobody free speaks to still goes to someone; strict, it waits for a
+ * manager to give it out. Saves at once, like auto-reassign.
+ */
+function LanguagesPanel({
+  team,
+  onSaved,
+}: {
+  team: Team;
+  onSaved: (team: Team) => void;
+}) {
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const strict = team.settings.strict_language === true;
+  const save = async (next: boolean) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      onSaved(
+        await saveSettings(team.settings.revision, {
+          auto_reassign: team.settings.auto_reassign,
+          reassign_minutes: team.settings.reassign_minutes,
+          strict_language: next,
+        }),
+      );
+    } catch (reason) {
+      setNote(
+        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Panel title="Languages" sub={strict ? "strict" : "preferred"}>
+      <div className={styles.form}>
+        <label className={styles.toggle}>
+          <input
+            type="checkbox"
+            checked={strict}
+            disabled={busy}
+            onChange={(event) => void save(event.target.checked)}
+          />
+          Only sellers who speak the lead&apos;s language
+        </label>
+        <p className={styles.hint}>
+          {strict
+            ? "If nobody free speaks it, the lead waits for a manager to give it out."
+            : "Languages are a preference. If nobody free speaks it, the lead still goes to someone."}
+        </p>
+        {note ? (
+          <p className={styles.hint} role="status">
+            {note}
+          </p>
+        ) : null}
+      </div>
+    </Panel>
   );
 }
 
