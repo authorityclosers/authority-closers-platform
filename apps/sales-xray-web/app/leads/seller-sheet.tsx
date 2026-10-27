@@ -76,6 +76,19 @@ const INDUSTRY_ICONS: Record<string, LucideIcon> = {
   solar: Sun,
 };
 
+/**
+ * A language as the server matches it (Lead OS, 27 Oct 2026: allocation knows
+ * English names and codes, not "हिन्दी"): a known language is saved by its
+ * English name, whatever script it was typed in; its chip still shows its own.
+ */
+export function savedLanguages(values: string[]): string[] {
+  const named = values.map(
+    (value) =>
+      LANGUAGES.find((item) => item.code === languageKey(value))?.name ?? value,
+  );
+  return [...new Set(named)];
+}
+
 const keyOf = (part: Part, value: string) =>
   part === "languages" ? languageKey(value) : placeKey(value);
 
@@ -469,7 +482,7 @@ export function SellerSheet({
         await saveRep(rep, {
           available,
           max_open: max,
-          languages: chosen.languages.slice(0, 12),
+          languages: savedLanguages(chosen.languages).slice(0, 12),
           areas: chosen.areas,
           interests: chosen.products,
         }),

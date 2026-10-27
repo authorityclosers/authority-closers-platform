@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { CallAiSettings } from "../call-ai/call-ai-client";
 import { resetBackCloseForTests } from "../ui/back-close";
 import type { RepView, Team } from "./leads-client";
-import { SellerSheet } from "./seller-sheet";
+import { SellerSheet, savedLanguages } from "./seller-sheet";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -265,4 +265,14 @@ it("still edits without the organisation's choices, and shows no fit", async () 
   expect(
     document.querySelector('[aria-label="More languages"]')?.textContent,
   ).toContain("English");
+});
+
+// Lead OS (27 Oct 2026): the server matches languages by English name or code,
+// so one typed in its own script before is saved by its English name.
+it("saves a language by its English name, whatever script it was typed in", () => {
+  expect(savedLanguages(["हिन्दी", "Hindi", "मराठी", "Konkani"])).toEqual([
+    "Hindi",
+    "Marathi",
+    "Konkani",
+  ]);
 });
