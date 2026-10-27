@@ -40,6 +40,7 @@ from ac_platform.lead_desk import (
     merging,
     push,
     simulation,
+    spool,
 )
 from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk import team as team_engine
@@ -989,6 +990,8 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
 
     application.include_router(router)
     push.attach(application, ctx.sessions, settings.environment)
+    # Leads a release's hold kept for later (lead_desk/spool.py), filed every minute.
+    spool.attach(application, ctx.sessions, settings.environment, app_url=app_url())
 
 
 async def _body(request: Request, limit: int) -> bytes:

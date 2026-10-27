@@ -11,6 +11,7 @@ import hashlib
 import re
 import secrets
 from collections.abc import Iterable, Mapping
+from datetime import datetime
 from typing import Any, Final
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4, uuid5
@@ -664,19 +665,24 @@ class Intake:
         app_url: str,
         test_data: bool = False,
         kind: str | None = None,
+        key_sha256: str | None = None,
+        received_at: datetime | None = None,
     ) -> tuple[UUID | None, str]:
         """``test_data``: the sender marked it a test (Google Ads' "Send test data").
-        ``kind``: the narrower source it is, for pipelines ("google_ads")."""
+        ``kind``: the narrower source it is, for pipelines ("google_ads").
+        ``key_sha256`` and ``received_at``: a lead the release spool kept (lead_desk/
+        spool.py), which holds only the key's hash and the time the lead reached it."""
         source = await database.scalar(
             select(LeadSource)
             .where(LeadSource.id == source_id, LeadSource.kind == "webhook")
             .with_for_update()
         )
+        digest = key_sha256 if key_sha256 is not None else token_hash(token)
         if (
             source is None
             or not source.active
             or source.token_sha256 is None
-            or not secrets.compare_digest(source.token_sha256, token_hash(token))
+            or not secrets.compare_digest(source.token_sha256, digest)
         ):
             raise DeskError(401, "Unknown source or key.")
         desk = LeadDesk(
@@ -705,6 +711,7 @@ class Intake:
                 actor=None,
                 test_data=test_data,
                 kind=kind,
+                received_at=received_at,
             )
         except CaptureError as error:
             raise DeskError(422, str(error)) from None

@@ -1565,6 +1565,7 @@ class TestResticCacheAndRetention:
             "volumes/media-safety-signatures",
             "volumes/media-video/*/tmp",
             "sales-xray/*/scratch",
+            "application/intake-spool",
         ):
             assert f"--exclude=/srv/authority-closers/{suffix}" in write
         assert not any(

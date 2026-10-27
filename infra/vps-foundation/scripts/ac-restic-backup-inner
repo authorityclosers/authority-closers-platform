@@ -67,6 +67,9 @@ backup_options=(
   --exclude='/srv/authority-closers/application/artifacts/**'
   --exclude='/srv/authority-closers/application/releases'
   --exclude='/srv/authority-closers/application/releases/**'
+  # Leads a release's hold kept wait here for minutes; the database keeps them after.
+  --exclude='/srv/authority-closers/application/intake-spool'
+  --exclude='/srv/authority-closers/application/intake-spool/**'
   --exclude='/srv/authority-closers/backups/application'
   --exclude='/srv/authority-closers/backups/application/**'
   --exclude='/srv/authority-closers/release-store/*'
