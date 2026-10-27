@@ -3984,6 +3984,12 @@ class LeadDesk:
         if not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins manage the team's lead rules.")
 
+    def _require_team_view(self) -> None:
+        # Roles B: Viewers read the team's calls, reports and team page, and change
+        # nothing (every write is refused before the route runs).
+        if not self.viewer.can_see_team:
+            raise DeskError(403, "Your role sees your own leads and calls only.")
+
     async def team_choices(self, days: int) -> choices.TeamChoices:
         """What a seller's languages, areas and products are picked from (owner bug #49)."""
         self._require_manager()
@@ -4014,7 +4020,7 @@ class LeadDesk:
         ]
 
     async def team(self) -> Team:
-        self._require_manager()
+        self._require_team_view()
         reps = await self._reps()
         day_start = self._day_start()
         due: dict[UUID | None, int] = dict(
@@ -4168,7 +4174,7 @@ class LeadDesk:
         logged by itself (out, or taken); talk time from every call; missed calls
         are the leads' calls nobody picked up.
         """
-        self._require_manager()
+        self._require_team_view()
         if end < start or (end - start).days >= REPORT_DAYS:
             raise DeskError(422, f"Pick up to {REPORT_DAYS} days, ending after they start.")
         days = [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
@@ -4223,7 +4229,7 @@ class LeadDesk:
         return CallReport(start=start, end=end, sellers=tuple(sellers))
 
     async def performance(self, days: int) -> Performance:
-        """How sales went over today, 7 or 30 days, India time (owners and admins).
+        """How sales went over today, 7 or 30 days, India time (those who see the team).
 
         Outcomes first (owner, 22 Oct 2026: "sales performance and business
         benefit" before activity): different leads moved to an interested or a
@@ -4232,7 +4238,7 @@ class LeadDesk:
         phone calls stay out. Then sellers ranked by what they won, and the open
         leads by stage.
         """
-        self._require_manager()
+        self._require_team_view()
         if days not in (1, 7, 30):
             raise DeskError(422, "Pick today, 7 days or 30 days.")
         end = self.now.astimezone(IST).date()
@@ -4430,6 +4436,7 @@ class LeadDesk:
             name=self.viewer.name,
             role=self.viewer.role,
             can_manage=self.viewer.can_manage,
+            can_see_team=self.viewer.can_see_team,
             taking_leads=rules.available if rules else True,
             paused_until=work_hours.next_start(hours, self.now)
             if hours is not None and work_hours.paused(hours, self.now)

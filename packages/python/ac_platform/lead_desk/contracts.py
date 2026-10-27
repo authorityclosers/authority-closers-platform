@@ -47,6 +47,9 @@ class Me(Model):
     name: str
     role: str
     can_manage: bool
+    # Reads the team's leads, calls, reports and team page: managers, and Viewers, who
+    # change nothing (Roles B).
+    can_see_team: bool = False
     # Off: the lead rules give this seller no new leads; their open leads stay
     # with them (UX study item 8, 18 Oct). Managers set the same switch on Team.
     taking_leads: bool = True
