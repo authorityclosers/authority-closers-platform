@@ -678,6 +678,76 @@ function answers(now: number, path: string): unknown {
         leads: 1,
       })),
     };
+  // AI on calls (a seller's level in their lead settings): the organisation
+  // gives every call the full report.
+  if (path === "/v1/sales-xray/call-ai")
+    return {
+      revision: 2,
+      default: "full",
+      people: [],
+      you: { level: "full", source: "organisation" },
+      levels: [
+        [
+          "off",
+          "Off",
+          "Calls are saved and logged on the lead. No AI reads them.",
+        ],
+        [
+          "data_only",
+          "Data only",
+          "Transcript and lead facts, no report or coaching.",
+        ],
+        ["auto", "Auto", "Sales X-Ray picks per call."],
+        ["full", "Full", "The full report and coaching on every call."],
+      ].map(([id, name, hint]) => ({ id, name, hint })),
+      can_edit: true,
+    };
+  // A seller's fit choices (owner bug #49): fictional areas, languages and
+  // products on this organisation's leads, and how many a profile fits.
+  if (path.startsWith("/v1/lead-desk/team/choices/fit"))
+    return {
+      days: 30,
+      leads: 140,
+      fits: 52,
+      percent: 37,
+      by: { language: 120, area: 61, product: 90 },
+    };
+  if (path.startsWith("/v1/lead-desk/team/choices"))
+    return {
+      schema: "lead-desk/1",
+      days: 90,
+      leads: 412,
+      areas: [
+        ["Pune", 120],
+        ["Baner", 37],
+        ["Wakad", 22],
+        ["Kharadi", 5],
+        ["Khadki", 2],
+      ].map(([value, leads]) => ({
+        value,
+        key: String(value).toLowerCase(),
+        leads,
+      })),
+      languages: [
+        ["Marathi", "mr", 140],
+        ["Hindi", "hi", 96],
+        ["English", "en", 88],
+        ["Gujarati", "gu", 9],
+      ].map(([value, key, leads]) => ({ value, key, leads })),
+      products: [
+        ["2 BHK", 64],
+        ["3 BHK", 41],
+        ["Villa", 12],
+        ["Plot", 6],
+      ].map(([value, leads]) => ({
+        value,
+        key: String(value).toLowerCase(),
+        leads,
+      })),
+      more: { areas: 0, languages: 0, products: 0 },
+      industry: { id: "real_estate", name: "Real estate" },
+      suggested_products: [],
+    };
   if (path === "/v1/lead-desk/team")
     return {
       reps: [

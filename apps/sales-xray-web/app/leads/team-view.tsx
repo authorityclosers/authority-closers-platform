@@ -15,7 +15,6 @@ import {
   Badge,
   Button,
   Card,
-  Dialog,
   Empty,
   Field,
   Kpi,
@@ -27,21 +26,16 @@ import {
   LeadsError,
   readTeam,
   runSweep,
-  saveRep,
   saveSettings,
   saveWorkHours,
-  splitList,
   waitWords,
   type RepView,
   type Team,
 } from "./leads-client";
 import {
-  CallAiError,
   LEVEL_NAMES,
   levelFor,
   readCallAi,
-  saveCallAiPerson,
-  type CallAiLevel,
   type CallAiSettings,
 } from "../call-ai/call-ai-client";
 import { notify } from "../notice-center";
@@ -56,6 +50,7 @@ import {
   readLimit,
 } from "./limit-field";
 import { phoneDot } from "./phone-setup-words";
+import { SellerSheet } from "./seller-sheet";
 import { RoutingRules } from "./routing-rules";
 import styles from "./leads.module.css";
 
@@ -230,173 +225,6 @@ export function WorkHoursPanel({
         ) : null}
       </div>
     </Panel>
-  );
-}
-
-function RulesDialog({
-  rep,
-  callAi,
-  onClose,
-  onSaved,
-  onCallAiSaved,
-}: {
-  rep: RepView | null;
-  /** AI on calls (owner, 21 Oct): this seller's level; null when it didn't load. */
-  callAi: CallAiSettings | null;
-  onClose: () => void;
-  onSaved: (team: Team) => void;
-  onCallAiSaved: (settings: CallAiSettings) => void;
-}) {
-  // TeamView gives each opening a new key, so these start from this seller.
-  const own = rep && callAi ? levelFor(callAi, rep.person_id) : null;
-  const startLevel: CallAiLevel | "" = own?.own ? own.level : "";
-  const [aiLevel, setAiLevel] = useState<CallAiLevel | "">(startLevel);
-  const [available, setAvailable] = useState(rep?.available ?? true);
-  const [cap, setCap] = useState(() =>
-    limitDraft(rep ? rep.max_open : undefined),
-  );
-  const [languages, setLanguages] = useState(rep?.languages.join(", ") ?? "");
-  const [areas, setAreas] = useState(rep?.areas.join(", ") ?? "");
-  const [interests, setInterests] = useState(rep?.interests.join(", ") ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    if (!rep) return;
-    const max = readLimit(cap);
-    if (max === undefined) {
-      setError(LIMIT_RULE);
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    if (callAi?.can_edit && aiLevel !== startLevel) {
-      try {
-        onCallAiSaved(
-          await saveCallAiPerson(
-            callAi.revision,
-            rep.person_id,
-            aiLevel || null,
-          ),
-        );
-      } catch (reason) {
-        notify({
-          id: `call-ai-${rep.person_id}`,
-          tone: "error",
-          title: "AI on calls not saved",
-          message:
-            reason instanceof CallAiError
-              ? reason.message
-              : "Not saved. Try again.",
-        });
-        setSaving(false);
-        return;
-      }
-    }
-    try {
-      onSaved(
-        await saveRep(rep, {
-          available,
-          max_open: max,
-          languages: splitList(languages).slice(0, 12),
-          areas: splitList(areas),
-          interests: splitList(interests),
-        }),
-      );
-    } catch (reason) {
-      setError(
-        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog
-      open={rep !== null}
-      title={rep ? `${rep.name}'s lead rules` : "Lead rules"}
-      description="Empty boxes mean no limit. New leads go to whoever fits and has the fewest open leads."
-      onClose={onClose}
-      actions={
-        <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save rules"}
-          </Button>
-        </>
-      }
-    >
-      <div className={styles.form}>
-        <label className={styles.toggle}>
-          <input
-            type="checkbox"
-            checked={available}
-            onChange={(event) => setAvailable(event.target.checked)}
-          />
-          Takes new leads now
-        </label>
-        <LimitField
-          id={`limit-${rep?.person_id ?? "seller"}`}
-          label="Most open leads at once"
-          hint={rep?.default_cap ? "Organisation default" : undefined}
-          draft={cap}
-          onChange={setCap}
-        />
-        <Field
-          label="Languages"
-          hint="Comma separated, e.g. Hindi, Marathi, English"
-        >
-          <input
-            value={languages}
-            onChange={(event) => setLanguages(event.target.value)}
-          />
-        </Field>
-        <Field label="Areas" hint="Cities or regions this seller covers">
-          <input
-            value={areas}
-            onChange={(event) => setAreas(event.target.value)}
-          />
-        </Field>
-        <Field label="Products" hint="What this seller sells, as leads name it">
-          <input
-            value={interests}
-            onChange={(event) => setInterests(event.target.value)}
-          />
-        </Field>
-        {callAi?.can_edit ? (
-          <Field
-            label="AI on this seller's calls"
-            hint={
-              callAi.levels.find(
-                (level) => level.id === (aiLevel || callAi.default),
-              )?.hint
-            }
-          >
-            <select
-              value={aiLevel}
-              onChange={(event) =>
-                setAiLevel(event.target.value as CallAiLevel | "")
-              }
-            >
-              <option value="">
-                Organisation default ({LEVEL_NAMES[callAi.default]})
-              </option>
-              {callAi.levels.map((level) => (
-                <option key={level.id} value={level.id}>
-                  {level.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : null}
-        {error ? (
-          <p className={styles.error} role="alert">
-            {error}
-          </p>
-        ) : null}
-      </div>
-    </Dialog>
   );
 }
 
@@ -842,7 +670,7 @@ export function TeamView({
         )}
       </div>
 
-      <RulesDialog
+      <SellerSheet
         key={editRound}
         rep={editing}
         callAi={callAi}
