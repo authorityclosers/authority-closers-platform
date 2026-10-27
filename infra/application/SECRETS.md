@@ -139,6 +139,26 @@ Access (dev, staging), `POST /v1/auth/apple/callback` needs an Access bypass:
 Apple posts it cross-site. Setup: `docs/product/identity/facebook-login-app.md`
 and `docs/product/identity/apple-sign-in.md`.
 
+## Sales Xray Sign in with Pulse and the Pulse org link (optional)
+
+The API reads these from the same Infisical `/application` path (dev:
+`/sales-xray-dev`). "Sign in with Pulse" on the sign-in screen stays hidden
+until the issuer, client ID and client secret all exist; "Connect your Pulse org"
+under Organisation → Connections also needs a sealing key. No release requires
+them. Compose forwards them to the API only. Contract:
+`docs/architecture/pulse-identity-contract.md`.
+
+| Secret                   | Constraint                                                                                                                                                                                             |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `AC_PULSE_ISSUER`        | that environment's Pulse address, no trailing slash (production `https://pulse.estateautopilots.com`); not secret                                                                                      |
+| `AC_PULSE_CLIENT_ID`     | the client ID of that environment's Sales Xray app on Pulse (Settings → Developer apps); redirect URIs `<Sales Xray URL>/v1/auth/pulse/callback` and `<Sales Xray URL>/v1/integrations/pulse/callback` |
+| `AC_PULSE_CLIENT_SECRET` | that app's client secret                                                                                                                                                                               |
+| `AC_PULSE_SEAL_KEY`      | independent 32-byte url-safe base64 key that seals stored Pulse tokens and webhook secrets; without it the API falls back to `AC_INTEGRATIONS_SEAL_KEY`                                                |
+
+Each environment has its own Pulse app and its own values; never copy a
+production value into staging or dev. Changing `AC_PULSE_SEAL_KEY` means every
+linked organisation must connect Pulse again.
+
 ## Sales Xray CRM lead sources (optional)
 
 The API reads these from the same Infisical `/application` path. The Meta Lead
