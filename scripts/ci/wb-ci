@@ -156,9 +156,14 @@ for path in "${include[@]}"; do
   if [ -e "$WB/$path" ]; then $G --work-tree="$WB" add -f -- "$path"; else $G rm -q --cached --ignore-unmatch -- "$path"; fi
 done
 wb_head=$($G --git-dir="$WB/.git" rev-parse HEAD)
+# The current CI files, each in the tested commit's own mode (HEAD's for a file the commit lacks): a request whose
+# only change is a file mode fails the CI prerequisite pin check (27 Oct 2026: wb_checks.py was 100755 at HEAD and
+# every request overlaid it as 100644).
 for path in "${CI_FILES[@]}"; do
   if blob=$($G --git-dir="$WB/.git" rev-parse -q --verify "$wb_head:$path" 2>/dev/null); then
-    $G update-index --add --cacheinfo "100644,$blob,$path"
+    mode=$($G ls-tree "$sha" -- "$path" | cut -d' ' -f1)
+    [ -n "$mode" ] || mode=$($G --git-dir="$WB/.git" ls-tree "$wb_head" -- "$path" | cut -d' ' -f1)
+    $G update-index --add --cacheinfo "${mode:-100644},$blob,$path"
   fi
 done
 printf '%s\n' "${changed_files[@]}" > "$tmp/changed"
