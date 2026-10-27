@@ -135,6 +135,25 @@ wait_for_release() {  # <sha>
   done
 }
 wait_for_release "$sha" || exit $?
+
+# A run is over only when GitHub says it is completed. `gh run watch` can return while the run goes on (a dropped
+# connection, an API error); wb-ci then printed an empty result and left, freeing the slot, and the next request in
+# that slot cancelled the run (27 Oct 2026, run 40530203131). Checks every 30 s, for at most 2 hours after the watch.
+wait_for_run() {  # <run id>
+  local status="" waited=0 limit=${WB_CI_RUN_WAIT_S:-7200} every=${WB_CI_RUN_POLL_S:-30}
+  gh run watch "$1" -R "$REPO" --interval 30 --exit-status >"$tmp/watch.log" 2>&1 || true
+  while :; do
+    status=$(gh run view "$1" -R "$REPO" --json status --jq .status 2>/dev/null) || status=""
+    [ "$status" = completed ] && return 0
+    if [ "$waited" -ge "$limit" ]; then
+      echo "wb-ci: run $1 is still ${status:-unreadable} after $((limit / 60)) min of waiting; no result" >&2
+      return 1
+    fi
+    [ "$waited" -gt 0 ] || echo "wb-ci: the watch ended but run $1 is ${status:-unreadable}; checking every ${every}s" >&2
+    sleep "$every"
+    waited=$((waited + every))
+  done
+}
 changed_files=()
 if [ "$full" = 0 ]; then
   wanted=${base:-$sha^}
@@ -237,7 +256,11 @@ url="https://github.com/$REPO/actions/runs/$run"
 echo "wb-ci: run $url"
 [ "$wait" = 1 ] || { echo "wb-ci: not waiting (--no-wait); delete the branch later: git push origin :$branch"; exit 0; }
 
-gh run watch "$run" -R "$REPO" --interval 30 --exit-status >"$tmp/watch.log" 2>&1 || true
+if ! wait_for_run "$run"; then
+  # Still running: no result, and the branch stays, since its run is using it.
+  echo "result: unknown (still running: $url)"
+  exit 1
+fi
 elapsed=$(( $(date +%s) - started ))
 gh run view "$run" -R "$REPO" --json conclusion,jobs --jq '
   def secs(a; b): if a and b and (b|startswith("0001")|not) then ((b|fromdate) - (a|fromdate)) else null end;
