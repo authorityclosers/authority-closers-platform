@@ -139,6 +139,7 @@ import { CallAudioDock } from "./call-audio-dock";
 import { SourceWaveformProvider, clipPressAction } from "./source-waveform";
 import { ReportHeader } from "./report-header";
 import { callTitle, type CallLabel } from "./call-label";
+import { rememberOpened } from "./pick-up";
 import { readCallLabel, renameCall } from "./call-label-client";
 import {
   revalidateContextualSourcePlayback,
@@ -1598,6 +1599,24 @@ export function AcquisitionStudio({
     result && result.claimed && result.label?.revision === 0
       ? computedTitle
       : null;
+  // Home's "Pick up where you left off" (owner, 27 Oct 2026): the Report this
+  // person opened last, kept on this device only.
+  const pickUpId = result && submission ? submission.id : null;
+  const pickUpName = result
+    ? callTitle(result.label ?? null, computedTitle ?? "Saved call")
+    : null;
+  const pickUpPerson = access?.context?.personId ?? null;
+  const pickUpTenant = access?.context?.tenantId ?? null;
+  useEffect(() => {
+    if (!pickUpId || !pickUpName || !pickUpPerson || !pickUpTenant) return;
+    rememberOpened({
+      kind: "call",
+      id: pickUpId,
+      name: pickUpName,
+      person: pickUpPerson,
+      tenant: pickUpTenant,
+    });
+  }, [pickUpId, pickUpName, pickUpPerson, pickUpTenant]);
   useEffect(() => {
     if (!submission || !autoTitle || review.requested) return;
     if (autoTitled.current === submission.id) return;

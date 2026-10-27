@@ -271,9 +271,14 @@ it("counts the first steps from what the desk says", () => {
   ]);
   expect(going.map((step) => step.key)).toContain("team");
   // In a browser the first step is getting the phone app.
+  // In the app the first step is the permission; in a browser, getting the app.
+  expect(steps[0]).toMatchObject({
+    title: "Allow call logging",
+    href: "/leads#phone-setup",
+  });
   expect(
-    startSteps(empty, { inApp: false, logging: false }, false)[0].title,
-  ).toBe("Get the phone app");
+    startSteps(empty, { inApp: false, logging: false }, false)[0],
+  ).toMatchObject({ title: "Get the phone app", href: "/leads?app=1" });
 });
 
 it("starts a new workspace with steps, a sample report and one first action", async () => {
@@ -281,19 +286,29 @@ it("starts a new workspace with steps, a sample report and one first action", as
     <SetupStart
       desk={{ counts: { open: 0 }, numbers: { calls: 0 }, team_pool: null }}
       manager={false}
+      sample
     />,
   );
   expect(container.textContent).toContain("Let's get you calling");
   expect(
     container.querySelector('[role="img"]')?.getAttribute("aria-label"),
   ).toBe("0 of 3 done");
-  expect(
-    container.querySelector('a[href="/leads#phone-setup"]'),
-  ).not.toBeNull();
+  expect(container.querySelector('a[href="/leads?app=1"]')).not.toBeNull();
   expect(
     container.querySelector('a[href="/analysis/sample"]')?.textContent,
   ).toContain("Sample");
   expect(
     container.querySelector('a[href="/leads#add=lead"]')?.textContent,
   ).toBe("Add your first lead");
+});
+
+it("leaves the sample report out until its page exists", async () => {
+  await render(
+    <SetupStart
+      desk={{ counts: { open: 0 }, numbers: { calls: 0 }, team_pool: null }}
+      manager={false}
+    />,
+  );
+  expect(container.querySelector('a[href="/analysis/sample"]')).toBeNull();
+  expect(container.textContent).toContain("Add your first lead");
 });

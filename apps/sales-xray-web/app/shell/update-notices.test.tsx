@@ -1,16 +1,22 @@
+// @vitest-environment happy-dom
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { Notice } from "../notice-center";
+import type { AppAlert } from "../ui/alerts";
 import type { UpdateNote, UpdateNotification } from "./updates-client";
 const mocks = vi.hoisted(() => ({
+  raise: vi.fn(),
+  clear: vi.fn(),
   notify: vi.fn(),
-  dismiss: vi.fn(),
   claimed: false,
+}));
+vi.mock("../ui/alerts", () => ({
+  raiseAlert: mocks.raise,
+  clearAlert: mocks.clear,
 }));
 vi.mock("../notice-center", () => ({
   notify: mocks.notify,
-  dismissNotice: mocks.dismiss,
+  dismissNotice: vi.fn(),
 }));
 vi.mock("./update-card-rules", async (original) => ({
   ...(await original<typeof import("./update-card-rules")>()),
@@ -20,7 +26,7 @@ vi.mock("./update-card-rules", async (original) => ({
     return true;
   },
 }));
-import { UpdateNotices } from "./update-notices";
+import { ACTIVITY_BANNER_MS, UpdateNotices } from "./update-notices";
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
@@ -40,12 +46,12 @@ const note: UpdateNote = {
 };
 const event: UpdateNotification = {
   id: "fictional-event",
-  kind: "analysis_paused",
-  title: "Fictional pause",
-  body: "Check your call",
-  href: "/analysis/calls",
+  kind: "lead_assigned",
+  title: "Neha Fictional is your lead now",
+  body: "New from your website form.",
+  href: "/leads",
   urgent: true,
-  created_at: "2026-10-09T00:00:00Z",
+  created_at: "2026-10-27T09:00:00Z",
   read: false,
 };
 const markSeen = vi.fn().mockResolvedValue(undefined);
@@ -55,18 +61,28 @@ const updates = {
   unseen_count: 2,
   notifications: [
     event,
+    {
+      ...event,
+      id: "older",
+      kind: "report_ready" as const,
+      created_at: "2026-10-27T08:00:00Z",
+    },
     { ...event, id: "not-urgent", urgent: false },
     { ...event, id: "already-read", read: true },
   ],
-  unread_count: 2,
+  unread_count: 3,
   status: "ready" as const,
   notifications_status: "ready" as const,
   markSeen,
   markRead,
 };
+const raised = (): AppAlert[] => mocks.raise.mock.calls.map(([alert]) => alert);
+let account = 0;
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.claimed = false;
+  account += 1;
+  window.sessionStorage.clear();
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -75,37 +91,48 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
 });
-it("shows only one of two major notes across rerenders/remounts, and dismissals acknowledge the right keys", async () => {
+
+it("shows what the bell received as a top banner, never as a corner card", async () => {
   const openNews = vi.fn();
   const openEvent = vi.fn();
   const render = () => (
     <UpdateNotices
       updates={updates}
-      contextKey="fictional-account"
+      contextKey={`account-${account}`}
       openNews={openNews}
       openEvent={openEvent}
     />
   );
   await act(async () => root.render(render()));
-  const cards: Notice[] = mocks.notify.mock.calls.map(([card]) => card);
-  expect(cards).toHaveLength(2);
-  expect(cards[0].title).toBe(note.title);
-  expect(cards[0].timeout).toBe(0);
-  cards[0].action?.run();
+  // One of the two major notes, and the newest urgent unread event only.
+  expect(raised().map((alert) => alert.title)).toEqual([
+    note.title,
+    event.title,
+  ]);
+  for (const alert of raised()) {
+    expect(alert.level).toBe("normal");
+    expect(alert.timeout).toBe(ACTIVITY_BANNER_MS);
+  }
+  expect(mocks.notify).not.toHaveBeenCalled();
+  raised()[0].action?.run?.();
   expect(openNews).toHaveBeenCalledTimes(1);
-  await cards[0].onDismiss?.();
-  expect(markSeen).toHaveBeenCalledWith([note.key]);
-  await cards[1].onDismiss?.();
-  expect(markRead).toHaveBeenCalledWith([event.id]);
+  expect(raised()[1].action?.label).toBe("Open lead");
+  raised()[1].action?.run?.();
+  expect(openEvent).toHaveBeenCalledWith("/leads");
+  // Leaving by itself reads nothing: the line stays unread in the bell.
+  expect(markRead).not.toHaveBeenCalled();
+  expect(markSeen).not.toHaveBeenCalled();
+
+  // Rerenders and remounts show nothing again.
   await act(async () => root.render(render()));
   await act(async () => root.render(null));
   await act(async () => root.render(render()));
-  expect(
-    mocks.notify.mock.calls.filter(([card]) => card.id.startsWith("update:")),
-  ).toHaveLength(1);
+  expect(raised()).toHaveLength(2);
 });
-it("removes acknowledged cards and old-account cards and never navigates an unsafe urgent event", async () => {
+
+it("clears banners once read and for another account, and never follows an unsafe link", async () => {
   const openEvent = vi.fn();
+  const key = `account-${account}`;
   const render = (contextKey: string | null, data = updates) => (
     <UpdateNotices
       updates={data}
@@ -116,30 +143,28 @@ it("removes acknowledged cards and old-account cards and never navigates an unsa
   );
   await act(async () =>
     root.render(
-      render("first", {
+      render(key, {
         ...updates,
         notifications: [{ ...event, href: "//external.test" }],
       }),
     ),
   );
-  const card: Notice = mocks.notify.mock.calls.find(([card]) =>
-    card.id.startsWith("event:"),
-  )![0];
-  expect(card.action).toBeUndefined();
+  const banner = raised().find((alert) => alert.id.startsWith("event:"))!;
+  expect(banner.action).toBeUndefined();
   expect(openEvent).not.toHaveBeenCalled();
   await act(async () =>
     root.render(
-      render("first", {
+      render(key, {
         ...updates,
         notes: [{ ...note, seen: true }],
         notifications: [{ ...event, read: true }],
       }),
     ),
   );
-  expect(mocks.dismiss).toHaveBeenCalledWith("update:first:fictional-note");
-  expect(mocks.dismiss).toHaveBeenCalledWith("event:first:fictional-event");
+  expect(mocks.clear).toHaveBeenCalledWith(`update:${key}:fictional-note`);
+  expect(mocks.clear).toHaveBeenCalledWith(`event:${key}:fictional-event`);
   await act(async () => root.render(render(null)));
-  const count = mocks.notify.mock.calls.length;
+  const count = mocks.raise.mock.calls.length;
   await act(async () => root.render(render(null)));
-  expect(mocks.notify).toHaveBeenCalledTimes(count);
+  expect(mocks.raise).toHaveBeenCalledTimes(count);
 });

@@ -27,6 +27,7 @@ import {
   PhoneCall,
   Sparkles,
   UserPlus,
+  Smartphone,
   UserRound,
   UsersRound,
   type LucideIcon,
@@ -51,83 +52,15 @@ import { eventText } from "../leads/lead-sheet";
 import { handOverLead } from "../leads/lead-handoff";
 import { ago, type ActivityItem } from "../leads/leads-client";
 import { callLogStatus, inPhoneApp } from "../leads/native-phone";
+import { PHONE_APP_HREF } from "../leads/phone-app-flag";
+import { onPickUp, pickUpFrom, readPickUp } from "../pick-up";
 import { useWorkspaceAccess } from "../workspace-access";
 import styles from "./home-v2.module.css";
 import homeStyles from "./sales-home.module.css";
 
 /* ---------- Pick up where you left off ---------- */
 
-const PICK_UP_KEY = "sx-pick-up";
-const PICK_UP_DAYS = 3;
-const PICK_UP_EVENT = "sx:pick-up";
-
-export type Opened = {
-  kind: "lead" | "call";
-  id: string;
-  name: string;
-  at: string;
-  person: string;
-  tenant: string;
-};
-
-/** The lead or Report this person last opened here, kept on this device only. */
-export function rememberOpened(
-  item: Omit<Opened, "at">,
-  now: Date = new Date(),
-): void {
-  try {
-    localStorage.setItem(
-      PICK_UP_KEY,
-      JSON.stringify({ ...item, at: now.toISOString() }),
-    );
-    window.dispatchEvent(new Event(PICK_UP_EVENT));
-  } catch {
-    // Storage blocked: nothing to pick up next time.
-  }
-}
-
-/** The thing to pick up, if it is this person's, here, and recent. */
-export function pickUpFrom(
-  raw: string | null,
-  who: { person: string; tenant: string } | null,
-  now: Date = new Date(),
-): Opened | null {
-  if (!raw || !who) return null;
-  try {
-    const value = JSON.parse(raw) as Partial<Opened>;
-    if (
-      (value.kind !== "lead" && value.kind !== "call") ||
-      typeof value.id !== "string" ||
-      typeof value.name !== "string" ||
-      typeof value.at !== "string" ||
-      value.person !== who.person ||
-      value.tenant !== who.tenant
-    )
-      return null;
-    const age = now.getTime() - Date.parse(value.at);
-    if (!(age >= 0 && age < PICK_UP_DAYS * 86_400_000)) return null;
-    return value as Opened;
-  } catch {
-    return null;
-  }
-}
-
-const readPickUp = () => {
-  try {
-    return localStorage.getItem(PICK_UP_KEY);
-  } catch {
-    return null;
-  }
-};
-
-const onPickUp = (change: () => void) => {
-  window.addEventListener(PICK_UP_EVENT, change);
-  window.addEventListener("storage", change);
-  return () => {
-    window.removeEventListener(PICK_UP_EVENT, change);
-    window.removeEventListener("storage", change);
-  };
-};
+export { pickUpFrom, rememberOpened, type Opened } from "../pick-up";
 
 export function PickUp() {
   const router = useRouter();
@@ -324,16 +257,25 @@ export function startSteps(
   manager: boolean,
 ): StartStep[] {
   const steps: StartStep[] = [
-    {
-      key: "phone",
-      title: phone.inApp ? "Connect your phone calls" : "Get the phone app",
-      hint: phone.inApp
-        ? "See who you called, missed calls too"
-        : "Calls and recordings log themselves",
-      href: "/leads#phone-setup",
-      icon: PhoneCall,
-      done: phone.logging,
-    },
+    // In the app, the permission step; in a browser, getting the app
+    // (orchestrator for the owner, 27 Oct 2026).
+    phone.inApp
+      ? {
+          key: "phone",
+          title: "Allow call logging",
+          hint: "See who you called, missed calls too",
+          href: "/leads#phone-setup",
+          icon: PhoneCall,
+          done: phone.logging,
+        }
+      : {
+          key: "phone",
+          title: "Get the phone app",
+          hint: "Calls and recordings log themselves",
+          href: PHONE_APP_HREF,
+          icon: Smartphone,
+          done: false,
+        },
     {
       key: "leads",
       title: "Add your leads",
@@ -403,7 +345,9 @@ function usePhoneLogging(): { inApp: boolean; logging: boolean } {
       if (alive)
         setState({
           inApp: true,
-          logging: Boolean(status?.access && status.state !== "signed_out"),
+          logging: Boolean(
+            status?.on && status.access && status.state !== "signed_out",
+          ),
         });
     });
     return () => {
@@ -414,13 +358,22 @@ function usePhoneLogging(): { inApp: boolean; logging: boolean } {
 }
 
 export const SAMPLE_REPORT_HREF = "/analysis/sample";
+/**
+ * The sample report card waits for its page: a fictional call written for new
+ * users, on the real report (27 Oct 2026). The review fixture's synthetic
+ * report is a rendering test, not something to show a new user.
+ */
+export const SAMPLE_REPORT_READY = false;
 
 export function SetupStart({
   desk,
   manager,
+  sample = SAMPLE_REPORT_READY,
 }: {
   desk: StartDesk;
   manager: boolean;
+  /** Whether to offer the sample report (the fixture shows it for review). */
+  sample?: boolean;
 }) {
   const phone = usePhoneLogging();
   const steps = startSteps(desk, phone, manager);
@@ -462,24 +415,26 @@ export function SetupStart({
           })}
         </ol>
       </section>
-      <Link
-        className={styles.sample}
-        href={SAMPLE_REPORT_HREF}
-        prefetch={false}
-        data-sx-action="report_open"
-      >
-        <span className={styles.sampleArt} aria-hidden="true">
-          <AudioLines size={26} />
-        </span>
-        <span className={styles.words}>
-          <small>Sample</small>
-          <strong>See what a call report shows</strong>
-          <span>
-            Who talked most, the next step agreed and what to say next time
+      {sample ? (
+        <Link
+          className={styles.sample}
+          href={SAMPLE_REPORT_HREF}
+          prefetch={false}
+          data-sx-action="report_open"
+        >
+          <span className={styles.sampleArt} aria-hidden="true">
+            <AudioLines size={26} />
           </span>
-        </span>
-        <ChevronRight size={18} aria-hidden="true" />
-      </Link>
+          <span className={styles.words}>
+            <small>Sample</small>
+            <strong>See what a call report shows</strong>
+            <span>
+              Who talked most, the next step agreed and what to say next time
+            </span>
+          </span>
+          <ChevronRight size={18} aria-hidden="true" />
+        </Link>
+      ) : null}
       <Link className={homeStyles.primary} href="/leads#add=lead">
         <UserPlus size={18} aria-hidden="true" />
         Add your first lead

@@ -39,6 +39,7 @@ import { displayName } from "../display-name";
 import { DayTiles, MyStages } from "./day-board";
 import { FirstRun } from "./first-run";
 import { HomeActivity, HomeRecentCalls, PickUp, SetupStart } from "./home-v2";
+import { TeamActivity } from "./team-activity";
 import { whyLine } from "../leads/desk-view";
 import { handOverLead } from "../leads/lead-handoff";
 import {
@@ -172,7 +173,16 @@ function Outcome({
   );
 }
 
-function TeamHome({ desk }: { desk: Desk | null }) {
+function TeamHome({
+  desk,
+  layout = "v1",
+  saved = null,
+}: {
+  desk: Desk | null;
+  layout?: "v1" | "v2";
+  /** The team's latest saved calls, for Team today's reports. */
+  saved?: readonly LibrarySubmission[] | null;
+}) {
   const [period, setPeriod] = usePeriod();
   const [report, setReport] = useState<{
     period: Period;
@@ -211,99 +221,110 @@ function TeamHome({ desk }: { desk: Desk | null }) {
     : null;
   const mineDue = desk ? desk.queue.length : 0;
 
+  const salesBlock = (
+    <section className={styles.block} aria-labelledby="sales-title">
+      <div className={styles.head}>
+        <h2 id="sales-title">How sales are going</h2>
+        {/* Team | My day is the screen's one switch; the period is a chip. */}
+        <label className={styles.periodChip}>
+          <select
+            aria-label="Period"
+            value={String(period)}
+            onChange={(event) =>
+              setPeriod(Number(event.target.value) as Period)
+            }
+          >
+            {PERIODS.map((item) => (
+              <option key={item.key} value={item.key}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={14} aria-hidden="true" />
+        </label>
+      </div>
+      {now && before ? (
+        <dl className={styles.outcomes}>
+          <Outcome
+            icon={Trophy}
+            tone="good"
+            label="Won"
+            value={now.won}
+            delta={<Delta value={now.won} previous={before.won} />}
+            note={
+              now.leads_called
+                ? `${percent(now.won, now.leads_called)} of ${now.leads_called} leads called`
+                : "No leads called yet"
+            }
+          />
+          <Outcome
+            icon={Flame}
+            tone="violet"
+            label="Interested"
+            value={now.interested}
+            delta={
+              <Delta value={now.interested} previous={before.interested} />
+            }
+            note="Leads who said they want it"
+          />
+          <Outcome
+            icon={UserPlus}
+            tone="teal"
+            label="New leads"
+            value={now.new_leads}
+            delta={<Delta value={now.new_leads} previous={before.new_leads} />}
+            note={
+              now.first_call_minutes !== null
+                ? `First call in ${minutesWords(now.first_call_minutes)}`
+                : now.new_leads
+                  ? "None called yet"
+                  : "None came in"
+            }
+          />
+          <Outcome
+            icon={PhoneCall}
+            tone="slate"
+            label="Connected"
+            value={percent(now.connected, now.calls)}
+            delta={<Delta value={now.connected} previous={before.connected} />}
+            note={`${now.connected} of ${now.calls} ${now.calls === 1 ? "call" : "calls"}`}
+          />
+        </dl>
+      ) : failed === period ? (
+        <p className={styles.quiet} role="status">
+          Sales numbers didn&apos;t load. Pull down or come back in a moment.
+        </p>
+      ) : (
+        <OutcomesSkeleton />
+      )}
+      <div className={styles.chips}>
+        {mineDue ? (
+          <Link className={styles.chip} href="/leads">
+            <PhoneCall size={15} aria-hidden="true" />
+            {`${mineDue} for you to call today`}
+          </Link>
+        ) : null}
+      </div>
+    </section>
+  );
+  // Approved map, slice 8: what is waiting on someone, before who sold what.
+  const needs = <NeedsYou desk={desk} late={shown ? late : undefined} />;
   return (
     <>
-      <section className={styles.block} aria-labelledby="sales-title">
-        <div className={styles.head}>
-          <h2 id="sales-title">How sales are going</h2>
-          {/* Team | My day is the screen's one switch; the period is a chip. */}
-          <label className={styles.periodChip}>
-            <select
-              aria-label="Period"
-              value={String(period)}
-              onChange={(event) =>
-                setPeriod(Number(event.target.value) as Period)
-              }
-            >
-              {PERIODS.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={14} aria-hidden="true" />
-          </label>
-        </div>
-        {now && before ? (
-          <dl className={styles.outcomes}>
-            <Outcome
-              icon={Trophy}
-              tone="good"
-              label="Won"
-              value={now.won}
-              delta={<Delta value={now.won} previous={before.won} />}
-              note={
-                now.leads_called
-                  ? `${percent(now.won, now.leads_called)} of ${now.leads_called} leads called`
-                  : "No leads called yet"
-              }
-            />
-            <Outcome
-              icon={Flame}
-              tone="violet"
-              label="Interested"
-              value={now.interested}
-              delta={
-                <Delta value={now.interested} previous={before.interested} />
-              }
-              note="Leads who said they want it"
-            />
-            <Outcome
-              icon={UserPlus}
-              tone="teal"
-              label="New leads"
-              value={now.new_leads}
-              delta={
-                <Delta value={now.new_leads} previous={before.new_leads} />
-              }
-              note={
-                now.first_call_minutes !== null
-                  ? `First call in ${minutesWords(now.first_call_minutes)}`
-                  : now.new_leads
-                    ? "None called yet"
-                    : "None came in"
-              }
-            />
-            <Outcome
-              icon={PhoneCall}
-              tone="slate"
-              label="Connected"
-              value={percent(now.connected, now.calls)}
-              delta={
-                <Delta value={now.connected} previous={before.connected} />
-              }
-              note={`${now.connected} of ${now.calls} ${now.calls === 1 ? "call" : "calls"}`}
-            />
-          </dl>
-        ) : failed === period ? (
-          <p className={styles.quiet} role="status">
-            Sales numbers didn&apos;t load. Pull down or come back in a moment.
-          </p>
-        ) : (
-          <OutcomesSkeleton />
-        )}
-        <div className={styles.chips}>
-          {mineDue ? (
-            <Link className={styles.chip} href="/leads">
-              <PhoneCall size={15} aria-hidden="true" />
-              {`${mineDue} for you to call today`}
-            </Link>
-          ) : null}
-        </div>
-      </section>
-
-      {/* Approved map, slice 8: what is waiting on someone, before who sold what. */}
-      <NeedsYou desk={desk} late={shown ? late : undefined} />
+      {/* Team v2 (orchestrator for the owner, 27 Oct 2026): what needs you
+          and the team's day first, then the numbers and charts. */}
+      {layout === "v2" ? (
+        <>
+          {needs}
+          <TeamActivity saved={saved} />
+          {salesBlock}
+        </>
+      ) : (
+        <>
+          {salesBlock}
+          {needs}
+        </>
+      )}
 
       <section className={styles.block} aria-labelledby="sellers-title">
         <div className={styles.head}>
@@ -553,7 +574,13 @@ function SellerHome({
       <section className={styles.block} aria-labelledby="today-title">
         <div className={styles.head}>
           <h2 id="today-title">Today</h2>
-          <span className={styles.meta}>Who to call</span>
+          {/* A clear button, not a quiet label (orchestrator for the owner,
+              27 Oct 2026): everyone due, on Leads. */}
+          <Link className={styles.headAction} href="/leads">
+            <UsersRound size={16} aria-hidden="true" />
+            Who to call
+            <ChevronRight size={16} aria-hidden="true" />
+          </Link>
         </div>
         {/* The day at a glance, each tile one tap into its Leads (owner,
             #18, 26 Oct 2026: Home was the same as Leads). */}
@@ -744,9 +771,12 @@ function SellerHomeV2({
 export function SalesHome({
   manager,
   layout = "v1",
+  team = "v1",
   recent = null,
 }: {
   manager: boolean;
+  /** "v2": the Team view redesign, on review fixtures until signed off. */
+  team?: "v1" | "v2";
   /** "v2": the Home redesign (27 Oct 2026), on review fixtures until signed off. */
   layout?: "v1" | "v2";
   /** The latest saved calls the dashboard already read, for v2's Recent calls. */
@@ -776,7 +806,11 @@ export function SalesHome({
         <Segmented label="Show" value={view} onChange={setView} items={VIEWS} />
       ) : null}
       {manager && view === "team" ? (
-        <TeamHome desk={desk.status === "ready" ? desk.desk : null} />
+        <TeamHome
+          desk={desk.status === "ready" ? desk.desk : null}
+          layout={team}
+          saved={recent}
+        />
       ) : layout === "v2" ? (
         <SellerHomeV2 state={desk} recent={recent} />
       ) : (

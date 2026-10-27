@@ -345,12 +345,99 @@ function weekWork(now: number) {
   };
 }
 
+/** The Team view redesign (27 Oct 2026): today's work across the team. */
+const TEAM_WORK: Work[] = [
+  [
+    "call",
+    "asha fictional",
+    9,
+    {
+      actor_name: "Swamini Fictional",
+      duration_seconds: 214,
+      direction: "outgoing",
+      via: "phone",
+    },
+  ],
+  [
+    "assigned",
+    "neha fictional",
+    21,
+    {
+      actor_name: null,
+      owner_name: "Rahul Example",
+      allocation_reason: "rules",
+    },
+  ],
+  [
+    "stage",
+    "meera fictional",
+    44,
+    {
+      actor_name: "Swamini Fictional",
+      stage_label: "Site visit booked",
+      from_label: "Interested",
+    },
+  ],
+  [
+    "call",
+    "ravi sample",
+    70,
+    {
+      actor_name: "Rahul Example",
+      duration_seconds: null,
+      direction: "missed",
+      via: "phone",
+    },
+  ],
+  [
+    "result",
+    "karan example",
+    118,
+    {
+      actor_name: "Rahul Example",
+      connected: true,
+      reason_label: "Call back later",
+      stage_label: "Follow-up",
+    },
+  ],
+  [
+    "captured",
+    "priya sample",
+    150,
+    { actor_name: null, source_label: "Website form" },
+  ],
+];
+
+function teamWork(now: number) {
+  const week = weekWork(now);
+  return {
+    ...week,
+    items: TEAM_WORK.map(([kind, lead, ago, extra], index) => ({
+      ...week.items[0],
+      event_id: `00000000-0000-4000-8000-0000000011${String(index).padStart(2, "0")}`,
+      lead_id: `00000000-0000-4000-8000-0000000012${String(index).padStart(2, "0")}`,
+      lead_name: lead,
+      event: {
+        ...week.items[0].event,
+        kind,
+        at: new Date(now - ago * MINUTE).toISOString(),
+        duration_seconds: null,
+        direction: null,
+        via: null,
+        ...extra,
+      },
+    })),
+  };
+}
+
 function answers(now: number, path: string, mode: Mode): unknown {
   const { quiet, none, fresh } = mode;
   const empty = quiet || none || fresh;
   const team = teamAnswers(path);
   if (team !== null) return team;
   if (path === "/v1/lead-desk/my-day") return myDay(now, mode);
+  if (path.startsWith("/v1/lead-desk/activity?") && path.includes("team=1"))
+    return teamWork(now);
   if (path.startsWith("/v1/lead-desk/activity?"))
     return empty
       ? { schema: "lead-desk/1", items: [], next_before: null, counts: {} }
@@ -641,6 +728,7 @@ function savedCalls(now: number): LibrarySubmission[] {
       state: "completed",
       hasReport: true,
       label: { displayName: "Site visit · Priya Sample", revision: 1 },
+      owner: { personId: SELLER, name: "Swamini Fictional" },
     },
     {
       id: "00000000-0000-4000-8000-000000000501",
@@ -657,9 +745,12 @@ function Preview() {
   const params = useSearchParams();
   const seller = params.get("role") === "seller";
   const analysis = params.get("analysis") === "1";
-  // `&layout=2`: the Home redesign (27 Oct 2026); `&fresh=1`: a new workspace.
-  const v2 = params.get("layout") === "2";
+  // The Home redesign (27 Oct 2026) is Home; `&layout=1` shows the one before.
+  // `&fresh=1`: a new workspace.
+  const v2 = params.get("layout") !== "1";
   const fresh = params.get("fresh") === "1";
+  // `&team=2`: the Team view redesign (owners), for sign-off.
+  const team = params.get("team") === "2";
   const [saved] = useState(() => savedCalls(Date.now()));
   // `&focus=<heading id>`: the shot starts at that part of Home (Home is
   // taller than a phone screen; the shots show one screen).
@@ -740,6 +831,7 @@ function Preview() {
             <SalesHome
               manager={!seller}
               layout={v2 ? "v2" : "v1"}
+              team={team ? "v2" : "v1"}
               recent={v2 && !fresh ? saved : null}
             />
           }

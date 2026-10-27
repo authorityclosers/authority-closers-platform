@@ -161,6 +161,51 @@
   color: var(--sx-ink);
 }
 
+/* ---------- Team today: who did it, with what kind of thing on their face ---------- */
+
+.who {
+  position: relative;
+  display: grid;
+  width: 32px;
+  height: 32px;
+}
+
+.badge {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 2px solid var(--sx-surface);
+  border-radius: 50%;
+  background: var(--sx-fill-strong, var(--sx-fill-soft));
+  color: var(--sx-ink-2);
+}
+
+.badge:is(
+  [data-kind="call"],
+  [data-kind="result"],
+  [data-kind="assigned"],
+  [data-kind="reassigned"],
+  [data-kind="captured"],
+  [data-kind="report"]
+) {
+  background: var(--sx-accent);
+  color: var(--sx-surface);
+}
+
+.badge[data-kind="missed"] {
+  background: var(--sx-bad);
+  color: var(--sx-surface);
+}
+
+.badge[data-kind="note"] {
+  background: var(--sx-warn);
+  color: var(--sx-ink);
+}
+
 /* ---------- A new workspace's start ---------- */
 
 .start {

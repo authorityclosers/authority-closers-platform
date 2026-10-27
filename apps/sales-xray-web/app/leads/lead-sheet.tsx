@@ -47,6 +47,8 @@ import {
 
 import { callHref, type UploadPolicy } from "../acquisition-client";
 import { notify } from "../notice-center";
+import { rememberOpened } from "../pick-up";
+import { useWorkspaceAccess } from "../workspace-access";
 import { haptic } from "../ui/haptics";
 import { useFlow } from "../telemetry-flows";
 import { CallFacts } from "../call-engine/call-facts";
@@ -3420,6 +3422,24 @@ export function LeadSheet({
     : null;
   const asking = after?.ask === true;
   const questionOpen = asking || intent === "log" || logging === leadId;
+
+  // Home's "Pick up where you left off" (owner, 27 Oct 2026): the lead this
+  // person opened last, kept on this device only.
+  const workspace = useWorkspaceAccess();
+  const openedId = detail?.lead.lead_id ?? null;
+  const openedName = detail?.lead.name ?? null;
+  const pickUpPerson = workspace?.context?.personId ?? null;
+  const pickUpTenant = workspace?.context?.tenantId ?? null;
+  useEffect(() => {
+    if (!openedId || !openedName || !pickUpPerson || !pickUpTenant) return;
+    rememberOpened({
+      kind: "lead",
+      id: openedId,
+      name: openedName,
+      person: pickUpPerson,
+      tenant: pickUpTenant,
+    });
+  }, [openedId, openedName, pickUpPerson, pickUpTenant]);
 
   useEffect(() => {
     if (!leadId) return;
