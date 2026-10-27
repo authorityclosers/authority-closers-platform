@@ -187,6 +187,29 @@
   font-size: var(--sx-text-sm);
 }
 
+/* Owner bug #55: what the sheet does, each choice's example, and why
+   nothing moves. */
+.intro {
+  margin: 0;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.rule small.example {
+  color: var(--lx-teal);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.why {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
 .give {
   display: inline-flex;
   align-items: center;

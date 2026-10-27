@@ -5,9 +5,11 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const notify = vi.fn();
 vi.mock("../notice-center", () => ({ notify: (n: unknown) => notify(n) }));
+const push = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
 
 import { resetBackCloseForTests } from "../ui/back-close";
-import { AssignSheet } from "./assign-sheet";
+import { AssignSheet, nothingWhy, ruleExample } from "./assign-sheet";
 import type { RepView } from "./leads-client";
 import { leftWords, type Distribution } from "./team-engine-client";
 
@@ -15,7 +17,12 @@ import { leftWords, type Distribution } from "./team-engine-client";
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
-const rep = (id: string, name: string, available = true): RepView => ({
+const rep = (
+  id: string,
+  name: string,
+  available = true,
+  open = 12,
+): RepView => ({
   person_id: id,
   name,
   role: "member",
@@ -25,7 +32,7 @@ const rep = (id: string, name: string, available = true): RepView => ({
   languages: [],
   areas: [],
   interests: [],
-  open_leads: 12,
+  open_leads: open,
   due_now: 0,
   calls_today: 0,
   connected_today: 0,
@@ -73,16 +80,19 @@ let bodies: {
   sellers?: string[];
   command_id: string;
 }[];
+// What the next previews return instead of plan(), when a test sets it.
+let answer: Distribution | null = null;
 
 beforeEach(() => {
   vi.useFakeTimers();
   bodies = [];
+  answer = null;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (_input: RequestInfo, init?: RequestInit) => {
       const body = JSON.parse(String(init?.body));
       bodies.push(body);
-      return new Response(JSON.stringify(plan(body.preview)), {
+      return new Response(JSON.stringify(answer ?? plan(body.preview)), {
         headers: { "content-type": "application/json" },
       });
     }),
@@ -97,6 +107,7 @@ afterEach(async () => {
   host.remove();
   resetBackCloseForTests();
   notify.mockClear();
+  push.mockClear();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -184,4 +195,136 @@ it("maps each source to the sellers picked for it", async () => {
     rule: "by_source",
     groups: { Facebook: ["p1"] },
   });
+});
+
+// Owner bug #55, 28 Oct 2026: "Confusion of this feature." The sheet says what
+// it does, and each choice shows what it would do with the team's own numbers.
+it("says what it does, with an example from the team's numbers under each choice", async () => {
+  await act(async () =>
+    root.render(
+      <AssignSheet
+        open
+        target={{ kind: "unassigned", count: 40 }}
+        reps={REPS}
+        onClose={() => {}}
+        onDone={() => {}}
+      />,
+    ),
+  );
+  await settle();
+  const text = sheet().textContent;
+  expect(text).toContain("This gives them out once, the way you pick below.");
+  expect(text).toContain("New leads keep going out by your lead rules.");
+  expect(text).toContain("40 leads → 20 each for 2 sellers");
+  expect(text).toContain("Everyone has 12 open now, so it shares like Even");
+  expect(text).toContain("Facebook leads to Priya, Website to Rohan");
+  expect(text).toContain("None of these leads has a city to go by");
+});
+
+it("works each example out from real numbers", () => {
+  const light = rep("a", "asha sample", true, 2);
+  const heavy = rep("b", "ravi example", true, 9);
+  const four = [
+    light,
+    heavy,
+    rep("c", "meera sample"),
+    rep("d", "dev example"),
+  ];
+  expect(ruleExample("even", 13, four, null)).toBe(
+    "13 leads → 3 or 4 each for 4 sellers",
+  );
+  expect(ruleExample("even", 2, four, null)).toBe(
+    "2 leads → 1 each to 2 of your 4 sellers",
+  );
+  expect(ruleExample("even", 1, four, null)).toBe(
+    "1 lead → one of your 4 sellers",
+  );
+  expect(ruleExample("even", 0, four, null)).toBe(
+    "For example, 12 new leads → 3 each for 4 sellers",
+  );
+  expect(ruleExample("even", 5, [light], null)).toBe("5 leads → all to Asha");
+  expect(ruleExample("balanced", 5, [heavy, light], null)).toBe(
+    "Asha has 2 open, Ravi 9: Asha gets leads first",
+  );
+  expect(ruleExample("balanced", 5, [light], null)).toBeNull();
+  expect(ruleExample("by_city", 0, [light, heavy], null)).toBe(
+    "For example, one city's leads to Asha, another's to Ravi",
+  );
+  expect(ruleExample("even", 5, [], null)).toBeNull();
+});
+
+it("says why nothing moves, and what to do about it", () => {
+  const none: Distribution = { ...plan(true), moved: 0, given: [], left: {} };
+  expect(nothingWhy(none, 0, "even")).toEqual({
+    line: "Tick at least one seller under To.",
+    button: "Pick a seller first",
+  });
+  expect(nothingWhy(none, 0, "by_city").line).toBe(
+    "Pick a seller for at least one city.",
+  );
+  expect(
+    nothingWhy({ ...none, left: { everyone_at_cap: 40 } }, 2, "even").button,
+  ).toBe("Everyone is full");
+  expect(
+    nothingWhy({ ...none, left: { no_seller_for_it: 40 } }, 1, "by_source")
+      .line,
+  ).toBe("No seller is picked for these leads' sources yet.");
+  expect(nothingWhy({ ...none, left: { closed: 3 } }, 2, "even").line).toBe(
+    "These leads are won, lost or junk. Closed leads stay where they are.",
+  );
+});
+
+it("names the reason on the button instead of a dead 'Nothing to give out'", async () => {
+  answer = {
+    ...plan(true),
+    moved: 0,
+    given: [],
+    left: { everyone_at_cap: 40 },
+  };
+  await act(async () =>
+    root.render(
+      <AssignSheet
+        open
+        target={{ kind: "unassigned", count: 40 }}
+        reps={REPS}
+        onClose={() => {}}
+        onDone={() => {}}
+      />,
+    ),
+  );
+  await settle();
+  expect(sheet().textContent).toContain(
+    "Everyone you picked is at their open-lead limit.",
+  );
+  const button = sheet().querySelector("footer button") as HTMLButtonElement;
+  expect(button.textContent).toBe("Everyone is full");
+  expect(button.disabled).toBe(true);
+});
+
+it("with no lead waiting, explains where new leads go and opens lead rules", async () => {
+  const onClose = vi.fn();
+  answer = { ...plan(true), leads: 0, moved: 0, given: [], left: {} };
+  await act(async () =>
+    root.render(
+      <AssignSheet
+        open
+        target={{ kind: "unassigned", count: 0 }}
+        reps={REPS}
+        onClose={onClose}
+        onDone={() => {}}
+      />,
+    ),
+  );
+  await settle();
+  const text = sheet().textContent;
+  expect(text).toContain("Every open lead has an owner");
+  expect(text).toContain("New leads go out by your lead rules.");
+  expect(text).toContain("Nothing to share right now.");
+  expect(text).toContain("For example, 6 new leads → 3 each for 2 sellers");
+  expect(text).not.toContain("Nothing to give out");
+  const button = sheet().querySelector("footer button") as HTMLButtonElement;
+  expect(button.textContent).toBe("Open lead rules");
+  await act(async () => button.click());
+  expect(onClose).toHaveBeenCalledOnce();
+  expect(push).toHaveBeenCalledWith("/settings/lead-rules");
 });
