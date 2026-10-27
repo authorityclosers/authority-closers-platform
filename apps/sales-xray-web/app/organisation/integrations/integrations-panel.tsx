@@ -21,6 +21,7 @@ import { notify } from "../../notice-center";
 import {
   Badge,
   Button,
+  Card,
   Dialog,
   Empty,
   Field,
@@ -555,8 +556,35 @@ function Deliveries({ reloadKey }: { reloadKey: number }) {
     return (
       <p className={styles.note}>No events sent yet. New events show here.</p>
     );
+  const retry = (id: string) =>
+    retryDelivery(id).then(setItems, (error: unknown) =>
+      problem(error, "The event was not queued again"),
+    );
   return (
-    <Table label="Delivery log">
+    <Table
+      label="Delivery log"
+      // On a phone each delivery is two lines, not a table to scroll (owner
+      // bug #47, 27 Oct 2026).
+      cards={items.map((item) => (
+        <Card key={item.id}>
+          <strong>
+            <code>{item.eventType}</code>
+          </strong>
+          <span>
+            {when(item.createdAt)} · {item.attempts}{" "}
+            {item.attempts === 1 ? "try" : "tries"} ·{" "}
+            <Badge tone={DELIVERY_TONE[item.status] ?? "neutral"}>
+              {DELIVERY_LABEL[item.status] ?? item.status}
+            </Badge>
+          </span>
+          {item.status === "dead_letter" ? (
+            <Button variant="ghost" onClick={() => void retry(item.id)}>
+              Send again
+            </Button>
+          ) : null}
+        </Card>
+      ))}
+    >
       <thead>
         <tr>
           <th scope="col">When</th>
@@ -585,14 +613,7 @@ function Deliveries({ reloadKey }: { reloadKey: number }) {
             <td>{item.lastHttpStatus ?? item.lastErrorCode ?? "—"}</td>
             <td>
               {item.status === "dead_letter" ? (
-                <Button
-                  variant="ghost"
-                  onClick={() =>
-                    retryDelivery(item.id).then(setItems, (error: unknown) =>
-                      problem(error, "The event was not queued again"),
-                    )
-                  }
-                >
+                <Button variant="ghost" onClick={() => void retry(item.id)}>
                   Send again
                 </Button>
               ) : null}
@@ -1040,7 +1061,30 @@ function AppsSection({
       }
     >
       {connected.length ? (
-        <Table label="Connected apps">
+        <Table
+          label="Connected apps"
+          // Two lines each on a phone (owner bug #47).
+          cards={connected.map((item) => (
+            <Card key={item.id}>
+              <strong>{item.app}</strong>
+              <span>
+                {item.scopes.map(label).join(", ")} · connected{" "}
+                {when(item.createdAt)} · last used{" "}
+                {item.lastUsedAt ? when(item.lastUsedAt) : "never"}
+              </span>
+              <Button
+                variant="ghost"
+                onClick={() =>
+                  disconnect(item.id).then(onConnections, (caught: unknown) =>
+                    problem(caught, "The app was not disconnected"),
+                  )
+                }
+              >
+                Disconnect
+              </Button>
+            </Card>
+          ))}
+        >
           <thead>
             <tr>
               <th scope="col">App</th>
@@ -1086,7 +1130,28 @@ function AppsSection({
       {apps.length ? (
         <>
           <h3 className={styles.subhead}>Your apps</h3>
-          <Table label="Your apps">
+          <Table
+            label="Your apps"
+            cards={apps.map((app) => (
+              <Card key={app.id}>
+                <strong>{app.name}</strong>
+                <span>
+                  <code>{app.clientId}</code> · returns to{" "}
+                  {app.redirectUris.join(", ")}
+                </span>
+                <Button
+                  variant="ghost"
+                  onClick={() =>
+                    removeApp(app.id).then(onApps, (caught: unknown) =>
+                      problem(caught, "The app was not removed"),
+                    )
+                  }
+                >
+                  Remove
+                </Button>
+              </Card>
+            ))}
+          >
             <thead>
               <tr>
                 <th scope="col">App</th>

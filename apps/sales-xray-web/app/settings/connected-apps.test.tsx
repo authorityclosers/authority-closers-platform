@@ -238,8 +238,12 @@ it("draws card outlines first, then one card per app with its status and one mai
         ),
       ),
   ).toEqual(["Leads and ads", "Messages", "Calls and AI", "Sign-in"]);
-  expect(host.textContent).toContain("4 connected");
-  expect(host.textContent).toContain("1 needs attention");
+  // The summary counts the apps in three chips (owner bug #45).
+  expect(
+    [...host.querySelectorAll('[aria-label="Show apps"] button')].map(
+      (item) => item.textContent,
+    ),
+  ).toEqual(["3Connected", "1To fix", "2Not connected"]);
   expect(card("meta_leads").textContent).toContain("Connected");
   // A problem shows the app's own words about it.
   expect(card("whatsapp").textContent).toContain("Needs attention");
@@ -774,7 +778,7 @@ it("says what connecting gives instead of sending people to Settings, and names 
   );
   expect(card("google_ads").textContent).not.toContain("Not connected.");
   expect(host.textContent).not.toMatch(/in Settings\./);
-  expect(host.textContent).toContain("Brightline Sandbox · 4 connected");
+  expect(host.querySelector("h2")?.textContent).toBe("Brightline Sandbox");
   await act(async () =>
     button(card("whatsapp"), "Send a test message")!.click(),
   );
@@ -783,25 +787,67 @@ it("says what connecting gives instead of sending people to Settings, and names 
   );
 });
 
-// Owner bug #43 (27 Oct 2026): at 390 px the status line wrapped mid-phrase
-// ("1 needs / attention"). Each part keeps its "·" and holds together.
-it("keeps each part of the status line together, breaking only between parts", async () => {
+// Owner bugs #43 and #45 (27 Oct 2026): the status sentence became chips that
+// count the apps and filter the cards; the filter lives in the address.
+it("filters the cards with the summary's status chips, kept in the address", async () => {
   await act(async () => root.render(<ConnectedApps />));
   await flush();
-  const line = [...host.querySelectorAll("p")].find((item) =>
-    item.textContent?.startsWith("Brightline Sandbox"),
-  )!;
-  const parts = [...line.children].map((part) => part.textContent ?? "");
-  expect(parts.slice(0, 3)).toEqual([
-    "Brightline Sandbox",
-    "· 4 connected",
-    "· 1 needs attention",
-  ]);
-  expect(parts.slice(1).every((part) => part.startsWith("· "))).toBe(true);
-  // The only plain spaces are between parts, so lines break only there.
-  expect(line.textContent).toContain(
-    "Brightline Sandbox · 4 connected · 1 needs attention",
+  const chip = (label: string) =>
+    [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '[aria-label="Show apps"] button',
+      ),
+    ].find((item) => item.textContent?.endsWith(label))!;
+  expect(host.querySelector("h2 + p")?.textContent).toMatch(
+    /^6 apps · checked /,
   );
+  await act(async () => chip("To fix").click());
+  expect(
+    [...host.querySelectorAll("article")].map((item) => item.dataset.app),
+  ).toEqual(["whatsapp"]);
+  expect(chip("To fix").getAttribute("aria-pressed")).toBe("true");
+  expect(new URLSearchParams(window.location.search).get("show")).toBe("fix");
+  expect(host.textContent).toContain("Showing 1 of 6 apps");
+  // The same chip again, or Show all, clears it.
+  await act(async () => chip("To fix").click());
+  expect(new URLSearchParams(window.location.search).get("show")).toBeNull();
+  await act(async () => chip("Connected").click());
+  expect(
+    [...host.querySelectorAll("article")].map((item) => item.dataset.app),
+  ).toEqual(["meta_leads", "phone_calls", "ai_replies"]);
+  await act(async () => button(host, "Show all 6 apps")!.click());
+  expect(host.querySelectorAll("article").length).toBeGreaterThan(3);
+  expect(new URLSearchParams(window.location.search).get("show")).toBeNull();
+});
+
+// Owner bug #45: one card shape; the whole card opens it, and a passed test
+// says so on its button.
+it("opens an app from anywhere on its card, and marks a passed test", async () => {
+  routes["POST /v1/lead-desk/integrations/phone_calls/test"] = () =>
+    Response.json({
+      testId: null,
+      app: "phone_calls",
+      status: "passed",
+      words: "Phones fine.",
+      steps: [],
+    });
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  // The card's own tap target comes last, under its buttons.
+  const open = [
+    ...card("phone_calls").querySelectorAll<HTMLButtonElement>("button"),
+  ].at(-1)!;
+  expect(open.textContent).toBe("Manage Phone call logging (Sales Xray app)");
+  await act(async () =>
+    button(card("phone_calls"), "Check the phones")!.click(),
+  );
+  await flush();
+  expect(card("phone_calls").hasAttribute("data-passed")).toBe(true);
+  expect(
+    button(card("phone_calls"), "Check the phones")!.querySelector("svg"),
+  ).not.toBeNull();
+  await act(async () => open.click());
+  expect(host.querySelector("dialog")).not.toBeNull();
 });
 
 it("keeps one result at a time, shown once", async () => {

@@ -9,7 +9,6 @@
  */
 import Link from "next/link";
 import {
-  Fragment,
   useCallback,
   useEffect,
   useId,
@@ -19,6 +18,7 @@ import {
 } from "react";
 import {
   CheckCircle2,
+  ChevronRight,
   Hourglass,
   Loader2,
   Lock,
@@ -40,6 +40,7 @@ import { goToProvider } from "../sign-in-connect";
 import { parseSignInMethods, type ConnectOption } from "../sign-in-methods";
 import { Badge, Button, Empty, Skeleton, type Tone } from "../ui/kit";
 import { BrandTile } from "../ui/brand-tile";
+import { SideScroll } from "../ui/side-scroll";
 import {
   ago,
   AppsError,
@@ -216,6 +217,31 @@ const GROUPS: { title: string; apps: AppKey[] }[] = [
 // The outline while loading: the same groups, so nothing moves.
 const SKELETON_GROUPS = [4, 3, 2];
 
+// The summary's status chips (owner bugs #43 and #45, 27 Oct 2026: the plain
+// status sentence "needs better ux"): each counts its apps and filters the
+// cards to them. The filter stays in the address (?show=), so a reload or a
+// shared link keeps it.
+type Show = "connected" | "fix" | "off";
+const SHOWS: { key: Show; label: string; tone: "good" | "warn" | "idle" }[] = [
+  { key: "connected", label: "Connected", tone: "good" },
+  { key: "fix", label: "To fix", tone: "warn" },
+  { key: "off", label: "Not connected", tone: "idle" },
+];
+const showOf = (app: AppHealth): Show =>
+  app.state === "ready" ? "connected" : app.state === "problem" ? "fix" : "off";
+
+function readShow(): Show | null {
+  if (typeof window === "undefined") return null;
+  const value = new URLSearchParams(window.location.search).get("show");
+  return SHOWS.find((item) => item.key === value)?.key ?? null;
+}
+
+/** When the apps were checked; a server clock a little ahead is still "just now". */
+function checkedWords(at: string | null): string | null {
+  const words = ago(at);
+  return words?.startsWith("in ") ? "just now" : words;
+}
+
 const POLL_MS = 2000;
 const POLL_LIMIT = 45;
 
@@ -306,11 +332,45 @@ function AppCard({
   const status = STATUS[app.state];
   const offer = app.tests[0];
   const connected = app.state === "ready" || app.state === "problem";
+  // One card for every app (owner bug #45, 27 Oct 2026): its tile, name,
+  // status and one line of detail; the whole card opens it; at most one filled
+  // action, and none where it can't connect here ("Not available here").
+  const main: ReactNode = app.page ? (
+    // Set up on its own page (lead stages live in Leads): a problem there is
+    // the one filled action; connected, the card itself goes there.
+    app.state === "problem" || !connected ? (
+      <Link
+        href={app.page}
+        className={styles.linkButton}
+        data-variant={app.state === "problem" ? "primary" : "tinted"}
+      >
+        {app.state === "problem" ? "Review" : "Set up"}
+      </Link>
+    ) : null
+  ) : app.state === "problem" && app.connect ? (
+    // Its own words ask to connect again: that is the one filled button.
+    <Button variant="primary" onClick={() => connectApp(app)}>
+      <PlugZap size={15} aria-hidden="true" />
+      Reconnect
+    </Button>
+  ) : !connected && app.connect && app.state !== "off" ? (
+    <Button
+      variant="secondary"
+      className={styles.tinted}
+      onClick={() => (GUIDED.has(app.app) ? onManage() : connectApp(app))}
+    >
+      <PlugZap size={15} aria-hidden="true" />
+      {GUIDED.has(app.app) ? "Set up" : "Connect"}
+    </Button>
+  ) : null;
+  const testable = offer && app.state !== "not_set_up";
+  const passed = result?.status === "passed";
   return (
     <article
       className={styles.card}
       data-app={app.app}
       data-state={app.state}
+      data-passed={passed ? "" : undefined}
       aria-labelledby={titleId}
     >
       <div className={styles.cardHead}>
@@ -319,6 +379,7 @@ function AppCard({
           <h3 id={titleId}>{app.name}</h3>
           <Badge tone={status.tone}>{status.label}</Badge>
         </div>
+        <ChevronRight size={18} aria-hidden="true" className={styles.chevron} />
       </div>
       <p className={styles.words}>{cardWords(app)}</p>
       {app.blockers.length ? (
@@ -329,61 +390,41 @@ function AppCard({
           {app.blockers[0].short}
         </p>
       ) : null}
-      <div className={styles.actions}>
-        {!app.page && app.state === "problem" && app.connect ? (
-          // Its own words ask to connect again: that is the one filled button.
-          <Button variant="primary" onClick={() => connectApp(app)}>
-            <PlugZap size={15} aria-hidden="true" />
-            Reconnect
-          </Button>
-        ) : null}
-        {app.page ? (
-          // Set up on its own page (lead stages live in Leads); a problem
-          // there is this card's one filled action.
-          <Link
-            href={app.page}
-            className={styles.linkButton}
-            data-variant={
-              app.state === "problem"
-                ? "primary"
-                : connected
-                  ? "secondary"
-                  : "tinted"
-            }
-          >
-            {app.state === "problem"
-              ? "Review"
-              : connected
-                ? "Manage"
-                : "Set up"}
-          </Link>
-        ) : app.state === "not_set_up" ? null : !connected &&
-          app.connect &&
-          app.state !== "off" ? (
-          <Button
-            variant="secondary"
-            className={styles.tinted}
-            onClick={() => (GUIDED.has(app.app) ? onManage() : connectApp(app))}
-          >
-            <PlugZap size={15} aria-hidden="true" />
-            {GUIDED.has(app.app) ? "Set up" : "Connect"}
-          </Button>
-        ) : (
-          <Button variant="secondary" onClick={onManage}>
-            Manage
-          </Button>
-        )}
-        {offer ? (
-          <Button
-            variant="ghost"
-            disabled={result?.status === "waiting"}
-            onClick={() => onTest(offer)}
-          >
-            {result?.status === "waiting" ? "Testing…" : offer.label}
-          </Button>
-        ) : null}
-      </div>
+      {main || testable ? (
+        <div className={styles.actions}>
+          {main}
+          {testable ? (
+            // The test is the card's own action when nothing needs fixing;
+            // beside a fix it steps back. Passed, it says so (bug #45).
+            <Button
+              variant={main ? "ghost" : "secondary"}
+              className={passed ? styles.testPassed : undefined}
+              disabled={result?.status === "waiting"}
+              onClick={() => onTest(offer)}
+            >
+              {result?.status === "waiting" ? (
+                <Loader2 size={15} aria-hidden="true" className={styles.spin} />
+              ) : passed ? (
+                <CheckCircle2 size={15} aria-hidden="true" />
+              ) : null}
+              {result?.status === "waiting" ? "Testing…" : offer.label}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
       {result ? <Outcome result={result} onDismiss={onDismiss} /> : null}
+      {/* Last, so the card's own links and buttons come first and sit above it. */}
+      {app.page ? (
+        <Link
+          href={app.page}
+          className={styles.open}
+          aria-label={`Manage ${app.name}`}
+        />
+      ) : (
+        <button type="button" className={styles.open} onClick={onManage}>
+          <span className={styles.hidden}>Manage {app.name}</span>
+        </button>
+      )}
     </article>
   );
 }
@@ -876,6 +917,17 @@ export function ConnectedApps() {
   const lastRead = useRef(0);
   // Which workspace these apps belong to: tests run there, so it is named.
   const [workspace, setWorkspace] = useState<string | null>(null);
+  // Read once from the address; the chips render only after the apps load,
+  // so the first paint never depends on it.
+  const [show, setShow] = useState<Show | null>(readShow);
+  const choose = (next: Show | null) => {
+    setShow(next);
+    const url = new URL(window.location.href);
+    if (next) url.searchParams.set("show", next);
+    else url.searchParams.delete("show");
+    // Like a tab: Back leaves the page, not the filter.
+    window.history.replaceState(window.history.state, "", url);
+  };
 
   useEffect(() => {
     const controller = new AbortController();
@@ -1090,64 +1142,96 @@ export function ConnectedApps() {
     );
 
   const apps = loaded.state === "ready" ? loaded.apps : [];
-  const connected = apps.filter(
-    (app) => app.state === "ready" || app.state === "problem",
-  ).length;
-  const attention = apps.filter((app) => app.state === "problem").length;
+  const counts: Record<Show, number> = { connected: 0, fix: 0, off: 0 };
+  for (const app of apps) counts[showOf(app)] += 1;
+  const shown = show ? counts[show] : apps.length;
   const open = drawn ? apps.find((app) => app.app === drawn.app) : undefined;
-  // The status line's parts (owner bug #43, 27 Oct 2026: it wrapped mid-phrase).
-  // Each holds together with its "·", so a narrow screen breaks between them.
-  const checked = ago(loaded.state === "ready" ? loaded.checkedAt : null);
-  const status: ReactNode[] = [
-    <strong key="connected">{connected} connected</strong>,
-    attention ? (
-      <span key="attention" data-tone="warn">
-        {attention} {attention === 1 ? "needs" : "need"} attention
-      </span>
-    ) : null,
-    checked ? <span key="checked">checked {checked}</span> : null,
-  ].filter(Boolean);
+  const checked = checkedWords(
+    loaded.state === "ready" ? loaded.checkedAt : null,
+  );
 
   return (
     <div className={styles.page}>
       <div className={styles.summary}>
+        <div className={styles.summaryHead}>
+          <div className={styles.summaryTitle}>
+            <h2>{workspace ?? "Your apps"}</h2>
+            {loaded.state === "ready" ? (
+              <p>
+                {show
+                  ? `Showing ${shown} of ${apps.length} apps`
+                  : `${apps.length} apps`}
+                {refreshing
+                  ? " · checking…"
+                  : checked
+                    ? ` · checked ${checked}`
+                    : null}
+              </p>
+            ) : loaded.state === "failed" ? (
+              <p>Your apps couldn’t be checked.</p>
+            ) : (
+              <Skeleton width={180} height={12} />
+            )}
+          </div>
+          {/* A quiet refresh: an icon beside the name; when they were checked
+              sits in the line under it. */}
+          <Button
+            variant="ghost"
+            className={styles.refresh}
+            aria-label={
+              loaded.state === "failed" ? "Try again" : "Check your apps again"
+            }
+            disabled={loaded.state === "loading" || refreshing}
+            onClick={() => {
+              setRefreshing(true);
+              setAttempt((value) => value + 1);
+            }}
+          >
+            {loaded.state === "failed" ? (
+              <span className={styles.refreshLabel}>Try again</span>
+            ) : (
+              <span className={styles.hidden}>Check again</span>
+            )}
+            <RefreshCw
+              size={16}
+              aria-hidden="true"
+              className={refreshing ? styles.spin : undefined}
+            />
+          </Button>
+        </div>
         {loaded.state === "ready" ? (
-          <p>
-            {workspace ? (
-              <span className={styles.workspace}>{workspace}</span>
-            ) : null}
-            {status.map((part, index) => (
-              <Fragment key={index}>
-                {workspace || index ? " " : null}
-                <span className={styles.statusPart}>
-                  {workspace || index ? "· " : null}
-                  {part}
-                </span>
-              </Fragment>
-            ))}
-          </p>
-        ) : loaded.state === "failed" ? (
-          <p>Your apps couldn’t be checked.</p>
-        ) : (
-          <Skeleton width={220} height={14} />
-        )}
-        <Button
-          variant="ghost"
-          disabled={loaded.state === "loading" || refreshing}
-          onClick={() => {
-            setRefreshing(true);
-            setAttempt((value) => value + 1);
-          }}
-        >
-          <RefreshCw
-            size={15}
-            aria-hidden="true"
-            className={refreshing ? styles.spin : undefined}
-          />
-          <span className={styles.refreshLabel}>
-            {loaded.state === "failed" ? "Try again" : "Check again"}
-          </span>
-        </Button>
+          // One row: at 320 px it scrolls inside itself, never wraps.
+          <SideScroll chosen={show ?? ""}>
+            <div role="group" aria-label="Show apps" className={styles.filters}>
+              {SHOWS.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  className={styles.filter}
+                  data-tone={item.tone}
+                  aria-pressed={show === item.key}
+                  onClick={() => choose(show === item.key ? null : item.key)}
+                >
+                  <span className={styles.dot} aria-hidden="true" />
+                  {/* Keyed by its number, so a new count rolls in. */}
+                  <strong key={counts[item.key]}>{counts[item.key]}</strong>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </SideScroll>
+        ) : null}
+        {/* Only once the apps are in: the server renders without the
+            address's filter, so the first paint must not depend on it. */}
+        {loaded.state === "ready" && show ? (
+          <button
+            type="button"
+            className={styles.showAll}
+            onClick={() => choose(null)}
+          >
+            Show all {apps.length} apps
+          </button>
+        ) : null}
       </div>
       <div className={styles.groups} aria-busy={loaded.state === "loading"}>
         {loaded.state === "loading"
@@ -1164,7 +1248,8 @@ export function ConnectedApps() {
           : GROUPS.map((group) => {
               const members = group.apps
                 .map((key) => apps.find((app) => app.app === key))
-                .filter((app): app is AppHealth => app !== undefined);
+                .filter((app): app is AppHealth => app !== undefined)
+                .filter((app) => !show || showOf(app) === show);
               return members.length ? (
                 <section
                   key={group.title}
@@ -1191,15 +1276,16 @@ export function ConnectedApps() {
                         onDismiss={() => dismiss(app.app)}
                       />
                     ))}
-                    {/* Its own state and actions (Lead OS, 27 Oct 2026). */}
-                    {group.title === "Leads and ads" ? (
+                    {/* Its own state and actions (Lead OS, 27 Oct 2026); the
+                        chips don't count it, so a filter leaves it out. */}
+                    {group.title === "Leads and ads" && !show ? (
                       <GoogleFilesCard />
                     ) : null}
                   </div>
                 </section>
               ) : null;
             })}
-        {loaded.state !== "loading" && signIn.length ? (
+        {loaded.state !== "loading" && signIn.length && !show ? (
           <section className={styles.group} aria-label="Sign-in">
             <h3 className={styles.groupTitle}>Sign-in</h3>
             <div className={styles.grid}>

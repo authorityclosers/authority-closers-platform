@@ -1,0 +1,173 @@
+/* Settings → AI replies (owner bug #46, 27 Oct 2026): one line of what it
+   does, the explainer and the business profile folded, the mode as a
+   segmented choice, channels as chips with their marks. Tokens only. */
+
+/* While AI replies is coming soon: the settings are kept for its launch. */
+.ready {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.how,
+.fold {
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-fill-soft);
+}
+
+.how summary,
+.fold summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: inherit;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  list-style: none;
+  cursor: pointer;
+}
+
+.how summary::-webkit-details-marker,
+.fold summary::-webkit-details-marker {
+  display: none;
+}
+
+.how summary svg,
+.fold summary > svg {
+  flex: none;
+  color: var(--sx-muted);
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.how[open] summary svg,
+.fold[open] summary > svg {
+  transform: rotate(180deg);
+}
+
+.how summary:focus-visible,
+.fold summary:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+.how p {
+  margin: 0;
+  padding: 0 12px 12px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.5;
+}
+
+/* Off, Suggest and Auto share the row in equal thirds. */
+.mode > [role="group"] {
+  display: grid;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.modeHint {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.channels {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+/* A channel chip: its mark and name; ticked, it fills. */
+.channel {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 14px 0 8px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    border-color var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.channel input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--sx-accent);
+}
+
+.channel:has(input:checked) {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+}
+
+.channel:has(input:focus-visible) {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+/* The business profile, folded to one row with how much is filled. */
+.fold summary {
+  min-height: 64px;
+  padding: 10px 12px;
+}
+
+.foldTitle {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+}
+
+.foldTitle small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 500;
+}
+
+.meter {
+  display: block;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--sx-fill);
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--sx-accent);
+}
+
+.foldBody {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  padding: 4px 12px 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .how summary svg,
+  .fold summary > svg,
+  .channel {
+    transition: none;
+  }
+}
