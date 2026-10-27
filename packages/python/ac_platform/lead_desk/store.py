@@ -25,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ac_platform.audit.service import AuditRepository
 from ac_platform.identity import person_photos
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk import allocation, deletion, duplicate_queue, reports
+from ac_platform.lead_desk import allocation, deletion, duplicate_queue, reports, routing_rules
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk import meetings as meeting_rows
 from ac_platform.lead_desk import tasks as task_book
@@ -2855,16 +2855,28 @@ class LeadDesk:
             )
             return allocation.Allocation(None, reason, "hours")
         team = reps if reps is not None else await self._reps()
-        decision = allocation.allocate(
-            allocation.LeadFacts(
-                language=lead.language,
-                city=lead.city,
-                interest=lead.interest,
-                previous_owner=previous_owner,
-                exclude=exclude,
-            ),
-            [rep.state for rep in team],
-        )
+        # Routing rules first (owner, 27 Oct 2026); a returning lead goes back to its seller.
+        decision = None if previous_owner is not None else await self._routed(lead, team, exclude)
+        if decision is None or decision.person_id is None:
+            fallback = allocation.allocate(
+                allocation.LeadFacts(
+                    language=lead.language,
+                    city=lead.city,
+                    interest=lead.interest,
+                    previous_owner=previous_owner,
+                    exclude=exclude,
+                ),
+                [rep.state for rep in team],
+            )
+            # A rule matched but its people were away or full: the reason says so.
+            passed = f"{decision.reason}; then " if decision is not None else ""
+            decision = allocation.Allocation(
+                fallback.person_id,
+                passed + fallback.reason[:1].lower() + fallback.reason[1:]
+                if passed
+                else fallback.reason,
+                fallback.rule,
+            )
         await self._set_owner(
             lead,
             decision.person_id,
@@ -4417,6 +4429,124 @@ class LeadDesk:
         if not work_hours.paused(hours, self.now):
             await self.release_held()
         return await self.team()
+
+    async def _routed(
+        self, lead: Lead, team: Sequence[_Rep], exclude: frozenset[UUID]
+    ) -> allocation.Allocation | None:
+        """What the routing rules say for a new lead: its owner and why; a decision with no
+        owner when a rule matched but its people were away or full; None when no rule is on
+        or none matched."""
+        _, config = await self.settings()
+        routed = routing_rules.decide(
+            config,
+            routing_rules.facts(
+                source=lead.source,
+                source_label=lead.source_label,
+                city=lead.city,
+                language=lead.language,
+                interest=lead.interest,
+                payload=lead.payload,
+                value_answer=config.get(routing_rules.VALUE_KEY),
+            ),
+            routing_rules.seats([rep.state for rep in team], exclude),
+        )
+        if routed is None:
+            return None
+        decision, _ = routed
+        if decision.person_id is not None:
+            return allocation.Allocation(decision.person_id, decision.why, "routing")
+        if decision.passed_over:
+            return allocation.Allocation(None, "; ".join(decision.passed_over), "routing")
+        return None
+
+    async def routing_view(self) -> routing_rules.RoutingView:
+        self._require_manager()
+        revision, config = await self.settings()
+        team = await self._reps()
+        recent = (
+            await self.db.scalars(
+                select(Lead.payload)
+                .where(Lead.tenant_id == self.tenant_id, Lead.test_data.is_(False))
+                .order_by(Lead.created_at.desc())
+                .limit(300)
+            )
+        ).all()
+        return routing_rules.view(
+            config,
+            revision,
+            [rep.state for rep in team],
+            questions=routing_rules.questions(recent),
+            can_edit=self.viewer.can_manage,
+        )
+
+    async def save_routing(
+        self, command: routing_rules.RoutingCommand
+    ) -> routing_rules.RoutingView:
+        self._require_manager()
+        row = await self.db.get(LeadDeskSettings, self.tenant_id, with_for_update=True)
+        current = row.revision if row else 0
+        if current != command.expected_revision:
+            raise DeskError(409, "Someone changed these settings. Reload and try again.")
+        team = await self._reps()
+        try:
+            changes = routing_rules.saved(command, (rep.state.person_id for rep in team))
+        except ValueError as error:
+            raise DeskError(422, str(error)) from None
+        if row is None:
+            row = LeadDeskSettings(tenant_id=self.tenant_id, revision=0, config={})
+            self.db.add(row)
+        row.revision = current + 1
+        row.config = {**DEFAULT_SETTINGS, **(row.config or {}), **changes}
+        row.updated_by_person_id = self.viewer.person_id
+        row.updated_at = self.now
+        await self.db.flush()
+        return await self.routing_view()
+
+    async def try_routing(self, lead: routing_rules.TryLead) -> routing_rules.TryView:
+        """Where a lead like this would go now, and why: nothing is saved or given out."""
+        self._require_manager()
+        _, config = await self.settings()
+        team = await self._reps()
+        names = {rep.state.person_id: rep.state.name for rep in team}
+        routed = routing_rules.decide(
+            config,
+            routing_rules.facts(
+                source=lead.source,
+                city=lead.city,
+                language=lead.language,
+                interest=lead.interest,
+                payload=lead.answers,
+                value_answer=None,
+                value=lead.value,
+            ),
+            routing_rules.seats([rep.state for rep in team]),
+        )
+        if routed is not None and (person := routed[0].person_id) is not None:
+            decision, name = routed
+            return routing_rules.TryView(
+                person_id=person,
+                name=names.get(person),
+                rule=decision.rule,
+                rule_name=name,
+                why=decision.why,
+                passed_over=decision.passed_over,
+            )
+        fallback = allocation.allocate(
+            allocation.LeadFacts(language=lead.language, city=lead.city, interest=lead.interest),
+            [rep.state for rep in team],
+        )
+        passed = routed[0].passed_over if routed is not None else ()
+        lead_rules = "Lead rules: " + fallback.reason
+        return routing_rules.TryView(
+            person_id=fallback.person_id,
+            name=names.get(fallback.person_id) if fallback.person_id else None,
+            rule=None,
+            rule_name=None,
+            why=f"{'; '.join(passed)}; then {lead_rules[:1].lower()}{lead_rules[1:]}"
+            if passed
+            else lead_rules,
+            passed_over=passed,
+        )
 
     async def release_held(self, *, limit: int = 500) -> int:
         """Leads that waited for work hours go out to sellers once work has started."""
