@@ -416,3 +416,105 @@ def test_the_ai_review_needs_the_subscription_gate_and_files_findings_only(
     assert "#### AI review (Claude subscription, 2 pages" in (run / "report.md").read_text()
     [comment] = _ops(tmp_path, "comment")
     assert "findings only, no cards" in comment["body"] and "Asha" not in comment["body"]
+
+
+def _real(
+    key: str,
+    score: int,
+    people: int = 1,
+    title: str = "Script error (typeerror, ab12cd34) on Leads",
+) -> dict:
+    return {
+        "key": key,
+        "title": title,
+        "score": score,
+        "people": people,
+        "unit": "per_100_sessions",
+        "now": 2.5,
+        "before": None,
+        "by_release": [{"release": "v1.01.0", "value": 2.5}],
+        "task": f"{title}\n{people} people affected in 7d on production.",
+    }
+
+
+def test_real_use_cards_what_affects_enough_people_and_closes_when_gone(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    radar = _load(monkeypatch, tmp_path)
+    state: dict = {}
+    crash = _real("exit:crash", 4, title="The Android app crashes")
+    error = _real("error:typeerror:ab12cd34", 6, 2, "Script error (typeerror, ab12cd34) on Leads")
+    dead = _real("tap:dead:leads:row", 1, title="Taps on a row that does nothing on Leads")
+    many = [_real(f"error:typeerror:{n:08x}", 6, 2) for n in range(radar.TEL_CARDS)]
+    answer = {"window": "7d", "items": [crash, error, dead, *many], "more": 0, "truncated": False}
+    counts = radar.telemetry_ingest("production", answer, state, dry=False)
+    # The highest scores become cards, 6 a night; the rest wait, and one dead tap is no card.
+    assert counts == {
+        "findings": 3 + radar.TEL_CARDS,
+        "cards": radar.TEL_CARDS,
+        "reopened": 0,
+        "closed": 0,
+        "waiting": 2,
+    }
+    known = state["telemetry"]["production"]
+    assert known["tap:dead:leads:row"]["status"] == "known"
+    assert sorted(entry["status"] for entry in known.values()).count("waiting") == 2
+    ensured = {op["marker"]: op["fields"] for op in _ops(tmp_path, "ensure")}
+    assert "tel:parent" in ensured
+    card = next(fields for marker, fields in ensured.items() if marker != "tel:parent")
+    assert card["title"].startswith("[prod] Real use: ")
+    assert "By release: v1.01.0 2.5" in card["notes"]
+    assert "Admin → Product telemetry → Fix next" in card["notes"]
+    parents = {op["id"]: op["fields"].get("parentId") for op in _ops(tmp_path, "save")}
+    assert parents["task-tel:parent"] == radar.HQ
+    # Night 2: the crash is gone from the week; an answer cut short closes nothing.
+    opened = [key for key, entry in known.items() if entry["status"] == "open"]
+    (tmp_path / "pulse.log").unlink()
+    rest = [item for item in answer["items"] if item["key"] != opened[0]]
+    radar.telemetry_ingest("production", {**answer, "items": rest, "more": 3}, state, dry=False)
+    assert _ops(tmp_path, "close") == []
+    radar.telemetry_ingest("production", {**answer, "items": rest}, state, dry=False)
+    [closed] = _ops(tmp_path, "close")
+    assert closed["marker"] == radar.tel_marker("production", opened[0])
+    assert "Gone from real use: not seen in the last 7d on production" in closed["note"]
+    # Night 3: it comes back: the same card reopens, outside the night's cap.
+    (tmp_path / "pulse.log").unlink()
+    counts = radar.telemetry_ingest("production", answer, state, dry=False)
+    assert counts["reopened"] == 1
+    assert _ops(tmp_path, "move")[0]["status"] == "open"
+
+
+def test_real_use_reads_the_week_inside_the_environment_and_waits_for_the_module(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    answer = tmp_path / "answer.json"
+    answer.write_text(json.dumps({"window": "7d", "items": [], "more": 0}))
+    runner = _fake(
+        tmp_path / "runner",
+        "import sys, pathlib\n"
+        f"pathlib.Path({str(tmp_path / 'argv')!r}).write_text(' '.join(sys.argv[1:]))\n"
+        f"print(pathlib.Path({str(answer)!r}).read_text())\n",
+    )
+    monkeypatch.setenv("AC_BUG_RADAR_TELEMETRY_RUNNER", runner)
+    radar = _load(monkeypatch, tmp_path)
+    assert radar.main(["telemetry", "production"]) == 0
+    assert (tmp_path / "argv").read_text() == "--environment production --window 7d --limit 200"
+    # A release without the module yet: nothing to card, no failure.
+    missing = _fake(
+        tmp_path / "missing",
+        "import sys\n"
+        "sys.stderr.write('No module named ac_platform.telemetry.fix_next_cli')\n"
+        "sys.exit(1)\n",
+    )
+    monkeypatch.setenv("AC_BUG_RADAR_TELEMETRY_RUNNER", missing)
+    assert radar.read_fix_next("production") is None
+    assert radar.main(["telemetry", "nowhere"]) == 2
+
+
+def test_names_never_reach_a_real_use_card(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    radar = _load(monkeypatch, tmp_path)
+    title, notes = radar.tel_text(
+        _real("error:x", 6, 2, "Script error on Asha Menon's lead, ₹ 45,000 deal"), "production"
+    )
+    assert "Asha Menon" not in title + notes
+    assert "45,000" not in title + notes
