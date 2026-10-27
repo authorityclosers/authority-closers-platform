@@ -24,6 +24,10 @@ let current: Badge | null = null;
 let readAt = 0;
 let timer: number | null = null;
 let reading = false;
+// "Off" where Leads doesn't apply (a 403 outside an organisation): no more
+// reads until the app comes back to the front or the page reloads, which a
+// workspace switch does.
+let off = false;
 const listeners = new Set<() => void>();
 
 function emit(next: Badge | null) {
@@ -40,18 +44,26 @@ export function publishBadge(next: Badge): void {
 }
 
 function read(force = false) {
-  if (reading || document.visibilityState !== "visible") return;
+  if (off || reading || document.visibilityState !== "visible") return;
   if (!force && Date.now() - readAt < AGAIN_MS) return;
   reading = true;
   readAt = Date.now();
   void readBadge()
-    .then(emit)
+    .then((next) => {
+      if (next === "off") {
+        off = true;
+        emit(null);
+      } else emit(next);
+    })
     .finally(() => {
       reading = false;
     });
 }
 
-const onVisible = () => read();
+const onVisible = () => {
+  off = false;
+  read();
+};
 
 function subscribe(listener: () => void): () => void {
   listeners.add(listener);
