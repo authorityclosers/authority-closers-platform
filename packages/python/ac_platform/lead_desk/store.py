@@ -25,7 +25,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ac_platform.audit.service import AuditRepository
 from ac_platform.identity import person_photos
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk import allocation, deletion, duplicate_queue, reports, routing_rules
+from ac_platform.lead_desk import (
+    allocation,
+    choices,
+    deletion,
+    duplicate_queue,
+    reports,
+    routing_rules,
+)
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk import meetings as meeting_rows
 from ac_platform.lead_desk import tasks as task_book
@@ -3957,6 +3964,35 @@ class LeadDesk:
     def _require_manager(self) -> None:
         if not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins manage the team's lead rules.")
+
+    async def team_choices(self, days: int) -> choices.TeamChoices:
+        """What a seller's languages, areas and products are picked from (owner bug #49)."""
+        self._require_manager()
+        journey = await self._labels()
+        rows = await self._lead_traits(days)
+        return choices.view(rows, days=days, industry=journey.industry)
+
+    async def choices_fit(self, command: choices.FitCommand) -> choices.FitView:
+        """How many of last month's leads a seller profile would take on its rules."""
+        self._require_manager()
+        return choices.fit(await self._lead_traits(choices.FIT_DAYS), command)
+
+    async def _lead_traits(self, days: int) -> list[choices.Row]:
+        """The window's leads (no test data, none merged away) by city, language and
+        interest, with how many share each."""
+        result = await self.db.execute(
+            select(Lead.city, Lead.language, Lead.interest, func.count())
+            .where(
+                Lead.tenant_id == self.tenant_id,
+                Lead.test_data.is_(False),
+                Lead.merged_into_id.is_(None),
+                Lead.created_at >= self.now - timedelta(days=days),
+            )
+            .group_by(Lead.city, Lead.language, Lead.interest)
+        )
+        return [
+            (city, language, interest, count) for city, language, interest, count in result.all()
+        ]
 
     async def team(self) -> Team:
         self._require_manager()

@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
+from ac_platform.lead_desk import allocation
 from ac_platform.lead_desk.facets import Band, band_words, rupees
 
 ValueOp = Literal["at_least", "below", "between"]
@@ -81,7 +82,17 @@ class FieldIn:
 
     def holds(self, facts: LeadFacts) -> bool:
         given = getattr(facts, self.name)
-        return given is not None and fold(given) in {fold(value) for value in self.values}
+        if given is None:
+            return False
+        # The keys seller matching uses (lead_desk/choices.py offers chips by them), so a
+        # picked chip matches here too: "Navi-Mumbai" is "Navi Mumbai", and a lead in
+        # "Hindi, English" speaks Hindi.
+        if self.name == "language":
+            wanted = {code for value in self.values for code in allocation.language_codes(value)}
+            return bool(wanted & set(allocation.language_codes(given)))
+        if self.name in {"city", "interest"}:
+            return allocation.key(given) in {allocation.key(value) for value in self.values}
+        return fold(given) in {fold(value) for value in self.values}
 
     def words(self, facts: LeadFacts) -> str:
         return str(getattr(facts, self.name) or "")

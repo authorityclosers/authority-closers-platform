@@ -33,6 +33,7 @@ from ac_platform.identity.models import Person
 from ac_platform.integrations.ai_writes import IN_APP, AiWrites, AiWritesSettings
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import (
+    choices,
     digest_push,
     due_soon,
     duplicate_queue,
@@ -830,6 +831,28 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.team()
+
+    @router.get("/team/choices", response_model=choices.TeamChoices, response_model_by_alias=True)
+    async def team_choices(
+        request: Request, response: Response, days: int = choices.DAYS
+    ) -> choices.TeamChoices:
+        """What a seller's languages, areas and products are picked from: the values the
+        organisation's leads carry, with counts (owners and admins; owner bug #49)."""
+        no_query(request, frozenset({"days"}))
+        if not 7 <= days <= 365:
+            raise HTTPException(422, "Pick between 7 and 365 days.", headers=PRIVATE)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.team_choices(days)
+
+    @router.post("/team/choices/fit", response_model=choices.FitView)
+    async def choices_fit(
+        command: choices.FitCommand, request: Request, response: Response
+    ) -> choices.FitView:
+        """How many of last month's leads a seller profile would take: a read, nothing
+        is saved."""
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.choices_fit(command)
 
     @router.put("/team/{person_id}", response_model=Team, response_model_by_alias=True)
     async def save_rep(

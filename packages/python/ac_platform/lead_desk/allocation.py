@@ -24,6 +24,7 @@ from __future__ import annotations
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Final
 from uuid import UUID
 
 
@@ -96,6 +97,35 @@ _CODES = {
     "odia": "or",
     "urdu": "ur",
 }
+# A code's name on a chip: the first name the table gives it ("bn" is Bengali).
+LANGUAGE_NAMES: Final[dict[str, str]] = {
+    code: name.title() for name, code in reversed(_CODES.items())
+}
+
+
+def key(value: str) -> str:
+    """How seller matching compares an area or a product: lower case, hyphens as spaces,
+    single spaces (lead_desk/choices.py offers chips by it)."""
+    return _norm(value)
+
+
+def language_codes(value: str | None) -> tuple[str, ...]:
+    """Each word of a lead's language as matching reads it: a known language's code, else
+    the word ("Hindi, English" is ("hi", "en"); "hi-mr" is ("hi", "mr"))."""
+    if not value:
+        return ()
+    parts = _norm(value).replace(",", " ").replace("/", " ").split()
+    return tuple(_CODES.get(part, part) for part in parts)
+
+
+def checks(lead: LeadFacts, rep: RepState) -> tuple[bool | None, bool | None, bool | None]:
+    """One seller's language, area and product checks for one lead. None: the check
+    doesn't apply (no value on the lead, or no limit on the seller)."""
+    return (
+        _language_matches(lead.language, rep.languages),
+        _matches(lead.city, rep.areas),
+        _matches(lead.interest, rep.interests),
+    )
 
 
 def _sort_key(rep: RepState) -> tuple[int, float, str]:
@@ -129,12 +159,9 @@ def allocate(
         )
 
     def fits(rep: RepState, *, area: bool, product: bool) -> bool:
-        checks = [_language_matches(lead.language, rep.languages)]
-        if area:
-            checks.append(_matches(lead.city, rep.areas))
-        if product:
-            checks.append(_matches(lead.interest, rep.interests))
-        return all(check is not False for check in checks)
+        language, city, interest = checks(lead, rep)
+        relevant = (language, city if area else None, interest if product else None)
+        return all(check is not False for check in relevant)
 
     if lead.previous_owner is not None:
         previous = next((rep for rep in candidates if rep.person_id == lead.previous_owner), None)
