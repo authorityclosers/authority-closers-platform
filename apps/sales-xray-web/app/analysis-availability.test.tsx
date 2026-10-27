@@ -37,6 +37,33 @@ it("shows the paused state, preserves saved-call access copy and offers contact"
     "mailto:admin@authorityclosers.com",
   );
 });
+it("asks every 15 s only while on view, and once on coming back", async () => {
+  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+  let state: DocumentVisibilityState = "visible";
+  vi.spyOn(document, "visibilityState", "get").mockImplementation(() => state);
+  const fetch = vi.fn(
+    async () => new Response(JSON.stringify({ paused: false })),
+  );
+  vi.stubGlobal("fetch", fetch);
+  try {
+    await act(async () => root.render(createElement(AnalysisAvailability)));
+    expect(fetch).toHaveBeenCalledTimes(1);
+    await act(async () => vi.advanceTimersByTime(15_000));
+    expect(fetch).toHaveBeenCalledTimes(2);
+    state = "hidden";
+    document.dispatchEvent(new Event("visibilitychange"));
+    await act(async () => vi.advanceTimersByTime(60_000));
+    expect(fetch).toHaveBeenCalledTimes(2);
+    state = "visible";
+    await act(async () => {
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    expect(fetch).toHaveBeenCalledTimes(3);
+  } finally {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  }
+});
 it("maps only the server's exact pause message without exposing raw errors", async () => {
   vi.stubGlobal(
     "fetch",

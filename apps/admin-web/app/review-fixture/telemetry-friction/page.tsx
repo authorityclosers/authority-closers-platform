@@ -8,6 +8,7 @@ import { frictionFixture } from "./friction-fixture";
 
 const HREFS = {
   overview: "/review-fixture/telemetry",
+  speed: "/review-fixture/telemetry-speed",
   devices: "/review-fixture/telemetry-loop",
   releases: "/review-fixture/telemetry-loop?view=releases",
   fix: "/review-fixture/telemetry-loop?view=fix",

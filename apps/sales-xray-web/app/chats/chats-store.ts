@@ -34,6 +34,10 @@ let inflight: Promise<void> | null = null;
 let readAt = 0;
 let timer: number | null = null;
 let screens = 0;
+// A 403 (Leads works only inside an organisation): the timer stops reading
+// until the app comes back to the front or the page reloads, which a
+// workspace switch does (Lead OS, 27 Oct 2026).
+let forbidden = false;
 const listeners = new Set<() => void>();
 
 const emit = () => listeners.forEach((listener) => listener());
@@ -50,6 +54,8 @@ export function refreshChats({ force = false } = {}): Promise<void> {
       state = { list, error: null, version: state.version + 1 };
     })
     .catch((reason: unknown) => {
+      if (reason instanceof LeadsError && reason.status === 403)
+        forbidden = true;
       state = {
         ...state,
         error:
@@ -73,7 +79,7 @@ function schedule() {
   if (!listeners.size) return;
   timer = window.setTimeout(
     () => {
-      if (visible()) void refreshChats({ force: true });
+      if (visible() && !forbidden) void refreshChats({ force: true });
       schedule();
     },
     screens > 0 ? PAGE_EVERY_MS : BADGE_EVERY_MS,
@@ -81,7 +87,9 @@ function schedule() {
 }
 
 const onBack = () => {
-  if (visible()) void refreshChats();
+  if (!visible()) return;
+  forbidden = false;
+  void refreshChats();
 };
 
 function subscribe(listener: () => void): () => void {
@@ -142,4 +150,5 @@ export function resetChatsStore(): void {
   inflight = null;
   readAt = 0;
   screens = 0;
+  forbidden = false;
 }

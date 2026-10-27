@@ -17,6 +17,7 @@ import {
   PauseCircle,
   Sparkles,
   UserPlus,
+  UserRoundPlus,
   type LucideIcon,
 } from "lucide-react";
 import { useRef, useState } from "react";
@@ -35,6 +36,7 @@ const KINDS: Record<Kind, { icon: LucideIcon; tone: string; verb: string }> = {
   analysis_paused: { icon: PauseCircle, tone: "paused", verb: "See why" },
   invite_received: { icon: UserPlus, tone: "invite", verb: "Open invite" },
   bug_solved: { icon: BadgeCheck, tone: "solved", verb: "Open" },
+  lead_assigned: { icon: UserRoundPlus, tone: "lead", verb: "Open lead" },
   updates: { icon: Sparkles, tone: "news", verb: "What's new" },
 };
 

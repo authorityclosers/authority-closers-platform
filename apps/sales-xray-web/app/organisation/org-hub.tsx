@@ -12,7 +12,7 @@
  * is the organisation view as before, with its own states.
  */
 
-import { can, roleLabel } from "./roles";
+import { roleLabel } from "./roles";
 import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
@@ -24,10 +24,12 @@ import { AcquisitionShell } from "../acquisition-shell";
 import { SettingsSectionView } from "../settings/sections";
 import type { SettingsSectionId } from "../settings/settings-sections";
 import { ActionList, ActionRow, Segmented } from "../ui/kit";
+import { SideScroll, sideScrollFades, useSideScroll } from "../ui/side-scroll";
 import { useWorkspaceAccess } from "../workspace-access";
 import type { ServerOrganisation } from "./organisation-seed";
 import { OrganisationView } from "./organisation-view";
 import { HUB_PATH, HUB_TABS, hubHref, type HubTab } from "./hub-tabs";
+import { hubTabsFor } from "./setup-tabs";
 import styles from "./org-hub.module.css";
 
 type Part = { key: string; label: string; section: SettingsSectionId };
@@ -44,7 +46,10 @@ const CONNECTION_PARTS: readonly Part[] = [
   { key: "pulse", label: "Pulse", section: "pulse" },
 ];
 
-/** The tab row; Insights shows it too, so leaving for it keeps the place. */
+/**
+ * The tab row; Insights shows it too, so leaving for it keeps the place. On a
+ * phone it scrolls, with the open tab in view (owner bug #43, 27 Oct 2026).
+ */
 export function HubTabs({
   tabs,
   current,
@@ -54,8 +59,17 @@ export function HubTabs({
   current: string;
   base?: string;
 }) {
+  const { ref, edges } = useSideScroll<HTMLElement>(
+    '[aria-current="page"]',
+    current,
+  );
   return (
-    <nav className={styles.tabs} aria-label="Organisation">
+    <nav
+      ref={ref}
+      className={`${styles.tabs} ${sideScrollFades}`}
+      aria-label="Organisation"
+      {...edges}
+    >
       {tabs.map((tab) => (
         <Link
           key={tab.id}
@@ -92,18 +106,21 @@ function Parts({
   const current = parts.find((item) => item.key === shown) ?? parts[0];
   return (
     <div className={styles.parts}>
-      <Segmented
-        label={tab.label}
-        value={current.key}
-        items={parts.map((item) => ({ key: item.key, label: item.label }))}
-        onChange={(next) => {
-          setChosen({ from: part, key: next });
-          // The part lives in the address too, so reload and links keep it.
-          const url = new URL(window.location.href);
-          url.searchParams.set("part", next);
-          window.history.replaceState(window.history.state, "", url);
-        }}
-      />
+      {/* Its own scroller: a bare segmented control widened the page. */}
+      <SideScroll chosen={current.key}>
+        <Segmented
+          label={tab.label}
+          value={current.key}
+          items={parts.map((item) => ({ key: item.key, label: item.label }))}
+          onChange={(next) => {
+            setChosen({ from: part, key: next });
+            // The part lives in the address too, so reload and links keep it.
+            const url = new URL(window.location.href);
+            url.searchParams.set("part", next);
+            window.history.replaceState(window.history.state, "", url);
+          }}
+        />
+      </SideScroll>
       <SettingsSectionView
         key={current.section}
         id={current.section}
@@ -152,8 +169,8 @@ export function OrgHubFrame({
     (item) => item.tenant_id === access.context?.tenantId,
   );
   if (workspace?.kind !== "organisation") return <>{children}</>;
-  const manager = can(workspace.role, "team.view");
-  const tabs = HUB_TABS.filter((tab) => manager || !tab.managers);
+  // A Viewer gets the team's tabs but none of the setup (Roles B).
+  const tabs = hubTabsFor(workspace.role);
   return (
     <div className={styles.hub}>
       <OrgHeader workspace={workspace} />
@@ -180,8 +197,7 @@ export function OrganisationHub({
   if (current?.kind !== "organisation")
     return <OrganisationView initial={initial} sections={["overview"]} />;
 
-  const manager = can(current.role, "team.view");
-  const tabs = HUB_TABS.filter((tab) => manager || !tab.managers);
+  const tabs = hubTabsFor(current.role);
   const asked = query?.get("tab") ?? "overview";
   const tab = tabs.find((item) => item.id === asked && !item.href) ?? tabs[0];
   const part = query?.get("part") ?? null;

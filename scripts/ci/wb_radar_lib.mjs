@@ -12,6 +12,8 @@
 // - the report: stable finding keys, dedupe across states, groups by root cause, markdown and JSON.
 import { createHash } from "node:crypto";
 
+import { journeySummary } from "./wb_journeys_lib.mjs";
+
 // Phones at 320, 360 and 390 px and one computer at 1280; 100% and 130% as browser text scaling everywhere, and 130%
 // as the Android app zooms on phones (clamped to 1.2, so 130% on 320 px leaves 267 CSS px); light and dark.
 export const RADAR_SIZES = [
@@ -23,9 +25,37 @@ export const RADAR_SIZES = [
 export const RADAR_THEMES = ["light", "dark"];
 // The tap crawler's state: a phone, 100%, light (and the computer for screens that ask for it).
 export const CRAWL_SIZE = RADAR_SIZES[2];
+// The Android app as a budget phone runs it (27 Oct 2026, the testing plan's second profile):
+// - the app's user agent, so pages draw their in-app version (data-sx-app), which no other load does;
+// - the app's own font-scale handshake at its 1.2 cap (window.SXFontScale, in-app.ts), not a browser zoom;
+// - a 360 px phone with the CPU 4x slower, so taps can land while a page still hydrates.
+export const ANDROID_PROFILE = {
+  size: RADAR_SIZES[1],
+  userAgent:
+    "Mozilla/5.0 (Linux; Android 13; Fictional A05 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36 SalesXrayApp/1.0.42",
+  fontScale: 1.2,
+  cpu: 4,
+};
 
-/** One page load per size, theme and zoom: 100% then 130% text on the same load; the app's 130% zoom on its own. */
+/**
+ * One page load per size, theme and zoom: 100% then 130% text on the same load; the app's 130% zoom on its own;
+ * and the Android app profile, light and dark.
+ */
 export function radarLoads() {
+  const android = RADAR_THEMES.map((theme) => ({
+    size: ANDROID_PROFILE.size,
+    theme,
+    zoom: 1,
+    android: ANDROID_PROFILE,
+    states: [
+      {
+        ...ANDROID_PROFILE.size,
+        theme,
+        scale: ANDROID_PROFILE.fontScale,
+        mode: "android",
+      },
+    ],
+  }));
   return RADAR_SIZES.flatMap((size) =>
     RADAR_THEMES.flatMap((theme) => [
       {
@@ -48,10 +78,17 @@ export function radarLoads() {
             },
           ]),
     ]),
-  );
+  ).concat(android);
 }
 
-/** Every measured state of a page: 3 phones x 3 scales x 2 themes + 1280 x 2 scales x 2 themes = 22. */
+/** A screen's loads: all of them, without the Android app's for a screen that says android: false. */
+export const screenLoads = (screen = {}) =>
+  radarLoads().filter((load) => !(load.android && screen.android === false));
+
+/**
+ * Every measured state of a page: 3 phones x 3 scales x 2 themes + 1280 x 2 scales x 2 themes + the Android app x 2
+ * themes = 24.
+ */
 export const radarStates = () => radarLoads().flatMap((load) => load.states);
 
 /** A state's place in a finding's "where" list, e.g. "320x640 130% text dark". */
@@ -198,8 +235,10 @@ export function labelOf(el, max = 48) {
 /** One step of an element path: tag, a stable id, the role, a data-sx-* switch and the first stable class. */
 export function segmentOf(el) {
   const tag = el.tagName.toLowerCase();
-  const id =
-    el.id && el.id.length < 30 && !/[:«»\d]/.test(el.id) ? `#${el.id}` : "";
+  // React's generated ids (":r1:", "«r1»", and React 19.1's "_r_a_") change with the markup around them: never in a
+  // key (the first nightly split one cut title into four groups when a card gained aria-labelledby).
+  const generated = /[:«»\d]|^_[rR]_.*_$/.test(el.id ?? "");
+  const id = el.id && el.id.length < 30 && !generated ? `#${el.id}` : "";
   const role = el.getAttribute("role")
     ? `[role=${el.getAttribute("role")}]`
     : "";
@@ -661,10 +700,11 @@ export function radarScan(options = {}) {
       if (ox < 4 || oy < 4) continue;
       if (a.kind === "box" && b.kind === "box") {
         if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
-        // Two controls' boxes touching at a corner (a sheet's close button over a wide row's edge) hide nothing:
-        // count them when the overlap is a real share of the smaller one.
+        // Two controls' boxes touching at an edge (a sheet's close button over a wide row's corner, 8 x 4 px) hide
+        // nothing: skip a thin overlap that is also a small share of the smaller one. Two fields overlapping by
+        // 28 x 44 px (Lead rules' From and To) still count.
         const smaller = Math.min(a.r.w * a.r.h, b.r.w * b.r.h);
-        if (ox * oy < 0.15 * smaller) continue;
+        if (Math.min(ox, oy) < 8 && ox * oy < 0.15 * smaller) continue;
       }
       const [box, text] = a.kind === "box" ? [a, b] : [b, a];
       if (box.kind === "box" && text.kind === "text") {
@@ -970,6 +1010,97 @@ export function radarScan(options = {}) {
       );
     }
   }
+  // 7. A tab, segment or chip whose label wraps (owner bug #43, 27 Oct 2026: "Connected / apps" and "AI / replies"
+  // in the Connections bar): the label's text runs taller than 1.5 of its lines. Short words only (32 characters),
+  // so a card title that wraps on purpose is never a label.
+  const TABLIKE =
+    '[role="tab"], [aria-pressed], [role="group"] > button, [role="tablist"] :is(a, button)';
+  // A chip by its class's last word ("signalTag", "routing-rules__chip"); "tagGroupHeading" is a heading.
+  const chipClass = (el) =>
+    !/^H[1-6]$/.test(el.tagName) &&
+    String(el.className?.baseVal ?? el.className ?? "")
+      .split(/\s+/)
+      .some((name) =>
+        /(chip|pill|tab|badge|tag|segment|seg)s?$/i.test(
+          name.replace(/__[A-Za-z0-9_-]{5}$/, ""),
+        ),
+      );
+  const tabOf = (el) => {
+    const tab = el.closest(TABLIKE);
+    if (tab) return tab;
+    for (
+      let p = el, up = 0;
+      p && p !== document.body && up < 3;
+      p = p.parentElement, up++
+    )
+      if (chipClass(p) && p.children.length <= 3) return p;
+    return null;
+  };
+  const words = (text) =>
+    String(text ?? "")
+      .replace(/\s+/g, " ")
+      .trim();
+  const wrapped = new Set();
+  for (const t of texts) {
+    if (t.text.length > 32) continue;
+    const tab = tabOf(t.el);
+    if (!tab || wrapped.has(tab)) continue;
+    // The label is the control's whole text: a choice card's title over its description, or a count over its
+    // name, wraps by design (the first baseline of this check: setup choices, report count cards).
+    if (words(tab.innerText) !== words(t.text)) continue;
+    const s = st(t.el);
+    const size = parseFloat(s.fontSize) || 16;
+    const line = parseFloat(s.lineHeight) || size * 1.2; // "normal" is about 1.2
+    const top = Math.min(...t.boxes.map((b) => b.t));
+    const bottom = Math.max(...t.boxes.map((b) => b.b));
+    if (bottom - top <= 1.5 * line) continue;
+    wrapped.add(tab);
+    const lines = new Set(t.boxes.map((b) => Math.round(b.t / (line / 2))))
+      .size;
+    add(
+      {
+        check: "label-wraps",
+        severity: phone ? "high" : "medium",
+        selector: R.pathOf(tab),
+        label: R.labelOf(tab),
+        detail: `"${R.scrub(t.text).slice(0, 32)}" wraps to ${Math.max(2, lines)} lines: ${Math.round(bottom - top)} px of text on a ${Math.round(line)} px line`,
+      },
+      [tab],
+    );
+  }
+
+  // 8. A tab bar cut by the screen's edge (bug #43: "Puls…" at the right): its last item runs past the edge, or is
+  // clipped there, and nothing in the bar scrolls to reach it (a bar that scrolls inside the screen is fine).
+  const BAR = '[role="tablist"], [role="group"], [role="radiogroup"], nav';
+  const ITEM = 'a[href], button, [role="tab"], [role="radio"]';
+  for (const bar of all) {
+    if (!bar.matches(BAR) && !R.labelish(bar)) continue;
+    const box = rectOf(bar);
+    if (box.h > 120) continue; // a row of tabs, not a panel of controls
+    const items = [...bar.querySelectorAll(ITEM)].filter(
+      (item) => shown(item) && rectOf(item).w >= 3 && rectOf(item).h >= 3,
+    );
+    if (items.length < 2 || items.length > 24) continue;
+    const last = items.reduce((a, b) => (rectOf(b).r > rectOf(a).r ? b : a));
+    const r = rectOf(last);
+    // What of it can be seen: up to the screen's edge, or a clip at that edge (the page's own wrapper).
+    const limit = Math.min(W, clipOf(last).r);
+    if (r.r <= limit + 2 || limit < W - 24 || inScroller(last)) continue;
+    add(
+      {
+        check: "tabs-clipped",
+        severity: phone ? "high" : "medium",
+        selector: R.pathOf(bar),
+        label: R.labelOf(last),
+        detail:
+          r.l >= limit
+            ? `its last item, "${R.labelOf(last, 24)}", is past the screen edge; the bar does not scroll`
+            : `its last item, "${R.labelOf(last, 24)}", is cut at the screen edge: ${Math.round(limit - r.l)} of ${Math.round(r.w)} px shown; the bar does not scroll`,
+      },
+      [bar],
+    );
+  }
+
   return { findings };
 }
 
@@ -1430,8 +1561,12 @@ export function groupKeyOf(f) {
     case "tap-error":
       return `${f.check} | ${f.message ?? f.selector}`;
     case "overflow-page":
-      // The same width in the same viewport on several pages is one cause (the shell), whatever the page.
-      return `overflow-page | ${f.detail}`;
+      // Per page: a key with the page's width in it churned when the width moved by 3 px (first nightly).
+      return `overflow-page | ${f.page}`;
+    case "journey-broken":
+    case "journey-slow":
+      // A journey's step: steps of two journeys with the same name are different places.
+      return `${f.check} | ${f.page} | ${f.selector}`;
     case "overlap":
       return `overlap | ${String(f.selector)
         .split(" ⟂ ")
@@ -1510,6 +1645,8 @@ export const CHECKS = {
   "tap-target": "tap target under 44 px",
   contrast: "faint text",
   "centred-card": "narrow card centred on a phone",
+  "label-wraps": "tab or chip label wraps",
+  "tabs-clipped": "tab bar cut at the screen edge",
   "console-error": "console error",
   "page-error": "uncaught error",
   "request-failed": "failed request",
@@ -1518,6 +1655,8 @@ export const CHECKS = {
   "tap-blocked": "something covers the control",
   "tap-error": "error after a tap",
   "sheet-offscreen": "sheet opens off-screen",
+  "journey-broken": "a seller journey stops at a step",
+  "journey-slow": "a journey step is slow",
 };
 
 // What the checks cannot tell (kept in every report, so a reader can discount the known kinds of false alarm).
@@ -1530,6 +1669,8 @@ export const CAVEATS = [
   "Centred cards need a visible box (background, border or shadow); a centred alert dialog is listed as low.",
   "A segmented switch (one of several pressed) may set a mode with no content of its own (a playback speed): when it lights up and nothing else changes it is a low tab-no-switch; real tabs (role tab) are high.",
   "Overlap is compared inside one scroller: content scrolled under a sheet's footer is by design and not compared.",
+  "A wrapped label is a tab, segment or chip (by role, a pressed button, or its class) whose words of up to 32 characters run taller than 1.5 lines; a tab bar is cut when its last item ends past the screen edge (or a clip there) and no box around it scrolls sideways within the screen.",
+  "Seller journeys walk the fictional screens on the fixtures' development server: a step's time shows one that hangs, not production speed (real phones are in Admin → Speed and journeys). A journey that stops may be its own step gone stale after a screen changed; the crop shows where it stood.",
 ];
 
 // Every cell loses names (fixture people stay out of the report too) and anything that would break the table.
@@ -1560,6 +1701,21 @@ export function reportMarkdown(run, top = 15) {
       `| ${check} (${CHECKS[check]}) | ${groups.filter((g) => g.check === check).length} | ${mine.length} | ${by("high")} | ${by("medium")} | ${by("low")} |`,
     );
   }
+  if (run.journeys?.length) {
+    lines.push(
+      "",
+      "#### Seller journeys (fictional screens)",
+      "",
+      "| journey | as | steps | time | slowest step | stops at |",
+      "|---|---|---|---|---|---|",
+    );
+    for (const walk of run.journeys) {
+      const line = journeySummary(walk);
+      lines.push(
+        `| ${cell(walk.title)} | ${walk.profile === "android" ? "the Android app, slow phone" : "phone"} | ${line.done} | ${line.seconds} s | ${cell(line.slowest)} | ${cell(line.stopped) || "—"} |`,
+      );
+    }
+  }
   lines.push("", `#### Top ${Math.min(top, groups.length)} groups`, "");
   lines.push(
     "| # | severity | check | component | pages | states | example | crop |",
@@ -1582,6 +1738,21 @@ export function reportMarkdown(run, top = 15) {
       );
     if (g.findings.length > 4)
       lines.push(`  - … ${g.findings.length - 4} more pages or elements`);
+  }
+  if (run.stopped?.length) {
+    lines.push("", "#### Shards stopped at the 40-minute deadline", "");
+    for (const s of run.stopped)
+      lines.push(
+        `- shard ${s.shard}: still running ${s.running.map((job) => `${job.page} (${job.kind}, ${job.seconds}s)`).join(", ") || "nothing"}`,
+      );
+  }
+  const slow = [...pages]
+    .filter((p) => p.ms)
+    .sort((a, b) => b.ms - a.ms)
+    .slice(0, 5);
+  if (slow.length) {
+    lines.push("", "#### Slowest pages (all their loads and taps)", "");
+    for (const p of slow) lines.push(`- ${p.key}: ${Math.round(p.ms / 1000)}s`);
   }
   if (failed.length) {
     lines.push("", "#### Pages that could not be checked everywhere", "");

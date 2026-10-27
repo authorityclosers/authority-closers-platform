@@ -1743,6 +1743,32 @@ finish() {
 }
 trap finish EXIT
 
+# Release-safe intake (lead_desk/spool.py; docs/product/lead-desk/release-safe-intake.md):
+# while the hold is on, the edge sends website-form capture posts to the candidate's
+# spool, which keeps each lead on disk until the API files it. The spool has no
+# database access and stays up through the hold. It starts before any mutation, and a
+# spool that won't start leaves those posts with today's 503 rather than stopping the
+# release.
+intake_spool_root="$application_root/intake-spool/$target_environment"
+prepare_intake_spool_root() {
+  install -d -m 0750 -o root -g acops "$application_root/intake-spool" || return 1
+  [[ ! -L "$intake_spool_root" ]] || {
+    printf 'Intake spool root cannot be a symlink.\n' >&2
+    return 1
+  }
+  if [[ ! -e "$intake_spool_root" ]]; then
+    install -d -o 10001 -g 10001 -m 700 -- "$intake_spool_root" || return 1
+  fi
+  [[ "$(stat -c '%u:%g:%a' -- "$intake_spool_root")" == 10001:10001:700 ]] || {
+    printf 'Intake spool root ownership or mode is not canonical.\n' >&2
+    return 1
+  }
+}
+prepare_intake_spool_root
+if ! compose_for "$release_dir" up --detach --no-deps --wait --wait-timeout 60 intake-spool; then
+  printf 'WARNING: Intake spool did not start; capture posts get the hold 503 this release.\n' >&2
+fi
+
 mutation_started=1
 activate_edge_route "$edge_hold_source"
 check_route "$api_host" /health/ready 503 "release-hold-$target_environment"

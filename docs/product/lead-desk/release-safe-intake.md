@@ -2,13 +2,14 @@
 
 The owner asked on 27 Oct 2026: "when a routine update runs, services might stop midway… how are we handling this?"
 
-This note covers how each inbound lead path behaves during a release, what production shows, and the smallest fix that means no lead is ever lost. Nothing is built yet: it waits for the orchestrator's confirmation.
+This note covers how each inbound lead path behaves during a release, what production shows, and the fix that means no lead is ever lost. The orchestrator approved it on 27 Oct 2026, and it is built as described under "What was built".
 
 ## What happens today
 
 Every production release puts every host behind the edge hold (`infra/application/edge-routes/production-hold.caddy`), `salesxray.` and `api.` included. The hold answers any request with a plain-text `503` and `Retry-After: 30`.
 
 During the hold the release:
+
 - stops the API and workers;
 - switches the database to the migrator only;
 - migrates;
@@ -18,59 +19,67 @@ Nothing in the app can store a lead until the hold lifts.
 
 There were six holds on 26 Oct 2026, about two minutes each (UTC, from `deployments/production/*.env`):
 
-| # | Hold | Release |
-|---|---|---|
-| 1 | 01:47:13–01:49:07 | 7b76772f |
-| 2 | 06:45:09–06:47:10 | a2e71abb |
-| 3 | 08:30:12–08:32:18 | 1bb8df63 |
-| 4 | 12:21:53–12:23:51 | 405eebd8 |
-| 5 | 14:21:02–14:23:03 | d5b1ec84 |
-| 6 | 17:34:23–17:36:24 | 6160b08a |
+| #   | Hold              | Release  |
+| --- | ----------------- | -------- |
+| 1   | 01:47:13–01:49:07 | 7b76772f |
+| 2   | 06:45:09–06:47:10 | a2e71abb |
+| 3   | 08:30:12–08:32:18 | 1bb8df63 |
+| 4   | 12:21:53–12:23:51 | 405eebd8 |
+| 5   | 14:21:02–14:23:03 | d5b1ec84 |
+| 6   | 17:34:23–17:36:24 | 6160b08a |
 
 ## Every inbound lead path, and what its sender does with a 503
 
 **Meta lead ads webhook**
+
 - Route: `POST /v1/lead-desk/meta/webhook`.
 - The sender retries immediately, "then try a few more times with decreasing frequency over the next 36 hours". It drops a notice after 36 hours ([Meta webhooks][meta]).
 - Our backstop: `meta_pull.py` reads each Page's recent leads every 10 minutes. The Meta lead id dedupes, so a lead that arrives both ways is filed once. "Bring in older leads" reads 90 days.
 - **Safe.**
 
 **WhatsApp Cloud API**
+
 - Routes: `POST /v1/lead-desk/meta/webhook/whatsapp` and `POST /v1/lead-desk/whatsapp/webhook`.
 - The sender "retries delivery with decreasing frequency until the request succeeds, for up to 7 days" ([WhatsApp webhooks][wa]).
 - Our backstop: the unique `wamid` index files a retry once.
 - **Safe.**
 
 **Instagram and Messenger messages**
+
 - Route: `POST /v1/lead-desk/messaging/webhook`.
 - The general Graph rule (36 hours, [Meta webhooks][meta]) covers it. I didn't verify a separate Messenger rule.
 - **Safe.** Re-check once that app is live.
 
 **Google Ads lead forms**
+
 - Route: `POST /v1/lead-desk/capture/{id}/google-ads`.
 - Google marks a 5XX "retryable" ([Google Ads webhook][gads]). It publishes no schedule.
 - Our backstop: `google_pull.py` reads every active account every 10 minutes. The click id dedupes.
 - **Safe.**
 
 **Website forms**
+
 - Route: `POST /v1/lead-desk/capture/{id}`. Senders: Elementor, WPForms, a site's own code.
 - No retry. A browser form shows our 503 text, and a plugin at most logs an error.
 - No backstop.
 - **Lost.**
 
 **Zapier**
+
 - Route: `POST /v1/lead-desk/capture/{id}`.
 - The step errors. Autoreplay retries up to 5 times over about 10 h 35 min, but only on the Professional, Team and Enterprise plans, and only when it's turned on ([Zapier Autoreplay][zap]).
 - No backstop.
 - **Lost** on the Free plan, or with Autoreplay off.
 
 **Make**
+
 - Route: `POST /v1/lead-desk/capture/{id}`.
 - Make treats a 503 as a `ConnectionError` ([Make connection errors][make-503]) and reruns it automatically. The first rerun is after 1 minute. With incomplete executions stored, there are up to 8 reruns over about 8 h ([Make backoff][make-retry]).
 - No backstop.
 - **Usually safe.** It depends on the scenario's settings.
 
 **Pabbly Connect**
+
 - Route: `POST /v1/lead-desk/capture/{id}`.
 - Auto Re-Execute does 0–5 attempts, set per workflow. The interval and the default aren't documented ([Pabbly][pabbly]).
 - No backstop.
@@ -92,55 +101,67 @@ All of these were read-only, counts-only reads, logged in `costq/QUERY-LOG.txt` 
 
 So the at-risk route has no production traffic today. It will as soon as a customer's website form goes live, or Wise Life's Make or Pabbly flow moves to production. Fix it before then.
 
-## Proposal: a store-and-forward receiver for the capture route during the hold
+## What was built: a store-and-forward spool for the capture route during the hold
 
 **Why not just answer with something senders retry?** The hold already answers `503` with `Retry-After`, which Meta, WhatsApp, Google and Make retry. A website form never retries, and Zapier retries only on paid plans with Autoreplay on. No status code changes that.
 
-### The pieces
+The code is `packages/python/ac_platform/lead_desk/spool.py`.
 
-**1. `intake-spool`: a small receiver that releases never stop.**
-- About 120 lines of standard-library Python, with no app code. It has its own pinned `python:3.12-alpine` image, a read-only root filesystem and 64 MiB of memory.
-- It runs in the foundation compose next to `ac-edge-router`, so an application release never stops or replaces it.
-- It accepts only `POST /v1/lead-desk/capture/{uuid}` and `POST /v1/lead-desk/capture/{uuid}/google-ads`. The body must be at most 64 KiB, the same as the API's `_CAPTURE_MAX`.
-- For each request it writes one file to `/srv/authority-closers/application/intake-spool/<env>/new/` (a temporary file, then `fsync`, then rename; mode 0600, root:acops). The file holds:
-  - the path and the content type;
+**1. `intake-spool`: a small receiver that a hold never stops.**
+
+- It is a service in `infra/application/compose.yaml` on the API image, running standard-library code only: `python -m ac_platform.lead_desk.spool serve`.
+- It has no database network and no secrets. Its environment is `AC_ENVIRONMENT` and `AC_INTAKE_SPOOL_ROOT` only, its root filesystem is read-only, and it has 96 MiB of memory. Started, it holds about 25 MiB (measured 27 Oct 2026 on Python 3.12: its imports are the standard library and the two package `__init__` files).
+- The edge reaches it as `ac-<env>-api-intake:8080`.
+- It accepts only `POST /v1/lead-desk/capture/{uuid}` and `POST /v1/lead-desk/capture/{uuid}/google-ads`, with a body of at most 64 KiB (the API's own limit). It reads the body as the API does: JSON, or a form.
+- For each lead it writes one file to `/srv/authority-closers/application/intake-spool/<env>/new/` (a temporary file, then `fsync`, then rename; mode 0600, owned by the app user 10001). The file holds:
+  - the source;
   - the arrival time;
-  - the body;
-  - the source key's SHA-256, never the key itself: from the header, the query or Google's `google_key`, which it replaces in the body with its hash.
-- It answers `202 {"received": true, "outcome": "queued"}`, the same 202 shape the API gives.
-- It can't check the key, because it has no database. It bounds a flood instead: at most 10,000 files or 200 MB, then 503, plus a per-address rate limit.
-- Anything else gets the hold's 503, as today.
+  - the lead;
+  - the source key's SHA-256, never the key itself. The key comes from the header, the bearer token, `?key=` or Google's `google_key`; the last is removed from the stored body.
+- It answers `202 {"received": true, "outcome": "queued", "lead_id": null}`, the API's 202 shape. It answers 401, 404, 413 or 422 where the API would.
+- It can't check the key, because it has no database. It bounds a flood instead:
+  - at most 10,000 waiting files, then 503;
+  - 60 posts a minute from one address, then 429. The address is read as the API's own
+    limiter reads it (`http/rate_limits.py` `client_identity`): `CF-Connecting-IP` only when
+    the edge router (`AC_TRUSTED_PROXY_ADDRESSES`) delivered exactly one, else the peer, and
+    an IPv6 sender by its /64. `X-Forwarded-For` is the sender's to write, so it is never
+    read. Caddy's `{client_ip}` wouldn't do: the edge listens only on 127.0.0.1 behind the
+    Cloudflare tunnel and has no trusted proxies, so it is the tunnel's one address.
+- A sender has 15 s to send its body, as at the API, and every read waits at most 15 s,
+  so a stalled sender, or one that says its body is longer than it is, frees its thread.
+  A chunked body is read too (Caddy passes one on as sent), up to the same 64 KiB.
+- Anything else gets the hold's 503 and `Retry-After: 30`.
 
-**2. The hold sends the capture route to the spool.**
-- `production-hold.caddy` and `staging-hold.caddy` each get about 6 lines: on `api.` and `salesxray.`, `path /v1/lead-desk/capture/*` goes to `intake-spool`, before the 503 catch-all.
-- Outside a hold nothing changes, and the API answers as now.
+**2. The release starts it, then the hold sends capture posts to it.**
 
-**3. Replay after the release.**
-- `python -m ac_platform.lead_desk.spool_replay` runs inside the API container, with the spool directory mounted.
-  - The release script runs it right after write exposure (`activate_edge_route` to the new release).
-  - A 5-minute timer runs it as a safety net, so nothing is stranded if a release step fails.
+- `install-application-release.sh` prepares the spool folder (10001:10001, 0700) and starts the candidate's spool **before** the hold, before any mutation.
+- A spool that won't start leaves those posts with today's 503. It doesn't stop the release.
+- A release stops only the API and the workers, never the spool.
+- `production-hold.caddy` and `staging-hold.caddy` each add a named matcher (the Sales X-Ray host, `POST`, the two capture paths) with its own `handle`, ahead of the 503 hold. Outside a hold nothing changes.
+
+**3. The API files what the spool kept, every minute.**
+
+- The API runs `spool.run_replay` for its lifetime (`spool.attach`, beside the Lead Desk push loops), so there's no timer and no extra release step. The API mounts the same folder.
 - Each file goes through the same `Intake.capture`:
-  - the key is checked by its hash;
+  - the key is checked by its hash (`key_sha256`);
   - the arrival time becomes the lead's `received_at`;
   - the capture's content reference dedupes, so a file replayed after a crash is filed once.
-- Afterwards the file moves:
-  - a filed lead goes to `done/`;
-  - a 401 or 422 goes to `rejected/`, with a count in the log.
-- Both folders are deleted after 7 days. They hold personal data, so they stay out of git, logs and backups.
+- Then:
+  - filed or already known: the file is deleted, since the lead is in the database now;
+  - a wrong key, an unknown source or a lead with no answers goes to `rejected/`;
+  - anything else stays in `new/` for the next minute, for up to 24 hours. A file still
+    failing after that moves to `rejected/` with one error log, so `new/` can't fill
+    with files that never file.
+- `rejected/` is deleted after 7 days. Spool files hold personal data, so they stay out of
+  git and logs, and out of backups: restic excludes the spool folder
+  (`ac-restic-backup-inner`), and the Drive backup reads only `/srv/authority-closers/backups`.
+- A file lock keeps two API processes from replaying at once.
 
-### Size
-
-About 400 lines with tests:
-- the spool and its tests: ~200;
-- the replay and its tests: ~150;
-- the hold files: +12;
-- the foundation compose: +25;
-- the release script: +8;
-- the timer: +15.
-
-The hold files, the foundation compose and the release script are shared infrastructure. That means one pull request on its own lane, with CTO review.
+The compose file, the hold files and the release script are shared infrastructure, so this needs CTO review before it rides a release.
 
 ### Tests
+
+Built as `tests/unit/lead_desk/test_spool.py`, `tests/database/test_intake_spool_postgresql.py` and `tests/infra/test_intake_spool_infra.py`. The hold files were also adapted by the edge's own Caddy image with the foundation Caddyfile, and the intake route is evaluated before each 503.
 
 - **Spool (unit):**
   - only the two paths are accepted;
@@ -155,8 +176,8 @@ The hold files, the foundation compose and the release script are shared infrast
   - a wrong key goes to `rejected/` and is counted;
   - a Google Ads payload files like its webhook.
 - **Edge:**
-  - both hold files pass `caddy validate`;
-  - during a hold, a capture POST gets 202 from the spool, while `/health/ready` keeps its `503 release-hold-<env>` (the existing `check_route` stays true).
+  - both hold files adapt with the foundation Caddyfile;
+  - only a capture POST on the Sales X-Ray host goes to the spool, and everything else, `/health/ready` included, keeps the `503 release-hold-<env>`.
 - **Staging drill:** post a test lead every 5 seconds through a full staging release. Every one arrives once.
 
 ### Ruled out

@@ -16,11 +16,13 @@
  */
 
 import type { CallActivity, CallSummary } from "../../dashboard/dashboard-data";
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import type { LibrarySubmission } from "../../acquisition-client";
 import { LightboxShell } from "../../shell/lightbox-shell";
 import { DashboardBody } from "../../dashboard/dashboard-body";
+import { rememberOpened } from "../../dashboard/home-v2";
 import { SalesHome } from "../../dashboard/sales-home";
 import { WorkspaceAccessContext } from "../../workspace-access";
 
@@ -74,7 +76,13 @@ function queue(now: number) {
   }));
 }
 
-type Mode = { quiet: boolean; none: boolean; targets: boolean };
+type Mode = {
+  quiet: boolean;
+  none: boolean;
+  targets: boolean;
+  /** `&fresh=1`: a brand-new workspace (Home v2's start). */
+  fresh?: boolean;
+};
 
 const BECAUSE: Record<string, string[]> = {
   due: ["promised a call back", "1 h overdue"],
@@ -85,7 +93,7 @@ const BECAUSE: Record<string, string[]> = {
 
 /** My day (Lead OS's team engine): ranked work with why, targets, fallback. */
 function myDay(now: number, mode: Mode) {
-  const empty = mode.quiet || mode.none;
+  const empty = mode.quiet || mode.none || mode.fresh;
   return {
     schema: "lead-desk/1",
     person_id: SELLER,
@@ -234,12 +242,206 @@ function teamAnswers(path: string): unknown {
   return null;
 }
 
+/** Home v2 (27 Oct 2026): this week's own work, as My work reads it. */
+type Work = [
+  kind: string,
+  lead: string,
+  minutesAgo: number,
+  extra: Record<string, unknown>,
+];
+
+const WORK: Work[] = [
+  [
+    "call",
+    "asha fictional",
+    14,
+    { duration_seconds: 214, direction: "outgoing", via: "phone" },
+  ],
+  [
+    "note",
+    "asha fictional",
+    12,
+    { note: "Wants the site visit on Saturday morning" },
+  ],
+  [
+    "call",
+    "ravi sample",
+    52,
+    { duration_seconds: null, direction: "missed", via: "phone" },
+  ],
+  [
+    "stage",
+    "meera fictional",
+    75,
+    { stage_label: "Site visit booked", from_label: "Interested" },
+  ],
+  [
+    "call",
+    "meera fictional",
+    95,
+    {
+      duration_seconds: 1268,
+      direction: "outgoing",
+      via: "phone",
+      recording: true,
+      submission_id: "00000000-0000-4000-8000-000000000501",
+    },
+  ],
+  [
+    "result",
+    "karan example",
+    160,
+    {
+      connected: true,
+      reason_label: "Call back later",
+      stage_label: "Follow-up",
+    },
+  ],
+  [
+    "call",
+    "karan example",
+    162,
+    { duration_seconds: 65, direction: "incoming", via: "phone" },
+  ],
+  [
+    "message",
+    "neha fictional",
+    1450,
+    { channel: "WhatsApp", template_label: "Price sheet" },
+  ],
+];
+
+function weekWork(now: number) {
+  return {
+    schema: "lead-desk/1",
+    items: WORK.map(([kind, lead, ago, extra], index) => ({
+      event_id: `00000000-0000-4000-8000-0000000009${String(index).padStart(2, "0")}`,
+      lead_id: `00000000-0000-4000-8000-0000000010${String(index).padStart(2, "0")}`,
+      lead_name: lead,
+      stage_label: "Interested",
+      event: {
+        kind,
+        at: new Date(now - ago * MINUTE).toISOString(),
+        actor_name: "Swamini Fictional",
+        stage: null,
+        stage_label: null,
+        reason: null,
+        reason_label: null,
+        connected: null,
+        note: null,
+        next_action_at: null,
+        owner_name: null,
+        previous_owner_name: null,
+        allocation_reason: null,
+        source_label: null,
+        submission_id: null,
+        simulated: null,
+        duration_seconds: null,
+        ...extra,
+      },
+    })),
+    next_before: null,
+    counts: { call: 3, note: 1, stage: 1, result: 1, message: 1 },
+  };
+}
+
+/** The Team view redesign (27 Oct 2026): today's work across the team. */
+const TEAM_WORK: Work[] = [
+  [
+    "call",
+    "asha fictional",
+    9,
+    {
+      actor_name: "Swamini Fictional",
+      duration_seconds: 214,
+      direction: "outgoing",
+      via: "phone",
+    },
+  ],
+  [
+    "assigned",
+    "neha fictional",
+    21,
+    {
+      actor_name: null,
+      owner_name: "Rahul Example",
+      allocation_reason: "rules",
+    },
+  ],
+  [
+    "stage",
+    "meera fictional",
+    44,
+    {
+      actor_name: "Swamini Fictional",
+      stage_label: "Site visit booked",
+      from_label: "Interested",
+    },
+  ],
+  [
+    "call",
+    "ravi sample",
+    70,
+    {
+      actor_name: "Rahul Example",
+      duration_seconds: null,
+      direction: "missed",
+      via: "phone",
+    },
+  ],
+  [
+    "result",
+    "karan example",
+    118,
+    {
+      actor_name: "Rahul Example",
+      connected: true,
+      reason_label: "Call back later",
+      stage_label: "Follow-up",
+    },
+  ],
+  [
+    "captured",
+    "priya sample",
+    150,
+    { actor_name: null, source_label: "Website form" },
+  ],
+];
+
+function teamWork(now: number) {
+  const week = weekWork(now);
+  return {
+    ...week,
+    items: TEAM_WORK.map(([kind, lead, ago, extra], index) => ({
+      ...week.items[0],
+      event_id: `00000000-0000-4000-8000-0000000011${String(index).padStart(2, "0")}`,
+      lead_id: `00000000-0000-4000-8000-0000000012${String(index).padStart(2, "0")}`,
+      lead_name: lead,
+      event: {
+        ...week.items[0].event,
+        kind,
+        at: new Date(now - ago * MINUTE).toISOString(),
+        duration_seconds: null,
+        direction: null,
+        via: null,
+        ...extra,
+      },
+    })),
+  };
+}
+
 function answers(now: number, path: string, mode: Mode): unknown {
-  const { quiet, none } = mode;
-  const empty = quiet || none;
+  const { quiet, none, fresh } = mode;
+  const empty = quiet || none || fresh;
   const team = teamAnswers(path);
   if (team !== null) return team;
   if (path === "/v1/lead-desk/my-day") return myDay(now, mode);
+  if (path.startsWith("/v1/lead-desk/activity?") && path.includes("team=1"))
+    return teamWork(now);
+  if (path.startsWith("/v1/lead-desk/activity?"))
+    return empty
+      ? { schema: "lead-desk/1", items: [], next_before: null, counts: {} }
+      : weekWork(now);
   if (path === "/v1/lead-desk")
     return {
       me: {
@@ -274,24 +476,44 @@ function answers(now: number, path: string, mode: Mode): unknown {
         follow_ups_done: 4,
         new_assigned: 2,
       },
-      numbers_week: {
-        calls: 64,
-        connected: 29,
-        talk_seconds: 11_400,
-        follow_ups_done: 12,
-        new_assigned: 9,
-      },
-      team_pool: { open: 382, unassigned: 40, may_take: true },
-      counts: {
-        open: none ? 0 : 21,
-        new: 1,
-        follow_up_due: 2,
-        not_connected: 1,
-        later_today: 2,
-        // Owners: two new leads nobody has yet (Needs you).
-        unassigned: 2,
-        overdue: 1,
-      },
+      numbers_week: fresh
+        ? {
+            calls: 0,
+            connected: 0,
+            talk_seconds: 0,
+            follow_ups_done: 0,
+            new_assigned: 0,
+          }
+        : {
+            calls: 64,
+            connected: 29,
+            talk_seconds: 11_400,
+            follow_ups_done: 12,
+            new_assigned: 9,
+          },
+      team_pool: fresh
+        ? { open: 0, unassigned: 0, may_take: false }
+        : { open: 382, unassigned: 40, may_take: true },
+      counts: fresh
+        ? {
+            open: 0,
+            new: 0,
+            follow_up_due: 0,
+            not_connected: 0,
+            later_today: 0,
+            unassigned: 0,
+            overdue: 0,
+          }
+        : {
+            open: none ? 0 : 21,
+            new: 1,
+            follow_up_due: 2,
+            not_connected: 1,
+            later_today: 2,
+            // Owners: two new leads nobody has yet (Needs you).
+            unassigned: 2,
+            overdue: 1,
+          },
       queue: empty ? [] : queue(now),
       upcoming: quiet
         ? [
@@ -496,17 +718,73 @@ function fixtureActivity(): CallActivity {
   };
 }
 
+/** Home v2's Recent calls: two saved calls the dashboard already read. */
+function savedCalls(now: number): LibrarySubmission[] {
+  return [
+    {
+      id: "00000000-0000-4000-8000-000000000511",
+      createdAt: new Date(now - 38 * MINUTE).toISOString(),
+      durationSeconds: 842,
+      state: "completed",
+      hasReport: true,
+      label: { displayName: "Site visit · Priya Sample", revision: 1 },
+      owner: { personId: SELLER, name: "Swamini Fictional" },
+    },
+    {
+      id: "00000000-0000-4000-8000-000000000501",
+      createdAt: new Date(now - 96 * MINUTE).toISOString(),
+      durationSeconds: 1268,
+      state: "completed",
+      hasReport: true,
+      label: null,
+    },
+  ];
+}
+
 function Preview() {
   const params = useSearchParams();
   const seller = params.get("role") === "seller";
   const analysis = params.get("analysis") === "1";
+  // The Home redesign (27 Oct 2026) is Home; `&layout=1` shows the one before.
+  // `&fresh=1`: a new workspace.
+  const v2 = params.get("layout") !== "1";
+  const fresh = params.get("fresh") === "1";
+  // The Team view redesign (owners) is the Team view; `&team=1` shows the one before.
+  const team = params.get("team") !== "1";
+  const [saved] = useState(() => savedCalls(Date.now()));
+  // `&focus=<heading id>`: the shot starts at that part of Home (Home is
+  // taller than a phone screen; the shots show one screen).
+  const focus = params.get("focus");
+  useEffect(() => {
+    if (!focus) return;
+    const scroll = () =>
+      document.getElementById(focus)?.scrollIntoView({ block: "start" });
+    const timers = [300, 900, 1800].map((ms) => window.setTimeout(scroll, ms));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
+  }, [focus]);
   useState(() =>
     install({
       quiet: params.get("quiet") === "1",
       none: params.get("none") === "1",
       targets: params.get("targets") !== "0",
+      fresh,
     }),
   );
+  // Where this person left off: a lead they opened 25 minutes ago.
+  useState(() => {
+    if (typeof window === "undefined" || !v2 || fresh) return null;
+    rememberOpened(
+      {
+        kind: "lead",
+        id: "00000000-0000-4000-8000-000000001000",
+        name: "asha fictional",
+        person: seller ? SELLER : OWNER,
+        tenant: TENANT,
+      },
+      new Date(Date.now() - 25 * MINUTE),
+    );
+    return null;
+  });
   return (
     <WorkspaceAccessContext.Provider
       value={{
@@ -549,7 +827,14 @@ function Preview() {
             },
           }}
           recent={{ status: "ready", value: [] }}
-          sales={<SalesHome manager={!seller} />}
+          sales={
+            <SalesHome
+              manager={!seller}
+              layout={v2 ? "v2" : "v1"}
+              team={team ? "v2" : "v1"}
+              recent={v2 && !fresh ? saved : null}
+            />
+          }
           salesRole={seller ? "seller" : "manager"}
         />
       </LightboxShell>

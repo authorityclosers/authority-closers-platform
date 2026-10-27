@@ -25,7 +25,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ac_platform.audit.service import AuditRepository
 from ac_platform.identity import person_photos
 from ac_platform.identity.models import Person
-from ac_platform.lead_desk import allocation, deletion, duplicate_queue, reports
+from ac_platform.lead_desk import (
+    allocation,
+    choices,
+    deletion,
+    duplicate_queue,
+    reports,
+    routing_rules,
+)
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk import meetings as meeting_rows
 from ac_platform.lead_desk import tasks as task_book
@@ -158,6 +165,8 @@ from ac_platform.tenancy.roles import roles_with
 MANAGERS = frozenset(roles_with("leads.manage"))
 # Deleting leads stays with owners and admins (Roles B: not Sales managers).
 DELETERS = frozenset(roles_with("leads.delete"))
+# Reading the team's leads (team.view): managers, and Viewers who change nothing.
+SEERS = frozenset(roles_with("team.view"))
 # A phone alert names a task due within this of now (task_push reminds up to two hours
 # before an in-person meeting).
 TASK_ALERT_WINDOW = timedelta(hours=2)
@@ -176,6 +185,9 @@ UPCOMING_LIMIT = 20
 PAGE_SIZE = 50
 # My work: what a seller does on a lead (not imports, edits or assignments).
 WORK_KINDS = ("call", "result", "note", "stage", "meeting", "message", "scheduled")
+# The team's day (Home's Team today, 27 Oct 2026) adds the leads given out and the leads
+# that came in.
+TEAM_KINDS = (*WORK_KINDS, "assigned", "reassigned", "captured")
 WORK_PAGE = 100
 # Days back from today's start for "this week" and "this month".
 BACK_DAYS: dict[str, int] = {"today": 0, "week": 6, "month": 29}
@@ -205,6 +217,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "show_full_phones": False,
     # The open-lead limit of a seller with no rules of their own; None: no limit.
     "default_max_open": DEFAULT_MAX_OPEN,
+    # Languages are preferred: a lead nobody free speaks still goes to someone.
+    "strict_language": False,
 }
 IST = ZoneInfo("Asia/Kolkata")
 # The pipeline board (Lead OS): cards per column per page.
@@ -235,6 +249,10 @@ class Viewer:
     @property
     def can_delete(self) -> bool:
         return self.role in DELETERS
+
+    @property
+    def can_see_team(self) -> bool:
+        return self.role in SEERS
 
 
 @dataclass(frozen=True, slots=True)
@@ -570,6 +588,14 @@ class LeadDesk:
             ),
         )
 
+    def _seen(self) -> Any:
+        """The leads this person may read in a list: the team's for those who see the
+        team (Viewers read them, Roles B), else exactly ``_visible()``. Writes never use
+        this: every write finds its lead through ``_lead()``."""
+        if self.viewer.can_see_team:
+            return Lead.tenant_id == self.tenant_id
+        return self._visible()
+
     async def _lead(self, lead_id: UUID, *, lock: bool = False) -> Lead:
         query = select(Lead).where(Lead.id == lead_id, self._visible())
         if lock:
@@ -596,17 +622,22 @@ class LeadDesk:
     async def _readable(self, lead_id: UUID) -> tuple[Lead, bool]:
         """A lead this person may open: one on their desk, or, to read only, the lead a
         merge kept from a lead they worked on lately (duplicates, "worked before")."""
+        # Viewers read any of the team's leads (Roles B); others only what a merge kept
+        # from a lead they worked on.
+        team = self.viewer.can_see_team and not self.viewer.can_manage
         try:
             return await self._lead(lead_id), False
         except DeskError:
-            if self.viewer.can_manage or not await duplicate_queue.worked_before(self, lead_id):
+            if not team and (
+                self.viewer.can_manage or not await duplicate_queue.worked_before(self, lead_id)
+            ):
                 raise
         lead: Lead | None = await self.db.scalar(
             select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id == lead_id)
         )
         if lead is None:
             raise DeskError(404, "This lead isn't on your desk.")
-        return lead, True
+        return lead, not team
 
     async def _command_seen(self, command_id: UUID) -> LeadEvent | None:
         seen: LeadEvent | None = await self.db.scalar(
@@ -1066,9 +1097,9 @@ class LeadDesk:
         duplicates: bool = False,
     ) -> LeadPage:
         limit = max(1, min(PAGE_SIZE, limit))
-        if scope != "mine" and not self.viewer.can_manage:
-            raise DeskError(403, "Only owners and admins see the whole team's leads.")
-        where: list[Any] = [self._visible()]
+        if scope != "mine" and not self.viewer.can_see_team:
+            raise DeskError(403, "Your role sees your own leads only.")
+        where: list[Any] = [self._seen()]
         if pipeline is not None:
             # One pipeline's leads: its stage tabs, counts and calling queue.
             where.append(journeys.lead_in((await self._pipeline(pipeline)).key))
@@ -1210,13 +1241,20 @@ class LeadDesk:
         day: WorkDay = "today",
         before: datetime | None = None,
         person: UUID | None = None,
+        team: bool = False,
         limit: int = WORK_PAGE,
     ) -> ActivityPage:
         """What a seller did, newest first: calls, outcomes, notes, stage moves, meetings
         and messages, on the leads the viewer can see. A seller sees their own work; an
-        owner or admin may look at a seller's (a private call stays private)."""
+        owner or admin may look at a seller's (a private call stays private).
+
+        ``team``: the whole team's day for those who see the team (Home's Team today,
+        owner, 27 Oct 2026): everyone's work, the leads given out and the leads that came
+        in, on the team's leads; private calls stay their sellers' own."""
+        if team and not self.viewer.can_see_team:
+            raise DeskError(403, "Your role sees your own work only.")
         who = person or self.viewer.person_id
-        if who != self.viewer.person_id and not self.viewer.can_manage:
+        if not team and who != self.viewer.person_id and not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins see someone else's work.")
         limit = max(1, min(WORK_PAGE, limit))
         start = self._day_start()
@@ -1228,8 +1266,8 @@ class LeadDesk:
             after, upto = start, self.now + timedelta(minutes=1)
         window = [
             LeadEvent.tenant_id == self.tenant_id,
-            LeadEvent.actor_person_id == who,
-            LeadEvent.kind.in_(WORK_KINDS),
+            *(() if team else (LeadEvent.actor_person_id == who,)),
+            LeadEvent.kind.in_(TEAM_KINDS if team else WORK_KINDS),
             LeadEvent.created_at >= after,
             LeadEvent.created_at < upto,
             # A new stage list placing leads, or a merge keeping the books, is not the
@@ -1241,7 +1279,7 @@ class LeadDesk:
                     tuple(transitions.BOOKKEEPING)
                 ),
             ),
-            self._visible(),
+            self._seen() if team else self._visible(),
         ]
         joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
         counts = {
@@ -1269,14 +1307,33 @@ class LeadDesk:
         ).all()
         more = len(rows) > limit
         rows = rows[:limit]
-        hidden = await self._private_calls(after) if who != self.viewer.person_id else frozenset()
+        hidden = (
+            await self._private_calls(after)
+            if team or who != self.viewer.person_id
+            else frozenset()
+        )
         removed = await self._undone(
             str(event.id)
             for event, _ in rows
             if event.kind == "note" or event.data.get("via") == CALL_FILL
         )
-        names = await self._names([who])
-        photos = await person_photos.photo_urls(self.db, [who])
+        # The team's day names everyone in it: who did it, and whom a lead went to or from.
+        people = (
+            {
+                person_id
+                for event, _ in rows
+                for person_id in (
+                    event.actor_person_id,
+                    self._uuid(event.data.get("to")),
+                    self._uuid(event.data.get("from")),
+                )
+                if person_id is not None
+            }
+            if team
+            else {who}
+        )
+        names = await self._names(people)
+        photos = await person_photos.photo_urls(self.db, list(people))
         labels: dict[str, journeys.Journey] = {}
         items: list[ActivityItem] = []
         for event, lead in rows:
@@ -1625,6 +1682,7 @@ class LeadDesk:
         command_id: UUID | None = None,
         pipeline: str | None = None,
         received_at: datetime | None = None,
+        kind: str | None = None,
     ) -> tuple[Lead | None, Literal["created", "repeat", "known", "skipped"]]:
         """Store one record as a lead. The same record again (same source id) is "known"
         and changes nothing; another record with the same phone, or with no phone and the
@@ -1675,7 +1733,7 @@ class LeadDesk:
         route = (
             (await self._pipeline(pipeline)).key
             if pipeline is not None
-            else pipelines.route(await self._pipeline_list(), source)
+            else pipelines.route(await self._pipeline_list(), source, kind=kind)
         )
         lead = Lead(
             id=uuid4(),
@@ -2829,7 +2887,43 @@ class LeadDesk:
         # the lead, which must be whole by then.
         if previous != person_id:
             await task_book.follow_owner(self, lead, person_id)
+        # The bell's "<name> is your lead now" (owner, 27 Oct 2026; migration 0142): for a
+        # seller someone else gave it to (the lead rules, a manager), never for their own pick
+        # (an add for oneself passes no actor, so the person asking counts too).
+        if (
+            person_id is not None
+            and person_id != previous
+            and person_id not in {actor, self.viewer.person_id}
+        ):
+            self._tell_new_owner(lead, person_id, event)
         return event
+
+    def _tell_new_owner(self, lead: Lead, person_id: UUID, event: LeadEvent) -> None:
+        """One bell line per hand-over: whose lead it is now, why, and a tap to open it.
+        The page pops it as a banner (urgent); the bell keeps it."""
+        from ac_platform.product_updates.models import Notification
+
+        name = " ".join(word[:1].upper() + word[1:] for word in lead.name.split()) or "A lead"
+        why = [
+            f"New from {lead.source_label}."
+            if lead.source_label and event.kind == "assigned"
+            else "",
+            lead.owner_reason or "",
+        ]
+        self.db.add(
+            Notification(
+                id=uuid4(),
+                person_id=person_id,
+                tenant_id=lead.tenant_id,
+                kind="lead_assigned",
+                dedupe_key=f"lead-assigned:{event.id}",
+                title=f"{name} is your lead now"[:200],
+                body=" ".join(part for part in why if part)[:1000],
+                href=f"/leads?lead={lead.id}",
+                urgent=True,
+                created_at=self.now,
+            )
+        )
 
     async def _allocate(
         self,
@@ -2843,7 +2937,8 @@ class LeadDesk:
         prefix: str = "",
         command_id: UUID | None = None,
     ) -> allocation.Allocation:
-        hours = work_hours.parse((await self.settings())[1])
+        _, config = await self.settings()
+        hours = work_hours.parse(config)
         if hours is not None and work_hours.paused(hours, self.now):
             reason = (
                 f"{work_hours.HELD} It goes to a seller "
@@ -2854,16 +2949,29 @@ class LeadDesk:
             )
             return allocation.Allocation(None, reason, "hours")
         team = reps if reps is not None else await self._reps()
-        decision = allocation.allocate(
-            allocation.LeadFacts(
-                language=lead.language,
-                city=lead.city,
-                interest=lead.interest,
-                previous_owner=previous_owner,
-                exclude=exclude,
-            ),
-            [rep.state for rep in team],
-        )
+        # Routing rules first (owner, 27 Oct 2026); a returning lead goes back to its seller.
+        decision = None if previous_owner is not None else await self._routed(lead, team, exclude)
+        if decision is None or decision.person_id is None:
+            fallback = allocation.allocate(
+                allocation.LeadFacts(
+                    language=lead.language,
+                    city=lead.city,
+                    interest=lead.interest,
+                    previous_owner=previous_owner,
+                    exclude=exclude,
+                ),
+                [rep.state for rep in team],
+                strict_language=bool(config.get("strict_language")),
+            )
+            # A rule matched but its people were away or full: the reason says so.
+            passed = f"{decision.reason}; then " if decision is not None else ""
+            decision = allocation.Allocation(
+                fallback.person_id,
+                passed + fallback.reason[:1].lower() + fallback.reason[1:]
+                if passed
+                else fallback.reason,
+                fallback.rule,
+            )
         await self._set_owner(
             lead,
             decision.person_id,
@@ -3941,8 +4049,43 @@ class LeadDesk:
         if not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins manage the team's lead rules.")
 
-    async def team(self) -> Team:
+    def _require_team_view(self) -> None:
+        # Roles B: Viewers read the team's calls, reports and team page, and change
+        # nothing (every write is refused before the route runs).
+        if not self.viewer.can_see_team:
+            raise DeskError(403, "Your role sees your own leads and calls only.")
+
+    async def team_choices(self, days: int) -> choices.TeamChoices:
+        """What a seller's languages, areas and products are picked from (owner bug #49)."""
         self._require_manager()
+        journey = await self._labels()
+        rows = await self._lead_traits(days)
+        return choices.view(rows, days=days, industry=journey.industry)
+
+    async def choices_fit(self, command: choices.FitCommand) -> choices.FitView:
+        """How many of last month's leads a seller profile would take on its rules."""
+        self._require_manager()
+        return choices.fit(await self._lead_traits(choices.FIT_DAYS), command)
+
+    async def _lead_traits(self, days: int) -> list[choices.Row]:
+        """The window's leads (no test data, none merged away) by city, language and
+        interest, with how many share each."""
+        result = await self.db.execute(
+            select(Lead.city, Lead.language, Lead.interest, func.count())
+            .where(
+                Lead.tenant_id == self.tenant_id,
+                Lead.test_data.is_(False),
+                Lead.merged_into_id.is_(None),
+                Lead.created_at >= self.now - timedelta(days=days),
+            )
+            .group_by(Lead.city, Lead.language, Lead.interest)
+        )
+        return [
+            (city, language, interest, count) for city, language, interest, count in result.all()
+        ]
+
+    async def team(self) -> Team:
+        self._require_team_view()
         reps = await self._reps()
         day_start = self._day_start()
         due: dict[UUID | None, int] = dict(
@@ -4080,6 +4223,7 @@ class LeadDesk:
                 nudges_off_for=tuple(
                     UUID(str(person)) for person in _team_config(config).get("nudges_off_for") or ()
                 ),
+                strict_language=bool(config.get("strict_language")),
             ),
             by_stage={stage: int(count) for stage, count in by_stage.items()},
             by_source={source: int(count) for source, count in by_source.items()},
@@ -4095,7 +4239,7 @@ class LeadDesk:
         logged by itself (out, or taken); talk time from every call; missed calls
         are the leads' calls nobody picked up.
         """
-        self._require_manager()
+        self._require_team_view()
         if end < start or (end - start).days >= REPORT_DAYS:
             raise DeskError(422, f"Pick up to {REPORT_DAYS} days, ending after they start.")
         days = [start + timedelta(days=offset) for offset in range((end - start).days + 1)]
@@ -4150,7 +4294,7 @@ class LeadDesk:
         return CallReport(start=start, end=end, sellers=tuple(sellers))
 
     async def performance(self, days: int) -> Performance:
-        """How sales went over today, 7 or 30 days, India time (owners and admins).
+        """How sales went over today, 7 or 30 days, India time (those who see the team).
 
         Outcomes first (owner, 22 Oct 2026: "sales performance and business
         benefit" before activity): different leads moved to an interested or a
@@ -4159,7 +4303,7 @@ class LeadDesk:
         phone calls stay out. Then sellers ranked by what they won, and the open
         leads by stage.
         """
-        self._require_manager()
+        self._require_team_view()
         if days not in (1, 7, 30):
             raise DeskError(422, "Pick today, 7 days or 30 days.")
         end = self.now.astimezone(IST).date()
@@ -4357,6 +4501,7 @@ class LeadDesk:
             name=self.viewer.name,
             role=self.viewer.role,
             can_manage=self.viewer.can_manage,
+            can_see_team=self.viewer.can_see_team,
             taking_leads=rules.available if rules else True,
             paused_until=work_hours.next_start(hours, self.now)
             if hours is not None and work_hours.paused(hours, self.now)
@@ -4377,6 +4522,8 @@ class LeadDesk:
             config["show_full_phones"] = command.show_full_phones
         if "default_max_open" in command.model_fields_set:
             config["default_max_open"] = command.default_max_open
+        if command.strict_language is not None:
+            config["strict_language"] = command.strict_language
         if row is None:
             row = LeadDeskSettings(tenant_id=self.tenant_id, revision=0, config={})
             self.db.add(row)
@@ -4416,6 +4563,125 @@ class LeadDesk:
         if not work_hours.paused(hours, self.now):
             await self.release_held()
         return await self.team()
+
+    async def _routed(
+        self, lead: Lead, team: Sequence[_Rep], exclude: frozenset[UUID]
+    ) -> allocation.Allocation | None:
+        """What the routing rules say for a new lead: its owner and why; a decision with no
+        owner when a rule matched but its people were away or full; None when no rule is on
+        or none matched."""
+        _, config = await self.settings()
+        routed = routing_rules.decide(
+            config,
+            routing_rules.facts(
+                source=lead.source,
+                source_label=lead.source_label,
+                city=lead.city,
+                language=lead.language,
+                interest=lead.interest,
+                payload=lead.payload,
+                value_answer=config.get(routing_rules.VALUE_KEY),
+            ),
+            routing_rules.seats([rep.state for rep in team], exclude),
+        )
+        if routed is None:
+            return None
+        decision, _ = routed
+        if decision.person_id is not None:
+            return allocation.Allocation(decision.person_id, decision.why, "routing")
+        if decision.passed_over:
+            return allocation.Allocation(None, "; ".join(decision.passed_over), "routing")
+        return None
+
+    async def routing_view(self) -> routing_rules.RoutingView:
+        self._require_manager()
+        revision, config = await self.settings()
+        team = await self._reps()
+        recent = (
+            await self.db.scalars(
+                select(Lead.payload)
+                .where(Lead.tenant_id == self.tenant_id, Lead.test_data.is_(False))
+                .order_by(Lead.created_at.desc())
+                .limit(300)
+            )
+        ).all()
+        return routing_rules.view(
+            config,
+            revision,
+            [rep.state for rep in team],
+            questions=routing_rules.questions(recent),
+            can_edit=self.viewer.can_manage,
+        )
+
+    async def save_routing(
+        self, command: routing_rules.RoutingCommand
+    ) -> routing_rules.RoutingView:
+        self._require_manager()
+        row = await self.db.get(LeadDeskSettings, self.tenant_id, with_for_update=True)
+        current = row.revision if row else 0
+        if current != command.expected_revision:
+            raise DeskError(409, "Someone changed these settings. Reload and try again.")
+        team = await self._reps()
+        try:
+            changes = routing_rules.saved(command, (rep.state.person_id for rep in team))
+        except ValueError as error:
+            raise DeskError(422, str(error)) from None
+        if row is None:
+            row = LeadDeskSettings(tenant_id=self.tenant_id, revision=0, config={})
+            self.db.add(row)
+        row.revision = current + 1
+        row.config = {**DEFAULT_SETTINGS, **(row.config or {}), **changes}
+        row.updated_by_person_id = self.viewer.person_id
+        row.updated_at = self.now
+        await self.db.flush()
+        return await self.routing_view()
+
+    async def try_routing(self, lead: routing_rules.TryLead) -> routing_rules.TryView:
+        """Where a lead like this would go now, and why: nothing is saved or given out."""
+        self._require_manager()
+        _, config = await self.settings()
+        team = await self._reps()
+        names = {rep.state.person_id: rep.state.name for rep in team}
+        routed = routing_rules.decide(
+            config,
+            routing_rules.facts(
+                source=lead.source,
+                city=lead.city,
+                language=lead.language,
+                interest=lead.interest,
+                payload=lead.answers,
+                value_answer=None,
+                value=lead.value,
+            ),
+            routing_rules.seats([rep.state for rep in team]),
+        )
+        if routed is not None and (person := routed[0].person_id) is not None:
+            decision, name = routed
+            return routing_rules.TryView(
+                person_id=person,
+                name=names.get(person),
+                rule=decision.rule,
+                rule_name=name,
+                why=decision.why,
+                passed_over=decision.passed_over,
+            )
+        fallback = allocation.allocate(
+            allocation.LeadFacts(language=lead.language, city=lead.city, interest=lead.interest),
+            [rep.state for rep in team],
+            strict_language=bool(config.get("strict_language")),
+        )
+        passed = routed[0].passed_over if routed is not None else ()
+        lead_rules = "Lead rules: " + fallback.reason
+        return routing_rules.TryView(
+            person_id=fallback.person_id,
+            name=names.get(fallback.person_id) if fallback.person_id else None,
+            rule=None,
+            rule_name=None,
+            why=f"{'; '.join(passed)}; then {lead_rules[:1].lower()}{lead_rules[1:]}"
+            if passed
+            else lead_rules,
+            passed_over=passed,
+        )
 
     async def release_held(self, *, limit: int = 500) -> int:
         """Leads that waited for work hours go out to sellers once work has started."""

@@ -16,9 +16,12 @@ Every review fixture (fictional data, no API, no credentials) is checked:
 - every named matrix screen in `scripts/ci/wb_matrix_lib.mjs`, and every other `app/review-fixture/**/page.tsx`;
 - at 320x640, 360x800, 390x844 and 1280x800;
 - at 100% and 130% text, plus the Android app's 130% zoom on phones;
-- in light and dark.
+- in light and dark;
+- and as the Android app on a budget phone (27 Oct 2026). The page gets the app's user agent, so it draws its in-app
+  version, and the app's font scale at its 1.2 cap (`window.SXFontScale`). This is a 360 px phone with the CPU 4x
+  slower (`ANDROID_PROFILE`).
 
-That is 22 states a page. In each state the page is measured (`radarScan` in `scripts/ci/wb_radar_lib.mjs`):
+That is 24 states a page. In each state the page is measured (`radarScan` in `scripts/ci/wb_radar_lib.mjs`):
 
 | check | finds | severity |
 |---|---|---|
@@ -29,9 +32,12 @@ That is 22 states a page. In each state the page is measured (`radarScan` in `sc
 | `tap-target` | a control under 44 x 44 px on a phone (inline links in a sentence are exempt; a widening `::before`/`::after` counts) | medium under 24 px, else low |
 | `contrast` | text under 4.5:1 (3:1 for large text) against its own and its parents' backgrounds | high under 2:1, medium under 3:1 |
 | `centred-card` | a card on a phone with over a quarter of the width empty, split on both sides | medium (low in a dialog) |
+| `label-wraps` | a tab, pressed button or chip whose whole label (up to 32 characters) runs taller than 1.5 lines (owner bug #43) | high on a phone |
+| `tabs-clipped` | a tab bar, button group or chip row whose last item ends past the screen edge, with nothing around it scrolling sideways | high on a phone |
 | `console-error`, `page-error`, `request-failed` | console errors, uncaught errors, failed same-origin requests while loading | medium; uncaught and hydration errors high |
 
-Then every safe control is tapped once, at 390 px (and at 1280 px for computer screens). Nothing labelled Delete,
+Then every safe control is tapped once: at 390 px, again as the Android app on the slow 360 px phone, and at 1280 px
+for computer screens. Nothing labelled Delete,
 Remove, Log out, Send, Call, WhatsApp, Pay or Upgrade is tapped, and nothing that leaves the app (tel:, mail,
 another site, a new window). A list's rows get one or two taps; every tab gets one. While a modal sheet is open,
 only its own controls are tapped.
@@ -72,6 +78,38 @@ sudo ac-bug-radar check --sha <sha>         # a release hold: groups the nightly
   `WB_RADAR_ORIGIN=http://127.0.0.1:3000 WB_RADAR_WORKERS=1 node scripts/ci/wb_radar.mjs run out .wb-ci/request.json`,
   then `node scripts/ci/wb_radar.mjs merge out`.
 
+## Seller journeys
+
+Lever 5 of the testing plan (27 Oct 2026): whole tasks a seller does, walked step by step on the fictional screens
+(`scripts/ci/wb_journeys_lib.mjs`):
+
+| journey | steps |
+|---|---|
+| `sign-in-setup` | email code sign-in, then setup: business, its name, real estate's stages, skip the team, first lead |
+| `after-call` | back from a call that connected: Call back, Save |
+| `call-mode` | Start calling, No answer, Save and stop here |
+| `upload-recording` (draft) | pick a fictional recording, accept the terms, ready to analyse, the analysing screen |
+| `read-report` (draft) | the report: Detailed Call Analysis, Final Call Outcome and its recording, Coaching view |
+
+Each runs with every radar run (a journey marked `draft` only when asked for, never in the nightly), as the phone and
+as the Android app on a slow phone:
+- every step is timed;
+- the screen after each step gets the static checks;
+- errors after a step are tap-errors;
+- a step that can't be done ends the walk, as `journey-broken` (high) with a crop of where it stood and the headings
+  and controls then on screen;
+- a step over its time (5 s; 20 s for the Android profile) is `journey-slow` (low).
+
+The report has a table of the walks: steps done, time, the slowest step, and where each stopped.
+
+```bash
+ssh ac wb-ci --radar journeys              # every journey alone, drafts too (one shard)
+ssh ac wb-ci --radar journey:after-call    # one journey
+```
+
+A later step's `goto` stands in for what happens off the page: the phone's dialler, or the server's analysis. Journeys
+with a real sign-in on staging wait for the owner's synthetic workspace.
+
 ## Every night, and the cards
 
 `ac-bug-radar.timer` runs `/usr/local/sbin/ac-bug-radar nightly` on ac at 22:30 UTC (04:00 IST), for development only:
@@ -83,6 +121,12 @@ sudo ac-bug-radar check --sha <sha>         # a release hold: groups the nightly
    - a new group of medium or high severity becomes a card, at most 10 a night (the rest wait, listed on the parent);
    - a group that is gone while all its pages were checked marks its card done; one that comes back reopens it;
    - low groups are recorded in the report, without a card.
+5. Real use (lever 6, since 27 Oct 2026): it reads each environment's "Fix next" list (production by default,
+   `AC_BUG_RADAR_TELEMETRY_ENVS`) with `ac_platform.telemetry.fix_next_cli`, read only, inside its worker:
+   - a finding scoring 4 or more becomes a card under "Real use: errors, dead taps and crashes, every night"
+     (`tel:parent`), at most 6 a night, with the same open, back and done rules (`tel:<env>:<key>`);
+   - `sudo ac-bug-radar telemetry <env> [--dry-run]` runs this part alone;
+   - until a release carries the module, it prints "no fix-next module in this release yet".
 
 Cards carry:
 - the check, the component and the pages;

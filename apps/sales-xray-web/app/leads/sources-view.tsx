@@ -1170,10 +1170,12 @@ function OtherWays({
   sandbox,
   onChanged,
   onImport,
+  onImportGoogle,
 }: {
   sandbox: boolean;
   onChanged: () => void;
   onImport: () => void;
+  onImportGoogle?: () => void;
 }) {
   const [sources, setSources] = useState<SourceView[] | null>(null);
   const [fresh, setFresh] = useState<Record<string, SourceView>>({});
@@ -1248,6 +1250,12 @@ function OtherWays({
             <FileSpreadsheet size={14} aria-hidden="true" />
             Upload a file
           </Button>
+          {onImportGoogle ? (
+            <Button onClick={onImportGoogle}>
+              <FileSpreadsheet size={14} aria-hidden="true" />
+              Import from Google Sheet
+            </Button>
+          ) : null}
           <Button onClick={() => setAdding("sheet")}>Google Sheet</Button>
           <Button onClick={() => setAdding("webhook")}>Website form</Button>
           <Button onClick={() => setAdding("google_ads")}>
@@ -1323,10 +1331,13 @@ export function SourcesView({
   sandbox,
   onChanged,
   onImport,
+  onImportGoogle,
 }: {
   sandbox: boolean;
   onChanged: () => void;
   onImport: () => void;
+  /** Import a Sheet picked in Google's Picker (Lead OS, 27 Oct 2026). */
+  onImportGoogle?: () => void;
 }) {
   return (
     <div className={styles.sourcesGrid}>
@@ -1343,7 +1354,12 @@ export function SourcesView({
           status={<StatusPill>Coming soon</StatusPill>}
         />
       </section>
-      <OtherWays sandbox={sandbox} onChanged={onChanged} onImport={onImport} />
+      <OtherWays
+        sandbox={sandbox}
+        onChanged={onChanged}
+        onImport={onImport}
+        onImportGoogle={onImportGoogle}
+      />
     </div>
   );
 }

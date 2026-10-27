@@ -266,6 +266,42 @@ it("walks through connecting an assistant, remote first, with the download folde
   ).not.toBeNull();
 });
 
+// Owner bug #47 (27 Oct 2026): the setup is a stepper that fits a phone, the
+// assistants are tiles, and only brands we have a mark for show one.
+it("steps through connecting an assistant, one step open at a time", async () => {
+  await act(async () => root.render(<AssistantSetup />));
+  expect(host.textContent).toContain("Step 1 of 3");
+  const tiles = [
+    ...host.querySelectorAll('[aria-label="Your assistant"] button'),
+  ];
+  // ChatGPT shows its mark from the brand library; the rest their initials.
+  expect(tiles[0].querySelector("[data-brand]")).not.toBeNull();
+  expect(tiles.slice(1).map((tile) => tile.textContent)).toEqual([
+    "ClClaude",
+    "CCClaude Code",
+    "CuCursor",
+    "VSVS Code",
+  ]);
+  expect(tiles[0].getAttribute("aria-pressed")).toBe("true");
+  const steps = () =>
+    [...host.querySelectorAll('[data-steps="remote"] > li')].map((item) =>
+      item.getAttribute("data-state"),
+    );
+  expect(steps()).toEqual(["open", null, null]);
+  await act(async () => button("Next: sign in")!.click());
+  expect(steps()).toEqual(["done", "open", null]);
+  expect(host.textContent).toContain("Step 2 of 3");
+  expect(host.textContent).toContain("approve it for your account");
+  expect(host.querySelector('[aria-label="ChatGPT setup"]')).toBeNull();
+  await act(async () => button("Next: ask it something")!.click());
+  expect(button("Next:")).toBeUndefined();
+  await act(async () => button("Back")!.click());
+  expect(steps()).toEqual(["done", "open", null]);
+  // A step's title opens it too.
+  await act(async () => button("Add Sales X-Ray to your assistant")!.click());
+  expect(steps()).toEqual(["open", null, null]);
+});
+
 it("puts the docs first, and hands a new key to Try it without saving it", async () => {
   await act(async () => root.render(<DevelopersSection />));
   expect(host.querySelector('a[href="/developers"]')?.textContent).toBe(

@@ -678,6 +678,76 @@ function answers(now: number, path: string): unknown {
         leads: 1,
       })),
     };
+  // AI on calls (a seller's level in their lead settings): the organisation
+  // gives every call the full report.
+  if (path === "/v1/sales-xray/call-ai")
+    return {
+      revision: 2,
+      default: "full",
+      people: [],
+      you: { level: "full", source: "organisation" },
+      levels: [
+        [
+          "off",
+          "Off",
+          "Calls are saved and logged on the lead. No AI reads them.",
+        ],
+        [
+          "data_only",
+          "Data only",
+          "Transcript and lead facts, no report or coaching.",
+        ],
+        ["auto", "Auto", "Sales X-Ray picks per call."],
+        ["full", "Full", "The full report and coaching on every call."],
+      ].map(([id, name, hint]) => ({ id, name, hint })),
+      can_edit: true,
+    };
+  // A seller's fit choices (owner bug #49): fictional areas, languages and
+  // products on this organisation's leads, and how many a profile fits.
+  if (path.startsWith("/v1/lead-desk/team/choices/fit"))
+    return {
+      days: 30,
+      leads: 140,
+      fits: 52,
+      percent: 37,
+      by: { language: 120, area: 61, product: 90 },
+    };
+  if (path.startsWith("/v1/lead-desk/team/choices"))
+    return {
+      schema: "lead-desk/1",
+      days: 90,
+      leads: 412,
+      areas: [
+        ["Pune", 120],
+        ["Baner", 37],
+        ["Wakad", 22],
+        ["Kharadi", 5],
+        ["Khadki", 2],
+      ].map(([value, leads]) => ({
+        value,
+        key: String(value).toLowerCase(),
+        leads,
+      })),
+      languages: [
+        ["Marathi", "mr", 140],
+        ["Hindi", "hi", 96],
+        ["English", "en", 88],
+        ["Gujarati", "gu", 9],
+      ].map(([value, key, leads]) => ({ value, key, leads })),
+      products: [
+        ["2 BHK", 64],
+        ["3 BHK", 41],
+        ["Villa", 12],
+        ["Plot", 6],
+      ].map(([value, leads]) => ({
+        value,
+        key: String(value).toLowerCase(),
+        leads,
+      })),
+      more: { areas: 0, languages: 0, products: 0 },
+      industry: { id: "real_estate", name: "Real estate" },
+      suggested_products: [],
+    };
   if (path === "/v1/lead-desk/team")
     return {
       reps: [
@@ -706,12 +776,81 @@ function answers(now: number, path: string): unknown {
         reassign_minutes: 10,
         default_country: "91",
         work_hours: null,
+        strict_language: false,
       },
       by_stage: { new: 2, follow_up: 2, interested: 1 },
       by_source: { meta: 4, manual: 4 },
       unassigned: 1,
       waiting_first_call: 1,
       first_call_minutes: 6,
+    };
+  // Who gets which leads (Settings → Lead rules): two fictional rules, one off.
+  if (path === "/v1/lead-desk/routing-rules")
+    return {
+      schema: "lead-desk/1",
+      revision: 4,
+      can_edit: true,
+      value_answer: "budget",
+      rules: [
+        {
+          id: "rule-1",
+          name: "Big budgets in Pune",
+          enabled: true,
+          when: [
+            { field: "city", values: ["Pune"] },
+            { field: "value", op: "at_least", low: 5000000, high: null },
+          ],
+          give_to: [SELLER, SECOND],
+        },
+        {
+          id: "rule-2",
+          name: "Website enquiries in Hindi",
+          enabled: false,
+          when: [
+            { field: "source", values: ["webhook"] },
+            { field: "language", values: ["Hindi"] },
+          ],
+          give_to: [SECOND],
+        },
+      ],
+      sources: {
+        meta: "Facebook and Instagram lead ads",
+        webhook: "Website forms and other apps",
+        manual: "Added by hand",
+      },
+      people: [
+        {
+          person_id: SELLER,
+          name: "priya example",
+          available: true,
+          open_leads: 38,
+          max_open: 50,
+        },
+        {
+          person_id: SECOND,
+          name: "rahul example",
+          available: true,
+          open_leads: 21,
+          max_open: null,
+        },
+      ],
+      questions: [
+        {
+          key: "budget",
+          label: "What is your budget?",
+          answered: 42,
+          examples: ["50 lakh", "1 crore"],
+        },
+      ],
+    };
+  if (path === "/v1/lead-desk/routing-rules/try")
+    return {
+      person_id: SELLER,
+      name: "priya example",
+      rule: 1,
+      rule_name: "Big budgets in Pune",
+      why: "City Pune and value ₹60,00,000 ≥ ₹50,00,000: rule 1",
+      passed_over: [],
     };
   if (path === "/v1/lead-desk/journey/templates")
     return (

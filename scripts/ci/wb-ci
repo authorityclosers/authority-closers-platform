@@ -21,8 +21,9 @@
 #   --speed      the speed check: the key screens of a production build at 1x, 4x and 6x CPU (loads and taps);
 #                opt-in, never part of --full; artifact wb-speed (report.md, speed.json). See docs/ops/BUG-RADAR.md.
 #   --py-tests   one pytest job for these paths instead of the 17 shards
-#   --include    also test these uncommitted workbench files (read only; nothing in the checkout changes)
+#   --include    also test these uncommitted workbench files, CI files included (read only; nothing changes)
 #   --no-wait    print the run URL and return     --keep    keep the wb-ci branch after the run
+# While a release is cutting or shipping (/run/ac-release-cut.active), every run but the cut's own waits for it.
 # Exit 0 only when the run succeeded. See docs/ops/WORKBENCH-CI.md.
 #
 # How: a bare repo (~/src/wb-ci.git) borrows the workbench's objects and builds a request commit (the tested tree plus
@@ -106,6 +107,53 @@ export GIT_DIR="$BARE"
 wanted=${sha:-HEAD}
 sha=$($G --git-dir="$WB/.git" rev-parse --verify "$wanted^{commit}") || die "cannot resolve the commit '$wanted'"
 short=${sha:0:8}
+
+# A release cut or ship in progress. Session runs share the global ci-prerequisites concurrency group with the
+# cut's checks and cancelled them (26-27 Oct), so every run but the cut's own (--sha = the hold) waits for it,
+# checking each minute, for at most 3 hours. The cut script (/root/cutNN.sh) writes "<version> <hold sha> <pid>"
+# to the marker ("-" until the hold is known) and removes it on exit; a marker whose process is gone is stale.
+CUT_MARKER=${WB_CI_CUT_MARKER:-/run/ac-release-cut.active}
+release_cut() {
+  local version hold pid
+  [ -r "$CUT_MARKER" ] || return 1
+  read -r version hold pid _ < "$CUT_MARKER" || [ -n "${version:-}" ] || return 1
+  if [ -n "${pid:-}" ] && [ ! -e "/proc/$pid" ]; then return 1; fi
+  printf '%s %s\n' "$version" "${hold:--}"
+}
+wait_for_release() {  # <sha>
+  local cut version hold waited=0 limit=${WB_CI_CUT_WAIT_S:-10800} every=${WB_CI_CUT_POLL_S:-60}
+  while cut=$(release_cut); do
+    read -r version hold <<< "$cut"
+    if [ ${#hold} -ge 7 ] && [ "${1#"$hold"}" != "$1" ]; then return 0; fi
+    if [ "$waited" -ge "$limit" ]; then
+      echo "wb-ci: the $version release is still cutting or shipping after $((limit / 60)) min; not starting. Retry once /var/log/ac-ship.log says it is live." >&2
+      return 75
+    fi
+    [ "$waited" -gt 0 ] || echo "wb-ci: waiting for the $version release to finish ($CUT_MARKER); checking every ${every}s for up to $((limit / 60)) min" >&2
+    sleep "$every"
+    waited=$((waited + every))
+  done
+}
+wait_for_release "$sha" || exit $?
+
+# A run is over only when GitHub says it is completed. `gh run watch` can return while the run goes on (a dropped
+# connection, an API error); wb-ci then printed an empty result and left, freeing the slot, and the next request in
+# that slot cancelled the run (27 Oct 2026, run 40530203131). Checks every 30 s, for at most 2 hours after the watch.
+wait_for_run() {  # <run id>
+  local status="" waited=0 limit=${WB_CI_RUN_WAIT_S:-7200} every=${WB_CI_RUN_POLL_S:-30}
+  gh run watch "$1" -R "$REPO" --interval 30 --exit-status >"$tmp/watch.log" 2>&1 || true
+  while :; do
+    status=$(gh run view "$1" -R "$REPO" --json status --jq .status 2>/dev/null) || status=""
+    [ "$status" = completed ] && return 0
+    if [ "$waited" -ge "$limit" ]; then
+      echo "wb-ci: run $1 is still ${status:-unreadable} after $((limit / 60)) min of waiting; no result" >&2
+      return 1
+    fi
+    [ "$waited" -gt 0 ] || echo "wb-ci: the watch ended but run $1 is ${status:-unreadable}; checking every ${every}s" >&2
+    sleep "$every"
+    waited=$((waited + every))
+  done
+}
 changed_files=()
 if [ "$full" = 0 ]; then
   wanted=${base:-$sha^}
@@ -127,9 +175,16 @@ for path in "${include[@]}"; do
   if [ -e "$WB/$path" ]; then $G --work-tree="$WB" add -f -- "$path"; else $G rm -q --cached --ignore-unmatch -- "$path"; fi
 done
 wb_head=$($G --git-dir="$WB/.git" rev-parse HEAD)
+# The current CI files, each in the tested commit's own mode (HEAD's for a file the commit lacks): a request whose
+# only change is a file mode fails the CI prerequisite pin check (27 Oct 2026: wb_checks.py was 100755 at HEAD and
+# every request overlaid it as 100644).
 for path in "${CI_FILES[@]}"; do
+  # An included CI file is the change under test (a radar or matrix change, before its commit): it stays.
+  [[ " ${include[*]} " == *" $path "* ]] && continue
   if blob=$($G --git-dir="$WB/.git" rev-parse -q --verify "$wb_head:$path" 2>/dev/null); then
-    $G update-index --add --cacheinfo "100644,$blob,$path"
+    mode=$($G ls-tree "$sha" -- "$path" | cut -d' ' -f1)
+    [ -n "$mode" ] || mode=$($G --git-dir="$WB/.git" ls-tree "$wb_head" -- "$path" | cut -d' ' -f1)
+    $G update-index --add --cacheinfo "${mode:-100644},$blob,$path"
   fi
 done
 printf '%s\n' "${changed_files[@]}" > "$tmp/changed"
@@ -201,7 +256,11 @@ url="https://github.com/$REPO/actions/runs/$run"
 echo "wb-ci: run $url"
 [ "$wait" = 1 ] || { echo "wb-ci: not waiting (--no-wait); delete the branch later: git push origin :$branch"; exit 0; }
 
-gh run watch "$run" -R "$REPO" --interval 30 --exit-status >"$tmp/watch.log" 2>&1 || true
+if ! wait_for_run "$run"; then
+  # Still running: no result, and the branch stays, since its run is using it.
+  echo "result: unknown (still running: $url)"
+  exit 1
+fi
 elapsed=$(( $(date +%s) - started ))
 gh run view "$run" -R "$REPO" --json conclusion,jobs --jq '
   def secs(a; b): if a and b and (b|startswith("0001")|not) then ((b|fromdate) - (a|fromdate)) else null end;

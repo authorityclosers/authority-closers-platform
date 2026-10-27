@@ -15,7 +15,6 @@ import {
   Badge,
   Button,
   Card,
-  Dialog,
   Empty,
   Field,
   Kpi,
@@ -27,21 +26,16 @@ import {
   LeadsError,
   readTeam,
   runSweep,
-  saveRep,
   saveSettings,
   saveWorkHours,
-  splitList,
   waitWords,
   type RepView,
   type Team,
 } from "./leads-client";
 import {
-  CallAiError,
   LEVEL_NAMES,
   levelFor,
   readCallAi,
-  saveCallAiPerson,
-  type CallAiLevel,
   type CallAiSettings,
 } from "../call-ai/call-ai-client";
 import { notify } from "../notice-center";
@@ -56,7 +50,25 @@ import {
   readLimit,
 } from "./limit-field";
 import { phoneDot } from "./phone-setup-words";
+import { SellerSheet } from "./seller-sheet";
+import { RoutingRules } from "./routing-rules";
+import { can } from "../organisation/roles";
+import { useWorkspaceAccess } from "../workspace-access";
 import styles from "./leads.module.css";
+
+/**
+ * Whether this person may change the team's rules (leads.manage). A Viewer
+ * reads the team and changes nothing (Roles B, 27 Oct 2026), so the page is
+ * read-only for them; the server refuses their saves anyway. Unknown (no
+ * workspace list yet, or a page drawn without one) stays editable.
+ */
+export function useCanEditTeam(): boolean {
+  const access = useWorkspaceAccess();
+  const role = access?.workspaces?.find(
+    (item) => item.tenant_id === access.context?.tenantId,
+  )?.role;
+  return role === undefined || can(role, "leads.manage");
+}
 
 const STAGE_ORDER = [
   "new",
@@ -106,9 +118,12 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export function WorkHoursPanel({
   team,
   onSaved,
+  readOnly = false,
 }: {
   team: Team;
   onSaved: (team: Team) => void;
+  /** A Viewer sees the hours and changes nothing. */
+  readOnly?: boolean;
 }) {
   const current = team.settings.work_hours ?? null;
   const [days, setDays] = useState<number[]>(
@@ -156,7 +171,7 @@ export function WorkHoursPanel({
           : "not set"
       }
     >
-      <div className={styles.form}>
+      <fieldset className={styles.form} disabled={readOnly}>
         <p className={styles.hint}>
           India time. Calls outside these hours stay on the seller&apos;s phone
           and are never logged.
@@ -204,198 +219,33 @@ export function WorkHoursPanel({
           />
           New leads wait outside work hours, then go out when work starts
         </label>
-        <div className={styles.row}>
-          <Button
-            variant="primary"
-            disabled={busy || days.length === 0}
-            onClick={() => void save()}
-          >
-            Save work hours
-          </Button>
-          {current ? (
+        {readOnly ? null : (
+          <div className={styles.row}>
             <Button
-              variant="ghost"
-              disabled={busy}
-              onClick={() => void save(true)}
+              variant="primary"
+              disabled={busy || days.length === 0}
+              onClick={() => void save()}
             >
-              Clear
+              Save work hours
             </Button>
-          ) : null}
-        </div>
+            {current ? (
+              <Button
+                variant="ghost"
+                disabled={busy}
+                onClick={() => void save(true)}
+              >
+                Clear
+              </Button>
+            ) : null}
+          </div>
+        )}
         {note ? (
           <p className={styles.hint} role="status">
             {note}
           </p>
         ) : null}
-      </div>
+      </fieldset>
     </Panel>
-  );
-}
-
-function RulesDialog({
-  rep,
-  callAi,
-  onClose,
-  onSaved,
-  onCallAiSaved,
-}: {
-  rep: RepView | null;
-  /** AI on calls (owner, 21 Oct): this seller's level; null when it didn't load. */
-  callAi: CallAiSettings | null;
-  onClose: () => void;
-  onSaved: (team: Team) => void;
-  onCallAiSaved: (settings: CallAiSettings) => void;
-}) {
-  // TeamView gives each opening a new key, so these start from this seller.
-  const own = rep && callAi ? levelFor(callAi, rep.person_id) : null;
-  const startLevel: CallAiLevel | "" = own?.own ? own.level : "";
-  const [aiLevel, setAiLevel] = useState<CallAiLevel | "">(startLevel);
-  const [available, setAvailable] = useState(rep?.available ?? true);
-  const [cap, setCap] = useState(() =>
-    limitDraft(rep ? rep.max_open : undefined),
-  );
-  const [languages, setLanguages] = useState(rep?.languages.join(", ") ?? "");
-  const [areas, setAreas] = useState(rep?.areas.join(", ") ?? "");
-  const [interests, setInterests] = useState(rep?.interests.join(", ") ?? "");
-  const [error, setError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
-
-  const save = async () => {
-    if (!rep) return;
-    const max = readLimit(cap);
-    if (max === undefined) {
-      setError(LIMIT_RULE);
-      return;
-    }
-    setSaving(true);
-    setError(null);
-    if (callAi?.can_edit && aiLevel !== startLevel) {
-      try {
-        onCallAiSaved(
-          await saveCallAiPerson(
-            callAi.revision,
-            rep.person_id,
-            aiLevel || null,
-          ),
-        );
-      } catch (reason) {
-        notify({
-          id: `call-ai-${rep.person_id}`,
-          tone: "error",
-          title: "AI on calls not saved",
-          message:
-            reason instanceof CallAiError
-              ? reason.message
-              : "Not saved. Try again.",
-        });
-        setSaving(false);
-        return;
-      }
-    }
-    try {
-      onSaved(
-        await saveRep(rep, {
-          available,
-          max_open: max,
-          languages: splitList(languages).slice(0, 12),
-          areas: splitList(areas),
-          interests: splitList(interests),
-        }),
-      );
-    } catch (reason) {
-      setError(
-        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Dialog
-      open={rep !== null}
-      title={rep ? `${rep.name}'s lead rules` : "Lead rules"}
-      description="Empty boxes mean no limit. New leads go to whoever fits and has the fewest open leads."
-      onClose={onClose}
-      actions={
-        <>
-          <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" onClick={save} disabled={saving}>
-            {saving ? "Saving…" : "Save rules"}
-          </Button>
-        </>
-      }
-    >
-      <div className={styles.form}>
-        <label className={styles.toggle}>
-          <input
-            type="checkbox"
-            checked={available}
-            onChange={(event) => setAvailable(event.target.checked)}
-          />
-          Takes new leads now
-        </label>
-        <LimitField
-          id={`limit-${rep?.person_id ?? "seller"}`}
-          label="Most open leads at once"
-          hint={rep?.default_cap ? "Organisation default" : undefined}
-          draft={cap}
-          onChange={setCap}
-        />
-        <Field
-          label="Languages"
-          hint="Comma separated, e.g. Hindi, Marathi, English"
-        >
-          <input
-            value={languages}
-            onChange={(event) => setLanguages(event.target.value)}
-          />
-        </Field>
-        <Field label="Areas" hint="Cities or regions this seller covers">
-          <input
-            value={areas}
-            onChange={(event) => setAreas(event.target.value)}
-          />
-        </Field>
-        <Field label="Products" hint="What this seller sells, as leads name it">
-          <input
-            value={interests}
-            onChange={(event) => setInterests(event.target.value)}
-          />
-        </Field>
-        {callAi?.can_edit ? (
-          <Field
-            label="AI on this seller's calls"
-            hint={
-              callAi.levels.find(
-                (level) => level.id === (aiLevel || callAi.default),
-              )?.hint
-            }
-          >
-            <select
-              value={aiLevel}
-              onChange={(event) =>
-                setAiLevel(event.target.value as CallAiLevel | "")
-              }
-            >
-              <option value="">
-                Organisation default ({LEVEL_NAMES[callAi.default]})
-              </option>
-              {callAi.levels.map((level) => (
-                <option key={level.id} value={level.id}>
-                  {level.name}
-                </option>
-              ))}
-            </select>
-          </Field>
-        ) : null}
-        {error ? (
-          <p className={styles.error} role="alert">
-            {error}
-          </p>
-        ) : null}
-      </div>
-    </Dialog>
   );
 }
 
@@ -437,6 +287,7 @@ export function TeamView({
   const [minutes, setMinutes] = useState("10");
   const [note, setNote] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const canEdit = useCanEditTeam();
 
   const load = (signal?: AbortSignal) =>
     readTeam(signal)
@@ -545,6 +396,13 @@ export function TeamView({
 
   return (
     <div className={styles.teamGrid}>
+      {canEdit ? null : (
+        <p className={styles.hint} role="note">
+          You can see the team. Owners, admins and managers change its rules.
+        </p>
+      )}
+      {/* Who gets which leads, first: the routing rules (Lead OS, 27 Oct 2026). */}
+      {rulesOnly && canEdit ? <RoutingRules /> : null}
       {rulesOnly ? null : (
         <Tiles label="Team leads">
           <Kpi
@@ -611,18 +469,20 @@ export function TeamView({
                           <Badge>{rep.role}</Badge>
                         ) : null}
                       </Link>
-                      <button
-                        type="button"
-                        className={styles.repRules}
-                        onClick={() => {
-                          setEditRound((value) => value + 1);
-                          setEditing(rep);
-                        }}
-                        aria-label={`Edit ${rep.name}'s lead rules`}
-                        title="Lead rules"
-                      >
-                        <SlidersHorizontal size={14} aria-hidden="true" />
-                      </button>
+                      {canEdit ? (
+                        <button
+                          type="button"
+                          className={styles.repRules}
+                          onClick={() => {
+                            setEditRound((value) => value + 1);
+                            setEditing(rep);
+                          }}
+                          aria-label={`Edit ${rep.name}'s lead rules`}
+                          title="Lead rules"
+                        >
+                          <SlidersHorizontal size={14} aria-hidden="true" />
+                        </button>
+                      ) : null}
                     </span>
                   </th>
                   <td>
@@ -688,18 +548,20 @@ export function TeamView({
                 ) : (
                   <Badge>Away</Badge>
                 )}
-                <button
-                  type="button"
-                  className={styles.repRules}
-                  onClick={() => {
-                    setEditRound((value) => value + 1);
-                    setEditing(rep);
-                  }}
-                  aria-label={`Edit ${rep.name}'s lead rules`}
-                  title="Lead rules"
-                >
-                  <SlidersHorizontal size={14} aria-hidden="true" />
-                </button>
+                {canEdit ? (
+                  <button
+                    type="button"
+                    className={styles.repRules}
+                    onClick={() => {
+                      setEditRound((value) => value + 1);
+                      setEditing(rep);
+                    }}
+                    aria-label={`Edit ${rep.name}'s lead rules`}
+                    title="Lead rules"
+                  >
+                    <SlidersHorizontal size={14} aria-hidden="true" />
+                  </button>
+                ) : null}
               </span>
               <span>
                 {rulesOnly
@@ -729,7 +591,7 @@ export function TeamView({
         <>
           <CallsReport />
 
-          <SlaPanel onOpen={onOpen} />
+          <SlaPanel onOpen={onOpen} readOnly={!canEdit} />
 
           <AdSpendPanel />
         </>
@@ -740,7 +602,7 @@ export function TeamView({
           title="Auto-reassign"
           sub={team.settings.auto_reassign ? "on" : "off"}
         >
-          <div className={styles.form}>
+          <fieldset className={styles.form} disabled={!canEdit}>
             <p className={styles.hint}>
               When a new lead isn&apos;t called within the time below, it moves
               to the next best seller. Test leads never move.
@@ -752,38 +614,54 @@ export function TeamView({
                 onChange={(event) => setMinutes(event.target.value)}
               />
             </Field>
-            <div className={styles.row}>
-              <Button
-                variant={team.settings.auto_reassign ? "secondary" : "primary"}
-                disabled={busy}
-                onClick={() => saveAuto(!team.settings.auto_reassign)}
-              >
-                {team.settings.auto_reassign ? "Turn off" : "Turn on"}
-              </Button>
-              {team.settings.auto_reassign ? (
-                <Button variant="ghost" disabled={busy} onClick={sweep}>
-                  <RefreshCw size={14} aria-hidden="true" />
-                  Check now
+            {canEdit ? (
+              <div className={styles.row}>
+                <Button
+                  variant={
+                    team.settings.auto_reassign ? "secondary" : "primary"
+                  }
+                  disabled={busy}
+                  onClick={() => saveAuto(!team.settings.auto_reassign)}
+                >
+                  {team.settings.auto_reassign ? "Turn off" : "Turn on"}
                 </Button>
-              ) : null}
-            </div>
+                {team.settings.auto_reassign ? (
+                  <Button variant="ghost" disabled={busy} onClick={sweep}>
+                    <RefreshCw size={14} aria-hidden="true" />
+                    Check now
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
             {note ? (
               <p className={styles.hint} role="status">
                 {note}
               </p>
             ) : null}
-          </div>
+          </fieldset>
         </Panel>
         <ListsPanel
           key={`lists-${team.settings.revision}`}
+          readOnly={!canEdit}
           team={team}
           onSaved={(next) => {
             setTeam(next);
             onChanged();
           }}
         />
+        {team.settings.strict_language === undefined ? null : (
+          <LanguagesPanel
+            readOnly={!canEdit}
+            team={team}
+            onSaved={(next) => {
+              setTeam(next);
+              onChanged();
+            }}
+          />
+        )}
         <WorkHoursPanel
           key={`${team.settings.revision}`}
+          readOnly={!canEdit}
           team={team}
           onSaved={(next) => {
             setTeam(next);
@@ -830,7 +708,7 @@ export function TeamView({
         )}
       </div>
 
-      <RulesDialog
+      <SellerSheet
         key={editRound}
         rep={editing}
         callAi={callAi}
@@ -847,6 +725,69 @@ export function TeamView({
 }
 
 /**
+ * Languages (Lead OS, 27 Oct 2026): a seller's languages are a preference, so
+ * a lead nobody free speaks to still goes to someone; strict, it waits for a
+ * manager to give it out. Saves at once, like auto-reassign.
+ */
+function LanguagesPanel({
+  team,
+  onSaved,
+  readOnly = false,
+}: {
+  team: Team;
+  onSaved: (team: Team) => void;
+  readOnly?: boolean;
+}) {
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const strict = team.settings.strict_language === true;
+  const save = async (next: boolean) => {
+    setBusy(true);
+    setNote(null);
+    try {
+      onSaved(
+        await saveSettings(team.settings.revision, {
+          auto_reassign: team.settings.auto_reassign,
+          reassign_minutes: team.settings.reassign_minutes,
+          strict_language: next,
+        }),
+      );
+    } catch (reason) {
+      setNote(
+        reason instanceof LeadsError ? reason.message : "Not saved. Try again.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Panel title="Languages" sub={strict ? "strict" : "preferred"}>
+      <div className={styles.form}>
+        <label className={styles.toggle}>
+          <input
+            type="checkbox"
+            checked={strict}
+            disabled={busy || readOnly}
+            onChange={(event) => void save(event.target.checked)}
+          />
+          Only sellers who speak the lead&apos;s language
+        </label>
+        <p className={styles.hint}>
+          {strict
+            ? "If nobody free speaks it, the lead waits for a manager to give it out."
+            : "Languages are a preference. If nobody free speaks it, the lead still goes to someone."}
+        </p>
+        {note ? (
+          <p className={styles.hint} role="status">
+            {note}
+          </p>
+        ) : null}
+      </div>
+    </Panel>
+  );
+}
+
+/**
  * Limits and phone numbers for the whole team (owner, 25 Oct 2026): the
  * open-lead limit of sellers with no rules of their own, and whether lists
  * show whole phone numbers.
@@ -854,9 +795,11 @@ export function TeamView({
 function ListsPanel({
   team,
   onSaved,
+  readOnly = false,
 }: {
   team: Team;
   onSaved: (team: Team) => void;
+  readOnly?: boolean;
 }) {
   const [draft, setDraft] = useState(() =>
     limitDraft(team.settings.default_max_open),
@@ -897,7 +840,7 @@ function ListsPanel({
   };
   return (
     <Panel title="Limits and phone numbers">
-      <div className={styles.form}>
+      <fieldset className={styles.form} disabled={readOnly}>
         <LimitField
           id="limit-new-sellers"
           label="Open-lead limit for new sellers"
@@ -916,17 +859,23 @@ function ListsPanel({
         <p className={styles.hint}>
           Off, lists show a number&apos;s last four digits.
         </p>
-        <div className={styles.row}>
-          <Button variant="primary" disabled={busy} onClick={() => void save()}>
-            {busy ? "Saving…" : "Save"}
-          </Button>
-        </div>
+        {readOnly ? null : (
+          <div className={styles.row}>
+            <Button
+              variant="primary"
+              disabled={busy}
+              onClick={() => void save()}
+            >
+              {busy ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        )}
         {note ? (
           <p className={styles.hint} role="status">
             {note}
           </p>
         ) : null}
-      </div>
+      </fieldset>
     </Panel>
   );
 }

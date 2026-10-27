@@ -12,7 +12,8 @@
 import { useState } from "react";
 import { Download } from "lucide-react";
 
-import { Panel, Segmented } from "../ui/kit";
+import { BrandTile } from "../ui/brand-tile";
+import { Button, Panel } from "../ui/kit";
 import { CopyButton } from "./copy-button";
 import { useOrigin } from "./use-origin";
 import styles from "./developers.module.css";
@@ -115,46 +116,125 @@ function Snippet({ code, label }: { code: string; label: string }) {
   );
 }
 
+// Each assistant's tile (owner bug #47, 27 Oct 2026): the official mark where
+// the brand library has one (ChatGPT), else its initials on a plain tile,
+// never a look-alike.
+const MARK: Partial<Record<Assistant, string>> = { chatgpt: "chatgpt" };
+const INITIALS: Record<Assistant, string> = {
+  chatgpt: "",
+  "claude-desktop": "Cl",
+  "claude-code": "CC",
+  cursor: "Cu",
+  vscode: "VS",
+};
+
+const STEPS = [
+  "Add Sales X-Ray to your assistant",
+  "Sign in",
+  "Ask it something",
+] as const;
+
 export function AssistantSetup() {
   const origin = useOrigin();
   const [assistant, setAssistant] = useState<Assistant>("chatgpt");
+  // A stepper that fits a phone (owner bug #47): every step's title stays
+  // listed, the one you're on is open, with Back and Next.
+  const [step, setStep] = useState(0);
   const chosen =
     ASSISTANTS.find((item) => item.key === assistant) ?? ASSISTANTS[0];
+  const body = [
+    <>
+      <div
+        className={styles.assistants}
+        role="group"
+        aria-label="Your assistant"
+      >
+        {ASSISTANTS.map((item) => (
+          <button
+            key={item.key}
+            type="button"
+            className={styles.assistant}
+            aria-pressed={item.key === assistant}
+            onClick={() => setAssistant(item.key)}
+          >
+            {MARK[item.key] ? (
+              <BrandTile brands={[MARK[item.key]!]} size={32} />
+            ) : (
+              <span className={styles.initials} aria-hidden="true">
+                {INITIALS[item.key]}
+              </span>
+            )}
+            {item.label}
+          </button>
+        ))}
+      </div>
+      <span>{REMOTE_WHERE[assistant]}</span>
+      <Snippet
+        code={remoteSnippet(assistant, origin)}
+        label={`${chosen.label} setup`}
+      />
+    </>,
+    <span key="sign-in">
+      Your assistant opens Sales X-Ray: approve it for your account. It reads
+      what you can see, in the workspace you have open, and you can remove it
+      any time. Nothing to download, no key to copy.
+    </span>,
+    <span key="ask">
+      “What objections came up in my last five calls?” · “Which leads are
+      waiting for a follow-up?” · “Add a lead: a name, a phone number and what
+      they asked about.”
+    </span>,
+  ];
   return (
-    <Panel title="Connect your AI assistant">
+    <Panel
+      title="Connect your AI assistant"
+      tools={
+        <span className={styles.stepCount}>
+          Step {step + 1} of {STEPS.length}
+        </span>
+      }
+    >
+      <div className={styles.progress} aria-hidden="true">
+        {STEPS.map((title, index) => (
+          <i key={title} data-on={index <= step ? "" : undefined} />
+        ))}
+      </div>
       <ol className={styles.steps} data-steps="remote">
-        <li>
-          <strong>Add Sales X-Ray to your assistant</strong>
-          <div className={styles.picker}>
-            <Segmented
-              label="Your assistant"
-              items={ASSISTANTS.map(({ key, label }) => ({ key, label }))}
-              value={assistant}
-              onChange={setAssistant}
-            />
-          </div>
-          <span>{REMOTE_WHERE[assistant]}</span>
-          <Snippet
-            code={remoteSnippet(assistant, origin)}
-            label={`${chosen.label} setup`}
-          />
-        </li>
-        <li>
-          <strong>Sign in</strong>
-          <span>
-            Your assistant opens Sales X-Ray: approve it for your account. It
-            reads what you can see, in the workspace you have open, and you can
-            remove it any time. Nothing to download, no key to copy.
-          </span>
-        </li>
-        <li>
-          <strong>Ask it something</strong>
-          <span>
-            “What objections came up in my last five calls?” · “Which leads are
-            waiting for a follow-up?” · “Add a lead: a name, a phone number and
-            what they asked about.”
-          </span>
-        </li>
+        {STEPS.map((title, index) => (
+          <li
+            key={title}
+            data-state={
+              index === step ? "open" : index < step ? "done" : undefined
+            }
+            aria-current={index === step ? "step" : undefined}
+          >
+            <button
+              type="button"
+              className={styles.stepTitle}
+              aria-expanded={index === step}
+              onClick={() => setStep(index)}
+            >
+              <strong>{title}</strong>
+            </button>
+            {index === step ? (
+              <>
+                {body[index]}
+                <div className={styles.stepNav}>
+                  {index > 0 ? (
+                    <Button variant="ghost" onClick={() => setStep(index - 1)}>
+                      Back
+                    </Button>
+                  ) : null}
+                  {index < STEPS.length - 1 ? (
+                    <Button onClick={() => setStep(index + 1)}>
+                      Next: {STEPS[index + 1].toLowerCase()}
+                    </Button>
+                  ) : null}
+                </div>
+              </>
+            ) : null}
+          </li>
+        ))}
       </ol>
       {assistant === "chatgpt" ? null : (
         <details className={styles.stdio}>

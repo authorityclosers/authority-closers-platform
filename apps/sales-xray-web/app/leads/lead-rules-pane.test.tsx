@@ -107,12 +107,97 @@ it("shows only the rules in Settings → Lead rules", async () => {
   expect(host.textContent).not.toContain("Calls by seller");
   expect(host.textContent).not.toContain("calls today");
   expect(host.textContent).not.toContain("Due now");
+  // No routing rules or language switch where the server doesn't offer them.
+  expect(headed("Who gets which leads")).toBe(false);
+  expect(host.textContent).not.toContain("Only sellers who speak");
   // Each seller's own rules stay one tap away.
   expect(
     host.querySelectorAll(
       'button[aria-label="Edit Priya Example\'s lead rules"]',
     ).length,
   ).toBeGreaterThan(0);
+});
+
+it("puts the routing rules first in Lead rules, not on Leads → Team", async () => {
+  vi.stubGlobal("fetch", async (url: string) =>
+    String(url).endsWith("/team")
+      ? Response.json(team)
+      : String(url).endsWith("/routing-rules")
+        ? Response.json({
+            schema: "lead-desk/1",
+            revision: 1,
+            can_edit: true,
+            value_answer: null,
+            rules: [],
+            sources: {},
+            people: [],
+            questions: [],
+          })
+        : Response.json({ detail: "Not here" }, { status: 404 }),
+  );
+  await act(async () => root.render(<LeadRulesPane />));
+  await settle();
+  const titles = [...host.querySelectorAll("h2, h3")].map((item) =>
+    item.textContent?.trim(),
+  );
+  expect(titles[0]).toBe("Who gets which leads");
+  await act(async () =>
+    root.render(
+      <TeamView onChanged={() => undefined} onOpen={() => undefined} />,
+    ),
+  );
+  await settle();
+  expect(headed("Who gets which leads")).toBe(false);
+});
+
+it("makes languages strict at once, keeping the other settings", async () => {
+  const sent: { url: string; body: unknown }[] = [];
+  const offered: Team = {
+    ...team,
+    settings: { ...team.settings, strict_language: false },
+  };
+  vi.stubGlobal("fetch", async (url: string, init?: RequestInit) => {
+    if (init?.method === "PUT") {
+      const body = JSON.parse(String(init.body)) as {
+        strict_language: boolean;
+      };
+      sent.push({ url: String(url), body });
+      return Response.json({
+        ...offered,
+        settings: {
+          ...offered.settings,
+          revision: 3,
+          strict_language: body.strict_language,
+        },
+      });
+    }
+    return String(url).endsWith("/team")
+      ? Response.json(offered)
+      : Response.json({ detail: "Not here" }, { status: 404 });
+  });
+  await act(async () => root.render(<LeadRulesPane />));
+  await settle();
+  expect(host.textContent).toContain(
+    "If nobody free speaks it, the lead still goes to someone.",
+  );
+  const strict = [...host.querySelectorAll("label")]
+    .find((label) => label.textContent?.includes("Only sellers who speak"))!
+    .querySelector("input")!;
+  expect(strict.checked).toBe(false);
+  await act(async () => strict.click());
+  await settle();
+  expect(sent).toHaveLength(1);
+  expect(sent[0].url.endsWith("/settings")).toBe(true);
+  expect(sent[0].body).toEqual({
+    expected_revision: 2,
+    auto_reassign: false,
+    reassign_minutes: 10,
+    strict_language: true,
+  });
+  expect(strict.checked).toBe(true);
+  expect(host.textContent).toContain(
+    "If nobody free speaks it, the lead waits for a manager to give it out.",
+  );
 });
 
 it("keeps the team's numbers on Leads → Team", async () => {

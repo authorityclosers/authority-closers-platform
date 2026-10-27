@@ -51,6 +51,7 @@ from ac_platform.http.routes import RouteContext
 from ac_platform.identity.models import Person
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import meetings as meeting_rows
+from ac_platform.lead_desk import routing_rules
 from ac_platform.lead_desk.contracts import (
     Board,
     Contact,
@@ -621,6 +622,43 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
         return PipelinesView(
             pipelines=views, sources=dict(pipelines.SOURCES), can_edit=desk.viewer.can_manage
         )
+
+    # ----- routing rules (owner, 27 Oct 2026: "smarter" lead rules; lead_desk/routing_rules.py)
+
+    @router.get(
+        "/routing-rules",
+        response_model=routing_rules.RoutingView,
+        response_model_by_alias=True,
+    )
+    async def read_routing(request: Request, response: Response) -> routing_rules.RoutingView:
+        """The workspace's routing rules, the sources and sellers they can name, and the form
+        questions recent leads answered (owners and managers)."""
+        async with desk_for(request, response) as desk:
+            return await desk.routing_view()
+
+    @router.put(
+        "/routing-rules",
+        response_model=routing_rules.RoutingView,
+        response_model_by_alias=True,
+    )
+    async def save_routing(
+        command: routing_rules.RoutingCommand, request: Request, response: Response
+    ) -> routing_rules.RoutingView:
+        """Replace the rules, top to bottom, under the settings' revision."""
+        async with desk_for(request, response, write=True) as desk:
+            return await desk.save_routing(command)
+
+    @router.post(
+        "/routing-rules/try",
+        response_model=routing_rules.TryView,
+        response_model_by_alias=True,
+    )
+    async def try_routing(
+        lead: routing_rules.TryLead, request: Request, response: Response
+    ) -> routing_rules.TryView:
+        """Where a lead like this would go now, and why. Nothing is saved or given out."""
+        async with desk_for(request, response) as desk:
+            return await desk.try_routing(lead)
 
     # ----- pipelines ----------------------------------------------------------------------
 

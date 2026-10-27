@@ -331,6 +331,8 @@ def test_owners_and_admins_delete_chosen_leads_for_good(
             seller_token = await _session(setup, seller)
             manager = await seed(setup.engine, tenant_id=tenant, role="manager")
             manager_token = await _session(setup, manager)
+            viewer = await seed(setup.engine, tenant_id=tenant, role="viewer")
+            viewer_token = await _session(setup, viewer)
             async with httpx.AsyncClient(
                 transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
             ) as client:
@@ -388,6 +390,28 @@ def test_owners_and_admins_delete_chosen_leads_for_good(
                 )
                 assert refused.status_code == 403
                 assert refused.json()["detail"] == "Only owners and admins delete leads."
+                # Viewers read the team's leads and a lead's page, and change nothing; a
+                # seller still sees only their own (Roles B).
+                as_(viewer_token)
+                seen = await client.get(f"{BASE}/leads?scope=team&test=only")
+                assert seen.status_code == 200, seen.text
+                assert {row["lead_id"] for row in seen.json()["leads"]} == {
+                    str(c),
+                    str(d),
+                    str(meta_test),
+                }
+                assert (await client.get(f"{BASE}/leads/{a}")).status_code == 200
+                for path, body in (
+                    (f"/leads/{a}/notes", {"command_id": str(uuid4()), "note": "x"}),
+                    ("/leads/delete", {"command_id": str(uuid4()), "lead_ids": [str(a)]}),
+                ):
+                    refused = await post(path, body)
+                    assert refused.status_code == 403, refused.text
+                    assert refused.json()["detail"].startswith("Your role can view only")
+                as_(seller_token)
+                team = await client.get(f"{BASE}/leads?scope=team")
+                assert team.status_code == 403
+                assert team.json()["detail"] == "Your role sees your own leads only."
 
                 as_(setup.token)
                 assert (

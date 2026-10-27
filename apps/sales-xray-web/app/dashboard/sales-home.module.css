@@ -125,6 +125,32 @@
   display: none;
 }
 
+/* A section's one way onward, as a compact button (Today's Who to call). */
+.headAction {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 12px;
+  border: 1px solid color-mix(in srgb, var(--sx-accent) 35%, var(--sx-line));
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.headAction:active {
+  transform: scale(var(--sx-press-scale, 0.97));
+}
+
+.headAction:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
 .chip {
   display: inline-flex;
   align-items: center;

@@ -28,6 +28,7 @@ import {
   pickRadarScreens,
   radarLoads,
   radarScreens,
+  screenLoads,
   radarStates,
   reportMarkdown,
   risky,
@@ -67,9 +68,25 @@ function el(
   };
 }
 
-test("checks 3 phones at three scales and 1280 at two, light and dark: 22 states in 14 loads", () => {
-  assert.equal(radarStates().length, 22);
-  assert.equal(radarLoads().length, 14);
+test("checks 3 phones at three scales, 1280 at two and the Android app, light and dark: 24 states in 16 loads", () => {
+  assert.equal(radarStates().length, 24);
+  assert.equal(radarLoads().length, 16);
+  // The Android app: its user agent and font-scale handshake on a 360 px phone, the CPU 4x slower.
+  const android = radarLoads().filter((load) => load.android);
+  assert.deepEqual(
+    android.map((load) => load.theme),
+    ["light", "dark"],
+  );
+  for (const load of android) {
+    assert.equal(load.size.width, 360);
+    assert.match(load.android.userAgent, /\bSalesXrayApp\/\d/);
+    assert.equal(load.android.fontScale, 1.2);
+    assert.equal(load.android.cpu, 4);
+    assert.equal(
+      stateTag(load.states[0]),
+      `360x800 120% android ${load.theme}`,
+    );
+  }
   const labels = new Set(radarStates().map((state) => state.label));
   assert.deepEqual([...labels], ["320x640", "360x800", "390x844", "1280x800"]);
   // The app's zoom is a phone's; the computer gets 100% and 130% text only.
@@ -81,7 +98,7 @@ test("checks 3 phones at three scales and 1280 at two, light and dark: 22 states
     "320x640 130% text dark",
   );
   // 130% text is measured on the same load as 100%, after it.
-  for (const load of radarLoads().filter((l) => l.zoom === 1))
+  for (const load of radarLoads().filter((l) => l.zoom === 1 && !l.android))
     assert.deepEqual(
       load.states.map((s) => s.scale),
       [1, 1.3],
@@ -183,6 +200,12 @@ test("element paths drop build hashes, bare wrappers and row text", () => {
   assert.equal(
     pathOf(el("span", { id: "«r1»", parent: el("li") })),
     "li > span",
+  );
+  // React 19.1's useId ("_r_a_") too; a real id stays.
+  assert.equal(pathOf(el("h3", { id: "_r_a_", parent: el("li") })), "li > h3");
+  assert.equal(
+    pathOf(el("h3", { id: "root", parent: el("li") })),
+    "li > h3#root",
   );
   assert.ok(
     labelish(
@@ -352,7 +375,7 @@ test("groups by root cause: one component, colour pair or message on any page", 
     componentOf("nav > a.lightbox-shell__bottomLink"),
     "a.lightbox-shell__bottomLink",
   );
-  // Siblings of one component that spill together are one group; one width on several pages is one group.
+  // Siblings of one component that spill together are one group; a page that scrolls sideways is its own.
   assert.equal(
     moduleOf("main > div.coaching__card > p.coaching__lead"),
     "coaching",
@@ -376,7 +399,7 @@ test("groups by root cause: one component, colour pair or message on any page", 
       detail: "the page is 297 px wide in 267",
       page: "report",
     }),
-    "overflow-page | the page is 297 px wide in 267",
+    "overflow-page | report",
   );
   const contrast = {
     check: "contrast",
@@ -498,4 +521,216 @@ test("the report counts by check, lists the top groups with crops, every group a
   );
   assert.match(text, /#### What the checks cannot tell/);
   assert.ok(Object.keys(CHECKS).includes("tab-no-switch"));
+});
+
+test("bug #43: Connections' parts are swept, and wrapped or cut tab bars are their own checks", async () => {
+  const { SCREENS } = await import("./wb_matrix_lib.mjs");
+  const swept = new Map(radarScreens(SCREENS, []));
+  for (const part of ["apps", "ai-replies", "developers", "pulse"])
+    assert.ok(
+      [...swept.values()].some(
+        (screen) =>
+          screen.path === `/review-fixture/hub?tab=connections&part=${part}`,
+      ),
+      part,
+    );
+  assert.equal(CHECKS["label-wraps"], "tab or chip label wraps");
+  assert.equal(CHECKS["tabs-clipped"], "tab bar cut at the screen edge");
+  // One card per bar or control, whichever page it shows on.
+  const key = groupKeyOf({
+    check: "tabs-clipped",
+    selector: "div.org-hub__parts > div[role=group].kit__segmented",
+    page: "hub-connections-apps",
+  });
+  assert.equal(
+    key,
+    groupKeyOf({
+      check: "tabs-clipped",
+      selector: "div.org-hub__parts > div[role=group].kit__segmented",
+      page: "hub-connections-pulse",
+    }),
+  );
+});
+
+test("a screen that needs a phone's own width skips the Android app's loads", async () => {
+  const { SCREENS } = await import("./wb_matrix_lib.mjs");
+  assert.equal(screenLoads(SCREENS["leads-all"]).length, 16);
+  for (const name of ["leads-table", "leads-table-open"]) {
+    const loads = screenLoads(SCREENS[name]);
+    assert.equal(loads.length, 14, name);
+    assert.ok(!loads.some((load) => load.android), name);
+  }
+  assert.equal(screenLoads().length, 16);
+});
+
+test("seller journeys: five on the fictional screens, each step doing something, no names", async () => {
+  const { JOURNEYS, stepActions } = await import("./wb_journeys_lib.mjs");
+  assert.deepEqual(Object.keys(JOURNEYS), [
+    "sign-in-setup",
+    "after-call",
+    "call-mode",
+    "upload-recording",
+    "read-report",
+  ]);
+  for (const [key, plan] of Object.entries(JOURNEYS)) {
+    assert.ok(plan.steps.length >= 3, key);
+    assert.match(plan.steps[0].goto, /^\/review-fixture\//, key);
+    assert.equal(namesOut(plan.title), plan.title, key);
+    const names = plan.steps.map((step) => step.name);
+    assert.equal(
+      new Set(names).size,
+      names.length,
+      `${key}: step names repeat`,
+    );
+    for (const step of plan.steps) {
+      assert.ok(stepActions(step).length, `${key}: ${step.name} does nothing`);
+      assert.equal(namesOut(step.name), step.name, `${key}: ${step.name}`);
+      if (step.goto)
+        assert.match(step.goto, /^\/review-fixture\//, `${key}: ${step.name}`);
+      if (step.fill) assert.equal(step.fill.length, 2, `${key}: ${step.name}`);
+    }
+  }
+});
+
+test("a request picks journeys by name; pages only means no journeys, journeys only means no pages", async () => {
+  const { JOURNEYS, pickJourneys, onlyJourneys, isJourneyRoute } = await import(
+    "./wb_journeys_lib.mjs"
+  );
+  const finished = Object.keys(JOURNEYS).filter((key) => !JOURNEYS[key].draft);
+  assert.ok(finished.length >= 3);
+  assert.deepEqual(
+    pickJourneys([]).map(([key]) => key),
+    finished,
+  );
+  assert.equal(pickJourneys(["journeys"]).length, 5);
+  assert.deepEqual(
+    pickJourneys(["journey:after-call", "leads-all"]).map(([key]) => key),
+    ["after-call"],
+  );
+  assert.deepEqual(pickJourneys(["leads-all", "/review-fixture/home"]), []);
+  assert.throws(() => pickJourneys(["journey:nope"]), /unknown journey nope/);
+  // A draft walks only when asked for: never in the nightly (its stops would be about the journey, not the app).
+  const plans = { done: { steps: [] }, draft: { steps: [], draft: true } };
+  assert.deepEqual(
+    pickJourneys([], plans).map(([key]) => key),
+    ["done"],
+  );
+  assert.deepEqual(
+    pickJourneys(["journeys"], plans).map(([key]) => key),
+    ["done", "draft"],
+  );
+  assert.deepEqual(
+    pickJourneys(["journey:draft"], plans).map(([key]) => key),
+    ["draft"],
+  );
+  assert.equal(onlyJourneys([]), false);
+  assert.equal(onlyJourneys(["journeys"]), true);
+  assert.equal(onlyJourneys(["journey:call-mode", "leads-all"]), false);
+  assert.ok(
+    isJourneyRoute("journey:call-mode") && !isJourneyRoute("journeys-page"),
+  );
+});
+
+test("a journey's recording is a real WAV, fictional and small; its budget follows the phone's speed", async () => {
+  const { fictionalRecording, journeyBudget, journeyTimeout, STEP_BUDGET_MS } =
+    await import("./wb_journeys_lib.mjs");
+  const { name, mimeType, buffer } = fictionalRecording();
+  assert.equal(name, "fictional-call.wav");
+  assert.equal(mimeType, "audio/wav");
+  assert.equal(buffer.toString("ascii", 0, 4), "RIFF");
+  assert.equal(buffer.toString("ascii", 8, 16), "WAVEfmt ");
+  assert.equal(buffer.readUInt32LE(4), buffer.length - 8);
+  assert.equal(buffer.readUInt32LE(40), buffer.length - 44);
+  assert.ok(buffer.length < 200_000);
+  assert.equal(journeyBudget(null), STEP_BUDGET_MS);
+  assert.equal(journeyBudget({ cpu: 4 }), 4 * STEP_BUDGET_MS);
+  assert.ok(journeyTimeout({ cpu: 4 }) > journeyTimeout(null));
+});
+
+test("journeys in the report: a table of walks, and a stop is its own group per journey and step", () => {
+  const stop = (page) =>
+    finding({
+      check: "journey-broken",
+      severity: "high",
+      page,
+      selector: "4. Send the code",
+      label: "Send the code",
+      detail: "stops at step 4. Send the code: Timeout 15000ms exceeded.",
+    });
+  const findings = dedupe([
+    stop("journey:sign-in-setup"),
+    stop("journey:other"),
+  ]);
+  const groups = groupFindings(findings);
+  assert.equal(groups.length, 2);
+  assert.equal(
+    groupKeyOf(findings[0]),
+    "journey-broken | journey:sign-in-setup | 4. Send the code",
+  );
+  const text = reportMarkdown({
+    findings,
+    groups,
+    pages: [],
+    journeys: [
+      {
+        key: "sign-in-setup",
+        title:
+          "A new seller signs in with an email code and sets up the business",
+        profile: "phone",
+        total: 15,
+        steps: [
+          { name: "1. Open sign-in", ms: 900 },
+          { name: "2. Type the email", ms: 120 },
+          { name: "3. Accept the terms", ms: 2400 },
+        ],
+        stopped: "4. Send the code",
+      },
+      {
+        key: "sign-in-setup",
+        title:
+          "A new seller signs in with an email code and sets up the business",
+        profile: "android",
+        total: 15,
+        steps: [{ name: "1. Open sign-in", ms: 3000 }],
+        stopped: null,
+      },
+    ],
+  });
+  assert.match(text, /#### Seller journeys \(fictional screens\)/);
+  assert.match(
+    text,
+    /\| phone \| 3\/15 \| 3\.4 s \| 3\. Accept the terms \(2\.4 s\) \| 4\. Send the code \|/,
+  );
+  assert.match(
+    text,
+    /\| the Android app, slow phone \| 1\/15 \| 3\.0 s \| 1\. Open sign-in \(3\.0 s\) \| — \|/,
+  );
+  assert.match(
+    text,
+    /journey-broken \(a seller journey stops at a step\) \| 2 \| 2 \| 2 \|/,
+  );
+});
+
+test("a shard stopped at the deadline says what was still running, and the slowest pages are listed", () => {
+  const text = reportMarkdown({
+    findings: [],
+    groups: [],
+    pages: [
+      { key: "home", path: "/review-fixture/home", ms: 412000, failed: [] },
+      { key: "kit", path: "/review-fixture/kit", ms: 61000, failed: [] },
+      { key: "calls-list", path: "/review-fixture/calls", ms: 0, failed: [] },
+    ],
+    stopped: [
+      {
+        shard: "3/5",
+        running: [
+          { page: "home-seller", kind: "sweep", since: 0, seconds: 540 },
+        ],
+      },
+    ],
+  });
+  assert.match(text, /#### Shards stopped at the 40-minute deadline/);
+  assert.match(text, /- shard 3\/5: still running home-seller \(sweep, 540s\)/);
+  assert.match(text, /#### Slowest pages[^\n]*\n\n- home: 412s\n- kit: 61s\n/);
+  assert.doesNotMatch(text, /- calls-list: 0s/);
 });

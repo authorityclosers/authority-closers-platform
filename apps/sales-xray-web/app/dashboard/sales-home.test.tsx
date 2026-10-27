@@ -83,6 +83,12 @@ const desk = (queue: unknown[]) => ({
   generated_at: "2026-10-22T05:30:00Z",
 });
 
+/** An owner's own desk: they manage (Roles B, 27 Oct 2026: edits follow can_manage). */
+const owner = <T extends { me: object }>(value: T) => ({
+  ...value,
+  me: { ...value.me, role: "owner", can_manage: true },
+});
+
 let root: Root;
 let host: HTMLDivElement;
 
@@ -123,7 +129,7 @@ afterEach(async () => {
 // Owner, 22 Oct 2026: owners and admins first see how sales are going.
 it("shows owners outcomes first, then sellers ranked and open leads by stage", async () => {
   answer({
-    "/v1/lead-desk": desk([]),
+    "/v1/lead-desk": owner(desk([])),
     "/v1/lead-desk/reports/performance*": {
       days: 7,
       start: "2026-10-16",
@@ -207,10 +213,10 @@ it("says all caught up when nobody is due", async () => {
 // Approved map, slice 8 (22 Oct 2026): "Needs you", from facts the server counts.
 it("tells an owner what needs them, each row opening the work", async () => {
   answer({
-    "/v1/lead-desk": {
+    "/v1/lead-desk": owner({
       ...desk([]),
       counts: { ...desk([]).counts, unassigned: 2 },
-    },
+    }),
     "/v1/lead-desk/reports/performance*": {
       days: 7,
       start: "2026-10-16",
@@ -250,7 +256,7 @@ it("tells an owner what needs them, each row opening the work", async () => {
 
 it("says so when nothing needs the owner, and switches to My day", async () => {
   answer({
-    "/v1/lead-desk": desk([row("ravi sample", { overdue: true })]),
+    "/v1/lead-desk": owner(desk([row("ravi sample", { overdue: true })])),
     "/v1/lead-desk/reports/performance*": {
       days: 7,
       start: "2026-10-16",
@@ -314,7 +320,7 @@ it("starts a new seller with three steps, no empty figures", async () => {
 });
 
 it("starts a new organisation's owner with Add your team", async () => {
-  answer({ "/v1/lead-desk": empty(), "/v1/lead-desk/team": team({}) });
+  answer({ "/v1/lead-desk": owner(empty()), "/v1/lead-desk/team": team({}) });
   await mount(true);
   await act(async () => Promise.resolve());
   expect(host.textContent).toContain("Add your team");
@@ -322,10 +328,47 @@ it("starts a new organisation's owner with Add your team", async () => {
 
 it("keeps the team's Home for an owner whose sellers have leads", async () => {
   answer({
-    "/v1/lead-desk": empty(),
+    "/v1/lead-desk": owner(empty()),
     "/v1/lead-desk/team": team({ new: 5 }),
   });
   await mount(true);
   await act(async () => Promise.resolve());
   expect(host.textContent).not.toContain("Welcome to Sales X-Ray");
+});
+
+// Roles B (27 Oct 2026): a Viewer reads the team's Home and changes nothing.
+it("gives a Viewer the team's Home with nothing to change", async () => {
+  answer({
+    "/v1/lead-desk": {
+      ...empty(),
+      me: { ...desk([]).me, role: "viewer", can_manage: false },
+      counts: { ...empty().counts, unassigned: 2 },
+    },
+    "/v1/lead-desk/team": team({}),
+    "/v1/lead-desk/reports/performance*": {
+      days: 7,
+      start: "2026-10-16",
+      end: "2026-10-22",
+      current: outcomes(2),
+      previous: outcomes(1),
+      sellers: [],
+      pipeline: {},
+    },
+  });
+  await mount(true);
+  await act(async () => Promise.resolve());
+  // No first steps in an empty workspace, and no My day: a Viewer works no leads.
+  expect(host.textContent).not.toContain("Welcome to Sales X-Ray");
+  expect(host.textContent).not.toContain("Let's get you calling");
+  expect(
+    Array.from(host.querySelectorAll("button")).some(
+      (button) => button.textContent === "My day",
+    ),
+  ).toBe(false);
+  expect(host.textContent).toContain("How sales are going");
+  // What is waiting, in words that ask nothing of them, and no way into settings.
+  expect(host.textContent).toContain("Needs attention");
+  expect(host.textContent).toContain("Waiting for a seller or the lead rules");
+  expect(host.querySelector('a[href="/settings/lead-rules"]')).toBeNull();
+  expect(host.textContent).not.toContain("Invite sellers");
 });

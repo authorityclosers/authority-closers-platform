@@ -47,6 +47,9 @@ class Me(Model):
     name: str
     role: str
     can_manage: bool
+    # Reads the team's leads, calls, reports and team page: managers, and Viewers, who
+    # change nothing (Roles B).
+    can_see_team: bool = False
     # Off: the lead rules give this seller no new leads; their open leads stay
     # with them (UX study item 8, 18 Oct). Managers set the same switch on Team.
     taking_leads: bool = True
@@ -908,6 +911,9 @@ class SettingsView(Model):
     # Nudges (team engine, section 3): off until an owner turns them on, and off for these.
     nudges: bool = False
     nudges_off_for: tuple[UUID, ...] = ()
+    # Languages are strict: a lead nobody free speaks waits for a manager instead of going
+    # to the least loaded seller (27 Oct 2026). Off: languages are preferred.
+    strict_language: bool = False
 
 
 class Team(Model):
@@ -1037,6 +1043,8 @@ class SourceView(Model):
     endpoint: str | None
     sheet_url: str | None
     token: str | None = None  # shown once, right after it's made
+    # A Google Sheet the 10-minute sync couldn't read: why, in plain words (else None).
+    problem: str | None = None
 
 
 class Sources(Model):
@@ -1344,6 +1352,8 @@ class SettingsCommand(Command):
     # Sent: the open-lead limit of sellers with no rules of their own (null: no limit).
     # Left out: kept as it is.
     default_max_open: int | None = Field(default=None, ge=1, le=1000)
+    # None keeps it as it is.
+    strict_language: bool | None = None
 
 
 class NudgesCommand(Command):

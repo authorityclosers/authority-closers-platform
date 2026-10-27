@@ -17,15 +17,17 @@ vi.mock("./leads/native-phone", () => ({
   tellPhoneTelemetry: phone.tell,
 }));
 
-import { telemetry } from "./telemetry";
+import { telemetry, timeAction } from "./telemetry";
 import {
   actionOf,
   elementOf,
   endpointOf,
   errorFacts,
   fingerprint,
+  overlapsHidden,
   placeOf,
   seenSoFar,
+  slowCall,
   styleOf,
   syncPhone,
   targetOf,
@@ -135,7 +137,6 @@ it("times a tap on a lead row to the screen settling", async () => {
   expect(tracked(track, "sx.screen_viewed")).toEqual([
     { screen: "leads", from: "none", nav: "first" },
   ]);
-  expect(tracked(track, "sx.app_start")[0]).toMatchObject({ ms: 1000 });
 
   const lead = host.querySelector("#lead")!;
   lead.dispatchEvent(
@@ -222,6 +223,46 @@ it("does nothing for a person the server records nothing for", async () => {
   });
   expect(tracked(track, "sx.action_timing")).toEqual([]);
   expect(tracked(track, "sx.screen_viewed")).toEqual([]);
+  await act(async () => root.unmount());
+});
+
+it("doesn't time a swipe across tabs, or a press on the tab already shown", async () => {
+  const track = vi.spyOn(telemetry, "track");
+  html(`
+    <div role="tablist">
+      <button id="on" role="tab" aria-selected="true">Now</button>
+      <button id="off" role="tab" aria-selected="false">All</button>
+    </div>
+    <nav><a id="here" href="/leads" aria-current="page">Leads</a></nav>`);
+  const root = await mount();
+  // The chosen tab, and the tab bar's own page: nothing is meant to change.
+  for (const id of ["#on", "#here"])
+    host
+      .querySelector(id)!
+      .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  // A finger that lands on a tab and swipes the strip: the browser cancels it.
+  const off = host.querySelector("#off")!;
+  off.dispatchEvent(
+    new PointerEvent("pointerdown", { bubbles: true, pointerId: 7 }),
+  );
+  off.dispatchEvent(
+    new PointerEvent("pointercancel", { bubbles: true, pointerId: 7 }),
+  );
+  await act(async () => {
+    vi.advanceTimersByTime(11_000);
+  });
+  expect(tracked(track, "sx.action_timing")).toEqual([]);
+
+  // A real press on another tab is still timed.
+  off.dispatchEvent(
+    new PointerEvent("pointerdown", { bubbles: true, pointerId: 8 }),
+  );
+  await act(async () => {
+    vi.advanceTimersByTime(1_100);
+  });
+  expect(tracked(track, "sx.action_timing")).toEqual([
+    expect.objectContaining({ action: "tab_switch", result: "no_change" }),
+  ]);
   await act(async () => root.unmount());
 });
 
@@ -317,4 +358,152 @@ it("counts only the time a screen was on view, and says where the page went away
   });
   expect(flush).toHaveBeenCalledWith(true);
   await act(async () => root.unmount());
+});
+
+it("times a slow call to its answer's first byte, never one the page spent hidden", () => {
+  const origin = "https://app.example";
+  const entry = (over: Record<string, unknown> = {}) => ({
+    name: `${origin}/v1/conversation-acquisition/submissions/3f2b7d10-aaaa-4bbb-8ccc-0123456789ab/source`,
+    initiatorType: "fetch",
+    startTime: 1_000,
+    duration: 9_000,
+    responseStart: 1_300,
+    responseEnd: 10_000,
+    responseStatus: 200,
+    ...over,
+  });
+  // A recording that took 9 s to download from a server that answered in 0.3 s.
+  expect(slowCall(entry(), origin, [])).toBeNull();
+  expect(slowCall(entry({ responseStart: 3_000 }), origin, [])).toEqual({
+    // Endpoint names stop at 48 characters.
+    endpoint: "v1_conversation_acquisition_submissions_id_sourc",
+    status: "2xx",
+    ms: 9_000,
+    wait_ms: 2_000,
+  });
+  // No first-byte time (an old browser): the whole call counts.
+  expect(slowCall(entry({ responseStart: 0 }), origin, [])?.wait_ms).toBe(
+    9_000,
+  );
+  // A server failure is reported however quick.
+  expect(
+    slowCall(
+      entry({ responseStatus: 503, duration: 80, responseEnd: 1_080 }),
+      origin,
+      [],
+    ),
+  ).toMatchObject({ status: "5xx", wait_ms: 300 });
+  const slow = entry({ responseStart: 4_000 });
+  // The page went to the background mid-call, or is still there.
+  expect(slowCall(slow, origin, [[5_000, 6_000]])).toBeNull();
+  expect(slowCall(slow, origin, [[9_500, null]])).toBeNull();
+  expect(slowCall(slow, origin, [[200, 900]])).not.toBeNull();
+  expect(slowCall(slow, origin, [[10_001, null]])).not.toBeNull();
+  // Not ours: another origin, the telemetry itself, not an API, an image.
+  expect(
+    slowCall(entry({ name: "https://cdn.example/v1/x" }), origin, []),
+  ).toBeNull();
+  expect(
+    slowCall(
+      entry({ name: `${origin}/v1/telemetry/events`, responseStart: 4_000 }),
+      origin,
+      [],
+    ),
+  ).toBeNull();
+  expect(
+    slowCall(
+      entry({ name: `${origin}/leads`, responseStart: 4_000 }),
+      origin,
+      [],
+    ),
+  ).toBeNull();
+  expect(
+    slowCall(entry({ initiatorType: "img", responseStart: 4_000 }), origin, []),
+  ).toBeNull();
+  expect(overlapsHidden([], 0, 10)).toBe(false);
+  expect(overlapsHidden([[10, 20]], 0, 10)).toBe(true);
+});
+
+it("sends the app's start when idle, with the CPU test and the phone's model", async () => {
+  const track = vi.spyOn(telemetry, "track");
+  const idle: Array<() => void> = [];
+  Object.defineProperty(window, "requestIdleCallback", {
+    configurable: true,
+    value: (work: () => void) => idle.push(work),
+  });
+  Object.defineProperty(window, "cancelIdleCallback", {
+    configurable: true,
+    value: () => undefined,
+  });
+  vi.spyOn(navigator, "userAgent", "get").mockReturnValue(
+    "Mozilla/5.0 (Linux; Android 12; Redmi Note 8 Pro Build/SP1A.210812.016; wv) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36 SalesXrayApp/1.0.30",
+  );
+  try {
+    window.localStorage.removeItem("sx-cpu");
+    const root = await mount();
+    expect(tracked(track, "sx.app_start")).toEqual([]);
+    expect(idle).toHaveLength(1);
+    // The clock moves 5 ms each pass of the test from here.
+    let clock = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => (clock += 2.5));
+    await act(async () => idle[0]?.());
+    expect(tracked(track, "sx.app_start")).toEqual([
+      expect.objectContaining({
+        ms: 1_000,
+        screen: "leads",
+        cpu_ms: 2.5,
+        model_label: "redmi-note-8-pro",
+      }),
+    ]);
+    expect(
+      JSON.parse(window.localStorage.getItem("sx-cpu") ?? "{}"),
+    ).toMatchObject({
+      ms: 2.5,
+    });
+    await act(async () => root.unmount());
+  } finally {
+    delete (window as { requestIdleCallback?: unknown }).requestIdleCallback;
+    delete (window as { cancelIdleCallback?: unknown }).cancelIdleCallback;
+  }
+});
+
+it("times a Call button from the call's real start, never from a touch on it", async () => {
+  // 27 Oct 2026: a third of the company phone's "Call presses" were touches
+  // that never became a call (a tap that only stopped a glide, or a swipe).
+  const track = vi.spyOn(telemetry, "track");
+  html(`<ul><li data-lead-row=""><span>Asha</span>
+    <button id="call" data-sx-call="" aria-label="Call Asha">Call</button></li></ul>`);
+  expect(actionOf(host.querySelector("#call"))).toBeNull();
+  const root = await mount();
+  host
+    .querySelector("#call")!
+    .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  await act(async () => {
+    vi.advanceTimersByTime(1_100);
+  });
+  expect(tracked(track, "sx.action_timing")).toEqual([]);
+
+  // The call starts: timed from here to the screen settling.
+  timeAction("call_start");
+  now = 1_300;
+  await act(async () => {
+    host.append(document.createElement("section"));
+  });
+  await act(async () => {
+    vi.advanceTimersByTime(200);
+  });
+  expect(tracked(track, "sx.action_timing")).toEqual([
+    expect.objectContaining({
+      action: "call_start",
+      result: "settled",
+      ms: 300,
+    }),
+  ]);
+  await act(async () => root.unmount());
+  // Unmounted: nothing times any more.
+  timeAction("call_start");
+  await act(async () => {
+    vi.advanceTimersByTime(1_100);
+  });
+  expect(tracked(track, "sx.action_timing")).toHaveLength(1);
 });

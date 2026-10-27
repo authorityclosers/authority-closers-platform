@@ -13,6 +13,7 @@ import {
   perfKey,
   pickSpeedScreens,
   speedMarkdown,
+  cpuByRate,
   summarize,
 } from "./wb_speed_lib.mjs";
 
@@ -220,4 +221,27 @@ test("the page hooks run before any script and keep the last change, LCP, blocki
   assert.equal(window.__speed.last, 42);
   listeners.pointerdown({ timeStamp: 7 });
   assert.equal(window.__speed.tap, 7);
+});
+
+test("the CPU test per rate, to set the device tiers from", () => {
+  const measures = [
+    { screen: "leads", action: "load", rate: 1, cpu_ms: 1.1 },
+    { screen: "home", action: "load", rate: 1, cpu_ms: 1.4 },
+    { screen: "leads", action: "load", rate: 4, cpu_ms: 4.6 },
+    { screen: "leads", action: "load", rate: 6, cpu_ms: 7.2 },
+    { screen: "home", action: "load", rate: 6, cpu_ms: null },
+    { screen: "leads", action: "lead_open", rate: 6, cpu_ms: 99 },
+  ];
+  const cpu = cpuByRate(measures);
+  assert.deepEqual(cpu, {
+    1: { ms: 1.3, n: 2 },
+    4: { ms: 4.6, n: 1 },
+    6: { ms: 7.2, n: 1 },
+  });
+  const text = speedMarkdown({ rows: [], findings: [], cpu });
+  assert.match(
+    text,
+    /CPU test, as phones run it \(median ms\): 1x 1\.3 \(n 2\) · 4x 4\.6 \(n 1\) · 6x 7\.2/,
+  );
+  assert.doesNotMatch(speedMarkdown({ rows: [], findings: [] }), /CPU test/);
 });

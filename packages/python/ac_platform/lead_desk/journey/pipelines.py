@@ -36,6 +36,9 @@ MAX_NAME: Final[int] = 40
 SOURCES: Final[dict[str, str]] = {
     "meta": "Facebook and Instagram lead ads",
     "webhook": "Website forms and other apps",
+    # A Google Ads lead form posts like a website form; a pipeline can take it apart
+    # (leads setup audit, 27 Oct 2026). Unpicked, it goes with the website forms.
+    "google_ads": "Google Ads lead forms",
     "sheet": "Google Sheets",
     "csv": "File imports",
     "manual": "Added by hand",
@@ -81,12 +84,14 @@ async def listed(db: AsyncSession, tenant_id: UUID) -> tuple[Pipeline, ...]:
     return tuple(found)
 
 
-def route(pipelines: Sequence[Pipeline], source: str) -> str:
+def route(pipelines: Sequence[Pipeline], source: str, *, kind: str | None = None) -> str:
     """Where a new lead from this source goes: the first other pipeline that picked the
-    source, else ``main``."""
-    for item in pipelines:
-        if not item.main and source in item.sources:
-            return item.key
+    source, else ``main``. ``kind``: the narrower source the lead also is ("google_ads" for
+    a Google Ads lead form, which arrives as "webhook"); a pipeline that picked it wins."""
+    for wanted in (kind, source) if kind else (source,):
+        for item in pipelines:
+            if not item.main and wanted in item.sources:
+                return item.key
     return MAIN
 
 

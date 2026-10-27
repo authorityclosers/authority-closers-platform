@@ -45,6 +45,15 @@ import {
   type SharedLead,
 } from "./leads-client";
 import { askFeedback } from "../feedback/ask";
+import { BrandTile } from "../ui/brand-tile";
+import {
+  GoogleFilesError,
+  previewGoogleSheet,
+  readGoogleFiles,
+  type GoogleFiles,
+} from "./google-files-client";
+import { PICKER_FAILED, pickGoogleSheet } from "./google-picker";
+import { inPhoneApp, openConnect } from "./native-phone";
 import { PASTED_FILE, pastedFile, readPasted } from "./paste-import";
 import { settingsPath } from "../settings/settings-sections";
 import styles from "./leads.module.css";
@@ -740,6 +749,7 @@ export function ImportDialog({
   onClose,
   onDone,
   pasted = null,
+  google = false,
 }: {
   open: boolean;
   canManage: boolean;
@@ -747,6 +757,9 @@ export function ImportDialog({
   onDone: () => void;
   /** Rows pasted into the list's quick add: read as soon as it opens. */
   pasted?: string | null;
+  /** Opened to import a Google Sheet (Lead sources → Import from Google
+   *  Sheet): Google's Picker opens as soon as Google is known connected. */
+  google?: boolean;
 }) {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
@@ -762,6 +775,79 @@ export function ImportDialog({
   const [text, setText] = useState("");
   const [dropped, setDropped] = useState(0);
   const [columns, setColumns] = useState(false);
+
+  // A Sheet picked in Google's Picker (Lead OS, 27 Oct 2026): owners and
+  // admins, once Google Sheets and Drive is connected.
+  const [googleFiles, setGoogleFiles] = useState<GoogleFiles | null>(null);
+  useEffect(() => {
+    if (!open || !canManage) return;
+    const controller = new AbortController();
+    readGoogleFiles(controller.signal).then(setGoogleFiles, () =>
+      setGoogleFiles(null),
+    );
+    return () => controller.abort();
+  }, [open, canManage]);
+  const googleReady = Boolean(googleFiles?.connected && googleFiles.picker);
+  // The Picker found Google no longer connected: say where to connect it.
+  const [googleLost, setGoogleLost] = useState(false);
+  const fromGoogle = async () => {
+    // The Picker needs a real browser page: the phone app opens one.
+    if (inPhoneApp()) {
+      void openConnect(
+        new URL("/leads?import=google", window.location.origin).href,
+      );
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    let sheet: string | null = null;
+    try {
+      sheet = await pickGoogleSheet();
+      if (!sheet) return;
+      const next = await previewGoogleSheet(sheet);
+      setPreview(next);
+      setMapping(next.mapping);
+      setColumns(false);
+    } catch (reason) {
+      // 409 from the Picker's setup: Google isn't connected (any more).
+      if (
+        !sheet &&
+        reason instanceof GoogleFilesError &&
+        reason.status === 409
+      ) {
+        setGoogleLost(true);
+        setGoogleFiles(
+          (current) => current && { ...current, connected: false },
+        );
+        return;
+      }
+      setError(
+        reason instanceof GoogleFilesError || reason instanceof LeadsError
+          ? reason.message
+          : PICKER_FAILED,
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+  const fromGoogleLatest = useRef(fromGoogle);
+  useEffect(() => {
+    fromGoogleLatest.current = fromGoogle;
+  });
+  // Arrived for a Google Sheet: the Picker opens once Google is known ready;
+  // without Google connected, the dialog says where to connect it.
+  const googleMissing =
+    (google || googleLost) &&
+    canManage &&
+    googleFiles !== null &&
+    !(googleFiles.connected && googleFiles.picker);
+  const googleAsked = useRef(false);
+  useEffect(() => {
+    if (!open || !google || !googleReady || googleAsked.current) return;
+    if (inPhoneApp()) return;
+    googleAsked.current = true;
+    void fromGoogleLatest.current();
+  }, [open, google, googleReady]);
 
   const pick = async (file: File | undefined) => {
     if (!file) return;
@@ -941,6 +1027,21 @@ export function ImportDialog({
         ) : null}
         {result ? null : !preview ? (
           <>
+            {googleMissing ? (
+              <p className={styles.hint} role="status">
+                Connect Google Sheets and Drive first:{" "}
+                <Link href={settingsPath("apps")}>
+                  Settings → Connected apps
+                </Link>
+                .
+              </p>
+            ) : null}
+            {googleReady ? (
+              <Button onClick={() => void fromGoogle()} disabled={busy}>
+                <BrandTile brands={["googlesheets"]} size={20} />
+                {busy ? "Opening Google…" : "Pick a Google Sheet"}
+              </Button>
+            ) : null}
             <label
               className={styles.drop}
               onDragOver={(event) => event.preventDefault()}

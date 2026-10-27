@@ -167,6 +167,8 @@ services:
       AC_GOOGLE_ADS_CLIENT_ID: ${AC_GOOGLE_ADS_CLIENT_ID:-}
       AC_GOOGLE_ADS_CLIENT_SECRET: ${AC_GOOGLE_ADS_CLIENT_SECRET:-}
       AC_GOOGLE_ADS_DEVELOPER_TOKEN: ${AC_GOOGLE_ADS_DEVELOPER_TOKEN:-}
+      AC_GOOGLE_PICKER_API_KEY: ${AC_GOOGLE_PICKER_API_KEY:-}
+      AC_GOOGLE_PROJECT_NUMBER: ${AC_GOOGLE_PROJECT_NUMBER:-}
       AC_WHATSAPP_APP_ID: ${AC_WHATSAPP_APP_ID:-}
       AC_WHATSAPP_APP_SECRET: ${AC_WHATSAPP_APP_SECRET:-}
       AC_WHATSAPP_CONFIG_ID: ${AC_WHATSAPP_CONFIG_ID:-}
@@ -181,6 +183,19 @@ services:
       AC_APPLE_SIGN_IN_TEAM_ID: ${AC_APPLE_SIGN_IN_TEAM_ID:-}
       AC_APPLE_SIGN_IN_KEY_ID: ${AC_APPLE_SIGN_IN_KEY_ID:-}
       AC_APPLE_SIGN_IN_PRIVATE_KEY: ${AC_APPLE_SIGN_IN_PRIVATE_KEY:-}
+      AC_PULSE_ISSUER: ${AC_PULSE_ISSUER:-}
+      AC_PULSE_CLIENT_ID: ${AC_PULSE_CLIENT_ID:-}
+      AC_PULSE_CLIENT_SECRET: ${AC_PULSE_CLIENT_SECRET:-}
+      AC_PULSE_SEAL_KEY: ${AC_PULSE_SEAL_KEY:-}
+      AC_INTAKE_SPOOL_ROOT: /var/lib/ac-intake-spool
+    volumes:
+      # Leads a release's hold kept (lead_desk/spool.py); the API files them every minute.
+      - type: bind
+        source: /srv/authority-closers/application/intake-spool/${AC_ENVIRONMENT:?AC_ENVIRONMENT must be staging or production}
+        target: /var/lib/ac-intake-spool
+        read_only: false
+        bind:
+          create_host_path: false
     depends_on:
       postgres:
         condition: service_healthy
@@ -209,6 +224,47 @@ services:
     pids_limit: 256
     cpus: 1.5
     mem_limit: 768m
+
+  # Release-safe intake (owner, 27 Oct 2026; docs/product/lead-desk/release-safe-intake.md).
+  # During a release's hold the edge sends the website-form capture routes here, so a
+  # lead that can't be retried is kept on disk until the API files it. No database and
+  # no secrets: the release starts it before the hold and never stops it during one.
+  intake-spool:
+    <<: *service-security
+    image: ${AC_API_IMAGE:?AC_API_IMAGE must be the reviewed immutable image reference}
+    pull_policy: never
+    restart: unless-stopped
+    command: ["python", "-m", "ac_platform.lead_desk.spool", "serve"]
+    environment:
+      AC_ENVIRONMENT: ${AC_ENVIRONMENT:?AC_ENVIRONMENT must be staging or production}
+      AC_INTAKE_SPOOL_ROOT: /var/lib/ac-intake-spool
+      # The edge router's address: its CF-Connecting-IP keys the rate, as at the API.
+      AC_TRUSTED_PROXY_ADDRESSES: ${AC_TRUSTED_PROXY_ADDRESSES:?AC_TRUSTED_PROXY_ADDRESSES must contain the exact edge-router IP}
+    volumes:
+      - type: bind
+        source: /srv/authority-closers/application/intake-spool/${AC_ENVIRONMENT:?AC_ENVIRONMENT must be staging or production}
+        target: /var/lib/ac-intake-spool
+        read_only: false
+        bind:
+          create_host_path: false
+    expose:
+      - "8080"
+    networks:
+      edge:
+        aliases:
+          - ${AC_EDGE_API_ALIAS:?AC_EDGE_API_ALIAS is required}-intake
+    healthcheck:
+      test:
+        - CMD
+        - /usr/local/bin/ac-http-healthcheck
+        - http://127.0.0.1:8080/health
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    pids_limit: 64
+    cpus: 0.25
+    mem_limit: 96m
 
   worker:
     <<: *service-security

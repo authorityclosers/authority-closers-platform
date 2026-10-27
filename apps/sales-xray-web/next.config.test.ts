@@ -60,6 +60,19 @@ it("keeps the Turbopack review alias out of production and ordinary development"
   }
 });
 
+it("hands the build's release, and nothing else, to the page", async () => {
+  vi.stubEnv("AC_RELEASE_ID", "0f3c2a9b1d4e5f60718293a4b5c6d7e8f9012345");
+  vi.resetModules();
+  const { default: config } = await import("./next.config");
+  expect(config.env).toEqual({
+    NEXT_PUBLIC_AC_RELEASE_ID: "0f3c2a9b1d4e5f60718293a4b5c6d7e8f9012345",
+  });
+  vi.stubEnv("AC_RELEASE_ID", undefined);
+  vi.resetModules();
+  const { default: local } = await import("./next.config");
+  expect(local.env).toEqual({ NEXT_PUBLIC_AC_RELEASE_ID: "" });
+});
+
 it("builds the speed check's fixture pages only when asked", async () => {
   vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "0");
   vi.stubEnv("AC_SALES_XRAY_PERF_FIXTURES", "");

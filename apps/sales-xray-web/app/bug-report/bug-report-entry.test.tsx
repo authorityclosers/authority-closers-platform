@@ -172,7 +172,17 @@ it("reports from a screen with a side panel open: the picture keeps the panel", 
   document.body.append(panel, reporter);
   panel.setAttribute("open", "");
   reporter.setAttribute("open", "");
-  const copy = await copyScreen();
+  // happy-dom 21 gives an iframe no document unless iframe loading is on; the
+  // capture draws in a blank iframe, which every browser gives one.
+  const settings = (
+    window as unknown as {
+      happyDOM: { settings: { enableIframePageLoading: boolean } };
+    }
+  ).happyDOM.settings;
+  settings.enableIframePageLoading = true;
+  const copy = await copyScreen().finally(() => {
+    settings.enableIframePageLoading = false;
+  });
   panel.remove();
   reporter.remove();
   expect(copy).not.toBeNull();

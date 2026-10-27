@@ -1,0 +1,150 @@
+/* Settings → Selling → Calls from the company number (company-calling.tsx). */
+
+.status {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.status li {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.4;
+}
+
+.status li svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.status li[data-tone="ok"] svg {
+  color: var(--lx-teal);
+}
+
+.status li[data-tone="warn"] svg {
+  color: color-mix(in oklab, var(--sx-warn) 70%, var(--sx-ink));
+}
+
+.form {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.form + .form {
+  margin-top: 12px;
+}
+
+.heading {
+  margin: 0;
+  font-size: var(--sx-text-sm);
+  color: var(--sx-muted);
+  font-weight: 600;
+}
+
+.input {
+  width: 100%;
+  min-height: var(--sx-control-h);
+  padding: 0 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+}
+
+.input:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.switch,
+.check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  cursor: pointer;
+}
+
+.switch span {
+  display: grid;
+  gap: 2px;
+}
+
+.switch small,
+.hint {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.switch input,
+.check input {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  accent-color: var(--lx-teal);
+}
+
+.fieldset {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.fieldset legend {
+  padding: 0;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.hint {
+  margin: 4px 0 6px;
+}
+
+.window {
+  display: grid;
+  gap: 6px;
+}
+
+.label {
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.notice svg {
+  flex: none;
+  margin-top: 2px;
+  color: var(--lx-teal);
+}
+
+.error {
+  margin: 0;
+  color: var(--sx-bad);
+  font-size: var(--sx-text-sm);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+}

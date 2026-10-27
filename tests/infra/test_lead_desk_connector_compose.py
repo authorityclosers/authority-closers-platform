@@ -17,6 +17,8 @@ LEAD_CONNECTOR_SETTINGS = {
     "AC_GOOGLE_ADS_CLIENT_ID": "fixture-google-ads-client-id",
     "AC_GOOGLE_ADS_CLIENT_SECRET": "fixture-google-ads-client-secret",
     "AC_GOOGLE_ADS_DEVELOPER_TOKEN": "fixture-google-ads-developer-token",
+    "AC_GOOGLE_PICKER_API_KEY": "fixture-google-picker-api-key",
+    "AC_GOOGLE_PROJECT_NUMBER": "123456789012",
     "AC_WHATSAPP_APP_ID": "fixture-whatsapp-app-id",
     "AC_WHATSAPP_APP_SECRET": "fixture-whatsapp-app-secret",
     "AC_WHATSAPP_CONFIG_ID": "fixture-whatsapp-config-id",

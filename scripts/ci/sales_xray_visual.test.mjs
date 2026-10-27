@@ -10,12 +10,61 @@ import {
   allowedRequest,
   routeFixtureRequest,
   capture,
+  fetchWithRetry,
   frames,
   selectFrames,
+  transientNetworkError,
   unavailable,
   viewports,
   waitForFixtureServer,
 } from "./sales_xray_visual.mjs";
+
+test("retries a fixture fetch the dev server dropped, and nothing else", async () => {
+  const route = (failures) => {
+    let calls = 0;
+    return {
+      calls: () => calls,
+      request: () => ({
+        method: () => "GET",
+        url: () => "http://127.0.0.1:18216/review-fixture/document?x=1",
+      }),
+      fetch: async () => {
+        calls += 1;
+        if (calls <= failures.length) throw failures[calls - 1];
+        return "response";
+      },
+    };
+  };
+  const pauses = [];
+  const logs = [];
+  const quiet = {
+    pause: async (ms) => void pauses.push(ms),
+    log: (line) => logs.push(line),
+  };
+  const reset = new Error("route.fetch: read ECONNRESET");
+  const flaky = route([reset, new Error("socket hang up")]);
+  assert.equal(await fetchWithRetry(flaky, {}, quiet), "response");
+  assert.equal(flaky.calls(), 3);
+  assert.deepEqual(pauses, [500, 1500]);
+  assert.equal(logs.length, 2);
+  assert.match(
+    logs[0],
+    /GET \/review-fixture\/document failed .*ECONNRESET.*retry 1 of 2/,
+  );
+  assert.doesNotMatch(logs[0], /x=1/);
+  // Three resets in a row: the third is the run's error.
+  const down = route([reset, reset, reset]);
+  await assert.rejects(fetchWithRetry(down, {}, quiet), /ECONNRESET/);
+  assert.equal(down.calls(), 3);
+  // A timeout or a refused page is not retried.
+  const slow = route([new Error("Timeout 35000ms exceeded")]);
+  await assert.rejects(fetchWithRetry(slow, {}, quiet), /Timeout/);
+  assert.equal(slow.calls(), 1);
+  assert.ok(
+    transientNetworkError(new Error("connect ETIMEDOUT 127.0.0.1:18216")),
+  );
+  assert.ok(!transientNetworkError(new Error("net::ERR_ABORTED")));
+});
 
 test("selects touched families and always includes shell", () => {
   assert.deepEqual(
@@ -82,7 +131,7 @@ test("rejects providers, API writes/reads and off-origin requests", () => {
 
 test("capture tabs cover the current fictional shell panels", async () => {
   const fixture = await readFile(
-    "apps/sales-xray-web/app/review-fixture/shell/full-shell-preview.tsx",
+    "apps/sales-xray-web/app/analysis/sample/sample-report-view.tsx",
     "utf8",
   );
   const panelLabels = [...fixture.matchAll(/id: "[\w-]+",\s+label: "([^"]+)"/g)]

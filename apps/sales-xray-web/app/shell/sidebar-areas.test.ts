@@ -75,6 +75,20 @@ it("adds Team for an organisation, with every hub section by role", () => {
     "Analytics",
     "Company",
   ]);
+  // A Viewer reads the team and its insights, but none of the setup (Roles B).
+  const viewer = sidebarAreas({
+    organisation: true,
+    team: true,
+    manager: true,
+    manages: false,
+  });
+  expect(viewer[2].pages.map((page) => page.label)).toEqual([
+    "Overview",
+    "Team",
+    "Analytics",
+    "Insights",
+    "Company",
+  ]);
   // On the hub outside an organisation: its overview only.
   expect(
     sidebarAreas({ organisation: false, team: true, manager: false })[2].pages,
