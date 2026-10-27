@@ -210,6 +210,25 @@ export type TelemetryEvents = {
   /** Shake to report: opened, or a near miss (two swings, not three); the
    * strongest swing in m/s² and the swings, to tune from real phones. */
   "sx.shake": { outcome: "opened" | "near"; peak: number; swings: number };
+  /** Calling a lead (27 Oct 2026, leads/phone-call-steps.ts): a real call
+   * start, a touch a glide would have lost, a touch on Call that placed no
+   * call, and the phone app's hand-off steps. Codes and ms only. */
+  "sx.phone_call": {
+    step:
+      | "started"
+      | "rescued"
+      | "touch_no_call"
+      | "status"
+      | "permits"
+      | "bridge_ok"
+      | "bridge_error"
+      | "fallback_tel";
+    via?: "touch" | "click";
+    why?: "drag" | "moved" | "long" | "timeout" | "error";
+    mode?: "dialer" | "direct" | "browser";
+    ms?: number;
+    screen?: Screen;
+  };
   // Lead OS (24 Oct 2026): the pipeline board, stage sheet and lead sheet.
   /** One stage move; wait is from opening the stage sheet to Save. */
   "sx.lead_stage_moved": {
@@ -485,6 +504,7 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.tap_issue",
   "sx.feature_used",
   "sx.shake",
+  "sx.phone_call",
   "sx.lead_stage_moved",
   "sx.board_drag",
   "sx.lead_open_to_action",
@@ -1267,3 +1287,18 @@ export const trackOnce = <N extends TelemetryEventName>(
   name: N,
   payload: TelemetryEvents[N],
 ) => telemetry.trackOnce(key, name, payload);
+
+// Tap-to-response timing started by code, not by a touch (telemetry-auto.tsx
+// registers it): a Call press is timed from the moment a call really starts.
+let actionTimer: ((action: TimedAction) => void) | null = null;
+
+export function setActionTimer(
+  timer: ((action: TimedAction) => void) | null,
+): void {
+  actionTimer = timer;
+}
+
+/** Starts timing `action` now, as a tap on it would. */
+export function timeAction(action: TimedAction): void {
+  actionTimer?.(action);
+}

@@ -20,6 +20,7 @@ import { ChannelMark } from "../chats/channel-mark";
 import { haptic } from "../ui/haptics";
 import { Avatar, Badge, Button, Kpi, Panel, Tiles, type Tone } from "../ui/kit";
 import { useRowKeys } from "../ui/row-keys";
+import { firstTap } from "./first-tap";
 import { useRowGestures } from "./gestures";
 import {
   ago,
@@ -30,6 +31,7 @@ import {
   type LeadRow,
 } from "./leads-client";
 import styles from "./leads.module.css";
+import { reportCallPress } from "./phone-call-steps";
 
 const WHY_TONE: Record<LeadRow["why_kind"], Tone> = {
   due: "warn",
@@ -231,17 +233,22 @@ export function LeadLine({
               {tags}
             </button>
             <span className={styles.leadQuick}>
+              {/* Call acts on the first touch, even while the list still
+                  glides (27 Oct 2026); a mouse, keys and screen readers click. */}
               <button
                 type="button"
                 className={styles.quickAct}
                 data-channel="call"
+                data-sx-call=""
                 aria-label={
                   reachable
                     ? `Call ${row.name}`
                     : `No number to call ${row.name}`
                 }
                 disabled={!reachable}
-                onClick={() => press(row, "call")}
+                {...(reachable
+                  ? firstTap(() => press(row, "call"), reportCallPress)
+                  : {})}
               >
                 <Phone size={16} aria-hidden="true" />
               </button>

@@ -38,6 +38,7 @@ import {
   deviceModel,
   measureCpu,
   screenOf,
+  setActionTimer,
   telemetry,
   track,
   type ErrorClass,
@@ -77,6 +78,9 @@ function navigationEntry(): PerformanceNavigationTiming | undefined {
 /** The key action a tap starts, or null for a tap that isn't one. */
 export function actionOf(target: Element | null): TimedAction | null {
   if (!target) return null;
+  // Call buttons time themselves from the call's real start: a touch on Call
+  // isn't a call (leads/phone-call-steps.ts, 27 Oct 2026).
+  if (target.closest("[data-sx-call]")) return null;
   const explicit = target
     .closest("[data-sx-action]")
     ?.getAttribute("data-sx-action");
@@ -794,6 +798,10 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
       typeof event.pointerId === "number" ? event.pointerId : null,
     );
   };
+  setActionTimer((action) => {
+    if (telemetry.active()) begin(action, performance.now());
+  });
+  cleanups.push(() => setActionTimer(null));
   const onCancel = (event: PointerEvent) => {
     if (timing && timing.pointer !== null && timing.pointer === event.pointerId)
       drop();

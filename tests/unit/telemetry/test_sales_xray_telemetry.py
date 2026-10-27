@@ -422,3 +422,24 @@ def test_shake_tells_its_force_and_swings_and_nothing_else() -> None:
     assert shake.required == frozenset({"outcome"})
     assert dict(shake.numbers) == {"peak": 200, "swings": 20}
     assert set(shake.values["outcome"]) == {"opened", "near"}
+
+
+def test_phone_call_steps_take_codes_and_milliseconds_only() -> None:
+    """27 Oct 2026: a Call press is a real call start, a rescued touch or a touch that placed no
+    call, never where the finger was, the number or the lead."""
+    call = SALES_XRAY_EVENTS["sx.phone_call"]
+    assert call.required == frozenset({"step"})
+    assert dict(call.numbers) == {"ms": 60_000}
+    assert set(call.values["step"]) == {
+        "started",
+        "rescued",
+        "touch_no_call",
+        "status",
+        "permits",
+        "bridge_ok",
+        "bridge_error",
+        "fallback_tel",
+    }
+    assert set(call.values["via"]) == {"touch", "click"}
+    assert set(call.values["why"]) == {"drag", "moved", "long", "timeout", "error"}
+    assert not {"number", "phone", "lead_id", "x", "y"} & set(call.allowed_payload_keys)

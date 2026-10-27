@@ -17,7 +17,7 @@ vi.mock("./leads/native-phone", () => ({
   tellPhoneTelemetry: phone.tell,
 }));
 
-import { telemetry } from "./telemetry";
+import { telemetry, timeAction } from "./telemetry";
 import {
   actionOf,
   elementOf,
@@ -465,4 +465,45 @@ it("sends the app's start when idle, with the CPU test and the phone's model", a
     delete (window as { requestIdleCallback?: unknown }).requestIdleCallback;
     delete (window as { cancelIdleCallback?: unknown }).cancelIdleCallback;
   }
+});
+
+it("times a Call button from the call's real start, never from a touch on it", async () => {
+  // 27 Oct 2026: a third of the company phone's "Call presses" were touches
+  // that never became a call (a tap that only stopped a glide, or a swipe).
+  const track = vi.spyOn(telemetry, "track");
+  html(`<ul><li data-lead-row=""><span>Asha</span>
+    <button id="call" data-sx-call="" aria-label="Call Asha">Call</button></li></ul>`);
+  expect(actionOf(host.querySelector("#call"))).toBeNull();
+  const root = await mount();
+  host
+    .querySelector("#call")!
+    .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  await act(async () => {
+    vi.advanceTimersByTime(1_100);
+  });
+  expect(tracked(track, "sx.action_timing")).toEqual([]);
+
+  // The call starts: timed from here to the screen settling.
+  timeAction("call_start");
+  now = 1_300;
+  await act(async () => {
+    host.append(document.createElement("section"));
+  });
+  await act(async () => {
+    vi.advanceTimersByTime(200);
+  });
+  expect(tracked(track, "sx.action_timing")).toEqual([
+    expect.objectContaining({
+      action: "call_start",
+      result: "settled",
+      ms: 300,
+    }),
+  ]);
+  await act(async () => root.unmount());
+  // Unmounted: nothing times any more.
+  timeAction("call_start");
+  await act(async () => {
+    vi.advanceTimersByTime(1_100);
+  });
+  expect(tracked(track, "sx.action_timing")).toHaveLength(1);
 });

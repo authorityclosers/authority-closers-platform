@@ -428,6 +428,30 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
             numbers={"peak": 200, "swings": 20},
             required=("outcome",),
         ),
+        # Calling a lead (27 Oct 2026, the first-tap Call fix): a call that really started (by touch
+        # or by click), a touch a glide would have lost (rescued), a touch on Call that placed no
+        # call (a drag, a finger that moved, a long press), and the phone app's hand-off steps with
+        # their time. Codes and milliseconds only, never a number or a lead.
+        "sx.phone_call": _event(
+            values={
+                "step": (
+                    "started",
+                    "rescued",
+                    "touch_no_call",
+                    "status",
+                    "permits",
+                    "bridge_ok",
+                    "bridge_error",
+                    "fallback_tel",
+                ),
+                "via": ("touch", "click"),
+                "why": ("drag", "moved", "long", "timeout", "error"),
+                "mode": ("dialer", "direct", "browser"),
+                "screen": SCREENS,
+            },
+            numbers={"ms": MAX_ACTION_MS},
+            required=("step",),
+        ),
         # Lead OS (24 Oct 2026, asked by the Lead OS session): the pipeline board and sheet.
         # A stage move: how it was made, whether an AI suggestion made it, the stage kinds
         # either side, how many required fields it asked for, and the wait from opening the
