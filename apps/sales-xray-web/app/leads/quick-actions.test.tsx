@@ -3,6 +3,9 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
+const pressed = vi.hoisted(() => ({ report: vi.fn() }));
+vi.mock("./phone-call-steps", () => ({ reportCallPress: pressed.report }));
+
 import { LeadLine, type QuickChannel } from "./desk-view";
 import type { LeadRow } from "./leads-client";
 
@@ -116,4 +119,60 @@ it("keeps the card as it was where a list has no one-tap actions", () => {
   expect(container.querySelector("[data-quick]")).toBeNull();
   expect(button("Call Asha Fictional")).toBeNull();
   expect(container.textContent).toContain("Call back");
+});
+
+it("calls on the first touch even when the list's glide eats the click, and never on a swipe", () => {
+  // 27 Oct 2026: a tap while a list still glides sends pointerdown and pointerup
+  // but no click; a swipe that starts on Call ends in pointercancel.
+  show(ROW);
+  const call = button("Call Asha Fictional")!;
+  const touch = (type: string) =>
+    call.dispatchEvent(
+      new PointerEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        pointerType: "touch",
+        isPrimary: true,
+        pointerId: 3,
+        clientX: 10,
+        clientY: 10,
+      }),
+    );
+  act(() => {
+    touch("pointerdown");
+    touch("pointerup");
+  });
+  expect(tapped).toEqual([["lead-1", "call"]]);
+  // The click that may follow doesn't call a second time.
+  act(() => call.click());
+  expect(tapped).toEqual([["lead-1", "call"]]);
+  expect(pressed.report).toHaveBeenCalledWith("touch");
+  act(() => {
+    touch("pointerdown");
+    touch("pointercancel");
+  });
+  expect(tapped).toEqual([["lead-1", "call"]]);
+  expect(pressed.report).toHaveBeenCalledWith("drag");
+});
+
+it("keeps a greyed Call silent to touches too", () => {
+  show({ ...ROW, phone_last4: null });
+  const call = button("No number to call Asha Fictional")!;
+  act(() => {
+    call.dispatchEvent(
+      new PointerEvent("pointerdown", {
+        bubbles: true,
+        pointerType: "touch",
+        isPrimary: true,
+      }),
+    );
+    call.dispatchEvent(
+      new PointerEvent("pointerup", {
+        bubbles: true,
+        pointerType: "touch",
+        isPrimary: true,
+      }),
+    );
+  });
+  expect(tapped).toEqual([]);
 });
