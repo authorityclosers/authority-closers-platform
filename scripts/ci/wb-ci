@@ -21,7 +21,7 @@
 #   --speed      the speed check: the key screens of a production build at 1x, 4x and 6x CPU (loads and taps);
 #                opt-in, never part of --full; artifact wb-speed (report.md, speed.json). See docs/ops/BUG-RADAR.md.
 #   --py-tests   one pytest job for these paths instead of the 17 shards
-#   --include    also test these uncommitted workbench files (read only; nothing in the checkout changes)
+#   --include    also test these uncommitted workbench files, CI files included (read only; nothing changes)
 #   --no-wait    print the run URL and return     --keep    keep the wb-ci branch after the run
 # While a release is cutting or shipping (/run/ac-release-cut.active), every run but the cut's own waits for it.
 # Exit 0 only when the run succeeded. See docs/ops/WORKBENCH-CI.md.
@@ -160,6 +160,8 @@ wb_head=$($G --git-dir="$WB/.git" rev-parse HEAD)
 # only change is a file mode fails the CI prerequisite pin check (27 Oct 2026: wb_checks.py was 100755 at HEAD and
 # every request overlaid it as 100644).
 for path in "${CI_FILES[@]}"; do
+  # An included CI file is the change under test (a radar or matrix change, before its commit): it stays.
+  [[ " ${include[*]} " == *" $path "* ]] && continue
   if blob=$($G --git-dir="$WB/.git" rev-parse -q --verify "$wb_head:$path" 2>/dev/null); then
     mode=$($G ls-tree "$sha" -- "$path" | cut -d' ' -f1)
     [ -n "$mode" ] || mode=$($G --git-dir="$WB/.git" ls-tree "$wb_head" -- "$path" | cut -d' ' -f1)
