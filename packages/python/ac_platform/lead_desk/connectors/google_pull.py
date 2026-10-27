@@ -143,6 +143,7 @@ async def pull_source(
             source_label=source.label,
             source_ref=str(record.get("lead_id") or "")[:200] or None,
             actor=None,
+            kind="google_ads",
         )
         key = outcome if outcome in _OUTCOMES else "skipped"
         setattr(result, key, getattr(result, key) + 1)

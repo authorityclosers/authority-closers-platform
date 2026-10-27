@@ -1625,6 +1625,7 @@ class LeadDesk:
         command_id: UUID | None = None,
         pipeline: str | None = None,
         received_at: datetime | None = None,
+        kind: str | None = None,
     ) -> tuple[Lead | None, Literal["created", "repeat", "known", "skipped"]]:
         """Store one record as a lead. The same record again (same source id) is "known"
         and changes nothing; another record with the same phone, or with no phone and the
@@ -1675,7 +1676,7 @@ class LeadDesk:
         route = (
             (await self._pipeline(pipeline)).key
             if pipeline is not None
-            else pipelines.route(await self._pipeline_list(), source)
+            else pipelines.route(await self._pipeline_list(), source, kind=kind)
         )
         lead = Lead(
             id=uuid4(),

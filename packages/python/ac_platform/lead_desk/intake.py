@@ -649,8 +649,10 @@ class Intake:
         *,
         app_url: str,
         test_data: bool = False,
+        kind: str | None = None,
     ) -> tuple[UUID | None, str]:
-        """``test_data``: the sender marked it a test (Google Ads' "Send test data")."""
+        """``test_data``: the sender marked it a test (Google Ads' "Send test data").
+        ``kind``: the narrower source it is, for pipelines ("google_ads")."""
         source = await database.scalar(
             select(LeadSource)
             .where(LeadSource.id == source_id, LeadSource.kind == "webhook")
@@ -688,6 +690,7 @@ class Intake:
                 source_ref=reference or content_ref(record),
                 actor=None,
                 test_data=test_data,
+                kind=kind,
             )
         except CaptureError as error:
             raise DeskError(422, str(error)) from None

@@ -454,6 +454,7 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                     app_url=app_url(),
                     # Google's "Send test data" (owner, 27 Oct 2026): kept apart as test data.
                     test_data=payload.get("is_test") is True,
+                    kind="google_ads",
                 )
         except DeskError as error:
             raise HTTPException(error.status, str(error), headers=NO_STORE) from None
