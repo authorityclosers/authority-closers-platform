@@ -23,6 +23,7 @@
 #   --py-tests   one pytest job for these paths instead of the 17 shards
 #   --include    also test these uncommitted workbench files (read only; nothing in the checkout changes)
 #   --no-wait    print the run URL and return     --keep    keep the wb-ci branch after the run
+# While a release is cutting or shipping (/run/ac-release-cut.active), every run but the cut's own waits for it.
 # Exit 0 only when the run succeeded. See docs/ops/WORKBENCH-CI.md.
 #
 # How: a bare repo (~/src/wb-ci.git) borrows the workbench's objects and builds a request commit (the tested tree plus
@@ -106,6 +107,34 @@ export GIT_DIR="$BARE"
 wanted=${sha:-HEAD}
 sha=$($G --git-dir="$WB/.git" rev-parse --verify "$wanted^{commit}") || die "cannot resolve the commit '$wanted'"
 short=${sha:0:8}
+
+# A release cut or ship in progress. Session runs share the global ci-prerequisites concurrency group with the
+# cut's checks and cancelled them (26-27 Oct), so every run but the cut's own (--sha = the hold) waits for it,
+# checking each minute, for at most 3 hours. The cut script (/root/cutNN.sh) writes "<version> <hold sha> <pid>"
+# to the marker ("-" until the hold is known) and removes it on exit; a marker whose process is gone is stale.
+CUT_MARKER=${WB_CI_CUT_MARKER:-/run/ac-release-cut.active}
+release_cut() {
+  local version hold pid
+  [ -r "$CUT_MARKER" ] || return 1
+  read -r version hold pid _ < "$CUT_MARKER" || [ -n "${version:-}" ] || return 1
+  if [ -n "${pid:-}" ] && [ ! -e "/proc/$pid" ]; then return 1; fi
+  printf '%s %s\n' "$version" "${hold:--}"
+}
+wait_for_release() {  # <sha>
+  local cut version hold waited=0 limit=${WB_CI_CUT_WAIT_S:-10800} every=${WB_CI_CUT_POLL_S:-60}
+  while cut=$(release_cut); do
+    read -r version hold <<< "$cut"
+    if [ ${#hold} -ge 7 ] && [ "${1#"$hold"}" != "$1" ]; then return 0; fi
+    if [ "$waited" -ge "$limit" ]; then
+      echo "wb-ci: the $version release is still cutting or shipping after $((limit / 60)) min; not starting. Retry once /var/log/ac-ship.log says it is live." >&2
+      return 75
+    fi
+    [ "$waited" -gt 0 ] || echo "wb-ci: waiting for the $version release to finish ($CUT_MARKER); checking every ${every}s for up to $((limit / 60)) min" >&2
+    sleep "$every"
+    waited=$((waited + every))
+  done
+}
+wait_for_release "$sha" || exit $?
 changed_files=()
 if [ "$full" = 0 ]; then
   wanted=${base:-$sha^}
