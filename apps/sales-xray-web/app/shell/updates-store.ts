@@ -133,6 +133,12 @@ function bindUpdatesStore(key: string | null) {
   }
   return shared;
 }
+const FIRST_LOAD_AT_MS = 3_000;
+/** How long until the page is 3 s old (none under test, where the shell reads nothing). */
+const startWait = () =>
+  process.env.NODE_ENV === "test"
+    ? 0
+    : Math.max(0, FIRST_LOAD_AT_MS - performance.now());
 function subscribeUpdates(listener: () => void) {
   subscribers.add(listener);
   return () => {
@@ -154,13 +160,22 @@ export function useShellUpdates(authenticated = true, enabled = true) {
   useEffect(() => {
     const store = bindUpdatesStore(key);
     if (!key || !enabled) return;
-    void store.refresh();
     const refresh = () => {
       void store.refresh();
     };
+    // Not among the app's first requests (27 Oct 2026: about 19 at once
+    // stalled a busy server): the page's first 3 s go by first. Then on
+    // focus, and every five minutes while the app is on view.
+    const first = window.setTimeout(refresh, startWait());
     window.addEventListener("focus", refresh);
-    const interval = window.setInterval(refresh, 5 * 60 * 1000);
+    const interval = window.setInterval(
+      () => {
+        if (document.visibilityState !== "hidden") refresh();
+      },
+      5 * 60 * 1000,
+    );
     return () => {
+      window.clearTimeout(first);
       window.removeEventListener("focus", refresh);
       window.clearInterval(interval);
     };
