@@ -29,8 +29,9 @@ const TITLES: Record<PolicySlug, string> = {
 const UPDATED: Record<PolicySlug, [string, string]> = {
   pricing: ["2026-10-03", "3 October 2026"],
   terms: ["2026-10-03", "3 October 2026"],
-  // A new version (owner, 27 Oct 2026): what a connected AI assistant can read.
-  privacy: ["2026-10-27", "27 October 2026"],
+  // A new version (owner, 28 Oct 2026): Microsoft Clarity, in usage analytics notice v3.
+  // Before it (27 Oct 2026): what a connected AI assistant can read.
+  privacy: ["2026-10-28", "28 October 2026"],
   refunds: ["2026-10-16", "16 October 2026"],
   delivery: ["2026-10-03", "3 October 2026"],
   contact: ["2026-10-16", "16 October 2026"],
@@ -263,7 +264,7 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "If you use Google sign-in, the Google account identifier and basic profile information needed to authenticate or link your identity. We do not receive your Google password. We keep your first and last name, language setting, Google Workspace email domain when supplied, and a small copy of your Google profile photo.",
         "Razorpay processes payment credentials entered in its hosted checkout. Sales X-Ray receives payment status and transaction references, not complete card credentials.",
         "If a business connects its WhatsApp number, Facebook Page or Instagram account to Sales X-Ray: the messages people send that business there, and the business's replies.",
-        "How you use the app and how fast it responds: screens, taps, response times, errors, page speed, the app version and the type of device and network. See Usage analytics, below.",
+        "How you use the app and how fast it responds: screens, taps, response times, errors, page speed, the app version and the type of device and network, and masked replays and heatmaps of how pages are used. See Usage analytics, below.",
       ],
     },
     {
@@ -283,18 +284,20 @@ const SECTIONS: Partial<Record<PolicySlug, Section[]>> = {
         "Razorpay for payments made through its hosted checkout.",
         "Google (the Gemini API, provided by Google LLC), to draft replies to messages, only for a business that switches on AI replies. See AI replies to messages, below.",
         "Google (Firebase Crashlytics, provided by Google LLC), for crash reports from the Android app. From app version 1.0.26 they follow the usage analytics switch. See Usage analytics, below.",
+        "Microsoft (Microsoft Clarity, provided by Microsoft Corporation, USA), for masked replays and heatmaps of how pages are used, only while usage analytics is on. See Usage analytics, below.",
         // The owner's words, verbatim (27 Oct 2026; a test pins them).
         "When you connect an AI assistant such as ChatGPT or Claude, it can read the calls, reports and leads you allow, including your leads' contact details, only while you stay connected.",
         "Sales X-Ray does not use your recordings or reports to target advertising.",
       ],
     },
     {
-      // The notice's words, version sx-product-analytics-2026-10-24-v2 (telemetry/sales_xray.py
+      // The notice's words, version sx-product-analytics-2026-10-28-v3 (telemetry/sales_xray.py
       // NOTICES; a test pins them). New words are a new version there.
       title: "Usage analytics",
       paragraphs: [
         "Sales X-Ray records how its app is used and how fast it responds, to make it faster, easier to use and cheaper to run. It records the screens and report sections you open and for how long, taps and how quickly the app responds to them, errors, page speed, the app version and the type of device and network. In the Android app it also records how the app itself runs (how fast it starts, how smoothly it draws and why it last closed), the phone's make, model, Android and WebView versions, its memory and free-storage tier, its battery-saver and notification settings, its network type and speed tier, and which of the app's permissions are on. It never records call content, transcripts, lead names, phone numbers, email addresses, contacts or location. Records are kept for 180 days and are never used to score you or to set your access, payments or plan.",
         "This is on in every workspace unless it is turned off. You can turn it off for yourself at any time in Settings, Privacy; an owner or admin can turn it off for the whole workspace there. Sandbox workspaces never record it. Crash reports from the Android app go to Firebase Crashlytics (provided by Google); from app version 1.0.26 they stop too when this is turned off.",
+        "While this is on for someone signed in, Sales X-Ray may also use Microsoft Clarity (provided by Microsoft Corporation, USA) to see where its screens are hard to use: replays of how pages are used and heatmaps of taps and scrolling, on the web and in the Android app. All text, and everything in leads, calls, reports, transcripts and chats, is masked on your device before anything reaches Clarity, and Sales X-Ray never tells Clarity who you are. Clarity stores two cookies of its own to link a visit's pages, keeps replays for 30 days (13 months for one we save to study) and heatmaps for 13 months. When this is turned off, Clarity stops from the next time the app opens.",
       ],
     },
     {

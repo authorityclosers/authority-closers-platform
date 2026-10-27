@@ -119,9 +119,22 @@ it("names Google (Gemini) for AI-drafted replies, and what is never sent", () =>
   expect(markup).toContain(
     "does not send Google the answers given in Facebook or Instagram lead forms",
   );
-  // Dated 27 Oct 2026: a new version saying what a connected AI assistant can read (the
-  // owner approved it).
-  expect(markup).toContain('dateTime="2026-10-27"');
+  // Dated 28 Oct 2026: a new version naming Microsoft Clarity (usage analytics notice v3).
+  // Before it, 27 Oct 2026: what a connected AI assistant can read (the owner approved it).
+  expect(markup).toContain('dateTime="2026-10-28"');
+});
+
+it("names Microsoft Clarity: masked replays and heatmaps, only while usage analytics is on", () => {
+  const markup = renderToStaticMarkup(<PolicyPage slug="privacy" />);
+  expect(markup).toContain(
+    "Microsoft (Microsoft Clarity, provided by Microsoft Corporation, USA), for masked replays and heatmaps of how pages are used, only while usage analytics is on.",
+  );
+  expect(markup).toContain(
+    "is masked on your device before anything reaches Clarity, and Sales X-Ray never tells Clarity who you are",
+  );
+  expect(markup).toContain(
+    "keeps replays for 30 days (13 months for one we save to study) and heatmaps for 13 months",
+  );
 });
 
 it("says what a connected AI assistant can read, in the owner's words", () => {

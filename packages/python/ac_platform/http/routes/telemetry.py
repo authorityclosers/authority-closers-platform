@@ -28,5 +28,7 @@ def install(app: FastAPI, ctx: RouteContext) -> None:
         retention_policy_id=RETENTION_POLICY_ID,
         admission=SalesXrayAdmission(),
         surface=SALES_XRAY_SURFACE,
+        # Microsoft Clarity (owner, 28 Oct 2026), production only: for a person recorded here.
+        session_replay_project=ctx.settings.sales_xray_clarity_project,
     )
     install_telemetry_preferences_http(app, settings=ctx.settings, require_actor=ctx.require_actor)
