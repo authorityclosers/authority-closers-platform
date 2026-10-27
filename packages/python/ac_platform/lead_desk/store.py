@@ -185,6 +185,9 @@ UPCOMING_LIMIT = 20
 PAGE_SIZE = 50
 # My work: what a seller does on a lead (not imports, edits or assignments).
 WORK_KINDS = ("call", "result", "note", "stage", "meeting", "message", "scheduled")
+# The team's day (Home's Team today, 27 Oct 2026) adds the leads given out and the leads
+# that came in.
+TEAM_KINDS = (*WORK_KINDS, "assigned", "reassigned", "captured")
 WORK_PAGE = 100
 # Days back from today's start for "this week" and "this month".
 BACK_DAYS: dict[str, int] = {"today": 0, "week": 6, "month": 29}
@@ -1238,13 +1241,20 @@ class LeadDesk:
         day: WorkDay = "today",
         before: datetime | None = None,
         person: UUID | None = None,
+        team: bool = False,
         limit: int = WORK_PAGE,
     ) -> ActivityPage:
         """What a seller did, newest first: calls, outcomes, notes, stage moves, meetings
         and messages, on the leads the viewer can see. A seller sees their own work; an
-        owner or admin may look at a seller's (a private call stays private)."""
+        owner or admin may look at a seller's (a private call stays private).
+
+        ``team``: the whole team's day for those who see the team (Home's Team today,
+        owner, 27 Oct 2026): everyone's work, the leads given out and the leads that came
+        in, on the team's leads; private calls stay their sellers' own."""
+        if team and not self.viewer.can_see_team:
+            raise DeskError(403, "Your role sees your own work only.")
         who = person or self.viewer.person_id
-        if who != self.viewer.person_id and not self.viewer.can_manage:
+        if not team and who != self.viewer.person_id and not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins see someone else's work.")
         limit = max(1, min(WORK_PAGE, limit))
         start = self._day_start()
@@ -1256,8 +1266,8 @@ class LeadDesk:
             after, upto = start, self.now + timedelta(minutes=1)
         window = [
             LeadEvent.tenant_id == self.tenant_id,
-            LeadEvent.actor_person_id == who,
-            LeadEvent.kind.in_(WORK_KINDS),
+            *(() if team else (LeadEvent.actor_person_id == who,)),
+            LeadEvent.kind.in_(TEAM_KINDS if team else WORK_KINDS),
             LeadEvent.created_at >= after,
             LeadEvent.created_at < upto,
             # A new stage list placing leads, or a merge keeping the books, is not the
@@ -1269,7 +1279,7 @@ class LeadDesk:
                     tuple(transitions.BOOKKEEPING)
                 ),
             ),
-            self._visible(),
+            self._seen() if team else self._visible(),
         ]
         joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
         counts = {
@@ -1297,14 +1307,33 @@ class LeadDesk:
         ).all()
         more = len(rows) > limit
         rows = rows[:limit]
-        hidden = await self._private_calls(after) if who != self.viewer.person_id else frozenset()
+        hidden = (
+            await self._private_calls(after)
+            if team or who != self.viewer.person_id
+            else frozenset()
+        )
         removed = await self._undone(
             str(event.id)
             for event, _ in rows
             if event.kind == "note" or event.data.get("via") == CALL_FILL
         )
-        names = await self._names([who])
-        photos = await person_photos.photo_urls(self.db, [who])
+        # The team's day names everyone in it: who did it, and whom a lead went to or from.
+        people = (
+            {
+                person_id
+                for event, _ in rows
+                for person_id in (
+                    event.actor_person_id,
+                    self._uuid(event.data.get("to")),
+                    self._uuid(event.data.get("from")),
+                )
+                if person_id is not None
+            }
+            if team
+            else {who}
+        )
+        names = await self._names(people)
+        photos = await person_photos.photo_urls(self.db, list(people))
         labels: dict[str, journeys.Journey] = {}
         items: list[ActivityItem] = []
         for event, lead in rows:
@@ -2858,7 +2887,43 @@ class LeadDesk:
         # the lead, which must be whole by then.
         if previous != person_id:
             await task_book.follow_owner(self, lead, person_id)
+        # The bell's "<name> is your lead now" (owner, 27 Oct 2026; migration 0142): for a
+        # seller someone else gave it to (the lead rules, a manager), never for their own pick
+        # (an add for oneself passes no actor, so the person asking counts too).
+        if (
+            person_id is not None
+            and person_id != previous
+            and person_id not in {actor, self.viewer.person_id}
+        ):
+            self._tell_new_owner(lead, person_id, event)
         return event
+
+    def _tell_new_owner(self, lead: Lead, person_id: UUID, event: LeadEvent) -> None:
+        """One bell line per hand-over: whose lead it is now, why, and a tap to open it.
+        The page pops it as a banner (urgent); the bell keeps it."""
+        from ac_platform.product_updates.models import Notification
+
+        name = " ".join(word[:1].upper() + word[1:] for word in lead.name.split()) or "A lead"
+        why = [
+            f"New from {lead.source_label}."
+            if lead.source_label and event.kind == "assigned"
+            else "",
+            lead.owner_reason or "",
+        ]
+        self.db.add(
+            Notification(
+                id=uuid4(),
+                person_id=person_id,
+                tenant_id=lead.tenant_id,
+                kind="lead_assigned",
+                dedupe_key=f"lead-assigned:{event.id}",
+                title=f"{name} is your lead now"[:200],
+                body=" ".join(part for part in why if part)[:1000],
+                href=f"/leads?lead={lead.id}",
+                urgent=True,
+                created_at=self.now,
+            )
+        )
 
     async def _allocate(
         self,

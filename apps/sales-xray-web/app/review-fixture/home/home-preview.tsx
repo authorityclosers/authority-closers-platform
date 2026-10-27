@@ -749,8 +749,8 @@ function Preview() {
   // `&fresh=1`: a new workspace.
   const v2 = params.get("layout") !== "1";
   const fresh = params.get("fresh") === "1";
-  // `&team=2`: the Team view redesign (owners), for sign-off.
-  const team = params.get("team") === "2";
+  // The Team view redesign (owners) is the Team view; `&team=1` shows the one before.
+  const team = params.get("team") !== "1";
   const [saved] = useState(() => savedCalls(Date.now()));
   // `&focus=<heading id>`: the shot starts at that part of Home (Home is
   // taller than a phone screen; the shots show one screen).

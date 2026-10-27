@@ -14,7 +14,6 @@
 
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { AddLeadDialog } from "../leads/capture-dialogs";
@@ -27,6 +26,7 @@ import { Skeleton } from "../ui/kit";
 import {
   CallRows,
   rowFromActivity,
+  useGo,
   useWeekActivity,
   weekCalls,
 } from "./call-rows";
@@ -62,7 +62,7 @@ export function CallRowsSkeleton({
 }
 
 export function PhoneCalls() {
-  const router = useRouter();
+  const go = useGo();
   const [week, retry] = useWeekActivity();
   const [unknown, setUnknown] = useState<string | null>(null);
   const [now] = useState(() => new Date());
@@ -130,7 +130,7 @@ export function PhoneCalls() {
             void forgetUnknown(unknown);
             setUnknown(null);
             handOverLead(leadId);
-            router.push("/leads");
+            go("/leads");
           }}
         />
       ) : null}

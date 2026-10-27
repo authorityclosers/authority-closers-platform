@@ -24,12 +24,11 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { callHref, type LibrarySubmission } from "../acquisition-client";
 import { callTitle } from "../call-label";
-import { shortWhen } from "../calls/call-rows";
+import { shortWhen, useGo } from "../calls/call-rows";
 import { CallRowsSkeleton } from "../calls/phone-calls";
 import { displayName } from "../display-name";
 import { eventText } from "../leads/lead-sheet";
@@ -235,7 +234,7 @@ export function TeamActivity({
   /** The latest saved calls Home already reads (the team's, for owners). */
   saved: readonly LibrarySubmission[] | null;
 }) {
-  const router = useRouter();
+  const go = useGo();
   const [work, setWork] = useState<Work>({ status: "loading" });
   const [now] = useState(() => new Date());
   useEffect(() => {
@@ -291,7 +290,7 @@ export function TeamActivity({
                     if (row.report || !leadId) return;
                     click.preventDefault();
                     handOverLead(leadId, false, row.at);
-                    router.push("/leads");
+                    go("/leads");
                   }}
                 >
                   {/* The face is the sentence's subject; nobody's (a lead

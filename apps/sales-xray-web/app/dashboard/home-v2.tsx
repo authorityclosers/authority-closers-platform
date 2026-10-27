@@ -33,7 +33,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
 import { callHref, type LibrarySubmission } from "../acquisition-client";
@@ -43,6 +42,7 @@ import {
   rowFromActivity,
   rowFromSaved,
   shortWhen,
+  useGo,
   weekCalls,
   type WeekActivity,
 } from "../calls/call-rows";
@@ -63,7 +63,7 @@ import homeStyles from "./sales-home.module.css";
 export { pickUpFrom, rememberOpened, type Opened } from "../pick-up";
 
 export function PickUp() {
-  const router = useRouter();
+  const go = useGo();
   const access = useWorkspaceAccess();
   const raw = useSyncExternalStore(onPickUp, readPickUp, () => null);
   const who = access?.context
@@ -83,7 +83,7 @@ export function PickUp() {
           if (!lead) return;
           click.preventDefault();
           handOverLead(item.id);
-          router.push("/leads");
+          go("/leads");
         }}
       >
         <span className={styles.tile} data-kind={item.kind} aria-hidden="true">
@@ -178,7 +178,7 @@ export function activityLine(item: ActivityItem): string {
 }
 
 export function HomeActivity({ week }: { week: WeekActivity }) {
-  const router = useRouter();
+  const go = useGo();
   const [now] = useState(() => new Date());
   const items = activityItems(week).slice(0, RECENT_ACTIVITY);
   if (week.status !== "ready" || items.length === 0) return null;
@@ -206,7 +206,7 @@ export function HomeActivity({ week }: { week: WeekActivity }) {
                 onClick={(click) => {
                   click.preventDefault();
                   handOverLead(item.lead_id, false, item.event.at);
-                  router.push("/leads");
+                  go("/leads");
                 }}
               >
                 <span

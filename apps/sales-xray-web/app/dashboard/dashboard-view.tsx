@@ -243,6 +243,8 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
     <SalesHome
       manager={salesRole === "manager"}
       layout="v2"
+      // Team v2 (approved 27 Oct 2026): Needs you, Team today, then the charts.
+      team="v2"
       recent={recentState.status === "ready" ? recentState.value : null}
     />
   ) : null;

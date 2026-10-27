@@ -18,7 +18,6 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useState } from "react";
 
 import { callHref, type LibrarySubmission } from "../acquisition-client";
@@ -32,6 +31,7 @@ import {
   type LeadEvent,
 } from "../leads/leads-client";
 import { clockTime } from "../leads/phone-call-text";
+import { useAppRouter } from "../shell/app-router";
 import { Avatar } from "../ui/kit";
 import styles from "./phone-calls.module.css";
 
@@ -82,6 +82,19 @@ export function shortWhen(at: string, now: Date = new Date()): string {
   if (day === "Today") return clock(at);
   if (day === "Yesterday") return day;
   return new Date(at).toLocaleDateString(undefined, { weekday: "short" });
+}
+
+/** Moves to a screen in the app, or loads it where no app router is mounted
+ *  (tests, static previews): next/navigation's useRouter throws there. */
+export function useGo(): (href: string) => void {
+  const router = useAppRouter();
+  return useCallback(
+    (href: string) => {
+      if (router) router.push(href);
+      else window.location.assign(href);
+    },
+    [router],
+  );
 }
 
 /** A call as a row shows it, from the phone's call log or the calls list. */
@@ -222,7 +235,7 @@ export function CallRows({
   label: string;
   days?: boolean;
 }) {
-  const router = useRouter();
+  const go = useGo();
   return (
     <ol className={styles.list} aria-label={label}>
       {rows.map((row, index) => {
@@ -248,7 +261,7 @@ export function CallRows({
                   if (row.report || !leadId) return;
                   click.preventDefault();
                   handOverLead(leadId, false, row.at);
-                  router.push("/leads");
+                  go("/leads");
                 }}
               >
                 <Avatar name={row.name} size={36} />

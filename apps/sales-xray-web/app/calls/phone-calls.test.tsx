@@ -4,7 +4,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const push = vi.fn();
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push }) }));
+vi.mock("../shell/app-router", () => ({ useAppRouter: () => ({ push }) }));
 vi.mock("next/link", () => ({
   default: ({
     href,

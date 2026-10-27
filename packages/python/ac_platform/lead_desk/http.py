@@ -322,11 +322,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         day: WorkDay = "today",
         before: AwareDatetime | None = None,
         person: UUID | None = None,
+        team: bool = False,
     ) -> ActivityPage:
-        """My work: what a seller did, newest first, today, yesterday or this week."""
-        no_query(request, frozenset({"day", "before", "person"}))
+        """My work: what a seller did, newest first, today, yesterday or this week; with
+        team=1, the whole team's day for those who see the team (Home's Team today)."""
+        no_query(request, frozenset({"day", "before", "person", "team"}))
         async with desk_for(request, response) as lead_desk:
-            return await lead_desk.activity(day=day, before=before, person=person)
+            return await lead_desk.activity(day=day, before=before, person=person, team=team)
 
     @router.get("/notes", response_model=ActivityPage, response_model_by_alias=True)
     async def list_notes(
