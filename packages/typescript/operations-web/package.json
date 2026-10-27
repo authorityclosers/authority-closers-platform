@@ -25,11 +25,11 @@
   },
   "dependencies": {
     "@ac/ui": "workspace:*",
-    "zod": "4.5.4",
+    "zod": "4.6.6",
     "lucide-react": "1.37.0"
   },
   "peerDependencies": {
-    "next": "16.3.8",
+    "next": "16.4.1",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },

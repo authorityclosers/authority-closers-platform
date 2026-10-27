@@ -14,17 +14,17 @@
     "@ac/ui": "workspace:*",
     "hls.js": "1.7.2",
     "lucide-react": "1.37.0",
-    "next": "16.3.8",
+    "next": "16.4.1",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "zod": "4.5.4"
+    "zod": "4.6.6"
   },
   "devDependencies": {
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
     "eslint": "9.39.5",
     "eslint-config-next": "16.3.3",
-    "happy-dom": "20.14.0",
+    "happy-dom": "21.0.4",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
   }
