@@ -155,6 +155,20 @@ export const SCREENS = {
     steps: [{ click: 'button:has-text("Stages")' }],
   },
   "hub-reviewer": { path: "/review-fixture/hub?reviewer=1" },
+  // Organisation, Connections, each part (owner bug #43, 27 Oct 2026: on a phone the parts bar wrapped its labels
+  // and ran past the edge, and no screen here showed it).
+  "hub-connections-apps": {
+    path: "/review-fixture/hub?tab=connections&part=apps",
+  },
+  "hub-connections-ai": {
+    path: "/review-fixture/hub?tab=connections&part=ai-replies",
+  },
+  "hub-connections-developers": {
+    path: "/review-fixture/hub?tab=connections&part=developers",
+  },
+  "hub-connections-pulse": {
+    path: "/review-fixture/hub?tab=connections&part=pulse",
+  },
   // Call analysis as it is (owner program, section 8: the rebuild's baseline): the Report,
   // a won call, coaching, the calls list, an empty list, a picked file, analysing.
   report: { path: "/review-fixture/report/story" },

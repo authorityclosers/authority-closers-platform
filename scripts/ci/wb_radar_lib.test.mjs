@@ -505,3 +505,32 @@ test("the report counts by check, lists the top groups with crops, every group a
   assert.match(text, /#### What the checks cannot tell/);
   assert.ok(Object.keys(CHECKS).includes("tab-no-switch"));
 });
+
+test("bug #43: Connections' parts are swept, and wrapped or cut tab bars are their own checks", async () => {
+  const { SCREENS } = await import("./wb_matrix_lib.mjs");
+  const swept = new Map(radarScreens(SCREENS, []));
+  for (const part of ["apps", "ai-replies", "developers", "pulse"])
+    assert.ok(
+      [...swept.values()].some(
+        (screen) =>
+          screen.path === `/review-fixture/hub?tab=connections&part=${part}`,
+      ),
+      part,
+    );
+  assert.equal(CHECKS["label-wraps"], "tab or chip label wraps");
+  assert.equal(CHECKS["tabs-clipped"], "tab bar cut at the screen edge");
+  // One card per bar or control, whichever page it shows on.
+  const key = groupKeyOf({
+    check: "tabs-clipped",
+    selector: "div.org-hub__parts > div[role=group].kit__segmented",
+    page: "hub-connections-apps",
+  });
+  assert.equal(
+    key,
+    groupKeyOf({
+      check: "tabs-clipped",
+      selector: "div.org-hub__parts > div[role=group].kit__segmented",
+      page: "hub-connections-pulse",
+    }),
+  );
+});
