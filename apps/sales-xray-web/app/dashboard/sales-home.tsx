@@ -36,6 +36,7 @@ import {
 import type { LibrarySubmission } from "../acquisition-client";
 import { useWeekActivity } from "../calls/call-rows";
 import { displayName } from "../display-name";
+import { can } from "../organisation/roles";
 import { DayTiles, MyStages } from "./day-board";
 import { FirstRun } from "./first-run";
 import { HomeActivity, HomeRecentCalls, PickUp, SetupStart } from "./home-v2";
@@ -368,9 +369,11 @@ function TeamHome({
           ) : (
             <div className={styles.quiet}>
               <span>Add sellers to see how each one does.</span>
-              <Link className={styles.more} href="/organisation/invites">
-                Invite sellers
-              </Link>
+              {desk?.me.can_manage ? (
+                <Link className={styles.more} href="/organisation/invites">
+                  Invite sellers
+                </Link>
+              ) : null}
             </div>
           )
         ) : (
@@ -388,10 +391,13 @@ function TeamHome({
         </ActionList>
       </section>
 
-      {/* Targets and nudges (owner program, 25 Oct 2026, section 2). */}
-      <div className={styles.block}>
-        <TargetsPanel />
-      </div>
+      {/* Targets and nudges (owner program, 25 Oct 2026, section 2): set by
+          managers, so a Viewer doesn't get them (their read and saves are theirs). */}
+      {desk?.me.can_manage ? (
+        <div className={styles.block}>
+          <TargetsPanel />
+        </div>
+      ) : null}
 
       <section className={styles.block} aria-labelledby="pipeline-title">
         <div className={styles.head}>
@@ -785,27 +791,33 @@ export function SalesHome({
   const desk = useDesk();
   const [view, setView] = useHomeView();
   const teamLeads = useTeamLeadCount(manager);
+  // A Viewer sees the team and works no leads (Roles B, 27 Oct 2026): the Team
+  // view only, with no My day and no first steps; editing stays with managers.
+  const me = desk.status === "ready" ? desk.desk.me : null;
+  const works = me === null || can(me.role, "leads.work");
+  const manages = me?.can_manage === true;
   // A brand-new workspace: three first steps, not empty figures (owner, #20).
   if (
     desk.status === "ready" &&
+    works &&
     brandNew(desk.desk) &&
     (!manager || teamLeads === 0)
   )
     return (
       <div className={styles.home}>
         {layout === "v2" ? (
-          <SetupStart desk={desk.desk} manager={manager} />
+          <SetupStart desk={desk.desk} manager={manager && manages} />
         ) : (
-          <FirstRun team={manager ? "invite" : null} />
+          <FirstRun team={manager && manages ? "invite" : null} />
         )}
       </div>
     );
   return (
     <div className={styles.home}>
-      {manager ? (
+      {manager && works ? (
         <Segmented label="Show" value={view} onChange={setView} items={VIEWS} />
       ) : null}
-      {manager && view === "team" ? (
+      {manager && (view === "team" || !works) ? (
         <TeamHome
           desk={desk.status === "ready" ? desk.desk : null}
           layout={team}
