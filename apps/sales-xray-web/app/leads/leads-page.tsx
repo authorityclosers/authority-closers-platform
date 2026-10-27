@@ -378,7 +378,11 @@ export function LeadsRoute() {
   const [adding, setAdding] = useState(false);
   // Settings → Lead sources → Import opens here (/leads?import=file).
   const [importing, setImporting] = useState(
-    () => params.get("import") === "file",
+    () => params.get("import") === "file" || params.get("import") === "google",
+  );
+  // Lead sources → Import from Google Sheet opens here (/leads?import=google).
+  const [googleImport, setGoogleImport] = useState(
+    () => params.get("import") === "google",
   );
   // Rows pasted into quick add, for the import to read (owner P0, 23 Oct 2026).
   const [pastedRows, setPastedRows] = useState<string | null>(null);
@@ -1415,6 +1419,10 @@ export function LeadsRoute() {
               sandbox={desk.sandbox}
               onChanged={refresh}
               onImport={() => begin("importing", setImporting)}
+              onImportGoogle={() => {
+                setGoogleImport(true);
+                begin("importing", setImporting);
+              }}
             />
           ) : tasks ? (
             <TasksView onOpen={(leadId) => open(leadId)} />
@@ -1704,8 +1712,10 @@ export function LeadsRoute() {
           open={importing}
           canManage={can}
           pasted={pastedRows}
+          google={googleImport}
           onClose={() => {
             setImporting(false);
+            setGoogleImport(false);
             setPastedRows(null);
             // Arrived from Settings: Import doesn't open again on a refresh.
             if (new URLSearchParams(window.location.search).has("import")) {

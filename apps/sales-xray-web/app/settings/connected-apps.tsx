@@ -58,6 +58,7 @@ import {
 } from "./connected-apps-client";
 import { Sheet } from "../ui/sheet";
 import { MetaSetup } from "./meta-setup";
+import { GoogleFilesCard } from "./google-files-card";
 import styles from "./connected-apps.module.css";
 
 const LOGOS: Record<AppKey, { brands?: string[]; icon?: LucideIcon }> = {
@@ -112,6 +113,7 @@ const PENDING_KEY = "sx.appConnect";
 const CARD_NAMES: Record<string, string> = {
   meta_leads: "Facebook and Instagram lead ads",
   google_ads: "Google Ads",
+  google_files: "Google Sheets and Drive",
   whatsapp: "WhatsApp",
   messenger: "Messenger",
   instagram: "Instagram",
@@ -1177,6 +1179,10 @@ export function ConnectedApps() {
                         onDismiss={() => dismiss(app.app)}
                       />
                     ))}
+                    {/* Its own state and actions (Lead OS, 27 Oct 2026). */}
+                    {group.title === "Leads and ads" ? (
+                      <GoogleFilesCard />
+                    ) : null}
                   </div>
                 </section>
               ) : null;
