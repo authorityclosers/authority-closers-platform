@@ -28,6 +28,7 @@ from ac_platform.tenancy.models import Membership, Tenant
 from tests.unit.test_local_platform_seed import empty_database  # noqa: F401 - fixture
 
 DEV_URL = "postgresql+psycopg://ac_runtime:unused@172.27.0.2:5432/ac_platform"
+DEV_LIVE_URL = "postgresql+psycopg://ac_runtime:unused@172.27.0.12:5432/ac_platform"
 SECRET = "test-fixture-email-key-at-least-32-bytes"  # noqa: S105 - isolated test input
 CONSENT = "sales-xray-consent-test-v1"
 PASSWORDS = {kind: f"fictional-{kind}-password-only" for kind in ACCOUNTS}
@@ -47,10 +48,12 @@ def no_libpq_overrides(monkeypatch):
         monkeypatch.delenv(name)
 
 
-def test_exact_development_target_requires_acknowledgement():
-    require_development_target(dev_settings(), acknowledged=True)
+@pytest.mark.parametrize("url", [DEV_URL, DEV_LIVE_URL])
+def test_exact_development_target_requires_acknowledgement(url):
+    # The dev API's database and the dev-live API's, each from its own env file.
+    require_development_target(dev_settings(database_url=url), acknowledged=True)
     with pytest.raises(ValueError):
-        require_development_target(dev_settings(), acknowledged=False)
+        require_development_target(dev_settings(database_url=url), acknowledged=False)
 
 
 @pytest.mark.parametrize(
@@ -69,11 +72,25 @@ def test_exact_development_target_requires_acknowledgement():
         {"database_url": "postgresql+psycopg://ac_runtime@172.27.0.2:5432/ac_staging"},
         {"database_url": "postgresql+asyncpg://ac_runtime@172.27.0.2:5432/ac_platform"},
         {"database_url": "postgresql+psycopg://ac_runtime@172.27.0.2:5432/ac_platform?host=prod"},
+        # The dev-live endpoint is exact too: no other port, database or neighbour.
+        {"database_url": "postgresql+psycopg://ac_runtime@172.27.0.12:5433/ac_platform"},
+        {"database_url": "postgresql+psycopg://ac_runtime@172.27.0.12:5432/ac_staging"},
+        {"database_url": "postgresql+psycopg://ac_runtime@172.27.0.13:5432/ac_platform"},
+        {"database_url": "postgresql+asyncpg://ac_runtime@172.27.0.12:5432/ac_platform"},
+        {"database_url": "postgresql+psycopg://ac_runtime@172.27.0.12/ac_platform?host=prod"},
     ],
 )
 def test_staging_and_production_like_targets_are_refused(updates):
     with pytest.raises(ValueError, match="Only the development database"):
         require_development_target(dev_settings(**updates), acknowledged=True)
+
+
+@pytest.mark.parametrize("environment", ["local", "test", "staging", "production"])
+def test_dev_live_database_is_refused_outside_development(environment):
+    # A staging or production environment never seeds, even pointed at dev-live.
+    settings = dev_settings(environment=environment, database_url=DEV_LIVE_URL)
+    with pytest.raises(ValueError, match="Only the development database"):
+        require_development_target(settings, acknowledged=True)
 
 
 @pytest.mark.parametrize("name", ["PGHOST", "PGHOSTADDR", "PGSERVICE", "PGOPTIONS"])

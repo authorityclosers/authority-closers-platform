@@ -192,7 +192,8 @@ and never activates the broader filesystem media profile.
 ## Fixture accounts
 
 `python -m ac_platform.development.sales_xray_fixture_accounts` creates three
-fictional password accounts on the dev DB for signing in to salesxray-dev:
+fictional password accounts on a dev DB (the dev API's or the dev-live API's)
+for signing in to salesxray-dev:
 `sx-owner@example.test`, `sx-admin@example.test` and `sx-member@example.test`.
 The addresses are fixed. Each account goes through the app's password
 registration and one-use verification with no email sent, and gets only the
@@ -204,10 +205,13 @@ read or changed.
 
 It refuses unless `--acknowledge-development-fixtures` is given,
 `AC_ENVIRONMENT=development`, and `AC_DATABASE_URL` is exactly
-`postgresql+psycopg` on host `172.27.0.2`, port `5432`, database `ac_platform`
-(the dev Postgres container's bridge address, AUT-119), with no query string
-and no `PG*` variables set. If that container is recreated with another
-address, change `DEVELOPMENT_DATABASE` in the module and this section together.
+`postgresql+psycopg` on port `5432`, database `ac_platform`, at one of the two
+dev Postgres containers' pinned addresses on `acdev-xray`: `172.27.0.2` (the dev
+API's, AUT-119) or `172.27.0.12` (the dev-live API's `acdev-live-postgres`,
+`ac-dev-live-create-postgres`). No query string and no `PG*` variables. Take
+the URL from that API's own environment file, never typed. If a container is
+recreated with another address, change `DEVELOPMENT_DATABASES` in the module
+and this section together.
 
 Passwords come only from `AC_DEV_FIXTURE_PASSWORD_OWNER`, `_ADMIN` and
 `_MEMBER` (12 to 256 characters), stored in Infisical `dev` at
@@ -233,8 +237,15 @@ sudo AC_INFISICAL_ENVIRONMENT=dev AC_INFISICAL_PATH=/sales-xray/dev-fixture-acco
     --acknowledge-development-fixtures
 ```
 
+For dev-live, the same command with the dev-live API's environment and build
+slot: `--property=EnvironmentFile=/etc/authority-closers/development/api-live.env`,
+and the `WorkingDirectory` and `.venv` of the active slot in
+`/etc/systemd/system/ac-dev-live-api.service.d/slot.conf`
+(`/srv/authority-closers/development/live-backend/a` or `/b`).
+
 Done check: exit 0 and three `accounts` entries; a second run prints the same
-person ids. Then sign in on salesxray-dev with each password.
+person ids. Then sign in on salesxray-dev with each password (dev-live behind
+`/__backend/live`).
 
 ## Admin dev image (AUT-970)
 
