@@ -168,6 +168,12 @@ function install() {
   return true;
 }
 
+/** These answers on another review page (the hub's Connections → Developers). */
+export function DevelopersAnswers() {
+  useState(install);
+  return null;
+}
+
 function Preview() {
   useState(install);
   return (

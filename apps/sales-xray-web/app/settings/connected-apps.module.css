@@ -14,9 +14,16 @@
 }
 
 .summary p {
+  min-width: 0;
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
+}
+
+/* One part of the status line with its "·": a narrow screen breaks between
+   parts, never inside one (owner bug #43, 27 Oct 2026). */
+.statusPart {
+  white-space: nowrap;
 }
 
 .summary strong {

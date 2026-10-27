@@ -189,6 +189,73 @@ function install() {
       })),
       calls: [],
     }),
+    // Connections → Connected apps (owner bug #43, 27 Oct 2026): fictional
+    // health with one app needing attention, so the status line is long.
+    "/v1/lead-desk/integrations/health": () => ({
+      checkedAt: new Date().toISOString(),
+      apps: [
+        {
+          app: "meta_leads",
+          name: "Facebook & Instagram lead ads",
+          state: "ready",
+          words: "2 Pages connected.",
+          connections: [
+            { id: "page-1", label: "Fictional Homes Pune", state: "ready" },
+            { id: "page-2", label: "Fictional Homes Mumbai", state: "ready" },
+          ],
+          review: {
+            state: "pending",
+            since: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+            worksNow: "test leads only for now",
+          },
+          tests: [{ kind: "lead", label: "Send a test lead", needs: [] }],
+        },
+        {
+          app: "google_ads",
+          name: "Google Ads lead forms",
+          state: "not_set_up",
+          configured: false,
+          words: "Not available here yet.",
+        },
+        {
+          app: "whatsapp",
+          name: "WhatsApp",
+          state: "problem",
+          words: "The number's access ended. Reconnect it to send again.",
+          connections: [
+            { id: "wa-1", label: "Fictional Homes sales", state: "problem" },
+          ],
+        },
+        {
+          app: "webhook_sources",
+          name: "Website forms and other apps",
+          state: "ready",
+          words: "1 form sending leads.",
+          connections: [
+            { id: "form-1", label: "Site enquiry form", state: "ready" },
+          ],
+        },
+      ],
+    }),
+    // Connections → AI replies (owner bug #46): suggesting, not yet offered.
+    "/v1/lead-desk/ai-replies/settings": () => ({
+      mode: "suggest",
+      channels: ["whatsapp"],
+      quotePrices: false,
+      businessName: "Fictional Homes",
+      about:
+        "Flats and villas in Pune and Mumbai, from 2 BHK to 4 BHK, ready to move in or under construction.",
+      offerings: "2 BHK, 3 BHK, villas, site visits on weekends",
+      faqs: [
+        {
+          question: "Do you help with a home loan?",
+          answer: "Yes, our partner banks can pre-approve a loan in a week.",
+        },
+      ],
+      notes: "",
+      ready: true,
+      available: false,
+    }),
     "/v1/organisation/settings": () => ({
       tenant_id: TENANT,
       name: "Fictional Homes",

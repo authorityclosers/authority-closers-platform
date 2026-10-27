@@ -13,6 +13,7 @@ import { useState } from "react";
 import { Download } from "lucide-react";
 
 import { Panel, Segmented } from "../ui/kit";
+import { SideScroll } from "../ui/side-scroll";
 import { CopyButton } from "./copy-button";
 import { useOrigin } from "./use-origin";
 import styles from "./developers.module.css";
@@ -125,14 +126,16 @@ export function AssistantSetup() {
       <ol className={styles.steps} data-steps="remote">
         <li>
           <strong>Add Sales X-Ray to your assistant</strong>
-          <div className={styles.picker}>
+          {/* Five assistants don't fit a phone: the bar scrolls inside itself,
+              with no scrollbar, fading where more sit past an edge (#47). */}
+          <SideScroll chosen={assistant}>
             <Segmented
               label="Your assistant"
               items={ASSISTANTS.map(({ key, label }) => ({ key, label }))}
               value={assistant}
               onChange={setAssistant}
             />
-          </div>
+          </SideScroll>
           <span>{REMOTE_WHERE[assistant]}</span>
           <Snippet
             code={remoteSnippet(assistant, origin)}

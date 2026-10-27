@@ -9,6 +9,7 @@
  */
 import Link from "next/link";
 import {
+  Fragment,
   useCallback,
   useEffect,
   useId,
@@ -1094,6 +1095,18 @@ export function ConnectedApps() {
   ).length;
   const attention = apps.filter((app) => app.state === "problem").length;
   const open = drawn ? apps.find((app) => app.app === drawn.app) : undefined;
+  // The status line's parts (owner bug #43, 27 Oct 2026: it wrapped mid-phrase).
+  // Each holds together with its "·", so a narrow screen breaks between them.
+  const checked = ago(loaded.state === "ready" ? loaded.checkedAt : null);
+  const status: ReactNode[] = [
+    <strong key="connected">{connected} connected</strong>,
+    attention ? (
+      <span key="attention" data-tone="warn">
+        {attention} {attention === 1 ? "needs" : "need"} attention
+      </span>
+    ) : null,
+    checked ? <span key="checked">checked {checked}</span> : null,
+  ].filter(Boolean);
 
   return (
     <div className={styles.page}>
@@ -1101,18 +1114,17 @@ export function ConnectedApps() {
         {loaded.state === "ready" ? (
           <p>
             {workspace ? (
-              <span className={styles.workspace}>{workspace} · </span>
+              <span className={styles.workspace}>{workspace}</span>
             ) : null}
-            <strong>{connected} connected</strong>
-            {attention ? (
-              <span data-tone="warn">
-                {" "}
-                · {attention} {attention === 1 ? "needs" : "need"} attention
-              </span>
-            ) : null}
-            {ago(loaded.checkedAt) ? (
-              <span> · checked {ago(loaded.checkedAt)}</span>
-            ) : null}
+            {status.map((part, index) => (
+              <Fragment key={index}>
+                {workspace || index ? " " : null}
+                <span className={styles.statusPart}>
+                  {workspace || index ? "· " : null}
+                  {part}
+                </span>
+              </Fragment>
+            ))}
           </p>
         ) : loaded.state === "failed" ? (
           <p>Your apps couldn’t be checked.</p>

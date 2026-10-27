@@ -774,12 +774,33 @@ it("says what connecting gives instead of sending people to Settings, and names 
   );
   expect(card("google_ads").textContent).not.toContain("Not connected.");
   expect(host.textContent).not.toMatch(/in Settings\./);
-  expect(host.textContent).toContain("Brightline Sandbox · 4 connected");
+  expect(host.textContent).toContain("Brightline Sandbox · 4 connected");
   await act(async () =>
     button(card("whatsapp"), "Send a test message")!.click(),
   );
   expect(host.querySelector("dialog")?.textContent).toContain(
     "Runs in Brightline Sandbox",
+  );
+});
+
+// Owner bug #43 (27 Oct 2026): at 390 px the status line wrapped mid-phrase
+// ("1 needs / attention"). Each part keeps its "·" and holds together.
+it("keeps each part of the status line together, breaking only between parts", async () => {
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  const line = [...host.querySelectorAll("p")].find((item) =>
+    item.textContent?.startsWith("Brightline Sandbox"),
+  )!;
+  const parts = [...line.children].map((part) => part.textContent ?? "");
+  expect(parts.slice(0, 3)).toEqual([
+    "Brightline Sandbox",
+    "· 4 connected",
+    "· 1 needs attention",
+  ]);
+  expect(parts.slice(1).every((part) => part.startsWith("· "))).toBe(true);
+  // The only plain spaces are between parts, so lines break only there.
+  expect(line.textContent).toContain(
+    "Brightline Sandbox · 4 connected · 1 needs attention",
   );
 });
 

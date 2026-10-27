@@ -24,6 +24,7 @@ import { AcquisitionShell } from "../acquisition-shell";
 import { SettingsSectionView } from "../settings/sections";
 import type { SettingsSectionId } from "../settings/settings-sections";
 import { ActionList, ActionRow, Segmented } from "../ui/kit";
+import { SideScroll, sideScrollFades, useSideScroll } from "../ui/side-scroll";
 import { useWorkspaceAccess } from "../workspace-access";
 import type { ServerOrganisation } from "./organisation-seed";
 import { OrganisationView } from "./organisation-view";
@@ -44,7 +45,10 @@ const CONNECTION_PARTS: readonly Part[] = [
   { key: "pulse", label: "Pulse", section: "pulse" },
 ];
 
-/** The tab row; Insights shows it too, so leaving for it keeps the place. */
+/**
+ * The tab row; Insights shows it too, so leaving for it keeps the place. On a
+ * phone it scrolls, with the open tab in view (owner bug #43, 27 Oct 2026).
+ */
 export function HubTabs({
   tabs,
   current,
@@ -54,8 +58,17 @@ export function HubTabs({
   current: string;
   base?: string;
 }) {
+  const { ref, edges } = useSideScroll<HTMLElement>(
+    '[aria-current="page"]',
+    current,
+  );
   return (
-    <nav className={styles.tabs} aria-label="Organisation">
+    <nav
+      ref={ref}
+      className={`${styles.tabs} ${sideScrollFades}`}
+      aria-label="Organisation"
+      {...edges}
+    >
       {tabs.map((tab) => (
         <Link
           key={tab.id}
@@ -92,18 +105,21 @@ function Parts({
   const current = parts.find((item) => item.key === shown) ?? parts[0];
   return (
     <div className={styles.parts}>
-      <Segmented
-        label={tab.label}
-        value={current.key}
-        items={parts.map((item) => ({ key: item.key, label: item.label }))}
-        onChange={(next) => {
-          setChosen({ from: part, key: next });
-          // The part lives in the address too, so reload and links keep it.
-          const url = new URL(window.location.href);
-          url.searchParams.set("part", next);
-          window.history.replaceState(window.history.state, "", url);
-        }}
-      />
+      {/* Its own scroller: a bare segmented control widened the page. */}
+      <SideScroll chosen={current.key}>
+        <Segmented
+          label={tab.label}
+          value={current.key}
+          items={parts.map((item) => ({ key: item.key, label: item.label }))}
+          onChange={(next) => {
+            setChosen({ from: part, key: next });
+            // The part lives in the address too, so reload and links keep it.
+            const url = new URL(window.location.href);
+            url.searchParams.set("part", next);
+            window.history.replaceState(window.history.state, "", url);
+          }}
+        />
+      </SideScroll>
       <SettingsSectionView
         key={current.section}
         id={current.section}
