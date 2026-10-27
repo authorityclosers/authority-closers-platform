@@ -23,9 +23,37 @@ export const RADAR_SIZES = [
 export const RADAR_THEMES = ["light", "dark"];
 // The tap crawler's state: a phone, 100%, light (and the computer for screens that ask for it).
 export const CRAWL_SIZE = RADAR_SIZES[2];
+// The Android app as a budget phone runs it (27 Oct 2026, the testing plan's second profile):
+// - the app's user agent, so pages draw their in-app version (data-sx-app), which no other load does;
+// - the app's own font-scale handshake at its 1.2 cap (window.SXFontScale, in-app.ts), not a browser zoom;
+// - a 360 px phone with the CPU 4x slower, so taps can land while a page still hydrates.
+export const ANDROID_PROFILE = {
+  size: RADAR_SIZES[1],
+  userAgent:
+    "Mozilla/5.0 (Linux; Android 13; Fictional A05 Build/TP1A.220624.014; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36 SalesXrayApp/1.0.42",
+  fontScale: 1.2,
+  cpu: 4,
+};
 
-/** One page load per size, theme and zoom: 100% then 130% text on the same load; the app's 130% zoom on its own. */
+/**
+ * One page load per size, theme and zoom: 100% then 130% text on the same load; the app's 130% zoom on its own;
+ * and the Android app profile, light and dark.
+ */
 export function radarLoads() {
+  const android = RADAR_THEMES.map((theme) => ({
+    size: ANDROID_PROFILE.size,
+    theme,
+    zoom: 1,
+    android: ANDROID_PROFILE,
+    states: [
+      {
+        ...ANDROID_PROFILE.size,
+        theme,
+        scale: ANDROID_PROFILE.fontScale,
+        mode: "android",
+      },
+    ],
+  }));
   return RADAR_SIZES.flatMap((size) =>
     RADAR_THEMES.flatMap((theme) => [
       {
@@ -48,10 +76,13 @@ export function radarLoads() {
             },
           ]),
     ]),
-  );
+  ).concat(android);
 }
 
-/** Every measured state of a page: 3 phones x 3 scales x 2 themes + 1280 x 2 scales x 2 themes = 22. */
+/**
+ * Every measured state of a page: 3 phones x 3 scales x 2 themes + 1280 x 2 scales x 2 themes + the Android app x 2
+ * themes = 24.
+ */
 export const radarStates = () => radarLoads().flatMap((load) => load.states);
 
 /** A state's place in a finding's "where" list, e.g. "320x640 130% text dark". */

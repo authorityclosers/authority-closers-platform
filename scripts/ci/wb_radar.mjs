@@ -14,6 +14,7 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import { SCREENS, textZoom } from "./wb_matrix_lib.mjs";
 import {
+  ANDROID_PROFILE,
   CRAWL,
   CRAWL_SIZE,
   RADAR_SIZES,
@@ -85,9 +86,16 @@ async function readRequest(path) {
 }
 
 /** A fresh, isolated page for one state: the app's theme choice, the helpers, same-origin reads only. */
-async function openPage(browser, screen, { size, theme, zoom }, sandboxed) {
+async function openPage(
+  browser,
+  screen,
+  { size, theme, zoom, android },
+  sandboxed,
+) {
   const { local, step } = matrix;
   const context = await browser.newContext({
+    // The Android app profile: the app's user agent, so the page draws its in-app version.
+    ...(android ? { userAgent: android.userAgent } : {}),
     viewport: {
       width: Math.round(size.width / zoom),
       height: Math.round(size.height / zoom),
@@ -111,6 +119,11 @@ async function openPage(browser, screen, { size, theme, zoom }, sandboxed) {
     }
   }, theme);
   await context.addInitScript({ content: helperScript() });
+  // The app hands the phone's font scale to the page before any script, as the real app does (in-app.ts).
+  if (android)
+    await context.addInitScript((scale) => {
+      window.SXFontScale = scale;
+    }, android.fontScale);
   await context.route("**/*", (route) => {
     const request = route.request();
     const url = new URL(request.url());
@@ -122,6 +135,11 @@ async function openPage(browser, screen, { size, theme, zoom }, sandboxed) {
     return origin === matrix.origin ? local(route) : route.continue();
   });
   const page = await context.newPage();
+  // A budget phone's CPU: 4x slower than the runner, from the first script on.
+  if (android?.cpu)
+    await (
+      await context.newCDPSession(page)
+    ).send("Emulation.setCPUThrottlingRate", { rate: android.cpu });
   const events = [];
   page.on("console", (message) => {
     if (message.type() !== "error") return;
@@ -345,13 +363,21 @@ async function run(args) {
   };
 
   /** Tap every safe control once; reload after any tap that changed something. */
-  const crawl = async (browser, key, screen, size) => {
+  const crawl = async (browser, key, screen, size, android = null) => {
     const info = pages.get(key);
     const load = {
       size,
       theme: "light",
       zoom: 1,
-      states: [{ ...size, theme: "light", scale: 1, mode: "app" }],
+      ...(android ? { android } : {}),
+      states: [
+        {
+          ...size,
+          theme: "light",
+          scale: android ? android.fontScale : 1,
+          mode: android ? "android" : "app",
+        },
+      ],
     };
     const where = `${stateTag(load.states[0])} (taps)`;
     let session = null;
@@ -380,7 +406,9 @@ async function run(args) {
     try {
       await fresh();
       const { chosen, skipped } = chooseTaps(targets);
-      info.skipped = skipped;
+      // Two crawls a page (the phone and the Android app): their counts add up.
+      for (const [why, count] of Object.entries(skipped))
+        info.skipped[why] = (info.skipped[why] ?? 0) + count;
       let dirty = false;
       for (const wanted of chosen) {
         if (dirty) {
@@ -599,6 +627,14 @@ async function run(args) {
     const jobs = [
       ...screens.flatMap(([key, screen]) => [
         { kind: "crawl", key, screen, size: CRAWL_SIZE },
+        // The same taps as the Android app on a slow phone: a tap during hydration is lost there.
+        {
+          kind: "crawl",
+          key,
+          screen,
+          size: ANDROID_PROFILE.size,
+          android: ANDROID_PROFILE,
+        },
         ...(screen.desktop
           ? [
               {
@@ -619,7 +655,7 @@ async function run(args) {
       while (next < jobs.length) {
         const job = jobs[next++];
         if (job.kind === "crawl")
-          await crawl(browser, job.key, job.screen, job.size);
+          await crawl(browser, job.key, job.screen, job.size, job.android);
         else await sweep(browser, job.key, job.screen, job.load);
       }
     };

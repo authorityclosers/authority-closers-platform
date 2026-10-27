@@ -67,9 +67,25 @@ function el(
   };
 }
 
-test("checks 3 phones at three scales and 1280 at two, light and dark: 22 states in 14 loads", () => {
-  assert.equal(radarStates().length, 22);
-  assert.equal(radarLoads().length, 14);
+test("checks 3 phones at three scales, 1280 at two and the Android app, light and dark: 24 states in 16 loads", () => {
+  assert.equal(radarStates().length, 24);
+  assert.equal(radarLoads().length, 16);
+  // The Android app: its user agent and font-scale handshake on a 360 px phone, the CPU 4x slower.
+  const android = radarLoads().filter((load) => load.android);
+  assert.deepEqual(
+    android.map((load) => load.theme),
+    ["light", "dark"],
+  );
+  for (const load of android) {
+    assert.equal(load.size.width, 360);
+    assert.match(load.android.userAgent, /\bSalesXrayApp\/\d/);
+    assert.equal(load.android.fontScale, 1.2);
+    assert.equal(load.android.cpu, 4);
+    assert.equal(
+      stateTag(load.states[0]),
+      `360x800 120% android ${load.theme}`,
+    );
+  }
   const labels = new Set(radarStates().map((state) => state.label));
   assert.deepEqual([...labels], ["320x640", "360x800", "390x844", "1280x800"]);
   // The app's zoom is a phone's; the computer gets 100% and 130% text only.
@@ -81,7 +97,7 @@ test("checks 3 phones at three scales and 1280 at two, light and dark: 22 states
     "320x640 130% text dark",
   );
   // 130% text is measured on the same load as 100%, after it.
-  for (const load of radarLoads().filter((l) => l.zoom === 1))
+  for (const load of radarLoads().filter((l) => l.zoom === 1 && !l.android))
     assert.deepEqual(
       load.states.map((s) => s.scale),
       [1, 1.3],

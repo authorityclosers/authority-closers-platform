@@ -16,9 +16,12 @@ Every review fixture (fictional data, no API, no credentials) is checked:
 - every named matrix screen in `scripts/ci/wb_matrix_lib.mjs`, and every other `app/review-fixture/**/page.tsx`;
 - at 320x640, 360x800, 390x844 and 1280x800;
 - at 100% and 130% text, plus the Android app's 130% zoom on phones;
-- in light and dark.
+- in light and dark;
+- and as the Android app on a budget phone (27 Oct 2026). The page gets the app's user agent, so it draws its in-app
+  version, and the app's font scale at its 1.2 cap (`window.SXFontScale`). This is a 360 px phone with the CPU 4x
+  slower (`ANDROID_PROFILE`).
 
-That is 22 states a page. In each state the page is measured (`radarScan` in `scripts/ci/wb_radar_lib.mjs`):
+That is 24 states a page. In each state the page is measured (`radarScan` in `scripts/ci/wb_radar_lib.mjs`):
 
 | check | finds | severity |
 |---|---|---|
@@ -29,9 +32,12 @@ That is 22 states a page. In each state the page is measured (`radarScan` in `sc
 | `tap-target` | a control under 44 x 44 px on a phone (inline links in a sentence are exempt; a widening `::before`/`::after` counts) | medium under 24 px, else low |
 | `contrast` | text under 4.5:1 (3:1 for large text) against its own and its parents' backgrounds | high under 2:1, medium under 3:1 |
 | `centred-card` | a card on a phone with over a quarter of the width empty, split on both sides | medium (low in a dialog) |
+| `label-wraps` | a tab, pressed button or chip whose whole label (up to 32 characters) runs taller than 1.5 lines (owner bug #43) | high on a phone |
+| `tabs-clipped` | a tab bar, button group or chip row whose last item ends past the screen edge, with nothing around it scrolling sideways | high on a phone |
 | `console-error`, `page-error`, `request-failed` | console errors, uncaught errors, failed same-origin requests while loading | medium; uncaught and hydration errors high |
 
-Then every safe control is tapped once, at 390 px (and at 1280 px for computer screens). Nothing labelled Delete,
+Then every safe control is tapped once: at 390 px, again as the Android app on the slow 360 px phone, and at 1280 px
+for computer screens. Nothing labelled Delete,
 Remove, Log out, Send, Call, WhatsApp, Pay or Upgrade is tapped, and nothing that leaves the app (tel:, mail,
 another site, a new window). A list's rows get one or two taps; every tab gets one. While a modal sheet is open,
 only its own controls are tapped.
