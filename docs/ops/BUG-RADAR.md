@@ -112,8 +112,10 @@ What it does:
   CPU throttling. The phone is 390 px.
 - **Runs:** three of each, one at a time, so nothing shares the CPU. The median counts.
 - **What is timed, as telemetry times real phones:**
-  - opening the screen: navigation to settled (no change for 300 ms), with LCP and blocking time;
-  - each tap telemetry names (open a lead, switch a tab, open a sheet): from the tap to settled (150 ms quiet).
+  - opening the screen: until it is ready to use (settled, and the main thread free for 500 ms, since hydration runs
+    as long tasks while the page looks done), with LCP and blocking time;
+  - each tap telemetry names (open a lead, switch a tab, open a sheet), on a ready screen: from the tap to settled
+    (150 ms quiet after the page first answers). A tap that does a full page load instead is listed as "left".
 - **Slow at 6x:** a screen over 3 s or a tap over 1 s. "For the builder": over 5 s and 2 s.
 
 ```bash

@@ -27,6 +27,7 @@ from ac_platform.audit.service import AuditRepository
 from ac_platform.integrations import write_policy as policy
 from ac_platform.integrations.models import IntegrationWrite
 from ac_platform.lead_desk.contracts import (
+    LeadEdit,
     NoteCommand,
     TaskAction,
     TaskCommand,
@@ -52,6 +53,7 @@ class AiWritesSettings(BaseModel):
     note: bool
     task: bool
     outcome: bool
+    update: bool = False
 
 
 class AiWriteError(DeskError):
@@ -372,6 +374,114 @@ class AiWrites:
         )
         return await self._answer(row)
 
+    async def update(
+        self,
+        lead_id: UUID,
+        fields: dict[str, Any],
+        *,
+        request_id: object,
+        expected_revision: int | None = None,
+        preview: bool = False,
+    ) -> dict[str, Any]:
+        """Change a lead's allowed details (name, company, city, interest, language).
+
+        Phone and email are refused with ``needs_review``: they decide duplicates and
+        who a call matches, so they wait for the review queue (ai-writes.md, section 8).
+        Undo restores what was there, unless a person changed those fields since."""
+        request = self._request(request_id)
+        unknown = sorted(set(fields) - set(policy.UPDATE_FIELDS) - set(policy.REVIEW_FIELDS))
+        if unknown:
+            raise AiWriteError(422, "field_not_allowed", f"Apps can't change {', '.join(unknown)}.")
+        if set(fields) & set(policy.REVIEW_FIELDS):
+            raise AiWriteError(
+                422,
+                "needs_review",
+                "Phone and email changes from apps need a person's review, which isn't open"
+                " yet. Add a note with the new details instead.",
+            )
+        if not fields:
+            raise AiWriteError(422, "fields", "Send at least one field to change.")
+        cleaned: dict[str, str | None] = {}
+        for name, value in fields.items():
+            if value is not None and not isinstance(value, str):
+                raise AiWriteError(422, "field_value", f"{name} must be text.")
+            text = policy.clean_text(value)[:200] if value else ""
+            if name == "name" and not text:
+                raise AiWriteError(422, "field_value", "A lead needs a name.")
+            cleaned[name] = text
+        command_id = self._command(request)
+        seen = await self._replay(command_id)
+        if seen is not None:
+            if seen.lead_id != lead_id or seen.action != "update":
+                raise AiWriteError(
+                    409, "request_reused", "That request_id was used for another change."
+                )
+            return await self._answer(seen, replayed=True)
+        await self._check("update", lead_id)
+        lead = await self.desk._lead(lead_id)
+        revision = lead.revision if expected_revision is None else expected_revision
+        if revision != lead.revision:
+            raise AiWriteError(409, "changed_since", "This lead changed. Read it and try again.")
+        changing = {
+            name: value
+            for name, value in cleaned.items()
+            if (getattr(lead, name) or "") != (value or "")
+        }
+        if preview:
+            return {
+                "preview": True,
+                "action": "update",
+                "lead_id": str(lead_id),
+                "lead_name": lead.name,
+                "would_change": changing,
+                "via": self.door.label,
+            }
+        if not changing:
+            raise AiWriteError(409, "no_change", "The lead already has those details.")
+        change_id = uuid4()
+        await self.desk.edit(
+            lead_id,
+            LeadEdit(command_id=command_id, expected_revision=revision, **changing),
+            by_app=self._by_app(change_id),
+        )
+        row = await self._record(
+            change_id,
+            action="update",
+            lead_id=lead_id,
+            request_id=request,
+            command_id=command_id,
+            event_id=await self._event_for(command_id),
+            task_id=None,
+            fields=sorted(changing),
+        )
+        return await self._answer(row)
+
+    async def _undo_update(self, row: IntegrationWrite, command_id: UUID) -> None:
+        """Put back what an app's update replaced, if nobody changed those fields since."""
+        event = await self.db.get(LeadEvent, row.event_id) if row.event_id else None
+        data = event.data if event is not None and isinstance(event.data, dict) else {}
+        before, after = data.get("before"), data.get("after")
+        if not isinstance(before, dict) or not isinstance(after, dict) or not before:
+            raise AiWriteError(409, "cannot_undo", "This change can't be undone here.")
+        lead = await self.desk._lead(row.lead_id)
+        if any(getattr(lead, name) != value for name, value in after.items()):
+            raise AiWriteError(
+                409,
+                "changed_since",
+                "Someone changed this lead since. Change it in Sales X-Ray instead.",
+            )
+        restore = {name: value if value is not None else "" for name, value in before.items()}
+        if not restore.get("name", "x"):
+            restore.pop("name")
+        await self.desk.edit(
+            row.lead_id,
+            LeadEdit(
+                command_id=uuid5(command_id, "restore"),
+                expected_revision=lead.revision,
+                **restore,
+            ),
+        )
+
     # ----- what was changed, and undo ---------------------------------------------
 
     async def changes(self, *, lead_id: UUID | None = None, limit: int = 50) -> dict[str, Any]:
@@ -475,6 +585,8 @@ class AiWrites:
             )
         )
         command_id = self._command(request)
+        if row.action == "update":
+            await self._undo_update(row, command_id)
         if row.action == "task" and row.task_id is not None:
             task: LeadTask | None = await self.db.get(LeadTask, row.task_id, with_for_update=True)
             if task is None or task.status != "open" or task.revision != 1:

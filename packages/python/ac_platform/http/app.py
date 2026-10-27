@@ -62,8 +62,10 @@ from ac_platform.http.staff_billing import install_staff_billing_http
 from ac_platform.http.studio_media import install_studio_media_http
 from ac_platform.http.studio_video_bytes import StudioVideoByteTransport
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
+from ac_platform.identity.sign_in_methods import register_pulse_issuer
 from ac_platform.media.runtime import MediaRuntime, create_default_media_runtime
 from ac_platform.media.studio_video_completion import StudioVideoCompletion
+from ac_platform.pulse.oidc import PulseClient, PulseSignInProvider
 
 logger = structlog.get_logger()
 settings = get_settings()
@@ -89,7 +91,7 @@ def _google_provider_from_settings(settings: Settings) -> OAuthIdentityProvider:
 
 
 def _extra_sign_in_providers(settings: Settings) -> dict[str, OAuthIdentityProvider]:
-    """Facebook and Apple for Sales Xray, each only once all its settings exist.
+    """Facebook, Apple and Pulse for Sales Xray, each only once all its settings exist.
 
     A provider whose settings are present but invalid stays off with a log line;
     it never stops the API from starting.
@@ -117,6 +119,20 @@ def _extra_sign_in_providers(settings: Settings) -> dict[str, OAuthIdentityProvi
             )
         except ValueError:
             logger.warning("apple_sign_in_settings_invalid")
+    pulse_secret = settings.pulse_client_secret
+    if settings.pulse_configured and pulse_secret is not None:
+        try:
+            pulse = PulseSignInProvider(
+                PulseClient(
+                    issuer=settings.pulse_issuer or "",
+                    client_id=settings.pulse_client_id or "",
+                    client_secret=pulse_secret.get_secret_value(),
+                )
+            )
+            register_pulse_issuer(pulse.issuer)
+            providers["pulse"] = pulse
+        except ValueError:
+            logger.warning("pulse_sign_in_settings_invalid")
     return providers
 
 

@@ -5,6 +5,8 @@ export type EmailCodeConfig = {
   /** Each provider shows only once its settings exist on the server. */
   apple_enabled: boolean;
   facebook_enabled: boolean;
+  /** Sign in with Pulse (Estate Autopilots' work app), once set up here. */
+  pulse_enabled: boolean;
   expires_in_seconds: number;
   resend_after_seconds: number;
 };
@@ -46,6 +48,7 @@ export function parseEmailCodeConfig(value: unknown): EmailCodeConfig {
   // Older servers send no Apple or Facebook flag: both stay hidden.
   const apple = optionalFlag(item.apple_enabled);
   const facebook = optionalFlag(item.facebook_enabled);
+  const pulse = optionalFlag(item.pulse_enabled);
   if (
     typeof item.enabled !== "boolean" ||
     typeof item.google_enabled !== "boolean" ||
@@ -53,7 +56,7 @@ export function parseEmailCodeConfig(value: unknown): EmailCodeConfig {
       (typeof item.consent_version !== "string" ||
         !item.consent_version.trim() ||
         item.consent_version.length > 64)) ||
-    ((item.enabled || item.google_enabled || apple || facebook) &&
+    ((item.enabled || item.google_enabled || apple || facebook || pulse) &&
       item.consent_version === null)
   )
     throw new Error("Invalid sign-in configuration");
@@ -64,6 +67,7 @@ export function parseEmailCodeConfig(value: unknown): EmailCodeConfig {
     google_enabled: item.google_enabled,
     apple_enabled: apple,
     facebook_enabled: facebook,
+    pulse_enabled: pulse,
   };
 }
 
@@ -432,11 +436,12 @@ export function maskedEmail(email: string) {
  * a short "signed in" note for this tab and returns to the starting page,
  * where the sign-in screen finishes as it does after the window.
  */
-export type SignInProvider = "google" | "apple" | "facebook";
+export type SignInProvider = "google" | "apple" | "facebook" | "pulse";
 const SIGN_IN_PROVIDERS = new Set<SignInProvider>([
   "google",
   "apple",
   "facebook",
+  "pulse",
 ]);
 
 export function providerLabel(provider: SignInProvider) {
@@ -444,7 +449,9 @@ export function providerLabel(provider: SignInProvider) {
     ? "Google"
     : provider === "apple"
       ? "Apple"
-      : "Facebook";
+      : provider === "pulse"
+        ? "Pulse"
+        : "Facebook";
 }
 
 export function providerEnabled(
@@ -456,7 +463,9 @@ export function providerEnabled(
     ? config.google_enabled
     : provider === "apple"
       ? config.apple_enabled
-      : config.facebook_enabled;
+      : provider === "pulse"
+        ? config.pulse_enabled
+        : config.facebook_enabled;
 }
 
 const REDIRECT_KEY = "sx.signIn.redirect";

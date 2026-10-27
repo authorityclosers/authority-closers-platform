@@ -210,6 +210,7 @@ def test_connect_offers_only_configured_providers_not_yet_linked(
         "google": {"linked": False, "can_connect": False},  # not configured here
         "apple": {"linked": False, "can_connect": False},
         "facebook": {"linked": False, "can_connect": True},
+        "pulse": {"linked": False, "can_connect": False},  # not configured here
     }
 
 

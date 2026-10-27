@@ -37,6 +37,7 @@ const config = {
   google_enabled: true,
   apple_enabled: false,
   facebook_enabled: false,
+  pulse_enabled: false,
   expires_in_seconds: 600,
   resend_after_seconds: 60,
 };
@@ -386,9 +387,10 @@ it("hands a full-page sign-in back once, for its own flow and not too late", () 
 });
 
 it("reads the Apple and Facebook flags, hidden when an older server sends none", () => {
-  const { apple_enabled, facebook_enabled, ...older } = config;
+  const { apple_enabled, facebook_enabled, pulse_enabled, ...older } = config;
   void apple_enabled;
   void facebook_enabled;
+  void pulse_enabled;
   expect(parseEmailCodeConfig(older)).toEqual(config);
   const both = parseEmailCodeConfig({
     ...config,
@@ -398,6 +400,13 @@ it("reads the Apple and Facebook flags, hidden when an older server sends none",
   expect(providerEnabled(both, "google")).toBe(true);
   expect(providerEnabled(both, "apple")).toBe(true);
   expect(providerEnabled(both, "facebook")).toBe(true);
+  expect(providerEnabled(both, "pulse")).toBe(false);
+  expect(
+    providerEnabled(
+      parseEmailCodeConfig({ ...config, pulse_enabled: true }),
+      "pulse",
+    ),
+  ).toBe(true);
   expect(providerEnabled(parseEmailCodeConfig(config), "apple")).toBe(false);
   expect(providerEnabled(null, "google")).toBe(false);
   expect(() =>

@@ -11,7 +11,7 @@ from typing import Any, cast
 
 import pytest
 
-from ac_platform.integrations import first_party, mcp_http, oauth, scopes
+from ac_platform.integrations import first_party, mcp_http, oauth, scopes, tiers
 from ac_platform.integrations.api_http import ApiError
 from ac_platform.integrations.errors import IntegrationError
 from ac_platform.integrations.oauth_http import (
@@ -193,6 +193,8 @@ class FakeReader:
     """Answers like ``Reader`` for one person's fictional calls and leads."""
 
     base = BASE
+    platform = tiers.DEFAULT_PLATFORM
+    tier = tiers.DEFAULT_PLATFORM.tier("unbilled")
 
     def __init__(self, granted: set[str], *, personal: bool = False) -> None:
         self.key = SimpleNamespace(scopes=frozenset(granted))

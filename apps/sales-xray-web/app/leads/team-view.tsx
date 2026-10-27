@@ -417,9 +417,17 @@ function AiCell({ callAi, rep }: { callAi: CallAiSettings; rep: RepView }) {
 export function TeamView({
   onChanged,
   onOpen,
+  rulesOnly = false,
 }: {
   onChanged: () => void;
   onOpen: (leadId: string) => void;
+  /**
+   * Settings → Lead rules (owner #38, 27 Oct 2026: "Lead rules shows this
+   * dashboard again, and why?"): only the rules. Who takes new leads and
+   * their limits, auto-reassign, limits and work hours; the team's numbers,
+   * calls, response times and ad spend stay on Leads → Team.
+   */
+  rulesOnly?: boolean;
 }) {
   const [team, setTeam] = useState<Team | null>(null);
   const [callAi, setCallAi] = useState<CallAiSettings | null>(null);
@@ -537,31 +545,36 @@ export function TeamView({
 
   return (
     <div className={styles.teamGrid}>
-      <Tiles label="Team leads">
-        <Kpi
-          label="All leads"
-          value={total}
-          note={`${team.waiting_first_call} waiting for a first call`}
-        />
-        <Kpi
-          label="No owner"
-          tone={team.unassigned ? "bad" : undefined}
-          value={team.unassigned}
-          note="Nobody fit the rules"
-        />
-        <Kpi label="Won" tone="good" value={team.by_stage.won ?? 0} />
-        <Kpi
-          label="First call"
-          value={
-            team.first_call_minutes != null
-              ? waitWords(team.first_call_minutes)
-              : "–"
-          }
-          note="Median time to first call, last 7 days"
-        />
-      </Tiles>
+      {rulesOnly ? null : (
+        <Tiles label="Team leads">
+          <Kpi
+            label="All leads"
+            value={total}
+            note={`${team.waiting_first_call} waiting for a first call`}
+          />
+          <Kpi
+            label="No owner"
+            tone={team.unassigned ? "bad" : undefined}
+            value={team.unassigned}
+            note="Nobody fit the rules"
+          />
+          <Kpi label="Won" tone="good" value={team.by_stage.won ?? 0} />
+          <Kpi
+            label="First call"
+            value={
+              team.first_call_minutes != null
+                ? waitWords(team.first_call_minutes)
+                : "–"
+            }
+            note="Median time to first call, last 7 days"
+          />
+        </Tiles>
+      )}
 
-      <Panel title="Sellers" sub={`${team.reps.length}`}>
+      <Panel
+        title={rulesOnly ? "Who takes new leads" : "Sellers"}
+        sub={`${team.reps.length}`}
+      >
         <div className={styles.tableWrap} data-has-cards="">
           <table className={styles.table}>
             <thead>
@@ -571,10 +584,14 @@ export function TeamView({
                 <th>Phone</th>
                 {callAi ? <th>AI on calls</th> : null}
                 <th data-num>Open</th>
-                <th data-num>Due now</th>
-                <th data-num>Calls today</th>
-                <th data-num>Connected</th>
-                <th data-num>First call</th>
+                {rulesOnly ? null : (
+                  <>
+                    <th data-num>Due now</th>
+                    <th data-num>Calls today</th>
+                    <th data-num>Connected</th>
+                    <th data-num>First call</th>
+                  </>
+                )}
                 <th>Rules</th>
               </tr>
             </thead>
@@ -625,14 +642,18 @@ export function TeamView({
                       <small>/{rep.max_open}</small>
                     )}
                   </td>
-                  <td data-num>{rep.due_now}</td>
-                  <td data-num>{rep.calls_today}</td>
-                  <td data-num>{rep.connected_today}</td>
-                  <td data-num>
-                    {rep.first_call_minutes != null
-                      ? waitWords(rep.first_call_minutes)
-                      : "–"}
-                  </td>
+                  {rulesOnly ? null : (
+                    <>
+                      <td data-num>{rep.due_now}</td>
+                      <td data-num>{rep.calls_today}</td>
+                      <td data-num>{rep.connected_today}</td>
+                      <td data-num>
+                        {rep.first_call_minutes != null
+                          ? waitWords(rep.first_call_minutes)
+                          : "–"}
+                      </td>
+                    </>
+                  )}
                   <td className={styles.rules}>
                     {[...rep.languages, ...rep.areas, ...rep.interests].length
                       ? [
@@ -681,8 +702,10 @@ export function TeamView({
                 </button>
               </span>
               <span>
-                {`${openWords(rep.open_leads, rep.max_open)} open · ${rep.due_now} due · ${rep.calls_today} ${rep.calls_today === 1 ? "call" : "calls"} today · ${rep.connected_today} connected`}
-                {rep.first_call_minutes != null
+                {rulesOnly
+                  ? `${openWords(rep.open_leads, rep.max_open)} open`
+                  : `${openWords(rep.open_leads, rep.max_open)} open · ${rep.due_now} due · ${rep.calls_today} ${rep.calls_today === 1 ? "call" : "calls"} today · ${rep.connected_today} connected`}
+                {!rulesOnly && rep.first_call_minutes != null
                   ? ` · first call ${waitWords(rep.first_call_minutes)}`
                   : ""}
               </span>
@@ -702,11 +725,15 @@ export function TeamView({
         </div>
       </Panel>
 
-      <CallsReport />
+      {rulesOnly ? null : (
+        <>
+          <CallsReport />
 
-      <SlaPanel onOpen={onOpen} />
+          <SlaPanel onOpen={onOpen} />
 
-      <AdSpendPanel />
+          <AdSpendPanel />
+        </>
+      )}
 
       <div className={styles.teamPair}>
         <Panel
@@ -763,40 +790,44 @@ export function TeamView({
             onChanged();
           }}
         />
-        <Panel title="Where leads stand">
-          <dl className={styles.bars}>
-            {STAGE_ORDER.map((stage) => (
-              <div key={stage}>
-                <dt>{STAGE_NAMES[stage]}</dt>
-                <dd>
-                  <span className={styles.bar}>
-                    <i
-                      style={{
-                        width: `${total ? ((team.by_stage[stage] ?? 0) / total) * 100 : 0}%`,
-                      }}
-                    />
-                  </span>
-                  <span>{team.by_stage[stage] ?? 0}</span>
-                </dd>
-              </div>
-            ))}
-          </dl>
-          <dl className={styles.bars}>
-            {Object.entries(team.by_source).map(([source, count]) => (
-              <div key={source}>
-                <dt>{SOURCE_NAMES[source] ?? source}</dt>
-                <dd>
-                  <span className={styles.bar}>
-                    <i
-                      style={{ width: `${total ? (count / total) * 100 : 0}%` }}
-                    />
-                  </span>
-                  <span>{count}</span>
-                </dd>
-              </div>
-            ))}
-          </dl>
-        </Panel>
+        {rulesOnly ? null : (
+          <Panel title="Where leads stand">
+            <dl className={styles.bars}>
+              {STAGE_ORDER.map((stage) => (
+                <div key={stage}>
+                  <dt>{STAGE_NAMES[stage]}</dt>
+                  <dd>
+                    <span className={styles.bar}>
+                      <i
+                        style={{
+                          width: `${total ? ((team.by_stage[stage] ?? 0) / total) * 100 : 0}%`,
+                        }}
+                      />
+                    </span>
+                    <span>{team.by_stage[stage] ?? 0}</span>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            <dl className={styles.bars}>
+              {Object.entries(team.by_source).map(([source, count]) => (
+                <div key={source}>
+                  <dt>{SOURCE_NAMES[source] ?? source}</dt>
+                  <dd>
+                    <span className={styles.bar}>
+                      <i
+                        style={{
+                          width: `${total ? (count / total) * 100 : 0}%`,
+                        }}
+                      />
+                    </span>
+                    <span>{count}</span>
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </Panel>
+        )}
       </div>
 
       <RulesDialog

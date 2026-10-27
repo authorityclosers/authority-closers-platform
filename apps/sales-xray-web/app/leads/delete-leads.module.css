@@ -235,8 +235,24 @@
 
 .barActions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
+  min-width: 0;
+}
+
+/* Phones: the actions take the bar's whole width and wrap, each as wide as
+   its words, so none runs past the edge (bug radar, 26 Oct 2026: "Select all
+   Assign to… Move stage More Delete" ran 222 px past it at 390 px). */
+@media (max-width: 899px) {
+  .barActions {
+    flex: 1 1 100%;
+  }
+
+  .barActions > * {
+    flex: 1 1 auto;
+  }
 }
 
 /* ---------- Select in the filters ---------- */

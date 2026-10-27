@@ -25,14 +25,27 @@ from ac_platform.identity.models import (
 )
 from ac_platform.identity.models import Session as IdentitySession
 
-Provider = Literal["google", "apple", "facebook"]
-MethodKind = Literal["email_code", "password", "google", "apple", "facebook"]
+Provider = Literal["google", "apple", "facebook", "pulse"]
+MethodKind = Literal["email_code", "password", "google", "apple", "facebook", "pulse"]
 PROVIDER_ISSUERS: dict[Provider, tuple[str, ...]] = {
     "google": ("https://accounts.google.com", "accounts.google.com"),
     "apple": ("https://appleid.apple.com",),
     "facebook": ("https://www.facebook.com",),
+    # Each environment's Pulse; register_pulse_issuer adds a configured one not listed.
+    "pulse": (
+        "https://pulse.estateautopilots.com",
+        "https://pulse.authorityclosers.com",
+        "https://pulse-staging.estateautopilots.com",
+        "https://pulse-dev.estateautopilots.com",
+    ),
 }
 FRESH_SIGN_IN = timedelta(minutes=10)
+
+
+def register_pulse_issuer(issuer: str) -> None:
+    """Count this environment's configured Pulse issuer as Pulse (a test or local one)."""
+    if issuer not in PROVIDER_ISSUERS["pulse"]:
+        PROVIDER_ISSUERS["pulse"] = (*PROVIDER_ISSUERS["pulse"], issuer)
 
 
 class SignInMethodError(Exception):
@@ -95,7 +108,7 @@ async def sign_in_methods(database: AsyncSession, person_id: UUID) -> list[SignI
         methods.append(SignInMethod("email_code", None, None, removable=False))
     if password is not None:
         methods.append(SignInMethod("password", password.created_at, None, removable=False))
-    for provider in ("google", "apple", "facebook"):
+    for provider in ("google", "apple", "facebook", "pulse"):
         if provider in found:
             added, used = found[provider]
             methods.append(SignInMethod(provider, added, used, removable=ways_in > 1))
@@ -144,6 +157,7 @@ async def remove_provider(
 __all__ = [
     "FRESH_SIGN_IN",
     "PROVIDER_ISSUERS",
+    "register_pulse_issuer",
     "SignInMethod",
     "SignInMethodError",
     "remove_provider",

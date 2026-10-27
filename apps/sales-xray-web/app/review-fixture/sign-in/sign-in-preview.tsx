@@ -121,6 +121,7 @@ function install() {
         google_enabled: true,
         apple_enabled: true,
         facebook_enabled: true,
+        pulse_enabled: true,
         expires_in_seconds: 600,
         resend_after_seconds: 30,
       });

@@ -103,7 +103,7 @@ DEFAULT_RATE_LIMIT_RULES = (
     RateLimitRule(
         name="oauth-start",
         method="GET",
-        path=re.compile(r"^/v1/auth/(?:google|facebook|apple)/start$"),
+        path=re.compile(r"^/v1/auth/(?:google|facebook|apple|pulse)/start$"),
         capacity=20,
         refill_seconds=600,
     ),
@@ -126,7 +126,7 @@ DEFAULT_RATE_LIMIT_RULES = (
     RateLimitRule(
         name="oauth-callback",
         method="GET",
-        path=re.compile(r"^/v1/auth/(?:google|facebook|apple)/callback$"),
+        path=re.compile(r"^/v1/auth/(?:google|facebook|apple|pulse)/callback$"),
         capacity=60,
         refill_seconds=600,
     ),
@@ -141,7 +141,7 @@ DEFAULT_RATE_LIMIT_RULES = (
         # Settings -> Connect starts a provider sign-in, like oauth-start.
         name="sign-in-method-connect",
         method="POST",
-        path=re.compile(r"^/v1/me/sign-in-methods/(?:google|facebook|apple)/connect$"),
+        path=re.compile(r"^/v1/me/sign-in-methods/(?:google|facebook|apple|pulse)/connect$"),
         capacity=20,
         refill_seconds=600,
     ),

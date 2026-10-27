@@ -97,3 +97,16 @@
   font-size: var(--sx-text-sm);
   line-height: 1.45;
 }
+
+/* Under "What your plan includes": the plans link, or the Play app's words. */
+.planNote {
+  margin: 0;
+  padding: 4px 16px 14px;
+  color: var(--lx-muted);
+  font-size: 14px;
+}
+
+.planNote a {
+  color: var(--lx-teal);
+  font-weight: 600;
+}

@@ -103,54 +103,90 @@ async function open(browser, rate) {
   return { context, page };
 }
 
-/** Wait until the page has not changed for `quiet` ms after `from`, or `cap` ms passed; when it last changed. */
-async function settle(page, from, quiet, cap) {
+/**
+ * Wait for the page to settle after `from`: its first change (up to `first` ms; a slow CPU takes a while to answer a
+ * tap at all), then no change for `quiet` ms, or `cap` ms in all. When it last changed, and whether it changed.
+ */
+async function settle(page, from, quiet, cap, first = 0) {
   for (;;) {
     const { now, last } = await page.evaluate(() => ({
       now: performance.now(),
       last: window.__speed.last,
     }));
+    const moved = last > from;
+    if (!moved && now - from < first) {
+      await page.waitForTimeout(50);
+      continue;
+    }
     const changed = Math.max(last, from);
     if (now - changed >= quiet)
-      return { at: changed, moved: last > from, result: "settled" };
+      return { at: changed, moved, result: "settled" };
     if (now - from >= cap) return { at: now, moved: true, result: "timeout" };
     await page.waitForTimeout(50);
   }
 }
 
-/** Load a screen: from navigation to settled (300 ms quiet), never earlier than the load event; LCP and blocking. */
+/**
+ * Load a screen. Its time is LCP, when the main content was painted (the first baseline showed "settled" too noisy
+ * to rank screens: timers keep some pages changing); settled (300 ms quiet) and blocking time are kept beside it.
+ */
 async function load(page, path) {
   await page.goto(origin + path, { waitUntil: "load", timeout: 90000 });
   const done = await settle(page, 0, 300, 15000);
+  // Ready: the page settled and the main thread has been free for 500 ms (hydration runs as long tasks while the
+  // page looks done; a tap before then is lost, or on a link reloads the page).
+  for (;;) {
+    const { now, busy } = await page.evaluate(() => ({
+      now: performance.now(),
+      busy: window.__speed.busy,
+    }));
+    if (now - busy >= 500 || now >= 15000) break;
+    await page.waitForTimeout(100);
+  }
+  await settle(page, 0, 150, 15000);
   const vitals = await page.evaluate(() => ({
     lcp: window.__speed.lcp,
     tbt: Math.round(window.__speed.tbt),
+    busy: window.__speed.busy,
+    last: window.__speed.last,
     loaded: performance.getEntriesByType("navigation")[0]?.loadEventEnd ?? 0,
   }));
+  const settled = Math.round(Math.max(done.at, vitals.loaded));
   return {
-    ms: Math.round(Math.max(done.at, vitals.loaded)),
+    // A screen's time: when it is ready to use; its LCP and blocking time beside it.
+    ms: Math.round(Math.max(settled, vitals.busy, vitals.lcp ?? 0)),
+    settled,
     lcp: vitals.lcp,
     tbt: vitals.tbt,
     result: done.result,
   };
 }
 
-/** One tap: from the tap (its own event time) to settled (150 ms quiet). Null when the screen has no such control. */
+/**
+ * One tap: from the tap (its own event time) to settled (150 ms quiet after the page first answers, waiting up to
+ * 3 s for that answer). Null when the screen has no such control; `control` names the element as the code does.
+ */
 async function tap(page, selector) {
   const target = page.locator(`${selector}:visible`).first();
   if (!(await target.count())) return null;
-  const before = await page.evaluate(() => {
+  const { before, control } = await target.evaluate((el) => {
     window.__speed.tap = 0;
-    return location.pathname;
+    const cls = [...el.classList]
+      .map((name) => name.replace(/-module__[A-Za-z0-9_-]{5,8}__/, "__"))
+      .find((name) => name.includes("__"));
+    return {
+      before: location.pathname,
+      control: `${el.tagName.toLowerCase()}${cls ? `.${cls}` : ""}`,
+    };
   });
   await target.click({ timeout: 10000 });
   const from = await page.evaluate(() => window.__speed.tap);
-  if (!from) return { ms: 0, result: "no_change" };
-  const done = await settle(page, from, 150, 10000);
+  if (!from) return { ms: 0, result: "no_change", control };
+  const done = await settle(page, from, 150, 10000, 3000);
   if ((await page.evaluate(() => location.pathname)) !== before)
-    return { result: "left" };
-  if (!done.moved) return { ms: 0, result: "no_change" };
-  return { ms: Math.round(done.at - from), result: done.result };
+    return { result: "left", control };
+  if (!done.moved) return { ms: 0, result: "no_change", control };
+  return { ms: Math.round(done.at - from), result: done.result, control };
 }
 
 async function main() {
@@ -175,8 +211,8 @@ async function main() {
   let browser;
   try {
     browser = await chromium.launch();
-    // Warm the server's render of each screen once, untimed.
-    for (const [, screen] of screens) {
+    // Warm the server's render of each screen twice, untimed (the first baseline's 1x runs came out slower than 4x).
+    for (const [, screen] of [...screens, ...screens]) {
       const warm = await open(browser, 1);
       await warm.page
         .goto(origin + screen.path, { waitUntil: "load", timeout: 90000 })
@@ -197,7 +233,10 @@ async function main() {
             });
             // Each tap on a page just loaded, so one tap's change never slows the next.
             let fresh = true;
-            for (const [action, selector] of Object.entries(ACTIONS)) {
+            for (const [action, selector] of Object.entries({
+              ...ACTIONS,
+              ...(screen.actions ?? {}),
+            })) {
               if (!fresh) {
                 await session.context.close();
                 session = await open(browser, rate);
@@ -205,7 +244,9 @@ async function main() {
               }
               const timed = await tap(session.page, selector);
               fresh = !timed || timed.result === "no_change";
-              if (!timed || timed.result === "left") continue;
+              if (!timed) continue;
+              // A tap that left the page is kept (as "left", no time): on a ready page it is a link doing a
+              // full load instead of opening in place.
               measures.push({ screen: key, action, rate, run, ...timed });
             }
           } catch (error) {

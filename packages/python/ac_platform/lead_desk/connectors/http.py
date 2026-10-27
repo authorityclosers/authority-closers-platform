@@ -447,7 +447,13 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         try:
             async with ctx.sessions() as database, database.begin():
                 lead_id, outcome = await Intake.capture(
-                    database, source_id, token, record, app_url=app_url()
+                    database,
+                    source_id,
+                    token,
+                    record,
+                    app_url=app_url(),
+                    # Google's "Send test data" (owner, 27 Oct 2026): kept apart as test data.
+                    test_data=payload.get("is_test") is True,
                 )
         except DeskError as error:
             raise HTTPException(error.status, str(error), headers=NO_STORE) from None

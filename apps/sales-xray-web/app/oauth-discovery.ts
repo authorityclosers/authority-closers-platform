@@ -17,6 +17,7 @@ export const SCOPES = [
   "leads:write",
   "leads:notes",
   "leads:tasks",
+  "leads:update",
   "webhooks:manage",
 ] as const;
 

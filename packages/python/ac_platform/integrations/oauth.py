@@ -268,7 +268,7 @@ def check_request(
     if code_challenge_method != "S256" or not CHALLENGE_PATTERN.fullmatch(code_challenge):
         raise IntegrationError("pkce")
     try:
-        chosen = scope_rules.validate(scope.split())
+        chosen = scope_rules.validate(scope.split(), app=True)
     except scope_rules.ScopeError:
         raise IntegrationError("invalid_scope") from None
     return client, chosen
