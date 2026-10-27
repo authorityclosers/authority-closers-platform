@@ -131,7 +131,7 @@ test("rejects providers, API writes/reads and off-origin requests", () => {
 
 test("capture tabs cover the current fictional shell panels", async () => {
   const fixture = await readFile(
-    "apps/sales-xray-web/app/review-fixture/shell/full-shell-preview.tsx",
+    "apps/sales-xray-web/app/analysis/sample/sample-report-view.tsx",
     "utf8",
   );
   const panelLabels = [...fixture.matchAll(/id: "[\w-]+",\s+label: "([^"]+)"/g)]
