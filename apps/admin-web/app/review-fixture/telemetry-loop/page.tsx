@@ -20,6 +20,7 @@ import { compareFixture, devicesFixture, fixNextFixture } from "./loop-fixture";
 const BASE = "/review-fixture/telemetry-loop";
 const HREFS = {
   overview: "/review-fixture/telemetry",
+  speed: "/review-fixture/telemetry-speed",
   devices: BASE,
   releases: `${BASE}?view=releases`,
   fix: `${BASE}?view=fix`,

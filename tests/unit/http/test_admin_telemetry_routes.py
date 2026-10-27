@@ -239,3 +239,18 @@ def test_the_friction_report_reads_one_india_week_as_json_or_markdown(
     assert client.get("/v1/admin/telemetry/friction?week=2020-01-06").status_code == 422
     assert client.get("/v1/admin/telemetry/friction?format=pdf").status_code == 422
     assert setup["outside"].get("/v1/admin/telemetry/friction").status_code == 403
+
+
+def test_speed_and_journeys_reads_the_window_for_control_accounts(setup: dict[str, Any]) -> None:
+    client = setup["client"]
+    response = client.get("/v1/admin/telemetry/speed?window=24h&app=web")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "private, no-store"
+    body = response.json()
+    assert body["schema"] == "ac.sales-xray.speed-journeys/1"
+    assert body["window"] == "24h"
+    assert body["min_p95"] == 20
+    assert {"frames", "apis", "load", "taps", "journey"} <= set(body)
+    assert client.get("/v1/admin/telemetry/speed?window=1y").status_code == 422
+    assert client.get("/v1/admin/telemetry/speed?app=ios").status_code == 422
+    assert setup["outside"].get("/v1/admin/telemetry/speed").status_code == 403

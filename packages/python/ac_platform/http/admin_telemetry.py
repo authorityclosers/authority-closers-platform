@@ -5,6 +5,11 @@ GET /v1/admin/telemetry/overview?window=24h|7d|30d[&release=&device=&app=&tier=]
     This environment's speed per action (slow-device share), Web Vitals, app start,
     screens and flows, funnels, feature adoption, errors, slow APIs, rage and dead taps,
     per release and device class (telemetry/admin_view.py).
+GET /v1/admin/telemetry/speed?window=24h|7d|30d[&app=web|android]
+    Speed and journeys (owner, 27 Oct 2026: the app on the slowest phones): Android frames,
+    slow APIs per 100 screen views and per endpoint, load and the CPU test by tier and phone
+    model, taps by tier, and the journey from Leads, each with its sample count
+    (telemetry/speed_view.py).
 GET /v1/admin/telemetry/daily[?day=YYYY-MM-DD]
     One India day's export for the cost optimiser: each analysed call's cost joined to how
     its report was used, and per-workspace tallies (telemetry/daily_export.py).
@@ -48,7 +53,7 @@ from ac_platform.conversation_intelligence.cost_metrics import india_day, read_s
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.http.auth import AuthenticatedTransaction, require_admin_surface
 from ac_platform.http.routes import RouteContext
-from ac_platform.telemetry import admin_view, daily_export, friction, improvement
+from ac_platform.telemetry import admin_view, daily_export, friction, improvement, speed_view
 from ac_platform.usage_people.pseudonyms import ensure_key
 
 PRIVATE = {"Cache-Control": "private, no-store"}
@@ -109,6 +114,21 @@ def install_admin_telemetry_http(application: FastAPI, ctx: RouteContext) -> Non
     ) -> admin_view.Read:
         return await auth.database.run_sync(
             lambda connection: admin_view.read_rows(connection, since=since, until=now, now=now)
+        )
+
+    @router.get("/speed")
+    async def speed(
+        request: Request,
+        response: Response,
+        window: Literal["24h", "7d", "30d"] = "7d",
+        app: Literal["web", "android"] | None = None,
+        auth: AuthenticatedTransaction = dependency,
+    ) -> dict[str, Any]:
+        await admit(request, response, auth)
+        now = datetime.now(UTC)
+        rows = await read_window(auth, now - admin_view.WINDOWS[window], now)
+        return speed_view.speed(
+            rows, now=now, window=window, app=app, environment=settings.environment
         )
 
     def release_name(value: str | None, field: str) -> str | None:
