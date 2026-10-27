@@ -183,6 +183,21 @@ environment has its own OAuth client; never copy a production value into
 staging or dev. A Google Ads lead form posts to
 `/v1/lead-desk/capture/{source}/google-ads` with the key Sales Xray wrote into it.
 
+## Sales Xray Google Sheets and Drive (optional)
+
+Settings → Connected apps → Google uses the same OAuth client as Google Ads, with the
+`drive.file` scope only (the files a person picks and the ones Sales X-Ray makes; see
+`docs/product/lead-desk/google-sheets-drive.md`). Connecting works once the Google Ads
+client ID and secret exist. Import from a Google Sheet also needs Google's file picker,
+which reads these two from the same Infisical `/application` path. Compose forwards them
+to the API only, and the API hands them to the owner's or admin's browser for the
+picker, so neither is secret in the usual sense; keep them per environment anyway.
+
+| Setting                    | Constraint                                                                                                      |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `AC_GOOGLE_PICKER_API_KEY` | a browser API key in GCP project ac-sales-xray-ads, restricted to the Sales Xray web address and the Picker API |
+| `AC_GOOGLE_PROJECT_NUMBER` | that project's number (digits), Google's "app ID" for the picker                                                |
+
 ## Sales Xray CRM WhatsApp (optional)
 
 The API reads these from the same Infisical `/application` path for each

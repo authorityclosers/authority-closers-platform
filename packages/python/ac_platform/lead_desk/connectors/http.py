@@ -26,7 +26,7 @@ import logging
 import secrets
 import time
 from collections.abc import AsyncIterator, Callable
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
 from dataclasses import asdict
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
@@ -51,6 +51,7 @@ from ac_platform.lead_desk import duplicate_intake
 from ac_platform.lead_desk.connectors import (
     app_return,
     google_ads,
+    google_files,
     google_pull,
     meta,
     meta_backfill,
@@ -60,10 +61,11 @@ from ac_platform.lead_desk.connectors import (
 )
 from ac_platform.lead_desk.connectors import google_ads_api as gads
 from ac_platform.lead_desk.connectors.app_return import AppComplete, AppCompleted
+from ac_platform.lead_desk.contracts import ImportPreview
 from ac_platform.lead_desk.intake import Intake, token_hash
 from ac_platform.lead_desk.models import LeadDeskSettings, LeadSource
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
-from ac_platform.tenancy.models import Membership, Organisation
+from ac_platform.tenancy.models import Membership, Organisation, Tenant
 
 log = logging.getLogger(__name__)
 NO_STORE = {"Cache-Control": "no-store"}
@@ -323,7 +325,7 @@ class PullResult(BaseModel):
 
 # The Settings → Connected apps cards each connect can come back to (see app_return).
 META_CARDS: tuple[str, ...] = ("meta_leads",)
-GOOGLE_CARDS: tuple[str, ...] = ("google_ads",)
+GOOGLE_CARDS: tuple[str, ...] = ("google_ads", google_files.CARD)
 
 
 def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
@@ -1272,7 +1274,10 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             gads.read_state(
                 cfg, state, tenant_id=desk.viewer.tenant_id, person_id=desk.viewer.person_id
             )
-            found = await finish_google(desk, cfg, code)
+            if card == google_files.CARD:
+                found = await finish_files(desk, cfg, code)
+            else:
+                found = await finish_google(desk, cfg, code)
         return done(found)
 
     @router.post("/google/app-complete", response_model=AppCompleted)
@@ -1291,7 +1296,205 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
             except gads.GoogleAdsApiError as error:
                 raise DeskError(403, str(error)) from None
             check_verifier(body, command.verifier)
+            if app_return.card_of(body, GOOGLE_CARDS) == google_files.CARD:
+                return AppCompleted(result=await finish_files(desk, cfg, code))
             return AppCompleted(result=await finish_google(desk, cfg, code))
+
+    # ----- Google Sheets and Drive (slice 1: connectors/google_files.py) -----------------
+
+    async def finish_files(desk: LeadDesk, cfg: gads.GoogleAdsConfig, code: str) -> str:
+        """Swap Google's code and keep it as the organisation's Google connection."""
+        try:
+            granted = await google_files.Files(cfg).exchange(
+                code=code, redirect_uri=google_callback_url()
+            )
+        except google_files.GoogleFilesError as error:
+            log.warning("google files connect failed: %s", error)
+            return "failed"
+        await google_files.keep(
+            desk.db,
+            cfg,
+            tenant_id=desk.viewer.tenant_id,
+            person_id=desk.viewer.person_id,
+            granted=granted,
+            now=desk.now,
+        )
+        return "connected"
+
+    async def files_status(desk: LeadDesk) -> google_files.FilesStatus:
+        connection = await google_files.live(desk.db, desk.viewer.tenant_id)
+        who = connection.connected_by_person_id if connection is not None else None
+        names = await desk._names([who]) if who is not None else {}
+        return google_files.status(gads.config(), connection, names.get(who) if who else None)
+
+    async def files_access(desk: LeadDesk) -> tuple[gads.GoogleAdsConfig, Any, str]:
+        """The connection and its token, read for a call to Google made after this block."""
+        cfg = google_config()
+        desk._require_manager()
+        connection = await google_files.live(desk.db, desk.viewer.tenant_id)
+        if connection is None:
+            raise DeskError(409, "Connect Google first: Settings, Connected apps, Google.")
+        try:
+            refresh = google_files.unseal(cfg, desk.viewer.tenant_id, connection.token)
+        except google_files.GoogleFilesError as error:
+            raise DeskError(409, str(error)) from None
+        return cfg, connection, refresh
+
+    @router.get(
+        "/google/files", response_model=google_files.FilesStatus, response_model_by_alias=True
+    )
+    async def google_files_status(request: Request, response: Response) -> google_files.FilesStatus:
+        """Settings, Connected apps, Google: Sheets and Drive (owners and admins)."""
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            return await files_status(desk)
+
+    @router.get("/google/files/connect", response_model=None)
+    async def google_files_connect(
+        request: Request,
+        response: Response,
+        app_challenge_value: str | None = Query(default=None, alias="app_challenge"),
+        reply: str | None = Query(default=None, alias="format"),
+    ) -> Response:
+        """Continue with Google for Sheets and Drive: the files you choose, nothing else."""
+        cfg = google_config()
+        challenge = app_challenge(app_challenge_value)
+        async with desk_for(request, response) as desk:
+            desk._require_manager()
+            state = gads.make_state(
+                cfg,
+                tenant_id=desk.viewer.tenant_id,
+                person_id=desk.viewer.person_id,
+                app_challenge=challenge,
+                card=google_files.CARD,
+            )
+        return started(
+            google_files.consent_url(cfg, redirect_uri=google_callback_url(), state=state), reply
+        )
+
+    @router.post(
+        "/google/files/disconnect",
+        response_model=google_files.FilesStatus,
+        response_model_by_alias=True,
+    )
+    async def google_files_disconnect(
+        request: Request, response: Response
+    ) -> google_files.FilesStatus:
+        """Stop every use of the Google connection, and ask Google to forget the grant."""
+        token: str | None = None
+        cfg = gads.config()
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            connection = await google_files.live(desk.db, desk.viewer.tenant_id, lock=True)
+            if connection is not None:
+                if cfg is not None:
+                    with suppress(google_files.GoogleFilesError):
+                        token = google_files.unseal(cfg, desk.viewer.tenant_id, connection.token)
+                connection.revoked_at = desk.now
+                connection.updated_at = desk.now
+                await desk.db.flush()
+            status = await files_status(desk)
+        if token is not None and cfg is not None:
+            await google_files.Files(cfg).revoke(token)
+        return status
+
+    @router.get("/google/picker", response_model=google_files.PickerView)
+    async def google_picker(request: Request, response: Response) -> google_files.PickerView:
+        """What Google's file picker needs in this browser (owners and admins)."""
+        async with desk_for(request, response) as desk:
+            cfg, _, refresh = await files_access(desk)
+        ids = google_files.picker(cfg)
+        if ids is None:
+            raise HTTPException(409, "Google's file picker isn't set up yet.", headers=PRIVATE)
+        try:
+            access = await google_files.Files(cfg).access_token(refresh)
+        except google_files.GoogleFilesError as error:
+            raise HTTPException(409, str(error), headers=PRIVATE) from None
+        return google_files.PickerView(
+            client_id=ids.client_id, api_key=ids.api_key, app_id=ids.app_id, access_token=access
+        )
+
+    @router.post("/imports/google-sheet", response_model=ImportPreview)
+    async def import_google_sheet(
+        command: google_files.SheetImport, request: Request, response: Response
+    ) -> ImportPreview:
+        """A Sheet picked in Google's file picker, read into the import preview. The import
+        then commits as a file's does (POST /imports)."""
+        async with desk_for(request, response) as desk:
+            cfg, _, refresh = await files_access(desk)
+        try:
+            client = google_files.Files(cfg)
+            title, tab, rows = await client.sheet(
+                await client.access_token(refresh), command.spreadsheet_id, command.tab
+            )
+        except google_files.GoogleFilesError as error:
+            raise HTTPException(422, str(error), headers=PRIVATE) from None
+        if len(rows) < 2:
+            raise HTTPException(422, "That Sheet has no rows under its headings.", headers=PRIVATE)
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            name = f"{title} · {tab}.csv"[:200]
+            return await Intake(desk, app_url=app_url()).preview(name, google_files.as_csv(rows))
+
+    @router.post(
+        "/google/sheet-copy", response_model=google_files.FilesStatus, response_model_by_alias=True
+    )
+    async def google_sheet_copy(request: Request, response: Response) -> google_files.FilesStatus:
+        """Keep a copy in Google Sheets: a "Sales X-Ray" folder and Sheet in the connected
+        Google account; every new lead from now on is added as a row."""
+        async with desk_for(request, response) as desk:
+            cfg, connection, refresh = await files_access(desk)
+            folder = (connection.config or {}).get("folder_id")
+            workspace = await desk.db.scalar(
+                select(Tenant.name).where(Tenant.id == desk.viewer.tenant_id)
+            )
+        name = workspace or "leads"
+        try:
+            client = google_files.Files(cfg)
+            access = await client.access_token(refresh)
+            if not folder:
+                folder = await client.folder(access, f"Sales X-Ray · {name}"[:120])
+            sheet_id, url = await client.copy_sheet(
+                access, f"Sales X-Ray leads · {name}"[:120], folder
+            )
+        except google_files.GoogleFilesError as error:
+            raise HTTPException(422, str(error), headers=PRIVATE) from None
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            current = await google_files.live(desk.db, desk.viewer.tenant_id, lock=True)
+            if current is None:
+                raise DeskError(409, "Connect Google first: Settings, Connected apps, Google.")
+            current.config = {
+                **(current.config or {}),
+                "folder_id": folder,
+                "copy": {
+                    "on": True,
+                    "sheet_id": sheet_id,
+                    "url": url,
+                    "started_at": desk.now.isoformat(),
+                    "sent": 0,
+                    "problem": None,
+                },
+            }
+            current.updated_at = desk.now
+            await desk.db.flush()
+            return await files_status(desk)
+
+    @router.delete(
+        "/google/sheet-copy", response_model=google_files.FilesStatus, response_model_by_alias=True
+    )
+    async def google_sheet_copy_off(
+        request: Request, response: Response
+    ) -> google_files.FilesStatus:
+        """Stop adding rows. The Sheet is the organisation's, and stays."""
+        async with desk_for(request, response, write=True) as desk:
+            desk._require_manager()
+            current = await google_files.live(desk.db, desk.viewer.tenant_id, lock=True)
+            if current is not None and isinstance((current.config or {}).get("copy"), dict):
+                current.config = {**current.config, "copy": {**current.config["copy"], "on": False}}
+                current.updated_at = desk.now
+                await desk.db.flush()
+            return await files_status(desk)
 
     async def finish_google(desk: LeadDesk, cfg: gads.GoogleAdsConfig, code: str) -> str:
         """Swap Google's code and keep each Ads account it can see (off until turned on)."""

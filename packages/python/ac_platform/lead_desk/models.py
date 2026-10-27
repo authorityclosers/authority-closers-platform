@@ -1357,3 +1357,60 @@ class LeadConversionAttempt(Base):
     error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     trace_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     duration_ms: Mapped[int] = mapped_column(Integer)
+
+
+class GoogleConnection(Base):
+    """An organisation's Google sign-in for Sheets and Drive (migration 20261027_0141).
+
+    ``drive.file`` only: Sales X-Ray sees the files a person picks and the ones it makes,
+    never the rest of their Drive. The refresh token is sealed (``google_files.seal``).
+    ``config`` keeps what it made: the "Sales X-Ray" folder and the copy Sheet.
+    At most one live connection per organisation; a disconnected one keeps ``revoked_at``.
+    """
+
+    __tablename__ = "lead_desk_google_connections"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], name="fk_lead_desk_google_connection_tenant"
+        ),
+        ForeignKeyConstraint(
+            ["connected_by_person_id"],
+            ["persons.id"],
+            name="fk_lead_desk_google_connection_person",
+        ),
+        Index(
+            "uq_lead_desk_google_connection_live",
+            "tenant_id",
+            unique=True,
+            postgresql_where=text("revoked_at IS NULL"),
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    connected_by_person_id: Mapped[UUID] = mapped_column(Uuid)
+    google_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    scopes: Mapped[list[str]] = mapped_column(JSON)
+    token: Mapped[dict[str, Any]] = mapped_column(JSON)
+    config: Mapped[dict[str, Any]] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SheetRow(Base):
+    """A lead the copy Sheet has been sent: each lead goes to a Sheet once."""
+
+    __tablename__ = "lead_desk_sheet_rows"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_sheet_row_tenant"),
+        UniqueConstraint(
+            "tenant_id", "spreadsheet_id", "lead_id", name="uq_lead_desk_sheet_row_lead"
+        ),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    spreadsheet_id: Mapped[str] = mapped_column(String(128))
+    lead_id: Mapped[UUID] = mapped_column(Uuid)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

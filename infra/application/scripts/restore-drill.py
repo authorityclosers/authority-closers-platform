@@ -829,7 +829,19 @@ PULSE_LINK_PARITY_TABLES = RECEIVED_PARITY_TABLES + (
     "pulse_org_members",
     "app_call_uploads",
 )
+# 0141 adds an organisation's Google connection for Sheets and Drive, and the rows its
+# Sheet copy has written (two tables).
+GOOGLE_CONNECTIONS_PARITY_MIGRATION_HEAD = "20261027_0141"
+GOOGLE_CONNECTIONS_PARITY_CONTRACT = "ac-postgres-parity-v108"
+GOOGLE_CONNECTIONS_PARITY_TABLES = PULSE_LINK_PARITY_TABLES + (
+    "lead_desk_google_connections",
+    "lead_desk_sheet_rows",
+)
 VERSIONED_PARITY_CONTRACTS = {
+    GOOGLE_CONNECTIONS_PARITY_MIGRATION_HEAD: (
+        GOOGLE_CONNECTIONS_PARITY_CONTRACT,
+        GOOGLE_CONNECTIONS_PARITY_TABLES,
+    ),
     PULSE_LINK_PARITY_MIGRATION_HEAD: (
         PULSE_LINK_PARITY_CONTRACT,
         PULSE_LINK_PARITY_TABLES,

@@ -196,6 +196,9 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "pulse_org_links",
         "pulse_org_members",
         "app_call_uploads",
+        # Google Sheets and Drive (migration 0141).
+        "lead_desk_google_connections",
+        "lead_desk_sheet_rows",
         "person_photos",
         "person_profile_details",
         "ai_spend_settings",

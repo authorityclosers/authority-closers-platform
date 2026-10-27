@@ -54,6 +54,7 @@ from sqlalchemy import and_, delete, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.lead_desk import digest_push, hours, nudge_push, reassign, sheet_sync, task_push
+from ac_platform.lead_desk.connectors import google_ads_api, google_files
 from ac_platform.lead_desk.contracts import PushConfig
 from ac_platform.lead_desk.meetings import REMIND_BEFORE
 from ac_platform.lead_desk.models import Lead, LeadDevice, LeadMeeting
@@ -447,6 +448,12 @@ async def run_push_sender(
                 await asyncio.wait_for(stop.wait(), timeout=every)
 
 
+def _app_url() -> str:
+    from ac_platform.application.settings import get_settings
+
+    return str(get_settings().sales_xray_app_url or "").rstrip("/")
+
+
 async def run_hours_release(
     sessions: async_sessionmaker[AsyncSession],
     stop: asyncio.Event,
@@ -481,6 +488,15 @@ async def run_hours_release(
                 log.info("lead desk filed %d new rows from Google Sheets", filed)
         except Exception:  # noqa: BLE001 - the loop must survive a bad pass
             log.warning("lead desk sheet sync failed")
+        # The organisation's copy in Google Sheets gets its new leads (27 Oct 2026).
+        try:
+            sent = await google_files.send_copies(
+                sessions, google_ads_api.config(), datetime.now(UTC), app_url=_app_url()
+            )
+            if sent:
+                log.info("lead desk added %d leads to Google Sheets copies", sent)
+        except Exception:  # noqa: BLE001 - the loop must survive a bad pass
+            log.warning("lead desk Google Sheets copy failed")
         with suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=_HOURS_TICK)
 
