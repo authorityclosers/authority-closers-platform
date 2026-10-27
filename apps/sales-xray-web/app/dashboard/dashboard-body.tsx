@@ -353,45 +353,52 @@ export function DashboardBody({
             </>
           )}
 
-          <section
-            className={styles.section}
-            aria-labelledby="panel-recent-calls"
-          >
-            <div className={styles.sectionHead}>
-              <h2 id="panel-recent-calls">
-                {sales ? "Calls analysed" : "Recent calls"}
-              </h2>
-              {recent && recent.length > 0 ? (
-                <Link className={styles.textLink} href="/analysis/calls">
-                  View all calls
-                  {hiddenRecent > 0 ? ` (+${hiddenRecent})` : ""}
-                </Link>
-              ) : null}
-            </div>
-            <div className={styles.surface} data-flush="">
-              {/* Rows carry dates and names in the browser's own language
+          {/* Under the sales Home, an empty "Calls analysed" panel is noise:
+              a new workspace has the sample report, a seller Recent calls
+              (orchestrator for the owner, 27 Oct 2026). */}
+          {sales &&
+          recentState.status === "ready" &&
+          (recent === null || recent.length === 0) ? null : (
+            <section
+              className={styles.section}
+              aria-labelledby="panel-recent-calls"
+            >
+              <div className={styles.sectionHead}>
+                <h2 id="panel-recent-calls">
+                  {sales ? "Calls analysed" : "Recent calls"}
+                </h2>
+                {recent && recent.length > 0 ? (
+                  <Link className={styles.textLink} href="/analysis/calls">
+                    View all calls
+                    {hiddenRecent > 0 ? ` (+${hiddenRecent})` : ""}
+                  </Link>
+                ) : null}
+              </div>
+              <div className={styles.surface} data-flush="">
+                {/* Rows carry dates and names in the browser's own language
                   and time zone, so a page rendered on the server (dev) draws
                   them once the app starts, in the rows' own boxes. */}
-              {recentState.status === "loading" || !hydrated ? (
-                <RecentCallsSkeleton />
-              ) : recentState.status === "error" ? (
-                <NotLoaded />
-              ) : recent === null || recent.length === 0 ? (
-                <Quiet
-                  text="No calls yet."
-                  action={{ href: "/analysis/new", label: "Analyse a call" }}
-                />
-              ) : (
-                <SectionBoundary name="Recent calls">
-                  <RecentCallsList
-                    calls={recent}
-                    viewerId={viewerId}
-                    onHiddenChange={onHiddenChange}
+                {recentState.status === "loading" || !hydrated ? (
+                  <RecentCallsSkeleton />
+                ) : recentState.status === "error" ? (
+                  <NotLoaded />
+                ) : recent === null || recent.length === 0 ? (
+                  <Quiet
+                    text="No calls yet."
+                    action={{ href: "/analysis/new", label: "Analyse a call" }}
                   />
-                </SectionBoundary>
-              )}
-            </div>
-          </section>
+                ) : (
+                  <SectionBoundary name="Recent calls">
+                    <RecentCallsList
+                      calls={recent}
+                      viewerId={viewerId}
+                      onHiddenChange={onHiddenChange}
+                    />
+                  </SectionBoundary>
+                )}
+              </div>
+            </section>
+          )}
         </>
       )}
     </>

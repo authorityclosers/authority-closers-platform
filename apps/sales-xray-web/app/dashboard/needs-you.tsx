@@ -48,19 +48,24 @@ export function NeedsYou({
 
   const waiting = sla?.settings.on ? (sla.late ?? []) : [];
   const unassigned = desk?.counts.unassigned ?? 0;
+  // A Viewer reads what is waiting and changes nothing (Roles B, 27 Oct 2026): no
+  // way into the lead rules, and words that ask nothing of them.
+  const manages = desk?.me.can_manage === true;
   const loading = !desk || late === undefined;
   const nothing = !loading && !waiting.length && !unassigned && !late;
 
   return (
     <section className={styles.block} aria-labelledby="needs-title">
       <div className={styles.head}>
-        <h2 id="needs-title">Needs you</h2>
+        <h2 id="needs-title">{manages ? "Needs you" : "Needs attention"}</h2>
       </div>
       {loading ? (
         <NeedsSkeleton />
       ) : nothing ? (
         <p className={styles.quiet} role="status">
-          Nothing needs you right now.
+          {manages
+            ? "Nothing needs you right now."
+            : "Nothing is waiting right now."}
         </p>
       ) : (
         <ActionList label="Needs you">
@@ -71,7 +76,9 @@ export function NeedsYou({
               title="Waiting for a first response"
               note={`Right now, longer than ${waited(sla?.settings.minutes ?? 0)} (your target)`}
               end={<Badge tone="bad">{waiting.length}</Badge>}
-              href="/settings/lead-rules"
+              href={
+                manages ? "/settings/lead-rules" : "/leads?tab=all&stage=open"
+              }
             />
           ) : null}
           {waiting.slice(0, SHOWN).map((lead) => (
@@ -97,7 +104,11 @@ export function NeedsYou({
               icon={<UserX size={20} />}
               tone="warn"
               title="New leads with no owner"
-              note="Give them to a seller, or let the lead rules decide"
+              note={
+                manages
+                  ? "Give them to a seller, or let the lead rules decide"
+                  : "Waiting for a seller or the lead rules"
+              }
               end={<Badge tone="warn">{unassigned}</Badge>}
               href="/leads?tab=all&stage=open&who=unassigned"
             />

@@ -128,6 +128,7 @@ async function detail(response: Response): Promise<string | undefined> {
 /** Starts a Connect in the phone's browser. Null once the browser is open. */
 export async function startConnect(
   provider: ConnectProvider,
+  start: string = STARTS[provider],
 ): Promise<ConnectOutcome | null> {
   const app = await phoneStatus();
   if (!app?.connect) return { result: "update_app", message: UPDATE_APP };
@@ -135,7 +136,7 @@ export async function startConnect(
     const verifier = newVerifier();
     const challenge = await challengeOf(verifier);
     const response = await fetch(
-      `${STARTS[provider]}?app_challenge=${challenge}&format=json`,
+      `${start}?app_challenge=${challenge}&format=json`,
       {
         credentials: "same-origin",
         cache: "no-store",
@@ -202,11 +203,13 @@ export async function finishConnect(
 /**
  * For a Connect link: finishes a Connect the app brought back here, and inside
  * the app turns the link's click into the phone's-browser Connect. ``done``
- * hears each outcome.
+ * hears each outcome. ``start`` is the sign-in address when it isn't the
+ * provider's own (Google Sheets and Drive shares Google's hand-off).
  */
 export function useAppConnect(
   provider: ConnectProvider,
   done: (outcome: ConnectOutcome) => void,
+  start?: string,
 ): (event: { preventDefault: () => void }) => void {
   const latest = useRef(done);
   useEffect(() => {
@@ -221,10 +224,10 @@ export function useAppConnect(
     (event) => {
       if (!inPhoneApp()) return;
       event.preventDefault();
-      void startConnect(provider).then(
+      void startConnect(provider, start).then(
         (outcome) => outcome && latest.current(outcome),
       );
     },
-    [provider],
+    [provider, start],
   );
 }

@@ -1,7 +1,7 @@
 /* The organisation's hub (org-hub.tsx): one header, one row of tabs, then
    the tab. Computers: an underlined tab row that wraps if it must. Phones: the
-   row scrolls sideways with a fade at its end, and Overview's list is the way
-   in. Only --sx-* and --lx-* tokens. */
+   row scrolls sideways, fading at an edge while more tabs sit past it, and
+   Overview's list is the way in. Only --sx-* and --lx-* tokens. */
 
 .hub {
   display: grid;
@@ -59,6 +59,7 @@
 
 /* The tab row. */
 .tabs {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
@@ -125,8 +126,8 @@
   }
 }
 
-/* Phones: the tab row scrolls sideways and fades at its end; tabs keep a
-   44 px target. */
+/* Phones: the tab row scrolls sideways, fading at an edge with more past it
+   (ui/side-scroll); tabs keep a 44 px target. */
 @media (max-width: 899.98px) {
   /* One gutter: the app's own 16 px (owner, 26 Oct 2026). */
   .hub {
@@ -140,7 +141,6 @@
     margin-inline: -16px;
     padding-inline: 16px;
     scrollbar-width: none;
-    mask-image: linear-gradient(90deg, black calc(100% - 28px), transparent);
   }
 
   .tabs::-webkit-scrollbar {

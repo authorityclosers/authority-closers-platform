@@ -384,7 +384,8 @@ def test_runtime_containers_are_not_privileged_or_host_published() -> None:
     assert '"--no-access-log"' in PYTHON_DOCKERFILE
     assert "container_name:" not in COMPOSE
     assert "build:" not in COMPOSE
-    assert COMPOSE.count("pull_policy: never") == 6
+    # The six application services plus the release intake spool (lead_desk/spool.py).
+    assert COMPOSE.count("pull_policy: never") == 7
 
 
 def test_filesystem_media_companion_uses_reviewed_environment_roots() -> None:

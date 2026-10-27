@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { HUB_TABS, hubHref } from "../organisation/hub-tabs";
+import { SETUP_TABS } from "../organisation/setup-tabs";
 
 /**
  * The sidebar's areas and their pages (owner, dev #8, 26 Oct 2026: the one
@@ -61,10 +62,16 @@ export const ALL_LEADS_HREF = "/leads?tab=all&stage=open";
  * included); the managers' sections only for those who may see the team.
  * Outside an organisation the hub is the organisation view: Overview only.
  */
-function hubPages(organisation: boolean, manager: boolean): SidebarPage[] {
+function hubPages(
+  organisation: boolean,
+  manager: boolean,
+  manages: boolean,
+): SidebarPage[] {
   return HUB_TABS.filter(
     (tab) =>
-      (organisation || tab.id === "overview") && (manager || !tab.managers),
+      (organisation || tab.id === "overview") &&
+      (manager || !tab.managers) &&
+      (manages || !SETUP_TABS.has(tab.id)),
   ).map((tab) =>
     tab.id === "overview"
       ? {
@@ -93,6 +100,7 @@ export function sidebarAreas({
   organisation,
   team,
   manager,
+  manages = manager,
 }: {
   /** An organisation is the selected workspace. */
   organisation: boolean;
@@ -100,6 +108,8 @@ export function sidebarAreas({
   team: boolean;
   /** May see the team (roles.ts "team.view"): the hub's managers' tabs. */
   manager: boolean;
+  /** May change how leads work (roles.ts "leads.manage"): the setup tabs. */
+  manages?: boolean;
 }): SidebarArea[] {
   const areas: SidebarArea[] = [
     {
@@ -160,7 +170,7 @@ export function sidebarAreas({
       label: "Team",
       href: "/organisation",
       icon: UsersRound,
-      pages: hubPages(organisation, manager),
+      pages: hubPages(organisation, manager, manages),
     });
   areas.push({
     key: "results",

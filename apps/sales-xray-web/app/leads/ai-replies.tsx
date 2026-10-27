@@ -13,11 +13,12 @@
  *   ready. Nothing shows while AI replies are paused.
  */
 
-import { Plus, Sparkles, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ChevronDown, Plus, Sparkles, Trash2 } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { notify } from "../notice-center";
-import { Button, Field } from "../ui/kit";
+import { BrandTile } from "../ui/brand-tile";
+import { Button, Field, Segmented } from "../ui/kit";
 import {
   AppCard,
   AppCardSkeleton,
@@ -42,6 +43,7 @@ import {
   type AiSettings,
 } from "./ai-replies-client";
 import { LeadsError } from "./leads-client";
+import aiStyles from "./ai-replies.module.css";
 import styles from "./leads.module.css";
 import { waCall } from "./whatsapp-client";
 
@@ -66,6 +68,55 @@ const CHANNEL_LABELS: Record<AiChannel, string> = {
 
 const TITLE = "AI replies";
 const LOGO = <AppLogo icon={Sparkles} />;
+
+// One line of what it does; the rest folds under "How it works" (owner bug
+// #46, 27 Oct 2026: "overflowing everything here … bad ux").
+const SUMMARY = "Answers your leads' messages from your business profile.";
+const HOW_IT_WORKS =
+  "It replies on WhatsApp, Messenger and Instagram, only about your business and only from what you write here, in the lead's own language. It hands the chat to a person on complaints, price talk, anything it can't answer from your profile, or when they ask for a person, and stops when they say STOP.";
+
+/** How much of the business profile the AI can answer from (of 4 parts). */
+function profileParts(settings: AiSettings): number {
+  return (
+    [settings.businessName, settings.about, settings.offerings].filter((part) =>
+      part.trim(),
+    ).length +
+    (settings.faqs.some((faq) => faq.question.trim() && faq.answer.trim())
+      ? 1
+      : 0)
+  );
+}
+
+/**
+ * The business profile, folded to one row that says how much is filled; it
+ * opens by itself while the profile is incomplete.
+ */
+function ProfileFold({
+  filled,
+  children,
+}: {
+  filled: number;
+  children: ReactNode;
+}) {
+  const [open] = useState(filled < 4);
+  return (
+    <details className={aiStyles.fold} open={open}>
+      <summary>
+        <span className={aiStyles.foldTitle}>
+          <strong>Your business profile</strong>
+          <small>
+            {filled} of 4 parts filled · the AI answers only from it
+          </small>
+          <span className={aiStyles.meter} aria-hidden="true">
+            <i style={{ width: `${(filled / 4) * 100}%` }} />
+          </span>
+        </span>
+        <ChevronDown size={18} aria-hidden="true" />
+      </summary>
+      <div className={aiStyles.foldBody}>{children}</div>
+    </details>
+  );
+}
 
 export function AiRepliesSettings() {
   const [base, setBase] = useState<AiSettings | null>(null);
@@ -146,34 +197,42 @@ export function AiRepliesSettings() {
           <StatusPill tone="warn">Add your business profile</StatusPill>
         )
       }
-      summary="Replies to leads on WhatsApp, Messenger and Instagram, only about your business and only from what you write here, in the lead's own language. It hands the chat to a person on complaints, price talk, anything it can't answer from your profile, or when they ask for a person, and stops when they say STOP."
+      summary={SUMMARY}
     >
+      {!form.available ? (
+        // Coming soon: the settings are kept, and used on the day it opens
+        // (owner bug #46: the controls looked live).
+        <p className={aiStyles.ready}>
+          Ready for launch: we&apos;ll use these settings when AI replies opens.
+        </p>
+      ) : null}
+      <details className={aiStyles.how}>
+        <summary>
+          How it works
+          <ChevronDown size={18} aria-hidden="true" />
+        </summary>
+        <p>{HOW_IT_WORKS}</p>
+      </details>
       <Group title="How it helps">
-        <div
-          className={cardStyles.options}
-          role="radiogroup"
-          aria-label="AI replies"
-        >
-          {MODES.map((mode) => (
-            <label key={mode.value} className={cardStyles.option}>
-              <input
-                type="radio"
-                name="ai-mode"
-                checked={form.mode === mode.value}
-                onChange={() => set({ mode: mode.value })}
-              />
-              <span>
-                <strong>{mode.label}</strong>
-                <small>{mode.hint}</small>
-              </span>
-            </label>
-          ))}
+        <div className={aiStyles.mode}>
+          <Segmented
+            label="How it helps"
+            value={form.mode}
+            items={MODES.map((mode) => ({
+              key: mode.value,
+              label: mode.label,
+            }))}
+            onChange={(mode) => set({ mode })}
+          />
         </div>
+        <p className={aiStyles.modeHint}>
+          {MODES.find((mode) => mode.value === form.mode)?.hint}
+        </p>
       </Group>
       <Group title="Where it answers">
-        <div className={cardStyles.chips} role="group" aria-label="Channels">
+        <div className={aiStyles.channels} role="group" aria-label="Channels">
           {(Object.keys(CHANNEL_LABELS) as AiChannel[]).map((channel) => (
-            <label key={channel} className={cardStyles.chip}>
+            <label key={channel} className={aiStyles.channel}>
               <input
                 type="checkbox"
                 checked={form.channels.includes(channel)}
@@ -185,139 +244,141 @@ export function AiRepliesSettings() {
                   })
                 }
               />
+              <BrandTile brands={[channel]} size={22} />
               {CHANNEL_LABELS[channel]}
             </label>
           ))}
         </div>
         <SwitchRow
-          label="Let the AI give prices exactly as written below"
-          hint="Never discounts. Off, it hands price questions to a person."
+          label="Give prices as written"
+          hint="Never discounts. Off: price questions go to a person."
           checked={form.quotePrices}
           onChange={(on) => set({ quotePrices: on })}
         />
       </Group>
-      <Group
-        title="Your business profile"
-        hint="The AI answers only from this. Plain sentences work best."
-      >
-        <label className={cardStyles.field}>
-          <span className={cardStyles.fieldLabel}>
-            <strong>Business name</strong>
-          </span>
-          <input
-            value={form.businessName}
-            maxLength={200}
-            onChange={(event) => set({ businessName: event.target.value })}
-          />
-        </label>
-        <label className={cardStyles.field}>
-          <span className={cardStyles.fieldLabel}>
-            <strong>What you do</strong>
-            <small>
-              Where you are, your hours, what a lead can do next (visit, call,
-              book).
-            </small>
-          </span>
-          <textarea
-            value={form.about}
-            maxLength={4000}
-            rows={3}
-            onChange={(event) => set({ about: event.target.value })}
-          />
-        </label>
-        <label className={cardStyles.field}>
-          <span className={cardStyles.fieldLabel}>
-            <strong>Products and services</strong>
-          </span>
-          <textarea
-            value={form.offerings}
-            maxLength={4000}
-            rows={3}
-            onChange={(event) => set({ offerings: event.target.value })}
-          />
-        </label>
-      </Group>
-      <Group title="Questions leads ask">
-        {form.faqs.map((faq, index) => (
-          <fieldset key={index} className={cardStyles.sub}>
-            <div className={cardStyles.subHead}>
-              <div className={cardStyles.subTitle}>
-                <strong>Question {index + 1}</strong>
+      <ProfileFold filled={profileParts(base)}>
+        <Group title="About your business" hint="Plain sentences work best.">
+          <label className={cardStyles.field}>
+            <span className={cardStyles.fieldLabel}>
+              <strong>Business name</strong>
+            </span>
+            <input
+              value={form.businessName}
+              maxLength={200}
+              onChange={(event) => set({ businessName: event.target.value })}
+            />
+          </label>
+          <label className={cardStyles.field}>
+            <span className={cardStyles.fieldLabel}>
+              <strong>What you do</strong>
+              <small>
+                Where you are, your hours, what a lead can do next (visit, call,
+                book).
+              </small>
+            </span>
+            <textarea
+              value={form.about}
+              maxLength={4000}
+              rows={3}
+              onChange={(event) => set({ about: event.target.value })}
+            />
+          </label>
+          <label className={cardStyles.field}>
+            <span className={cardStyles.fieldLabel}>
+              <strong>Products and services</strong>
+            </span>
+            <textarea
+              value={form.offerings}
+              maxLength={4000}
+              rows={3}
+              onChange={(event) => set({ offerings: event.target.value })}
+            />
+          </label>
+        </Group>
+        <Group title="Questions leads ask">
+          {form.faqs.map((faq, index) => (
+            <fieldset key={index} className={cardStyles.sub}>
+              <div className={cardStyles.subHead}>
+                <div className={cardStyles.subTitle}>
+                  <strong>Question {index + 1}</strong>
+                </div>
+                <button
+                  type="button"
+                  className={cardStyles.quiet}
+                  data-danger=""
+                  aria-label="Remove question"
+                  onClick={() =>
+                    set({ faqs: form.faqs.filter((_, i) => i !== index) })
+                  }
+                >
+                  <Trash2 size={14} aria-hidden="true" />
+                  Remove
+                </button>
               </div>
-              <button
-                type="button"
-                className={cardStyles.quiet}
-                data-danger=""
-                aria-label="Remove question"
-                onClick={() =>
-                  set({ faqs: form.faqs.filter((_, i) => i !== index) })
-                }
-              >
-                <Trash2 size={14} aria-hidden="true" />
-                Remove
-              </button>
-            </div>
-            <label className={cardStyles.field}>
-              <span className={cardStyles.fieldLabel}>
-                <strong>They ask</strong>
-              </span>
-              <input
-                value={faq.question}
-                maxLength={300}
-                onChange={(event) =>
-                  set({
-                    faqs: form.faqs.map((f, i) =>
-                      i === index ? { ...f, question: event.target.value } : f,
-                    ),
-                  })
-                }
-              />
-            </label>
-            <label className={cardStyles.field}>
-              <span className={cardStyles.fieldLabel}>
-                <strong>You answer</strong>
-              </span>
-              <textarea
-                value={faq.answer}
-                maxLength={1000}
-                rows={2}
-                onChange={(event) =>
-                  set({
-                    faqs: form.faqs.map((f, i) =>
-                      i === index ? { ...f, answer: event.target.value } : f,
-                    ),
-                  })
-                }
-              />
-            </label>
-          </fieldset>
-        ))}
-        <div>
-          <button
-            type="button"
-            className={cardStyles.secondary}
-            disabled={form.faqs.length >= 40}
-            onClick={() =>
-              set({ faqs: [...form.faqs, { question: "", answer: "" }] })
-            }
-          >
-            <Plus size={14} aria-hidden="true" />
-            Add a question
-          </button>
-        </div>
-      </Group>
-      <label className={cardStyles.field}>
-        <span className={cardStyles.fieldLabel}>
-          <strong>Anything else the AI should know</strong>
-          <small>Optional.</small>
-        </span>
-        <textarea
-          value={form.notes}
-          maxLength={4000}
-          rows={2}
-          onChange={(event) => set({ notes: event.target.value })}
-        />
-      </label>
+              <label className={cardStyles.field}>
+                <span className={cardStyles.fieldLabel}>
+                  <strong>They ask</strong>
+                </span>
+                <input
+                  value={faq.question}
+                  maxLength={300}
+                  onChange={(event) =>
+                    set({
+                      faqs: form.faqs.map((f, i) =>
+                        i === index
+                          ? { ...f, question: event.target.value }
+                          : f,
+                      ),
+                    })
+                  }
+                />
+              </label>
+              <label className={cardStyles.field}>
+                <span className={cardStyles.fieldLabel}>
+                  <strong>You answer</strong>
+                </span>
+                <textarea
+                  value={faq.answer}
+                  maxLength={1000}
+                  rows={2}
+                  onChange={(event) =>
+                    set({
+                      faqs: form.faqs.map((f, i) =>
+                        i === index ? { ...f, answer: event.target.value } : f,
+                      ),
+                    })
+                  }
+                />
+              </label>
+            </fieldset>
+          ))}
+          <div>
+            <button
+              type="button"
+              className={cardStyles.secondary}
+              disabled={form.faqs.length >= 40}
+              onClick={() =>
+                set({ faqs: [...form.faqs, { question: "", answer: "" }] })
+              }
+            >
+              <Plus size={14} aria-hidden="true" />
+              Add a question
+            </button>
+          </div>
+        </Group>
+        <label className={cardStyles.field}>
+          <span className={cardStyles.fieldLabel}>
+            <strong>Anything else the AI should know</strong>
+            <small>Optional.</small>
+          </span>
+          <textarea
+            value={form.notes}
+            maxLength={4000}
+            rows={2}
+            onChange={(event) => set({ notes: event.target.value })}
+          />
+        </label>
+      </ProfileFold>
       <SaveBar
         dirty={dirty}
         busy={busy}

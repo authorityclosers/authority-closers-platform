@@ -2,12 +2,13 @@
 
 /**
  * Notifications with fictional entries, for the visual matrix: a ready report
- * that needs you, paused analysis, an invite, what's new and two read lines.
- * `?empty=1`: nothing waiting. The bell opens the sheet; nothing leaves the
+ * that needs you, a new lead for you, paused analysis, an invite, what's new
+ * and two read lines. `?empty=1`: nothing waiting. `?open=1`: the sheet opens
+ * by itself, for screenshots. The bell opens the sheet; nothing leaves the
  * browser.
  */
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { UpdatesBell } from "../../shell/updates-bell";
@@ -26,6 +27,16 @@ function entries(now: number): UpdateNotification[] {
       href: "/review-fixture/notifications",
       urgent: true,
       created_at: at(0.2),
+      read: false,
+    },
+    {
+      id: "n6",
+      kind: "lead_assigned",
+      title: "Neha Fictional is your lead now",
+      body: "New from your website form. The lead rules gave her to you.",
+      href: "/review-fixture/notifications",
+      urgent: true,
+      created_at: at(0.4),
       read: false,
     },
     {
@@ -70,8 +81,24 @@ function entries(now: number): UpdateNotification[] {
 }
 
 function Preview() {
-  const empty = useSearchParams().get("empty") === "1";
+  const params = useSearchParams();
+  const empty = params.get("empty") === "1";
+  const open = params.get("open") === "1";
   const [list, setList] = useState(() => (empty ? [] : entries(Date.now())));
+  // `?open=1`: the bell is pressed once the page is up, so a shot shows the sheet.
+  useEffect(() => {
+    if (!open) return;
+    const timer = window.setTimeout(
+      () =>
+        document
+          .querySelector<HTMLButtonElement>(
+            'header button[aria-haspopup="dialog"]',
+          )
+          ?.click(),
+      300,
+    );
+    return () => window.clearTimeout(timer);
+  }, [open]);
   return (
     <main style={{ display: "grid", gap: 16, padding: 16 }}>
       <header style={{ display: "flex", justifyContent: "flex-end" }}>

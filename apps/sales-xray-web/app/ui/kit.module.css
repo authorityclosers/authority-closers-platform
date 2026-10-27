@@ -571,6 +571,7 @@ a.tile:active {
 }
 
 .segmented {
+  position: relative;
   display: inline-flex;
   gap: 2px;
   padding: 2px;
@@ -578,8 +579,42 @@ a.tile:active {
   background: var(--sx-fill);
 }
 
+/* The chosen segment's lift, as one pill that slides between segments (owner
+   bug #45, 27 Oct 2026); placed by Segmented before paint. */
+.segmentPill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: 0;
+  border-radius: calc(var(--sx-radius-sm) - 2px);
+  background: var(--sx-elevated);
+  box-shadow:
+    0 1px 3px color-mix(in oklab, var(--lx-film) 14%, transparent),
+    0 0 0 0.5px var(--sx-hairline);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented[data-pill] .segmentPill {
+  opacity: 1;
+}
+
+.segmented[data-slide] .segmentPill {
+  transition:
+    transform var(--sx-dur-base) var(--sx-spring),
+    width var(--sx-dur-base) var(--sx-spring);
+}
+
+/* With the pill in place, the chosen segment drops its own lift. */
+.segmented[data-pill] .segment[aria-pressed="true"] {
+  background: transparent;
+  box-shadow: none;
+}
+
 /* A full control height on its own (44 px on touch), inside the well. */
 .segment {
+  position: relative;
   min-height: var(--sx-control-h);
   padding: 0 10px;
   border: 0;
@@ -829,6 +864,11 @@ a.rowTitle:focus-visible::after {
   border-top: 1px solid var(--lx-line-soft);
 }
 
+/* A row's own action sits at its start, not across the row. */
+.card > :is(button, a) {
+  justify-self: start;
+}
+
 @media (max-width: 760px) {
   /* Phones: tiles two across (r17 S4). */
   .tiles {
@@ -932,6 +972,11 @@ a.rowTitle:focus-visible::after {
   .button:active:not(:disabled),
   .segment:active {
     transform: none;
+  }
+
+  /* The pill moves at once. */
+  .segmented[data-slide] .segmentPill {
+    transition: none;
   }
 }
 

@@ -62,6 +62,14 @@ event() { printf '%s\n' "$*" >> "$events"; }
 # digest, atomic moves and append-only receipt behavior run on actual files.
 chown() { event ownership; }
 install() { command install -d -m 0750 "${@: -1}"; }
+# The intake spool's root belongs to the container user (10001), which only root
+# can set; the installer's check of it reads that owner and mode.
+stat() {
+  if [[ "${*: -1}" == "$fixture/intake-spool/fictional" ]]; then
+    printf '10001:10001:700\n'; return 0
+  fi
+  command stat "$@"
+}
 sync() {
   if [[ "$failure" == receipt-sync && "${*: -1}" == */deployments/fictional ]]; then
     return 80
@@ -80,6 +88,8 @@ activate_edge_route() { event "route:$1"; }
 check_route() { :; }
 compose_for() {
   local release="${1##*/}"; shift
+  # The intake spool starts before the hold and holds no database.
+  if [[ "${*: -1}" == intake-spool ]]; then event "spool:$release"; return 0; fi
   if [[ "$1" == up ]]; then
     event "up:$release:${*: -1}"
     if [[ "$release" == new && "$failure" == startup* ]]; then
@@ -204,6 +214,7 @@ def test_post_write_failure_preserves_row_and_append_only_forward_recovery(tmp_p
     assert (tmp_path / "accepted-write").read_text() == "accepted fictional row"
     assert not any(e.startswith(("up:old:", "restore:", "reopen:")) for e in events)
     assert "route:hold" in events
+    assert events.index("spool:new") < events.index("route:hold")
     records = list((tmp_path / "deployments/fictional").glob("*-forward-recovery-required-*.env"))
     assert len(records) == 1
     assert "AC_RECOVERY_ACTION=REAPPLY_EXACT_RELEASE" in records[0].read_text()

@@ -1,0 +1,44 @@
+/* The production report scope (.studio-main) owns padding and scrolling;
+   the view adds none of its own so scroll geometry matches. */
+.page {
+  box-sizing: border-box;
+}
+
+/* What this is, and the one way to a report of your own (the sample), or the
+   fixture's review note. */
+.banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px 14px;
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border: 1px dashed var(--lx-hypothesis-edge);
+  border-radius: var(--lx-radius-sm);
+  color: var(--lx-muted);
+  font: var(--lx-text-meta);
+}
+
+.banner strong {
+  color: var(--lx-ink);
+}
+
+.banner a {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  color: var(--sx-accent);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.report {
+  min-width: 0;
+}
+
+.status {
+  margin: 18px 0 0;
+  color: var(--lx-muted);
+  font: var(--lx-text-meta);
+}

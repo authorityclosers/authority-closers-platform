@@ -13,7 +13,8 @@ for (on by default, any person or workspace can turn it off) is ``sales_xray_con
 - Every payload value is one of a fixed set, a short code token, a version or fingerprint
   label, a bounded number or a flag: no free text, no call content, no lead names or numbers,
   nothing personal. The device class, device tier, network, app and app version may ride on
-  any event.
+  any event. Since 27 Oct 2026 the tier is the CPU test's (sx.app_start cpu_ms) once a device
+  has run it, and a web event's app version is its build's commit (12 characters).
 - A call is named only by ``call_ref``: ``c_`` and 16 hex characters of HMAC(this
   environment's metrics key, ``call:`` and the recording id), filled in by the server after it
   finds the call in the caller's workspace. The cost export can make the same reference, so
@@ -149,6 +150,8 @@ PERMISSION_STATES = ("granted", "denied", "not_in_build")
 APP_PERMISSIONS = ("calls", "rec_files", "notifications", "mic", "all_files", "folder", "call_log")
 MAX_STAY_MS = 1_800_000
 MAX_LOAD_MS = 120_000
+# The CPU test takes about 1 ms on a laptop; a minute is far past any phone.
+MAX_CPU_MS = 60_000
 # The Report's parts as its components name them (xray-report/panels.tsx: Overview, the AI
 # coaching score or detailed analysis, Final Call Outcome, Prospect's Information) and the
 # call's other tabs. One skill of the coaching score is "analysis" with its ``skill``.
@@ -253,8 +256,10 @@ def _event(
 
 SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
     {
+        # Sent once the app has the new session (27 Oct 2026); providers as the sign-in offers them.
         "sx.sign_in": _event(
-            values={"method": ("password", "email_code", "google")}, required=("method",)
+            values={"method": ("password", "email_code", "google", "apple", "facebook", "pulse")},
+            required=("method",),
         ),
         "sx.sign_out": _event(),
         "sx.upload_started": _event(
@@ -362,14 +367,18 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
             numbers={"value": MAX_LOAD_MS},
             required=("metric", "value"),
         ),
-        # The app's start: from the page or app opening to the first screen working.
+        # The app's start: from the page or app opening to the first screen working. Since 27
+        # Oct 2026 also the CPU test run once the app is idle (cpu_ms: the best of five passes
+        # over the same JSON; the tier on every event is this test's once the device has run
+        # it) and, on Android, the phone's model ("redmi-note-8-pro"), never an identifier.
         "sx.app_start": _event(
             values={
                 "start": ("cold", "warm"),
                 "nav_type": ("navigate", "reload", "back_forward", "prerender"),
                 "screen": SCREENS,
             },
-            numbers={"ms": MAX_LOAD_MS},
+            numbers={"ms": MAX_LOAD_MS, "cpu_ms": MAX_CPU_MS},
+            labels=("model_label",),
             required=("start", "ms"),
         ),
         # A script error: its kind and class, and a fingerprint of where it was thrown (a
@@ -384,11 +393,13 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
             labels=("where",),
             required=("kind", "error"),
         ),
-        # An API call slower than 1.5 s or failed: its route with every id taken out.
+        # An API call slower than 1.5 s or failed: its route with every id taken out. Since 27
+        # Oct 2026 slow means wait_ms, to the answer's first byte (a recording downloading is
+        # not a slow server), and never while the page was out of view.
         "sx.api_slow": _event(
             values={"status": API_STATUSES, "screen": SCREENS},
             tokens=("endpoint",),
-            numbers={"ms": MAX_LOAD_MS},
+            numbers={"ms": MAX_LOAD_MS, "wait_ms": MAX_LOAD_MS},
             required=("endpoint", "status", "ms"),
         ),
         # Three or more taps in a second on one spot, or a tap that changed nothing. Since 25
@@ -416,6 +427,30 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
             values={"outcome": ("opened", "near")},
             numbers={"peak": 200, "swings": 20},
             required=("outcome",),
+        ),
+        # Calling a lead (27 Oct 2026, the first-tap Call fix): a call that really started (by touch
+        # or by click), a touch a glide would have lost (rescued), a touch on Call that placed no
+        # call (a drag, a finger that moved, a long press), and the phone app's hand-off steps with
+        # their time. Codes and milliseconds only, never a number or a lead.
+        "sx.phone_call": _event(
+            values={
+                "step": (
+                    "started",
+                    "rescued",
+                    "touch_no_call",
+                    "status",
+                    "permits",
+                    "bridge_ok",
+                    "bridge_error",
+                    "fallback_tel",
+                ),
+                "via": ("touch", "click"),
+                "why": ("drag", "moved", "long", "timeout", "error"),
+                "mode": ("dialer", "direct", "browser"),
+                "screen": SCREENS,
+            },
+            numbers={"ms": MAX_ACTION_MS},
+            required=("step",),
         ),
         # Lead OS (24 Oct 2026, asked by the Lead OS session): the pipeline board and sheet.
         # A stage move: how it was made, whether an AI suggestion made it, the stage kinds

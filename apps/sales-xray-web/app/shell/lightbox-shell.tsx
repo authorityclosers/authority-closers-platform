@@ -918,14 +918,15 @@ function LightboxShellFrame({
   // management options").
   const orgHere = place === "organisation";
   // The sidebar's areas and pages, from one list (sidebar-areas.ts).
+  const roleHere = workspaces.find(
+    (workspace) => workspace.tenant_id === effectiveTenantId,
+  )?.role;
   const areas = sidebarAreas({
     organisation: inOrganisation,
     team: inOrganisation || orgHere,
-    manager: can(
-      workspaces.find((workspace) => workspace.tenant_id === effectiveTenantId)
-        ?.role,
-      "team.view",
-    ),
+    manager: can(roleHere, "team.view"),
+    // A Viewer reads the team; setting it up stays with those who manage.
+    manages: can(roleHere, "leads.manage"),
   });
   // Account belongs to no area: the panel keeps Home's pages there.
   const shownArea = areas.find((item) => item.key === litArea) ?? areas[0];
@@ -956,6 +957,10 @@ function LightboxShellFrame({
   // The Leads tab badge reads on the same terms.
   const leadsBadgeLive =
     authenticated && !loading && process.env.NODE_ENV !== "test";
+  // Leads' own pollers (its badge, the chats badge, work due soon) only in an
+  // organisation: elsewhere every read answered 403, every 20-40 s (Lead OS,
+  // 27 Oct 2026, from the bug radar's chats 4xx).
+  const leadsLive = leadsBadgeLive && inOrganisation;
   useEffect(() => {
     if (!invites.live) return;
     const open = () => setCreateOpen(true);
@@ -1350,7 +1355,7 @@ function LightboxShellFrame({
         Skip to workspace
       </a>
       {/* Work due within the hour: the red banner (demo, workflow 12). */}
-      <DueSoonWatch live={leadsBadgeLive} />
+      <DueSoonWatch live={leadsLive} />
       <aside
         id="sales-xray-sidebar"
         className={styles.sidebar}
@@ -1388,7 +1393,7 @@ function LightboxShellFrame({
                       <LeadsTabIcon
                         size={20}
                         strokeWidth={1.75}
-                        live={leadsBadgeLive}
+                        live={leadsLive}
                         withChats
                       />
                     ) : (
@@ -1888,7 +1893,7 @@ function LightboxShellFrame({
             onClick={tapTab("leads")}
             aria-current={phoneTab === "leads" ? "page" : undefined}
           >
-            <LeadsTabIcon size={20} live={leadsBadgeLive} />
+            <LeadsTabIcon size={20} live={leadsLive} />
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Leads</span>
           </ScreenLink>
@@ -1937,7 +1942,7 @@ function LightboxShellFrame({
             onClick={tapTab("chats")}
             aria-current={phoneTab === "chats" ? "page" : undefined}
           >
-            <ChatsTabIcon size={20} live={leadsBadgeLive} />
+            <ChatsTabIcon size={20} live={leadsLive} />
             <span className={styles.tabPill} aria-hidden="true" />
             <span>Chats</span>
           </ScreenLink>

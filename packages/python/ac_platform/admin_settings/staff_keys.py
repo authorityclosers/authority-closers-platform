@@ -92,6 +92,8 @@ READS: tuple[re.Pattern[str], ...] = tuple(
         r"^/v1/admin/telemetry/fix-next$",
         # Where people get stuck, by week (owner, 25 Oct 2026; builders read it with a key).
         r"^/v1/admin/telemetry/friction$",
+        # Speed and journeys: frames, slow APIs, load, taps by tier (owner, 27 Oct 2026).
+        r"^/v1/admin/telemetry/speed$",
     )
 )
 MAX_ACTIVE = 2

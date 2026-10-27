@@ -33,9 +33,14 @@ import {
   type ReactNode,
 } from "react";
 
+import type { LibrarySubmission } from "../acquisition-client";
+import { useWeekActivity } from "../calls/call-rows";
 import { displayName } from "../display-name";
+import { can } from "../organisation/roles";
 import { DayTiles, MyStages } from "./day-board";
 import { FirstRun } from "./first-run";
+import { HomeActivity, HomeRecentCalls, PickUp, SetupStart } from "./home-v2";
+import { TeamActivity } from "./team-activity";
 import { whyLine } from "../leads/desk-view";
 import { handOverLead } from "../leads/lead-handoff";
 import {
@@ -169,7 +174,16 @@ function Outcome({
   );
 }
 
-function TeamHome({ desk }: { desk: Desk | null }) {
+function TeamHome({
+  desk,
+  layout = "v1",
+  saved = null,
+}: {
+  desk: Desk | null;
+  layout?: "v1" | "v2";
+  /** The team's latest saved calls, for Team today's reports. */
+  saved?: readonly LibrarySubmission[] | null;
+}) {
   const [period, setPeriod] = usePeriod();
   const [report, setReport] = useState<{
     period: Period;
@@ -208,99 +222,110 @@ function TeamHome({ desk }: { desk: Desk | null }) {
     : null;
   const mineDue = desk ? desk.queue.length : 0;
 
+  const salesBlock = (
+    <section className={styles.block} aria-labelledby="sales-title">
+      <div className={styles.head}>
+        <h2 id="sales-title">How sales are going</h2>
+        {/* Team | My day is the screen's one switch; the period is a chip. */}
+        <label className={styles.periodChip}>
+          <select
+            aria-label="Period"
+            value={String(period)}
+            onChange={(event) =>
+              setPeriod(Number(event.target.value) as Period)
+            }
+          >
+            {PERIODS.map((item) => (
+              <option key={item.key} value={item.key}>
+                {item.label}
+              </option>
+            ))}
+          </select>
+          <ChevronDown size={14} aria-hidden="true" />
+        </label>
+      </div>
+      {now && before ? (
+        <dl className={styles.outcomes}>
+          <Outcome
+            icon={Trophy}
+            tone="good"
+            label="Won"
+            value={now.won}
+            delta={<Delta value={now.won} previous={before.won} />}
+            note={
+              now.leads_called
+                ? `${percent(now.won, now.leads_called)} of ${now.leads_called} leads called`
+                : "No leads called yet"
+            }
+          />
+          <Outcome
+            icon={Flame}
+            tone="violet"
+            label="Interested"
+            value={now.interested}
+            delta={
+              <Delta value={now.interested} previous={before.interested} />
+            }
+            note="Leads who said they want it"
+          />
+          <Outcome
+            icon={UserPlus}
+            tone="teal"
+            label="New leads"
+            value={now.new_leads}
+            delta={<Delta value={now.new_leads} previous={before.new_leads} />}
+            note={
+              now.first_call_minutes !== null
+                ? `First call in ${minutesWords(now.first_call_minutes)}`
+                : now.new_leads
+                  ? "None called yet"
+                  : "None came in"
+            }
+          />
+          <Outcome
+            icon={PhoneCall}
+            tone="slate"
+            label="Connected"
+            value={percent(now.connected, now.calls)}
+            delta={<Delta value={now.connected} previous={before.connected} />}
+            note={`${now.connected} of ${now.calls} ${now.calls === 1 ? "call" : "calls"}`}
+          />
+        </dl>
+      ) : failed === period ? (
+        <p className={styles.quiet} role="status">
+          Sales numbers didn&apos;t load. Pull down or come back in a moment.
+        </p>
+      ) : (
+        <OutcomesSkeleton />
+      )}
+      <div className={styles.chips}>
+        {mineDue ? (
+          <Link className={styles.chip} href="/leads">
+            <PhoneCall size={15} aria-hidden="true" />
+            {`${mineDue} for you to call today`}
+          </Link>
+        ) : null}
+      </div>
+    </section>
+  );
+  // Approved map, slice 8: what is waiting on someone, before who sold what.
+  const needs = <NeedsYou desk={desk} late={shown ? late : undefined} />;
   return (
     <>
-      <section className={styles.block} aria-labelledby="sales-title">
-        <div className={styles.head}>
-          <h2 id="sales-title">How sales are going</h2>
-          {/* Team | My day is the screen's one switch; the period is a chip. */}
-          <label className={styles.periodChip}>
-            <select
-              aria-label="Period"
-              value={String(period)}
-              onChange={(event) =>
-                setPeriod(Number(event.target.value) as Period)
-              }
-            >
-              {PERIODS.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
-            <ChevronDown size={14} aria-hidden="true" />
-          </label>
-        </div>
-        {now && before ? (
-          <dl className={styles.outcomes}>
-            <Outcome
-              icon={Trophy}
-              tone="good"
-              label="Won"
-              value={now.won}
-              delta={<Delta value={now.won} previous={before.won} />}
-              note={
-                now.leads_called
-                  ? `${percent(now.won, now.leads_called)} of ${now.leads_called} leads called`
-                  : "No leads called yet"
-              }
-            />
-            <Outcome
-              icon={Flame}
-              tone="violet"
-              label="Interested"
-              value={now.interested}
-              delta={
-                <Delta value={now.interested} previous={before.interested} />
-              }
-              note="Leads who said they want it"
-            />
-            <Outcome
-              icon={UserPlus}
-              tone="teal"
-              label="New leads"
-              value={now.new_leads}
-              delta={
-                <Delta value={now.new_leads} previous={before.new_leads} />
-              }
-              note={
-                now.first_call_minutes !== null
-                  ? `First call in ${minutesWords(now.first_call_minutes)}`
-                  : now.new_leads
-                    ? "None called yet"
-                    : "None came in"
-              }
-            />
-            <Outcome
-              icon={PhoneCall}
-              tone="slate"
-              label="Connected"
-              value={percent(now.connected, now.calls)}
-              delta={
-                <Delta value={now.connected} previous={before.connected} />
-              }
-              note={`${now.connected} of ${now.calls} ${now.calls === 1 ? "call" : "calls"}`}
-            />
-          </dl>
-        ) : failed === period ? (
-          <p className={styles.quiet} role="status">
-            Sales numbers didn&apos;t load. Pull down or come back in a moment.
-          </p>
-        ) : (
-          <OutcomesSkeleton />
-        )}
-        <div className={styles.chips}>
-          {mineDue ? (
-            <Link className={styles.chip} href="/leads">
-              <PhoneCall size={15} aria-hidden="true" />
-              {`${mineDue} for you to call today`}
-            </Link>
-          ) : null}
-        </div>
-      </section>
-
-      {/* Approved map, slice 8: what is waiting on someone, before who sold what. */}
-      <NeedsYou desk={desk} late={shown ? late : undefined} />
+      {/* Team v2 (orchestrator for the owner, 27 Oct 2026): what needs you
+          and the team's day first, then the numbers and charts. */}
+      {layout === "v2" ? (
+        <>
+          {needs}
+          <TeamActivity saved={saved} />
+          {salesBlock}
+        </>
+      ) : (
+        <>
+          {salesBlock}
+          {needs}
+        </>
+      )}
 
       <section className={styles.block} aria-labelledby="sellers-title">
         <div className={styles.head}>
@@ -344,9 +369,11 @@ function TeamHome({ desk }: { desk: Desk | null }) {
           ) : (
             <div className={styles.quiet}>
               <span>Add sellers to see how each one does.</span>
-              <Link className={styles.more} href="/organisation/invites">
-                Invite sellers
-              </Link>
+              {desk?.me.can_manage ? (
+                <Link className={styles.more} href="/organisation/invites">
+                  Invite sellers
+                </Link>
+              ) : null}
             </div>
           )
         ) : (
@@ -364,10 +391,13 @@ function TeamHome({ desk }: { desk: Desk | null }) {
         </ActionList>
       </section>
 
-      {/* Targets and nudges (owner program, 25 Oct 2026, section 2). */}
-      <div className={styles.block}>
-        <TargetsPanel />
-      </div>
+      {/* Targets and nudges (owner program, 25 Oct 2026, section 2): set by
+          managers, so a Viewer doesn't get them (their read and saves are theirs). */}
+      {desk?.me.can_manage ? (
+        <div className={styles.block}>
+          <TargetsPanel />
+        </div>
+      ) : null}
 
       <section className={styles.block} aria-labelledby="pipeline-title">
         <div className={styles.head}>
@@ -491,7 +521,17 @@ function LeadLink({ row }: { row: LeadRow }) {
   );
 }
 
-function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
+function SellerHome({
+  state,
+  before = null,
+  after = null,
+}: {
+  state: ReturnType<typeof useDesk>;
+  /** Home v2 (27 Oct 2026): what goes above Today, and what replaces the
+   *  stage strip and Recently called below it. */
+  before?: ReactNode;
+  after?: ReactNode;
+}) {
   // Read beside the desk, so both land together (Lead OS's team engine).
   const myDay = useMyDay();
   const [now] = useState(() => Date.now());
@@ -536,10 +576,17 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
           pausedUntil={desk.me.paused_until ?? null}
         />
       </section>
+      {before}
       <section className={styles.block} aria-labelledby="today-title">
         <div className={styles.head}>
           <h2 id="today-title">Today</h2>
-          <span className={styles.meta}>Who to call</span>
+          {/* A clear button, not a quiet label (orchestrator for the owner,
+              27 Oct 2026): everyone due, on Leads. */}
+          <Link className={styles.headAction} href="/leads">
+            <UsersRound size={16} aria-hidden="true" />
+            Who to call
+            <ChevronRight size={16} aria-hidden="true" />
+          </Link>
         </div>
         {/* The day at a glance, each tile one tap into its Leads (owner,
             #18, 26 Oct 2026: Home was the same as Leads). */}
@@ -614,8 +661,12 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
           </>
         )}
       </section>
-      <MyStages />
-      <RecentlyCalled />
+      {after ?? (
+        <>
+          <MyStages />
+          <RecentlyCalled />
+        </>
+      )}
       <DayNumbers desk={desk} myDay={myDay} />
     </>
   );
@@ -699,28 +750,81 @@ function brandNew(desk: HomeDesk): boolean {
   );
 }
 
-export function SalesHome({ manager }: { manager: boolean }) {
+/** Home v2's seller day: where you left off and your last calls above Today,
+ *  your recent activity below it, from one read of this week's work. */
+function SellerHomeV2({
+  state,
+  recent,
+}: {
+  state: ReturnType<typeof useDesk>;
+  recent: readonly LibrarySubmission[] | null;
+}) {
+  const [week] = useWeekActivity();
+  return (
+    <SellerHome
+      state={state}
+      before={
+        <>
+          <PickUp />
+          <HomeRecentCalls week={week} saved={recent} />
+        </>
+      }
+      after={<HomeActivity week={week} />}
+    />
+  );
+}
+
+export function SalesHome({
+  manager,
+  layout = "v1",
+  team = "v1",
+  recent = null,
+}: {
+  manager: boolean;
+  /** "v2": the Team view redesign, on review fixtures until signed off. */
+  team?: "v1" | "v2";
+  /** "v2": the Home redesign (27 Oct 2026), on review fixtures until signed off. */
+  layout?: "v1" | "v2";
+  /** The latest saved calls the dashboard already read, for v2's Recent calls. */
+  recent?: readonly LibrarySubmission[] | null;
+}) {
   const desk = useDesk();
   const [view, setView] = useHomeView();
   const teamLeads = useTeamLeadCount(manager);
+  // A Viewer sees the team and works no leads (Roles B, 27 Oct 2026): the Team
+  // view only, with no My day and no first steps; editing stays with managers.
+  const me = desk.status === "ready" ? desk.desk.me : null;
+  const works = me === null || can(me.role, "leads.work");
+  const manages = me?.can_manage === true;
   // A brand-new workspace: three first steps, not empty figures (owner, #20).
   if (
     desk.status === "ready" &&
+    works &&
     brandNew(desk.desk) &&
     (!manager || teamLeads === 0)
   )
     return (
       <div className={styles.home}>
-        <FirstRun team={manager ? "invite" : null} />
+        {layout === "v2" ? (
+          <SetupStart desk={desk.desk} manager={manager && manages} />
+        ) : (
+          <FirstRun team={manager && manages ? "invite" : null} />
+        )}
       </div>
     );
   return (
     <div className={styles.home}>
-      {manager ? (
+      {manager && works ? (
         <Segmented label="Show" value={view} onChange={setView} items={VIEWS} />
       ) : null}
-      {manager && view === "team" ? (
-        <TeamHome desk={desk.status === "ready" ? desk.desk : null} />
+      {manager && (view === "team" || !works) ? (
+        <TeamHome
+          desk={desk.status === "ready" ? desk.desk : null}
+          layout={team}
+          saved={recent}
+        />
+      ) : layout === "v2" ? (
+        <SellerHomeV2 state={desk} recent={recent} />
       ) : (
         <SellerHome state={desk} />
       )}

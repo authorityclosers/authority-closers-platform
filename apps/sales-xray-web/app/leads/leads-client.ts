@@ -310,6 +310,11 @@ export type Team = {
     default_max_open?: number | null;
     /** Lists show whole phone numbers. */
     show_full_phones?: boolean;
+    /**
+     * Only sellers who speak a lead's language get it; off, languages are a
+     * preference. Absent where the server doesn't offer it yet.
+     */
+    strict_language?: boolean;
   };
   by_stage: Record<string, number>;
   by_source: Record<string, number>;
@@ -1308,6 +1313,8 @@ export function saveSettings(
     default_max_open?: number | null;
     /** Sent: whether lists show whole phone numbers. Left out: kept. */
     show_full_phones?: boolean;
+    /** Sent: whether languages are strict. Left out: kept. */
+    strict_language?: boolean;
   },
 ) {
   return request<Team>(

@@ -80,6 +80,29 @@ export const median = (values) => {
     : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
 };
 
+/**
+ * The app's CPU test (telemetry.ts cpuMs) at each rate: the median over the loads that ran it, to a tenth of a ms.
+ * Phones are tiered by it (high-end under 3 ms, low-end from 6 ms, provisional), so these say where 4x and 6x fall.
+ */
+export function cpuByRate(measures) {
+  const out = {};
+  for (const rate of RATES) {
+    const values = measures
+      .filter(
+        (m) =>
+          m.action === "load" && m.rate === rate && Number.isFinite(m.cpu_ms),
+      )
+      .map((m) => m.cpu_ms)
+      .sort((a, b) => a - b);
+    if (!values.length) continue;
+    const mid = Math.floor(values.length / 2);
+    const value =
+      values.length % 2 ? values[mid] : (values[mid - 1] + values[mid]) / 2;
+    out[rate] = { ms: Math.round(value * 10) / 10, n: values.length };
+  }
+  return out;
+}
+
 /** A card's marker: perf:<screen>:<action> (orchestrator, 27 Oct 2026). */
 export const perfKey = (screen, action) => `perf:${screen}:${action}`;
 
@@ -200,6 +223,14 @@ export function speedMarkdown(run) {
         `${cell(six)} | ${six?.lcp ?? "–"} | ${six?.tbt ?? "–"} | ${flag ? (flag.severity === "builder" ? "**for the builder**" : "slow") : ""} |`,
     );
   }
+  const cpu = Object.entries(run.cpu ?? {});
+  if (cpu.length)
+    lines.push(
+      "",
+      "The app's CPU test, as phones run it (median ms): " +
+        cpu.map(([rate, at]) => `${rate}x ${at.ms} (n ${at.n})`).join(" · ") +
+        ". Telemetry calls a phone high-end under 3 ms and low-end from 6 ms (provisional).",
+    );
   lines.push("", `#### Slow on a low-end phone (${findings.length})`, "");
   if (!findings.length) lines.push("None.");
   for (const f of findings)

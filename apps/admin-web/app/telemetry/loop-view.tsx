@@ -52,6 +52,7 @@ import { msWords, shareWords } from "./telemetry-data";
 
 const LOOP_PAGES = [
   { key: "overview", label: "Overview" },
+  { key: "speed", label: "Speed and journeys" },
   { key: "devices", label: "Devices" },
   { key: "releases", label: "Releases" },
   { key: "fix", label: "Fix next" },
@@ -59,7 +60,7 @@ const LOOP_PAGES = [
 ] as const;
 export type LoopPage = (typeof LOOP_PAGES)[number]["key"];
 
-/** Overview, Devices, Releases, Fix next and Friction: the telemetry pages, one tab each. */
+/** Overview, Speed and journeys, Devices, Releases, Fix next and Friction: one tab each. */
 export function LoopTabs({
   current,
   hrefs,
@@ -85,6 +86,7 @@ export function LoopTabs({
 
 export const LOOP_HREFS: Record<LoopPage, string> = {
   overview: "/telemetry",
+  speed: "/telemetry/speed",
   devices: "/telemetry/devices",
   releases: "/telemetry/releases",
   fix: "/telemetry/fix-next",

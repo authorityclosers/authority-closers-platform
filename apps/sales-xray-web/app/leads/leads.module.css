@@ -6197,7 +6197,9 @@ button.leadTags {
   gap: 12px;
   align-items: start;
   padding-top: 4px;
-  padding-right: 44px;
+  /* Clear of the sheet's 44 px x at 8 px from the edge, with 4 px to spare
+     (bug radar, 26 Oct 2026: "Close" drawn over the name and the subtitle). */
+  padding-right: 56px;
 }
 
 .leadHead .cardTitle {
@@ -6553,8 +6555,36 @@ button.leadTags {
   color: var(--sx-accent);
 }
 
+/* A call with a Report: a tap anywhere on its line opens it, not only on the
+   small link (owner, 27 Oct 2026: "she can't click on the call"). The link's
+   area covers the line; the line's own buttons stay above it. */
+.history li[data-report] .historyLink::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--sx-radius-md);
+}
+
+.history li[data-report] :is(button, a:not(.historyLink)) {
+  position: relative;
+  z-index: 1;
+}
+
+.history li[data-report]:active {
+  background: var(--sx-fill-soft);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .leadTab {
     transition: none;
   }
+}
+
+/* A settings panel a Viewer only reads (Roles B, 27 Oct 2026): the form is a
+   disabled fieldset, drawn as the form it replaces. */
+fieldset.form {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
 }

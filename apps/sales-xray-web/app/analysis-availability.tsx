@@ -36,10 +36,20 @@ export function AnalysisAvailability({
       }
     }
     void refresh();
-    const timer = window.setInterval(() => void refresh(), 15000);
+    // Every 15 s while on view; none in the background (a phone left on this
+    // screen asked all night), and once on coming back.
+    const hidden = () => document.visibilityState === "hidden";
+    const timer = window.setInterval(() => {
+      if (!hidden()) void refresh();
+    }, 15000);
+    const onVisibility = () => {
+      if (!hidden()) void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       controller.abort();
       window.clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [onChange]);
   return paused ? (

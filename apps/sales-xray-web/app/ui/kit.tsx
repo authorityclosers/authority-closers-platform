@@ -24,6 +24,7 @@ import {
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ButtonHTMLAttributes,
@@ -491,8 +492,47 @@ export function Segmented<T extends string>({
   onChange: (next: T) => void;
   label: string;
 }) {
+  // The chosen segment's pill slides to the next one (owner bug #45, 27 Oct
+  // 2026: "nice perfectly made micro interactions"). It is placed straight on
+  // the element, before paint; until it is, the chosen segment keeps its own
+  // lift, so the first paint looks the same.
+  const group = useRef<HTMLDivElement>(null);
+  const pill = useRef<HTMLSpanElement>(null);
+  useLayoutEffect(() => {
+    const root = group.current;
+    const mark = pill.current;
+    if (!root || !mark) return;
+    const place = () => {
+      const chosen = root.querySelector<HTMLElement>('[aria-pressed="true"]');
+      if (!chosen) {
+        delete root.dataset.pill;
+        return;
+      }
+      mark.style.width = `${chosen.offsetWidth}px`;
+      mark.style.transform = `translateX(${chosen.offsetLeft}px)`;
+      root.dataset.pill = "";
+    };
+    place();
+    // Slides from the next change on, never into its first place.
+    const frame = requestAnimationFrame(() => {
+      root.dataset.slide = "";
+    });
+    const resize =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    resize?.observe(root);
+    return () => {
+      cancelAnimationFrame(frame);
+      resize?.disconnect();
+    };
+  }, [value, items.length]);
   return (
-    <div className={styles.segmented} role="group" aria-label={label}>
+    <div
+      ref={group}
+      className={styles.segmented}
+      role="group"
+      aria-label={label}
+    >
+      <span ref={pill} className={styles.segmentPill} aria-hidden="true" />
       {items.map((item) => (
         <button
           key={item.key}

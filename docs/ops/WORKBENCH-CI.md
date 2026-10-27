@@ -64,6 +64,18 @@ summary.
 - Commit with `wb-commit` first, or pass `--include` for files you have not committed yet.
 - Screenshots on GitHub use fictional fixtures only (no API, no real data). Anything that needs dev-live data still
   uses the dev box, briefly.
+- **Releases come first, by themselves.** While a release is cutting or shipping, its script keeps
+  `/run/ac-release-cut.active` ("<version> <hold sha> <pid>", "-" until the hold is known) and removes it on exit.
+  `wb-ci` then prints "waiting for the vX release to finish" and checks again each minute; after 3 hours it stops
+  with exit 75. Only the cut's own runs (`--sha` = the hold) go straight through. A marker whose process has ended
+  (a killed cut) is ignored. In a cut script:
+
+  ```bash
+  printf '%s - %s\n' "$VER" "$$" > /run/ac-release-cut.active; trap 'rm -f /run/ac-release-cut.active; systemctl stop ac-ci-hold-cutNN >/dev/null 2>&1 || true' EXIT
+  printf '%s %s %s\n' "$VER" "$HOLD" "$$" > /run/ac-release-cut.active
+  ```
+
+  The first replaces the script's `trap ... EXIT` line; the second goes right after the hold is known.
 
 ## How it works
 

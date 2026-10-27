@@ -11,6 +11,7 @@ import hashlib
 import re
 import secrets
 from collections.abc import Iterable, Mapping
+from datetime import datetime
 from typing import Any, Final
 from urllib.parse import parse_qs, urlsplit
 from uuid import UUID, uuid4, uuid5
@@ -61,6 +62,14 @@ SANDBOX_PEOPLE = UUID("1dfdfac9-bfa2-49ab-b061-d98776454e0f")
 
 def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
+
+
+def sheet_csv_url(config: Mapping[str, Any]) -> str:
+    """A connected sheet's tab as CSV, from its source config (``_sheet_config``)."""
+    return (
+        f"https://docs.google.com/spreadsheets/d/{config['sheet_id']}"
+        f"/export?format=csv&gid={config.get('gid', '0')}"
+    )
 
 
 # Stage and owner columns (paste import, 23 Oct 2026): the headers that usually hold them.
@@ -470,6 +479,7 @@ class Intake:
             else None,
             sheet_url=source.config.get("url") if source.kind == "sheet" else None,
             token=token,
+            problem=source.config.get("problem") if source.kind == "sheet" else None,
         )
 
     async def sources(self, *, meta_ready: bool) -> Sources:
@@ -569,11 +579,11 @@ class Intake:
         source = await self._source(source_id)
         if source.kind != "sheet" or not source.active:
             raise DeskError(422, "Choose a connected Google Sheet.")
-        url = (
-            f"https://docs.google.com/spreadsheets/d/{source.config['sheet_id']}"
-            f"/export?format=csv&gid={source.config.get('gid', '0')}"
-        )
-        data = await self._fetch_sheet(url)
+        return await self.file_sheet(source, await self._fetch_sheet(sheet_csv_url(source.config)))
+
+    async def file_sheet(self, source: LeadSource, data: bytes) -> ImportResult:
+        """A sheet's rows as leads, for "Sync" and the 10-minute pass (lead_desk/sheet_sync.py):
+        rows seen before read as "known", so a sheet read again files only its new rows."""
         try:
             sheet = read_csv(data)
         except CaptureError as error:
@@ -600,6 +610,11 @@ class Intake:
         source.received += result.created + outcomes.count("repeat")
         source.last_received_at = self.desk.now
         source.updated_at = self.desk.now
+        source.config = {
+            **(source.config or {}),
+            "synced_at": self.desk.now.timestamp(),
+            "problem": None,
+        }
         await self.db.flush()
         return result
 
@@ -649,18 +664,25 @@ class Intake:
         *,
         app_url: str,
         test_data: bool = False,
+        kind: str | None = None,
+        key_sha256: str | None = None,
+        received_at: datetime | None = None,
     ) -> tuple[UUID | None, str]:
-        """``test_data``: the sender marked it a test (Google Ads' "Send test data")."""
+        """``test_data``: the sender marked it a test (Google Ads' "Send test data").
+        ``kind``: the narrower source it is, for pipelines ("google_ads").
+        ``key_sha256`` and ``received_at``: a lead the release spool kept (lead_desk/
+        spool.py), which holds only the key's hash and the time the lead reached it."""
         source = await database.scalar(
             select(LeadSource)
             .where(LeadSource.id == source_id, LeadSource.kind == "webhook")
             .with_for_update()
         )
+        digest = key_sha256 if key_sha256 is not None else token_hash(token)
         if (
             source is None
             or not source.active
             or source.token_sha256 is None
-            or not secrets.compare_digest(source.token_sha256, token_hash(token))
+            or not secrets.compare_digest(source.token_sha256, digest)
         ):
             raise DeskError(401, "Unknown source or key.")
         desk = LeadDesk(
@@ -688,6 +710,8 @@ class Intake:
                 source_ref=reference or content_ref(record),
                 actor=None,
                 test_data=test_data,
+                kind=kind,
+                received_at=received_at,
             )
         except CaptureError as error:
             raise DeskError(422, str(error)) from None

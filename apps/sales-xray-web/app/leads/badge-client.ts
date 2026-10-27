@@ -5,7 +5,11 @@
 
 export type Badge = { overdue: number; to_call: number };
 
-export async function readBadge(signal?: AbortSignal): Promise<Badge | null> {
+/** The badge; null when it couldn't be read; "off" where Leads doesn't apply
+ *  (not signed in, not an organisation workspace). */
+export async function readBadge(
+  signal?: AbortSignal,
+): Promise<Badge | null | "off"> {
   try {
     const response = await fetch("/v1/lead-desk/badge", {
       credentials: "same-origin",
@@ -14,6 +18,7 @@ export async function readBadge(signal?: AbortSignal): Promise<Badge | null> {
       headers: { accept: "application/json" },
       signal,
     });
+    if ([401, 403, 404].includes(response.status)) return "off";
     if (!response.ok) return null;
     const badge = (await response.json()) as Partial<Badge>;
     return typeof badge.overdue === "number" &&

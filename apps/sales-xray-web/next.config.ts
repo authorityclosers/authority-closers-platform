@@ -51,6 +51,9 @@ const config: NextConfig = {
   ...(staticPreview ? { trailingSlash: true } : {}),
   outputFileTracingRoot: path.join(__dirname, "../.."),
   reactStrictMode: true,
+  // The build's commit (the image's AC_RELEASE_ID), so telemetry can say which
+  // web build an event ran on (telemetry.ts releaseLabel). Not a secret.
+  env: { NEXT_PUBLIC_AC_RELEASE_ID: process.env.AC_RELEASE_ID ?? "" },
   experimental: {
     staleTimes: { dynamic: 30 },
   },

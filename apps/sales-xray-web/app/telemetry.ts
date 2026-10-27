@@ -83,9 +83,18 @@ export type ReportSource =
 /** The call a report event is about (its report's id); sent apart from the payload. */
 type AboutCall = { call_id: string };
 
+/** How someone signed in: a password, an email code or a provider. */
+export type SignInMethod =
+  | "password"
+  | "email_code"
+  | "google"
+  | "apple"
+  | "facebook"
+  | "pulse";
+
 /** Every event and its payload. Add here first; the server lists what it takes. */
 export type TelemetryEvents = {
-  "sx.sign_in": { method: "password" | "email_code" | "google" };
+  "sx.sign_in": { method: SignInMethod };
   "sx.sign_out": Empty;
   "sx.upload_started": { size_band: SizeBand; format: AudioFormat };
   "sx.upload_finished": {
@@ -165,6 +174,9 @@ export type TelemetryEvents = {
     ms: number;
     nav_type?: "navigate" | "reload" | "back_forward" | "prerender";
     screen?: Screen;
+    /** The CPU test (cpuMs), and the phone's model on Android ("redmi-note-8-pro"). */
+    cpu_ms?: number;
+    model_label?: string;
   };
   /** Never the message: its class and a fingerprint of where it was thrown. */
   "sx.js_error": {
@@ -178,6 +190,8 @@ export type TelemetryEvents = {
     endpoint: string;
     status: "2xx" | "3xx" | "4xx" | "5xx" | "network" | "unknown";
     ms: number;
+    /** To the answer's first byte: the server's part, without the download. */
+    wait_ms?: number;
     screen?: Screen;
   };
   "sx.tap_issue": {
@@ -196,6 +210,25 @@ export type TelemetryEvents = {
   /** Shake to report: opened, or a near miss (two swings, not three); the
    * strongest swing in m/s² and the swings, to tune from real phones. */
   "sx.shake": { outcome: "opened" | "near"; peak: number; swings: number };
+  /** Calling a lead (27 Oct 2026, leads/phone-call-steps.ts): a real call
+   * start, a touch a glide would have lost, a touch on Call that placed no
+   * call, and the phone app's hand-off steps. Codes and ms only. */
+  "sx.phone_call": {
+    step:
+      | "started"
+      | "rescued"
+      | "touch_no_call"
+      | "status"
+      | "permits"
+      | "bridge_ok"
+      | "bridge_error"
+      | "fallback_tel";
+    via?: "touch" | "click";
+    why?: "drag" | "moved" | "long" | "timeout" | "error";
+    mode?: "dialer" | "direct" | "browser";
+    ms?: number;
+    screen?: Screen;
+  };
   // Lead OS (24 Oct 2026): the pipeline board, stage sheet and lead sheet.
   /** One stage move; wait is from opening the stage sheet to Save. */
   "sx.lead_stage_moved": {
@@ -471,6 +504,7 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.tap_issue",
   "sx.feature_used",
   "sx.shake",
+  "sx.phone_call",
   "sx.lead_stage_moved",
   "sx.board_drag",
   "sx.lead_open_to_action",
@@ -583,6 +617,215 @@ export function deviceTier(
     return "low";
   if (knownMemory && memoryGb >= 8 && knownCores && cores >= 8) return "high";
   return "mid";
+}
+
+/** A version or model label as the server takes it (ingest.py _LABEL_PATTERN). */
+const LABEL = /^[a-z0-9][a-z0-9._-]{0,31}$/;
+
+/** The CPU test's work: a thousand rows of JSON, like an API answer (made once). */
+let cpuSample: string | null = null;
+function cpuText(): string {
+  if (cpuSample) return cpuSample;
+  const rows: Array<Record<string, unknown>> = [];
+  let seed = 7;
+  for (let id = 0; id < 1_000; id += 1) {
+    seed = (Math.imul(seed, 48_271) + 11) | 0;
+    rows.push({
+      id,
+      stage: `s${(seed >>> 8) % 9}`,
+      score: ((seed >>> 4) % 1_000) / 10,
+      tags: ["a", "b", String(seed & 255)],
+      open: (seed & 1) === 1,
+    });
+  }
+  return (cpuSample = JSON.stringify(rows));
+}
+
+/**
+ * The CPU test (owner, 27 Oct 2026: the app on the slowest phones): the best of
+ * five passes of reading and writing the same JSON, in ms to a tenth. The
+ * browser's native code does the work, so how far the JIT has warmed up doesn't
+ * decide it; about 1 ms on a laptop.
+ */
+export function cpuMs(now: () => number = () => performance.now()): number {
+  const text = cpuText();
+  let best = Infinity;
+  for (let run = 0; run < 5; run += 1) {
+    const start = now();
+    JSON.stringify(JSON.parse(text));
+    best = Math.min(best, now() - start);
+  }
+  return Math.round(best * 10) / 10;
+}
+
+/**
+ * The tier the CPU test measured: high under 3 ms, low from 6 ms (provisional,
+ * 27 Oct 2026, about 2.5 and 5 times a laptop; the speed check's 4x and 6x
+ * runs record the test, to set them from).
+ */
+export function cpuTier(milliseconds: number): DeviceTier {
+  if (!Number.isFinite(milliseconds) || milliseconds < 0) return "unknown";
+  return milliseconds < 3 ? "high" : milliseconds < 6 ? "mid" : "low";
+}
+
+const CPU_KEY = "sx-cpu";
+const CPU_MAX_AGE_MS = 7 * 24 * 3_600_000;
+
+/** The device's last CPU test (kept a week), or null. */
+export function readCpuMs(
+  storage: Pick<Storage, "getItem"> | null,
+  now: number,
+): number | null {
+  try {
+    const kept = JSON.parse(storage?.getItem(CPU_KEY) ?? "null") as {
+      ms?: unknown;
+      at?: unknown;
+    } | null;
+    return kept &&
+      typeof kept.ms === "number" &&
+      kept.ms >= 0 &&
+      kept.ms < 60_000 &&
+      typeof kept.at === "number" &&
+      now - kept.at >= 0 &&
+      now - kept.at < CPU_MAX_AGE_MS
+      ? kept.ms
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+export function keepCpuMs(
+  storage: Pick<Storage, "setItem"> | null,
+  milliseconds: number,
+  now: number,
+) {
+  try {
+    storage?.setItem(CPU_KEY, JSON.stringify({ ms: milliseconds, at: now }));
+  } catch {
+    // Without storage the next page load runs the test again.
+  }
+}
+
+/** A phone's model as a label ("redmi-note-8-pro"); null when hidden ("K"). */
+export function modelLabel(raw: string | null | undefined): string | null {
+  const label = (raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._]+/g, "-")
+    .replace(/^[-.]+/, "")
+    .slice(0, 32)
+    .replace(/[-.]+$/, "");
+  return label.length > 1 && LABEL.test(label) ? label : null;
+}
+
+/** The model in an Android user agent ("Linux; Android 12; Redmi Note 8 Pro Build/…; wv)"). */
+export function userAgentModel(userAgent: string): string | null {
+  return modelLabel(
+    /\bAndroid [^;)]*;\s*([^;)]+?)(?:\s+Build\/[^;)]*)?\s*(?:;\s*wv\s*)?\)/.exec(
+      userAgent,
+    )?.[1],
+  );
+}
+
+type HintedNavigator = Navigator & {
+  userAgentData?: {
+    getHighEntropyValues?: (hints: string[]) => Promise<{ model?: string }>;
+  };
+};
+
+/** The phone's model on Android: the browser's hint, else its user agent; null elsewhere. */
+export async function deviceModel(
+  nav: HintedNavigator,
+): Promise<string | null> {
+  if (!/\bAndroid\b/.test(nav.userAgent)) return null;
+  try {
+    const hinted = modelLabel(
+      (await nav.userAgentData?.getHighEntropyValues?.(["model"]))?.model,
+    );
+    if (hinted) return hinted;
+  } catch {
+    // The hint was refused: the user agent may still say.
+  }
+  return userAgentModel(nav.userAgent);
+}
+
+/** The web app's build: its commit's first 12 characters; null in development. */
+export function releaseLabel(raw: string | undefined): string | null {
+  const value = (raw ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[0-9a-f]{40}/, (commit) => commit.slice(0, 12));
+  return LABEL.test(value) ? value : null;
+}
+
+/** Inlined at build time from AC_RELEASE_ID (next.config.ts). */
+const WEB_RELEASE = releaseLabel(process.env.NEXT_PUBLIC_AC_RELEASE_ID);
+
+const SIGN_IN_KEY = "sx-sign-in";
+const SIGN_IN_MAX_AGE_MS = 10 * 60_000;
+const SIGN_IN_METHODS = new Set<string>([
+  "password",
+  "email_code",
+  "google",
+  "apple",
+  "facebook",
+  "pulse",
+]);
+
+/**
+ * A sign-in just worked: sx.sign_in goes out when the app has the new session
+ * (TelemetryClient.setSession), after the page reload many sign-ins end with.
+ */
+export function noteSignIn(
+  method: SignInMethod,
+  storage: Pick<Storage, "setItem"> | null = sessionStore(),
+  now = Date.now(),
+) {
+  try {
+    storage?.setItem(SIGN_IN_KEY, JSON.stringify({ method, at: now }));
+  } catch {
+    // Without storage the sign-in goes uncounted.
+  }
+}
+
+/** The sign-in this tab noted in the last ten minutes, once. */
+export function takeSignIn(
+  storage: Pick<Storage, "getItem" | "removeItem"> | null = sessionStore(),
+  now = Date.now(),
+): SignInMethod | null {
+  try {
+    const raw = storage?.getItem(SIGN_IN_KEY);
+    if (raw === null || raw === undefined) return null;
+    storage?.removeItem(SIGN_IN_KEY);
+    const kept = JSON.parse(raw) as { method?: unknown; at?: unknown } | null;
+    return kept &&
+      typeof kept.method === "string" &&
+      SIGN_IN_METHODS.has(kept.method) &&
+      typeof kept.at === "number" &&
+      now - kept.at >= 0 &&
+      now - kept.at < SIGN_IN_MAX_AGE_MS
+      ? (kept.method as SignInMethod)
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function sessionStore(): Storage | null {
+  try {
+    return typeof window === "undefined" ? null : window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function localStore(): Storage | null {
+  try {
+    return typeof window === "undefined" ? null : window.localStorage;
+  } catch {
+    return null;
+  }
 }
 
 /** The network as the browser reports it (Chrome and Android WebView only). */
@@ -747,6 +990,8 @@ type Sender = Readonly<{
   id: () => string;
   /** Read at each event; absent under test (no route, device or app). */
   context?: () => EventContext;
+  /** The sign-in noted before the session arrived (takeSignIn), once. */
+  signIn?: () => SignInMethod | null;
 }>;
 
 /** One step for a bug report's trail: the event's name, when, and the route template. */
@@ -793,6 +1038,8 @@ export class TelemetryClient {
       for (const event of this.queue) event.session_id = sessionId;
     }
     this.session = sessionId;
+    const method = sessionId ? this.sender.signIn?.() : null;
+    if (method) this.track("sx.sign_in", { method });
     if (sessionId && this.queue.length) this.schedule();
   }
 
@@ -976,18 +1223,39 @@ type BrowserNavigator = Navigator & {
   connection?: { effectiveType?: string; type?: string };
 };
 
-/** This page: its route, the device's class and tier, the network, web or the app. */
+/** This device's CPU test: this page's, else the last one kept (undefined until read). */
+let deviceCpu: number | null | undefined;
+
+/** Run the CPU test (once a page, when the app is idle) and keep it for the tier. */
+export function measureCpu(): number {
+  deviceCpu = cpuMs();
+  keepCpuMs(localStore(), deviceCpu, Date.now());
+  return deviceCpu;
+}
+
+/**
+ * This page: its route, the device's class and tier, the network, web or the
+ * app, and its version (the phone app's, or the web build's). The tier is the
+ * CPU test's once this device has run it; until then, the guess from cores and
+ * memory (every phone says 8 and 8, so "high").
+ */
 function browserContext(): EventContext {
   const nav = navigator as BrowserNavigator;
+  const app = document.documentElement.hasAttribute(IN_APP_ATTRIBUTE)
+    ? "android"
+    : "web";
+  if (deviceCpu === undefined) deviceCpu = readCpuMs(localStore(), Date.now());
   return {
     route: routeTemplate(window.location.pathname),
     device: deviceClass(window.innerWidth),
-    app: document.documentElement.hasAttribute(IN_APP_ATTRIBUTE)
-      ? "android"
-      : "web",
-    tier: deviceTier(nav.hardwareConcurrency, nav.deviceMemory),
+    app,
+    tier:
+      deviceCpu === null
+        ? deviceTier(nav.hardwareConcurrency, nav.deviceMemory)
+        : cpuTier(deviceCpu),
     ...network(nav.connection, nav.onLine !== false),
-    appVersion: appVersion(nav.userAgent),
+    appVersion:
+      appVersion(nav.userAgent) ?? (app === "web" ? WEB_RELEASE : null),
   };
 }
 
@@ -1001,6 +1269,7 @@ export const telemetry = new TelemetryClient(
         ? crypto.randomUUID()
         : "00000000-0000-4000-8000-000000000000",
     context: browserContext,
+    signIn: () => takeSignIn(),
   },
   browser && process.env.NODE_ENV !== "test",
 );
@@ -1018,3 +1287,18 @@ export const trackOnce = <N extends TelemetryEventName>(
   name: N,
   payload: TelemetryEvents[N],
 ) => telemetry.trackOnce(key, name, payload);
+
+// Tap-to-response timing started by code, not by a touch (telemetry-auto.tsx
+// registers it): a Call press is timed from the moment a call really starts.
+let actionTimer: ((action: TimedAction) => void) | null = null;
+
+export function setActionTimer(
+  timer: ((action: TimedAction) => void) | null,
+): void {
+  actionTimer = timer;
+}
+
+/** Starts timing `action` now, as a tap on it would. */
+export function timeAction(action: TimedAction): void {
+  actionTimer?.(action);
+}

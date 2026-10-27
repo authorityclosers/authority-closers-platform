@@ -266,4 +266,14 @@ it("shows a dialer call with its recording as one row with its Report", async ()
   expect(row.textContent).toContain("From the phone dialer · recorded");
   expect(row.textContent).toContain("Open the call's Report");
   expect(row.textContent).not.toContain("added the call recording");
+  // The whole line opens the Report, not only its small link (27 Oct 2026).
+  expect(row.hasAttribute("data-report")).toBe(true);
+});
+
+it("leaves a phone call without a Report as a plain line", async () => {
+  await act(async () => root.render(<History events={[phoneCall({})]} />));
+  const row = host.querySelector("li:not([aria-hidden])")!;
+  expect(row.textContent).toContain("Asha called · 2:14");
+  expect(row.hasAttribute("data-report")).toBe(false);
+  expect(row.querySelector("a")).toBeNull();
 });

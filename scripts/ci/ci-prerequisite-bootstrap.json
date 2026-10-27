@@ -1,12 +1,12 @@
 [
   {
-    "artifact_id": 12640713994,
-    "digest": "3f924f563560e4ff7f6a3f5f3df45f1419bbdd64979b5b975e0b85cf6d036a3b",
-    "identity": "54ef77ee856ba826a13e048faf53ea88f3bb97f34234e7897fd1e0516c6309a6",
+    "artifact_id": 12708332948,
+    "digest": "5c09dbeeafbe67a6982cc32b1b424b4d61e378c7a11fe9271f2938611fd58966",
+    "identity": "4db81fe74365a50767c32fb12902063603bee31eb3d2a93c3b354e51daa0230c",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 40302589754,
-    "source_sha": "8db0631783865d88f8692134e4bfdaf162964667",
-    "reviewed_source_sha": "fe00fed2f3c9a667c6262d417d8008fe8179b67a",
-    "review": "Orchestrator 26 Oct 2026: producer run 40302589754 (workbench-checks.yml, push, success) on request 8db06317, whose only parent is workbench fe00fed2f and which changes only .wb-ci/request.json (wb-ci --sha, a clean request). Identity 54ef77ee is unchanged from the 25 Oct pin, so the prerequisite inputs are the same. Artifact digest from the API. Replaces the cleared pin (fe00fed2f) after the 25 Oct artifact passed the 36 h reuse window."
+    "run_id": 40446003999,
+    "source_sha": "2e9f74dea945c84a66537ea087a9c8af5b8745ce",
+    "reviewed_source_sha": "b0b28630ec5ddec48e53a69947e40da1edcef4a8",
+    "review": "Orchestrator 27 Oct 2026 (Dependabot bumps): producer run 40446003999 (workbench-checks.yml, push, success, wb-ci --full) on request 2e9f74de, whose only parent is b0b28630e (npm + pip security bumps stacked) and which changes only .wb-ci/request.json. New identity 4db81fe7: pnpm-lock.yaml and uv.lock changed. Artifact digest from the API. Replaces the 54ef77ee pin now that the lockfile commits have landed."
   }
 ]

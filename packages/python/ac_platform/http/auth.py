@@ -16,7 +16,17 @@ from typing import Annotated, Literal, Protocol, cast
 from urllib.parse import parse_qs, urlencode, urlsplit
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Query, Request, Response, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    FastAPI,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    Response,
+    status,
+)
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool, model_validator
 from sqlalchemy import select
@@ -225,18 +235,14 @@ class RequestOriginDenied(DomainError):
     status = 403
 
 
+# What a Viewer or Finance member hears when they ask for a change their role does not
+# make (Roles B; tenancy/roles.py read_only_refusal).
+READ_ONLY_DETAIL = "Your role can view only. Ask an owner or admin to change this."
+
+
 class AdminSurfaceRequired(DomainError):
     code = "admin_surface_required"
     title = "The admin surface is required"
-    status = 403
-
-
-class RoleReadOnly(DomainError):
-    """A Viewer or Finance member asked for a change their role does not make (Roles B,
-    25 Oct 2026; tenancy/roles.py read_only_refusal)."""
-
-    code = "role_read_only"
-    title = "Your role can view only"
     status = 403
 
 
@@ -1905,11 +1911,14 @@ def install_identity_http(
             account_deletion_hook=account_deletion_hook,
         )
 
-    def _refuse_read_only_change(request: Request, resolved: ResolvedActorContext) -> None:
+    def _refuse_read_only_change(  # Roles B, 25 Oct 2026
+        request: Request, resolved: ResolvedActorContext
+    ) -> None:
         # One place for every route: a change the member's role cannot make is refused
-        # before the route runs, so a route nobody listed stays closed.
+        # before the route runs, so a route nobody listed stays closed. A plain 403, not a
+        # DomainError: routes that wrap require_actor turn DomainError into "Sign in".
         if read_only_refusal(resolved.membership_role, request.method, request.url.path):
-            raise RoleReadOnly("Your role can view only. Ask an owner or admin to change this.")
+            raise HTTPException(status.HTTP_403_FORBIDDEN, READ_ONLY_DETAIL)
 
     async def require_actor(request: Request) -> AsyncIterator[AuthenticatedTransaction]:
         key = staff_key(request, settings)

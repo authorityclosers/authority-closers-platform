@@ -79,10 +79,14 @@ it("sets the mode and the business profile in Settings", async () => {
   await act(async () => root.render(<AiRepliesSettings />));
   expect(host.textContent).toContain("AI replies");
   expect(host.textContent).toContain("only about your business");
+  // Off / Suggest / Auto, one segmented choice with its line (owner bug #46).
   const auto = [
-    ...host.querySelectorAll('input[name="ai-mode"]'),
-  ][2] as HTMLInputElement;
+    ...host.querySelectorAll('[aria-label="How it helps"] button'),
+  ].find((item) => item.textContent === "Auto") as HTMLButtonElement;
   await act(async () => auto.click());
+  expect(host.textContent).toContain(
+    "The AI answers by itself within the rules",
+  );
   await act(async () => button("Save").click());
   const saved = calls.find((call) => call.method === "PUT");
   expect(saved?.url).toBe("/v1/lead-desk/ai-replies/settings");
@@ -93,6 +97,30 @@ it("sets the mode and the business profile in Settings", async () => {
     faqs: [{ question: "Sunday visits?", answer: "Yes, 10am to 7pm." }],
   });
   expect(host.textContent).toContain("Saved.");
+});
+
+// Owner bug #46 (27 Oct 2026): while AI replies is coming soon, the settings
+// say they're kept for its launch; the explainer folds under "How it works".
+it("keeps the settings for launch while AI replies is coming soon", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(
+      async () =>
+        new Response(JSON.stringify({ ...SETTINGS, available: false }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+    ),
+  );
+  await act(async () => root.render(<AiRepliesSettings />));
+  expect(host.textContent).toContain("Coming soon");
+  expect(host.textContent).toContain(
+    "Ready for launch: we'll use these settings when AI replies opens.",
+  );
+  const how = host.querySelector("details")!;
+  expect(how.querySelector("summary")?.textContent).toContain("How it works");
+  expect(how.open).toBe(false);
+  expect(how.textContent).toContain("stops when they say STOP");
 });
 
 it("puts the AI's draft in the reply box for the seller to send", async () => {

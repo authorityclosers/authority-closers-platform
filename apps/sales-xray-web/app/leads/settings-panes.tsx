@@ -118,6 +118,7 @@ export function LeadSourcesPane() {
         sandbox={desk.sandbox}
         onChanged={() => undefined}
         onImport={() => router.push(`${LEADS_PATH}?import=file`)}
+        onImportGoogle={() => router.push(`${LEADS_PATH}?import=google`)}
       />
     </div>
   );

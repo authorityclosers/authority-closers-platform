@@ -33,6 +33,7 @@ from ac_platform.identity.models import Person
 from ac_platform.integrations.ai_writes import IN_APP, AiWrites, AiWritesSettings
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import (
+    choices,
     digest_push,
     due_soon,
     duplicate_queue,
@@ -40,6 +41,7 @@ from ac_platform.lead_desk import (
     merging,
     push,
     simulation,
+    spool,
 )
 from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk import team as team_engine
@@ -320,11 +322,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         day: WorkDay = "today",
         before: AwareDatetime | None = None,
         person: UUID | None = None,
+        team: bool = False,
     ) -> ActivityPage:
-        """My work: what a seller did, newest first, today, yesterday or this week."""
-        no_query(request, frozenset({"day", "before", "person"}))
+        """My work: what a seller did, newest first, today, yesterday or this week; with
+        team=1, the whole team's day for those who see the team (Home's Team today)."""
+        no_query(request, frozenset({"day", "before", "person", "team"}))
         async with desk_for(request, response) as lead_desk:
-            return await lead_desk.activity(day=day, before=before, person=person)
+            return await lead_desk.activity(day=day, before=before, person=person, team=team)
 
     @router.get("/notes", response_model=ActivityPage, response_model_by_alias=True)
     async def list_notes(
@@ -830,6 +834,28 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.team()
 
+    @router.get("/team/choices", response_model=choices.TeamChoices, response_model_by_alias=True)
+    async def team_choices(
+        request: Request, response: Response, days: int = choices.DAYS
+    ) -> choices.TeamChoices:
+        """What a seller's languages, areas and products are picked from: the values the
+        organisation's leads carry, with counts (owners and admins; owner bug #49)."""
+        no_query(request, frozenset({"days"}))
+        if not 7 <= days <= 365:
+            raise HTTPException(422, "Pick between 7 and 365 days.", headers=PRIVATE)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.team_choices(days)
+
+    @router.post("/team/choices/fit", response_model=choices.FitView)
+    async def choices_fit(
+        command: choices.FitCommand, request: Request, response: Response
+    ) -> choices.FitView:
+        """How many of last month's leads a seller profile would take: a read, nothing
+        is saved."""
+        no_query(request)
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.choices_fit(command)
+
     @router.put("/team/{person_id}", response_model=Team, response_model_by_alias=True)
     async def save_rep(
         person_id: UUID, command: RepRules, request: Request, response: Response
@@ -989,6 +1015,8 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
 
     application.include_router(router)
     push.attach(application, ctx.sessions, settings.environment)
+    # Leads a release's hold kept for later (lead_desk/spool.py), filed every minute.
+    spool.attach(application, ctx.sessions, settings.environment, app_url=app_url())
 
 
 async def _body(request: Request, limit: int) -> bytes:

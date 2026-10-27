@@ -41,12 +41,13 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type MouseEvent,
   type ReactNode,
 } from "react";
 
 import { callHref, type UploadPolicy } from "../acquisition-client";
 import { notify } from "../notice-center";
+import { rememberOpened } from "../pick-up";
+import { useWorkspaceAccess } from "../workspace-access";
 import { haptic } from "../ui/haptics";
 import { useFlow } from "../telemetry-flows";
 import { CallFacts } from "../call-engine/call-facts";
@@ -83,6 +84,10 @@ import { PersonAvatar } from "../people/person-avatar";
 import { LastCallBrief } from "./call-brief-card";
 import { ReassignSheet } from "./reassign-sheet";
 import { InAppCallHint } from "./call-hint";
+import { CallLink } from "./call-link";
+import type { FirstTapEvent } from "./first-tap";
+import { callStep } from "./phone-call-steps";
+import { CompanyCallStrip, useCompanyCall } from "./company-call";
 import { LeadTasks } from "./lead-tasks";
 import { RemindSheet } from "./remind-sheet";
 import {
@@ -1451,6 +1456,9 @@ export function History({
                 key={`${event.at}-${index}`}
                 data-kind={event.kind}
                 data-at={event.at}
+                data-report={
+                  event.kind === "call" && event.submission_id ? "" : undefined
+                }
                 data-missed={
                   event.direction === "missed" || event.direction === "rejected"
                     ? true
@@ -1721,8 +1729,11 @@ function RecordingUpload({
   callEventId = null,
   hidden = false,
   onAttached,
+  readFound,
 }: {
   detail: LeadDetail;
+  /** Reads `found` from elsewhere than the phone: a company-number call's recording. */
+  readFound?: () => Promise<File>;
   onDone: (next: LeadDetail) => void;
   /** The call on this lead the recording belongs to (one the phone logged from its dialer). */
   callEventId?: string | null;
@@ -1794,7 +1805,9 @@ function RecordingUpload({
     setError(null);
     setState("reading");
     try {
-      const file = await readPhoneRecording(found);
+      const file = readFound
+        ? await readFound()
+        : await readPhoneRecording(found);
       setPicked(file);
       await choose(file);
     } catch {
@@ -1877,7 +1890,7 @@ function RecordingUpload({
     let chosen: File;
     let terms: UploadPolicy;
     try {
-      chosen = await readPhoneRecording(found);
+      chosen = readFound ? await readFound() : await readPhoneRecording(found);
       terms = policy ?? (await readUploadPolicy());
     } catch {
       setError(
@@ -1982,7 +1995,10 @@ function RecordingUpload({
           <span>
             <strong>Analyse this call&apos;s recording</strong>
             <small>
-              Your phone recorded it: {found.name}
+              {readFound
+                ? "Recorded on the company number"
+                : "Your phone recorded it"}
+              : {found.name}
               {found.durationMs
                 ? ` · ${talkTime(found.durationMs / 1000)}`
                 : ""}
@@ -2595,31 +2611,52 @@ export function LeadCard({
   // Call access is checked once per sheet, and again after a call that failed
   // (builder, 24 Oct 2026: a tap took about a second before the dialler opened).
   const callAccess = useRef<boolean | null>(null);
+  // Calls from the company number (owner, 27 Oct 2026): a lead who asked to be
+  // contacted is called through it, and the call lands on the lead by itself.
+  const company = useCompanyCall(
+    lead.lead_id,
+    Boolean(detail.phone && detail.can_edit),
+    () => void readLead(lead.lead_id).then(onChanged, () => undefined),
+  );
   // Inside the phone app the call is placed and followed by the app.
+  // Each step of the hand-off is counted (phone-call-steps.ts, 27 Oct 2026).
   const callFromApp = async (askFirst: boolean) => {
     if (!detail.phone) return;
     setCalling(true);
+    const began = performance.now();
     try {
       if (askFirst) callAccess.current = await askCallAccess();
       else if (callAccess.current !== true) {
         const status = await phoneStatus();
+        callStep("status", { ms: performance.now() - began });
         if (status && !status.callAccess) {
           callAccess.current = false;
           setPermits(true);
+          callStep("permits");
           return;
         }
         callAccess.current = status ? true : null;
       }
       setPermits(false);
+      const sent = performance.now();
       await startPhoneCall({
         leadId: lead.lead_id,
         number: detail.phone,
         name: lead.name,
       });
-    } catch {
+      callStep("bridge_ok", { ms: performance.now() - sent });
+    } catch (error) {
+      callStep("bridge_error", {
+        ms: performance.now() - began,
+        why:
+          error instanceof Error && error.message === "phone_timeout"
+            ? "timeout"
+            : "error",
+      });
       callAccess.current = null;
       setPermits(false);
       rememberCall(lead.lead_id);
+      callStep("fallback_tel", { mode: "browser" });
       window.location.href = `tel:${detail.phone}`;
     } finally {
       setCalling(false);
@@ -2627,18 +2664,35 @@ export function LeadCard({
   };
   const placeCall = () => {
     if (!detail.phone) return;
+    if (company.ready) {
+      rememberCall(lead.lead_id);
+      void company.start();
+      return;
+    }
     if (inPhoneApp()) void callFromApp(false);
     else {
       rememberCall(lead.lead_id);
       window.location.href = `tel:${detail.phone}`;
     }
   };
-  // A tel: link's tap: the app places it, a browser follows the link.
-  const callHere = (event: MouseEvent<HTMLAnchorElement>) => {
+  // A press on Call or the number (first-tap.ts): the app places it, a
+  // browser follows the link. A touch acts as the finger lifts, so a tap
+  // while the sheet still glides calls too (27 Oct 2026); a browser touch
+  // dials itself, since its click may never come.
+  const callHere = (event: FirstTapEvent<HTMLAnchorElement>) => {
+    if (company.ready) {
+      event.preventDefault();
+      rememberCall(lead.lead_id);
+      void company.start();
+      return;
+    }
     if (inPhoneApp()) {
       event.preventDefault();
       void callFromApp(false);
-    } else rememberCall(lead.lead_id);
+      return;
+    }
+    rememberCall(lead.lead_id);
+    if (event.type !== "click") window.location.href = `tel:${detail.phone}`;
   };
   // Once per opening: the intent came with this lead.
   const acted = useRef(false);
@@ -2683,25 +2737,42 @@ export function LeadCard({
   const recordingNow =
     afterCall?.step === "recording" ||
     phoneCall !== null ||
+    company.found !== null ||
     waitingRecording.item !== null;
   const recording =
     detail.can_edit &&
     detail.call_mode === "phone" &&
     me &&
     afterCall?.step !== "outcome" &&
-    (lead.calls > 0 || phoneCall) ? (
+    (lead.calls > 0 || phoneCall || company.found) ? (
       <RecordingUpload
         detail={detail}
         onDone={onChanged}
-        found={phoneCall?.recording ?? waitingRecording.item?.recording ?? null}
+        found={
+          company.found ??
+          phoneCall?.recording ??
+          waitingRecording.item?.recording ??
+          null
+        }
+        readFound={company.found ? company.readRecording : undefined}
         waiting={phoneCall ? !phoneCall.final : false}
         next={afterCall?.step === "recording"}
         onNext={afterCall?.onNext}
         callEventId={
-          phoneCall ? null : (waitingRecording.item?.eventId ?? null)
+          company.found
+            ? (company.call?.eventId ?? null)
+            : phoneCall
+              ? null
+              : (waitingRecording.item?.eventId ?? null)
         }
         hidden={waitingRecording.hidden}
-        onAttached={phoneCall ? undefined : waitingRecording.done}
+        onAttached={
+          company.found
+            ? company.dismiss
+            : phoneCall
+              ? undefined
+              : waitingRecording.done
+        }
       />
     ) : null;
   const tabCounts = {
@@ -2723,9 +2794,9 @@ export function LeadCard({
             value: (
               // The number calls through the app too: a call from the dialler
               // is never seen (builder, 24 Oct 2026).
-              <a href={`tel:${detail.phone}`} onClick={callHere}>
+              <CallLink phone={detail.phone} onCall={callHere}>
                 {displayPhone(detail.phone)}
-              </a>
+              </CallLink>
             ),
           },
         ]
@@ -2809,18 +2880,21 @@ export function LeadCard({
           row, the same size, a box that can't work greyed in its place. */}
       <div className={styles.leadActions}>
         {detail.phone ? (
-          <a
+          <CallLink
             className={styles.callButton}
-            href={`tel:${detail.phone}`}
-            aria-busy={calling || undefined}
-            onClick={callHere}
+            phone={detail.phone}
+            aria-busy={calling || company.busy || undefined}
+            onCall={callHere}
           >
             <Phone size={20} aria-hidden="true" />
             <span>
-              <strong>{calling ? "Calling…" : "Call"}</strong>
-              <small>{displayPhone(detail.phone)}</small>
+              <strong>{calling || company.busy ? "Calling…" : "Call"}</strong>
+              <small>
+                {displayPhone(detail.phone)}
+                {company.ready ? " · company number" : ""}
+              </small>
             </span>
-          </a>
+          </CallLink>
         ) : detail.can_edit ? (
           <button
             type="button"
@@ -2841,6 +2915,11 @@ export function LeadCard({
             phone app's hint, then "Called from another phone? Log it", or
             the call's question once it is open. */}
         {detail.phone ? <InAppCallHint /> : null}
+        <CompanyCallStrip
+          company={company}
+          name={lead.name}
+          phone={detail.phone ?? null}
+        />
         <OpenMessage.Provider value={target ? openMessage : null}>
           {detail.can_edit && afterCall?.step !== "recording" ? outcome : null}
         </OpenMessage.Provider>
@@ -3365,6 +3444,24 @@ export function LeadSheet({
     : null;
   const asking = after?.ask === true;
   const questionOpen = asking || intent === "log" || logging === leadId;
+
+  // Home's "Pick up where you left off" (owner, 27 Oct 2026): the lead this
+  // person opened last, kept on this device only.
+  const workspace = useWorkspaceAccess();
+  const openedId = detail?.lead.lead_id ?? null;
+  const openedName = detail?.lead.name ?? null;
+  const pickUpPerson = workspace?.context?.personId ?? null;
+  const pickUpTenant = workspace?.context?.tenantId ?? null;
+  useEffect(() => {
+    if (!openedId || !openedName || !pickUpPerson || !pickUpTenant) return;
+    rememberOpened({
+      kind: "lead",
+      id: openedId,
+      name: openedName,
+      person: pickUpPerson,
+      tenant: pickUpTenant,
+    });
+  }, [openedId, openedName, pickUpPerson, pickUpTenant]);
 
   useEffect(() => {
     if (!leadId) return;

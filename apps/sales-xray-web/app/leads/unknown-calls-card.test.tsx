@@ -34,7 +34,9 @@ function fakePhone(answer: (message: Sent) => unknown) {
   return sent;
 }
 
-const now = Date.now();
+// A fixed midday, so "today" never crosses midnight: v1.00's CI ran at
+// 00:00 UTC and read a call two minutes back as "yesterday 11:58 PM".
+const now = new Date(2026, 9, 27, 12, 0).getTime();
 const ITEMS = [
   {
     number: "+919123456789",
@@ -56,6 +58,7 @@ let root: Root;
 let host: HTMLDivElement;
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"], now });
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -65,6 +68,7 @@ afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 const button = (label: string) =>

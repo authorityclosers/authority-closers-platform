@@ -1,4 +1,18 @@
 	@staging_release_hold host staging.authorityclosers.com learner-staging.authorityclosers.com admin-staging.authorityclosers.com coach-staging.authorityclosers.com api-staging.authorityclosers.com salesxray-staging.authorityclosers.com
+	# Release-safe intake (lead_desk/spool.py, docs/product/lead-desk/release-safe-intake.md):
+	# a website form, Make, Pabbly or Zapier can't retry a 503, so during the hold their
+	# capture posts go to the spool, which keeps each lead until the API files it.
+	@staging_release_intake {
+		host salesxray-staging.authorityclosers.com
+		method POST
+		path_regexp ^/v1/lead-desk/capture/[0-9a-fA-F-]+(/google-ads)?$
+	}
+	handle @staging_release_intake {
+		import base_security_headers
+		header X-Authority-Closers-Route "release-hold-staging"
+		header Cache-Control "no-store"
+		reverse_proxy ac-staging-api-intake:8080
+	}
 	handle @staging_release_hold {
 		import base_security_headers
 		header X-Authority-Closers-Route "release-hold-staging"

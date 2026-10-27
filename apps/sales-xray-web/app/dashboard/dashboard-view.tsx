@@ -237,8 +237,16 @@ function DashboardDetails({ initial }: { initial: ServerDashboard | null }) {
   const team = useDashboardTeam();
   // In an organisation, Home starts with sales (owner, 22 Oct 2026).
   const salesRole = useSalesRole();
+  // Home v2 (owner, 27 Oct 2026): recent calls and activity first; its Recent
+  // calls merge the saved calls read here with the phone's.
   const sales = salesRole ? (
-    <SalesHome manager={salesRole === "manager"} />
+    <SalesHome
+      manager={salesRole === "manager"}
+      layout="v2"
+      // Team v2 (approved 27 Oct 2026): Needs you, Team today, then the charts.
+      team="v2"
+      recent={recentState.status === "ready" ? recentState.value : null}
+    />
   ) : null;
   useEffect(() => {
     if (team !== true) return;

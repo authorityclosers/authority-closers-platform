@@ -17,7 +17,9 @@ export type UpdateNotification = Readonly<{
     | "report_ready"
     | "analysis_paused"
     | "invite_received"
-    | "bug_solved";
+    | "bug_solved"
+    // A lead given to you, by the lead rules or a manager (27 Oct 2026).
+    | "lead_assigned";
   title: string;
   href: string | null;
   urgent: boolean;
@@ -82,6 +84,7 @@ const KINDS = [
   "analysis_paused",
   "invite_received",
   "bug_solved",
+  "lead_assigned",
 ];
 function notification(value: unknown): UpdateNotification | null {
   const v = record(value);

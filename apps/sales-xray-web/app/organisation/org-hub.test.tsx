@@ -61,7 +61,7 @@ afterEach(async () => {
 });
 
 const render = async (
-  role: "owner" | "admin" | "member",
+  role: "owner" | "admin" | "member" | "viewer",
   kind: "organisation" | "personal" = "organisation",
 ) => {
   await act(async () =>
@@ -135,6 +135,25 @@ it("shows members the team, the numbers and the company only", async () => {
   ]);
 });
 
+// Roles B (27 Oct 2026): a Viewer reads the team, and changes nothing.
+it("shows a Viewer the team, the numbers and insights, and none of the setup", async () => {
+  await render("viewer");
+  expect(tabs().map(([label]) => label)).toEqual([
+    "Overview",
+    "Team",
+    "Analytics",
+    "Insights",
+    "Company",
+  ]);
+  // A setup tab asked for by address opens Overview instead.
+  query = "tab=connections";
+  await render("viewer");
+  expect(
+    host.querySelector('nav[aria-label="Organisation"] a[aria-current="page"]')
+      ?.textContent,
+  ).toBe("Overview");
+});
+
 it("opens each tab here, with the hub's header only", async () => {
   query = "tab=team";
   await render("admin");
@@ -202,6 +221,76 @@ it("switches the part on a tap, and keeps it in the address", async () => {
   ].find((button) => button.textContent === "Developers");
   await act(async () => connection?.click());
   expect(host.querySelector('[data-section="developers"]')).not.toBeNull();
+});
+
+// Owner bug #43 (27 Oct 2026): on a phone the Connections parts wrapped onto
+// two lines and pushed the page past the screen, and the open tab sat out of
+// sight. Each row scrolls inside itself: the open item comes into view, and the
+// row fades at its edge only while more sits past it.
+it("brings the open tab and part into view, and fades a row only while more is past its edge", async () => {
+  // A 358 px row holding 700 px; Connections and Pulse sit at 600 px.
+  const layout: Record<string, (this: HTMLElement) => number> = {
+    clientWidth: () => 358,
+    scrollWidth: () => 700,
+    offsetWidth: () => 100,
+    offsetLeft() {
+      return ["Connections", "Pulse"].includes(this.textContent ?? "")
+        ? 600
+        : 0;
+    },
+  };
+  const saved = Object.keys(layout).map(
+    (key) =>
+      [
+        key,
+        Object.getOwnPropertyDescriptor(HTMLElement.prototype, key),
+      ] as const,
+  );
+  for (const [key, get] of Object.entries(layout))
+    Object.defineProperty(HTMLElement.prototype, key, {
+      configurable: true,
+      get,
+    });
+  const frame = () =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    });
+  const bar = () =>
+    host.querySelector<HTMLElement>('[aria-label="Connections"]')!
+      .parentElement!;
+  try {
+    query = "tab=connections&part=pulse";
+    await render("owner");
+    await frame();
+    const nav = host.querySelector<HTMLElement>(
+      'nav[aria-label="Organisation"]',
+    )!;
+    // 600 + 100 - 358, and 32 px to clear the fade.
+    expect(nav.scrollLeft).toBe(374);
+    expect(nav.getAttribute("data-less")).toBe("");
+    expect(bar().scrollLeft).toBe(374);
+    // Scrolled to its end: the fade is on the left only.
+    expect(bar().getAttribute("data-less")).toBe("");
+    expect(bar().hasAttribute("data-more")).toBe(false);
+    await act(async () => root.unmount());
+    root = createRoot(host);
+
+    query = "tab=connections&part=apps";
+    await render("owner");
+    await frame();
+    // At its start: the fade is on the right only.
+    expect(bar().scrollLeft).toBe(0);
+    expect(bar().hasAttribute("data-less")).toBe(false);
+    expect(bar().getAttribute("data-more")).toBe("");
+  } finally {
+    for (const [key, descriptor] of saved)
+      if (descriptor)
+        Object.defineProperty(HTMLElement.prototype, key, descriptor);
+      else
+        delete (HTMLElement.prototype as unknown as Record<string, unknown>)[
+          key
+        ];
+  }
 });
 
 it("keeps the organisation page as it was outside an organisation", async () => {

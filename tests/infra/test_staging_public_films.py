@@ -423,6 +423,9 @@ compose_for {shlex.quote(old.as_posix())} config
         assert str(previous.as_posix()) + "/compose.staging-public-films.yaml" in rollback
 
 
+FILMS_TARGET = "/run/ac-staging-public-films"
+
+
 def test_effective_compose_override_mounts_only_api_and_keeps_other_services_inert(tmp_path):
     docker = shutil.which("docker.exe" if os.name == "nt" else "docker")
     if docker is None:
@@ -463,8 +466,10 @@ def test_effective_compose_override_mounts_only_api_and_keeps_other_services_ine
     assert result.returncode == 0, result.stderr
     services = json.loads(result.stdout)["services"]
     api = services["api"]
-    mount = api["volumes"][0]
-    assert len(api["volumes"]) == 1 and mount["type"] == "bind"
+    # The API's only other mount is the release intake spool (lead_desk/spool.py).
+    (mount,) = (m for m in api["volumes"] if m["target"] == FILMS_TARGET)
+    assert [m["target"] for m in api["volumes"] if m is not mount] == ["/var/lib/ac-intake-spool"]
+    assert mount["type"] == "bind"
     assert mount["read_only"] is True
 
     # Older compose-go serializes false with omitempty; newer OptOut versions
@@ -493,7 +498,11 @@ def test_effective_compose_override_mounts_only_api_and_keeps_other_services_ine
         timeout=30,
     )
     assert control_result.returncode == 0, control_result.stderr
-    control_mount = json.loads(control_result.stdout)["services"]["api"]["volumes"][0]
+    (control_mount,) = (
+        m
+        for m in json.loads(control_result.stdout)["services"]["api"]["volumes"]
+        if m["target"] == FILMS_TARGET
+    )
     omitted = object()
     disabled_value = mount.get("bind", {}).get("create_host_path", omitted)
     enabled_value = control_mount.get("bind", {}).get("create_host_path", omitted)
@@ -502,7 +511,6 @@ def test_effective_compose_override_mounts_only_api_and_keeps_other_services_ine
     assert mount["source"].endswith(
         "/media-staging/" + hashlib.sha256(SOURCE_MANIFEST.read_bytes()).hexdigest()
     )
-    assert mount["target"] == "/run/ac-staging-public-films"
     assert api["environment"]["AC_MEDIA_STAGING_PUBLIC_FILMS_DELIVERY_ENABLED"] == "true"
     # A third web app does not inherit fixture bytes, provider secrets or media
     # activation from the API-only override.

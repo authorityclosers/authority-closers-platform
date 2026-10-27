@@ -53,7 +53,8 @@ from fastapi import FastAPI
 from sqlalchemy import and_, delete, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ac_platform.lead_desk import digest_push, hours, nudge_push, task_push
+from ac_platform.lead_desk import digest_push, hours, nudge_push, reassign, sheet_sync, task_push
+from ac_platform.lead_desk.connectors import google_ads_api, google_files
 from ac_platform.lead_desk.contracts import PushConfig
 from ac_platform.lead_desk.meetings import REMIND_BEFORE
 from ac_platform.lead_desk.models import Lead, LeadDevice, LeadMeeting
@@ -447,13 +448,20 @@ async def run_push_sender(
                 await asyncio.wait_for(stop.wait(), timeout=every)
 
 
+def _app_url() -> str:
+    from ac_platform.application.settings import get_settings
+
+    return str(get_settings().sales_xray_app_url or "").rstrip("/")
+
+
 async def run_hours_release(
     sessions: async_sessionmaker[AsyncSession],
     stop: asyncio.Event,
     *,
     first_delay: int = _HOURS_TICK,
 ) -> None:
-    """Every minute: leads that waited for work hours go out once work starts."""
+    """Every minute: leads that waited for work hours go out once work starts, and new leads
+    nobody called in time move on where auto-reassign is on."""
     with suppress(TimeoutError):
         await asyncio.wait_for(stop.wait(), timeout=first_delay)
     while not stop.is_set():
@@ -466,8 +474,29 @@ async def run_hours_release(
                     released = await hours.release_held(database, datetime.now(UTC))
                     if released:
                         log.info("lead desk gave out %d leads at the start of work", released)
+                    # Auto-reassign on its own, not only on "Check now" (27 Oct 2026).
+                    moved = await reassign.reassign_due(database, datetime.now(UTC))
+                    if moved:
+                        log.info("lead desk moved %d leads nobody called in time", moved)
         except Exception:  # noqa: BLE001 - the loop must survive a bad pass
             log.warning("lead desk work-hours release failed")
+        # Connected Google Sheets, every 10 minutes (27 Oct 2026). Outside the lock above:
+        # Google is asked first, and nothing waits on it.
+        try:
+            filed = await sheet_sync.sync_due(sessions, datetime.now(UTC))
+            if filed:
+                log.info("lead desk filed %d new rows from Google Sheets", filed)
+        except Exception:  # noqa: BLE001 - the loop must survive a bad pass
+            log.warning("lead desk sheet sync failed")
+        # The organisation's copy in Google Sheets gets its new leads (27 Oct 2026).
+        try:
+            sent = await google_files.send_copies(
+                sessions, google_ads_api.config(), datetime.now(UTC), app_url=_app_url()
+            )
+            if sent:
+                log.info("lead desk added %d leads to Google Sheets copies", sent)
+        except Exception:  # noqa: BLE001 - the loop must survive a bad pass
+            log.warning("lead desk Google Sheets copy failed")
         with suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=_HOURS_TICK)
 

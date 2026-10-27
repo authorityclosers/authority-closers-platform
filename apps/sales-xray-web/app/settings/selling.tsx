@@ -31,6 +31,7 @@ import { openPhoneSetup } from "../leads/phone-onboarding";
 import { PhoneLogCard } from "../leads/phone-log-card";
 import { TakingSwitch } from "../leads/taking-switch";
 import { Panel, Skeleton } from "../ui/kit";
+import { CompanyCallingPanel } from "./company-calling";
 import styles from "./sections.module.css";
 
 const never = () => () => undefined;
@@ -164,6 +165,9 @@ export function SellingSettings() {
           your phone. A logged call you mark private shows to you alone.
         </Line>
       </Panel>
+
+      {/* Shows only where the workspace calls from a company number. */}
+      <CompanyCallingPanel />
 
       <Panel title="Lead alerts">
         <AlertsCard />

@@ -16,7 +16,13 @@ screens of a production build timed with the CPU at 4x and 6x. What is slow at 6
 perf:<screen>:<action>, under "Speed check" ("for the builder" over 2 s for a tap, 5 s for a screen); it closes when a
 later night measures it fast enough. Its report is in runs/<when>/speed/.
 
+After the screens, the same night reads real use on production (the testing plan's lever 6, 27 Oct 2026): the last
+7 days of Sales X-Ray's own telemetry, as Admin → Product telemetry → Fix next ranks it (script errors, dead and
+repeated taps, crashes and freezes, slow screens and server calls). A finding that affects enough people keeps a
+card, marker tel:<environment>:<id>, under "Real use"; it closes when a week passes without it.
+
   ac-bug-radar nightly [--dry-run]               the timer's run (waits while a release cut or ship runs)
+  ac-bug-radar telemetry <environment> [--dry-run]   real use alone: development-live, staging or production
   ac-bug-radar baseline [--cards N] [--dry-run]  the first run: every group recorded; cards for the N to fix first
   ac-bug-radar check [--sha S]                   a release hold: the groups the nightly baseline doesn't know;
                                                  exit 1 when one is high severity; no cards, no state
@@ -31,6 +37,7 @@ State: /var/lib/ac-bug-radar/state.json (groups, their cards and the last runs);
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -455,6 +462,172 @@ def speed_ingest(speed_dir: Path, run: dict, state: dict, *, dry: bool) -> dict:
 
 
 # ---------------------------------------------------------------------------------------------------------------
+# Real use (orchestrator for the owner, 27 Oct 2026, the testing plan's lever 6: errors, dead taps and crashes from
+# real use, carded like the radar). Read inside the environment by ac_platform.telemetry.fix_next_cli: the same answer
+# as Admin → Product telemetry → Fix next, counts and code names only.
+
+TEL_PARENT_MARKER = "tel:parent"
+TEL_MODULE = "ac_platform.telemetry.fix_next_cli"
+TEL_ENVIRONMENTS = ("development-live", "staging", "production")
+TEL_CARDS = 6  # new cards a night
+# People affected times severity (1 a dead tap, 2 slow or refused, 3 a script error or a failing call, 4 a crash): one
+# person whose app crashed, or two with the same script error, make a card; one dead tap does not.
+TEL_MIN_SCORE = 4
+TEL_LIMIT = 200  # every finding, so one ranked low is never taken for gone
+
+
+def telemetry_runner(env: str) -> list[str]:
+    """The command that runs the fix-next module inside the environment (as ac-telemetry-friction does)."""
+    override = os.environ.get("AC_BUG_RADAR_TELEMETRY_RUNNER")
+    if override:
+        return override.split()
+    if env == "development-live":
+        slot = Path("/var/lib/ac-dev-live-backend/active-slot").read_text().strip()
+        python = f"/srv/authority-closers/development/live-backend/{slot}/.venv/bin/python"
+        return [
+            "env", "-i", "PATH=/usr/bin:/bin", "HOME=/root", "LANG=C.UTF-8", python, "-m", TEL_MODULE,
+            "--database-url-file", "/etc/authority-closers/development/database-url-live",
+        ]  # fmt: skip
+    return [
+        "docker", "exec", f"ac-application-{env}-sales-xray-worker-1", "python", "-m", TEL_MODULE,
+        "--database-url-file", "/run/ac-sales-xray/database-url",
+    ]  # fmt: skip
+
+
+def read_fix_next(env: str) -> dict | None:
+    """The environment's fix-next answer over the last 7 days; None while its release has no module yet."""
+    done = subprocess.run(  # noqa: S603 - argv lists from fixed commands; no shell is used.
+        [*telemetry_runner(env), "--environment", env, "--window", "7d", "--limit", str(TEL_LIMIT)],
+        capture_output=True,
+        text=True,
+        timeout=600,
+        cwd="/",
+        check=False,
+    )
+    if done.returncode != 0 and "No module named" in done.stderr:
+        return None
+    try:
+        answer = json.loads(done.stdout.strip().splitlines()[-1])
+    except (IndexError, json.JSONDecodeError):
+        raise RuntimeError(f"fix-next module gave no answer (exit {done.returncode})") from None
+    if done.returncode != 0 or "error" in answer:
+        raise RuntimeError(f"fix-next module refused: {answer.get('error', done.returncode)}")
+    return answer
+
+
+def tel_marker(env: str, key: str) -> str:
+    return f"tel:{env}:{hashlib.sha1(key.encode()).hexdigest()[:12]}"  # noqa: S324 - a name, not a secret
+
+
+def tel_parent(state: dict, *, dry: bool) -> str | None:
+    if state.get("tel_parent"):
+        return state["tel_parent"]
+    notes = "\n".join(
+        [
+            "Every night the radar reads the last 7 days of real use (Sales X-Ray's own telemetry: script errors, dead",
+            "and repeated taps, crashes and freezes, slow screens and server calls, refused permissions) and keeps a",
+            "card for each that affects enough people: the same findings as Admin → Product telemetry → Fix next.",
+            "Counts and code names only, never a person or their data. Cards close when a week passes without it.",
+            f"Marker: {TEL_PARENT_MARKER}",
+        ]
+    )
+    task = ensure_task(TEL_PARENT_MARKER, "Real use: errors, dead taps and crashes, every night", notes, HQ, dry=dry)
+    if task and not dry:
+        state["tel_parent"] = task
+    return task
+
+
+def tel_text(item: dict, env: str) -> tuple[str, str]:
+    where = "prod" if env == "production" else env
+    title = f"[{where}] Real use: {names_out(item['title'])}"
+    lines = [names_out(item.get("task", item["title"]))]
+    unit = item.get("unit", "")
+    if item.get("now") is not None:
+        before = item.get("before")
+        earlier = f" (the week before: {before})" if before is not None else ""
+        lines.append(f"Measure now: {item['now']} {unit}{earlier}")
+    releases = [
+        f"{part['release']} {part['value']}" for part in item.get("by_release", []) if part.get("value") is not None
+    ]
+    if releases:
+        lines.append("By release: " + " · ".join(releases))
+    lines += [
+        "Live in Admin → Product telemetry → Fix next.",
+        f"Finding {item['key']}. Marker: {tel_marker(env, item['key'])}",
+    ]
+    return title, "\n".join(lines)
+
+
+def telemetry_ingest(env: str, answer: dict, state: dict, *, dry: bool) -> dict:
+    """Cards for what real use shows; a card closes when its finding is gone from the last week, and reopens when it
+    comes back."""
+    known = state.setdefault("telemetry", {}).setdefault(env, {})
+    items = {item["key"]: item for item in answer.get("items", [])}
+    seen = now().isoformat(timespec="seconds")
+    counts = {"findings": len(items), "cards": 0, "reopened": 0, "closed": 0, "waiting": 0}
+    budget = TEL_CARDS
+    for key, item in sorted(items.items(), key=lambda pair: -pair[1].get("score", 0)):
+        old = known.get(key, {})
+        score = item.get("score", 0)
+        record = {**old, "score": score, "people": item.get("people", 0), "first_seen": old.get("first_seen", seen)}
+        if old.get("status") == "open":
+            known[key] = {**record, "last_seen": seen}
+            continue
+        back = old.get("status") == "fixed" and old.get("task")
+        if not back and score < TEL_MIN_SCORE:
+            known[key] = {**record, "status": "known", "last_seen": seen}
+            continue
+        if not back and budget <= 0:
+            known[key] = {**record, "status": "waiting", "last_seen": seen}
+            counts["waiting"] += 1
+            continue
+        title, notes = tel_text(item, env)
+        if dry:
+            print(json.dumps({"card": tel_marker(env, key), "title": title}, ensure_ascii=False))
+            continue
+        marker = tel_marker(env, key)
+        task = ensure_task(marker, title, notes, tel_parent(state, dry=False) or HQ, dry=False)
+        if back:
+            pulse([{"op": "move", "id": task, "status": "open", "note": f"Back in real use ({seen})."}], dry=False)
+            counts["reopened"] += 1
+        else:
+            counts["cards"] += 1
+            budget -= 1
+        known[key] = {**record, "status": "open", "task": task, "marker": marker, "last_seen": seen}
+    # A finding only counts as gone when the answer lists every finding over a whole read.
+    complete = not answer.get("more") and not answer.get("truncated")
+    for key, old in list(known.items()):
+        if old.get("status") != "open" or key in items or not complete:
+            continue
+        if dry:
+            print(json.dumps({"close": old.get("marker") or tel_marker(env, key)}))
+            continue
+        note = (
+            f"Gone from real use: not seen in the last {answer.get('window', '7d')} on {env} "
+            f"(it affected {old.get('people', '?')} people)."
+        )
+        marker = old.get("marker") or tel_marker(env, key)
+        pulse([{"op": "close", "marker": marker, "status": "done", "note": note}], dry=False)
+        known[key] = {**old, "status": "fixed", "fixed_at": seen}
+        counts["closed"] += 1
+    print(json.dumps({"telemetry": {env: counts}}))
+    return counts
+
+
+def telemetry(env: str, *, dry: bool) -> dict | None:
+    """One environment's real-use cards; None while its release has no fix-next module yet."""
+    answer = read_fix_next(env)
+    if answer is None:
+        print(json.dumps({"telemetry": {env: "no fix-next module in this release yet"}}))
+        return None
+    state = load_state()
+    counts = telemetry_ingest(env, answer, state, dry=dry)
+    if not dry:
+        save_state(state)
+    return counts
+
+
+# ---------------------------------------------------------------------------------------------------------------
 # Running the radar on GitHub
 
 
@@ -653,7 +826,17 @@ def main(argv: list[str]) -> int:
             ai_review(dest, ai_pages, state, dry=dry)
             if not dry:
                 save_state(state)
+        # Real use, after the screens: a failure here never costs the night's radar cards.
+        if command == "nightly":
+            for env in os.environ.get("AC_BUG_RADAR_TELEMETRY_ENVS", "production").split():
+                try:
+                    telemetry(env, dry=dry)
+                except Exception as error:  # noqa: BLE001 - one line in the journal, the radar's cards stand
+                    print(json.dumps({"telemetry": {env: f"failed: {str(error)[:200]}"}}))
         prune()
+        return 0
+    if command == "telemetry" and rest and rest[0] in TEL_ENVIRONMENTS:
+        telemetry(rest[0], dry=dry)
         return 0
     if command == "ingest" and rest and not rest[0].startswith("--"):
         baseline = "--baseline" in rest

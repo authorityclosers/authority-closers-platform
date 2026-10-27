@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -19,6 +19,7 @@ import {
   Kpi,
   Panel,
   QueryTabs,
+  Segmented,
   Spark,
   Table,
   Tiles,
@@ -363,4 +364,73 @@ it("outlines a row at its own shape: avatar circle, lines and a chip", () => {
   expect(
     renderToStaticMarkup(<SkeletonRow avatar={false} end={false} />),
   ).not.toContain("border-radius");
+});
+
+// Owner bug #45 (27 Oct 2026): the chosen segment's lift is one pill that
+// slides to the next choice; it never animates into its first place.
+it("slides one pill to the chosen segment", async () => {
+  const widths: Record<string, number> = { Off: 40, Suggest: 80, Auto: 50 };
+  const lefts: Record<string, number> = { Off: 2, Suggest: 44, Auto: 126 };
+  const saved = ["offsetWidth", "offsetLeft"].map(
+    (key) =>
+      [
+        key,
+        Object.getOwnPropertyDescriptor(HTMLElement.prototype, key),
+      ] as const,
+  );
+  Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return widths[this.textContent ?? ""] ?? 0;
+    },
+  });
+  Object.defineProperty(HTMLElement.prototype, "offsetLeft", {
+    configurable: true,
+    get(this: HTMLElement) {
+      return lefts[this.textContent ?? ""] ?? 0;
+    },
+  });
+  try {
+    const Choice = () => {
+      const [value, setValue] = useState<"off" | "suggest" | "auto">("off");
+      return (
+        <Segmented
+          label="How it helps"
+          value={value}
+          items={[
+            { key: "off", label: "Off" },
+            { key: "suggest", label: "Suggest" },
+            { key: "auto", label: "Auto" },
+          ]}
+          onChange={setValue}
+        />
+      );
+    };
+    await act(async () => root.render(<Choice />));
+    const group = host.querySelector<HTMLElement>('[role="group"]')!;
+    const pill = group.querySelector<HTMLElement>('[aria-hidden="true"]')!;
+    expect(group.hasAttribute("data-pill")).toBe(true);
+    expect(pill.style.width).toBe("40px");
+    expect(pill.style.transform).toBe("translateX(2px)");
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 40));
+    });
+    // Placed first, then free to slide.
+    expect(group.hasAttribute("data-slide")).toBe(true);
+    const suggest = [...group.querySelectorAll("button")].find(
+      (button) => button.textContent === "Suggest",
+    )!;
+    await act(async () => suggest.click());
+    expect(suggest.getAttribute("aria-pressed")).toBe("true");
+    expect(pill.style.width).toBe("80px");
+    expect(pill.style.transform).toBe("translateX(44px)");
+  } finally {
+    for (const [key, descriptor] of saved)
+      if (descriptor)
+        Object.defineProperty(HTMLElement.prototype, key, descriptor);
+      else
+        delete (HTMLElement.prototype as unknown as Record<string, unknown>)[
+          key
+        ];
+  }
 });

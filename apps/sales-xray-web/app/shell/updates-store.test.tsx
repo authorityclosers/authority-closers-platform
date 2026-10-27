@@ -54,6 +54,8 @@ function responses() {
 }
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
+  vi.restoreAllMocks();
   vi.useRealTimers();
 });
 it("shares concurrent refreshes and clears the badge from a successful account receipt", async () => {
@@ -260,7 +262,7 @@ it("does not dispatch queued acknowledgements after the account/session changes"
   await rejected;
   expect(fetcher).toHaveBeenCalledOnce();
 });
-it("refreshes on focus and every five minutes, and hides another account's cached list", async () => {
+it("loads after the first screen, then on focus and every five minutes on view, and hides another account's cached list", async () => {
   vi.useFakeTimers();
   const fetcher = responses();
   vi.stubGlobal("fetch", fetcher);
@@ -283,14 +285,31 @@ it("refreshes on focus and every five minutes, and hides another account's cache
         <Viewer />
       </WorkspaceAccessContext.Provider>,
     );
+  // A page one second old, outside the test switch.
+  vi.stubEnv("NODE_ENV", "production");
+  vi.spyOn(performance, "now").mockReturnValue(1_000);
+  let visibility: DocumentVisibilityState = "visible";
+  vi.spyOn(document, "visibilityState", "get").mockImplementation(
+    () => visibility,
+  );
   try {
     await act(async () => render(access));
+    // Not among the app's first requests: once the page is 3 s old.
+    expect(fetcher).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTime(1_999));
+    expect(fetcher).not.toHaveBeenCalled();
+    await act(async () => vi.advanceTimersByTime(1));
     expect(host.textContent).toBe(note.title);
     expect(fetcher).toHaveBeenCalledTimes(2);
     await act(async () => window.dispatchEvent(new Event("focus")));
     expect(fetcher).toHaveBeenCalledTimes(4);
     await act(async () => vi.advanceTimersByTime(5 * 60 * 1000));
     expect(fetcher).toHaveBeenCalledTimes(6);
+    // Nothing while the app is in the background.
+    visibility = "hidden";
+    await act(async () => vi.advanceTimersByTime(10 * 60 * 1000));
+    expect(fetcher).toHaveBeenCalledTimes(6);
+    visibility = "visible";
     fetcher.mockImplementation(() =>
       Promise.resolve(new Response(null, { status: 503 })),
     );

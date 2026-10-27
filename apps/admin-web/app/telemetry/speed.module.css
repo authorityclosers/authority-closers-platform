@@ -1,0 +1,115 @@
+/* Speed and journeys: sample counts beside every number, toned values that also say their
+   value, and the journey's steps. Tokens only, so light and dark share one layout. */
+
+.note {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.headline {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md, 15px);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.headline[data-tone="warn"],
+.toned[data-tone="warn"] {
+  color: var(--sx-warn);
+}
+
+.headline[data-tone="bad"],
+.toned[data-tone="bad"] {
+  color: var(--sx-bad);
+}
+
+.toned[data-tone="good"] {
+  color: var(--sx-good);
+}
+
+.toned {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.value {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* Too few samples to tell: still shown, never as a firm number. */
+.value[data-few],
+.count[data-few] {
+  color: var(--sx-muted);
+  font-style: italic;
+}
+
+.n {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-2xs, 11px);
+  font-style: normal;
+  font-weight: 400;
+}
+
+.endpoint {
+  max-width: 320px;
+  overflow-wrap: anywhere;
+}
+
+.journey {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: step;
+}
+
+.step {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) minmax(0, 1fr) minmax(0, auto);
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  font-size: var(--sx-text-xs);
+  counter-increment: step;
+}
+
+.stepLabel {
+  color: var(--sx-ink);
+}
+
+.stepLabel::before {
+  content: counter(step) ". ";
+  color: var(--sx-muted);
+}
+
+.stepTrack {
+  height: 14px;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+}
+
+.stepTrack i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sx-accent);
+}
+
+.stepValue {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .step {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .stepTrack {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
