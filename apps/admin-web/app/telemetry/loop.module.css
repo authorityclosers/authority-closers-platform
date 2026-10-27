@@ -55,7 +55,9 @@
   display: flex;
   gap: 4px;
   padding: 3px;
-  width: max-content;
+  /* fit-content, not max-content: a max-content width set the page's grid column to every
+     tab's width, so on a phone the whole page scrolled sideways instead of the tabs. */
+  width: fit-content;
   max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--sx-line);
