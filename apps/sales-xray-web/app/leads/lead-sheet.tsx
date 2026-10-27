@@ -41,7 +41,6 @@ import {
   useRef,
   useState,
   type KeyboardEvent,
-  type MouseEvent,
   type ReactNode,
 } from "react";
 
@@ -85,6 +84,9 @@ import { PersonAvatar } from "../people/person-avatar";
 import { LastCallBrief } from "./call-brief-card";
 import { ReassignSheet } from "./reassign-sheet";
 import { InAppCallHint } from "./call-hint";
+import { CallLink } from "./call-link";
+import type { FirstTapEvent } from "./first-tap";
+import { callStep } from "./phone-call-steps";
 import { CompanyCallStrip, useCompanyCall } from "./company-call";
 import { LeadTasks } from "./lead-tasks";
 import { RemindSheet } from "./remind-sheet";
@@ -2617,30 +2619,44 @@ export function LeadCard({
     () => void readLead(lead.lead_id).then(onChanged, () => undefined),
   );
   // Inside the phone app the call is placed and followed by the app.
+  // Each step of the hand-off is counted (phone-call-steps.ts, 27 Oct 2026).
   const callFromApp = async (askFirst: boolean) => {
     if (!detail.phone) return;
     setCalling(true);
+    const began = performance.now();
     try {
       if (askFirst) callAccess.current = await askCallAccess();
       else if (callAccess.current !== true) {
         const status = await phoneStatus();
+        callStep("status", { ms: performance.now() - began });
         if (status && !status.callAccess) {
           callAccess.current = false;
           setPermits(true);
+          callStep("permits");
           return;
         }
         callAccess.current = status ? true : null;
       }
       setPermits(false);
+      const sent = performance.now();
       await startPhoneCall({
         leadId: lead.lead_id,
         number: detail.phone,
         name: lead.name,
       });
-    } catch {
+      callStep("bridge_ok", { ms: performance.now() - sent });
+    } catch (error) {
+      callStep("bridge_error", {
+        ms: performance.now() - began,
+        why:
+          error instanceof Error && error.message === "phone_timeout"
+            ? "timeout"
+            : "error",
+      });
       callAccess.current = null;
       setPermits(false);
       rememberCall(lead.lead_id);
+      callStep("fallback_tel", { mode: "browser" });
       window.location.href = `tel:${detail.phone}`;
     } finally {
       setCalling(false);
@@ -2659,8 +2675,11 @@ export function LeadCard({
       window.location.href = `tel:${detail.phone}`;
     }
   };
-  // A tel: link's tap: the app places it, a browser follows the link.
-  const callHere = (event: MouseEvent<HTMLAnchorElement>) => {
+  // A press on Call or the number (first-tap.ts): the app places it, a
+  // browser follows the link. A touch acts as the finger lifts, so a tap
+  // while the sheet still glides calls too (27 Oct 2026); a browser touch
+  // dials itself, since its click may never come.
+  const callHere = (event: FirstTapEvent<HTMLAnchorElement>) => {
     if (company.ready) {
       event.preventDefault();
       rememberCall(lead.lead_id);
@@ -2670,7 +2689,10 @@ export function LeadCard({
     if (inPhoneApp()) {
       event.preventDefault();
       void callFromApp(false);
-    } else rememberCall(lead.lead_id);
+      return;
+    }
+    rememberCall(lead.lead_id);
+    if (event.type !== "click") window.location.href = `tel:${detail.phone}`;
   };
   // Once per opening: the intent came with this lead.
   const acted = useRef(false);
@@ -2772,9 +2794,9 @@ export function LeadCard({
             value: (
               // The number calls through the app too: a call from the dialler
               // is never seen (builder, 24 Oct 2026).
-              <a href={`tel:${detail.phone}`} onClick={callHere}>
+              <CallLink phone={detail.phone} onCall={callHere}>
                 {displayPhone(detail.phone)}
-              </a>
+              </CallLink>
             ),
           },
         ]
@@ -2858,11 +2880,11 @@ export function LeadCard({
           row, the same size, a box that can't work greyed in its place. */}
       <div className={styles.leadActions}>
         {detail.phone ? (
-          <a
+          <CallLink
             className={styles.callButton}
-            href={`tel:${detail.phone}`}
-            aria-busy={calling || undefined}
-            onClick={callHere}
+            phone={detail.phone}
+            aria-busy={calling || company.busy || undefined}
+            onCall={callHere}
           >
             <Phone size={20} aria-hidden="true" />
             <span>
@@ -2872,7 +2894,7 @@ export function LeadCard({
                 {company.ready ? " · company number" : ""}
               </small>
             </span>
-          </a>
+          </CallLink>
         ) : detail.can_edit ? (
           <button
             type="button"
