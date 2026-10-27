@@ -222,3 +222,26 @@ it("shows a solved report and leaves out a kind it does not know", async () => {
   });
   expect(parsed.notifications.map((item) => item.id)).toEqual(["a"]);
 });
+
+// 27 Oct 2026: "a lead is assigned" is one of the bell's lines (and pops when urgent).
+it("shows a lead given to you", async () => {
+  const { parseNotifications } = await import("./updates-client");
+  const parsed = parseNotifications({
+    notifications: [
+      {
+        id: "c",
+        kind: "lead_assigned",
+        title: "Neha Fictional is your lead now",
+        body: "New from your website form.",
+        href: "/leads",
+        urgent: true,
+        created_at: "2026-10-27T04:30:00Z",
+        read: false,
+      },
+    ],
+    unread_count: 1,
+  });
+  expect(parsed.notifications).toEqual([
+    expect.objectContaining({ id: "c", kind: "lead_assigned" }),
+  ]);
+});

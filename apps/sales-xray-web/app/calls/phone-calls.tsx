@@ -12,144 +12,72 @@
  * read (GET /v1/lead-desk/activity) and Leads' phone cards; nothing new.
  */
 
-import {
-  ChevronRight,
-  PhoneIncoming,
-  PhoneMissed,
-  PhoneOff,
-  PhoneOutgoing,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Fragment, useEffect, useState } from "react";
+import { useState } from "react";
 
-import { callHref } from "../acquisition-client";
-import { displayName } from "../display-name";
 import { AddLeadDialog } from "../leads/capture-dialogs";
 import { handOverLead } from "../leads/lead-handoff";
-import {
-  LeadsError,
-  readActivity,
-  type ActivityItem,
-  type LeadEvent,
-} from "../leads/leads-client";
-import { uniqueEvents } from "../leads/my-work";
 import { forgetUnknown } from "../leads/native-phone";
-import { clockTime } from "../leads/phone-call-text";
 import { PhoneLogCard } from "../leads/phone-log-card";
 import { RecordedCallsCard } from "../leads/recorded-calls";
 import { UnknownCallsCard } from "../leads/unknown-calls-card";
-import { Avatar, Skeleton } from "../ui/kit";
+import { Skeleton } from "../ui/kit";
+import {
+  CallRows,
+  rowFromActivity,
+  useWeekActivity,
+  weekCalls,
+} from "./call-rows";
 import styles from "./phone-calls.module.css";
+
+export { callLine, dayLabel, weekCalls } from "./call-rows";
 
 /** Calls on the Calls page; the rest are in My work, with notes and moves. */
 export const SHOWN_CALLS = 6;
 const MY_WORK = "/leads?tab=work";
 
-/** "You called · 3:12", "They called · 1:05", "Missed call": the seller's side. */
-export function callLine(event: LeadEvent): string {
-  const talk = event.duration_seconds ? clockTime(event.duration_seconds) : "";
-  switch (event.direction) {
-    case "incoming":
-      return talk ? `They called · ${talk}` : "They called";
-    case "missed":
-      return "Missed call";
-    case "rejected":
-      return "You cut their call";
-    case "blocked":
-      return "Blocked call";
-    default:
-      if (event.simulated) return "Sample call";
-      if (talk) return `You called · ${talk}`;
-      return event.via === "phone" ? "You called · no answer" : "You called";
-  }
-}
-
-const ICONS: Record<string, LucideIcon> = {
-  incoming: PhoneIncoming,
-  missed: PhoneMissed,
-  rejected: PhoneMissed,
-  blocked: PhoneOff,
-};
-
-const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
-
-/** "Today", "Yesterday", or "Monday 26 Oct". */
-export function dayLabel(at: string, now: Date = new Date()): string {
-  const day = new Date(at);
-  if (sameDay(day, now)) return "Today";
-  const yesterday = new Date(now);
-  yesterday.setDate(now.getDate() - 1);
-  if (sameDay(day, yesterday)) return "Yesterday";
-  return day.toLocaleDateString(undefined, {
-    weekday: "long",
-    day: "numeric",
-    month: "short",
-  });
-}
-
-const clock = (at: string) =>
-  new Date(at).toLocaleTimeString(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-  });
-
-/** This week's calls, newest first, each once; nothing from an odd answer. */
-export function weekCalls(items: unknown): ActivityItem[] {
-  if (!Array.isArray(items)) return [];
-  return uniqueEvents(items as ActivityItem[]).filter(
-    (item) => item?.event?.kind === "call",
+/** Three rows in the list's final shape while the calls load. */
+export function CallRowsSkeleton({
+  label,
+  rows = 3,
+}: {
+  label: string;
+  rows?: number;
+}) {
+  return (
+    <ol className={styles.list} aria-busy="true" aria-label={label}>
+      {Array.from({ length: rows }, (_, index) => (
+        <li key={index} className={styles.skeleton}>
+          <Skeleton width={36} height={36} radius="circle" />
+          <span>
+            <Skeleton width="55%" height={14} />
+            <Skeleton width="35%" height={12} />
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
-type Calls =
-  | { status: "loading" }
-  | { status: "ready"; items: ActivityItem[]; more: boolean }
-  | { status: "error" }
-  // Outside an organisation, or signed out: Calls shows saved calls only.
-  | { status: "off" };
-
 export function PhoneCalls() {
   const router = useRouter();
-  const [state, setState] = useState<Calls>({ status: "loading" });
-  const [attempt, setAttempt] = useState(0);
+  const [week, retry] = useWeekActivity();
   const [unknown, setUnknown] = useState<string | null>(null);
   const [now] = useState(() => new Date());
 
-  useEffect(() => {
-    const controller = new AbortController();
-    readActivity("week", null, controller.signal).then(
-      (page) => {
-        const calls = weekCalls(page?.items);
-        setState({
-          status: "ready",
-          items: calls.slice(0, SHOWN_CALLS),
-          more: calls.length > SHOWN_CALLS || Boolean(page?.next_before),
-        });
-      },
-      (reason: unknown) => {
-        if (reason instanceof DOMException && reason.name === "AbortError")
-          return;
-        setState(
-          reason instanceof LeadsError &&
-            [401, 403, 404].includes(reason.status)
-            ? { status: "off" }
-            : { status: "error" },
-        );
-      },
-    );
-    return () => controller.abort();
-  }, [attempt]);
-
-  if (state.status === "off") return null;
-  const items = state.status === "ready" ? state.items : [];
+  if (week.status === "off") return null;
+  const calls = week.status === "ready" ? weekCalls(week.items) : [];
+  const items = calls.slice(0, SHOWN_CALLS);
+  const more =
+    week.status === "ready" && (calls.length > SHOWN_CALLS || week.more);
 
   return (
     <section className={styles.calls} aria-labelledby="your-calls-title">
       <div className={styles.head}>
         <h2 id="your-calls-title">Your calls</h2>
-        {state.status === "ready" && items.length ? (
+        {week.status === "ready" && items.length ? (
           <Link className={styles.more} href={MY_WORK}>
             My work
             <ChevronRight size={16} aria-hidden="true" />
@@ -158,29 +86,12 @@ export function PhoneCalls() {
       </div>
       <PhoneLogCard as="offer" />
       <RecordedCallsCard />
-      {state.status === "loading" ? (
-        <ol className={styles.list} aria-busy="true" aria-label="Your calls">
-          {Array.from({ length: 3 }, (_, index) => (
-            <li key={index} className={styles.skeleton}>
-              <Skeleton width={36} height={36} radius="circle" />
-              <span>
-                <Skeleton width="55%" height={14} />
-                <Skeleton width="35%" height={12} />
-              </span>
-            </li>
-          ))}
-        </ol>
-      ) : state.status === "error" ? (
+      {week.status === "loading" ? (
+        <CallRowsSkeleton label="Your calls" />
+      ) : week.status === "error" ? (
         <div className={styles.quiet} role="status">
           <span>Your calls didn&apos;t load.</span>
-          <button
-            type="button"
-            className={styles.retry}
-            onClick={() => {
-              setState({ status: "loading" });
-              setAttempt((value) => value + 1);
-            }}
-          >
+          <button type="button" className={styles.retry} onClick={retry}>
             Try again
           </button>
         </div>
@@ -195,58 +106,13 @@ export function PhoneCalls() {
           </Link>
         </div>
       ) : (
-        <ol className={styles.list} aria-label="Your calls, newest first">
-          {items.map((item, index) => {
-            const event = item.event;
-            const Icon = ICONS[event.direction ?? ""] ?? PhoneOutgoing;
-            const report = event.submission_id;
-            const day = dayLabel(event.at, now);
-            const newDay =
-              index === 0 || dayLabel(items[index - 1].event.at, now) !== day;
-            const missed =
-              event.direction === "missed" || event.direction === "rejected";
-            return (
-              <Fragment key={item.event_id}>
-                {newDay ? (
-                  <li className={styles.day} aria-hidden="true">
-                    {day}
-                  </li>
-                ) : null}
-                <li>
-                  <Link
-                    className={styles.row}
-                    href={report ? callHref(report) : "/leads"}
-                    data-sx-action={report ? "report_open" : "lead_open"}
-                    data-missed={missed ? "" : undefined}
-                    onClick={(click) => {
-                      if (report) return;
-                      click.preventDefault();
-                      handOverLead(item.lead_id, false, event.at);
-                      router.push("/leads");
-                    }}
-                  >
-                    <Avatar name={item.lead_name} size={36} />
-                    <span className={styles.text}>
-                      <strong>{displayName(item.lead_name)}</strong>
-                      <span className={styles.line}>
-                        <Icon size={14} aria-hidden="true" />
-                        {callLine(event)}
-                      </span>
-                    </span>
-                    <span className={styles.end}>
-                      <time dateTime={event.at}>{clock(event.at)}</time>
-                      {report ? (
-                        <span className={styles.report}>Report</span>
-                      ) : null}
-                    </span>
-                  </Link>
-                </li>
-              </Fragment>
-            );
-          })}
-        </ol>
+        <CallRows
+          rows={items.map(rowFromActivity)}
+          now={now}
+          label="Your calls, newest first"
+        />
       )}
-      {state.status === "ready" && state.more ? (
+      {more ? (
         <Link className={styles.all} href={MY_WORK}>
           See all in My work
         </Link>

@@ -33,9 +33,12 @@ import {
   type ReactNode,
 } from "react";
 
+import type { LibrarySubmission } from "../acquisition-client";
+import { useWeekActivity } from "../calls/call-rows";
 import { displayName } from "../display-name";
 import { DayTiles, MyStages } from "./day-board";
 import { FirstRun } from "./first-run";
+import { HomeActivity, HomeRecentCalls, PickUp, SetupStart } from "./home-v2";
 import { whyLine } from "../leads/desk-view";
 import { handOverLead } from "../leads/lead-handoff";
 import {
@@ -491,7 +494,17 @@ function LeadLink({ row }: { row: LeadRow }) {
   );
 }
 
-function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
+function SellerHome({
+  state,
+  before = null,
+  after = null,
+}: {
+  state: ReturnType<typeof useDesk>;
+  /** Home v2 (27 Oct 2026): what goes above Today, and what replaces the
+   *  stage strip and Recently called below it. */
+  before?: ReactNode;
+  after?: ReactNode;
+}) {
   // Read beside the desk, so both land together (Lead OS's team engine).
   const myDay = useMyDay();
   const [now] = useState(() => Date.now());
@@ -536,6 +549,7 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
           pausedUntil={desk.me.paused_until ?? null}
         />
       </section>
+      {before}
       <section className={styles.block} aria-labelledby="today-title">
         <div className={styles.head}>
           <h2 id="today-title">Today</h2>
@@ -614,8 +628,12 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
           </>
         )}
       </section>
-      <MyStages />
-      <RecentlyCalled />
+      {after ?? (
+        <>
+          <MyStages />
+          <RecentlyCalled />
+        </>
+      )}
       <DayNumbers desk={desk} myDay={myDay} />
     </>
   );
@@ -699,7 +717,41 @@ function brandNew(desk: HomeDesk): boolean {
   );
 }
 
-export function SalesHome({ manager }: { manager: boolean }) {
+/** Home v2's seller day: where you left off and your last calls above Today,
+ *  your recent activity below it, from one read of this week's work. */
+function SellerHomeV2({
+  state,
+  recent,
+}: {
+  state: ReturnType<typeof useDesk>;
+  recent: readonly LibrarySubmission[] | null;
+}) {
+  const [week] = useWeekActivity();
+  return (
+    <SellerHome
+      state={state}
+      before={
+        <>
+          <PickUp />
+          <HomeRecentCalls week={week} saved={recent} />
+        </>
+      }
+      after={<HomeActivity week={week} />}
+    />
+  );
+}
+
+export function SalesHome({
+  manager,
+  layout = "v1",
+  recent = null,
+}: {
+  manager: boolean;
+  /** "v2": the Home redesign (27 Oct 2026), on review fixtures until signed off. */
+  layout?: "v1" | "v2";
+  /** The latest saved calls the dashboard already read, for v2's Recent calls. */
+  recent?: readonly LibrarySubmission[] | null;
+}) {
   const desk = useDesk();
   const [view, setView] = useHomeView();
   const teamLeads = useTeamLeadCount(manager);
@@ -711,7 +763,11 @@ export function SalesHome({ manager }: { manager: boolean }) {
   )
     return (
       <div className={styles.home}>
-        <FirstRun team={manager ? "invite" : null} />
+        {layout === "v2" ? (
+          <SetupStart desk={desk.desk} manager={manager} />
+        ) : (
+          <FirstRun team={manager ? "invite" : null} />
+        )}
       </div>
     );
   return (
@@ -721,6 +777,8 @@ export function SalesHome({ manager }: { manager: boolean }) {
       ) : null}
       {manager && view === "team" ? (
         <TeamHome desk={desk.status === "ready" ? desk.desk : null} />
+      ) : layout === "v2" ? (
+        <SellerHomeV2 state={desk} recent={recent} />
       ) : (
         <SellerHome state={desk} />
       )}

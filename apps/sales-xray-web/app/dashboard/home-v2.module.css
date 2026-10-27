@@ -1,0 +1,341 @@
+/* Home worth opening (27 Oct 2026): pick up, recent calls, recent activity,
+   and a new workspace's start. Phones first; tokens only, one layout for light
+   and dark. */
+
+.more {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 2px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.words {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.words strong {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.words span {
+  overflow: hidden;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.words small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+/* ---------- Pick up where you left off ---------- */
+
+.pickUpRow {
+  display: grid;
+  min-height: 64px;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background:
+    linear-gradient(
+      100deg,
+      color-mix(in srgb, var(--sx-accent) 10%, transparent),
+      transparent 60%
+    ),
+    var(--sx-surface);
+  color: inherit;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.pickUpRow > svg {
+  color: var(--sx-muted);
+}
+
+.tile {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.tile[data-kind="call"] {
+  background: color-mix(in srgb, var(--sx-warn) 20%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+/* ---------- Recent activity ---------- */
+
+.activity {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  list-style: none;
+}
+
+.activity > li + li {
+  border-top: 1px solid var(--sx-hairline, var(--sx-line));
+}
+
+.activityRow {
+  display: grid;
+  min-height: 58px;
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  color: inherit;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.activityRow time {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  white-space: nowrap;
+}
+
+.dot {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+}
+
+/* One colour per kind, as on Leads: calls teal, messages violet, notes
+   amber, stage moves slate, new and assigned leads accent. */
+.dot:is(
+  [data-kind="result"],
+  [data-kind="assigned"],
+  [data-kind="reassigned"],
+  [data-kind="captured"]
+) {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.dot[data-kind="note"] {
+  background: color-mix(in srgb, var(--sx-warn) 20%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+.dot[data-kind="message"] {
+  background: color-mix(
+    in srgb,
+    var(--lx-violet, var(--sx-accent)) 16%,
+    var(--sx-surface)
+  );
+  color: var(--sx-ink);
+}
+
+.dot:is([data-kind="meeting"], [data-kind="scheduled"]) {
+  background: color-mix(in srgb, var(--sx-good) 18%, var(--sx-surface));
+  color: var(--sx-ink);
+}
+
+/* ---------- A new workspace's start ---------- */
+
+.start {
+  display: grid;
+  gap: 14px;
+}
+
+.steps {
+  display: grid;
+  gap: 4px;
+  padding: 16px 0 6px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-xl, var(--sx-radius-lg));
+  background:
+    radial-gradient(
+      120% 80% at 100% 0%,
+      color-mix(in srgb, var(--sx-accent) 14%, transparent),
+      transparent 70%
+    ),
+    var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.steps ol {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.startHead {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px 8px;
+}
+
+.startHead h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-headline);
+  letter-spacing: -0.01em;
+}
+
+.startHead small {
+  display: block;
+  margin-top: 2px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.ring {
+  position: relative;
+  display: grid;
+  width: 56px;
+  height: 56px;
+  place-items: center;
+}
+
+.ring svg {
+  position: absolute;
+  inset: 0;
+  transform: rotate(-90deg);
+}
+
+.ring circle {
+  fill: none;
+  stroke-width: 6;
+}
+
+.ringTrack {
+  stroke: var(--sx-fill-strong, var(--sx-line));
+}
+
+.ringFill {
+  stroke: var(--sx-accent);
+  stroke-linecap: round;
+  transition: stroke-dasharray var(--sx-dur-base, 240ms)
+    var(--sx-ease-out, ease);
+}
+
+.ring > span {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.step {
+  display: grid;
+  min-height: 60px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  color: inherit;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.step > svg {
+  color: var(--sx-muted);
+}
+
+.step:active,
+.activityRow:active,
+.pickUpRow:active,
+.sample:active {
+  background: var(--sx-fill-soft);
+}
+
+.stepIcon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 1.5px dashed var(--sx-line-strong);
+  border-radius: 50%;
+  color: var(--sx-accent);
+}
+
+.step[data-done] .stepIcon {
+  border: 0;
+  background: var(--sx-accent);
+  color: var(--sx-surface);
+}
+
+.step[data-done] strong {
+  color: var(--sx-ink-2);
+}
+
+.sample {
+  display: grid;
+  min-height: 76px;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  color: inherit;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.sample > svg {
+  color: var(--sx-muted);
+}
+
+/* Hints wrap to a second line rather than end mid-sentence. */
+.sample .words span,
+.step .words span {
+  white-space: normal;
+}
+
+.sampleArt {
+  display: grid;
+  width: 52px;
+  height: 52px;
+  place-items: center;
+  border-radius: var(--sx-radius-lg);
+  background: var(--lx-gradient-primary, var(--sx-accent));
+  color: var(--lx-on-teal, var(--sx-surface));
+  box-shadow: var(--sx-shadow-1);
+}
+
+:is(.pickUpRow, .activityRow, .step, .sample, .more):focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ringFill {
+    transition: none;
+  }
+}
