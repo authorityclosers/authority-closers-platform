@@ -129,6 +129,43 @@ export function allowedRequest(request, origin, routes) {
   );
 }
 
+/** A dropped connection worth another try: the dev server reset it, often mid-compile. A timeout is not. */
+export function transientNetworkError(error) {
+  return /\b(ECONNRESET|ETIMEDOUT)\b|socket hang up/i.test(
+    String(error?.message ?? error),
+  );
+}
+
+/**
+ * route.fetch, tried up to twice more after a transient network error (0.5 s,
+ * then 1.5 s apart), each retry logged. A run on a commit with no UI change
+ * failed on one `read ECONNRESET` (27 Oct 2026).
+ */
+export async function fetchWithRetry(
+  route,
+  options,
+  {
+    tries = 3,
+    pause = (ms) => new Promise((done) => setTimeout(done, ms)),
+    log = (line) => console.warn(line),
+  } = {},
+) {
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await route.fetch(options);
+    } catch (error) {
+      if (attempt >= tries || !transientNetworkError(error)) throw error;
+      const delay = 500 * 3 ** (attempt - 1);
+      const request = route.request();
+      log(
+        `sales_xray_visual: ${request.method()} ${new URL(request.url()).pathname} failed ` +
+          `(${String(error?.message ?? error).slice(0, 80)}); retry ${attempt} of ${tries - 1} in ${delay} ms`,
+      );
+      await pause(delay);
+    }
+  }
+}
+
 export async function routeFixtureRequest(route, origin, routes) {
   const request = route.request();
   const url = new URL(request.url());
@@ -151,7 +188,10 @@ export async function routeFixtureRequest(route, origin, routes) {
   // Native HMR is required for Turbopack hydration. CSP blocks external sockets,
   // frames and workers without replacing the browser WebSocket constructor.
   const local = new URL(origin);
-  const response = await route.fetch({ maxRedirects: 0, timeout: 35000 });
+  const response = await fetchWithRetry(route, {
+    maxRedirects: 0,
+    timeout: 35000,
+  });
   await route.fulfill({
     response,
     headers: {
