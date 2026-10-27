@@ -155,6 +155,66 @@ function page(now: number, empty: boolean) {
   };
 }
 
+/** Your calls (27 Oct 2026): this week's calls with leads, as My work reads them. */
+type PhoneCall = [
+  lead: string,
+  minutesAgo: number,
+  seconds: number | null,
+  direction: "outgoing" | "incoming" | "missed",
+  report: number | null,
+];
+
+const PHONE_CALLS: PhoneCall[] = [
+  ["asha fictional", 12, 214, "outgoing", null],
+  ["ravi sample", 48, null, "missed", null],
+  ["meera fictional", 95, 1268, "outgoing", 2],
+  ["karan example", 160, 65, "incoming", null],
+  ["neha fictional", 1500, 0, "outgoing", null],
+  ["anil example", 2950, 204, "outgoing", 5],
+];
+
+function activity(now: number, empty: boolean) {
+  const items = empty
+    ? []
+    : PHONE_CALLS.map(([lead, ago, seconds, direction, report], index) => ({
+        event_id: `00000000-0000-4000-8000-0000000007${String(index).padStart(2, "0")}`,
+        lead_id: `00000000-0000-4000-8000-0000000008${String(index).padStart(2, "0")}`,
+        lead_name: lead,
+        stage_label: "Interested",
+        event: {
+          kind: "call",
+          at: new Date(now - ago * MINUTE).toISOString(),
+          actor_name: "Swamini Fictional",
+          stage: null,
+          stage_label: null,
+          reason: null,
+          reason_label: null,
+          connected: direction !== "missed",
+          note: null,
+          next_action_at: null,
+          owner_name: null,
+          previous_owner_name: null,
+          allocation_reason: null,
+          source_label: null,
+          submission_id:
+            report === null
+              ? null
+              : `00000000-0000-4000-8000-0000000005${String(report).padStart(2, "0")}`,
+          simulated: null,
+          recording: report !== null,
+          duration_seconds: seconds,
+          via: "phone",
+          direction,
+        },
+      }));
+  return {
+    schema: "lead-desk/1",
+    items,
+    next_before: null,
+    counts: { call: items.length },
+  };
+}
+
 function install(empty: boolean) {
   if (typeof window === "undefined") return true;
   const real = window.fetch.bind(window);
@@ -163,6 +223,11 @@ function install(empty: boolean) {
     const path = url.replace(/^https?:\/\/[^/]+/, "");
     if (path.startsWith("/v1/conversation/acquisition/submissions?"))
       return new Response(JSON.stringify(page(Date.now(), empty)), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    if (path.startsWith("/v1/lead-desk/activity?"))
+      return new Response(JSON.stringify(activity(Date.now(), empty)), {
         status: 200,
         headers: { "content-type": "application/json" },
       });

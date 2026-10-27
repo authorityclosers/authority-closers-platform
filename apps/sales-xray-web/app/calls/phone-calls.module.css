@@ -1,0 +1,186 @@
+/* Your calls, first on Calls: this week's calls with your leads, newest
+   first, in the same rows as My work. Phones first; tokens only. */
+
+.calls,
+.calls * {
+  box-sizing: border-box;
+}
+
+.calls {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.calls :is(h2, ol, p) {
+  margin: 0;
+}
+
+.head {
+  display: flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.head h2 {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-title);
+  font-weight: 750;
+  letter-spacing: var(--sx-tracking-title, normal);
+}
+
+.more,
+.all,
+.retry {
+  display: inline-flex;
+  min-height: 44px;
+  align-items: center;
+  gap: 2px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.all {
+  justify-self: start;
+}
+
+.retry {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.list {
+  display: grid;
+  padding: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  list-style: none;
+  overflow: hidden;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--sx-hairline, var(--sx-line));
+}
+
+.day {
+  padding: 10px 16px 4px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.row {
+  display: grid;
+  min-height: 60px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  color: inherit;
+  text-decoration: none;
+  touch-action: manipulation;
+}
+
+.row:active {
+  background: var(--sx-fill-soft);
+}
+
+.row:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.text {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.text strong {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}
+
+.line svg {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+.row[data-missed] .line,
+.row[data-missed] .line svg {
+  color: var(--sx-bad);
+}
+
+.end {
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+}
+
+.end time {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.report {
+  padding: 2px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.skeleton {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+}
+
+.skeleton > span:last-child {
+  display: grid;
+  gap: 6px;
+}
+
+.quiet {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 10px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+}

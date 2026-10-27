@@ -1,20 +1,25 @@
 /**
  * A lead to open on the Leads page, handed over from another page: one added
- * from the + sheet, or Home's "Call <name>". The page hands its id over here,
- * then moves to Leads. Leads already open takes it from the event; Leads that
- * opens next takes it once on arrival. Ids only, in memory: nothing reaches
- * the address bar or storage.
+ * from the + sheet, Home's "Call <name>", or a call on Calls. The page hands
+ * its id over here, then moves to Leads. Leads already open takes it from the
+ * event; Leads that opens next takes it once on arrival. Ids only, in memory:
+ * nothing reaches the address bar or storage.
  */
 
 export const LEAD_ADDED_EVENT = "sx:lead-added";
 
-export type HandedLead = { leadId: string; call: boolean };
+/** `at`: the line of its history to show, such as the call tapped on Calls. */
+export type HandedLead = { leadId: string; call: boolean; at?: string | null };
 
 let waiting: HandedLead | null = null;
 
 /** `call`: open it ready to call, as Start calling does. */
-export function handOverLead(leadId: string, call = false) {
-  waiting = { leadId, call };
+export function handOverLead(
+  leadId: string,
+  call = false,
+  at: string | null = null,
+) {
+  waiting = at ? { leadId, call, at } : { leadId, call };
   if (typeof window !== "undefined")
     window.dispatchEvent(
       new CustomEvent<HandedLead>(LEAD_ADDED_EVENT, { detail: waiting }),

@@ -455,7 +455,12 @@ it("shows a rename made elsewhere without a reload", async () => {
 });
 
 it("points an organisation owner with no calls of their own to Personal", async () => {
-  fetchMock.mockResolvedValue(ok(page([row(ids[0], repB, "Quinn Fixture")])));
+  // In an organisation, Your calls reads this week's calls first (27 Oct 2026).
+  fetchMock.mockImplementation(async (url: string) =>
+    String(url).startsWith("/v1/lead-desk/activity?")
+      ? ok({ items: [], next_before: null, counts: {} })
+      : ok(page([row(ids[0], repB, "Quinn Fixture")])),
+  );
   const switched: string[] = [];
   const onSwitch = (event: Event) =>
     switched.push((event as CustomEvent<string>).detail);

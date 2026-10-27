@@ -87,6 +87,7 @@ import { useRowsInView } from "./rows-in-view";
 import { csvRows } from "./csv-export";
 import { Panel } from "./ui/kit";
 import { RecentCallsList, RecentCallsSkeleton } from "./dashboard/recent-calls";
+import { PhoneCalls } from "./calls/phone-calls";
 
 const libraryError =
   "Saved calls could not be loaded. Try again; your completed work remains private.";
@@ -1612,6 +1613,15 @@ function CallsLibraryContent({
       data-reps={showReps ? "true" : undefined}
       data-selecting={selecting || picked.size > 0 ? "true" : undefined}
     >
+      {/* The phone's calls come first, then saved calls (owner, 27 Oct 2026:
+          call logs and recordings were "hidden somewhere"). */}
+      {insights &&
+      access?.authenticated === true &&
+      currentWorkspace?.kind === "organisation" ? (
+        <SectionBoundary name="Your calls" resetKey={identityKey}>
+          <PhoneCalls key={identityKey} />
+        </SectionBoundary>
+      ) : null}
       {/* One page heading; New analysis lives in the shell, not here too. */}
       <header className={styles.header}>
         <div className={styles.headerCopy}>

@@ -416,7 +416,19 @@ type Timing = {
   quiet: ReturnType<typeof setTimeout> | null;
   cap: ReturnType<typeof setTimeout>;
   observer: MutationObserver;
+  /** The finger or pointer that pressed: if it turns into a scroll, no tap. */
+  pointer: number | null;
 };
+
+/**
+ * A press on the tab or place already shown: nothing is meant to change, so
+ * it is not timed (a re-tap of the chosen stage tab read as "no change").
+ */
+export function alreadyShown(target: Element): boolean {
+  return !!target.closest(
+    '[role="tab"][aria-selected="true"], [aria-current="page"]',
+  );
+}
 
 /**
  * The last screen shown, how long it has been on view (seen, plus the time
@@ -720,7 +732,22 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
       screen: current.screen,
     });
   };
-  const begin = (action: TimedAction, start: number) => {
+  // A press that became a scroll or a swipe (the stage tabs' strip, a list):
+  // it was never a tap, so nothing is recorded (27 Oct 2026: swipes across
+  // the stage tabs read as taps that changed nothing).
+  const drop = () => {
+    const current = timing;
+    if (!current) return;
+    timing = null;
+    current.observer.disconnect();
+    if (current.quiet) clearTimeout(current.quiet);
+    clearTimeout(current.cap);
+  };
+  const begin = (
+    action: TimedAction,
+    start: number,
+    pointer: number | null = null,
+  ) => {
     if (timing) finish(timing.last !== null ? "settled" : "no_change");
     const observer = new MutationObserver(() => {
       const current = timing;
@@ -745,12 +772,18 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
       }, NO_CHANGE_MS),
       cap: setTimeout(() => finish("timeout"), MAX_ACTION_MS),
       observer,
+      pointer,
     };
   };
   const onPointer = (event: PointerEvent) => {
     if (!telemetry.active() || !(event.target instanceof Element)) return;
     const action = actionOf(event.target);
     if (!action) return;
+    if (
+      (action === "tab_switch" || action === "nav_switch") &&
+      alreadyShown(event.target)
+    )
+      return;
     // The tap's own time (it counts the input delay slow phones add), unless
     // the browser gives one off the page's clock.
     const now = performance.now();
@@ -758,15 +791,25 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
     begin(
       action,
       stamp > 0 && stamp <= now && now - stamp < 5_000 ? stamp : now,
+      typeof event.pointerId === "number" ? event.pointerId : null,
     );
+  };
+  const onCancel = (event: PointerEvent) => {
+    if (timing && timing.pointer !== null && timing.pointer === event.pointerId)
+      drop();
   };
   document.addEventListener("pointerdown", onPointer, {
     capture: true,
     passive: true,
   });
-  cleanups.push(() =>
-    document.removeEventListener("pointerdown", onPointer, { capture: true }),
-  );
+  document.addEventListener("pointercancel", onCancel, {
+    capture: true,
+    passive: true,
+  });
+  cleanups.push(() => {
+    document.removeEventListener("pointerdown", onPointer, { capture: true });
+    document.removeEventListener("pointercancel", onCancel, { capture: true });
+  });
 
   // Rage taps, dead taps and named features.
   let taps: Array<{ at: number; x: number; y: number }> = [];

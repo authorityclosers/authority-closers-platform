@@ -226,6 +226,46 @@ it("does nothing for a person the server records nothing for", async () => {
   await act(async () => root.unmount());
 });
 
+it("doesn't time a swipe across tabs, or a press on the tab already shown", async () => {
+  const track = vi.spyOn(telemetry, "track");
+  html(`
+    <div role="tablist">
+      <button id="on" role="tab" aria-selected="true">Now</button>
+      <button id="off" role="tab" aria-selected="false">All</button>
+    </div>
+    <nav><a id="here" href="/leads" aria-current="page">Leads</a></nav>`);
+  const root = await mount();
+  // The chosen tab, and the tab bar's own page: nothing is meant to change.
+  for (const id of ["#on", "#here"])
+    host
+      .querySelector(id)!
+      .dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }));
+  // A finger that lands on a tab and swipes the strip: the browser cancels it.
+  const off = host.querySelector("#off")!;
+  off.dispatchEvent(
+    new PointerEvent("pointerdown", { bubbles: true, pointerId: 7 }),
+  );
+  off.dispatchEvent(
+    new PointerEvent("pointercancel", { bubbles: true, pointerId: 7 }),
+  );
+  await act(async () => {
+    vi.advanceTimersByTime(11_000);
+  });
+  expect(tracked(track, "sx.action_timing")).toEqual([]);
+
+  // A real press on another tab is still timed.
+  off.dispatchEvent(
+    new PointerEvent("pointerdown", { bubbles: true, pointerId: 8 }),
+  );
+  await act(async () => {
+    vi.advanceTimersByTime(1_100);
+  });
+  expect(tracked(track, "sx.action_timing")).toEqual([
+    expect.objectContaining({ action: "tab_switch", result: "no_change" }),
+  ]);
+  await act(async () => root.unmount());
+});
+
 it("tells the phone app the switch once the server answers, and sends its events", async () => {
   const collecting = vi.spyOn(telemetry, "collecting");
   const track = vi.spyOn(telemetry, "track").mockImplementation(() => {});

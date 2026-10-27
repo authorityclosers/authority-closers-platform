@@ -1451,6 +1451,9 @@ export function History({
                 key={`${event.at}-${index}`}
                 data-kind={event.kind}
                 data-at={event.at}
+                data-report={
+                  event.kind === "call" && event.submission_id ? "" : undefined
+                }
                 data-missed={
                   event.direction === "missed" || event.direction === "rejected"
                     ? true

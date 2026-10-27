@@ -463,12 +463,13 @@ export function LeadsRoute() {
 
   const refresh = useCallback(() => setVersion((value) => value + 1), []);
   // A lead added from the + sheet, or Home's "Call <name>", opens here
-  // (owner, 22 Oct).
+  // (owner, 22 Oct); a call tapped on Calls opens at its line (27 Oct).
   useEffect(() => {
     const show = (handed: HandedLead | null) => {
       if (!handed) return;
       setHolding(null);
       setIntent(handed.call ? "call" : null);
+      setFocusAt(handed.at ?? null);
       setOpenLead(handed.leadId);
       refresh();
     };
