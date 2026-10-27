@@ -38,7 +38,14 @@ const targetWords = (minutes: number) =>
     ? `${minutes} minutes`
     : `${minutes / 60} hour${minutes === 60 ? "" : "s"}`;
 
-export function SlaPanel({ onOpen }: { onOpen?: (leadId: string) => void }) {
+export function SlaPanel({
+  onOpen,
+  readOnly = false,
+}: {
+  onOpen?: (leadId: string) => void;
+  /** A Viewer reads the target and the last 7 days, and changes nothing (Roles B). */
+  readOnly?: boolean;
+}) {
   const [report, setReport] = useState<SlaReport | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [draft, setDraft] = useState<Sla | null>(null);
@@ -145,47 +152,61 @@ export function SlaPanel({ onOpen }: { onOpen?: (leadId: string) => void }) {
           </ul>
         </SubCard>
       ) : null}
-      <Group title="Your target">
-        <SwitchRow
-          label="Use a first-response target"
-          hint="Leads that arrive outside your work hours start their clock when work starts."
-          checked={draft.on}
-          onChange={(on) => change({ ...draft, on })}
-        >
-          <label className={cardStyles.field}>
+      {readOnly ? (
+        <Group title="Your target">
+          <div className={cardStyles.field}>
             <span className={cardStyles.fieldLabel}>
-              <strong>A person answers within</strong>
+              <strong>
+                {draft.on
+                  ? `A person answers within ${targetWords(draft.minutes)}`
+                  : "No first-response target"}
+              </strong>
             </span>
-            <select
-              aria-label="Target"
-              value={draft.minutes}
-              onChange={(event) =>
-                change({ ...draft, minutes: Number(event.target.value) })
-              }
-            >
-              {draft.targets.map((minutes) => (
-                <option key={minutes} value={minutes}>
-                  {targetWords(minutes)}
-                </option>
-              ))}
-            </select>
-          </label>
+          </div>
+        </Group>
+      ) : (
+        <Group title="Your target">
           <SwitchRow
-            label="Alert owners and admins too"
-            hint="Their phones get the same alert as the seller's."
-            checked={draft.alertManagers}
-            onChange={(on) => change({ ...draft, alertManagers: on })}
+            label="Use a first-response target"
+            hint="Leads that arrive outside your work hours start their clock when work starts."
+            checked={draft.on}
+            onChange={(on) => change({ ...draft, on })}
+          >
+            <label className={cardStyles.field}>
+              <span className={cardStyles.fieldLabel}>
+                <strong>A person answers within</strong>
+              </span>
+              <select
+                aria-label="Target"
+                value={draft.minutes}
+                onChange={(event) =>
+                  change({ ...draft, minutes: Number(event.target.value) })
+                }
+              >
+                {draft.targets.map((minutes) => (
+                  <option key={minutes} value={minutes}>
+                    {targetWords(minutes)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <SwitchRow
+              label="Alert owners and admins too"
+              hint="Their phones get the same alert as the seller's."
+              checked={draft.alertManagers}
+              onChange={(on) => change({ ...draft, alertManagers: on })}
+            />
+          </SwitchRow>
+          <SaveBar
+            dirty={dirty}
+            busy={busy}
+            saved={!!saved}
+            savedText={saved ?? undefined}
+            onSave={() => void save()}
+            onDiscard={() => setDraft(base)}
           />
-        </SwitchRow>
-        <SaveBar
-          dirty={dirty}
-          busy={busy}
-          saved={!!saved}
-          savedText={saved ?? undefined}
-          onSave={() => void save()}
-          onDiscard={() => setDraft(base)}
-        />
-      </Group>
+        </Group>
+      )}
       <Group title="Last 7 days">
         {report.sellers.length ? (
           <div className={cardStyles.tableWrap}>

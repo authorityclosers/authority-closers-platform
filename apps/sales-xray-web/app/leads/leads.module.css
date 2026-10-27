@@ -6579,3 +6579,12 @@ button.leadTags {
     transition: none;
   }
 }
+
+/* A settings panel a Viewer only reads (Roles B, 27 Oct 2026): the form is a
+   disabled fieldset, drawn as the form it replaces. */
+fieldset.form {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}

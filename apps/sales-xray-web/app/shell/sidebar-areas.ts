@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 
 import { HUB_TABS, hubHref } from "../organisation/hub-tabs";
+import { SETUP_TABS } from "../organisation/setup-tabs";
 
 /**
  * The sidebar's areas and their pages (owner, dev #8, 26 Oct 2026: the one
@@ -61,14 +62,6 @@ export const ALL_LEADS_HREF = "/leads?tab=all&stage=open";
  * included); the managers' sections only for those who may see the team.
  * Outside an organisation the hub is the organisation view: Overview only.
  */
-/**
- * The hub's sections that change how the organisation works (routing rules,
- * chip choices and "Try a lead", connections, AI on calls, the plan): for
- * those who manage leads, not for a Viewer, who sees the team and changes
- * nothing (Roles B, 27 Oct 2026).
- */
-const SETUP_TABS = new Set(["leads", "connections", "call-ai", "plan"]);
-
 function hubPages(
   organisation: boolean,
   manager: boolean,

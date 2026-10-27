@@ -61,7 +61,7 @@ afterEach(async () => {
 });
 
 const render = async (
-  role: "owner" | "admin" | "member",
+  role: "owner" | "admin" | "member" | "viewer",
   kind: "organisation" | "personal" = "organisation",
 ) => {
   await act(async () =>
@@ -133,6 +133,25 @@ it("shows members the team, the numbers and the company only", async () => {
     "Analytics",
     "Company",
   ]);
+});
+
+// Roles B (27 Oct 2026): a Viewer reads the team, and changes nothing.
+it("shows a Viewer the team, the numbers and insights, and none of the setup", async () => {
+  await render("viewer");
+  expect(tabs().map(([label]) => label)).toEqual([
+    "Overview",
+    "Team",
+    "Analytics",
+    "Insights",
+    "Company",
+  ]);
+  // A setup tab asked for by address opens Overview instead.
+  query = "tab=connections";
+  await render("viewer");
+  expect(
+    host.querySelector('nav[aria-label="Organisation"] a[aria-current="page"]')
+      ?.textContent,
+  ).toBe("Overview");
 });
 
 it("opens each tab here, with the hub's header only", async () => {
