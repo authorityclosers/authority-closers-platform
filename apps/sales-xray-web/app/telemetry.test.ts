@@ -4,18 +4,29 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
   appVersion,
   audioFormat,
+  cpuMs,
+  cpuTier,
   deviceClass,
+  deviceModel,
   deviceTier,
+  keepCpuMs,
+  modelLabel,
   network,
+  noteSignIn,
   readBand,
+  readCpuMs,
+  releaseLabel,
   routeTemplate,
   safePayload,
   screenOf,
   sizeBand,
+  takeSignIn,
   TELEMETRY_EVENT_NAMES,
   TelemetryClient,
+  userAgentModel,
   waitBand,
   type EventContext,
+  type SignInMethod,
 } from "./telemetry";
 
 const SESSION = "11111111-1111-4111-8111-111111111111";
@@ -360,4 +371,153 @@ it("takes the phone app's daily profile, its largest event, with where it ran", 
   });
   await vi.runAllTimersAsync();
   expect(Object.keys(sent()[0]?.payload as object)).toHaveLength(15);
+});
+
+it("times the CPU test as the best of five passes, and tiers it", () => {
+  // Each pass reads the clock twice; the third pass is the quickest.
+  const passes = [9, 8, 4.04, 7, 6];
+  const clock: number[] = [];
+  let at = 0;
+  for (const pass of passes) clock.push(at, (at += pass));
+  expect(cpuMs(() => clock.shift() ?? 0)).toBe(4);
+  expect(cpuTier(1.2)).toBe("high");
+  expect(cpuTier(3)).toBe("mid");
+  expect(cpuTier(5.9)).toBe("mid");
+  expect(cpuTier(6)).toBe("low");
+  expect(cpuTier(Number.NaN)).toBe("unknown");
+});
+
+it("keeps the device's CPU test a week, and nothing it can't read", () => {
+  const store = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+  };
+  const day = 24 * 3_600_000;
+  expect(readCpuMs(storage, 0)).toBeNull();
+  keepCpuMs(storage, 7.4, 1_000);
+  expect(readCpuMs(storage, 1_000 + 6 * day)).toBe(7.4);
+  expect(readCpuMs(storage, 1_000 + 7 * day)).toBeNull();
+  expect(readCpuMs(storage, 0)).toBeNull();
+  store.set("sx-cpu", "{not json");
+  expect(readCpuMs(storage, 1_000)).toBeNull();
+  store.set("sx-cpu", JSON.stringify({ ms: "7", at: 1_000 }));
+  expect(readCpuMs(storage, 1_000)).toBeNull();
+  expect(readCpuMs(null, 1_000)).toBeNull();
+  const refusing = {
+    setItem: () => {
+      throw new Error("QuotaExceededError");
+    },
+  };
+  expect(() => keepCpuMs(refusing, 3, 0)).not.toThrow();
+});
+
+it("names an Android phone's model as a label, from its hint or its user agent", async () => {
+  const webView =
+    "Mozilla/5.0 (Linux; Android 12; Redmi Note 8 Pro Build/SP1A.210812.016; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/130.0.0.0 Mobile Safari/537.36 SalesXrayApp/1.0.30";
+  expect(userAgentModel(webView)).toBe("redmi-note-8-pro");
+  expect(
+    userAgentModel(
+      "Mozilla/5.0 (Linux; Android 14; SM-A155F) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36",
+    ),
+  ).toBe("sm-a155f");
+  // Chrome's reduced user agent hides the model as "K".
+  const reduced =
+    "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Mobile Safari/537.36";
+  expect(userAgentModel(reduced)).toBeNull();
+  expect(modelLabel("  M1906G7G ")).toBe("m1906g7g");
+  expect(modelLabel("Galaxy A05s (2023)")).toBe("galaxy-a05s-2023");
+  expect(modelLabel("x".repeat(40))).toHaveLength(32);
+  expect(modelLabel("")).toBeNull();
+  const hinted = (model: string | Error) => ({
+    userAgent: reduced,
+    userAgentData: {
+      getHighEntropyValues: async () => {
+        if (model instanceof Error) throw model;
+        return { model };
+      },
+    },
+  });
+  expect(await deviceModel(hinted("Redmi 13C") as never)).toBe("redmi-13c");
+  expect(await deviceModel(hinted(new Error("no")) as never)).toBeNull();
+  expect(
+    await deviceModel({
+      userAgent: webView,
+      userAgentData: undefined,
+    } as never),
+  ).toBe("redmi-note-8-pro");
+  // Computers and iPhones say nothing.
+  expect(
+    await deviceModel({
+      userAgent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130",
+    } as never),
+  ).toBeNull();
+});
+
+it("labels the web build by its commit's first 12 characters", () => {
+  expect(releaseLabel("0F3C2A9B1D4E5F60718293A4B5C6D7E8F9012345")).toBe(
+    "0f3c2a9b1d4e",
+  );
+  expect(releaseLabel("ci-0f3c2a9b1d4e5f60718293a4b5c6d7e8f9012345")).toBe(
+    "ci-0f3c2a9b1d4e",
+  );
+  expect(releaseLabel("v1.00.0")).toBe("v1.00.0");
+  expect(releaseLabel("")).toBeNull();
+  expect(releaseLabel(undefined)).toBeNull();
+  expect(releaseLabel("local build")).toBeNull();
+});
+
+it("sends a sign-in once the new session arrives, once, and only a fresh one", async () => {
+  const store = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => store.get(key) ?? null,
+    setItem: (key: string, value: string) => void store.set(key, value),
+    removeItem: (key: string) => void store.delete(key),
+  };
+  noteSignIn("pulse", storage, 1_000);
+  expect(takeSignIn(storage, 1_000 + 9 * 60_000)).toBe("pulse");
+  expect(takeSignIn(storage, 1_000 + 9 * 60_000)).toBeNull();
+  noteSignIn("google", storage, 1_000);
+  expect(takeSignIn(storage, 1_000 + 11 * 60_000)).toBeNull();
+  store.set("sx-sign-in", JSON.stringify({ method: "magic_link", at: 1_000 }));
+  expect(takeSignIn(storage, 1_000)).toBeNull();
+
+  let pending: SignInMethod | null = "email_code";
+  const telemetry = new TelemetryClient(
+    {
+      fetch: vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+        calls.push({
+          url: String(url),
+          body: init?.body ? JSON.parse(String(init.body)) : null,
+        });
+        return String(url) === "/v1/telemetry/taxonomy"
+          ? Response.json({
+              events: TELEMETRY_EVENT_NAMES.map((event_name) => ({
+                event_name,
+              })),
+            })
+          : new Response("{}", { status: 202 });
+      }) as unknown as typeof fetch,
+      now: () => new Date("2026-10-27T05:00:00Z"),
+      id: () => "00000000-0000-4000-8000-000000000001",
+      signIn: () => {
+        const method = pending;
+        pending = null;
+        return method;
+      },
+    },
+    true,
+  );
+  telemetry.setSession(null);
+  expect(pending).toBe("email_code");
+  telemetry.setSession(SESSION);
+  telemetry.setSession(SESSION);
+  await vi.runAllTimersAsync();
+  expect(sent()).toEqual([
+    expect.objectContaining({
+      event_name: "sx.sign_in",
+      session_id: SESSION,
+      payload: { method: "email_code" },
+    }),
+  ]);
 });

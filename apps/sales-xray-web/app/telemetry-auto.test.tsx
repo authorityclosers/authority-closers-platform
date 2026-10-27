@@ -24,8 +24,10 @@ import {
   endpointOf,
   errorFacts,
   fingerprint,
+  overlapsHidden,
   placeOf,
   seenSoFar,
+  slowCall,
   styleOf,
   syncPhone,
   targetOf,
@@ -135,7 +137,6 @@ it("times a tap on a lead row to the screen settling", async () => {
   expect(tracked(track, "sx.screen_viewed")).toEqual([
     { screen: "leads", from: "none", nav: "first" },
   ]);
-  expect(tracked(track, "sx.app_start")[0]).toMatchObject({ ms: 1000 });
 
   const lead = host.querySelector("#lead")!;
   lead.dispatchEvent(
@@ -317,4 +318,111 @@ it("counts only the time a screen was on view, and says where the page went away
   });
   expect(flush).toHaveBeenCalledWith(true);
   await act(async () => root.unmount());
+});
+
+it("times a slow call to its answer's first byte, never one the page spent hidden", () => {
+  const origin = "https://app.example";
+  const entry = (over: Record<string, unknown> = {}) => ({
+    name: `${origin}/v1/conversation-acquisition/submissions/3f2b7d10-aaaa-4bbb-8ccc-0123456789ab/source`,
+    initiatorType: "fetch",
+    startTime: 1_000,
+    duration: 9_000,
+    responseStart: 1_300,
+    responseEnd: 10_000,
+    responseStatus: 200,
+    ...over,
+  });
+  // A recording that took 9 s to download from a server that answered in 0.3 s.
+  expect(slowCall(entry(), origin, [])).toBeNull();
+  expect(slowCall(entry({ responseStart: 3_000 }), origin, [])).toEqual({
+    // Endpoint names stop at 48 characters.
+    endpoint: "v1_conversation_acquisition_submissions_id_sourc",
+    status: "2xx",
+    ms: 9_000,
+    wait_ms: 2_000,
+  });
+  // No first-byte time (an old browser): the whole call counts.
+  expect(slowCall(entry({ responseStart: 0 }), origin, [])?.wait_ms).toBe(
+    9_000,
+  );
+  // A server failure is reported however quick.
+  expect(
+    slowCall(
+      entry({ responseStatus: 503, duration: 80, responseEnd: 1_080 }),
+      origin,
+      [],
+    ),
+  ).toMatchObject({ status: "5xx", wait_ms: 300 });
+  const slow = entry({ responseStart: 4_000 });
+  // The page went to the background mid-call, or is still there.
+  expect(slowCall(slow, origin, [[5_000, 6_000]])).toBeNull();
+  expect(slowCall(slow, origin, [[9_500, null]])).toBeNull();
+  expect(slowCall(slow, origin, [[200, 900]])).not.toBeNull();
+  expect(slowCall(slow, origin, [[10_001, null]])).not.toBeNull();
+  // Not ours: another origin, the telemetry itself, not an API, an image.
+  expect(
+    slowCall(entry({ name: "https://cdn.example/v1/x" }), origin, []),
+  ).toBeNull();
+  expect(
+    slowCall(
+      entry({ name: `${origin}/v1/telemetry/events`, responseStart: 4_000 }),
+      origin,
+      [],
+    ),
+  ).toBeNull();
+  expect(
+    slowCall(
+      entry({ name: `${origin}/leads`, responseStart: 4_000 }),
+      origin,
+      [],
+    ),
+  ).toBeNull();
+  expect(
+    slowCall(entry({ initiatorType: "img", responseStart: 4_000 }), origin, []),
+  ).toBeNull();
+  expect(overlapsHidden([], 0, 10)).toBe(false);
+  expect(overlapsHidden([[10, 20]], 0, 10)).toBe(true);
+});
+
+it("sends the app's start when idle, with the CPU test and the phone's model", async () => {
+  const track = vi.spyOn(telemetry, "track");
+  const idle: Array<() => void> = [];
+  Object.defineProperty(window, "requestIdleCallback", {
+    configurable: true,
+    value: (work: () => void) => idle.push(work),
+  });
+  Object.defineProperty(window, "cancelIdleCallback", {
+    configurable: true,
+    value: () => undefined,
+  });
+  vi.spyOn(navigator, "userAgent", "get").mockReturnValue(
+    "Mozilla/5.0 (Linux; Android 12; Redmi Note 8 Pro Build/SP1A.210812.016; wv) AppleWebKit/537.36 Chrome/130 Mobile Safari/537.36 SalesXrayApp/1.0.30",
+  );
+  try {
+    window.localStorage.removeItem("sx-cpu");
+    const root = await mount();
+    expect(tracked(track, "sx.app_start")).toEqual([]);
+    expect(idle).toHaveLength(1);
+    // The clock moves 5 ms each pass of the test from here.
+    let clock = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => (clock += 2.5));
+    await act(async () => idle[0]?.());
+    expect(tracked(track, "sx.app_start")).toEqual([
+      expect.objectContaining({
+        ms: 1_000,
+        screen: "leads",
+        cpu_ms: 2.5,
+        model_label: "redmi-note-8-pro",
+      }),
+    ]);
+    expect(
+      JSON.parse(window.localStorage.getItem("sx-cpu") ?? "{}"),
+    ).toMatchObject({
+      ms: 2.5,
+    });
+    await act(async () => root.unmount());
+  } finally {
+    delete (window as { requestIdleCallback?: unknown }).requestIdleCallback;
+    delete (window as { cancelIdleCallback?: unknown }).cancelIdleCallback;
+  }
 });

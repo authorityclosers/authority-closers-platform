@@ -202,6 +202,45 @@ def test_performance_events_take_bounded_codes_and_numbers_only() -> None:
     )
 
 
+def test_start_cpu_test_model_sign_in_and_server_wait_are_bounded() -> None:
+    start = SALES_XRAY_EVENTS["sx.app_start"]
+    check_payload_values(
+        start,
+        {
+            "start": "cold",
+            "ms": 2400,
+            "cpu_ms": 7.4,
+            "model_label": "redmi-note-8-pro",
+            "tier": "low",
+            "app": "android",
+            "app_version": "1.0.30",
+        },
+    )
+    check_payload_values(start, {"start": "warm", "ms": 900, "app_version": "0f3c2a9b1d4e"})
+    for bad in (
+        {"start": "cold", "ms": 10, "cpu_ms": -1},
+        {"start": "cold", "ms": 10, "cpu_ms": 60_001},
+        {"start": "cold", "ms": 10, "model_label": "Redmi Note 8 Pro"},
+        {"start": "cold", "ms": 10, "model_label": "x" * 33},
+    ):
+        with pytest.raises(ValueError):
+            check_payload_values(start, bad)
+    sign_in = SALES_XRAY_EVENTS["sx.sign_in"]
+    for method in ("password", "email_code", "google", "apple", "facebook", "pulse"):
+        check_payload_values(sign_in, {"method": method})
+    for bad in ({"method": "magic_link"}, {}):
+        with pytest.raises(ValueError):
+            check_payload_values(sign_in, bad)
+    slow = SALES_XRAY_EVENTS["sx.api_slow"]
+    check_payload_values(
+        slow, {"endpoint": "v1_lead_desk_leads", "status": "2xx", "ms": 5400, "wait_ms": 5200}
+    )
+    with pytest.raises(ValueError):
+        check_payload_values(
+            slow, {"endpoint": "v1_lead_desk_leads", "status": "2xx", "ms": 10, "wait_ms": -5}
+        )
+
+
 def test_lead_os_events_take_stage_kinds_and_bands_never_labels() -> None:
     moved = SALES_XRAY_EVENTS["sx.lead_stage_moved"]
     check_payload_values(

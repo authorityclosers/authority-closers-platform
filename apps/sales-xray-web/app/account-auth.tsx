@@ -53,6 +53,7 @@ import {
   type SignInProvider,
 } from "./account-auth-client";
 import styles from "./account-auth.module.css";
+import { noteSignIn } from "./telemetry";
 import { noteFreshSignIn } from "./welcome/setup-state";
 import {
   inPhoneApp,
@@ -757,6 +758,7 @@ export function AccountAuth({
       if (request.signal.aborted) return;
       await readCanonicalSession(request.signal);
       if (!request.signal.aborted) {
+        noteSignIn(popupProvider.current);
         clearPopup();
         complete();
         inFlight.current = false;

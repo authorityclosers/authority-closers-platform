@@ -15,10 +15,12 @@
  *   input-to-paint time for that tap. The action is the element's
  *   `data-sx-action`, or what it plainly is: a lead or call row, a Call link,
  *   a tab, a navigation link, a button that opens a sheet.
- * - Web Vitals (LCP, INP, CLS, FCP, TTFB) and the app's start.
+ * - Web Vitals (LCP, INP, CLS, FCP, TTFB) and the app's start, with a short
+ *   CPU test and, on Android, the phone's model (27 Oct 2026).
  * - Script errors: their class and a fingerprint of where they were thrown,
  *   never the message.
- * - API calls slower than 1.5 s or failed, with every id taken out of the path.
+ * - API calls whose answer took over 1.5 s to start, or that failed, with every
+ *   id taken out of the path; never one the page spent out of view.
  * - Rage taps (three in a second on one spot) and dead taps (a tap on
  *   something that looks tappable and changes nothing), with the screen zone
  *   and the element as the code names it (its data-sx-action or
@@ -33,6 +35,8 @@ import { useEffect, useRef } from "react";
 
 import { drainPhoneTelemetry, tellPhoneTelemetry } from "./leads/native-phone";
 import {
+  deviceModel,
+  measureCpu,
   screenOf,
   telemetry,
   track,
@@ -146,6 +150,94 @@ export function endpointOf(path: string): string {
           : "id",
     );
   return (parts.join("_").replace(/_+/g, "_") || "root").slice(0, 48);
+}
+
+/** When the page was out of view, in performance.now() time; the last ends null while it still is. */
+export type HiddenSpans = Array<[number, number | null]>;
+
+/** True when [start, end] touches a time out of view: the browser slows hidden pages, so their timings say nothing. */
+export function overlapsHidden(
+  spans: HiddenSpans,
+  start: number,
+  end: number,
+): boolean {
+  return spans.some(
+    ([from, to]) => from <= end && (to === null || to >= start),
+  );
+}
+
+type ResourceTiming = Pick<
+  PerformanceResourceTiming,
+  | "name"
+  | "initiatorType"
+  | "startTime"
+  | "duration"
+  | "responseStart"
+  | "responseEnd"
+> & { responseStatus?: number };
+
+/**
+ * An API call worth reporting: one whose answer took over 1.5 s to start or
+ * that failed on the server. Slow is time to the first byte, so a recording or
+ * a long transcript downloading is not a slow server (27 Oct 2026); null for
+ * the rest, other origins and the telemetry itself, and calls the page spent
+ * out of view.
+ */
+export function slowCall(
+  entry: ResourceTiming,
+  origin: string,
+  hidden: HiddenSpans,
+): TelemetryEvents["sx.api_slow"] | null {
+  if (
+    entry.initiatorType !== "fetch" &&
+    entry.initiatorType !== "xmlhttprequest"
+  )
+    return null;
+  let url: URL;
+  try {
+    url = new URL(entry.name);
+  } catch {
+    return null;
+  }
+  if (
+    url.origin !== origin ||
+    !url.pathname.startsWith("/v1/") ||
+    url.pathname.startsWith("/v1/telemetry/")
+  )
+    return null;
+  const end = entry.responseEnd || entry.startTime + entry.duration;
+  if (overlapsHidden(hidden, entry.startTime, end)) return null;
+  const wait =
+    entry.responseStart > 0
+      ? entry.responseStart - entry.startTime
+      : entry.duration;
+  const code = entry.responseStatus ?? 0;
+  if (wait < SLOW_API_MS && code < 500) return null;
+  return {
+    endpoint: endpointOf(url.pathname),
+    status:
+      code >= 500
+        ? "5xx"
+        : code >= 400
+          ? "4xx"
+          : code >= 300
+            ? "3xx"
+            : code >= 200
+              ? "2xx"
+              : "unknown",
+    ms: ms(entry.duration),
+    wait_ms: ms(wait),
+  };
+}
+
+/** Run `work` once the page is idle (at most 5 s on), or a second on where the browser can't say; the cancel. */
+export function whenIdle(work: () => void): () => void {
+  if (typeof window.requestIdleCallback === "function") {
+    const handle = window.requestIdleCallback(work, { timeout: 5_000 });
+    return () => window.cancelIdleCallback(handle);
+  }
+  const timer = setTimeout(work, 1_000);
+  return () => clearTimeout(timer);
 }
 
 const ERROR_CLASSES = new Set<string>([
@@ -471,9 +563,12 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
     if (phoneTimer) clearTimeout(phoneTimer);
   });
 
-  // The app's start: page open to the first screen working (this effect).
+  // The app's start: page open to the first screen working (this effect). It
+  // goes out once the app is idle, with the CPU test run then and, on Android,
+  // the phone's model (owner, 27 Oct 2026: the app on the slowest phones).
   try {
     const navigation = navigationEntry();
+    const started = ms(performance.now());
     let warm = false;
     try {
       warm = sessionStorage.getItem("sx-started") === "1";
@@ -482,17 +577,34 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
       // Private windows can refuse storage: count it as a cold start.
     }
     const type = navigation?.type;
-    track("sx.app_start", {
-      start: warm ? "warm" : "cold",
-      ms: ms(performance.now()),
-      ...(type === "navigate" ||
-      type === "reload" ||
-      type === "back_forward" ||
-      type === "prerender"
-        ? { nav_type: type }
-        : {}),
-      screen: here(),
-    });
+    const screen = here();
+    cleanups.push(
+      whenIdle(() => {
+        let cpu: number | null = null;
+        try {
+          cpu = measureCpu();
+        } catch {
+          // No JSON or no clock: the start goes out without the test.
+        }
+        void deviceModel(navigator)
+          .catch(() => null)
+          .then((model) =>
+            track("sx.app_start", {
+              start: warm ? "warm" : "cold",
+              ms: started,
+              ...(type === "navigate" ||
+              type === "reload" ||
+              type === "back_forward" ||
+              type === "prerender"
+                ? { nav_type: type }
+                : {}),
+              screen,
+              ...(cpu === null ? {} : { cpu_ms: cpu }),
+              ...(model ? { model_label: model } : {}),
+            }),
+          );
+      }),
+    );
   } catch {
     // No performance timeline: nothing to say about the start.
   }
@@ -518,7 +630,21 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
     reportError("rejection", event.reason),
   );
 
-  // Slow or failed API calls, from the browser's own timings.
+  // Slow or failed API calls, from the browser's own timings, leaving out any
+  // the page spent out of view.
+  const hidden: HiddenSpans = visible() ? [] : [[0, null]];
+  const onHidden = () => {
+    const now = performance.now();
+    const last = hidden[hidden.length - 1];
+    if (!visible()) {
+      if (!last || last[1] !== null) hidden.push([now, null]);
+    } else if (last && last[1] === null) last[1] = now;
+    if (hidden.length > 50) hidden.splice(0, hidden.length - 50);
+  };
+  document.addEventListener("visibilitychange", onHidden);
+  cleanups.push(() =>
+    document.removeEventListener("visibilitychange", onHidden),
+  );
   let slowApis = 0;
   const lastSlow = new Map<string, number>();
   if (typeof PerformanceObserver !== "undefined") {
@@ -526,51 +652,17 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
       const resources = new PerformanceObserver((list) => {
         if (!telemetry.active()) return;
         for (const entry of list.getEntries() as PerformanceResourceTiming[]) {
-          if (
-            entry.initiatorType !== "fetch" &&
-            entry.initiatorType !== "xmlhttprequest"
-          )
-            continue;
-          let url: URL;
-          try {
-            url = new URL(entry.name);
-          } catch {
-            continue;
-          }
-          if (
-            url.origin !== window.location.origin ||
-            !url.pathname.startsWith("/v1/") ||
-            url.pathname.startsWith("/v1/telemetry/")
-          )
-            continue;
-          const code =
-            (entry as PerformanceResourceTiming & { responseStatus?: number })
-              .responseStatus ?? 0;
-          if (entry.duration < SLOW_API_MS && code < 500) continue;
-          const endpoint = endpointOf(url.pathname);
+          const call = slowCall(entry, window.location.origin, hidden);
+          if (!call) continue;
           const at = performance.now();
           if (
             slowApis >= MAX_SLOW_APIS ||
-            at - (lastSlow.get(endpoint) ?? -Infinity) < 30_000
+            at - (lastSlow.get(call.endpoint) ?? -Infinity) < 30_000
           )
             continue;
           slowApis += 1;
-          lastSlow.set(endpoint, at);
-          track("sx.api_slow", {
-            endpoint,
-            status:
-              code >= 500
-                ? "5xx"
-                : code >= 400
-                  ? "4xx"
-                  : code >= 300
-                    ? "3xx"
-                    : code >= 200
-                      ? "2xx"
-                      : "unknown",
-            ms: ms(entry.duration),
-            screen: here(),
-          });
+          lastSlow.set(call.endpoint, at);
+          track("sx.api_slow", { ...call, screen: here() });
         }
       });
       resources.observe({ type: "resource", buffered: true });

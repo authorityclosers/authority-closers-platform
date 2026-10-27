@@ -1,3 +1,5 @@
+import { noteSignIn } from "./telemetry";
+
 export type EmailCodeConfig = {
   enabled: boolean;
   consent_version: string | null;
@@ -113,6 +115,7 @@ export async function emailCodeRequest(
       response.status === 429 ? "rate-limited" : "sign-in-unavailable",
     );
   }
+  if (path === "verify") noteSignIn("email_code");
   return response.json() as Promise<unknown>;
 }
 
@@ -420,7 +423,9 @@ export async function passwordLogin(
     if (await isClosedAccount(response)) throw new Error(ACCOUNT_CLOSED);
     throw new Error("Password sign-in was not confirmed");
   }
-  return readCanonicalSession(signal);
+  const session = await readCanonicalSession(signal);
+  noteSignIn("password");
+  return session;
 }
 
 export function maskedEmail(email: string) {
@@ -591,6 +596,7 @@ export function keepSignInResult(
   result: AuthCompletionResult,
   provider: SignInProvider,
 ) {
+  if (result === "success") noteSignIn(provider);
   try {
     sessionStore()?.setItem(
       RESULT_KEY,
