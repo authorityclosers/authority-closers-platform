@@ -79,6 +79,10 @@ export function radarLoads() {
   ).concat(android);
 }
 
+/** A screen's loads: all of them, without the Android app's for a screen that says android: false. */
+export const screenLoads = (screen = {}) =>
+  radarLoads().filter((load) => !(load.android && screen.android === false));
+
 /**
  * Every measured state of a page: 3 phones x 3 scales x 2 themes + 1280 x 2 scales x 2 themes + the Android app x 2
  * themes = 24.

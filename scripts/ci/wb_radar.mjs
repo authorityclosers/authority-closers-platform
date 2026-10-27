@@ -30,7 +30,7 @@ import {
   radarChanged,
   radarCovered,
   radarFocusHit,
-  radarLoads,
+  screenLoads,
   radarMark,
   radarObserve,
   radarScan,
@@ -628,13 +628,17 @@ async function run(args) {
       ...screens.flatMap(([key, screen]) => [
         { kind: "crawl", key, screen, size: CRAWL_SIZE },
         // The same taps as the Android app on a slow phone: a tap during hydration is lost there.
-        {
-          kind: "crawl",
-          key,
-          screen,
-          size: ANDROID_PROFILE.size,
-          android: ANDROID_PROFILE,
-        },
+        ...(screen.android === false
+          ? []
+          : [
+              {
+                kind: "crawl",
+                key,
+                screen,
+                size: ANDROID_PROFILE.size,
+                android: ANDROID_PROFILE,
+              },
+            ]),
         ...(screen.desktop
           ? [
               {
@@ -647,7 +651,12 @@ async function run(args) {
           : []),
       ]),
       ...screens.flatMap(([key, screen]) =>
-        radarLoads().map((load) => ({ kind: "sweep", key, screen, load })),
+        screenLoads(screen).map((load) => ({
+          kind: "sweep",
+          key,
+          screen,
+          load,
+        })),
       ),
     ];
     let next = 0;

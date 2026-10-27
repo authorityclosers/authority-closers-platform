@@ -28,6 +28,7 @@ import {
   pickRadarScreens,
   radarLoads,
   radarScreens,
+  screenLoads,
   radarStates,
   reportMarkdown,
   risky,
@@ -549,4 +550,15 @@ test("bug #43: Connections' parts are swept, and wrapped or cut tab bars are the
       page: "hub-connections-pulse",
     }),
   );
+});
+
+test("a screen that needs a phone's own width skips the Android app's loads", async () => {
+  const { SCREENS } = await import("./wb_matrix_lib.mjs");
+  assert.equal(screenLoads(SCREENS["leads-all"]).length, 16);
+  for (const name of ["leads-table", "leads-table-open"]) {
+    const loads = screenLoads(SCREENS[name]);
+    assert.equal(loads.length, 14, name);
+    assert.ok(!loads.some((load) => load.android), name);
+  }
+  assert.equal(screenLoads().length, 16);
 });

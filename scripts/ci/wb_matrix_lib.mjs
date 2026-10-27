@@ -56,10 +56,13 @@ export const SCREENS = {
   // Leads, All, Open on a phone (production report #28, 26 Oct 2026): the stage
   // tabs and the seller chips scroll inside their own strips, nothing past the edge.
   "leads-all-open": { path: "/review-fixture/leads?tab=all&stage=open" },
+  // The table needs a phone's own width: the Android app's 1.2 zoom leaves 300 CSS px, where Leads offers no table,
+  // so the radar's Android profile skips these two (android: false).
   "leads-table": {
     path: "/review-fixture/leads?tab=all",
     steps: asTable,
     desktop: true,
+    android: false,
   },
   "leads-table-open": {
     path: "/review-fixture/leads?tab=all",
@@ -67,6 +70,7 @@ export const SCREENS = {
       ...asTable,
       { click: 'button[aria-label^="Show more about"]', optional: true },
     ],
+    android: false,
   },
   "leads-board": { path: "/review-fixture/leads?tab=board" },
   "leads-work": { path: "/review-fixture/leads?tab=work" },
