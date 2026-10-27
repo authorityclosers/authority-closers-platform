@@ -25,7 +25,9 @@ vi.mock("../acquisition-shell", () => ({
 const LEAD = "11111111-1111-4111-8111-111111111111";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 const ACCOUNT = "33333333-3333-4333-8333-333333333333";
-const now = new Date();
+// A fixed midday, so a message minutes old is always "Today" (a run just
+// after midnight read it as yesterday).
+const now = new Date(2026, 9, 27, 12, 0);
 const minutesAgo = (minutes: number) =>
   new Date(now.getTime() - minutes * 60000).toISOString();
 
@@ -57,6 +59,7 @@ const conversation = () => ({
 });
 
 beforeEach(() => {
+  vi.useFakeTimers({ toFake: ["Date"], now });
   resetChatsStore();
   vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
   window.history.replaceState(null, "", "/chats");
@@ -171,6 +174,7 @@ afterEach(async () => {
   host.remove();
   localStorage.clear();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 const settle = async () => {
