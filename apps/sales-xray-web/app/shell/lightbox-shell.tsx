@@ -1475,6 +1475,8 @@ function LightboxShellFrame({
                 workspaces={workspaces}
                 currentId={switchingTo ?? effectiveTenantId}
                 personName={profileName}
+                personPhotoUrl={profile?.photo_url}
+                personEmail={profile?.email}
                 branding={branding}
                 pending={chromePending}
                 open={switcherOpen}
@@ -2010,6 +2012,8 @@ function LightboxShellFrame({
             currentId={effectiveTenantId}
             branding={branding}
             personName={profileName}
+            personPhotoUrl={profile?.photo_url}
+            personEmail={profile?.email}
             onSelect={(tenantId) => {
               setWorkspaceSheetOpen(false);
               void handleSelectWorkspace(tenantId);

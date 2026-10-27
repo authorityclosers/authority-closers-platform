@@ -61,3 +61,32 @@ it.each([401, 403, 404, 503])(
     expect(fetcher).toHaveBeenCalledOnce();
   },
 );
+
+it("accepts optional member-scoped logos and the older directory shape", () => {
+  const tenant = "00000000-0000-4000-8000-000000000004";
+  const org = {
+    ...workspace,
+    tenant_id: tenant,
+    kind: "organisation",
+    name: "Cedar Studio",
+    role: "member",
+  };
+  const logo_url = `/v1/me/sales-xray-workspaces/${tenant}/logo/00000000-0000-4000-8000-000000000008`;
+  const value = { ...choices, workspaces: [{ ...org, logo_url }] };
+  expect(parseSalesXrayWorkspaces(value)).toEqual(value);
+  expect(
+    parseSalesXrayWorkspaces({ ...choices, workspaces: [org] }),
+  ).not.toBeNull();
+  for (const logo of [
+    "https://example.test/logo.png",
+    "/v1/me/sales-xray-workspaces/00000000-0000-4000-8000-000000000099/logo/00000000-0000-4000-8000-000000000008",
+    42,
+  ]) {
+    expect(
+      parseSalesXrayWorkspaces({
+        ...choices,
+        workspaces: [{ ...org, logo_url: logo }],
+      }),
+    ).toBeNull();
+  }
+});
