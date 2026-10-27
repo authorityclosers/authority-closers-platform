@@ -23,7 +23,12 @@ vi.mock("next/link", () => ({
 import type { LibrarySubmission } from "../acquisition-client";
 import { takeHandedLead } from "../leads/lead-handoff";
 import type { ActivityItem, LeadEvent } from "../leads/leads-client";
-import { rowFromReport, TeamActivity, teamRows } from "./team-activity";
+import {
+  rowFromReport,
+  TeamActivity,
+  teamRows,
+  teamSentence,
+} from "./team-activity";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -107,10 +112,52 @@ afterEach(() => {
 });
 
 it("says a ready Report is whose call", () => {
-  expect(rowFromReport(saved()).line).toBe(
-    "Report ready · Swamini Fictional's call",
-  );
-  expect(rowFromReport(saved({ owner: undefined })).line).toBe("Report ready");
+  expect(rowFromReport(saved())).toMatchObject({
+    title: "Report ready: Site visit",
+    line: "Swamini Fictional's call",
+    actor: "swamini fictional",
+  });
+  expect(rowFromReport(saved({ owner: undefined })).line).toBe("");
+});
+
+it("puts who did it first, so nobody reads the lead as the doer", () => {
+  const said = (event: Partial<LeadEvent>) =>
+    teamSentence(work("e", "asha fictional", event));
+  expect(
+    said({
+      actor_name: "Swamini Fictional",
+      duration_seconds: 214,
+      direction: "outgoing",
+      via: "phone",
+    }),
+  ).toMatchObject({
+    subject: "Swamini Fictional",
+    title: "Swamini called Asha Fictional · 3:34",
+  });
+  expect(
+    said({ actor_name: "Swamini Fictional", direction: "missed" }).title,
+  ).toBe("Swamini missed a call from Asha Fictional");
+  expect(
+    said({ kind: "assigned", actor_name: null, owner_name: "Rahul Example" }),
+  ).toMatchObject({
+    subject: "Rahul Example",
+    title: "Rahul got Asha Fictional",
+    line: "By the lead rules",
+  });
+  expect(
+    said({
+      kind: "stage",
+      actor_name: "Swamini Fictional",
+      stage_label: "Site visit booked",
+    }).title,
+  ).toBe("Swamini moved Asha Fictional to Site visit booked");
+  expect(
+    said({ kind: "captured", actor_name: null, source_label: "Website form" }),
+  ).toMatchObject({
+    subject: null,
+    title: "New lead: Asha Fictional",
+    line: "From Website form",
+  });
 });
 
 it("merges today's work and today's Reports, newest first, each once", () => {
@@ -145,9 +192,9 @@ it("lists who did what today and opens the lead or the Report", async () => {
     ...container.querySelectorAll<HTMLAnchorElement>("a[data-sx-action]"),
   ];
   expect(rows).toHaveLength(3);
-  expect(rows[0].textContent).toContain("Asha Fictional");
-  expect(rows[0].textContent).toContain("Swamini Fictional called");
-  expect(rows[1].textContent).toContain("Assigned to Rahul Example");
+  expect(rows[0].textContent).toContain("Swamini called Asha Fictional · 3:34");
+  expect(rows[1].textContent).toContain("Rahul got Neha Fictional");
+  expect(rows[2].textContent).toContain("Report ready: Site visit");
   expect(rows[2].getAttribute("href")).toBe(`/analysis/calls/${REPORT}`);
   await act(async () => rows[1].click());
   expect(push).toHaveBeenCalledWith("/leads");

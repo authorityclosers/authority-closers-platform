@@ -163,6 +163,15 @@
 
 /* ---------- Team today: who did it, with what kind of thing on their face ---------- */
 
+/* A whole sentence ("Swamini called Asha Fictional · 3:34") gets two lines. */
+.words[data-sentence] strong {
+  display: -webkit-box;
+  font-size: var(--sx-text-sm);
+  white-space: normal;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
 .who {
   position: relative;
   display: grid;

@@ -34,6 +34,7 @@ import { CallRowsSkeleton } from "../calls/phone-calls";
 import { displayName } from "../display-name";
 import { eventText } from "../leads/lead-sheet";
 import { handOverLead } from "../leads/lead-handoff";
+import { clockTime } from "../leads/phone-call-text";
 import {
   deskRequest,
   type ActivityItem,
@@ -53,25 +54,116 @@ export function readTeamActivity(signal?: AbortSignal) {
 export type TeamRow = {
   key: string;
   at: string;
-  /** Who did it, for the avatar; null for the lead rules or the system. */
+  /** The line's subject, for the avatar; null when nobody did it (a lead came in). */
   actor: string | null;
-  /** The lead's name, or the call's. */
+  /** Who did what, subject first: "Swamini called Asha Fictional · 3:34". */
   title: string;
+  /** A little more: the stage, the source, who gave it. */
   line: string;
   kind: string;
   report: string | null;
   leadId: string | null;
 };
 
+const firstName = (name: string) => displayName(name).split(" ")[0];
+
+/**
+ * The event as a sentence that starts with who did it (orchestrator for the
+ * owner, 27 Oct 2026: with the seller's face beside the lead's name in bold,
+ * it read as if the lead had done it).
+ */
+export function teamSentence(item: ActivityItem): {
+  subject: string | null;
+  title: string;
+  line: string;
+} {
+  const event = item.event;
+  const lead = displayName(item.lead_name);
+  const actor = event.actor_name ? firstName(event.actor_name) : null;
+  const who = actor ?? "Someone";
+  const talk = event.duration_seconds ? clockTime(event.duration_seconds) : "";
+  switch (event.kind) {
+    case "call":
+      if (event.direction === "incoming")
+        return {
+          subject: event.actor_name,
+          title: `${lead} called ${who}${talk ? ` · ${talk}` : ""}`,
+          line: "From the phone's call log",
+        };
+      if (event.direction === "missed" || event.direction === "rejected")
+        return {
+          subject: event.actor_name,
+          title: `${who} missed a call from ${lead}`,
+          line: "Call them back",
+        };
+      return {
+        subject: event.actor_name,
+        title: `${who} called ${lead}${talk ? ` · ${talk}` : event.via === "phone" ? " · no answer" : ""}`,
+        line: event.submission_id ? "Recorded" : (item.stage_label ?? ""),
+      };
+    case "assigned":
+    case "reassigned": {
+      const to = event.owner_name ? firstName(event.owner_name) : "Nobody";
+      return {
+        subject: event.owner_name,
+        title: `${to} got ${lead}`,
+        line:
+          event.kind === "reassigned" && event.previous_owner_name
+            ? `From ${displayName(event.previous_owner_name)}`
+            : actor
+              ? `Given by ${displayName(event.actor_name ?? "")}`
+              : "By the lead rules",
+      };
+    }
+    case "captured":
+      return {
+        subject: null,
+        title: `New lead: ${lead}`,
+        line: event.source_label ? `From ${event.source_label}` : "",
+      };
+    case "stage":
+      return {
+        subject: event.actor_name,
+        title: `${who} moved ${lead} to ${event.stage_label ?? "a new stage"}`,
+        line: event.from_label ? `Was ${event.from_label}` : "",
+      };
+    case "result":
+      return {
+        subject: event.actor_name,
+        title: `${who} talked to ${lead}`,
+        line: event.reason_label ?? event.stage_label ?? "",
+      };
+    case "note":
+      return {
+        subject: event.actor_name,
+        title: `${who} added a note on ${lead}`,
+        line: event.note ?? "",
+      };
+    case "message":
+      return {
+        subject: event.actor_name,
+        title: `${who} sent ${lead} ${event.channel === "SMS" ? "an SMS" : "a WhatsApp"}`,
+        line: event.template_label ?? "",
+      };
+    default:
+      return {
+        subject: event.actor_name,
+        title: `${lead}: ${eventText(event).title}`,
+        line: item.stage_label ?? "",
+      };
+  }
+}
+
 export function rowFromWork(item: ActivityItem): TeamRow {
   const missed =
     item.event.direction === "missed" || item.event.direction === "rejected";
+  const said = teamSentence(item);
   return {
     key: item.event_id,
     at: item.event.at,
-    actor: item.event.actor_name,
-    title: displayName(item.lead_name),
-    line: eventText(item.event).title,
+    actor: said.subject,
+    title: said.title,
+    line: said.line,
     kind: missed ? "missed" : item.event.kind,
     report:
       item.event.kind === "call" ? (item.event.submission_id ?? null) : null,
@@ -82,16 +174,15 @@ export function rowFromWork(item: ActivityItem): TeamRow {
 /** A saved call whose Report is ready, as a team line. */
 export function rowFromReport(call: LibrarySubmission): TeamRow {
   const owner = call.owner?.name ?? null;
+  const name = call.lead
+    ? displayName(call.lead.name)
+    : callTitle(call.label, "Saved call");
   return {
     key: `report-${call.id}`,
     at: call.createdAt,
     actor: owner,
-    title: call.lead
-      ? displayName(call.lead.name)
-      : callTitle(call.label, "Saved call"),
-    line: owner
-      ? `Report ready · ${displayName(owner)}'s call`
-      : "Report ready",
+    title: `Report ready: ${name}`,
+    line: owner ? `${displayName(owner)}'s call` : "",
     kind: "report",
     report: call.id,
     leadId: call.lead?.leadId ?? null,
@@ -203,15 +294,27 @@ export function TeamActivity({
                     router.push("/leads");
                   }}
                 >
-                  <span className={styles.who} aria-hidden="true">
-                    <Avatar name={row.actor ?? "Lead rules"} size={32} />
-                    <span className={styles.badge} data-kind={row.kind}>
-                      <Icon size={11} />
+                  {/* The face is the sentence's subject; nobody's (a lead
+                      came in) is the kind's mark alone. */}
+                  {row.actor ? (
+                    <span className={styles.who} aria-hidden="true">
+                      <Avatar name={row.actor} size={32} />
+                      <span className={styles.badge} data-kind={row.kind}>
+                        <Icon size={11} />
+                      </span>
                     </span>
-                  </span>
-                  <span className={styles.words}>
+                  ) : (
+                    <span
+                      className={styles.dot}
+                      data-kind={row.kind}
+                      aria-hidden="true"
+                    >
+                      <Icon size={15} />
+                    </span>
+                  )}
+                  <span className={styles.words} data-sentence="">
                     <strong>{row.title}</strong>
-                    <span>{row.line}</span>
+                    {row.line ? <span>{row.line}</span> : null}
                   </span>
                   <time dateTime={row.at}>{shortWhen(row.at, now)}</time>
                 </Link>
