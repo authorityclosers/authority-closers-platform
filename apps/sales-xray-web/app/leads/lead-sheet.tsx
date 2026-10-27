@@ -83,6 +83,7 @@ import { PersonAvatar } from "../people/person-avatar";
 import { LastCallBrief } from "./call-brief-card";
 import { ReassignSheet } from "./reassign-sheet";
 import { InAppCallHint } from "./call-hint";
+import { CompanyCallStrip, useCompanyCall } from "./company-call";
 import { LeadTasks } from "./lead-tasks";
 import { RemindSheet } from "./remind-sheet";
 import {
@@ -1724,8 +1725,11 @@ function RecordingUpload({
   callEventId = null,
   hidden = false,
   onAttached,
+  readFound,
 }: {
   detail: LeadDetail;
+  /** Reads `found` from elsewhere than the phone: a company-number call's recording. */
+  readFound?: () => Promise<File>;
   onDone: (next: LeadDetail) => void;
   /** The call on this lead the recording belongs to (one the phone logged from its dialer). */
   callEventId?: string | null;
@@ -1797,7 +1801,9 @@ function RecordingUpload({
     setError(null);
     setState("reading");
     try {
-      const file = await readPhoneRecording(found);
+      const file = readFound
+        ? await readFound()
+        : await readPhoneRecording(found);
       setPicked(file);
       await choose(file);
     } catch {
@@ -1880,7 +1886,7 @@ function RecordingUpload({
     let chosen: File;
     let terms: UploadPolicy;
     try {
-      chosen = await readPhoneRecording(found);
+      chosen = readFound ? await readFound() : await readPhoneRecording(found);
       terms = policy ?? (await readUploadPolicy());
     } catch {
       setError(
@@ -1985,7 +1991,10 @@ function RecordingUpload({
           <span>
             <strong>Analyse this call&apos;s recording</strong>
             <small>
-              Your phone recorded it: {found.name}
+              {readFound
+                ? "Recorded on the company number"
+                : "Your phone recorded it"}
+              : {found.name}
               {found.durationMs
                 ? ` · ${talkTime(found.durationMs / 1000)}`
                 : ""}
@@ -2598,6 +2607,13 @@ export function LeadCard({
   // Call access is checked once per sheet, and again after a call that failed
   // (builder, 24 Oct 2026: a tap took about a second before the dialler opened).
   const callAccess = useRef<boolean | null>(null);
+  // Calls from the company number (owner, 27 Oct 2026): a lead who asked to be
+  // contacted is called through it, and the call lands on the lead by itself.
+  const company = useCompanyCall(
+    lead.lead_id,
+    Boolean(detail.phone && detail.can_edit),
+    () => void readLead(lead.lead_id).then(onChanged, () => undefined),
+  );
   // Inside the phone app the call is placed and followed by the app.
   const callFromApp = async (askFirst: boolean) => {
     if (!detail.phone) return;
@@ -2630,6 +2646,11 @@ export function LeadCard({
   };
   const placeCall = () => {
     if (!detail.phone) return;
+    if (company.ready) {
+      rememberCall(lead.lead_id);
+      void company.start();
+      return;
+    }
     if (inPhoneApp()) void callFromApp(false);
     else {
       rememberCall(lead.lead_id);
@@ -2638,6 +2659,12 @@ export function LeadCard({
   };
   // A tel: link's tap: the app places it, a browser follows the link.
   const callHere = (event: MouseEvent<HTMLAnchorElement>) => {
+    if (company.ready) {
+      event.preventDefault();
+      rememberCall(lead.lead_id);
+      void company.start();
+      return;
+    }
     if (inPhoneApp()) {
       event.preventDefault();
       void callFromApp(false);
@@ -2686,25 +2713,42 @@ export function LeadCard({
   const recordingNow =
     afterCall?.step === "recording" ||
     phoneCall !== null ||
+    company.found !== null ||
     waitingRecording.item !== null;
   const recording =
     detail.can_edit &&
     detail.call_mode === "phone" &&
     me &&
     afterCall?.step !== "outcome" &&
-    (lead.calls > 0 || phoneCall) ? (
+    (lead.calls > 0 || phoneCall || company.found) ? (
       <RecordingUpload
         detail={detail}
         onDone={onChanged}
-        found={phoneCall?.recording ?? waitingRecording.item?.recording ?? null}
+        found={
+          company.found ??
+          phoneCall?.recording ??
+          waitingRecording.item?.recording ??
+          null
+        }
+        readFound={company.found ? company.readRecording : undefined}
         waiting={phoneCall ? !phoneCall.final : false}
         next={afterCall?.step === "recording"}
         onNext={afterCall?.onNext}
         callEventId={
-          phoneCall ? null : (waitingRecording.item?.eventId ?? null)
+          company.found
+            ? (company.call?.eventId ?? null)
+            : phoneCall
+              ? null
+              : (waitingRecording.item?.eventId ?? null)
         }
         hidden={waitingRecording.hidden}
-        onAttached={phoneCall ? undefined : waitingRecording.done}
+        onAttached={
+          company.found
+            ? company.dismiss
+            : phoneCall
+              ? undefined
+              : waitingRecording.done
+        }
       />
     ) : null;
   const tabCounts = {
@@ -2820,8 +2864,11 @@ export function LeadCard({
           >
             <Phone size={20} aria-hidden="true" />
             <span>
-              <strong>{calling ? "Calling…" : "Call"}</strong>
-              <small>{displayPhone(detail.phone)}</small>
+              <strong>{calling || company.busy ? "Calling…" : "Call"}</strong>
+              <small>
+                {displayPhone(detail.phone)}
+                {company.ready ? " · company number" : ""}
+              </small>
             </span>
           </a>
         ) : detail.can_edit ? (
@@ -2844,6 +2891,11 @@ export function LeadCard({
             phone app's hint, then "Called from another phone? Log it", or
             the call's question once it is open. */}
         {detail.phone ? <InAppCallHint /> : null}
+        <CompanyCallStrip
+          company={company}
+          name={lead.name}
+          phone={detail.phone ?? null}
+        />
         <OpenMessage.Provider value={target ? openMessage : null}>
           {detail.can_edit && afterCall?.step !== "recording" ? outcome : null}
         </OpenMessage.Provider>
