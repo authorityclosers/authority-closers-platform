@@ -12,7 +12,7 @@ import pytest
 from fastapi import Depends, FastAPI
 from sqlalchemy.orm import Session
 
-from ac_platform.http.auth import install_identity_http
+from ac_platform.http.auth import READ_ONLY_DETAIL, install_identity_http
 from ac_platform.http.problem import register_problem_handlers
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.tenancy.models import Membership
@@ -76,4 +76,4 @@ async def test_read_only_roles_change_only_their_own(
     }
     assert got == expected, (read.json(), change.json())
     if expected["change"] == 403:
-        assert change.json()["code"] == "role_read_only"
+        assert change.json()["detail"] == READ_ONLY_DETAIL

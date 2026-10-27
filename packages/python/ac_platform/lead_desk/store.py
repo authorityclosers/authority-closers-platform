@@ -165,6 +165,8 @@ from ac_platform.tenancy.roles import roles_with
 MANAGERS = frozenset(roles_with("leads.manage"))
 # Deleting leads stays with owners and admins (Roles B: not Sales managers).
 DELETERS = frozenset(roles_with("leads.delete"))
+# Reading the team's leads (team.view): managers, and Viewers who change nothing.
+SEERS = frozenset(roles_with("team.view"))
 # A phone alert names a task due within this of now (task_push reminds up to two hours
 # before an in-person meeting).
 TASK_ALERT_WINDOW = timedelta(hours=2)
@@ -244,6 +246,10 @@ class Viewer:
     @property
     def can_delete(self) -> bool:
         return self.role in DELETERS
+
+    @property
+    def can_see_team(self) -> bool:
+        return self.role in SEERS
 
 
 @dataclass(frozen=True, slots=True)
@@ -579,6 +585,14 @@ class LeadDesk:
             ),
         )
 
+    def _seen(self) -> Any:
+        """The leads this person may read in a list: the team's for those who see the
+        team (Viewers read them, Roles B), else exactly ``_visible()``. Writes never use
+        this: every write finds its lead through ``_lead()``."""
+        if self.viewer.can_see_team:
+            return Lead.tenant_id == self.tenant_id
+        return self._visible()
+
     async def _lead(self, lead_id: UUID, *, lock: bool = False) -> Lead:
         query = select(Lead).where(Lead.id == lead_id, self._visible())
         if lock:
@@ -605,17 +619,22 @@ class LeadDesk:
     async def _readable(self, lead_id: UUID) -> tuple[Lead, bool]:
         """A lead this person may open: one on their desk, or, to read only, the lead a
         merge kept from a lead they worked on lately (duplicates, "worked before")."""
+        # Viewers read any of the team's leads (Roles B); others only what a merge kept
+        # from a lead they worked on.
+        team = self.viewer.can_see_team and not self.viewer.can_manage
         try:
             return await self._lead(lead_id), False
         except DeskError:
-            if self.viewer.can_manage or not await duplicate_queue.worked_before(self, lead_id):
+            if not team and (
+                self.viewer.can_manage or not await duplicate_queue.worked_before(self, lead_id)
+            ):
                 raise
         lead: Lead | None = await self.db.scalar(
             select(Lead).where(Lead.tenant_id == self.tenant_id, Lead.id == lead_id)
         )
         if lead is None:
             raise DeskError(404, "This lead isn't on your desk.")
-        return lead, True
+        return lead, not team
 
     async def _command_seen(self, command_id: UUID) -> LeadEvent | None:
         seen: LeadEvent | None = await self.db.scalar(
@@ -1075,9 +1094,9 @@ class LeadDesk:
         duplicates: bool = False,
     ) -> LeadPage:
         limit = max(1, min(PAGE_SIZE, limit))
-        if scope != "mine" and not self.viewer.can_manage:
-            raise DeskError(403, "Only owners and admins see the whole team's leads.")
-        where: list[Any] = [self._visible()]
+        if scope != "mine" and not self.viewer.can_see_team:
+            raise DeskError(403, "Your role sees your own leads only.")
+        where: list[Any] = [self._seen()]
         if pipeline is not None:
             # One pipeline's leads: its stage tabs, counts and calling queue.
             where.append(journeys.lead_in((await self._pipeline(pipeline)).key))
