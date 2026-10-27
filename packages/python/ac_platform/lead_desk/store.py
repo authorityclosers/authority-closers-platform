@@ -205,6 +205,8 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "show_full_phones": False,
     # The open-lead limit of a seller with no rules of their own; None: no limit.
     "default_max_open": DEFAULT_MAX_OPEN,
+    # Languages are preferred: a lead nobody free speaks still goes to someone.
+    "strict_language": False,
 }
 IST = ZoneInfo("Asia/Kolkata")
 # The pipeline board (Lead OS): cards per column per page.
@@ -2844,7 +2846,8 @@ class LeadDesk:
         prefix: str = "",
         command_id: UUID | None = None,
     ) -> allocation.Allocation:
-        hours = work_hours.parse((await self.settings())[1])
+        _, config = await self.settings()
+        hours = work_hours.parse(config)
         if hours is not None and work_hours.paused(hours, self.now):
             reason = (
                 f"{work_hours.HELD} It goes to a seller "
@@ -2867,6 +2870,7 @@ class LeadDesk:
                     exclude=exclude,
                 ),
                 [rep.state for rep in team],
+                strict_language=bool(config.get("strict_language")),
             )
             # A rule matched but its people were away or full: the reason says so.
             passed = f"{decision.reason}; then " if decision is not None else ""
@@ -4093,6 +4097,7 @@ class LeadDesk:
                 nudges_off_for=tuple(
                     UUID(str(person)) for person in _team_config(config).get("nudges_off_for") or ()
                 ),
+                strict_language=bool(config.get("strict_language")),
             ),
             by_stage={stage: int(count) for stage, count in by_stage.items()},
             by_source={source: int(count) for source, count in by_source.items()},
@@ -4390,6 +4395,8 @@ class LeadDesk:
             config["show_full_phones"] = command.show_full_phones
         if "default_max_open" in command.model_fields_set:
             config["default_max_open"] = command.default_max_open
+        if command.strict_language is not None:
+            config["strict_language"] = command.strict_language
         if row is None:
             row = LeadDeskSettings(tenant_id=self.tenant_id, revision=0, config={})
             self.db.add(row)
@@ -4534,6 +4541,7 @@ class LeadDesk:
         fallback = allocation.allocate(
             allocation.LeadFacts(language=lead.language, city=lead.city, interest=lead.interest),
             [rep.state for rep in team],
+            strict_language=bool(config.get("strict_language")),
         )
         passed = routed[0].passed_over if routed is not None else ()
         lead_rules = "Lead rules: " + fallback.reason

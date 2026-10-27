@@ -107,7 +107,11 @@ def _load(rep: RepState) -> str:
     return f"{rep.open_leads} open lead{'s' if rep.open_leads != 1 else ''}"
 
 
-def allocate(lead: LeadFacts, reps: Sequence[RepState]) -> Allocation:
+def allocate(
+    lead: LeadFacts, reps: Sequence[RepState], *, strict_language: bool = False
+) -> Allocation:
+    """``strict_language`` (the workspace's "Only sellers who speak it", 27 Oct 2026): a lead
+    nobody free speaks waits for a manager instead of going to the least loaded."""
     candidates = [
         rep
         for rep in reps
@@ -166,7 +170,12 @@ def allocate(lead: LeadFacts, reps: Sequence[RepState]) -> Allocation:
             )
 
     # Nobody speaks the lead's language: give it to the least-loaded free seller
-    # and say so, rather than leaving the lead to go cold.
+    # and say so, rather than leaving the lead to go cold (unless the workspace asked
+    # for sellers who speak it only).
+    if strict_language:
+        return Allocation(
+            None, f"Nobody free speaks {lead.language}; it waits for a manager.", "none"
+        )
     chosen = min(candidates, key=_sort_key)
     return Allocation(
         chosen.person_id,

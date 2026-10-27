@@ -908,6 +908,9 @@ class SettingsView(Model):
     # Nudges (team engine, section 3): off until an owner turns them on, and off for these.
     nudges: bool = False
     nudges_off_for: tuple[UUID, ...] = ()
+    # Languages are strict: a lead nobody free speaks waits for a manager instead of going
+    # to the least loaded seller (27 Oct 2026). Off: languages are preferred.
+    strict_language: bool = False
 
 
 class Team(Model):
@@ -1346,6 +1349,8 @@ class SettingsCommand(Command):
     # Sent: the open-lead limit of sellers with no rules of their own (null: no limit).
     # Left out: kept as it is.
     default_max_open: int | None = Field(default=None, ge=1, le=1000)
+    # None keeps it as it is.
+    strict_language: bool | None = None
 
 
 class NudgesCommand(Command):
