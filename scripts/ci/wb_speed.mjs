@@ -18,6 +18,7 @@ import {
   SPEED_INIT,
   VIEWPORT,
   classify,
+  cpuByRate,
   pickSpeedScreens,
   speedMarkdown,
   summarize,
@@ -152,12 +153,27 @@ async function load(page, path) {
     loaded: performance.getEntriesByType("navigation")[0]?.loadEventEnd ?? 0,
   }));
   const settled = Math.round(Math.max(done.at, vitals.loaded));
+  // The app's own CPU test (telemetry.ts measureCpu, kept as sx-cpu), run once the page is idle: what a phone this
+  // slow measures, to set the device tiers from (27 Oct 2026). Null when the page never ran it.
+  let cpu = null;
+  for (let wait = 0; wait < 30 && cpu === null; wait++) {
+    cpu = await page.evaluate(() => {
+      try {
+        const kept = JSON.parse(localStorage.getItem("sx-cpu") ?? "null");
+        return typeof kept?.ms === "number" ? kept.ms : null;
+      } catch {
+        return null;
+      }
+    });
+    if (cpu === null) await page.waitForTimeout(100);
+  }
   return {
     // A screen's time: when it is ready to use; its LCP and blocking time beside it.
     ms: Math.round(Math.max(settled, vitals.busy, vitals.lcp ?? 0)),
     settled,
     lcp: vitals.lcp,
     tbt: vitals.tbt,
+    cpu_ms: cpu,
     result: done.result,
   };
 }
@@ -278,6 +294,7 @@ async function main() {
     elapsed_seconds: Math.round((Date.now() - started) / 1000),
     rates: RATES,
     runs: RUNS,
+    cpu: cpuByRate(measures),
     rows,
     findings,
     failures,
