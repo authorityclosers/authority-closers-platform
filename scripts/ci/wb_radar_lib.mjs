@@ -198,8 +198,10 @@ export function labelOf(el, max = 48) {
 /** One step of an element path: tag, a stable id, the role, a data-sx-* switch and the first stable class. */
 export function segmentOf(el) {
   const tag = el.tagName.toLowerCase();
-  const id =
-    el.id && el.id.length < 30 && !/[:«»\d]/.test(el.id) ? `#${el.id}` : "";
+  // React's generated ids (":r1:", "«r1»", and React 19.1's "_r_a_") change with the markup around them: never in a
+  // key (the first nightly split one cut title into four groups when a card gained aria-labelledby).
+  const generated = /[:«»\d]|^_[rR]_.*_$/.test(el.id ?? "");
+  const id = el.id && el.id.length < 30 && !generated ? `#${el.id}` : "";
   const role = el.getAttribute("role")
     ? `[role=${el.getAttribute("role")}]`
     : "";
@@ -661,10 +663,11 @@ export function radarScan(options = {}) {
       if (ox < 4 || oy < 4) continue;
       if (a.kind === "box" && b.kind === "box") {
         if (a.el.contains(b.el) || b.el.contains(a.el)) continue;
-        // Two controls' boxes touching at a corner (a sheet's close button over a wide row's edge) hide nothing:
-        // count them when the overlap is a real share of the smaller one.
+        // Two controls' boxes touching at an edge (a sheet's close button over a wide row's corner, 8 x 4 px) hide
+        // nothing: skip a thin overlap that is also a small share of the smaller one. Two fields overlapping by
+        // 28 x 44 px (Lead rules' From and To) still count.
         const smaller = Math.min(a.r.w * a.r.h, b.r.w * b.r.h);
-        if (ox * oy < 0.15 * smaller) continue;
+        if (Math.min(ox, oy) < 8 && ox * oy < 0.15 * smaller) continue;
       }
       const [box, text] = a.kind === "box" ? [a, b] : [b, a];
       if (box.kind === "box" && text.kind === "text") {
@@ -1430,8 +1433,8 @@ export function groupKeyOf(f) {
     case "tap-error":
       return `${f.check} | ${f.message ?? f.selector}`;
     case "overflow-page":
-      // The same width in the same viewport on several pages is one cause (the shell), whatever the page.
-      return `overflow-page | ${f.detail}`;
+      // Per page: a key with the page's width in it churned when the width moved by 3 px (first nightly).
+      return `overflow-page | ${f.page}`;
     case "overlap":
       return `overlap | ${String(f.selector)
         .split(" ⟂ ")

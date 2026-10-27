@@ -184,6 +184,12 @@ test("element paths drop build hashes, bare wrappers and row text", () => {
     pathOf(el("span", { id: "«r1»", parent: el("li") })),
     "li > span",
   );
+  // React 19.1's useId ("_r_a_") too; a real id stays.
+  assert.equal(pathOf(el("h3", { id: "_r_a_", parent: el("li") })), "li > h3");
+  assert.equal(
+    pathOf(el("h3", { id: "root", parent: el("li") })),
+    "li > h3#root",
+  );
   assert.ok(
     labelish(
       el("span", { classes: ["lightbox-shell-module__3nIbHW__tabPill"] }),
@@ -352,7 +358,7 @@ test("groups by root cause: one component, colour pair or message on any page", 
     componentOf("nav > a.lightbox-shell__bottomLink"),
     "a.lightbox-shell__bottomLink",
   );
-  // Siblings of one component that spill together are one group; one width on several pages is one group.
+  // Siblings of one component that spill together are one group; a page that scrolls sideways is its own.
   assert.equal(
     moduleOf("main > div.coaching__card > p.coaching__lead"),
     "coaching",
@@ -376,7 +382,7 @@ test("groups by root cause: one component, colour pair or message on any page", 
       detail: "the page is 297 px wide in 267",
       page: "report",
     }),
-    "overflow-page | the page is 297 px wide in 267",
+    "overflow-page | report",
   );
   const contrast = {
     check: "contrast",
