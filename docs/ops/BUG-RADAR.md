@@ -78,6 +78,38 @@ sudo ac-bug-radar check --sha <sha>         # a release hold: groups the nightly
   `WB_RADAR_ORIGIN=http://127.0.0.1:3000 WB_RADAR_WORKERS=1 node scripts/ci/wb_radar.mjs run out .wb-ci/request.json`,
   then `node scripts/ci/wb_radar.mjs merge out`.
 
+## Seller journeys
+
+Lever 5 of the testing plan (27 Oct 2026): whole tasks a seller does, walked step by step on the fictional screens
+(`scripts/ci/wb_journeys_lib.mjs`):
+
+| journey | steps |
+|---|---|
+| `sign-in-setup` | email code sign-in, then setup: business, its name, real estate's stages, skip the team, first lead |
+| `after-call` | back from a call that connected: Call back, Save |
+| `call-mode` | Start calling, No answer, Save and stop here |
+| `upload-recording` (draft) | pick a fictional recording, accept the terms, ready to analyse, the analysing screen |
+| `read-report` (draft) | the report: Detailed Call Analysis, Final Call Outcome and its recording, Coaching view |
+
+Each runs with every radar run (a journey marked `draft` only when asked for, never in the nightly), as the phone and
+as the Android app on a slow phone:
+- every step is timed;
+- the screen after each step gets the static checks;
+- errors after a step are tap-errors;
+- a step that can't be done ends the walk, as `journey-broken` (high) with a crop of where it stood and the headings
+  and controls then on screen;
+- a step over its time (5 s; 20 s for the Android profile) is `journey-slow` (low).
+
+The report has a table of the walks: steps done, time, the slowest step, and where each stopped.
+
+```bash
+ssh ac wb-ci --radar journeys              # every journey alone, drafts too (one shard)
+ssh ac wb-ci --radar journey:after-call    # one journey
+```
+
+A later step's `goto` stands in for what happens off the page: the phone's dialler, or the server's analysis. Journeys
+with a real sign-in on staging wait for the owner's synthetic workspace.
+
 ## Every night, and the cards
 
 `ac-bug-radar.timer` runs `/usr/local/sbin/ac-bug-radar nightly` on ac at 22:30 UTC (04:00 IST), for development only:
@@ -89,6 +121,12 @@ sudo ac-bug-radar check --sha <sha>         # a release hold: groups the nightly
    - a new group of medium or high severity becomes a card, at most 10 a night (the rest wait, listed on the parent);
    - a group that is gone while all its pages were checked marks its card done; one that comes back reopens it;
    - low groups are recorded in the report, without a card.
+5. Real use (lever 6, since 27 Oct 2026): it reads each environment's "Fix next" list (production by default,
+   `AC_BUG_RADAR_TELEMETRY_ENVS`) with `ac_platform.telemetry.fix_next_cli`, read only, inside its worker:
+   - a finding scoring 4 or more becomes a card under "Real use: errors, dead taps and crashes, every night"
+     (`tel:parent`), at most 6 a night, with the same open, back and done rules (`tel:<env>:<key>`);
+   - `sudo ac-bug-radar telemetry <env> [--dry-run]` runs this part alone;
+   - until a release carries the module, it prints "no fix-next module in this release yet".
 
 Cards carry:
 - the check, the component and the pages;

@@ -12,6 +12,8 @@
 // - the report: stable finding keys, dedupe across states, groups by root cause, markdown and JSON.
 import { createHash } from "node:crypto";
 
+import { journeySummary } from "./wb_journeys_lib.mjs";
+
 // Phones at 320, 360 and 390 px and one computer at 1280; 100% and 130% as browser text scaling everywhere, and 130%
 // as the Android app zooms on phones (clamped to 1.2, so 130% on 320 px leaves 267 CSS px); light and dark.
 export const RADAR_SIZES = [
@@ -1561,6 +1563,10 @@ export function groupKeyOf(f) {
     case "overflow-page":
       // Per page: a key with the page's width in it churned when the width moved by 3 px (first nightly).
       return `overflow-page | ${f.page}`;
+    case "journey-broken":
+    case "journey-slow":
+      // A journey's step: steps of two journeys with the same name are different places.
+      return `${f.check} | ${f.page} | ${f.selector}`;
     case "overlap":
       return `overlap | ${String(f.selector)
         .split(" ⟂ ")
@@ -1649,6 +1655,8 @@ export const CHECKS = {
   "tap-blocked": "something covers the control",
   "tap-error": "error after a tap",
   "sheet-offscreen": "sheet opens off-screen",
+  "journey-broken": "a seller journey stops at a step",
+  "journey-slow": "a journey step is slow",
 };
 
 // What the checks cannot tell (kept in every report, so a reader can discount the known kinds of false alarm).
@@ -1662,6 +1670,7 @@ export const CAVEATS = [
   "A segmented switch (one of several pressed) may set a mode with no content of its own (a playback speed): when it lights up and nothing else changes it is a low tab-no-switch; real tabs (role tab) are high.",
   "Overlap is compared inside one scroller: content scrolled under a sheet's footer is by design and not compared.",
   "A wrapped label is a tab, segment or chip (by role, a pressed button, or its class) whose words of up to 32 characters run taller than 1.5 lines; a tab bar is cut when its last item ends past the screen edge (or a clip there) and no box around it scrolls sideways within the screen.",
+  "Seller journeys walk the fictional screens on the fixtures' development server: a step's time shows one that hangs, not production speed (real phones are in Admin → Speed and journeys). A journey that stops may be its own step gone stale after a screen changed; the crop shows where it stood.",
 ];
 
 // Every cell loses names (fixture people stay out of the report too) and anything that would break the table.
@@ -1692,6 +1701,21 @@ export function reportMarkdown(run, top = 15) {
       `| ${check} (${CHECKS[check]}) | ${groups.filter((g) => g.check === check).length} | ${mine.length} | ${by("high")} | ${by("medium")} | ${by("low")} |`,
     );
   }
+  if (run.journeys?.length) {
+    lines.push(
+      "",
+      "#### Seller journeys (fictional screens)",
+      "",
+      "| journey | as | steps | time | slowest step | stops at |",
+      "|---|---|---|---|---|---|",
+    );
+    for (const walk of run.journeys) {
+      const line = journeySummary(walk);
+      lines.push(
+        `| ${cell(walk.title)} | ${walk.profile === "android" ? "the Android app, slow phone" : "phone"} | ${line.done} | ${line.seconds} s | ${cell(line.slowest)} | ${cell(line.stopped) || "—"} |`,
+      );
+    }
+  }
   lines.push("", `#### Top ${Math.min(top, groups.length)} groups`, "");
   lines.push(
     "| # | severity | check | component | pages | states | example | crop |",
@@ -1714,6 +1738,21 @@ export function reportMarkdown(run, top = 15) {
       );
     if (g.findings.length > 4)
       lines.push(`  - … ${g.findings.length - 4} more pages or elements`);
+  }
+  if (run.stopped?.length) {
+    lines.push("", "#### Shards stopped at the 40-minute deadline", "");
+    for (const s of run.stopped)
+      lines.push(
+        `- shard ${s.shard}: still running ${s.running.map((job) => `${job.page} (${job.kind}, ${job.seconds}s)`).join(", ") || "nothing"}`,
+      );
+  }
+  const slow = [...pages]
+    .filter((p) => p.ms)
+    .sort((a, b) => b.ms - a.ms)
+    .slice(0, 5);
+  if (slow.length) {
+    lines.push("", "#### Slowest pages (all their loads and taps)", "");
+    for (const p of slow) lines.push(`- ${p.key}: ${Math.round(p.ms / 1000)}s`);
   }
   if (failed.length) {
     lines.push("", "#### Pages that could not be checked everywhere", "");
