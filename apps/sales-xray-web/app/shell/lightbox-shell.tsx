@@ -918,14 +918,15 @@ function LightboxShellFrame({
   // management options").
   const orgHere = place === "organisation";
   // The sidebar's areas and pages, from one list (sidebar-areas.ts).
+  const roleHere = workspaces.find(
+    (workspace) => workspace.tenant_id === effectiveTenantId,
+  )?.role;
   const areas = sidebarAreas({
     organisation: inOrganisation,
     team: inOrganisation || orgHere,
-    manager: can(
-      workspaces.find((workspace) => workspace.tenant_id === effectiveTenantId)
-        ?.role,
-      "team.view",
-    ),
+    manager: can(roleHere, "team.view"),
+    // A Viewer reads the team; setting it up stays with those who manage.
+    manages: can(roleHere, "leads.manage"),
   });
   // Account belongs to no area: the panel keeps Home's pages there.
   const shownArea = areas.find((item) => item.key === litArea) ?? areas[0];
