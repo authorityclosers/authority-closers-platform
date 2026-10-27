@@ -63,6 +63,14 @@ def token_hash(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+def sheet_csv_url(config: Mapping[str, Any]) -> str:
+    """A connected sheet's tab as CSV, from its source config (``_sheet_config``)."""
+    return (
+        f"https://docs.google.com/spreadsheets/d/{config['sheet_id']}"
+        f"/export?format=csv&gid={config.get('gid', '0')}"
+    )
+
+
 # Stage and owner columns (paste import, 23 Oct 2026): the headers that usually hold them.
 STAGE_HEADERS: Final[tuple[str, ...]] = (
     "stage",
@@ -470,6 +478,7 @@ class Intake:
             else None,
             sheet_url=source.config.get("url") if source.kind == "sheet" else None,
             token=token,
+            problem=source.config.get("problem") if source.kind == "sheet" else None,
         )
 
     async def sources(self, *, meta_ready: bool) -> Sources:
@@ -569,11 +578,11 @@ class Intake:
         source = await self._source(source_id)
         if source.kind != "sheet" or not source.active:
             raise DeskError(422, "Choose a connected Google Sheet.")
-        url = (
-            f"https://docs.google.com/spreadsheets/d/{source.config['sheet_id']}"
-            f"/export?format=csv&gid={source.config.get('gid', '0')}"
-        )
-        data = await self._fetch_sheet(url)
+        return await self.file_sheet(source, await self._fetch_sheet(sheet_csv_url(source.config)))
+
+    async def file_sheet(self, source: LeadSource, data: bytes) -> ImportResult:
+        """A sheet's rows as leads, for "Sync" and the 10-minute pass (lead_desk/sheet_sync.py):
+        rows seen before read as "known", so a sheet read again files only its new rows."""
         try:
             sheet = read_csv(data)
         except CaptureError as error:
@@ -600,6 +609,11 @@ class Intake:
         source.received += result.created + outcomes.count("repeat")
         source.last_received_at = self.desk.now
         source.updated_at = self.desk.now
+        source.config = {
+            **(source.config or {}),
+            "synced_at": self.desk.now.timestamp(),
+            "problem": None,
+        }
         await self.db.flush()
         return result
 

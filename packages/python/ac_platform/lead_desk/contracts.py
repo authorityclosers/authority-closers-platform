@@ -1037,6 +1037,8 @@ class SourceView(Model):
     endpoint: str | None
     sheet_url: str | None
     token: str | None = None  # shown once, right after it's made
+    # A Google Sheet the 10-minute sync couldn't read: why, in plain words (else None).
+    problem: str | None = None
 
 
 class Sources(Model):

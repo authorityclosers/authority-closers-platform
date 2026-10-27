@@ -53,7 +53,7 @@ from fastapi import FastAPI
 from sqlalchemy import and_, delete, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from ac_platform.lead_desk import digest_push, hours, nudge_push, reassign, task_push
+from ac_platform.lead_desk import digest_push, hours, nudge_push, reassign, sheet_sync, task_push
 from ac_platform.lead_desk.contracts import PushConfig
 from ac_platform.lead_desk.meetings import REMIND_BEFORE
 from ac_platform.lead_desk.models import Lead, LeadDevice, LeadMeeting
@@ -473,6 +473,14 @@ async def run_hours_release(
                         log.info("lead desk moved %d leads nobody called in time", moved)
         except Exception:  # noqa: BLE001 - the loop must survive a bad pass
             log.warning("lead desk work-hours release failed")
+        # Connected Google Sheets, every 10 minutes (27 Oct 2026). Outside the lock above:
+        # Google is asked first, and nothing waits on it.
+        try:
+            filed = await sheet_sync.sync_due(sessions, datetime.now(UTC))
+            if filed:
+                log.info("lead desk filed %d new rows from Google Sheets", filed)
+        except Exception:  # noqa: BLE001 - the loop must survive a bad pass
+            log.warning("lead desk sheet sync failed")
         with suppress(TimeoutError):
             await asyncio.wait_for(stop.wait(), timeout=_HOURS_TICK)
 
