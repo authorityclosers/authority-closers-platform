@@ -241,7 +241,10 @@ For dev-live, the same command with the dev-live API's environment and build
 slot: `--property=EnvironmentFile=/etc/authority-closers/development/api-live.env`,
 and the `WorkingDirectory` and `.venv` of the active slot in
 `/etc/systemd/system/ac-dev-live-api.service.d/slot.conf`
-(`/srv/authority-closers/development/live-backend/a` or `/b`).
+(`/srv/authority-closers/development/live-backend/a` or `/b`). Uid 10001 cannot
+enter `/srv/authority-closers`, so mount the slots in as the dev-live API unit
+does: `--property=TemporaryFileSystem=/srv/authority-closers:ro` and
+`--property=BindReadOnlyPaths=/srv/authority-closers/development/live-backend`.
 
 Done check: exit 0 and three `accounts` entries; a second run prints the same
 person ids. Then sign in on salesxray-dev with each password (dev-live behind
