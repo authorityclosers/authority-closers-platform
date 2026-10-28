@@ -1,0 +1,45 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "3c2e42ef1c66dc2fbdbf7b9b4052d39ed747780d",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "docs/ops/aws-cutover.md",
+    "infra/aws/cutover/backup.example.json",
+    "infra/aws/cutover/backup.py",
+    "infra/aws/cutover/canary.py",
+    "infra/aws/cutover/cutover.py",
+    "infra/aws/cutover/dry_run.py",
+    "infra/aws/cutover/endpoint.py",
+    "infra/aws/cutover/fixture.py",
+    "infra/aws/cutover/fixture_forward.py",
+    "infra/aws/cutover/freeze-production.caddy",
+    "infra/aws/cutover/host.example.json",
+    "infra/aws/cutover/host.py",
+    "infra/aws/cutover/install-backups.py",
+    "infra/aws/cutover/ops-repoint",
+    "infra/aws/cutover/production.example.json",
+    "infra/aws/cutover/public-canary.example.json",
+    "infra/aws/cutover/recover-archive.py",
+    "infra/aws/cutover/systemd/ac-aws-backup@.service",
+    "infra/aws/cutover/systemd/ac-aws-backup@archive.timer",
+    "infra/aws/cutover/systemd/ac-aws-backup@capture.timer",
+    "infra/aws/cutover/test_cutover.py",
+    "infra/aws/rehearsal/README.md",
+    "infra/aws/rehearsal/inventory.py",
+    "infra/aws/rehearsal/test_rehearsal.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "infra/aws/rehearsal/test_rehearsal.py"
+  ],
+  "include_paths": [
+    "infra/aws/rehearsal/inventory.py",
+    "infra/aws/rehearsal/test_rehearsal.py",
+    "infra/aws/rehearsal/README.md"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}
