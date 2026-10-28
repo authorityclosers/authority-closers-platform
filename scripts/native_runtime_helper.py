@@ -173,6 +173,8 @@ def _parse() -> argparse.Namespace:
     parser.add_argument("--peer-uid", type=int, required=True)
     parser.add_argument("--peer-gid", type=int, required=True)
     parser.add_argument("--timeout-seconds", type=float, default=1500.0)
+    parser.add_argument("--memory-mib", type=int, default=2048)
+    parser.add_argument("--cgroup-parent")
     args = parser.parse_args()
     if (
         not args.socket.is_absolute()
@@ -214,6 +216,8 @@ def main() -> int:
             output_root=args.output_root,
             native_owner=(NATIVE_UID, NATIVE_GID),
             timeout_seconds=args.timeout_seconds,
+            memory_mib=args.memory_mib,
+            cgroup_parent=args.cgroup_parent,
         )
         unix_family = getattr(socket, "AF_UNIX", None)
         if not isinstance(unix_family, int):

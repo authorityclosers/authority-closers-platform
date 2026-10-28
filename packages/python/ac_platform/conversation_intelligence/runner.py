@@ -220,7 +220,14 @@ class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
     own their claims, transactions and dispatch fences.
     """
 
-    def __init__(self, *args: Any, provider_consumers: int = 1, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        provider_consumers: int = 1,
+        max_jobs: int = 0,
+        admission: Callable[[asyncio.Event], Awaitable[bool]] | None = None,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
         if (
             type(provider_consumers) is not int
@@ -230,6 +237,10 @@ class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
                 f"Conversation provider consumers must be 1 to {MAX_PROVIDER_CONSUMERS}"
             )
         self.provider_consumers = provider_consumers
+        if type(max_jobs) is not int or not 0 <= max_jobs <= 100_000:
+            raise ValueError("worker_job_limit_invalid")
+        self.max_jobs = max_jobs
+        self.admission = admission
 
     async def run(self, stop: asyncio.Event) -> ConversationWorkerRunnerSummary:
         if not isinstance(stop, asyncio.Event):
@@ -239,12 +250,24 @@ class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
         summary = ConversationWorkerRunnerSummary()
         local_wake, wake = self.wakeups or (asyncio.Event(), asyncio.Event())
         halted = asyncio.Event()
+        completed_jobs = 0
+
+        def completed(did_work: bool) -> None:
+            nonlocal completed_jobs
+            completed_jobs += int(did_work)
+            if self.max_jobs and completed_jobs >= self.max_jobs:
+                # Stop new admissions; all already accepted stages drain.
+                stop.set()
 
         async def consume(*, local: bool) -> None:
             nonlocal summary
             idle = self.idle_min
             try:
                 while not stop.is_set() and not halted.is_set():
+                    if self.admission is not None and not await self.admission(stop):
+                        break
+                    if stop.is_set() or halted.is_set():
+                        break
                     # Clear before checking durable work: a completion
                     # arriving during a scan must survive into the wait.
                     (local_wake if local else wake).clear()
@@ -256,6 +279,7 @@ class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
                                 offline = await self._owned_call(
                                     self.offline_worker.run_once, "offline worker"
                                 )
+                            completed(offline)
                             outcomes = (retention, offline, False, False)
                         else:
                             plan = await self._owned_call(
@@ -266,6 +290,7 @@ class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
                                 inference = await self._owned_call(
                                     self.inference_worker.run_once, "inference worker"
                                 )
+                            completed(inference)
                             outcomes = (False, False, plan, inference)
                     except ReconciliationRequiredError:
                         summary = summary.append_recovery_hold()
@@ -292,6 +317,8 @@ class PipelinedConversationWorkerRunner(ConversationWorkerRunner):
             if stop.is_set():
                 return summary
             # Retention/recovery admission runs before either consumer starts.
+            if self.admission is not None and not await self.admission(stop):
+                return summary
             while not stop.is_set():
                 try:
                     retention = await self._owned_call(self.retention.step, "retention")

@@ -480,6 +480,8 @@ class DockerNativeRuntime:
         workspace_root: Path,
         output_root: Path | None = None,
         native_owner: tuple[int, int] | None = None,
+        memory_mib: int = 2048,
+        cgroup_parent: str | None = None,
         docker_executable: str | Path = "docker",
         container_prefix: str = "ac-sales-xray-native",
         timeout_seconds: float = MAX_RUNTIME_SECONDS,
@@ -507,6 +509,15 @@ class DockerNativeRuntime:
                     or any(type(value) is not int or value < 0 for value in native_owner)
                 )
             )
+            or type(memory_mib) is not int
+            or not 128 <= memory_mib <= 2048
+            or (
+                cgroup_parent is not None
+                and (
+                    not isinstance(cgroup_parent, str)
+                    or re.fullmatch(r"[A-Za-z0-9_.-]+\.slice", cgroup_parent) is None
+                )
+            )
             or not _CONTAINER_PREFIX.fullmatch(container_prefix)
             or type(timeout_seconds) not in {int, float}
             or not 1 <= timeout_seconds <= MAX_RUNTIME_SECONDS
@@ -519,6 +530,8 @@ class DockerNativeRuntime:
         self.workspace_root = workspace_root
         self.output_root = output_root
         self.native_owner = native_owner
+        self.memory_mib = memory_mib
+        self.cgroup_parent = cgroup_parent
         self.docker_executable = str(docker_executable)
         self.container_prefix = container_prefix
         self.timeout_seconds = float(timeout_seconds)
@@ -732,8 +745,13 @@ class DockerNativeRuntime:
             "--cap-drop=ALL",
             "--security-opt=no-new-privileges:true",
             "--pids-limit=32",
-            "--memory=2g",
-            "--memory-swap=2g",
+            f"--memory={self.memory_mib}m" if self.memory_mib != 2048 else "--memory=2g",
+            f"--memory-swap={self.memory_mib}m" if self.memory_mib != 2048 else "--memory-swap=2g",
+            *(
+                (f"--cgroup-parent={self.cgroup_parent}", "--oom-score-adj=500")
+                if self.cgroup_parent is not None
+                else ()
+            ),
             "--cpus=1",
             "--ulimit",
             "nofile=64:64",

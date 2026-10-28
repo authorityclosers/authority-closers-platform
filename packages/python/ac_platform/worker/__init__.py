@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from collections.abc import Awaitable, Callable, Mapping
 from contextlib import AbstractAsyncContextManager, suppress
@@ -110,6 +111,7 @@ from ac_platform.providers import (
     create_email_provider_from_settings,
 )
 from ac_platform.telemetry import InMemoryTelemetrySink, TelemetryCategory, TelemetryRecorder
+from ac_platform.worker.load_gate import worker_job_limit
 from ac_platform.worker.reviewer_email import resolve_reviewer_auth_message
 
 ENROLLMENT_WELCOME_EVENT = "enrollment.welcome.requested.v1"
@@ -662,7 +664,7 @@ class DurableWorker:
     async def start(self) -> bool:
         return await self.prepare()
 
-    async def run_once(self) -> WorkerRunResult:
+    async def run_once(self, *, max_jobs: int | None = None) -> WorkerRunResult:
         """Materialize safely, then claim/commit/dispatch one job at a time."""
 
         if not self._ready:
@@ -673,7 +675,9 @@ class DurableWorker:
             self._ready = False
             raise WorkerNotReadyError(str(error)) from error
         result = WorkerRunResult(materialized=len(materialized))
-        for _ in range(self._batch_size):
+        for _ in range(
+            min(self._batch_size, max_jobs) if max_jobs is not None else self._batch_size
+        ):
             try:
                 job = await self._claim_one()
             except ReconciliationRequiredError:
@@ -694,9 +698,20 @@ class DurableWorker:
             raise ValueError("max_iterations must be positive")
         stop = stop_event or asyncio.Event()
         iterations = 0
+        completed_jobs = 0
+        job_limit = worker_job_limit(os.environ.get("AC_WORKER_MAX_JOBS"))
         while not stop.is_set():
             if await self.prepare():
-                await self.run_once()
+                result = (
+                    await self.run_once(max_jobs=job_limit - completed_jobs)
+                    if job_limit
+                    else await self.run_once()
+                )
+                if job_limit:
+                    completed_jobs += result.claimed
+                if job_limit and completed_jobs >= job_limit:
+                    stop.set()  # accepted work finished; sibling media loop drains
+                    return
             iterations += 1
             if max_iterations is not None and iterations >= max_iterations:
                 return
