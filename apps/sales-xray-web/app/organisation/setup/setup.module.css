@@ -711,6 +711,39 @@
   vertical-align: -3px;
   color: var(--sx-accent);
 }
+/* Stages as one grouped list; the arrows show only while reordering. */
+.stageRow {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  padding: 0 8px 0 16px;
+}
+.stageRow .stageEdit {
+  gap: 12px;
+  min-height: 60px;
+}
+.stageNumber {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.rowChevron {
+  flex: none;
+  color: var(--sx-muted);
+}
+.stageRow .stageMoves {
+  gap: 0;
+}
 .spin {
   animation: setupSpin 900ms linear infinite;
 }
