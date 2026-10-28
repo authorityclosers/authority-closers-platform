@@ -2171,3 +2171,72 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Organisation → Team on phones (owner order 29 Oct 2026, Opus UX pass): each
+   person is one calm row, the avatar 32 px, the role a compact chip under the
+   name and the row's actions 44 px to tap on the right; the invite fields
+   are 44 px tall. */
+@media (max-width: 720px) {
+  .memberRow {
+    grid-template-areas:
+      "person actions"
+      "role actions";
+    align-items: center;
+    gap: 6px 8px;
+    padding: 12px 6px 12px 14px;
+  }
+
+  .memberRow .avatar {
+    width: 32px;
+    height: 32px;
+    font-size: 11px;
+  }
+
+  .memberRow > .roleCell {
+    justify-self: start;
+    padding-left: 42px;
+  }
+
+  .memberRow .roleSelect,
+  .memberRow .role {
+    height: 30px;
+    margin-left: 0;
+    border-color: transparent;
+    border-radius: 999px;
+    background-color: var(--sx-fill-soft);
+    color: var(--sx-ink-2);
+    font-size: 12px;
+    font-weight: 600;
+  }
+
+  .memberRow .roleSelect {
+    padding: 0 24px 0 12px;
+  }
+
+  .memberRow .role {
+    padding: 0 12px;
+  }
+
+  .memberRow .rowActions {
+    align-self: center;
+  }
+
+  .memberRow .icon {
+    width: 44px;
+    height: 44px;
+  }
+
+  .addRow {
+    gap: 10px;
+    padding: 12px 14px;
+  }
+
+  .addRow .field,
+  .addRow .select {
+    height: 44px;
+  }
+
+  .addRow .field input {
+    font-size: 16px;
+  }
+}
