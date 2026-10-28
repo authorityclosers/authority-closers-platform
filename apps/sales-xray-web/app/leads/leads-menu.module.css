@@ -1,6 +1,6 @@
 .groups {
   display: grid;
-  gap: 20px;
+  gap: 16px;
   min-width: 0;
 }
 
@@ -12,7 +12,8 @@
 }
 
 .groups ul > li > button {
-  min-height: 64px;
+  min-height: 60px;
+  padding-block: 8px;
   grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
@@ -20,4 +21,32 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* One quiet icon treatment for setup and tools, in both themes. */
+.groups li > button > span[aria-hidden="true"] {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.groups li > button svg {
+  stroke-width: 1.75;
+}
+
+.groups strong {
+  line-height: 1.25;
+}
+
+.groups small {
+  font-size: var(--sx-text-sm);
+  line-height: 1.35;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sheet button {
+    transition: none;
+  }
 }

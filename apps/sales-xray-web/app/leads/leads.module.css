@@ -7092,3 +7092,17 @@ fieldset.form {
     top: calc(62px + env(safe-area-inset-top, 0px));
   }
 }
+
+/* Offscreen loaded rows retain their natural size without painting every
+   avatar, gesture layer and control on each sync. Keyboard focus still reveals
+   a row, and browsers without content-visibility keep the ordinary list. */
+.leadList > .leadLine {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 84px;
+}
+
+@media (max-width: 767px) {
+  .leadList > .leadLine {
+    contain-intrinsic-block-size: auto 134px;
+  }
+}

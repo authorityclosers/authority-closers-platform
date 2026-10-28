@@ -26,12 +26,8 @@ import {
 import { buzz } from "./native-phone";
 import styles from "./message-sheet.module.css";
 
-/** The ready messages and the names that fill them, for every lead on the page. */
-export const MessageSetup = createContext<{
-  templates: MessageTemplate[];
-  myName: string;
-  org: string;
-}>({ templates: [], myName: "", org: "" });
+// Kept as a re-export for existing composers; the list imports the small context.
+export { MessageSetup } from "./message-context";
 
 /** Opens the composer for the open lead, starting with a ready message. */
 export const OpenMessage = createContext<

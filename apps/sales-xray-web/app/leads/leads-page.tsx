@@ -74,7 +74,6 @@ import {
   readJourney,
   type JourneyView,
 } from "./journey/journey-client";
-import { LeadActions } from "./lead-actions";
 import {
   LEAD_ADDED_EVENT,
   takeHandedLead,
@@ -111,9 +110,12 @@ import {
   type ListSince,
   type ListSort,
 } from "./leads-client";
-import { MessageSetup } from "./message-sheet";
+import { MessageSetup } from "./message-context";
 import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { LeadsSkeleton } from "./leads-skeleton";
+import { useServerSeedAllowed } from "../initial-session";
+import type { ServerLeads } from "./leads-seed";
+import { legacyLeadSettings } from "./legacy-settings";
 import { ListView, TEST, type Scope } from "./list-view";
 
 import { NewLeadCard, useArrival } from "./new-lead-card";
@@ -262,6 +264,11 @@ const WORK = "work";
 const TASKS = "tasks";
 /** Notes' tab: it opens /leads/notes, Notes' own place (owner, 25 Oct 2026). */
 const NOTES = "notes";
+// Tools opened from a tap do not belong in the first list's bundle.
+const LeadActions = dynamic(
+  () => import("./lead-actions").then((module) => module.LeadActions),
+  { ssr: false },
+);
 const PhoneSetupBar = dynamic(
   () => import("./phone-setup").then((m) => m.PhoneSetupBar),
   { ssr: false },
@@ -363,7 +370,9 @@ function ViewLoading() {
   );
 }
 
-export function LeadsRoute() {
+export function LeadsRoute({
+  initial = null,
+}: { initial?: ServerLeads | null } = {}) {
   const access = useWorkspaceAccess();
   const params = useSearchParams();
   const router = useRouter();
@@ -371,6 +380,10 @@ export function LeadsRoute() {
   const requestedStage = params.get("stage");
   const requestedPipeline = params.get("pipeline");
   const addressKey = params.toString();
+  const legacySettings = legacyLeadSettings(addressKey);
+  useEffect(() => {
+    if (legacySettings) router.replace(legacySettings);
+  }, [legacySettings, router]);
   // A lead handed over by the Chrome extension opens Add lead, filled in. It
   // travels after "#", so the lead's details never reach a server or its logs.
   const hash = useSyncExternalStore(onHashChange, readHash, () => "");
@@ -400,6 +413,10 @@ export function LeadsRoute() {
   // Leads paints it at once and reads again quietly. Not under test, where
   // every case starts from nothing.
   const identity = identityOf(access?.context);
+  const serverAllowed = useServerSeedAllowed(initial?.identity ?? null);
+  const serverSeed =
+    serverAllowed && initial?.identity === identity ? initial : null;
+  const [serverConsumed, setServerConsumed] = useState(!!serverSeed);
   const hydrated = useSyncExternalStore(
     subscribeHydrated,
     () => true,
@@ -413,9 +430,16 @@ export function LeadsRoute() {
   const [deskState, setDeskState] = useState<{
     identity: string | null;
     desk: Desk | null;
-  }>({ identity: seed ? identity : null, desk: seed });
+  }>({
+    identity: serverSeed || seed ? identity : null,
+    desk: serverSeed?.desk ?? seed,
+  });
   const deskKey = deskState.identity;
   const desk = deskFor(deskState, identity);
+  if (authenticated && serverSeed && !serverConsumed && deskKey !== identity) {
+    setDeskState({ identity, desk: serverSeed.desk });
+    setServerConsumed(true);
+  }
   if (
     authenticated &&
     hydrated &&
@@ -467,6 +491,18 @@ export function LeadsRoute() {
     at: string;
     pipeline?: string | null;
   } | null>(null);
+  useEffect(() => {
+    // A tool temporarily selects a view before Next updates the address.
+    // Back must discard that override instead of applying it to the old URL.
+    const restoreAddress = () => {
+      setPicked(null);
+      setSettingsOpen(false);
+      pushedSettings.current = false;
+    };
+    window.addEventListener("popstate", restoreAddress);
+    return () => window.removeEventListener("popstate", restoreAddress);
+  }, []);
+
   // Whose leads and the search start from the address (a saved view, a link).
   const [scopeChoice, setScopeChoice] = useState<Scope | null>(() =>
     asScope(params.get("who")),
@@ -1062,7 +1098,7 @@ export function LeadsRoute() {
     );
   }
 
-  if (!current || !desk) return <LeadsSkeleton />;
+  if (!current || !desk || legacySettings) return <LeadsSkeleton />;
 
   // A phone alert's lead opens once; closing it leaves the desk.
   const fromLink = linked && linkDone !== hash ? linked : null;
@@ -1277,16 +1313,15 @@ export function LeadsRoute() {
               ? `${desk.counts.unassigned} ready to share`
               : "Choose who gets each lead",
             onPick: () => {
+              leavingOverlay();
               setSettingsOpen(false);
               setSharing(true);
             },
           },
           {
             key: "team",
-            label: "Team",
-            note: desk.counts.unassigned
-              ? `${desk.counts.unassigned} need an owner`
-              : "Who gets which leads",
+            label: "Lead rules",
+            note: "Who gets leads and when",
             // Approved map, slice 5: Leads' settings live in Settings.
             onPick: () => {
               setSettingsOpen(false);
@@ -1318,7 +1353,9 @@ export function LeadsRoute() {
     {
       key: "stages",
       label: "Lead stages",
-      note: can ? "Set the steps to a sale" : "Your team’s steps to a sale",
+      note: can
+        ? "Your team’s steps to a sale"
+        : "See your team’s steps to a sale",
       onPick: () => {
         setSettingsOpen(false);
         leavingOverlay();
@@ -1330,6 +1367,7 @@ export function LeadsRoute() {
       label: "Import leads",
       note: can ? "From contacts, files or ads" : "From your contacts",
       onPick: () => {
+        leavingOverlay();
         setSettingsOpen(false);
         begin("menu", setMenu);
       },
@@ -1339,7 +1377,7 @@ export function LeadsRoute() {
           {
             key: "test",
             label: "Test leads",
-            note: "Review and clear sample leads",
+            note: "Find and clear sample leads",
             onPick: () => {
               setSettingsOpen(false);
               go(TEST);
@@ -1579,6 +1617,7 @@ export function LeadsRoute() {
           ) : stageView ? (
             <ListView
               canManage={can}
+              initial={desk === serverSeed?.desk ? serverSeed : null}
               cacheIdentity={identity}
               stage={view}
               stageLabel={stageLabel}

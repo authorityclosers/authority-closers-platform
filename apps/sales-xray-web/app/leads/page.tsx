@@ -2,11 +2,17 @@ import { Suspense } from "react";
 
 import { LeadsRoute } from "./leads-page";
 import { LeadsSkeleton } from "./leads-skeleton";
+import { serverLeads } from "./leads-server";
 
-export default function Page() {
+export default async function Page({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const initial = await serverLeads(searchParams);
   return (
     <Suspense fallback={<LeadsSkeleton />}>
-      <LeadsRoute />
+      <LeadsRoute initial={initial} />
     </Suspense>
   );
 }

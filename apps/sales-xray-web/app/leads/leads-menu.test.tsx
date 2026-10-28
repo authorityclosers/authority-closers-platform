@@ -13,7 +13,7 @@ let host: HTMLDivElement;
 let root: Root;
 const entries = [
   ["share", "Share out leads"],
-  ["team", "Team"],
+  ["team", "Lead rules"],
   ["sources", "Lead sources"],
   ["numbers", "Pipeline numbers"],
   ["stages", "Lead stages"],
@@ -55,18 +55,18 @@ it("groups every existing destination in job order with an icon and its original
   );
   expect(
     Array.from(host.querySelectorAll("h3"), (el) => el.textContent),
-  ).toEqual(["Getting leads in", "Who works them", "Your pipeline"]);
+  ).toEqual(["Set up leads", "Manage leads"]);
   const buttons = Array.from(
     host.querySelectorAll<HTMLButtonElement>("li > button"),
   );
   const order = [
     "sources",
-    "import",
-    "test",
+    "stages",
     "team",
     "share",
-    "stages",
+    "import",
     "numbers",
+    "test",
   ];
   expect(buttons).toHaveLength(7);
   for (const [index, key] of order.entries()) {
@@ -92,8 +92,13 @@ it("keeps permission-filtered rows absent and omits empty groups", async () => {
   );
   expect(
     Array.from(host.querySelectorAll("h3"), (el) => el.textContent),
-  ).toEqual(["Getting leads in", "Your pipeline"]);
+  ).toEqual(["Set up leads", "Manage leads"]);
   expect(host.querySelectorAll("li")).toHaveLength(3);
-  for (const label of ["Share out leads", "Team", "Lead sources", "Test leads"])
+  for (const label of [
+    "Share out leads",
+    "Lead rules",
+    "Lead sources",
+    "Test leads",
+  ])
     expect(host.textContent).not.toContain(label);
 });

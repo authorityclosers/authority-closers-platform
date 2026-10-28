@@ -20,14 +20,18 @@ import {
 } from "lucide-react";
 import {
   memo,
+  useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
   type ReactNode,
 } from "react";
 
 import { cachedLeadPage, readFirstLeads } from "./list-cache";
+import { firstPageFor, type ServerLeads } from "./leads-seed";
 import { notify } from "../notice-center";
 import { useRowKeys } from "../ui/row-keys";
 import { Button, Skeleton } from "../ui/kit";
@@ -48,11 +52,16 @@ import {
   type ListMore,
   type ListSort,
 } from "./leads-client";
-import { BulkSheet } from "./bulk-sheet";
 import { QuickAddBar, type PasteRows } from "./quick-add";
 import styles from "./leads.module.css";
 
 const CachedLeadLine = memo(LeadLine);
+const subscribeHydration = () => () => {};
+
+const BulkSheet = dynamic(
+  () => import("./bulk-sheet").then((module) => module.BulkSheet),
+  { ssr: false },
+);
 
 const LeadsTable = dynamic(
   () => import("./leads-table").then((m) => m.LeadsTable),
@@ -81,6 +90,7 @@ function storedLayout(owner: string | undefined): Layout {
 
 export function ListView({
   canManage,
+  initial = null,
   cacheIdentity,
   stage,
   stageLabel,
@@ -107,6 +117,7 @@ export function ListView({
   onSort,
 }: {
   canManage: boolean;
+  initial?: ServerLeads | null;
   cacheIdentity?: string | null;
   /** "open", a stage kind, or "test". */
   stage: string;
@@ -155,9 +166,14 @@ export function ListView({
     owner: layoutOwner,
     value: storedLayout(layoutOwner),
   }));
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    () => true,
+    () => false,
+  );
   if (layout.owner !== layoutOwner)
     setLayout({ owner: layoutOwner, value: storedLayout(layoutOwner) });
-  const asTable = layout.value === "table";
+  const asTable = hydrated && layout.value === "table";
   const chooseLayout = (value: Layout) => {
     setLayout({ owner: layoutOwner, value });
     if (!layoutOwner) return;
@@ -173,6 +189,36 @@ export function ListView({
     stage === "open" || stage === "new"
       ? { pipeline, onAdded: () => onChanged?.(), onPasteRows }
       : null;
+  // Counts and sync update the parent callbacks. Keep unchanged rows reusable,
+  // while their next tap always uses the handlers from the latest commit.
+  const handlers = useRef({ onOpen, actions });
+  useLayoutEffect(() => {
+    handlers.current = { onOpen, actions };
+  });
+  const openRow = useCallback((id: string) => handlers.current.onOpen(id), []);
+  const call = !!actions?.onCall;
+  const log = !!actions?.onLog;
+  const message = !!actions?.onMessage;
+  const hold = !!actions?.onHold;
+  const tap = !!actions?.onTap;
+  const rowActions = useMemo<RowActions>(
+    () => ({
+      onCall: call
+        ? (row) => handlers.current.actions?.onCall?.(row)
+        : undefined,
+      onLog: log ? (row) => handlers.current.actions?.onLog?.(row) : undefined,
+      onMessage: message
+        ? (row) => handlers.current.actions?.onMessage?.(row)
+        : undefined,
+      onHold: hold
+        ? (row) => handlers.current.actions?.onHold?.(row)
+        : undefined,
+      onTap: tap
+        ? (row, channel) => handlers.current.actions?.onTap?.(row, channel)
+        : undefined,
+    }),
+    [call, log, message, hold, tap],
+  );
   const [loaded, setLoaded] = useState<{
     key: string;
     question: string;
@@ -248,9 +294,19 @@ export function ListView({
       }),
     [cacheIdentity, scope, owner, stage, query, pipeline, moreKey],
   );
-  const page = loaded?.question === question ? loaded.page : remembered;
+  const [initialRead] = useState(initial);
+  const serverPage = firstPageFor(initialRead, cacheIdentity, {
+    scope,
+    stage,
+    query,
+    pipeline,
+    owner,
+    more: refine,
+  });
+  const page =
+    loaded?.question === question ? loaded.page : (serverPage ?? remembered);
   const rows =
-    loaded?.question === question ? loaded.rows : (remembered?.leads ?? []);
+    loaded?.question === question ? loaded.rows : (page?.leads ?? []);
   // Paint the visible phone rows first. Building 50 gesture-enabled rows at
   // once monopolises a mid-range phone even when the data is already cached.
   const [revealed, setRevealed] = useState({ question: "", count: 8 });
@@ -687,9 +743,9 @@ export function ListView({
                       <CachedLeadLine
                         key={row.lead_id}
                         row={row}
-                        onOpen={onOpen}
+                        onOpen={openRow}
                         showOwner={scope !== "mine"}
-                        actions={actions}
+                        actions={actions ? rowActions : undefined}
                       />
                     ),
                   )}
