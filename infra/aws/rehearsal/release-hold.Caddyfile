@@ -1,0 +1,20 @@
+{
+ admin unix//tmp/caddy-admin.sock
+ auto_https off
+ persist_config off
+}
+:8080 {
+ encode zstd gzip
+ @intake {
+  method POST
+  path_regexp ^/v1/lead-desk/capture/[0-9a-fA-F-]+(/google-ads)?$
+ }
+ handle @intake {
+  reverse_proxy intake-spool:8080
+ }
+ handle {
+  header X-Authority-Closers-Route release-hold-rehearsal
+  header Retry-After 30
+  respond "Isolated fictional rehearsal release in progress.\n" 503
+ }
+}

@@ -1,0 +1,86 @@
+# Isolated exception layer after the real production + lean overlays.
+# v1.3.0 lacks lean_service. The old hosted worker is explicitly BOOTSTRAP ONLY:
+# its memory and queue measurements cannot qualify provider execution.
+services:
+  postgres:
+    environment:
+      PGDATA: /var/lib/postgresql/data
+    networks: [data]
+  pgbouncer:
+    healthcheck:
+      test: [CMD, pg_isready, -h, 127.0.0.1, -p, "6432", -U, ac_runtime, -d, ac_platform]
+    tmpfs: !override ["/tmp:rw,noexec,nosuid,nodev,size=4m,uid=10001,gid=10001"]
+  api:
+    environment:
+      AC_OTEL_EXPORTER_OTLP_ENDPOINT: null
+      AC_PULSE_ISSUER: https://pulse.example.test
+      AC_PULSE_CLIENT_ID: fictional-rehearsal
+      AC_PULSE_CLIENT_SECRET: ${AC_GOOGLE_OAUTH_CLIENT_SECRET}
+    volumes:
+      - ${HOME}/rehearsal/spool:/var/lib/ac-intake-spool
+    networks: !override
+      app: {}
+      data: {}
+      edge: {}
+  worker:
+    environment:
+      AC_EXTERNAL_SIDE_EFFECTS_HOLD: ${AC_REHEARSAL_WORKER_HOLD:-true}
+      TMPDIR: /tmp
+      AC_MEDIA_FILESYSTEM_ROOT: ""
+      AC_MEDIA_FILESYSTEM_AVATAR_ROOT: ""
+      AC_MEDIA_SCANNER_UNIX_SOCKET: ""
+      AC_MEDIA_SCANNER_HOST: ""
+      AC_OTEL_EXPORTER_OTLP_ENDPOINT: null
+    networks: !override
+      data: {}
+  sales-xray-worker:
+    command: [python, -m, ac_platform.conversation_intelligence.service, --config, /run/ac-sales-xray/service.json, --sha256, '${AC_XRAY_SERVICE_SHA256}']
+    networks: !override
+      data: {}
+  intake-spool:
+    volumes:
+      - ${HOME}/rehearsal/spool:/var/lib/ac-intake-spool
+  learner-web:
+    profiles: !reset []
+  admin-web:
+    profiles: !reset []
+  coach-web:
+    profiles: !reset []
+  sales-xray-web:
+    image: ghcr.io/authorityclosers/ac-sales-xray-web:8eac71cb1c0606b2faf344b2589ebcb08343ab3b
+    restart: unless-stopped
+    init: true
+    read_only: true
+    user: '1000:1000'
+    tmpfs: ["/tmp:rw,noexec,nosuid,nodev,size=32m,uid=1000,gid=1000,mode=0700"]
+    mem_limit: 384m
+    memswap_limit: 384m
+    networks: [edge]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    healthcheck:
+      test: [CMD, /usr/local/bin/ac-http-healthcheck, 'http://127.0.0.1:3016/health', sales-xray]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+  caddy:
+    image: caddy@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    restart: unless-stopped
+    mem_limit: 64m
+    memswap_limit: 64m
+    ports: ['127.0.0.1:8080:8080']
+    volumes: ['./Caddyfile:/etc/caddy/Caddyfile:ro', '${HOME}/rehearsal/auth.caddy:/etc/caddy/auth.caddy:ro']
+    networks:
+      edge:
+        ipv4_address: 172.30.29.10
+      tunnel: {}
+networks:
+  tunnel: {}
+  edge: !override
+    internal: true
+    ipam:
+      config: [{subnet: 172.30.29.0/24}]
+  telemetry: !override
+    internal: true
+  egress:
+    internal: true
