@@ -1,0 +1,15 @@
+# Install as /etc/ac-disk-guard.conf, owned by root and writable only by root.
+# Values are GiB (1024^3 bytes). Only the listed rebuildable caches are always allowed.
+TARGET_FREE_GB=90
+CRITICAL_FREE_GB=20
+KEEP_RELEASES=3
+
+# Set to 1 ONLY after the owner approves this backup retention policy.
+BACKUP_ROTATION_APPROVED=0
+KEEP_PAPERCLIP_BACKUPS=4
+KEEP_STAGING_DUMPS=3
+KEEP_PROD_LOGICAL_HOURS=24
+KEEP_SNAPSHOTS=4
+
+# Never prune held/pre-promote backups, production snapshots, restic/offsite,
+# volumes, media-safety, imports or datasets. They need separate owner decisions.

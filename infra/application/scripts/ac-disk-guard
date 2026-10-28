@@ -1,0 +1,270 @@
+#!/bin/bash
+# Owner-directed disk cleanup, 28 Oct 2026. Never run this script from a test without
+# overriding paths AND destructive commands. Backup rotation requires explicit approval.
+set -euo pipefail
+export LC_ALL=C
+# Only the trusted config can approve backup rotation, never an inherited environment.
+BACKUP_ROTATION_APPROVED=0
+CONF=${AC_DISK_CONF:-/etc/ac-disk-guard.conf}
+if [ -f "$CONF" ]; then
+    # shellcheck source=/dev/null
+    . "$CONF"
+fi
+TARGET_FREE_GB=${TARGET_FREE_GB:-90}
+CRITICAL_FREE_GB=${CRITICAL_FREE_GB:-20}
+BACKUP_ROTATION_APPROVED=${BACKUP_ROTATION_APPROVED:-0}
+KEEP_RELEASES=${KEEP_RELEASES:-3}
+KEEP_PAPERCLIP_BACKUPS=${KEEP_PAPERCLIP_BACKUPS:-4}
+KEEP_STAGING_DUMPS=${KEEP_STAGING_DUMPS:-3}
+KEEP_PROD_LOGICAL_HOURS=${KEEP_PROD_LOGICAL_HOURS:-24}
+KEEP_SNAPSHOTS=${KEEP_SNAPSHOTS:-4}
+LOG=${AC_DISK_LOG:-/var/log/ac-disk-guard.log}
+ALERT=${AC_DISK_ALERT:-/srv/authority-closers/metrics/disk-alert.json}
+LOCK=${AC_DISK_LOCK:-/run/ac-disk-guard.lock}
+SRC=${AC_DISK_SRC:-/home/acdev/src}
+TMP=${AC_DISK_TMP:-/tmp}
+PAPERCLIP=${AC_DISK_PAPERCLIP:-/home/acdev/.paperclip/instances/default/data/backups}
+BACKUPS=${AC_DISK_BACKUPS:-/srv/authority-closers/backups}
+CUT=${AC_DISK_CUT:-/run/ac-release-cut.active}
+DF=${AC_DISK_DF:-df}
+DOCKER=${AC_DISK_DOCKER:-docker}
+JOURNAL=${AC_DISK_JOURNAL:-journalctl}
+APT=${AC_DISK_APT:-apt-get}
+RELEASE=${AC_DISK_RELEASE:-ac-release}
+PGREP=${AC_DISK_PGREP:-pgrep}
+RM=${AC_DISK_RM:-rm}
+DU=${AC_DISK_DU:-du}
+APT_CACHE=${AC_DISK_APT_CACHE:-/var/cache/apt/archives}
+PYTHON=${AC_DISK_PYTHON:-python3}
+TRIED=()
+say() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "$LOG"; }
+for key in TARGET_FREE_GB CRITICAL_FREE_GB KEEP_RELEASES KEEP_PAPERCLIP_BACKUPS \
+    KEEP_STAGING_DUMPS KEEP_PROD_LOGICAL_HOURS KEEP_SNAPSHOTS; do
+    value=${!key}
+    if ! [[ "$value" =~ ^[0-9]{1,6}$ ]] || [[ "$value" == 0* && "$value" != 0 ]]; then
+        say "invalid configuration: $key"; exit 1
+    fi
+done
+# Zero retained backups is never a valid rotation policy.
+if (( KEEP_PAPERCLIP_BACKUPS < 1 || KEEP_STAGING_DUMPS < 1 || KEEP_SNAPSHOTS < 1 \
+    || KEEP_PROD_LOGICAL_HOURS < 1 || TARGET_FREE_GB < 1 )); then
+    say 'invalid configuration: retention and target must be positive'; exit 1
+fi
+exec 9>"$LOCK"
+if ! flock -n 9; then say 'another disk guard is running; skipped'; exit 0; fi
+free_bytes() {
+    local result
+    result=$("$DF" -B1 --output=avail / | tail -n 1 | tr -d '[:space:]') || return 1
+    [[ "$result" =~ ^[0-9]+$ ]] || return 1
+    printf '%s\n' "$result"
+}
+measure() {
+    if ! FREE=$(free_bytes); then
+        say 'df failed; stopping cleanup because free space is unknown'; exit 1
+    fi
+}
+met_target() { (( FREE >= TARGET_FREE_GB * 1073741824 )); }
+# Only metadata from these commands is logged. Never read a candidate's contents.
+command_step() {
+    local output status=0 line
+    output=$("$@" 2>&1) || status=$?
+    while IFS= read -r line; do
+        [ -z "$line" ] || say "command metadata: $(printf '%q' "$line")"
+    done <<< "$output"
+    return "$status"
+}
+# Docker prune prints IDs and a total; preserve the per-image sizes as well.
+docker_images() {
+    local before after row image size status=0
+    before=$("$DOCKER" image ls --filter dangling=true --no-trunc --format '{{.ID}} {{.Size}}') \
+        || { say 'Docker image size inventory failed'; before=""; }
+    command_step "$DOCKER" image prune -f || status=$?
+    after=$("$DOCKER" image ls --filter dangling=true --no-trunc --format '{{.ID}} {{.Size}}') \
+        || { say 'Docker image size verification failed'; return 1; }
+    while IFS= read -r row; do
+        [ -n "$row" ] || continue
+        image=${row%% *}
+        size=${row#* }
+        if ! grep -qF -- "$image " <<< "$after"; then
+            say "removed image=$(printf '%q' "$image") size=$(printf '%q' "$size")"
+        fi
+    done <<< "$before"
+    return "$status"
+}
+apt_clean() {
+    local listing entry path size status=0
+    safe_root "$APT_CACHE" || { command_step "$APT" clean; return $?; }
+    listing=$(mktemp "${AC_DISK_WORK:-/tmp}/ac-disk-guard.XXXXXX") || return 1
+    find -P "$APT_CACHE" -xdev -type f ! -name lock -printf '%s %p\0' > "$listing" \
+        || status=$?
+    command_step "$APT" clean || status=$?
+    while IFS= read -r -d '' entry; do
+        size=${entry%% *}
+        path=${entry#* }
+        if [ ! -e "$path" ]; then
+            say "removed name=$(printf '%q' "$path") size_bytes=$size"
+        fi
+    done < "$listing"
+    "$RM" -f -- "$listing" || status=1
+    return "$status"
+}
+protected() {
+    case "/${1#/}/" in
+        */held/*|*/pre-promote-*/*|*/production-snapshots/*|*/restic*/*|*/offsite*/*|\
+        */volumes/*|*/media-safety/*|*/imports/*|*/datasets/*) return 0 ;;
+    esac
+    return 1
+}
+remove_path() {
+    local path=$1 size nested
+    protected "$path" && { say "protected: $(printf '%q' "$path")"; return 0; }
+    [ ! -L "$path" ] || return 0
+    [ "$(realpath -e -- "$path")" = "$path" ] || {
+        say "noncanonical candidate skipped: $(printf '%q' "$path")"; return 0;
+    }
+    if mountpoint -q -- "$path"; then say "mountpoint skipped: $path"; return 0; fi
+    # Preserve a snapshot containing a protected subtree in its entirety.
+    if [ -d "$path" ]; then
+        nested=$(find -P "$path" -xdev -mindepth 1 \
+            \( -name held -o -name 'pre-promote-*' -o -name production-snapshots \
+            -o -name 'restic*' -o -name 'offsite*' -o -name volumes -o -name media-safety \
+            -o -name imports -o -name datasets \) -print -quit) || return 1
+        [ -z "$nested" ] || { say "protected subtree: $(printf '%q' "$path")"; return 0; }
+    fi
+    size=$("$DU" -sx -B1 -- "$path") || return 1
+    size=${size%%[[:space:]]*}
+    if "$RM" -rf --one-file-system -- "$path"; then
+        say "removed name=$(printf '%q' "$path") size_bytes=$size"
+    else
+        say "remove failed name=$(printf '%q' "$path") size_bytes=$size"; return 1
+    fi
+}
+# Do not traverse a symlinked cleanup root (including any symlink in its ancestors).
+safe_root() {
+    [ -d "$1" ] || return 1
+    [ "$(realpath -e -- "$1")" = "$1" ] || { say "noncanonical root skipped: $1"; return 1; }
+}
+# Materialize find results before deleting, so discovery failures are observable.
+file_step() {
+    local mode=$1 root=$2 keep=${3:-0} listing entry path count=0 status=0
+    safe_root "$root" || return 0
+    listing=$(mktemp "${AC_DISK_WORK:-/tmp}/ac-disk-guard.XXXXXX") || return 1
+    case "$mode" in
+        caches)
+            find -P "$root" -xdev \
+                \( -name held -o -name 'pre-promote-*' -o -name production-snapshots \
+                -o -name 'restic*' -o -name 'offsite*' -o -name volumes -o -name media-safety \
+                -o -name imports -o -name datasets \) -prune -o \
+                -type d \( -path '*/.next/cache' -o -path '*/node_modules/.cache' \) \
+                -prune -mmin +4320 -printf '%T@ %p\0' > "$listing" || status=$? ;;
+        tmp)
+            # Numeric UIDs avoid an unknown -user making find abort on a host without suyash.
+            local uid clauses=() user
+            for user in acdev suyash; do
+                uid=$(id -u "$user" 2>/dev/null) || continue
+                [ ${#clauses[@]} -eq 0 ] || clauses+=(-o)
+                clauses+=(-uid "$uid")
+            done
+            if [ ${#clauses[@]} -gt 0 ]; then
+                find -P "$root" -xdev -maxdepth 1 -type f \
+                    \( -name 'wb-ci*' -o -name '*.tgz' -o -name '*.log' \) \
+                    \( "${clauses[@]}" \) -mmin +4320 -printf '%T@ %p\0' > "$listing" \
+                    || status=$?
+            fi ;;
+        paperclip|staging|snapshots|logical)
+            local selector=(-type f) pattern='*' age=() dumps=()
+            [ "$mode" != paperclip ] || pattern='paperclip-*.sql.gz'
+            [ "$mode" != snapshots ] || selector=(-type d)
+            if [ "$mode" = logical ]; then
+                # The current PostgreSQL backup tool stores dump + metadata as one capture.
+                selector=('(' -type f -o '(' -type d -name '*Z-*-production' ')' ')')
+                age=(-mmin "+$((KEEP_PROD_LOGICAL_HOURS * 60))" ! -name '.*' ! -name '*.lock')
+            fi
+            if [ "$mode" = staging ]; then
+                dumps=('(' -name '*.dump' -o -name '*.dump.gz' -o -name '*.dump.zst'
+                    -o -name '*.sql' -o -name '*.sql.gz' -o -name '*.sql.zst' ')')
+            fi
+            find -P "$root" -xdev -mindepth 1 -maxdepth 1 "${selector[@]}" \
+                "${dumps[@]}" -name "$pattern" "${age[@]}" -printf '%T@ %p\0' > "$listing" || status=$? ;;
+    esac
+    if [ "$status" -eq 0 ]; then
+        # Newest first; NUL delimiters preserve whitespace and newlines in names.
+        sort -z -nr -o "$listing" "$listing" || status=$?
+    fi
+    if [ "$status" -eq 0 ]; then
+        while IFS= read -r -d '' entry; do
+            path=${entry#* }
+            protected "$path" && continue
+            count=$((count + 1))
+            [ "$count" -gt "$keep" ] || continue
+            remove_path "$path" || status=1
+            measure
+            met_target && break
+        done < "$listing"
+    fi
+    "$RM" -f -- "$listing" || status=1
+    return "$status"
+}
+release_step() {
+    local status=0
+    if [ -e "$CUT" ]; then say 'release artifacts skipped: release cut active'; return 0; fi
+    "$PGREP" -f '(^|[ /])(ac-ship|ac-release|ac_release[.]py)([[:space:]]|$)' >/dev/null 2>&1 || status=$?
+    if [ "$status" -eq 0 ]; then say 'release artifacts skipped: release process active'; return 0; fi
+    if [ "$status" -ne 1 ]; then say 'release artifacts skipped: process check failed'; return 1; fi
+    command_step "$RELEASE" prune-artifacts --apply --keep-recent "$KEEP_RELEASES" --json
+}
+step() {
+    local name=$1 before status=0
+    shift
+    before=$FREE
+    TRIED+=("$name")
+    say "step=$name before_free_bytes=$before"
+    "$@" || status=$?
+    measure
+    say "step=$name after_free_bytes=$FREE status=$status"
+    if met_target; then say "target met free_bytes=$FREE target_gb=$TARGET_FREE_GB"; exit 0; fi
+}
+measure
+if met_target; then say "target met free_bytes=$FREE target_gb=$TARGET_FREE_GB; no cleanup"; exit 0; fi
+step docker-images docker_images
+step docker-builder command_step "$DOCKER" builder prune -f
+step journal command_step "$JOURNAL" --vacuum-size=300M
+step apt apt_clean
+step release-artifacts release_step
+step source-caches file_step caches "$SRC"
+step temporary-files file_step tmp "$TMP"
+if [ "$BACKUP_ROTATION_APPROVED" = 1 ]; then
+    step paperclip-backups file_step paperclip "$PAPERCLIP" "$KEEP_PAPERCLIP_BACKUPS"
+    step staging-dumps file_step staging "$BACKUPS/application/staging" "$KEEP_STAGING_DUMPS"
+    step production-logical file_step logical "$BACKUPS/application/production/logical"
+    step staging-snapshots file_step snapshots "$BACKUPS/staging-snapshots" "$KEEP_SNAPSHOTS"
+else
+    say 'backup rotation skipped: BACKUP_ROTATION_APPROVED is not 1'
+fi
+if (( FREE < CRITICAL_FREE_GB * 1073741824 )); then
+    if (
+        umask 022
+        mkdir -p -- "$(dirname "$ALERT")"
+    ) && "$PYTHON" - "$ALERT" "$FREE" "${TRIED[@]}" <<'PY'
+import datetime
+import json
+import os
+import sys
+import tempfile
+
+path, free, *tried = sys.argv[1:]
+record = {
+    "free_gb": int(free) / 1073741824,
+    "tried": tried,
+    "time": datetime.datetime.now(datetime.UTC).isoformat(),
+}
+with tempfile.NamedTemporaryFile(mode="w", dir=os.path.dirname(path), delete=False) as out:
+    json.dump(record, out)
+    out.write("\n")
+os.chmod(out.name, 0o644)
+os.replace(out.name, path)
+PY
+    then say "critical disk alert written free_bytes=$FREE";
+    else say 'failed to write critical disk alert'; fi
+fi
+say "allowed cleanup exhausted free_bytes=$FREE target_gb=$TARGET_FREE_GB"

@@ -1,0 +1,10 @@
+[Unit]
+Description=Check the disk free-space target every ten minutes
+
+[Timer]
+OnBootSec=3min
+OnCalendar=*:0/10
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target
