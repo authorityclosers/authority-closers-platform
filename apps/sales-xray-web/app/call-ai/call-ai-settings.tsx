@@ -6,7 +6,15 @@
  * else sees what applies to their calls. Errors are corner cards.
  */
 
-import { Sparkles, Users } from "lucide-react";
+import {
+  ChevronRight,
+  CircleOff,
+  FileText,
+  Sparkles,
+  Users,
+  WandSparkles,
+  type LucideIcon,
+} from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 
@@ -22,7 +30,19 @@ import {
 } from "./call-ai-client";
 import styles from "./call-ai.module.css";
 
-/** One choice per level, its plain words underneath. */
+/** Each level's mark, so the four rows read at a glance. */
+const LEVEL_ICON: Record<CallAiLevel, LucideIcon> = {
+  off: CircleOff,
+  data_only: FileText,
+  auto: WandSparkles,
+  full: Sparkles,
+};
+
+/**
+ * One choice per level as rows of one grouped list (owner, 29 Oct 2026: calm
+ * and clean like Insights): its mark, name and plain words, a check on the
+ * chosen one. The radio stays the control, so keys and screen readers work.
+ */
 export function LevelChoices({
   settings,
   value,
@@ -52,6 +72,7 @@ export function LevelChoices({
             disabled={disabled}
             onChange={() => onChange(level.id)}
           />
+          <LevelMark level={level.id} />
           <span className={styles.choiceText}>
             <strong>{level.name}</strong>
             <small>{level.hint}</small>
@@ -61,6 +82,23 @@ export function LevelChoices({
     </div>
   );
 }
+
+function LevelMark({ level }: { level: CallAiLevel }) {
+  const Icon = LEVEL_ICON[level];
+  return (
+    <span className={styles.mark} data-level={level} aria-hidden="true">
+      <Icon size={18} />
+    </span>
+  );
+}
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
 
 export function CallAiSettingsSection() {
   const [settings, setSettings] = useState<CallAiSettings | null>(null);
@@ -130,8 +168,8 @@ export function CallAiSettingsSection() {
       >
         <div className={styles.body}>
           <p className={styles.lead}>
-            How much AI reads each recorded call. Every call is still saved and
-            logged on its lead. Changes apply to calls from now on.
+            How much AI reads each recorded call. Calls are always saved on
+            their lead; changes apply from now on.
           </p>
           {settings.can_edit ? (
             <>
@@ -143,13 +181,6 @@ export function CallAiSettingsSection() {
                 name="Organisation default"
               />
               <div className={styles.actions}>
-                <Button
-                  variant="primary"
-                  disabled={saving || selected === settings.default}
-                  onClick={() => void save()}
-                >
-                  {saving ? "Saving…" : "Save default"}
-                </Button>
                 {choice !== null && choice !== settings.default ? (
                   <Button
                     variant="ghost"
@@ -159,14 +190,26 @@ export function CallAiSettingsSection() {
                     Cancel
                   </Button>
                 ) : null}
+                <Button
+                  variant="primary"
+                  disabled={saving || selected === settings.default}
+                  onClick={() => void save()}
+                >
+                  {saving ? "Saving…" : "Save default"}
+                </Button>
               </div>
             </>
           ) : (
             <p className={styles.yours}>
-              Your calls: <strong>{LEVEL_NAMES[settings.you.level]}</strong>
-              {settings.you.source === "person"
-                ? " (set for you by an owner or admin)."
-                : " (your organisation's default)."}
+              <LevelMark level={settings.you.level} />
+              <span>
+                Your calls: <strong>{LEVEL_NAMES[settings.you.level]}</strong>
+                <small>
+                  {settings.you.source === "person"
+                    ? "Set for you by an owner or admin."
+                    : "Your organisation's default."}
+                </small>
+              </span>
             </p>
           )}
         </div>
@@ -180,7 +223,10 @@ export function CallAiSettingsSection() {
           <ul className={styles.people}>
             {settings.people.map((person) => (
               <li key={person.person_id}>
-                <span>{person.name}</span>
+                <span className={styles.who}>
+                  <i aria-hidden="true">{initials(person.name)}</i>
+                  <span>{person.name}</span>
+                </span>
                 <Badge tone={person.level === "full" ? "good" : "neutral"}>
                   {LEVEL_NAMES[person.level]}
                 </Badge>
@@ -193,10 +239,13 @@ export function CallAiSettingsSection() {
           </p>
         )}
         {settings.can_edit ? (
-          <p className={styles.foot}>
-            Set one seller&apos;s level in{" "}
-            <Link href="/leads?tab=team">Leads → Team</Link>: tap their name.
-          </p>
+          <Link href="/leads?tab=team" className={styles.foot}>
+            <span>
+              Set one seller&apos;s level
+              <small>Leads → Team, then tap their name</small>
+            </span>
+            <ChevronRight size={18} aria-hidden="true" />
+          </Link>
         ) : null}
       </Panel>
     </div>

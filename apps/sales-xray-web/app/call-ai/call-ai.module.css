@@ -11,71 +11,174 @@
   padding: 12px 16px 16px;
 }
 
-.lead,
-.yours,
-.foot,
-.empty {
+.lead {
   margin: 0;
   color: var(--sx-muted);
   font-size: var(--sx-text-sm);
+  line-height: 1.45;
 }
 
-.yours strong {
+.yours {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
   color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
 }
 
-.foot,
-.empty {
-  padding: 12px 16px;
-  border-top: 1px solid var(--sx-line);
+.yours > span:last-child {
+  display: grid;
+  gap: 2px;
+}
+
+.yours small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
 }
 
 .empty {
   display: flex;
   align-items: center;
   gap: 8px;
-  border-top: 0;
+  margin: 0;
+  padding: 14px 16px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
 }
 
-.foot a {
-  color: var(--sx-accent);
-  font-weight: 650;
+/* The way to a seller's own level: one quiet row with a chevron. */
+.foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--sx-line);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
 }
 
+.foot > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.foot small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+}
+
+.foot > svg {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.foot:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: -2px;
+}
+
+/*
+ * The levels as one grouped list (owner, 29 Oct 2026: calm like Insights):
+ * rows split by hairlines, the chosen one tinted with a check at its end. The
+ * radio stays the control, visually hidden; the seller's own AI choice in the
+ * profile shares these rows.
+ */
 .choices {
   display: grid;
-  gap: 8px;
+  margin: 0;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
 }
 
 .choice {
+  position: relative;
   display: flex;
-  gap: 10px;
-  align-items: flex-start;
-  min-height: 44px;
-  padding: 10px 12px;
-  border: 1px solid var(--sx-line);
-  border-radius: 10px;
-  background: var(--sx-surface);
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--sx-line);
+  background: transparent;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
-.choice:hover {
-  background: var(--sx-sunken);
+.choice:first-child {
+  border-top: 0;
 }
 
 .choice[data-checked] {
-  border-color: var(--sx-accent);
   background: var(--sx-accent-soft);
 }
 
 .choice input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* The end mark: a ring, filled with a check when chosen. */
+.choice::after {
+  content: "";
   flex: none;
-  margin: 3px 0 0;
-  accent-color: var(--sx-accent);
+  width: 22px;
+  height: 22px;
+  margin-left: auto;
+  box-sizing: border-box;
+  border: 1.5px solid var(--sx-line-strong);
+  border-radius: 50%;
+}
+
+.choice[data-checked]::after {
+  border: 0;
+  background: var(--sx-accent);
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill-rule='evenodd' d='M12 1a11 11 0 1 0 0 22a11 11 0 1 0 0-22ZM5.6 12.4l5.2 4.9 7.8-8-1.4-1.4-6.4 6.6-3.8-3.6Z'/%3E%3C/svg%3E")
+    center / contain no-repeat;
 }
 
 .choice:focus-within {
-  box-shadow: var(--sx-focus-ring);
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: -2px;
+}
+
+.choice:has(input:disabled) {
+  cursor: default;
+  opacity: 0.6;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .choice:not([data-checked]):hover {
+    background: var(--sx-sunken);
+  }
+}
+
+.mark {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+}
+
+.choice[data-checked] .mark,
+.yours .mark {
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
 }
 
 .choiceText {
@@ -93,11 +196,13 @@
 .choiceText small {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs, 12px);
+  line-height: 1.4;
 }
 
 .actions {
   display: flex;
   flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -113,8 +218,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  min-height: 44px;
-  padding: 0 16px;
+  min-height: 56px;
+  padding: 8px 16px;
   border-top: 1px solid var(--sx-line);
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
@@ -122,6 +227,33 @@
 
 .people li:first-child {
   border-top: 0;
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.who > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.who i {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-style: normal;
+  font-weight: 650;
 }
 
 .select {
