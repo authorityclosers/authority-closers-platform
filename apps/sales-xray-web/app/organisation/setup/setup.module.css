@@ -275,3 +275,19 @@
     display: none;
   }
 }
+
+/* Reuse the existing Google, file, sheet and website controls. Meta has its own catalogue above. */
+.otherProviders [data-brand="meta"] {
+  display: none;
+}
+
+/* Keep the 44px target inclusive of its padding and border. */
+.button,
+.primary,
+.choice,
+.card,
+.stageCard,
+.stageEdit,
+.check {
+  box-sizing: border-box;
+}

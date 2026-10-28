@@ -178,6 +178,16 @@ function Answers() {
       const buttons = [
         ...document.querySelectorAll<HTMLButtonElement>("button"),
       ];
+      if (setup === "other") {
+        const summary = [...document.querySelectorAll("summary")].find((item) =>
+          item.textContent?.includes("Other lead sources"),
+        );
+        if (summary) {
+          summary.click();
+          clearInterval(timer);
+        }
+        return;
+      }
       if (setup === "rename") {
         const stage = buttons.find((button) => button.title === "Call back");
         if (stage) {
@@ -231,8 +241,8 @@ function Answers() {
         return;
       }
       if (phase === 3) {
-        const area = buttons.find(
-          (button) => button.textContent?.trim() === "Areas",
+        const area = buttons.find((button) =>
+          button.textContent?.trim().startsWith("Areas"),
         );
         if (area) {
           area.click();

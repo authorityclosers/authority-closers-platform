@@ -10,9 +10,12 @@ export default function Page() {
         organisation.
       </p>
       <p>Allow Sales X-Ray to read Sample Office’s directory?</p>
-      <Link href="/organisation/review?tab=connections&part=pulse&pulse=connected">
-        Allow fictional link
-      </Link>
+      <form action="/organisation/review" method="get">
+        <input type="hidden" name="tab" value="connections" />
+        <input type="hidden" name="part" value="pulse" />
+        <input type="hidden" name="pulse" value="connected" />
+        <button type="submit">Allow fictional link</button>
+      </form>
       <p>
         <Link href="/organisation/review?tab=connections&part=pulse&pulse=cancelled">
           Cancel

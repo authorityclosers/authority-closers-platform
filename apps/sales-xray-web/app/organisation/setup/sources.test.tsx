@@ -4,6 +4,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { OrganisationSources } from "./sources";
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(),
+  useRouter: () => ({ push: vi.fn() }),
 }));
 vi.mock("../../leads/app-connect", () => ({ useAppConnect: () => () => {} }));
 vi.mock("./microphone", () => ({ MicrophoneAccess: () => null }));
@@ -114,4 +115,32 @@ it("keeps selection local until Save and sends history requests for all selected
   expect(calls.find((call) => call.path.endsWith("/p1"))?.body).toEqual({
     forms: ["one"],
   });
+});
+
+// /settings/sources redirects to this hub: linking to it here would send people in a loop.
+it("keeps the other source controls on the screen instead of linking back to itself", async () => {
+  await render();
+  expect(host.querySelector('a[href="/settings/sources"]')).toBeNull();
+  const details = [...host.querySelectorAll("details")].find(
+    (item) =>
+      item.querySelector("summary")?.textContent === "Other lead sources",
+  )!;
+  await act(async () => {
+    details.open = true;
+    details.dispatchEvent(new Event("toggle"));
+  });
+  expect(host.querySelector('[data-brand="google"]')).not.toBeNull();
+  expect(host.textContent).toContain("Website form");
+});
+
+it("does not send people to an unavailable Facebook connector", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async () => Response.json({ configured: false, pages: [] })),
+  );
+  await render();
+  expect(
+    host.querySelector('a[href="/v1/lead-desk/meta/connect-sources"]'),
+  ).toBeNull();
+  expect(host.textContent).toContain("not set up in this environment");
 });

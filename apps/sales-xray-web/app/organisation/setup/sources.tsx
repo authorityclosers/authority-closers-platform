@@ -1,11 +1,11 @@
 "use client";
-import Link from "next/link";
 import { Check, History, Link2, RefreshCw, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { notify } from "../../notice-center";
 import { useAppConnect } from "../../leads/app-connect";
 import {
+  SourcesView,
   alreadyHere,
   backfillLine,
   type MetaForm,
@@ -35,6 +35,8 @@ const selectedOn = (page: MetaPage, form: MetaForm) =>
 /** One catalogue: every connected Facebook account, Page and form. Selection is a draft until Save. */
 export function OrganisationSources() {
   const params = useSearchParams();
+  const router = useRouter();
+  const [showOther, setShowOther] = useState(false);
   const [catalogue, setCatalogue] = useState<MetaCatalogue | null>(null);
   const [forms, setForms] = useState<Record<string, MetaForm[] | null>>({});
   const [loadingForms, setLoadingForms] = useState(false);
@@ -277,24 +279,32 @@ export function OrganisationSources() {
             <RefreshCw size={18} />
           </button>
         </header>
-        <div className={styles.tools}>
-          <a
-            className={styles.button}
-            href="/v1/lead-desk/meta/connect-sources"
-            onClick={add}
-          >
-            <Link2 size={16} />
-            Add Pages
-          </a>
-          <a
-            className={styles.button}
-            href="/v1/lead-desk/meta/connect-another"
-            onClick={another}
-          >
-            Another account
-          </a>
-        </div>
-        <p className={styles.help}>Meta review pending · Test leads only.</p>
+        {catalogue?.configured ? (
+          <>
+            <div className={styles.tools}>
+              <a
+                className={pages.length ? styles.button : styles.primary}
+                href="/v1/lead-desk/meta/connect-sources"
+                onClick={add}
+              >
+                <Link2 size={16} />
+                Add Pages
+              </a>
+              <a
+                className={styles.button}
+                href="/v1/lead-desk/meta/connect-another"
+                onClick={another}
+              >
+                Another account
+              </a>
+            </div>
+            <p className={styles.help}>
+              Meta review pending · Test leads only.
+            </p>
+          </>
+        ) : !catalogue && !failed ? (
+          <Skeleton height={44} />
+        ) : null}
       </section>
       {!catalogue && !failed ? (
         <div aria-label="Loading forms" aria-busy="true">
@@ -466,16 +476,21 @@ export function OrganisationSources() {
         duplicate checks: certain matches merge; uncertain matches wait for
         review. Paused forms can supply older leads.
       </p>
-      <details className={styles.details}>
+      <details
+        className={styles.details}
+        onToggle={(event) => setShowOther(event.currentTarget.open)}
+      >
         <summary>Other lead sources</summary>
-        <div className={styles.tools}>
-          <Link className={styles.button} href="/settings/sources">
-            Google, sheets & website
-          </Link>
-          <Link className={styles.button} href="/leads?import=file">
-            Import a file
-          </Link>
-        </div>
+        {showOther ? (
+          <div className={styles.otherProviders}>
+            <SourcesView
+              sandbox={false}
+              onChanged={() => undefined}
+              onImport={() => router.push("/leads?import=file")}
+              onImportGoogle={() => router.push("/leads?import=google")}
+            />
+          </div>
+        ) : null}
       </details>
       <details className={styles.details}>
         <summary>Page missing or wrong account?</summary>
