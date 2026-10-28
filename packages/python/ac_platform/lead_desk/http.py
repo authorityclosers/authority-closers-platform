@@ -45,6 +45,7 @@ from ac_platform.lead_desk import (
 )
 from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk import team as team_engine
+from ac_platform.lead_desk.activity_summary import ActivitySummary, summarize
 from ac_platform.lead_desk.contracts import (
     ActivityPage,
     AlertText,
@@ -329,6 +330,18 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request, frozenset({"day", "before", "person", "team"}))
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.activity(day=day, before=before, person=person, team=team)
+
+    @router.get("/activity/summary", response_model=ActivitySummary, response_model_by_alias=True)
+    async def activity_summary(
+        request: Request,
+        response: Response,
+        days: int = Query(default=30, ge=1, le=90),
+        person: UUID | None = None,
+        team: bool = False,
+    ) -> ActivitySummary:
+        no_query(request, frozenset({"days", "person", "team"}))
+        async with desk_for(request, response) as lead_desk:
+            return await summarize(lead_desk, days=days, person=person, team=team)
 
     @router.get("/notes", response_model=ActivityPage, response_model_by_alias=True)
     async def list_notes(

@@ -1,6 +1,6 @@
-import type { ActivityItem, ActivityPage } from "../leads/leads-client";
+import type { ActivityItem } from "../leads/leads-client";
 import { displayName } from "../display-name";
-import { readMembers, type OrgMember } from "./organisation-api";
+import { type OrgMember } from "./organisation-api";
 
 export const METRICS = [
   { key: "calls", label: "Calls" },
@@ -38,67 +38,77 @@ export const dayText = (day: number) =>
     month: "short",
   });
 
-/** Bounded reads of the existing permission-filtered feed. Never use all-time counts as a period total. */
+type SummaryResponse = {
+  schema: "lead-desk/1";
+  days: number;
+  timezone: string;
+  now: string;
+  start: string;
+  prior: string;
+  today: string;
+  current: Counts & { work: number };
+  previous: Counts & { work: number };
+  people: {
+    id: string | null;
+    name: string;
+    current: Counts & { work: number };
+    previous: Counts & { work: number };
+    daily: (Counts & { work: number; day: string })[];
+  }[];
+};
+
+/** One bounded summary read; never fetch activity pages or the members directory. */
 export async function readAnalytics({
   team,
   personId,
   signal,
-  previous,
-  now = new Date(Date.now()).toISOString(),
-  pages = 20,
 }: {
   team: boolean;
   personId?: string;
   signal?: AbortSignal;
-  previous?: AnalyticsHistory;
-  now?: string;
-  pages?: number;
-}): Promise<AnalyticsHistory> {
-  const directory = previous
-    ? Promise.resolve(previous.members)
-    : readMembers(signal).catch(() => null);
-  let cursor = previous?.cursor ?? null;
-  const items = new Map(
-    (previous?.items ?? []).map((item) => [item.event_id, item]),
-  );
-  let timezone = previous?.timezone ?? "Asia/Kolkata";
-  now = previous?.now ?? now;
-  for (let round = 0; round < pages; round += 1) {
-    const query = new URLSearchParams({ day: "recent" });
-    if (team) query.set("team", "true");
-    if (cursor) query.set("before", cursor);
-    const response = await fetch(`/v1/lead-desk/activity?${query}`, {
-      credentials: "same-origin",
-      cache: "no-store",
-      redirect: "error",
-      signal,
-      headers: { accept: "application/json" },
-    });
-    if (!response.ok) throw new Error("Activity could not load");
-    const page = (await response.json()) as ActivityPage;
-    if (!Array.isArray(page.items)) throw new Error("Activity is unavailable");
-    timezone = page.timezone ?? timezone;
-    for (const item of page.items) items.set(item.event_id, item);
-    const next = page.next_before;
-    if (!next) {
-      cursor = null;
-      break;
-    }
-    if (next === cursor || (cursor && Date.parse(next) >= Date.parse(cursor)))
-      throw new Error("Activity history did not advance");
-    cursor = next;
-    if (dayNumber(cursor, timezone) < dayNumber(now, timezone) - 59) break;
-  }
-  const members = await directory;
+}): Promise<AnalyticsSummary> {
+  const query = new URLSearchParams({ days: "30" });
+  if (team) query.set("team", "true");
+  else if (personId) query.set("person", personId);
+  const response = await fetch(`/v1/lead-desk/activity/summary?${query}`, {
+    credentials: "same-origin",
+    cache: "no-store",
+    redirect: "error",
+    signal,
+    headers: { accept: "application/json" },
+  });
+  if (!response.ok) throw new Error("Activity could not load");
+  const summary = (await response.json()) as SummaryResponse;
+  if (
+    summary.schema !== "lead-desk/1" ||
+    summary.days !== 30 ||
+    !Array.isArray(summary.people)
+  )
+    throw new Error("Activity is unavailable");
+  const start = dayNumber(summary.start, "UTC");
   return {
-    items: [...items.values()],
-    members: team
-      ? (members ?? [])
-      : (members ?? []).filter((member) => member.personId === personId),
-    directoryMissing: previous?.directoryMissing ?? members === null,
-    cursor,
-    timezone,
-    now,
+    ...summary,
+    start,
+    today: dayNumber(summary.today, "UTC"),
+    prior: dayNumber(summary.prior, "UTC"),
+    currentComplete: true,
+    previousComplete: true,
+    currentWork: summary.current.work,
+    directoryMissing: false,
+    people: summary.people.map((person) => {
+      const daily = new Map(
+        person.daily.map((day) => [dayNumber(day.day, "UTC"), day]),
+      );
+      return {
+        ...person,
+        name: displayName(person.name),
+        work: person.current.work,
+        daily: Array.from(
+          { length: 30 },
+          (_, index) => daily.get(start + index) ?? { ...zero(), work: 0 },
+        ),
+      };
+    }),
   };
 }
 

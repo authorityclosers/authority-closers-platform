@@ -18,7 +18,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import String, and_, case, cast, delete, func, or_, select, true
+from sqlalchemy import and_, case, delete, func, or_, select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -1263,11 +1263,9 @@ class LeadDesk:
         ``team``: the whole team's day for those who see the team (Home's Team today,
         owner, 27 Oct 2026): everyone's work, the leads given out and the leads that came
         in, on the team's leads; private calls stay their sellers' own."""
-        if team and not self.viewer.can_see_team:
-            raise DeskError(403, "Your role sees your own work only.")
+        from ac_platform.lead_desk.activity_summary import activity_window
+
         who = person or self.viewer.person_id
-        if who != self.viewer.person_id and not self.viewer.can_see_team:
-            raise DeskError(403, "Only owners and admins see someone else's work.")
         limit = max(1, min(WORK_PAGE, limit))
         start = self._day_start()
         if day == "yesterday":
@@ -1278,54 +1276,9 @@ class LeadDesk:
             after, upto = start - timedelta(days=6), self.now + timedelta(minutes=1)
         else:
             after, upto = start, self.now + timedelta(minutes=1)
-        window = [
-            LeadEvent.tenant_id == self.tenant_id,
-            *(() if team and person is None else (LeadEvent.actor_person_id == who,)),
-            LeadEvent.kind.in_(TEAM_KINDS if team else WORK_KINDS),
-            LeadEvent.created_at >= after,
-            LeadEvent.created_at < upto,
-            # A new stage list placing leads, or a merge keeping the books, is not the
-            # person's work (AUT-2218, 25 Oct 2026: "8 stage moves" credited to the admin
-            # who approved the install).
-            or_(
-                LeadEvent.kind != "stage",
-                func.coalesce(LeadEvent.data["source"].as_string(), "").not_in(
-                    tuple(transitions.BOOKKEEPING)
-                ),
-            ),
-            self._seen(),
-        ]
+        window = activity_window(self, after, upto, person=person, team=team)
         joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
-        # Apply privacy and undo fences before aggregates and pagination too.
         hidden = await self._private_calls(after)
-        if hidden:
-            window.append(
-                or_(
-                    LeadEvent.id.not_in(tuple(UUID(value) for value in hidden)),
-                    LeadEvent.actor_person_id == self.viewer.person_id,
-                )
-            )
-        undone = select(LeadEvent.data[UNDO_OF].as_string()).where(
-            LeadEvent.tenant_id == self.tenant_id,
-            LeadEvent.kind == "edited",
-            LeadEvent.data[UNDO_OF].as_string().is_not(None),
-        )
-        # UUID text comparison keeps undo markers append-only.
-        window.append(cast(LeadEvent.id, String).not_in(undone))
-        parent = LeadEvent.__table__.alias("activity_parent")
-        # A recording attached later is part of its phone call, not a second call.
-        window.append(
-            ~and_(
-                LeadEvent.kind == "call",
-                LeadEvent.data["for_call"].as_string().is_not(None),
-                select(parent.c.id)
-                .where(
-                    parent.c.tenant_id == LeadEvent.tenant_id,
-                    cast(parent.c.id, String) == LeadEvent.data["for_call"].as_string(),
-                )
-                .exists(),
-            )
-        )
         aggregate = (
             select(
                 LeadEvent.kind,

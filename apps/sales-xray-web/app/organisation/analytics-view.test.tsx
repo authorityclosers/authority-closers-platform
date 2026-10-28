@@ -3,7 +3,10 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { analyticsFixture } from "../review-fixture/analytics/fixture";
+import { activitySummary } from "./analytics-data";
+import { notify } from "../notice-center";
 import { AnalyticsView } from "./analytics-view";
+vi.mock("../notice-center", () => ({ notify: vi.fn() }));
 vi.mock("next/link", () => ({
   default: ({ children, ...props }: React.ComponentProps<"a">) => (
     <a {...props}>{children}</a>
@@ -21,6 +24,8 @@ beforeEach(() => {
 afterEach(() => {
   act(() => root.unmount());
   host.remove();
+  vi.unstubAllGlobals();
+  vi.clearAllMocks();
 });
 it("sorts people, shows seven at first, and opens their People page", () => {
   act(() => root.render(<AnalyticsView team initial={analyticsFixture} />));
@@ -100,4 +105,64 @@ it("shows message-only work in the daily line instead of an idle state", () => {
   expect(host.querySelector("svg")?.getAttribute("aria-label")).toContain(
     "daily activity updates",
   );
+});
+
+it("keeps a skeleton while the single summary request loads", async () => {
+  const fetch = vi.fn(() => new Promise<Response>(() => {}));
+  vi.stubGlobal("fetch", fetch);
+  await act(async () => root.render(<AnalyticsView team />));
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(
+    host
+      .querySelector('[aria-label="Loading activity"]')
+      ?.getAttribute("aria-busy"),
+  ).toBe("true");
+  expect(host.textContent).not.toContain("No activity recorded");
+});
+it("offers a corner-card retry after failure, then renders the complete summary", async () => {
+  const data = activitySummary(analyticsFixture);
+  const iso = (day: number) =>
+    new Date(day * 86400000).toISOString().slice(0, 10);
+  const body = {
+    ...data,
+    schema: "lead-desk/1",
+    days: 30,
+    now: analyticsFixture.now,
+    start: iso(data.start),
+    prior: iso(data.prior),
+    today: iso(data.today),
+    current: { ...data.current, work: data.currentWork },
+    previous: { ...data.previous, work: 0 },
+    people: data.people.map((p) => ({
+      ...p,
+      current: { ...p.current, work: p.work },
+      previous: { ...p.previous, work: 0 },
+      daily: p.daily.map((d, i) => ({ ...d, day: iso(data.start + i) })),
+    })),
+  };
+  const fetch = vi
+    .fn()
+    .mockResolvedValueOnce(new Response("{}", { status: 503 }))
+    .mockResolvedValueOnce(new Response(JSON.stringify(body)));
+  vi.stubGlobal("fetch", fetch);
+  await act(async () => root.render(<AnalyticsView team />));
+  expect(notify).toHaveBeenCalledWith(
+    expect.objectContaining({
+      title: "Activity didn't load",
+      tone: "error",
+      action: expect.objectContaining({ label: "Try again" }),
+    }),
+  );
+  expect(
+    host
+      .querySelector('[aria-label="Loading activity"]')
+      ?.getAttribute("aria-busy"),
+  ).toBe("false");
+  const retry = vi.mocked(notify).mock.calls[0][0].action!;
+  await act(async () => retry.run());
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(host.querySelector('[aria-label="Loading activity"]')).toBeNull();
+  expect(host.textContent).toContain("Kiva Fictional");
+  expect(host.textContent).toContain("Full period history loaded");
+  expect(host.textContent).not.toContain("Load older activity");
 });

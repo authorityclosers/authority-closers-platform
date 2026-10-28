@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { notify } from "../notice-center";
 import { Button, Segmented, Skeleton } from "../ui/kit";
 import {
@@ -57,21 +57,18 @@ export function AnalyticsView({
   personId?: string;
   initial?: AnalyticsHistory;
 }) {
-  const [history, setHistory] = useState(initial ?? null);
+  const [data, setData] = useState(initial ? activitySummary(initial) : null);
   const [metric, setMetric] = useState<Metric>("calls");
   const [all, setAll] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [failed, setFailed] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const moreControl = useRef<AbortController | null>(null);
-  useEffect(() => () => moreControl.current?.abort(), []);
   useEffect(() => {
     if (initial) return;
     const control = new AbortController();
     readAnalytics({ team, personId, signal: control.signal })
       .then((value) => {
         if (!control.signal.aborted) {
-          setHistory(value);
+          setData(value);
           setFailed(false);
         }
       })
@@ -93,31 +90,7 @@ export function AnalyticsView({
       });
     return () => control.abort();
   }, [team, personId, initial, attempt]);
-  const loadMore = async () => {
-    if (!history || busy) return;
-    setBusy(true);
-    const control = new AbortController();
-    moreControl.current = control;
-    try {
-      const value = await readAnalytics({
-        team,
-        personId,
-        previous: history,
-        signal: control.signal,
-      });
-      if (!control.signal.aborted) setHistory(value);
-    } catch {
-      if (control.signal.aborted) return;
-      notify({
-        id: "analytics-more",
-        tone: "error",
-        title: "More activity didn't load. Try again.",
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-  if (!history)
+  if (!data)
     return (
       <section
         className={styles.page}
@@ -131,19 +104,8 @@ export function AnalyticsView({
           ))}
         </div>
         <Skeleton height={450} />
-        {failed ? (
-          <Button
-            onClick={() => {
-              setFailed(false);
-              setAttempt((n) => n + 1);
-            }}
-          >
-            Try again
-          </Button>
-        ) : null}
       </section>
     );
-  const data = activitySummary(history);
   const sorted = [...data.people].sort(
     (a, b) =>
       b.current[metric] - a.current[metric] ||
@@ -315,10 +277,9 @@ export function AnalyticsView({
       </section>
       <footer className={styles.coverage}>
         <p>
-          {team ? "Visible team work" : "Your visible work"} ·{" "}
-          {history.timezone} · Calls include those without reports.
-          Conversations are connected calls. Daily lines include other recorded
-          work.
+          {team ? "Visible team work" : "Your visible work"} · {data.timezone} ·
+          Calls include those without reports. Conversations are connected
+          calls. Daily lines include other recorded work.
         </p>
         <p>
           Prior: {dayText(data.prior)} – {dayText(data.start - 1)}.
@@ -329,11 +290,6 @@ export function AnalyticsView({
             ? " People list unavailable; showing people with recorded work."
             : ""}
         </p>
-        {!data.previousComplete ? (
-          <Button disabled={busy} onClick={() => void loadMore()}>
-            {busy ? "Loading…" : "Load older activity"}
-          </Button>
-        ) : null}
       </footer>
     </section>
   );
