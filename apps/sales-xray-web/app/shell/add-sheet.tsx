@@ -7,12 +7,16 @@
  * "the + pop-up has Add lead and Add a call (record or upload a call for
  * analysis)".
  *
+ * The 28 Oct 2026 meeting moved the + to the top bar and added Add task:
+ * tasks are reminders on a lead, so it opens Tasks, where each lead's Remind
+ * sits.
+ *
  * Add lead opens the quick form over the current screen; Add a call goes to
  * the record-or-upload page. Outside an organisation there is no lead desk,
  * so Add lead says where leads live and opens Leads, which offers the switch.
  */
 
-import { AudioLines, ChevronRight, UserPlus } from "lucide-react";
+import { AudioLines, ChevronRight, ListChecks, UserPlus } from "lucide-react";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -28,7 +32,7 @@ function Choice({
   onClick,
 }: {
   icon: ReactNode;
-  tone: "lead" | "call";
+  tone: "lead" | "call" | "task";
   title: string;
   text: string;
   href?: string;
@@ -102,6 +106,16 @@ export function AddSheet({
           href={callHref}
           onClick={onClose}
         />
+        {leadsHere ? (
+          <Choice
+            icon={<ListChecks size={22} />}
+            tone="task"
+            title="Add task"
+            text="A reminder on a lead, on its day"
+            href="/leads?tab=tasks"
+            onClick={onClose}
+          />
+        ) : null}
       </div>
     </Sheet>
   );

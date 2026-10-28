@@ -236,7 +236,7 @@ it("shows what is next and this week beside last week on an empty day", async ()
     "Meera Fictional",
   );
   // The week's own numbers are one tap away in My work.
-  expect(text()).toContain("My work");
+  expect(text()).toContain("Analyse yourself");
 });
 
 it("tells a seller with no leads what the team has", async () => {

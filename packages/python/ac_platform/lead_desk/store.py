@@ -479,6 +479,11 @@ class LeadDesk:
         local = self.now.astimezone(IST)
         return datetime.combine(local.date(), time.min, tzinfo=IST).astimezone(UTC)
 
+    def _month_start(self) -> datetime:
+        """The first of this month, midnight in India, as UTC."""
+        local = self.now.astimezone(IST)
+        return datetime.combine(local.date().replace(day=1), time.min, tzinfo=IST).astimezone(UTC)
+
     async def settings(self) -> tuple[int, dict[str, Any]]:
         row = await self.db.get(LeadDeskSettings, self.tenant_id)
         if row is None:
@@ -903,6 +908,7 @@ class LeadDesk:
             numbers_week=await self._numbers(
                 day_start - timedelta(days=6), self.now + timedelta(seconds=1)
             ),
+            numbers_month=await self._numbers(self._month_start(), self.now + timedelta(seconds=1)),
             team_pool=TeamPool(
                 open=int(pool[0]), unassigned=int(pool[1]), may_take=who.taking_leads
             ),

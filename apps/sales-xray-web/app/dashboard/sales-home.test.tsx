@@ -228,7 +228,7 @@ it("gives an owner the team's four, the slider and recent work, in few words", a
   expect(host.querySelector('[aria-label="Recent"]')?.textContent).toContain(
     "No calls yet today",
   );
-  expect(host.textContent).toContain("My work");
+  expect(host.textContent).toContain("Analyse yourself");
 });
 
 it("keeps a calm tile for a rule that is met", async () => {
@@ -413,7 +413,7 @@ it("gives a Viewer the team's Home with nothing to change", async () => {
   expect(host.querySelector("a[data-four=no_owner]")).not.toBeNull();
   expect(host.querySelector('a[href="/settings/lead-rules"]')).toBeNull();
   expect(host.textContent).not.toContain("late follow-up");
-  expect(host.textContent).not.toContain("My work");
+  expect(host.textContent).not.toContain("Analyse yourself");
   expect(
     Array.from(host.querySelectorAll("button")).some(
       (button) => button.textContent === "Controls",

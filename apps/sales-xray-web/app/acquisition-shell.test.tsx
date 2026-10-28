@@ -67,14 +67,18 @@ it("keeps navigation, one main landmark and help, without placeholder chrome", a
       .querySelector('a[aria-label="New analysis"]')
       ?.getAttribute("href"),
   ).toBe("/analysis/new");
-  // Phones: on New analysis the + is lit; it asks what to add (owner, 22 Oct).
+  // Phones: the + sits in the top bar since the 28 Oct meeting and asks what
+  // to add; the tab bar's middle is Ask Deepak, so no tab is lit here.
   expect(
-    shell
-      .querySelector(
-        'nav[aria-label="Mobile Sales Xray navigation"] [aria-current="page"]',
-      )
-      ?.getAttribute("aria-label"),
-  ).toBe("Add a lead or a call");
+    shell.querySelector(
+      'nav[aria-label="Mobile Sales Xray navigation"] [aria-current="page"]',
+    ),
+  ).toBeNull();
+  expect(
+    shell.querySelector(
+      'header button[aria-label="Add a lead, a call or a task"]',
+    ),
+  ).not.toBeNull();
   expect(shell.querySelector('a[href="/analysis/calls"]')).not.toBeNull();
   // Account is its own destination, not a second link to Calls.
   const account = navigation.querySelector<HTMLAnchorElement>(

@@ -239,11 +239,19 @@ const talk = (seconds: number) => {
     : `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
 };
 
-/** My work: you against yourself, today or this week (Dipak: "analyse yourself"). */
+/**
+ * Analyse yourself (28 Oct 2026 meeting): you against yourself, for today,
+ * this week or this month: calls attempted, connected, talk time and
+ * follow-ups done.
+ */
 export function MyWork({ desk }: { desk: HomeDesk | null }) {
-  const [when, setWhen] = useState<"today" | "week">("today");
+  const [when, setWhen] = useState<"today" | "week" | "month">("today");
   const numbers =
-    when === "today" ? (desk?.numbers ?? null) : (desk?.numbers_week ?? null);
+    when === "today"
+      ? (desk?.numbers ?? null)
+      : when === "week"
+        ? (desk?.numbers_week ?? null)
+        : (desk?.numbers_month ?? null);
   const figures = numbers
     ? [
         { label: "Attempted", value: String(numbers.calls) },
@@ -255,15 +263,18 @@ export function MyWork({ desk }: { desk: HomeDesk | null }) {
   return (
     <section className={styles.work} aria-labelledby="my-work-title">
       <div className={styles.workHead}>
-        <h2 id="my-work-title">My work</h2>
+        <h2 id="my-work-title">Analyse yourself</h2>
         {desk?.numbers_week ? (
           <Segmented
-            label="My work for"
+            label="Analyse yourself for"
             value={when}
             onChange={setWhen}
             items={[
               { key: "today", label: "Today" },
               { key: "week", label: "Week" },
+              ...(desk.numbers_month
+                ? [{ key: "month" as const, label: "Month" }]
+                : []),
             ]}
           />
         ) : null}

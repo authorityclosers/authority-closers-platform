@@ -53,14 +53,19 @@ afterEach(async () => {
   resetBackCloseForTests();
 });
 
-// Owner, 22 Oct: the + asks for two things, a lead or a call.
-it("offers exactly Add lead and Add a call", async () => {
+// Owner, 22 Oct: the + asks for a lead or a call; the 28 Oct meeting added a
+// task (a reminder on a lead, so it opens Tasks).
+it("offers exactly Add lead, Add a call and Add task", async () => {
   const { dialog, onAddLead } = await mount(true);
   expect(dialog.open).toBe(true);
   const titles = Array.from(dialog.querySelectorAll("strong"), (strong) =>
     strong.textContent?.trim(),
   );
-  expect(titles).toEqual(["Add lead", "Add a call"]);
+  expect(titles).toEqual(["Add lead", "Add a call", "Add task"]);
+  const addTask = Array.from(dialog.querySelectorAll("a")).find((link) =>
+    link.textContent?.includes("Add task"),
+  );
+  expect(addTask?.getAttribute("href")).toBe("/leads?tab=tasks");
   const addCall = Array.from(dialog.querySelectorAll("a")).find((link) =>
     link.textContent?.includes("Add a call"),
   );

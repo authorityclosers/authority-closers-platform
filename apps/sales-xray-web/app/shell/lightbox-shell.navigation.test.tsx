@@ -109,12 +109,15 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
     'a[aria-label="New analysis"][data-next-client-link="true"]',
   );
   expect(desktopNewAnalysis?.getAttribute("href")).toBe("/sales-xray?new=1");
-  // Phones: the + asks what to add, a lead or a call (owner, 22 Oct).
-  const mobileAdd = mobileNav?.querySelector(
-    'button[aria-label="Add a lead or a call"]',
+  // Phones (28 Oct 2026 meeting): the + is in the top bar and asks what to
+  // add; the tab bar's middle slot is Ask Deepak.
+  const mobileAdd = host.querySelector(
+    'header button[aria-label="Add a lead, a call or a task"]',
   );
-  expect(mobileAdd?.textContent?.trim()).toBe("Add");
   expect(mobileAdd?.getAttribute("aria-haspopup")).toBe("dialog");
+  const ask = mobileNav?.querySelector('button[aria-label="Ask Deepak"]');
+  expect(ask?.textContent?.trim()).toBe("Ask Deepak");
+  expect(ask?.getAttribute("aria-haspopup")).toBe("dialog");
   expect(
     desktopNav?.querySelector(
       'a[aria-label="Calls"][href="/analysis/calls"][data-next-client-link="true"]',
@@ -254,21 +257,21 @@ it("keeps the phone tab bar to its five tabs, plus a dev settings control", () =
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? ["Home", "Leads", "Add", "Chats", "Calls", "Settings"]
-        : ["Home", "Leads", "Add", "Chats", "Calls"],
+        ? ["Home", "Leads", "Ask Deepak", "Chats", "Calls", "Settings"]
+        : ["Home", "Leads", "Ask Deepak", "Chats", "Calls"],
     );
     // Prospects and Coaching open from You, not from the tab bar.
     expect(nav.querySelector('a[href="/prospects"]')).toBeNull();
     expect(nav.querySelector('a[href="/coaching"]')).toBeNull();
     // Chats is its own tab now.
     expect(nav.querySelector('a[href="/chats"]')).not.toBeNull();
-    // Add is the only tab that is a button: it asks what to add (the dev
-    // settings control is the other button, and only with live data).
+    // Ask Deepak is the only tab that is a button: it opens his sheet (the
+    // dev settings control is the other button, and only with live data).
     expect(
       Array.from(nav.querySelectorAll("button"), (button) =>
         button.textContent?.trim(),
       ),
-    ).toEqual(liveData ? ["Add", "Settings"] : ["Add"]);
+    ).toEqual(liveData ? ["Ask Deepak", "Settings"] : ["Ask Deepak"]);
     expect(
       nav.querySelector('[aria-current="page"]')?.getAttribute("href"),
     ).toBe("/dashboard");
@@ -292,7 +295,7 @@ it("keeps the five tabs for an unconfirmed session; signed out offers Home, New 
         <p>Dashboard</p>
       </AcquisitionShell>,
     ),
-  ).toEqual(["Home", "Leads", "Add", "Chats", "Calls"]);
+  ).toEqual(["Home", "Leads", "Ask Deepak", "Chats", "Calls"]);
   // B22: Leads and Calls only lead to a sign-in prompt for a visitor.
   expect(
     tabs(

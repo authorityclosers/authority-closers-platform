@@ -170,6 +170,8 @@ class Desk(Model):
     # or weeks"): yesterday's numbers and the last seven days', today's included.
     numbers_yesterday: Numbers | None = None
     numbers_week: Numbers | None = None
+    # This calendar month so far (Analyse yourself, 28 Oct 2026 meeting).
+    numbers_month: Numbers | None = None
     # The workspace's open leads beside mine, for a member with none assigned.
     team_pool: TeamPool | None = None
 
