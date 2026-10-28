@@ -19,7 +19,8 @@ services:
     volumes:
       - ${HOME}/rehearsal/spool:/var/lib/ac-intake-spool
     networks: !override
-      app: {}
+      app:
+        aliases: ["${AC_INTERNAL_API_HOST}"]
       data: {}
       edge: {}
   worker:
