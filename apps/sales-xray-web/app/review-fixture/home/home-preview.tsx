@@ -13,6 +13,7 @@
  * (`?view=mine`). `&pipelines=2`: two pipelines, each with its own stages, and
  * a switch above the open leads by stage. Owners also see Targets (two sellers
  * with targets, one without) and can share out leads from My day (`&none=1`).
+ * `&controls=1`: Team controls open (targets, nudges and who gets them).
  */
 
 import type { CallActivity, CallSummary } from "../../dashboard/dashboard-data";
@@ -206,7 +207,11 @@ function teamAnswers(path: string): unknown {
       sellers: [
         {
           person_id: SELLER,
-          targets: [],
+          targets: [
+            { metric: "calls", period: "day", value: 40 },
+            { metric: "connects", period: "day", value: 15 },
+            { metric: "meetings", period: "day", value: 2 },
+          ],
           progress: [
             progress("calls", 40, 18, true),
             progress("connects", 15, 7, false),
@@ -215,7 +220,7 @@ function teamAnswers(path: string): unknown {
         },
         {
           person_id: SECOND,
-          targets: [],
+          targets: [{ metric: "calls", period: "day", value: 40 }],
           progress: [progress("calls", 40, 31, false)],
         },
       ],
@@ -777,6 +782,17 @@ function Preview() {
       fresh,
     }),
   );
+  // `&controls=1`: Team controls open, for the sheet's own shots (owner Home v3).
+  const controls = params.get("controls") === "1";
+  useEffect(() => {
+    if (!controls) return;
+    const timer = window.setTimeout(() => {
+      Array.from(document.querySelectorAll("button"))
+        .find((button) => button.textContent === "Controls")
+        ?.click();
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [controls]);
   // Where this person left off: a lead they opened 25 minutes ago.
   useState(() => {
     if (typeof window === "undefined" || !v2 || fresh) return null;

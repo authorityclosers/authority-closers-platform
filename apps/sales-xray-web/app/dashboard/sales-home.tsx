@@ -32,6 +32,7 @@ import { DayTiles, MyStages } from "./day-board";
 import { FirstRun } from "./first-run";
 import { HomeActivity, HomeRecentCalls, PickUp, SetupStart } from "./home-v2";
 import { TeamActivity } from "./team-activity";
+import { TeamControls } from "./team-controls";
 import { whyLine } from "../leads/desk-view";
 import { handOverLead } from "../leads/lead-handoff";
 import {
@@ -50,7 +51,6 @@ import { NeedsYou } from "./needs-you";
 import { OutcomeTiles } from "./outcome-tiles";
 import { StuckFunnel } from "./stuck-funnel";
 import { ShareOut } from "../leads/assign-sheet";
-import { TargetsPanel } from "../leads/targets-panel";
 import { TakingSwitch } from "../leads/taking-switch";
 import type { HomeDesk } from "./my-day-client";
 import { DayNumbers, DoNowRow, NextUp, TeamPoolCard, useMyDay } from "./my-day";
@@ -241,14 +241,6 @@ function TeamHome({
           />
         </ActionList>
       </section>
-
-      {/* Targets and nudges (owner program, 25 Oct 2026, section 2): set by
-          managers, so a Viewer doesn't get them (their read and saves are theirs). */}
-      {desk?.me.can_manage ? (
-        <div className={styles.block}>
-          <TargetsPanel />
-        </div>
-      ) : null}
     </>
   );
 }
@@ -567,8 +559,20 @@ export function SalesHome({
     );
   return (
     <div className={styles.home}>
-      {manager && works ? (
-        <Segmented label="Show" value={view} onChange={setView} items={VIEWS} />
+      {manager && (works || manages) ? (
+        <div className={styles.homeBar}>
+          {works ? (
+            <Segmented
+              label="Show"
+              value={view}
+              onChange={setView}
+              items={VIEWS}
+            />
+          ) : null}
+          {/* Owner Home v3 (28 Oct 2026, #52): targets, nudges and the lead
+              rules behind one labelled gear, not in the scroll. */}
+          {manages && (view === "team" || !works) ? <TeamControls /> : null}
+        </div>
       ) : null}
       {manager && (view === "team" || !works) ? (
         <TeamHome

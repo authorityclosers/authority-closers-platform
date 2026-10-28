@@ -158,8 +158,13 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
     "Needs you",
     "Where leads get stuck",
     "Sellers",
-    "Targets",
   ]);
+  // Owner Home v3: targets and nudges sit behind the labelled gear.
+  expect(
+    Array.from(host.querySelectorAll("button")).some(
+      (button) => button.textContent === "Controls",
+    ),
+  ).toBe(true);
   // Owner Home v3: the outcomes are tiles, each opening its detail.
   const figures = Array.from(
     host.querySelectorAll("button[data-tile]"),
@@ -373,4 +378,9 @@ it("gives a Viewer the team's Home with nothing to change", async () => {
   expect(host.textContent).toContain("Waiting for a seller or the lead rules");
   expect(host.querySelector('a[href="/settings/lead-rules"]')).toBeNull();
   expect(host.textContent).not.toContain("Invite sellers");
+  expect(
+    Array.from(host.querySelectorAll("button")).some(
+      (button) => button.textContent === "Controls",
+    ),
+  ).toBe(false);
 });

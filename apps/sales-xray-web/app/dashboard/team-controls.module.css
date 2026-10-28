@@ -1,0 +1,215 @@
+/* Team controls (owner Home v3, 28 Oct 2026): a labelled gear in Home's
+   header, and one sheet of targets, nudges and the lead rules. */
+.gear {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  transition: transform 150ms var(--sx-ease-out);
+}
+
+.gear:active {
+  transform: scale(var(--sx-press-scale, 0.98));
+}
+
+.gear svg {
+  color: var(--sx-accent);
+}
+
+.body {
+  display: grid;
+  gap: 22px;
+  min-width: 0;
+}
+
+.title {
+  margin: 0 0 10px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+.pickers {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.kinds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.kind {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+/* 36 px to the eye, 44 px to the thumb. */
+.kind::before {
+  position: absolute;
+  inset: -4px 0;
+  content: "";
+}
+
+.kind[aria-checked="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.sellers {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sellers li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.sellers li:last-child {
+  border-bottom: 0;
+}
+
+.who {
+  display: grid;
+  min-width: 0;
+}
+
+.who strong {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.who small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* − 40 +: 44 px targets, the number typeable. */
+.stepper {
+  display: inline-grid;
+  grid-template-columns: 44px 48px 44px;
+  align-items: center;
+}
+
+.stepper button {
+  display: grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+  cursor: pointer;
+  transition: transform 150ms var(--sx-ease-out);
+}
+
+.stepper button:active {
+  transform: scale(var(--sx-press-scale, 0.98));
+}
+
+.stepper button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.stepper input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.footer {
+  display: grid;
+  gap: 6px;
+  justify-items: center;
+}
+
+.footer small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.save {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.save:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.loading {
+  min-height: 240px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-fill-soft);
+}
+
+.quiet {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gear,
+  .stepper button {
+    transition: none;
+  }
+
+  .gear:active,
+  .stepper button:active {
+    transform: none;
+  }
+}

@@ -602,3 +602,20 @@
   border-radius: var(--sx-radius-md);
   background: var(--sx-surface);
 }
+
+/* Home's header bar: the view and, for managers, Team controls. */
+.homeBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.homeBar > :first-child:not(:only-child) {
+  flex: 1;
+  min-width: 0;
+}
+
+.homeBar > :only-child {
+  margin-left: auto;
+}
