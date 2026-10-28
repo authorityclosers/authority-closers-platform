@@ -72,6 +72,13 @@ def prune(export: Path) -> None:
         shutil.rmtree(export / name, ignore_errors=True)
     for path in export.rglob("*.map"):
         path.unlink()
+    # Developer downloads (the Python sample in /developers) stay on the website: the app asks the
+    # server for anything its copy doesn't have, and no code but the web page's ever goes in a bundle.
+    for cache in [path for path in export.rglob("__pycache__") if path.is_dir()]:
+        shutil.rmtree(cache, ignore_errors=True)
+    for pattern in ("*.py", "*.pyc"):
+        for path in export.rglob(pattern):
+            path.unlink()
     # The brand icon packs load on demand from the server, as in the app build.
     brands = export / "brands"
     if brands.is_dir():

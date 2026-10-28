@@ -84,6 +84,8 @@ def test_pack_prunes_like_the_app_build_and_names_the_zip_by_its_sha256(tmp_path
             "_next/static/chunks/app.js.map",
             "brands/a.json",
             "brands/index.json",
+            "developers/sx.py",
+            "developers/__pycache__/sx.cpython-312.pyc",
         ),
     )
     zip_path = tmp_path / "bundle" / f"{facts['sha256']}.zip"
@@ -102,6 +104,7 @@ def test_pack_prunes_like_the_app_build_and_names_the_zip_by_its_sha256(tmp_path
         "provider-review/",
         ".map",
         "brands/a.json",
+        "developers/",
     ):
         assert not any(gone in name for name in names), gone
     # sx-web.json is the app's own file list format (BundledWeb), with the commit's time.
