@@ -545,9 +545,7 @@ export function OrganisationSources() {
           aria-label="Unsaved forms"
         >
           <span className={styles.saveCount}>
-            {changes
-              ? `${plural(changes, "change")} not saved`
-              : "Not saved yet"}
+            {changes ? plural(changes, "change") : "Unsaved"}
           </span>
           <button
             className={styles.textButton}

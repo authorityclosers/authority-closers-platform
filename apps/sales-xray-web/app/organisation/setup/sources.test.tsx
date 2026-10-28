@@ -145,7 +145,7 @@ it("shows the save bar only while a choice is unsaved, and Discard restores it",
   expect(host.textContent).toContain("3 of 3 forms bring in leads · 2 Pages");
   const before = pressed();
   await tap("Earlier campaign");
-  expect(saveBar()?.textContent).toContain("1 change not saved");
+  expect(saveBar()?.textContent).toContain("1 change");
   expect(host.textContent).toContain("2 of 3 forms");
   await tap("Discard");
   expect(saveBar()).toBeNull();
