@@ -981,6 +981,18 @@ class SellerOutcome(Model):
     late: int
 
 
+class DayOutcome(Model):
+    """One India-time day of the period, counted as the period is (Home's small bars)."""
+
+    day: date
+    calls: int
+    connected: int
+    # Different leads moved to an interested or a won stage that day.
+    interested: int
+    won: int
+    new_leads: int
+
+
 class Performance(Model):
     """How sales went (owners and admins; owner, 22 Oct 2026): outcomes first,
     then sellers ranked by outcome, then the open leads by stage."""
@@ -996,6 +1008,9 @@ class Performance(Model):
     pipeline: dict[str, int]
     # The same open leads by stage, per pipeline (key: the pipeline's key).
     pipelines: dict[str, dict[str, int]] = Field(default_factory=dict)
+    # Each day of the period, oldest first (owner Home v3, 28 Oct 2026). A lead
+    # interested on two days counts on both; the period's own count stays distinct.
+    daily: tuple[DayOutcome, ...] = ()
 
 
 class ImportPreview(Model):

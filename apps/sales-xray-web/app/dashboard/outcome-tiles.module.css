@@ -1,0 +1,385 @@
+/* Outcome tiles (owner Home v3, 28 Oct 2026): two columns on a phone, four
+   on a computer; Won and Interested carry the days as small bars. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (min-width: 900px) {
+  .tiles {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.tile {
+  --tone: var(--lx-teal);
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  min-width: 0;
+  min-height: 132px;
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 150ms var(--sx-ease-out);
+  -webkit-tap-highlight-color: transparent;
+  animation: tile-in 450ms var(--sx-ease-out) both;
+}
+
+.tile:nth-child(2) {
+  animation-delay: 40ms;
+}
+
+.tile:nth-child(3) {
+  animation-delay: 80ms;
+}
+
+.tile:nth-child(4) {
+  animation-delay: 120ms;
+}
+
+.tile:active {
+  transform: scale(var(--sx-press-scale, 0.98));
+}
+
+.tile:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.tile[data-tone="good"],
+.detail[data-tone="good"] {
+  --tone: var(--lx-strength-ink);
+}
+
+.tile[data-tone="violet"],
+.detail[data-tone="violet"] {
+  --tone: var(--lx-missed-ink);
+}
+
+.tile[data-tone="slate"],
+.detail[data-tone="slate"] {
+  --tone: var(--lx-closing-ink);
+}
+
+.tile[data-tone="warn"],
+.detail[data-tone="warn"] {
+  --tone: var(--sx-warn);
+}
+
+/* An odd tile out on a phone takes the whole row. */
+@media (max-width: 899px) {
+  .tile:last-child:nth-child(odd) {
+    grid-column: 1 / -1;
+  }
+}
+
+@keyframes tile-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.label svg {
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.figure {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.value {
+  color: var(--sx-ink);
+  font: var(--sx-text-kpi);
+  font-variant-numeric: tabular-nums;
+}
+
+.change {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.change[data-trend="up"] {
+  color: var(--lx-strength-ink);
+}
+
+.change[data-trend="down"] {
+  color: var(--sx-warn);
+}
+
+.note {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.35;
+}
+
+/* The days: bars grow from the baseline; a true zero keeps a short mark. */
+.chart {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 34px;
+}
+
+.chart[data-large] .bars {
+  gap: 8px;
+  height: 120px;
+}
+
+.barSlot {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-end;
+  gap: 3px;
+  height: 100%;
+  min-width: 0;
+}
+
+.barSlot small {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.bar {
+  display: block;
+  min-height: 2px;
+  border-radius: 3px 3px 1px 1px;
+  background: var(--tone, var(--sx-accent));
+  transform-origin: bottom;
+  animation: bar-in 550ms var(--sx-ease-out) both;
+}
+
+.bar[data-zero] {
+  height: 2px;
+  background: var(--sx-line-strong);
+}
+
+@keyframes bar-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+
+.line {
+  display: block;
+  width: 100%;
+  height: 34px;
+  overflow: visible;
+}
+
+.chart[data-large] .line {
+  height: 120px;
+}
+
+.line polyline {
+  fill: none;
+  stroke: var(--tone, var(--sx-accent));
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  color: var(--sx-muted);
+  font-size: 11px;
+}
+
+.chart[data-large] .axis > span {
+  flex: 1;
+  text-align: center;
+}
+
+/* Connected: one share, one ring. */
+.ring {
+  flex: none;
+  width: 44px;
+  height: 44px;
+}
+
+.ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  transform: rotate(-90deg);
+}
+
+.ringTrack,
+.ringFill {
+  fill: none;
+  stroke-width: 6;
+}
+
+.ringTrack {
+  stroke: var(--sx-fill);
+}
+
+.ringFill {
+  stroke: var(--tone);
+  stroke-linecap: round;
+  transition: stroke-dasharray 600ms var(--sx-ease-out);
+}
+
+.footnote {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.quiet {
+  margin: 0;
+  padding: 14px;
+  border: 1px dashed var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+/* The tile's detail, in a sheet. */
+.detail {
+  --tone: var(--lx-teal);
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+}
+
+.detailFigure {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+}
+
+.detailFigure strong {
+  color: var(--sx-ink);
+  font: var(--sx-text-kpi);
+  font-size: 40px;
+  font-variant-numeric: tabular-nums;
+}
+
+.detailFigure span,
+.explain {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.detailChange {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.detailHead {
+  margin: 4px 0 6px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+.sellers {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sellers a {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  border-bottom: 1px solid var(--sx-line);
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.sellers li:last-child a {
+  border-bottom: 0;
+}
+
+.sellers a > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sellers strong {
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.sellers svg {
+  color: var(--sx-muted);
+}
+
+.sheetAction {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile,
+  .bar {
+    animation: none;
+  }
+
+  .tile,
+  .ringFill {
+    transition: none;
+  }
+
+  .tile:active {
+    transform: none;
+  }
+}

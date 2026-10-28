@@ -62,6 +62,7 @@ from ac_platform.lead_desk.contracts import (
     ConversionView,
     Counts,
     DayCalls,
+    DayOutcome,
     DeleteLeads,
     Desk,
     DeviceCommand,
@@ -4333,12 +4334,15 @@ class LeadDesk:
 
         current, previous = blank(), blank()
         per: dict[UUID, dict[str, Any]] = {}
+        by_day: dict[date, dict[str, Any]] = {}
         for event_id, actor, lead_id, kind, data, at in rows:
             if not isinstance(data, dict) or str(event_id) in hidden:
                 continue
             tallies = [current if at >= begin else previous]
             if actor is not None and at >= begin:
                 tallies.append(per.setdefault(actor, blank()))
+            if at >= begin:
+                tallies.append(by_day.setdefault(at.astimezone(IST).date(), blank()))
             if kind == "result" or (kind == "call" and counted_phone_call(data)):
                 for tally in tallies:
                     tally["calls"] += 1
@@ -4353,6 +4357,8 @@ class LeadDesk:
                 for tally in tallies:
                     tally[stage].add(lead_id)
 
+        arrivals_by_day: dict[date, int] = {}
+
         async def arrived(since: datetime, until: datetime | None) -> tuple[int, int | None]:
             where = [
                 Lead.tenant_id == self.tenant_id,
@@ -4363,14 +4369,20 @@ class LeadDesk:
                 where.append(until > ARRIVED)
             leads = (
                 await self.db.execute(
-                    select(Lead.created_at, Lead.first_contact_at).where(*where).limit(50000)
+                    select(Lead.created_at, Lead.first_contact_at, ARRIVED)
+                    .where(*where)
+                    .limit(50000)
                 )
             ).all()
             speeds = [
                 minutes
-                for created, first in leads
+                for created, first, _ in leads
                 if (minutes := first_call_minutes(created, first)) is not None
             ]
+            if until is None:
+                for _, _, came in leads:
+                    day = came.astimezone(IST).date()
+                    arrivals_by_day[day] = arrivals_by_day.get(day, 0) + 1
             return len(leads), median(speeds)
 
         def outcomes(tally: dict[str, Any], arrivals: tuple[int, int | None]) -> Outcomes:
@@ -4433,15 +4445,31 @@ class LeadDesk:
         ).all():
             pipeline[str(stage)] = pipeline.get(str(stage), 0) + int(count)
             pipelines.setdefault(str(owner_pipeline), {})[str(stage)] = int(count)
+        now_outcomes = outcomes(current, await arrived(begin, None))
+        daily = []
+        for offset in range(days):
+            day = start + timedelta(days=offset)
+            tally = by_day.get(day, blank())
+            daily.append(
+                DayOutcome(
+                    day=day,
+                    calls=tally["calls"],
+                    connected=tally["connected"],
+                    interested=len(tally["interested"]),
+                    won=len(tally["won"]),
+                    new_leads=arrivals_by_day.get(day, 0),
+                )
+            )
         return Performance(
             days=days,
             start=start,
             end=end,
-            current=outcomes(current, await arrived(begin, None)),
+            current=now_outcomes,
             previous=outcomes(previous, await arrived(before, begin)),
             sellers=tuple(sellers),
             pipeline=pipeline,
             pipelines=pipelines,
+            daily=tuple(daily),
         )
 
     async def save_rep(self, person_id: UUID, command: RepRules) -> Team:

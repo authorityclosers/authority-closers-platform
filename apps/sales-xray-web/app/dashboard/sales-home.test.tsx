@@ -139,7 +139,7 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
       sellers: [
         {
           person_id: "s1",
-          name: "swamini fictional",
+          name: "priya example",
           calls: 12,
           connected: 6,
           interested: 3,
@@ -160,12 +160,14 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
     "Targets",
     "Open leads by stage",
   ]);
-  const figures = Array.from(host.querySelectorAll("dt"), (dt) =>
-    dt.textContent?.trim(),
+  // Owner Home v3: the outcomes are tiles, each opening its detail.
+  const figures = Array.from(
+    host.querySelectorAll("button[data-tile]"),
+    (tile) => tile.firstElementChild?.textContent?.trim(),
   );
   expect(figures).toEqual(["Won", "Interested", "New leads", "Connected"]);
   expect(host.textContent).toContain("13% of 16 leads called");
-  expect(host.textContent).toContain("Swamini Fictional");
+  expect(host.textContent).toContain("Priya Example");
   expect(host.textContent).toContain(
     "2\u00a0won · 3\u00a0interested · 12\u00a0calls",
   );

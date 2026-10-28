@@ -15,16 +15,7 @@
  * Only real numbers: nothing here is estimated or invented.
  */
 
-import {
-  ChevronDown,
-  ChevronRight,
-  Flame,
-  PhoneCall,
-  Trophy,
-  UserPlus,
-  UsersRound,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronRight, PhoneCall, UsersRound } from "lucide-react";
 import Link from "next/link";
 import {
   useEffect,
@@ -61,8 +52,9 @@ import {
 } from "../leads/journey/journey-client";
 import { KIND_WORDS } from "../leads/stage-tabs";
 import { several, usePipelines } from "../leads/use-pipelines";
-import { ActionList, ActionRow, Avatar, Delta, Segmented } from "../ui/kit";
+import { ActionList, ActionRow, Avatar, Segmented } from "../ui/kit";
 import { NeedsYou } from "./needs-you";
+import { OutcomeTiles } from "./outcome-tiles";
 import { ShareOut } from "../leads/assign-sheet";
 import { TargetsPanel } from "../leads/targets-panel";
 import { TakingSwitch } from "../leads/taking-switch";
@@ -71,28 +63,15 @@ import { DayNumbers, DoNowRow, NextUp, TeamPoolCard, useMyDay } from "./my-day";
 import { RecentlyCalled } from "./recently-called";
 import {
   FunnelSkeleton,
-  OutcomesSkeleton,
   RowsSkeleton,
   TodaySkeleton,
 } from "./sales-home-skeleton";
 import styles from "./sales-home.module.css";
 
-const PERIODS: { key: string; label: string }[] = [
-  { key: "1", label: "Today" },
-  { key: "7", label: "7 days" },
-  { key: "30", label: "30 days" },
-];
-
 const OPEN_KINDS = ["new", "not_connected", "follow_up", "interested"] as const;
 
 const percent = (part: number, whole: number) =>
   whole ? `${Math.round((part / whole) * 100)}%` : "–";
-
-function minutesWords(minutes: number): string {
-  if (minutes < 60) return `${minutes} min`;
-  const hours = Math.round(minutes / 6) / 10;
-  return hours < 24 ? `${hours} h` : `${Math.round(hours / 24)} days`;
-}
 
 const PERIOD_EVENT = "sx:home-period";
 
@@ -144,36 +123,6 @@ function useDesk() {
   return state;
 }
 
-function Outcome({
-  icon: Icon,
-  tone,
-  label,
-  value,
-  delta,
-  note,
-}: {
-  icon: LucideIcon;
-  tone: "good" | "violet" | "teal" | "slate";
-  label: string;
-  value: ReactNode;
-  delta?: ReactNode;
-  note: ReactNode;
-}) {
-  return (
-    <div className={styles.outcome} data-tone={tone}>
-      <span className={styles.outcomeIcon} aria-hidden="true">
-        <Icon size={18} />
-      </span>
-      <dt>{label}</dt>
-      <dd>
-        <span className={styles.outcomeValue}>{value}</span>
-        {delta}
-      </dd>
-      <dd className={styles.outcomeNote}>{note}</dd>
-    </div>
-  );
-}
-
 function TeamHome({
   desk,
   layout = "v1",
@@ -203,8 +152,6 @@ function TeamHome({
     return () => controller.abort();
   }, [period]);
   const shown = report?.period === period ? report.value : null;
-  const now = shown?.current;
-  const before = shown?.previous;
   const late = shown?.sellers.reduce((sum, seller) => sum + seller.late, 0);
   // Several pipelines: the funnel shows one at a time, in its own stages.
   const pipes = usePipelines();
@@ -226,78 +173,15 @@ function TeamHome({
     <section className={styles.block} aria-labelledby="sales-title">
       <div className={styles.head}>
         <h2 id="sales-title">How sales are going</h2>
-        {/* Team | My day is the screen's one switch; the period is a chip. */}
-        <label className={styles.periodChip}>
-          <select
-            aria-label="Period"
-            value={String(period)}
-            onChange={(event) =>
-              setPeriod(Number(event.target.value) as Period)
-            }
-          >
-            {PERIODS.map((item) => (
-              <option key={item.key} value={item.key}>
-                {item.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={14} aria-hidden="true" />
-        </label>
       </div>
-      {now && before ? (
-        <dl className={styles.outcomes}>
-          <Outcome
-            icon={Trophy}
-            tone="good"
-            label="Won"
-            value={now.won}
-            delta={<Delta value={now.won} previous={before.won} />}
-            note={
-              now.leads_called
-                ? `${percent(now.won, now.leads_called)} of ${now.leads_called} leads called`
-                : "No leads called yet"
-            }
-          />
-          <Outcome
-            icon={Flame}
-            tone="violet"
-            label="Interested"
-            value={now.interested}
-            delta={
-              <Delta value={now.interested} previous={before.interested} />
-            }
-            note="Leads who said they want it"
-          />
-          <Outcome
-            icon={UserPlus}
-            tone="teal"
-            label="New leads"
-            value={now.new_leads}
-            delta={<Delta value={now.new_leads} previous={before.new_leads} />}
-            note={
-              now.first_call_minutes !== null
-                ? `First call in ${minutesWords(now.first_call_minutes)}`
-                : now.new_leads
-                  ? "None called yet"
-                  : "None came in"
-            }
-          />
-          <Outcome
-            icon={PhoneCall}
-            tone="slate"
-            label="Connected"
-            value={percent(now.connected, now.calls)}
-            delta={<Delta value={now.connected} previous={before.connected} />}
-            note={`${now.connected} of ${now.calls} ${now.calls === 1 ? "call" : "calls"}`}
-          />
-        </dl>
-      ) : failed === period ? (
-        <p className={styles.quiet} role="status">
-          Sales numbers didn&apos;t load. Pull down or come back in a moment.
-        </p>
-      ) : (
-        <OutcomesSkeleton />
-      )}
+      {/* Owner Home v3 (28 Oct 2026): B's tiles, the period as the one segmented
+          control; each tile opens its detail. */}
+      <OutcomeTiles
+        period={period}
+        onPeriod={setPeriod}
+        performance={shown}
+        failed={failed === period}
+      />
       <div className={styles.chips}>
         {mineDue ? (
           <Link className={styles.chip} href="/leads">
@@ -312,20 +196,11 @@ function TeamHome({
   const needs = <NeedsYou desk={desk} late={shown ? late : undefined} />;
   return (
     <>
-      {/* Team v2 (orchestrator for the owner, 27 Oct 2026): what needs you
-          and the team's day first, then the numbers and charts. */}
-      {layout === "v2" ? (
-        <>
-          {needs}
-          <TeamActivity saved={saved} />
-          {salesBlock}
-        </>
-      ) : (
-        <>
-          {salesBlock}
-          {needs}
-        </>
-      )}
+      {/* Owner Home v3 (28 Oct 2026, B): the period's outcomes first, then
+          what needs you, then the team's day (Team v2's feed). */}
+      {salesBlock}
+      {needs}
+      {layout === "v2" ? <TeamActivity saved={saved} /> : null}
 
       <section className={styles.block} aria-labelledby="sellers-title">
         <div className={styles.head}>

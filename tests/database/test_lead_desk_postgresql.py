@@ -274,6 +274,14 @@ def test_a_sellers_day_on_the_desk(postgres_harness: Any, tmp_path: Path) -> Non
                 assert top["person_id"] == str(seller.person_id)
                 assert (top["calls"], top["interested"]) == (2, 1)
                 assert week["pipeline"] == {"interested": 1}
+                # Each India-time day, oldest first: today holds this test's work.
+                daily = week["daily"]
+                assert [day["day"] for day in daily][-1] == week["end"]
+                assert len(daily) == 7 and daily[0]["day"] == week["start"]
+                today = daily[-1]
+                assert (today["calls"], today["connected"], today["new_leads"]) == (2, 1, 1)
+                assert (today["interested"], today["won"]) == (1, 0)
+                assert sum(day["calls"] + day["new_leads"] for day in daily[:-1]) == 0
                 odd = await client.get(f"{BASE}/reports/performance", params={"days": 3})
                 assert odd.status_code == 422
                 as_(seller_token)

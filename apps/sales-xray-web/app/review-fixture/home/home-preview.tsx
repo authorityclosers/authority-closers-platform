@@ -55,7 +55,7 @@ function queue(now: number) {
     source: "meta",
     source_label: "Facebook ad",
     owner_person_id: SELLER,
-    owner_name: "swamini fictional",
+    owner_name: "asha fictional",
     why:
       why === "due"
         ? "Call back now"
@@ -322,7 +322,7 @@ function weekWork(now: number) {
       event: {
         kind,
         at: new Date(now - ago * MINUTE).toISOString(),
-        actor_name: "Swamini Fictional",
+        actor_name: "Asha Fictional",
         stage: null,
         stage_label: null,
         reason: null,
@@ -352,7 +352,7 @@ const TEAM_WORK: Work[] = [
     "asha fictional",
     9,
     {
-      actor_name: "Swamini Fictional",
+      actor_name: "Asha Fictional",
       duration_seconds: 214,
       direction: "outgoing",
       via: "phone",
@@ -373,7 +373,7 @@ const TEAM_WORK: Work[] = [
     "meera fictional",
     44,
     {
-      actor_name: "Swamini Fictional",
+      actor_name: "Asha Fictional",
       stage_label: "Site visit booked",
       from_label: "Interested",
     },
@@ -446,7 +446,7 @@ function answers(now: number, path: string, mode: Mode): unknown {
     return {
       me: {
         person_id: SELLER,
-        name: "swamini fictional",
+        name: "asha fictional",
         role: "member",
         // An owner's own desk manages the team (Share out leads on My day).
         can_manage:
@@ -554,7 +554,7 @@ function answers(now: number, path: string, mode: Mode): unknown {
         first_call_minutes: 11,
       },
       sellers: [
-        [SELLER, "swamini fictional", 31, 15, 5, 2, 38, 1],
+        [SELLER, "asha fictional", 31, 15, 5, 2, 38, 1],
         [SECOND, "RAHUL EXAMPLE", 22, 9, 3, 1, 26, 3],
         [THIRD, "priya sample", 11, 5, 1, 0, 12, 0],
       ].map(
@@ -569,6 +569,13 @@ function answers(now: number, path: string, mode: Mode): unknown {
           late,
         }),
       ),
+      daily: fixtureDays(days, {
+        calls: 64 * scale,
+        connected: 29 * scale,
+        interested: 9 * scale,
+        won: 3 * scale,
+        new_leads: 37 * scale,
+      }),
       pipeline: { new: 12, not_connected: 9, follow_up: 21, interested: 8 },
       pipelines: {
         main: { new: 5, not_connected: 3, follow_up: 9, interested: 6 },
@@ -601,7 +608,7 @@ function answers(now: number, path: string, mode: Mode): unknown {
         {
           leadId: "00000000-0000-4000-8000-000000000302",
           leadName: "karan example",
-          seller: "swamini fictional",
+          seller: "asha fictional",
           minutesLate: 14,
         },
       ],
@@ -728,7 +735,7 @@ function savedCalls(now: number): LibrarySubmission[] {
       state: "completed",
       hasReport: true,
       label: { displayName: "Site visit · Priya Sample", revision: 1 },
-      owner: { personId: SELLER, name: "Swamini Fictional" },
+      owner: { personId: SELLER, name: "Asha Fictional" },
     },
     {
       id: "00000000-0000-4000-8000-000000000501",
@@ -840,6 +847,39 @@ function Preview() {
       </LightboxShell>
     </WorkspaceAccessContext.Provider>
   );
+}
+
+/**
+ * Invented days for the outcome tiles: the period's counts spread over its
+ * days in a fixed, uneven pattern, oldest first, ending on the fixture's end.
+ */
+function fixtureDays(
+  days: number,
+  totals: Record<
+    "calls" | "connected" | "interested" | "won" | "new_leads",
+    number
+  >,
+) {
+  const pattern = [0.4, 1.1, 0.7, 1.5, 0.9, 1.3, 1.6];
+  const weights = Array.from(
+    { length: days },
+    (_, index) => pattern[index % 7],
+  );
+  const sum = weights.reduce((total, weight) => total + weight, 0);
+  const last = Date.parse("2026-10-22T12:00:00+05:30");
+  return weights.map((weight, index) => {
+    const share = (value: number) => Math.round((value * weight) / sum);
+    return {
+      day: new Date(last - (days - 1 - index) * 86_400_000)
+        .toISOString()
+        .slice(0, 10),
+      calls: share(totals.calls),
+      connected: share(totals.connected),
+      interested: share(totals.interested),
+      won: share(totals.won),
+      new_leads: share(totals.new_leads),
+    };
+  });
 }
 
 export function HomePreview() {

@@ -1268,6 +1268,16 @@ export type SellerOutcome = {
   late: number;
 };
 
+/** One India-time day of the period, counted as the period is (Home's small bars). */
+export type DayOutcome = {
+  day: string;
+  calls: number;
+  connected: number;
+  interested: number;
+  won: number;
+  new_leads: number;
+};
+
 export type Performance = {
   days: number;
   start: string;
@@ -1278,6 +1288,8 @@ export type Performance = {
   pipeline: Record<string, number>;
   /** The same open leads by stage, per pipeline (by the pipeline's key). */
   pipelines?: Record<string, Record<string, number>>;
+  /** Each day of the period, oldest first (owner Home v3, 28 Oct 2026). */
+  daily?: DayOutcome[];
 };
 
 export type Period = 1 | 7 | 30;
