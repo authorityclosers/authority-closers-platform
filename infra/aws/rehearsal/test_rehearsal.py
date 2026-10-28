@@ -34,7 +34,11 @@ def test_rehearsal_overlay_has_only_loopback_ingress_and_valid_tmpfs():
         for mount in service.get("tmpfs", []):
             assert mount.startswith("/"), (name, mount)
     assert config["networks"]["edge"]["internal"] is True
-    assert config["services"]["api"]["networks"] == {"app": {}, "data": {}, "edge": {}}
+    assert config["services"]["api"]["networks"] == {
+        "app": {"aliases": ["${AC_INTERNAL_API_HOST}"]},
+        "data": {},
+        "edge": {},
+    }
     assert config["services"]["worker"]["networks"] == {"data": {}}
 
 

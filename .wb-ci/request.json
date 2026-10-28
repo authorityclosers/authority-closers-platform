@@ -1,0 +1,26 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "7c5a089e5aecb74d66491a9d1142f038848c1263",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/account-settings.tsx",
+    "apps/sales-xray-web/app/account-view.module.css",
+    "apps/sales-xray-web/app/settings/profile-details.test.tsx",
+    "apps/sales-xray-web/app/settings/profile-details.tsx",
+    "infra/aws/rehearsal/compose.rehearsal.yaml",
+    "infra/aws/rehearsal/test_rehearsal.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "infra/aws/rehearsal/test_rehearsal.py"
+  ],
+  "include_paths": [
+    "infra/aws/rehearsal/compose.rehearsal.yaml",
+    "infra/aws/rehearsal/test_rehearsal.py"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}
