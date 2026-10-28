@@ -1700,14 +1700,14 @@ it("desktop and mobile Analyse navigation explicitly starts a new call", async (
     'aside[aria-label="Sales Xray navigation"] a[aria-label="New analysis"]',
   );
   expect(desktop?.getAttribute("href")).toBe("/analysis/new");
-  // Phones: a visitor's New goes straight there; a signed-in + asks first,
-  // and its Add a call goes there (owner, 22 Oct).
+  // Phones: a visitor's New goes straight there; a signed-in + (in the top
+  // bar since the 28 Oct meeting) asks first, and its Add a call goes there.
   const nav = container.querySelector(
     'nav[aria-label="Mobile Sales Xray navigation"]',
   )!;
   const visitorNew = nav.querySelector('a[aria-label="New analysis"]');
-  const add = nav.querySelector<HTMLButtonElement>(
-    'button[aria-label="Add a lead or a call"]',
+  const add = container.querySelector<HTMLButtonElement>(
+    'header button[aria-label="Add a lead, a call or a task"]',
   );
   if (visitorNew) {
     expect(visitorNew.getAttribute("href")).toBe("/analysis/new");

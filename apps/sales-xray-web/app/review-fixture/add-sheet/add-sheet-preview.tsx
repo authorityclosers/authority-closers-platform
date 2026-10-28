@@ -75,7 +75,7 @@ function Preview() {
       if (stopped) return;
       document
         .querySelector<HTMLButtonElement>(
-          'button[aria-label="Add a lead or a call"]',
+          'button[aria-label="Add a lead, a call or a task"]',
         )
         ?.click();
       if (view !== "lead" && view !== "duplicate" && view !== "discard") return;

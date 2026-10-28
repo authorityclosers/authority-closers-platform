@@ -177,7 +177,11 @@ export function DashboardBody({
         <>
           {/* Sales first, call analysis second (owner, 22 Oct 2026); a
               seller's Home keeps only their recent calls below today. */}
-          {salesRole === "seller" ? null : (
+          {/* An organisation's Home carries its own Recent calls and a way
+              to every report (owner, 28 Oct 2026, bugs #70–#72: "so much
+              text", "graphs and design are very terrible"): no call-analysis
+              charts under it. */}
+          {sales || salesRole === "seller" ? null : (
             <>
               {/* Needs attention is a dot beside the title, only while calls
                   wait (owner, 25 Oct 2026). */}
@@ -356,9 +360,7 @@ export function DashboardBody({
           {/* Under the sales Home, an empty "Calls analysed" panel is noise:
               a new workspace has the sample report, a seller Recent calls
               (orchestrator for the owner, 27 Oct 2026). */}
-          {sales &&
-          recentState.status === "ready" &&
-          (recent === null || recent.length === 0) ? null : (
+          {sales ? null : (
             <section
               className={styles.section}
               aria-labelledby="panel-recent-calls"

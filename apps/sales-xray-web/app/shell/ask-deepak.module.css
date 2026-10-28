@@ -1,0 +1,62 @@
+/* Ask Deepak's sheet (28 Oct 2026 meeting): tokens only. */
+
+.body {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 4px 0 8px;
+  text-align: center;
+}
+
+.face {
+  display: block;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--sx-radius-pill);
+  background: url("/media/dipak-learning-hero-v1.webp") -372px -19px / 544px
+    auto no-repeat;
+  box-shadow:
+    0 0 0 3px var(--sx-surface),
+    0 0 0 5px var(--sx-accent);
+}
+
+.lead {
+  max-width: 34ch;
+  margin: 4px 0 0;
+  color: var(--sx-ink);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.soon {
+  max-width: 36ch;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.open {
+  display: inline-flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 0 18px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font-weight: 600;
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.open:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+.open:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}

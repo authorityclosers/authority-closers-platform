@@ -6,12 +6,6 @@ import {
   readAnalytics,
   type AnalyticsHistory,
 } from "./analytics-data";
-vi.mock("./organisation-api", () => ({
-  readMembers: vi.fn(async () => [
-    { status: "active", personId: "seller-a", name: "Mira Fictional" },
-    { status: "active", personId: "seller-b", name: "Tali Example" },
-  ]),
-}));
 const now = "2026-10-28T12:00:00Z";
 const event = (id: string, kind: string, at: string, extras = {}) =>
   ({
@@ -83,90 +77,87 @@ it("keeps unobserved days missing while real zero days stay zero", () => {
   expect(result.people[0].daily[0]).toBeNull();
   expect(result.people[0].daily[28]?.calls).toBe(0);
 });
-it("paginates the team feed until both periods are covered, rather than using all-time counts", async () => {
-  const fetch = vi
-    .fn()
-    .mockResolvedValueOnce(
+it("reads both complete periods in one request with no directory or paging", async () => {
+  const fetch = vi.fn(
+    async () =>
       new Response(
         JSON.stringify({
-          items: [event("a", "note", now)],
-          next_before: "2026-10-20T12:00:00Z",
-          counts: { note: 9999 },
+          schema: "lead-desk/1",
+          days: 30,
           timezone: "Asia/Kolkata",
+          now,
+          start: "2026-09-29",
+          prior: "2026-08-30",
+          today: "2026-10-28",
+          current: { calls: 7, conversations: 3, notes: 2, moves: 1, work: 12 },
+          previous: { calls: 4, conversations: 2, notes: 1, moves: 0, work: 6 },
+          people: [
+            {
+              id: "seller-a",
+              name: "mira fictional",
+              current: {
+                calls: 7,
+                conversations: 3,
+                notes: 2,
+                moves: 1,
+                work: 12,
+              },
+              previous: {
+                calls: 4,
+                conversations: 2,
+                notes: 1,
+                moves: 0,
+                work: 6,
+              },
+              daily: [
+                {
+                  day: "2026-10-28",
+                  calls: 7,
+                  conversations: 3,
+                  notes: 2,
+                  moves: 1,
+                  work: 12,
+                },
+              ],
+            },
+          ],
         }),
       ),
-    )
-    .mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          items: [event("b", "stage", "2026-09-05T12:00:00Z")],
-          next_before: "2026-08-01T12:00:00Z",
-          counts: { note: 9999 },
-          timezone: "Asia/Kolkata",
-        }),
-      ),
-    );
+  );
   vi.stubGlobal("fetch", fetch);
-  const read = await readAnalytics({ team: true, now });
-  expect(fetch).toHaveBeenCalledTimes(2);
-  expect(fetch.mock.calls[0][0]).toContain("team=true");
-  expect(fetch.mock.calls[1][0]).toContain("before=2026-10-20");
-  expect(activitySummary(read).current.notes).toBe(1);
-  expect(activitySummary(read).previous.moves).toBe(1);
-  expect(activitySummary(read).previousComplete).toBe(true);
+  const signal = new AbortController().signal;
+  const result = await readAnalytics({ team: true, signal });
+  expect(fetch).toHaveBeenCalledExactlyOnceWith(
+    "/v1/lead-desk/activity/summary?days=30&team=true",
+    expect.objectContaining({
+      signal,
+      cache: "no-store",
+      credentials: "same-origin",
+    }),
+  );
+  expect(result.current.calls).toBe(7);
+  expect(result.previous.calls).toBe(4);
+  expect(result.currentComplete && result.previousComplete).toBe(true);
+  expect(result.people[0].daily).toHaveLength(30);
+  expect(result.people[0].daily[29]?.work).toBe(12);
+  expect(result.people[0].daily[0]?.work).toBe(0);
+  expect(result.people[0].name).toBe("Mira Fictional");
 });
-it("bounds large reads, resumes at the cursor and never fetches the team for a seller", async () => {
-  const fetch = vi
-    .fn()
-    .mockResolvedValueOnce(
-      new Response(
-        JSON.stringify({
-          items: [event("a", "note", now)],
-          next_before: "2026-10-20T12:00:00Z",
-          timezone: "Asia/Kolkata",
-        }),
-      ),
-    )
-    .mockResolvedValueOnce(
-      new Response(JSON.stringify({ items: [], next_before: null })),
-    );
+it("scopes personal reads and never turns a failed summary into an empty period", async () => {
+  const fetch = vi.fn(async () => new Response("{}", { status: 403 }));
   vi.stubGlobal("fetch", fetch);
-  const first = await readAnalytics({
-    team: false,
-    personId: "seller-a",
-    now,
-    pages: 1,
-  });
-  expect(first.members).toHaveLength(1);
-  expect(first.members[0].personId).toBe("seller-a");
-  expect(fetch.mock.calls[0][0]).not.toContain("team=true");
-  expect(activitySummary(first).currentComplete).toBe(false);
-  const second = await readAnalytics({
-    team: false,
-    personId: "seller-a",
-    previous: first,
-  });
-  expect(second.items).toHaveLength(1);
-  expect(activitySummary(second).previousComplete).toBe(true);
-});
-it("does not call a failed or stuck read an empty period", async () => {
+  await expect(
+    readAnalytics({ team: false, personId: "seller-a" }),
+  ).rejects.toThrow();
+  expect(fetch).toHaveBeenCalledExactlyOnceWith(
+    "/v1/lead-desk/activity/summary?days=30&person=seller-a",
+    expect.anything(),
+  );
   vi.stubGlobal(
     "fetch",
-    vi.fn(async () => new Response("{}", { status: 403 })),
+    vi.fn(async () => new Response("{}")),
   );
-  await expect(readAnalytics({ team: true, now })).rejects.toThrow();
-  vi.stubGlobal(
-    "fetch",
-    vi.fn(
-      async () =>
-        new Response(
-          JSON.stringify({ items: [], next_before: "2026-10-20T12:00:00Z" }),
-        ),
-    ),
-  );
-  await expect(readAnalytics({ team: true, now })).rejects.toThrow(
-    "did not advance",
-  );
+  await expect(readAnalytics({ team: true })).rejects.toThrow("unavailable");
 });
 
 it("keeps a person active through messages and meetings without adding fake calls", () => {

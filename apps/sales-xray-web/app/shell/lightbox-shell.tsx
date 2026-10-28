@@ -50,6 +50,7 @@ import {
 
 import { useBranding } from "./branding-store";
 import { AddSheet } from "./add-sheet";
+import { AskDeepakSheet } from "./ask-deepak";
 import { useAppRouter } from "./app-router";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
@@ -395,6 +396,8 @@ function LightboxShellFrame({
   // quick form over the current screen (owner, 22 Oct). Each opening of the
   // form is a new round, so it always starts empty.
   const [addOpen, setAddOpen] = useState(false);
+  // Ask Deepak (28 Oct 2026 meeting): the tab bar's middle slot.
+  const [askOpen, setAskOpen] = useState(false);
   const [leadForm, setLeadForm] = useState({ open: false, round: 0 });
   const router = useAppRouter();
   const accountAnchorRef = useRef<HTMLElement | null>(null);
@@ -1762,6 +1765,23 @@ function LightboxShellFrame({
           {/* You opens from the avatar on the left, not from here too. */}
           <div className={styles.barActions}>
             <ReviewBarChip live={leadsBadgeLive} />
+            {/* The + lives up here now (28 Oct 2026 meeting): small and
+                highlighted; it opens Add lead, Add a call and Add task. */}
+            {guest ? null : (
+              <button
+                type="button"
+                className={styles.barAdd}
+                onClick={() => {
+                  tick();
+                  setAddOpen(true);
+                }}
+                aria-label="Add a lead, a call or a task"
+                aria-haspopup="dialog"
+                aria-expanded={addOpen}
+              >
+                <Plus size={18} strokeWidth={2.5} aria-hidden="true" />
+              </button>
+            )}
             {guest ? null : (
               <button
                 type="button"
@@ -1822,7 +1842,19 @@ function LightboxShellFrame({
                 <kbd aria-hidden="true">{shortcut}</kbd>
               </button>
             )}
-            {(authenticated || sessionPending) && place !== "analyse" ? (
+            {authenticated && !guest ? (
+              <button
+                type="button"
+                className={styles.newAnalysisButton}
+                onClick={() => setAddOpen(true)}
+                aria-label="Add a lead, a call or a task"
+                aria-haspopup="dialog"
+                aria-expanded={addOpen}
+              >
+                <Plus size={15} aria-hidden="true" />
+                Add
+              </button>
+            ) : sessionPending && place !== "analyse" ? (
               <Link className={styles.newAnalysisButton} href={newAnalysisHref}>
                 <Plus size={15} aria-hidden="true" />
                 New analysis
@@ -1919,21 +1951,18 @@ function LightboxShellFrame({
         ) : (
           <button
             type="button"
-            className={`${styles.bottomLink} ${styles.bottomNew}`}
+            className={`${styles.bottomLink} ${styles.bottomAsk}`}
             onClick={() => {
               tick();
-              setAddOpen(true);
+              setAskOpen(true);
             }}
-            aria-label="Add a lead or a call"
+            aria-label="Ask Deepak"
             aria-haspopup="dialog"
-            aria-expanded={addOpen}
-            aria-current={phoneTab === "new" ? "page" : undefined}
+            aria-expanded={askOpen}
           >
-            <span className={styles.newMark} aria-hidden="true">
-              <Plus size={18} strokeWidth={2.25} />
-            </span>
+            <span className={styles.askFace} aria-hidden="true" />
             <span className={styles.tabPill} aria-hidden="true" />
-            <span>Add</span>
+            <span>Ask Deepak</span>
           </button>
         )}
         {/* Chats has its own tab and its own unread count. */}
@@ -2068,6 +2097,9 @@ function LightboxShellFrame({
       )}
       {guest || !(quiet || reportWaiting) ? null : <BugReportHost />}
       {guest || !quiet ? null : <FeedbackHost />}
+      {guest ? null : (
+        <AskDeepakSheet open={askOpen} onClose={() => setAskOpen(false)} />
+      )}
       {guest ? null : (
         <AddSheet
           open={addOpen}

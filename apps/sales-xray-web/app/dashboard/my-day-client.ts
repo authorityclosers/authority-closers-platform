@@ -56,6 +56,8 @@ export type TeamPool = { open: number; unassigned: number; may_take: boolean };
 export type HomeDesk = Desk & {
   numbers_yesterday?: Desk["numbers"] | null;
   numbers_week?: Desk["numbers"] | null;
+  /** This calendar month so far (Analyse yourself). */
+  numbers_month?: Desk["numbers"] | null;
   team_pool?: TeamPool | null;
 };
 

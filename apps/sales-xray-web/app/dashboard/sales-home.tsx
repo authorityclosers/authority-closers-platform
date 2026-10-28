@@ -1,65 +1,67 @@
 "use client";
 
 /**
- * Home in an organisation (owner, 22 Oct 2026): "Working late", "your call
- * analysis", "ready reports" and "minutes left" mean nothing to a salesperson,
- * "Attention needs 5" is not a metric, and there was no direct call to action.
+ * Home in an organisation (owner's 28 Oct 2026 meeting, section 03: "today's
+ * work on top, recent work below"; bugs #70–#72 from his Android phone).
  *
- * - Owners and admins first see how sales are going: won, interested, new
- *   leads and connect rate for today, 7 or 30 days, each beside the period
- *   before; then sellers ranked by what they won; then the open leads by
- *   stage. Call analysis comes after, on the page below.
- * - A salesperson sees today: who is late, who to call now and later, with
- *   one primary action, "Call <name>", and today's own numbers.
+ * - Today's line, with its few controls on it: My day or Team, and for those
+ *   who manage leads, Team controls behind the gear.
+ * - The top four, each red until its rule is met and one tap into Leads: for
+ *   the team, new leads, open leads as a share of all, late follow-ups and
+ *   leads with no owner; for you, new and open leads, today's follow-ups and
+ *   today's tasks.
+ * - One primary action: Call the next lead (you), or review the late
+ *   follow-ups (the team).
+ * - The second figures sideways in a slider (the team's outcomes).
+ * - Recent calls, with Activity beside them; then My work.
  *
  * Only real numbers: nothing here is estimated or invented.
  */
 
-import { ChevronRight, PhoneCall, UsersRound } from "lucide-react";
-import Link from "next/link";
 import {
-  useEffect,
-  useState,
-  useSyncExternalStore,
-  type ReactNode,
-} from "react";
+  ArrowRight,
+  ChevronRight,
+  FileText,
+  PhoneCall,
+  UsersRound,
+} from "lucide-react";
+import Link from "next/link";
+import { useEffect, useState, useSyncExternalStore } from "react";
 
 import type { LibrarySubmission } from "../acquisition-client";
 import { useWeekActivity } from "../calls/call-rows";
 import { displayName } from "../display-name";
 import { can } from "../organisation/roles";
-import { DayTiles, MyStages } from "./day-board";
 import { FirstRun } from "./first-run";
-import { HomeActivity, HomeRecentCalls, PickUp, SetupStart } from "./home-v2";
+import { HomeActivity, HomeRecentCalls, SetupStart } from "./home-v2";
+import {
+  FourTiles,
+  MyWork,
+  RecentToggle,
+  TodayBar,
+  mineFour,
+  teamFour,
+} from "./home-today";
 import { TeamActivity } from "./team-activity";
 import { TeamControls } from "./team-controls";
-import { whyLine } from "../leads/desk-view";
 import { handOverLead } from "../leads/lead-handoff";
 import {
-  deskSections,
   readDesk,
-  readTeam,
   readPerformance,
-  when,
+  readTasks,
+  readTeam,
   type Desk,
-  type LeadRow,
   type Performance,
   type Period,
 } from "../leads/leads-client";
-import { ActionList, ActionRow, Avatar } from "../ui/kit";
-import { NeedsYou } from "./needs-you";
-import { OutcomeTiles } from "./outcome-tiles";
-import { StuckFunnel } from "./stuck-funnel";
+import { ActionList, ActionRow } from "../ui/kit";
+import { OutcomeTiles, TILE_SETS } from "./outcome-tiles";
 import { ShareOut } from "../leads/assign-sheet";
 import { TakingSwitch } from "../leads/taking-switch";
 import type { HomeDesk } from "./my-day-client";
-import { DayNumbers, DoNowRow, NextUp, TeamPoolCard, useMyDay } from "./my-day";
-import { RecentlyCalled } from "./recently-called";
-import { RowsSkeleton, TodaySkeleton } from "./sales-home-skeleton";
+import { NextUp, TeamPoolCard, YourTargets, useMyDay } from "./my-day";
+import { TodaySkeleton } from "./sales-home-skeleton";
 import styles from "./sales-home.module.css";
-
-const percent = (part: number, whole: number) =>
-  whole ? `${Math.round((part / whole) * 100)}%` : "–";
 
 const PERIOD_EVENT = "sx:home-period";
 
@@ -111,16 +113,51 @@ function useDesk() {
   return state;
 }
 
-function TeamHome({
-  desk,
-  layout = "v1",
-  saved = null,
-}: {
-  desk: Desk | null;
-  layout?: "v1" | "v2";
-  /** The team's latest saved calls, for Team today's reports. */
-  saved?: readonly LibrarySubmission[] | null;
-}) {
+/** Your tasks due today and those already past their time; null until read,
+ *  "off" when they didn't load (the tile says so instead of waiting forever). */
+function useTasksToday() {
+  const [tasks, setTasks] = useState<
+    { today: number; late: number } | "off" | null
+  >(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    readTasks("today", controller.signal).then(
+      (list) =>
+        setTasks({
+          today: list.counts.today ?? 0,
+          late: list.counts.overdue ?? 0,
+        }),
+      () => {
+        if (!controller.signal.aborted) setTasks("off");
+      },
+    );
+    return () => controller.abort();
+  }, []);
+  return tasks;
+}
+
+/** All the organisation's leads, for an owner or admin; null until read, and
+ *  still null if the read fails (Home then stays as it is). */
+function useTeamLeadCount(enabled: boolean): number | null {
+  const [total, setTotal] = useState<number | null>(null);
+  useEffect(() => {
+    if (!enabled) return;
+    const controller = new AbortController();
+    readTeam(controller.signal).then(
+      (team) =>
+        setTotal(
+          Object.values(team.by_stage).reduce((sum, n) => sum + n, 0) +
+            (team.unassigned ?? 0),
+        ),
+      () => undefined,
+    );
+    return () => controller.abort();
+  }, [enabled]);
+  return total;
+}
+
+/** The period's report for the team, with the period kept in the address. */
+function usePerformance() {
   const [period, setPeriod] = usePeriod();
   const [report, setReport] = useState<{
     period: Period;
@@ -139,156 +176,124 @@ function TeamHome({
       });
     return () => controller.abort();
   }, [period]);
-  const shown = report?.period === period ? report.value : null;
-  const late = shown?.sellers.reduce((sum, seller) => sum + seller.late, 0);
-  const mineDue = desk ? desk.queue.length : 0;
+  return {
+    period,
+    setPeriod,
+    shown: report?.period === period ? report.value : null,
+    failed: failed === period,
+  };
+}
 
-  const salesBlock = (
-    <section className={styles.block} aria-labelledby="sales-title">
-      <div className={styles.head}>
-        <h2 id="sales-title">How sales are going</h2>
-      </div>
-      {/* Owner Home v3 (28 Oct 2026): B's tiles, the period as the one segmented
-          control; each tile opens its detail. */}
-      <OutcomeTiles
-        period={period}
-        onPeriod={setPeriod}
-        performance={shown}
-        failed={failed === period}
-      />
-      <div className={styles.chips}>
-        {mineDue ? (
-          <Link className={styles.chip} href="/leads">
-            <PhoneCall size={15} aria-hidden="true" />
-            {`${mineDue} for you to call today`}
-          </Link>
-        ) : null}
-      </div>
-    </section>
-  );
-  // Approved map, slice 8: what is waiting on someone, before who sold what.
-  const needs = <NeedsYou desk={desk} late={shown ? late : undefined} />;
+/** My day or Team: one tap, on Today's line. */
+function ViewChip({ to, onPick }: { to: HomeView; onPick: () => void }) {
   return (
-    <>
-      {/* Owner Home v3 (28 Oct 2026, B): the period's outcomes first, then
-          what needs you, then the team's day (Team v2's feed). */}
-      {salesBlock}
-      {needs}
-      {/* Owner Home v3, A: where the open leads wait, and what to do. */}
-      <StuckFunnel performance={shown} />
-      {layout === "v2" ? <TeamActivity saved={saved} /> : null}
-
-      <section className={styles.block} aria-labelledby="sellers-title">
-        <div className={styles.head}>
-          <h2 id="sellers-title">Sellers</h2>
-          <span className={styles.meta}>By what they won</span>
-        </div>
-        {shown ? (
-          shown.sellers.length ? (
-            <ol className={styles.list}>
-              {shown.sellers.map((seller) => (
-                <li key={seller.person_id}>
-                  <Link
-                    className={styles.row}
-                    href={`/organisation/people/${seller.person_id}`}
-                  >
-                    <Avatar name={seller.name} size={34} />
-                    <span className={styles.rowMain}>
-                      <strong>{seller.name}</strong>
-                      {/* Each number keeps its word; the line breaks only
-                          between them (polish pass, 24 Oct 2026). */}
-                      <small>
-                        {`${seller.won}\u00a0won · ${seller.interested}\u00a0interested · ${seller.calls}\u00a0${seller.calls === 1 ? "call" : "calls"}`}
-                      </small>
-                    </span>
-                    <span className={styles.rowEnd}>
-                      <span className={styles.rate}>
-                        {percent(seller.connected, seller.calls)}
-                        <small>connected</small>
-                      </span>
-                      {seller.late ? (
-                        <span
-                          className={styles.late}
-                        >{`${seller.late} late`}</span>
-                      ) : null}
-                    </span>
-                    <ChevronRight size={16} aria-hidden="true" />
-                  </Link>
-                </li>
-              ))}
-            </ol>
-          ) : (
-            <div className={styles.quiet}>
-              <span>Add sellers to see how each one does.</span>
-              {desk?.me.can_manage ? (
-                <Link className={styles.more} href="/organisation/invites">
-                  Invite sellers
-                </Link>
-              ) : null}
-            </div>
-          )
-        ) : (
-          <RowsSkeleton rows={3} kind="seller" />
-        )}
-        {/* Owner, 23 Oct 2026: team and organisation were "too hidden". */}
-        <ActionList label="Team">
-          <ActionRow
-            icon={<UsersRound size={20} />}
-            tone="neutral"
-            title="Organisation"
-            note="Team, analytics, insights and settings"
-            href="/organisation"
-          />
-        </ActionList>
-      </section>
-    </>
+    <button type="button" className={styles.viewShortcut} onClick={onPick}>
+      {to === "mine" ? "My day" : "Team"}
+      <ChevronRight size={16} aria-hidden="true" />
+    </button>
   );
 }
 
-function LeadLink({ row }: { row: LeadRow }) {
+function TeamHome({
+  desk,
+  saved,
+  allLeads,
+  works,
+  manages,
+  onMine,
+}: {
+  desk: HomeDesk | null;
+  /** The team's latest saved calls, for Recent calls' Reports. */
+  saved: readonly LibrarySubmission[] | null;
+  allLeads: number | null;
+  works: boolean;
+  manages: boolean;
+  onMine: () => void;
+}) {
+  const { period, setPeriod, shown, failed } = usePerformance();
+  const four = teamFour(shown, allLeads, desk?.counts.unassigned ?? null);
+  const late = shown?.sellers.reduce((sum, seller) => sum + seller.late, 0);
+  const sellers = shown?.sellers.length ?? 0;
   return (
-    <li>
-      <Link
-        className={styles.row}
-        href="/leads"
-        onClick={() => handOverLead(row.lead_id)}
-        data-late={row.overdue ? "" : undefined}
-      >
-        <Avatar name={row.name} size={34} />
-        <span className={styles.rowMain}>
-          <strong>{row.name}</strong>
-          <small>{whyLine(row)}</small>
-        </span>
-        {row.overdue ? <span className={styles.late}>Late</span> : null}
-        <ChevronRight size={16} aria-hidden="true" />
-      </Link>
-    </li>
+    <>
+      <TodayBar>
+        {works ? <ViewChip to="mine" onPick={onMine} /> : null}
+        {manages ? <TeamControls /> : null}
+      </TodayBar>
+      <FourTiles label="The team's day" tiles={four} />
+      {/* The screen's one primary action, while any follow-up is late. */}
+      {manages && late ? (
+        <Link className={styles.primary} href="/leads?tab=all&due=late">
+          {`Review ${late} late ${late === 1 ? "follow-up" : "follow-ups"}`}
+          <ArrowRight size={18} aria-hidden="true" />
+        </Link>
+      ) : null}
+      <section className={styles.block} aria-labelledby="sales-title">
+        <div className={styles.head}>
+          <h2 id="sales-title">How sales are going</h2>
+        </div>
+        <OutcomeTiles
+          period={period}
+          onPeriod={setPeriod}
+          performance={shown}
+          failed={failed}
+          tiles={TILE_SETS.slider}
+          layout="slider"
+        />
+      </section>
+      <RecentToggle
+        calls={<TeamActivity saved={saved} bare only="calls" />}
+        activity={<TeamActivity saved={saved} bare />}
+        seeAll={{ calls: "/analysis/calls" }}
+      />
+      {works ? <MyWork desk={desk} /> : null}
+      <ActionList label="More">
+        <ActionRow
+          icon={<UsersRound size={20} />}
+          tone="neutral"
+          title="Your team"
+          note={
+            sellers
+              ? `${sellers} ${sellers === 1 ? "seller" : "sellers"}, how each one does`
+              : "Sellers and how each one does"
+          }
+          href="/organisation?tab=team"
+        />
+        <ActionRow
+          icon={<FileText size={20} />}
+          tone="neutral"
+          title="Call reports"
+          note="Every analysed call"
+          href="/reports"
+        />
+      </ActionList>
+    </>
   );
 }
 
 function SellerHome({
   state,
-  before = null,
-  after = null,
+  recent,
+  onTeam,
 }: {
   state: ReturnType<typeof useDesk>;
-  /** Home v2 (27 Oct 2026): what goes above Today, and what replaces the
-   *  stage strip and Recently called below it. */
-  before?: ReactNode;
-  after?: ReactNode;
+  recent: readonly LibrarySubmission[] | null;
+  /** Owners and admins: back to the team's Home. */
+  onTeam?: () => void;
 }) {
   // Read beside the desk, so both land together (Lead OS's team engine).
   const myDay = useMyDay();
-  const [now] = useState(() => Date.now());
+  const tasks = useTasksToday();
+  const [week] = useWeekActivity();
   const [sharing, setSharing] = useState(false);
   if (state.status === "loading" || myDay.status === "loading")
     return <TodaySkeleton />;
   if (state.status === "error")
     return (
       <section className={styles.block}>
-        <div className={styles.head}>
-          <h2>Today</h2>
-        </div>
+        <TodayBar>
+          {onTeam ? <ViewChip to="team" onPick={onTeam} /> : null}
+        </TodayBar>
         <div className={styles.quiet} role="status">
           <span>Your leads didn&apos;t load. Come back in a moment.</span>
           <Link className={styles.more} href="/leads">
@@ -298,121 +303,71 @@ function SellerHome({
       </section>
     );
   const desk: HomeDesk = state.desk;
-  const sections = deskSections(desk.queue);
-  const count = (key: string) =>
-    sections.find((section) => section.key === key)?.rows.length ?? 0;
   // My day's ranked work with why; the desk's queue if My day didn't load.
   const ranked = myDay.status === "ready" ? myDay.value.do_now : null;
   const first = ranked
     ? ranked[0] && { id: ranked[0].lead_id, name: ranked[0].lead_name }
     : desk.queue[0] && { id: desk.queue[0].lead_id, name: desk.queue[0].name };
-  const fallback = myDay.status === "ready" ? myDay.value.fallback : null;
-  const later = desk.upcoming?.[0];
   const mineNone = !desk.queue.length && !desk.counts.open;
+  const nextUp =
+    myDay.status === "ready" ? myDay.value.fallback?.next_up : null;
   return (
     <>
-      {/* Taking new leads, or not, in plain sight with one tap to change
-          (owner, 25 Oct 2026: "it isn't clear whether I'm taking leads"). */}
-      <section className={styles.taking} aria-label="New leads">
+      <TodayBar>
+        {/* Taking new leads, as a small pill (Dipak, 28 Oct 2026). */}
         <TakingSwitch
           key={`taking-${desk.me.taking_leads !== false}`}
           initial={desk.me.taking_leads !== false}
-          place="row"
+          place="chip"
           pausedUntil={desk.me.paused_until ?? null}
         />
-      </section>
-      {before}
-      <section className={styles.block} aria-labelledby="today-title">
-        <div className={styles.head}>
-          <h2 id="today-title">Today</h2>
-          {/* A clear button, not a quiet label (orchestrator for the owner,
-              27 Oct 2026): everyone due, on Leads. */}
-          <Link className={styles.headAction} href="/leads">
-            <UsersRound size={16} aria-hidden="true" />
-            Who to call
-            <ChevronRight size={16} aria-hidden="true" />
-          </Link>
-        </div>
-        {/* The day at a glance, each tile one tap into its Leads (owner,
-            #18, 26 Oct 2026: Home was the same as Leads). */}
-        <DayTiles
-          counts={{
-            overdue: count("overdue"),
-            dueToday: count("now") + count("later"),
-            fresh: desk.counts.new,
-            calls: desk.numbers.calls,
-          }}
-        />
-        {first ? (
-          <>
-            <ol className={styles.list}>
-              {ranked
-                ? ranked
-                    .slice(0, 2)
-                    .map((item) => (
-                      <DoNowRow key={item.lead_id} item={item} now={now} />
-                    ))
-                : desk.queue
-                    .slice(0, 2)
-                    .map((row) => <LeadLink key={row.lead_id} row={row} />)}
-            </ol>
-            <Link
-              className={styles.primary}
-              href="/leads"
-              onClick={() => handOverLead(first.id, true)}
-            >
-              <PhoneCall size={18} aria-hidden="true" />
-              {`Call ${displayName(first.name).split(" ")[0]}`}
-            </Link>
-            {desk.queue.length > 2 ? (
-              <Link className={styles.more} href="/leads">
-                {`See all ${desk.queue.length} for today`}
-              </Link>
-            ) : null}
-          </>
-        ) : mineNone && desk.team_pool?.open ? (
-          <>
-            <TeamPoolCard desk={desk} onShare={() => setSharing(true)} />
-            {desk.me.can_manage ? (
-              <ShareOut
-                open={sharing}
-                target={{
-                  kind: "unassigned",
-                  count: desk.team_pool?.unassigned ?? 0,
-                }}
-                onClose={() => setSharing(false)}
-                onDone={() => setSharing(false)}
-              />
-            ) : null}
-          </>
-        ) : (
-          <>
-            <div className={styles.caughtUp}>
-              <strong>All caught up</strong>
-              <span>
-                {fallback?.next_up.length
-                  ? "Nothing is due now. Next up:"
-                  : later?.next_action_at
-                    ? `Next call ${when(later.next_action_at)}: ${displayName(later.name)}.`
-                    : "New leads land on Leads the moment they come in."}
-              </span>
-              {fallback?.next_up.length ? null : (
-                <Link className={styles.more} href="/leads">
-                  Open Leads
-                </Link>
-              )}
-            </div>
-            {fallback ? <NextUp items={fallback.next_up} /> : null}
-          </>
-        )}
-      </section>
-      <DayNumbers desk={desk} myDay={myDay} />
-      {after ?? (
+        {onTeam ? <ViewChip to="team" onPick={onTeam} /> : null}
+      </TodayBar>
+      <FourTiles label="Your day" tiles={mineFour(desk, tasks)} />
+      {first ? (
+        <Link
+          className={styles.primary}
+          href="/leads"
+          onClick={() => handOverLead(first.id, true)}
+        >
+          <PhoneCall size={18} aria-hidden="true" />
+          {`Call ${displayName(first.name).split(" ")[0]}`}
+        </Link>
+      ) : mineNone && desk.team_pool?.open ? (
         <>
-          <MyStages />
-          <RecentlyCalled />
+          <TeamPoolCard desk={desk} onShare={() => setSharing(true)} />
+          {desk.me.can_manage ? (
+            <ShareOut
+              open={sharing}
+              target={{
+                kind: "unassigned",
+                count: desk.team_pool?.unassigned ?? 0,
+              }}
+              onClose={() => setSharing(false)}
+              onDone={() => setSharing(false)}
+            />
+          ) : null}
+        </>
+      ) : (
+        <>
+          <p className={styles.caughtUp} role="status">
+            <strong>All caught up</strong>
+            <span>
+              {nextUp?.length
+                ? "Nothing is due now. Next up:"
+                : "New leads land on Leads the moment they come in."}
+            </span>
+          </p>
+          {nextUp?.length ? <NextUp items={nextUp} /> : null}
         </>
       )}
+      <YourTargets myDay={myDay} />
+      <RecentToggle
+        calls={<HomeRecentCalls week={week} saved={recent} bare />}
+        activity={<HomeActivity week={week} bare />}
+        seeAll={{ calls: "/analysis/calls", activity: "/leads?tab=work" }}
+      />
+      <MyWork desk={desk} />
     </>
   );
 }
@@ -456,26 +411,6 @@ function useHomeView(): [HomeView, (next: HomeView) => void] {
   return [view, choose];
 }
 
-/** All the organisation's leads, for an owner or admin; null until read, and
- *  still null if the read fails (Home then stays as it is). */
-function useTeamLeadCount(enabled: boolean): number | null {
-  const [total, setTotal] = useState<number | null>(null);
-  useEffect(() => {
-    if (!enabled) return;
-    const controller = new AbortController();
-    readTeam(controller.signal).then(
-      (team) =>
-        setTotal(
-          Object.values(team.by_stage).reduce((sum, n) => sum + n, 0) +
-            (team.unassigned ?? 0),
-        ),
-      () => undefined,
-    );
-    return () => controller.abort();
-  }, [enabled]);
-  return total;
-}
-
 /** Nothing here yet: no leads (none waiting in the team either), nothing
  *  coming up, no calls, not the sandbox. */
 function brandNew(desk: HomeDesk): boolean {
@@ -490,41 +425,17 @@ function brandNew(desk: HomeDesk): boolean {
   );
 }
 
-/** Today and its next action first; recent work follows the day's numbers. */
-function SellerHomeV2({
-  state,
-  recent,
-}: {
-  state: ReturnType<typeof useDesk>;
-  recent: readonly LibrarySubmission[] | null;
-}) {
-  const [week] = useWeekActivity();
-  return (
-    <SellerHome
-      state={state}
-      after={
-        <>
-          <PickUp />
-          <HomeRecentCalls week={week} saved={recent} />
-          <HomeActivity week={week} />
-        </>
-      }
-    />
-  );
-}
-
 export function SalesHome({
   manager,
   layout = "v1",
-  team = "v1",
   recent = null,
 }: {
   manager: boolean;
-  /** "v2": the Team view redesign, on review fixtures until signed off. */
+  /** Kept for callers; Home has one layout now (28 Oct 2026). */
   team?: "v1" | "v2";
-  /** "v2": the Home redesign (27 Oct 2026), on review fixtures until signed off. */
+  /** "v2": a new workspace starts with steps and the sample report. */
   layout?: "v1" | "v2";
-  /** The latest saved calls the dashboard already read, for v2's Recent calls. */
+  /** The latest saved calls the dashboard already read, for Recent calls. */
   recent?: readonly LibrarySubmission[] | null;
 }) {
   const desk = useDesk();
@@ -553,35 +464,21 @@ export function SalesHome({
     );
   return (
     <div className={styles.home}>
-      {manager && (works || manages) ? (
-        <div className={styles.homeBar}>
-          {/* Owner Home v3 (28 Oct 2026): one tap to your own calls and back;
-              the period keeps the screen's one segmented control. */}
-          {works ? (
-            <button
-              type="button"
-              className={styles.viewShortcut}
-              onClick={() => setView(view === "team" ? "mine" : "team")}
-            >
-              {view === "team" ? "My day" : "Team"}
-              <ChevronRight size={16} aria-hidden="true" />
-            </button>
-          ) : null}
-          {/* Owner Home v3 (28 Oct 2026, #52): targets, nudges and the lead
-              rules behind one labelled gear, not in the scroll. */}
-          {manages && (view === "team" || !works) ? <TeamControls /> : null}
-        </div>
-      ) : null}
       {manager && (view === "team" || !works) ? (
         <TeamHome
           desk={desk.status === "ready" ? desk.desk : null}
-          layout={team}
           saved={recent}
+          allLeads={teamLeads}
+          works={works}
+          manages={manages}
+          onMine={() => setView("mine")}
         />
-      ) : layout === "v2" ? (
-        <SellerHomeV2 state={desk} recent={recent} />
       ) : (
-        <SellerHome state={desk} />
+        <SellerHome
+          state={desk}
+          recent={recent}
+          onTeam={manager ? () => setView("team") : undefined}
+        />
       )}
     </div>
   );
