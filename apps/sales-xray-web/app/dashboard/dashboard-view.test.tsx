@@ -335,7 +335,9 @@ it("never paints Not loaded for reads cancelled by a re-run of the page effect",
   expect(host.querySelector("h2#first-run-title")).not.toBeNull();
 });
 
-it("says which figures are the owner's own and which are the team's", async () => {
+// Owner, 28 Oct 2026 (#71, #72): no call-analysis figures under an
+// organisation's Home; Calls and Reports hold them.
+it("keeps call-analysis figures off an organisation's Home", async () => {
   routeReads({
     "/submissions/summary": () =>
       Response.json({
@@ -378,15 +380,10 @@ it("says which figures are the owner's own and which are the team's", async () =
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  // /activity is the viewer's own; /submissions/summary is everyone's.
-  expect(host.querySelector("#metric-analysed dt")?.textContent).toBe(
-    "Your calls analysed",
-  );
-  expect(host.querySelector("#metric-reports-ready")?.textContent).toContain(
-    "of 9 team calls",
-  );
-  expect(host.textContent).toContain("Your calls analysed per day");
-  expect(host.textContent).toContain("Everyone in the organisation");
+  expect(host.querySelector("#metric-analysed")).toBeNull();
+  expect(host.querySelector("#metric-reports-ready")).toBeNull();
+  expect(host.textContent).not.toContain("Your calls analysed per day");
+  expect(host.textContent).not.toContain("Everyone in the organisation");
 });
 
 it("shows a rename made elsewhere in Recent calls at once", async () => {

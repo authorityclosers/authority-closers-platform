@@ -240,6 +240,30 @@ function Figures({
  * numbers (beside yesterday's) when there are any; else this week beside last
  * week; else nothing (a new account has the start card above instead).
  */
+/** The seller's targets with progress, or nothing when none are set. */
+export function YourTargets({ myDay }: { myDay: MyDayState }) {
+  const day = myDay.status === "ready" ? myDay.value : null;
+  if (!day?.progress.length) return null;
+  return (
+    <section className={styles.numbers} aria-label="Your targets">
+      <h3 className={styles.numbersTitle}>Your targets</h3>
+      <ul className={styles.targets}>
+        {[...day.progress]
+          .sort((a, b) =>
+            a.period === b.period
+              ? ORDER.indexOf(a.metric) - ORDER.indexOf(b.metric)
+              : a.period === "day"
+                ? -1
+                : 1,
+          )
+          .map((line) => (
+            <Target key={`${line.metric}-${line.period}`} line={line} />
+          ))}
+      </ul>
+    </section>
+  );
+}
+
 export function DayNumbers({
   desk,
   myDay,

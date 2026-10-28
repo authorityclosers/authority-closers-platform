@@ -81,7 +81,7 @@ function queue(now: number) {
     source: "meta",
     source_label: "Facebook ad",
     owner_person_id: SELLER,
-    owner_name: "asha fictional",
+    owner_name: "nisha example",
     why:
       why === "due"
         ? "Call back now"
@@ -352,7 +352,7 @@ function weekWork(now: number) {
       event: {
         kind,
         at: new Date(now - ago * MINUTE).toISOString(),
-        actor_name: "Asha Fictional",
+        actor_name: "Nisha Example",
         stage: null,
         stage_label: null,
         reason: null,
@@ -382,7 +382,7 @@ const TEAM_WORK: Work[] = [
     "asha fictional",
     9,
     {
-      actor_name: "Asha Fictional",
+      actor_name: "Nisha Example",
       duration_seconds: 214,
       direction: "outgoing",
       via: "phone",
@@ -403,7 +403,7 @@ const TEAM_WORK: Work[] = [
     "meera fictional",
     44,
     {
-      actor_name: "Asha Fictional",
+      actor_name: "Nisha Example",
       stage_label: "Site visit booked",
       from_label: "Interested",
     },
@@ -466,6 +466,9 @@ function answers(now: number, path: string, mode: Mode): unknown {
   const team = teamAnswers(path);
   if (team !== null) return team;
   if (path === "/v1/lead-desk/my-day") return myDay(now, mode);
+  // Today's tasks: two due, one past its time (owner Home, 28 Oct 2026).
+  if (path.startsWith("/v1/lead-desk/tasks?view=today"))
+    return { tasks: [], counts: { today: 2, overdue: 1 } };
   if (path.startsWith("/v1/lead-desk/activity?") && path.includes("team=1"))
     return teamWork(now);
   if (path.startsWith("/v1/lead-desk/activity?"))
@@ -476,7 +479,7 @@ function answers(now: number, path: string, mode: Mode): unknown {
     return {
       me: {
         person_id: SELLER,
-        name: "asha fictional",
+        name: "nisha example",
         role: "member",
         // An owner's own desk manages the team (Share out leads on My day).
         can_manage:
@@ -584,7 +587,7 @@ function answers(now: number, path: string, mode: Mode): unknown {
         first_call_minutes: 11,
       },
       sellers: [
-        [SELLER, "asha fictional", 31, 15, 5, 2, 38, 1],
+        [SELLER, "nisha example", 31, 15, 5, 2, 38, 1],
         [SECOND, "RAHUL EXAMPLE", 22, 9, 3, 1, 26, 3],
         [THIRD, "priya sample", 11, 5, 1, 0, 12, 0],
       ].map(
@@ -638,7 +641,7 @@ function answers(now: number, path: string, mode: Mode): unknown {
         {
           leadId: "00000000-0000-4000-8000-000000000302",
           leadName: "karan example",
-          seller: "asha fictional",
+          seller: "nisha example",
           minutesLate: 14,
         },
       ],
@@ -765,7 +768,7 @@ function savedCalls(now: number): LibrarySubmission[] {
       state: "completed",
       hasReport: true,
       label: { displayName: "Site visit · Priya Sample", revision: 1 },
-      owner: { personId: SELLER, name: "Asha Fictional" },
+      owner: { personId: SELLER, name: "Nisha Example" },
     },
     {
       id: "00000000-0000-4000-8000-000000000501",

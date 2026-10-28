@@ -379,6 +379,8 @@ export const TILE_SETS = {
   outcomes: ["won", "interested", "new_leads", "connected"],
   /** Operations first (Dipak's brief): not shown until chosen. */
   operations: ["new_leads", "untouched", "first_call", "calls", "late"],
+  /** Home's second figures, in the sideways slider (owner, 28 Oct 2026). */
+  slider: ["won", "interested", "connected", "calls", "new_leads"],
 } as const satisfies Record<string, readonly TileKey[]>;
 
 const ringOf = ([part, whole]: [number, number]) => ({ part, whole });
@@ -393,6 +395,7 @@ export function OutcomeTiles({
   performance,
   failed,
   tiles = TILE_SETS.outcomes,
+  layout = "grid",
 }: {
   period: Period;
   onPeriod: (next: Period) => void;
@@ -400,6 +403,8 @@ export function OutcomeTiles({
   failed: boolean;
   /** Which tiles, in order (TILE_SETS). */
   tiles?: readonly TileKey[];
+  /** "slider": one sideways row of small cards, no note lines (Home, #71). */
+  layout?: "grid" | "slider";
 }) {
   const [open, setOpen] = useState<TileKey | null>(null);
   const data: TileData | null =
@@ -424,7 +429,10 @@ export function OutcomeTiles({
         items={PERIODS}
       />
       {data ? (
-        <div className={styles.tiles}>
+        <div
+          className={layout === "slider" ? styles.slider : styles.tiles}
+          data-layout={layout}
+        >
           {tiles.map((key) => {
             const tile: TileSpec = TILES[key];
             return (
@@ -462,7 +470,9 @@ export function OutcomeTiles({
                     label={tile.label}
                   />
                 ) : null}
-                <span className={styles.note}>{tile.note(data)}</span>
+                {layout === "slider" ? null : (
+                  <span className={styles.note}>{tile.note(data)}</span>
+                )}
               </button>
             );
           })}

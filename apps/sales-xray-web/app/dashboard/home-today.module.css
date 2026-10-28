@@ -1,0 +1,220 @@
+/* Home's calm layout (owner, 28 Oct 2026 meeting; bugs #70–#72): few words,
+   one rhythm of cards, numbers you read at a glance. */
+
+/* ---------- Today's header line ---------- */
+.bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+}
+
+.bar h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-headline);
+  letter-spacing: -0.01em;
+}
+
+.barEnd {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---------- The top four ---------- */
+.four {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 900px) {
+  .four {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.tile {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  min-height: 96px;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  text-decoration: none;
+  transition: transform 150ms var(--sx-ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tile:active {
+  transform: scale(var(--sx-press-scale, 0.98));
+}
+
+.tile:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* Red until its rule is met: the number, the rule and the card say so. */
+.tile[data-red] {
+  border-color: color-mix(in oklab, var(--sx-bad) 55%, var(--sx-line));
+  box-shadow: inset 3px 0 0 var(--sx-bad);
+}
+
+.label {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.value {
+  color: var(--sx-ink);
+  font: var(--sx-text-kpi);
+  font-size: 30px;
+  font-variant-numeric: tabular-nums;
+}
+
+.tile[data-red] .value,
+.tile[data-red] .rule {
+  color: var(--sx-bad);
+}
+
+.rule {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* Loading: the same boxes, quietly. */
+.tile[aria-busy] .value,
+.tile[aria-busy] .rule {
+  width: 56%;
+  border-radius: 6px;
+  background: var(--sx-fill-soft);
+}
+
+.tile[aria-busy] .rule {
+  width: 40%;
+}
+
+/* ---------- Recent calls, with Activity beside them ---------- */
+.recent {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.recentHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.recentHead > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.more {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.recentBody {
+  min-width: 0;
+}
+
+/* ---------- My work ---------- */
+.work {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.workHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workHead h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.workHead > :last-child:not(h2) {
+  flex: 0 1 180px;
+}
+
+.figures {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 10px;
+  margin: 0;
+}
+
+@media (min-width: 900px) {
+  .figures {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+.figures > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.figures dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.figures dd {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: 22px;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+.figures > div[aria-busy] dd {
+  width: 50%;
+  border-radius: 6px;
+  background: var(--sx-fill-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tile {
+    transition: none;
+  }
+
+  .tile:active {
+    transform: none;
+  }
+}
