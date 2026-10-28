@@ -28,7 +28,7 @@ import { useEffect, useState } from "react";
 
 import { callHref, type LibrarySubmission } from "../acquisition-client";
 import { callTitle } from "../call-label";
-import { shortWhen, useGo } from "../calls/call-rows";
+import { useGo } from "../calls/call-rows";
 import { CallRowsSkeleton } from "../calls/phone-calls";
 import { displayName } from "../display-name";
 import { eventText } from "../leads/lead-sheet";
@@ -40,10 +40,13 @@ import {
   type ActivityPage,
 } from "../leads/leads-client";
 import { Avatar } from "../ui/kit";
+import { Sheet } from "../ui/sheet";
 import styles from "./home-v2.module.css";
 import homeStyles from "./sales-home.module.css";
+import timeline from "./team-activity.module.css";
 
-export const TEAM_ROWS = 6;
+/** Home's short preview; the rest is one tap away (All activity). */
+export const TEAM_ROWS = 5;
 
 /** Today's work by everyone in the workspace (owners and admins). */
 export function readTeamActivity(signal?: AbortSignal) {
@@ -55,7 +58,7 @@ export type TeamRow = {
   at: string;
   /** The line's subject, for the avatar; null when nobody did it (a lead came in). */
   actor: string | null;
-  /** Who did what, subject first: "Swamini called Asha Fictional · 3:34". */
+  /** Who did what, subject first: "Meera called Asha Fictional · 3:34". */
   title: string;
   /** A little more: the stage, the source, who gave it. */
   line: string;
@@ -228,15 +231,105 @@ type Work =
   | { status: "ready"; items: ActivityItem[] }
   | { status: "off" };
 
+/** "10 am": the hour a group of lines happened in, this phone's time. */
+const hourWords = (at: Date) => {
+  const hour = at.getHours() % 12 || 12;
+  return `${hour}\u00a0${at.getHours() < 12 ? "am" : "pm"}`;
+};
+
+/** "10:42": a line's time of day; its hour heads the group. */
+const timeOfDay = (at: Date) =>
+  `${at.getHours() % 12 || 12}:${String(at.getMinutes()).padStart(2, "0")}`;
+
+export type HourGroup = { key: string; hour: string; rows: TeamRow[] };
+
+/** Lines grouped by the hour they happened in, newest first (owner Home v3, C). */
+export function byHour(rows: readonly TeamRow[]): HourGroup[] {
+  const groups: HourGroup[] = [];
+  for (const row of rows) {
+    const at = new Date(row.at);
+    const key = `${at.toDateString()}-${at.getHours()}`;
+    const last = groups[groups.length - 1];
+    if (last?.key === key) last.rows.push(row);
+    else groups.push({ key, hour: hourWords(at), rows: [row] });
+  }
+  return groups;
+}
+
+/** The team's lines as a timeline: an hour, then who did what in it. */
+function Timeline({
+  rows,
+  label,
+}: {
+  rows: readonly TeamRow[];
+  label: string;
+}) {
+  const go = useGo();
+  return (
+    <ol className={timeline.hours} aria-label={label}>
+      {byHour(rows).map((group) => (
+        <li key={group.key} className={timeline.hour}>
+          <span className={timeline.hourLabel}>{group.hour}</span>
+          <ol className={timeline.lines}>
+            {group.rows.map((row) => {
+              const Icon = ICONS[row.kind] ?? Clock;
+              const leadId = row.leadId;
+              return (
+                <li key={row.key}>
+                  <Link
+                    className={styles.activityRow}
+                    href={row.report ? callHref(row.report) : "/leads"}
+                    data-sx-action={row.report ? "report_open" : "lead_open"}
+                    onClick={(click) => {
+                      if (row.report || !leadId) return;
+                      click.preventDefault();
+                      handOverLead(leadId, false, row.at);
+                      go("/leads");
+                    }}
+                  >
+                    {/* The face is the sentence's subject; nobody's (a lead
+                        came in) is the kind's mark alone. */}
+                    {row.actor ? (
+                      <span className={styles.who} aria-hidden="true">
+                        <Avatar name={row.actor} size={32} />
+                        <span className={styles.badge} data-kind={row.kind}>
+                          <Icon size={11} />
+                        </span>
+                      </span>
+                    ) : (
+                      <span
+                        className={styles.dot}
+                        data-kind={row.kind}
+                        aria-hidden="true"
+                      >
+                        <Icon size={15} />
+                      </span>
+                    )}
+                    <span className={styles.words} data-sentence="">
+                      <strong>{row.title}</strong>
+                      {row.line ? <span>{row.line}</span> : null}
+                    </span>
+                    <time dateTime={row.at}>{timeOfDay(new Date(row.at))}</time>
+                  </Link>
+                </li>
+              );
+            })}
+          </ol>
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 export function TeamActivity({
   saved,
 }: {
   /** The latest saved calls Home already reads (the team's, for owners). */
   saved: readonly LibrarySubmission[] | null;
 }) {
-  const go = useGo();
   const [work, setWork] = useState<Work>({ status: "loading" });
   const [now] = useState(() => new Date());
+  const [all, setAll] = useState(false);
   useEffect(() => {
     const controller = new AbortController();
     readTeamActivity(controller.signal).then(
@@ -255,73 +348,60 @@ export function TeamActivity({
     return () => controller.abort();
   }, []);
   if (work.status === "off") return null;
-  const rows =
-    work.status === "ready"
-      ? teamRows(work.items, saved ?? [], now).slice(0, TEAM_ROWS)
-      : [];
+  const every =
+    work.status === "ready" ? teamRows(work.items, saved ?? [], now) : [];
   return (
     <section className={homeStyles.block} aria-labelledby="team-activity-title">
       <div className={homeStyles.head}>
         <h2 id="team-activity-title">Team today</h2>
-        <Link className={styles.more} href="/organisation?tab=team">
-          Team
-          <ChevronRight size={16} aria-hidden="true" />
-        </Link>
+        {every.length > TEAM_ROWS ? (
+          <button
+            type="button"
+            className={`${styles.more} ${timeline.all}`}
+            aria-haspopup="dialog"
+            onClick={() => setAll(true)}
+          >
+            All activity
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+        ) : (
+          <Link className={styles.more} href="/organisation?tab=team">
+            Team
+            <ChevronRight size={16} aria-hidden="true" />
+          </Link>
+        )}
       </div>
       {work.status === "loading" ? (
         <CallRowsSkeleton label="Team today" rows={4} />
-      ) : rows.length === 0 ? (
+      ) : every.length === 0 ? (
         <p className={homeStyles.quiet}>
-          Nothing yet today. Calls, reports and lead moves show here as they
-          happen.
+          Nothing yet today. Calls, notes, reports and lead moves show here as
+          they happen.
         </p>
       ) : (
-        <ol className={styles.activity} aria-label="Team today, newest first">
-          {rows.map((row) => {
-            const Icon = ICONS[row.kind] ?? Clock;
-            const leadId = row.leadId;
-            return (
-              <li key={row.key}>
-                <Link
-                  className={styles.activityRow}
-                  href={row.report ? callHref(row.report) : "/leads"}
-                  data-sx-action={row.report ? "report_open" : "lead_open"}
-                  onClick={(click) => {
-                    if (row.report || !leadId) return;
-                    click.preventDefault();
-                    handOverLead(leadId, false, row.at);
-                    go("/leads");
-                  }}
-                >
-                  {/* The face is the sentence's subject; nobody's (a lead
-                      came in) is the kind's mark alone. */}
-                  {row.actor ? (
-                    <span className={styles.who} aria-hidden="true">
-                      <Avatar name={row.actor} size={32} />
-                      <span className={styles.badge} data-kind={row.kind}>
-                        <Icon size={11} />
-                      </span>
-                    </span>
-                  ) : (
-                    <span
-                      className={styles.dot}
-                      data-kind={row.kind}
-                      aria-hidden="true"
-                    >
-                      <Icon size={15} />
-                    </span>
-                  )}
-                  <span className={styles.words} data-sentence="">
-                    <strong>{row.title}</strong>
-                    {row.line ? <span>{row.line}</span> : null}
-                  </span>
-                  <time dateTime={row.at}>{shortWhen(row.at, now)}</time>
-                </Link>
-              </li>
-            );
-          })}
-        </ol>
+        <div className={timeline.card}>
+          <Timeline
+            rows={every.slice(0, TEAM_ROWS)}
+            label="Team today, newest first"
+          />
+        </div>
       )}
+      <Sheet
+        open={all}
+        onClose={() => setAll(false)}
+        title="Team today"
+        description={`${every.length} things so far today, newest first`}
+        footer={
+          <Link className={timeline.sheetLink} href="/organisation?tab=team">
+            Open the team
+            <ChevronRight size={16} aria-hidden="true" />
+          </Link>
+        }
+      >
+        {all ? (
+          <Timeline rows={every} label="All of today, newest first" />
+        ) : null}
+      </Sheet>
     </section>
   );
 }

@@ -24,10 +24,13 @@ import type { LibrarySubmission } from "../acquisition-client";
 import { takeHandedLead } from "../leads/lead-handoff";
 import type { ActivityItem, LeadEvent } from "../leads/leads-client";
 import {
+  byHour,
   rowFromReport,
+  TEAM_ROWS,
   TeamActivity,
   teamRows,
   teamSentence,
+  type TeamRow,
 } from "./team-activity";
 
 (
@@ -57,7 +60,7 @@ const saved = (extra: Partial<LibrarySubmission> = {}): LibrarySubmission => ({
   state: "completed",
   hasReport: true,
   label: { displayName: "Site visit", revision: 1 },
-  owner: { personId: "p1", name: "swamini fictional" },
+  owner: { personId: "p1", name: "meera example" },
   ...extra,
 });
 
@@ -76,7 +79,7 @@ beforeEach(() => {
     body: {
       items: [
         work("e1", "asha fictional", {
-          actor_name: "Swamini Fictional",
+          actor_name: "Meera Example",
           duration_seconds: 214,
           direction: "outgoing",
           via: "phone",
@@ -114,8 +117,8 @@ afterEach(() => {
 it("says a ready Report is whose call", () => {
   expect(rowFromReport(saved())).toMatchObject({
     title: "Report ready: Site visit",
-    line: "Swamini Fictional's call",
-    actor: "swamini fictional",
+    line: "Meera Example's call",
+    actor: "meera example",
   });
   expect(rowFromReport(saved({ owner: undefined })).line).toBe("");
 });
@@ -125,18 +128,18 @@ it("puts who did it first, so nobody reads the lead as the doer", () => {
     teamSentence(work("e", "asha fictional", event));
   expect(
     said({
-      actor_name: "Swamini Fictional",
+      actor_name: "Meera Example",
       duration_seconds: 214,
       direction: "outgoing",
       via: "phone",
     }),
   ).toMatchObject({
-    subject: "Swamini Fictional",
-    title: "Swamini called Asha Fictional · 3:34",
+    subject: "Meera Example",
+    title: "Meera called Asha Fictional · 3:34",
   });
-  expect(
-    said({ actor_name: "Swamini Fictional", direction: "missed" }).title,
-  ).toBe("Swamini missed a call from Asha Fictional");
+  expect(said({ actor_name: "Meera Example", direction: "missed" }).title).toBe(
+    "Meera missed a call from Asha Fictional",
+  );
   expect(
     said({ kind: "assigned", actor_name: null, owner_name: "Rahul Example" }),
   ).toMatchObject({
@@ -147,10 +150,10 @@ it("puts who did it first, so nobody reads the lead as the doer", () => {
   expect(
     said({
       kind: "stage",
-      actor_name: "Swamini Fictional",
+      actor_name: "Meera Example",
       stage_label: "Site visit booked",
     }).title,
-  ).toBe("Swamini moved Asha Fictional to Site visit booked");
+  ).toBe("Meera moved Asha Fictional to Site visit booked");
   expect(
     said({ kind: "captured", actor_name: null, source_label: "Website form" }),
   ).toMatchObject({
@@ -192,7 +195,7 @@ it("lists who did what today and opens the lead or the Report", async () => {
     ...container.querySelectorAll<HTMLAnchorElement>("a[data-sx-action]"),
   ];
   expect(rows).toHaveLength(3);
-  expect(rows[0].textContent).toContain("Swamini called Asha Fictional · 3:34");
+  expect(rows[0].textContent).toContain("Meera called Asha Fictional · 3:34");
   expect(rows[1].textContent).toContain("Rahul got Neha Fictional");
   expect(rows[2].textContent).toContain("Report ready: Site visit");
   expect(rows[2].getAttribute("href")).toBe(`/analysis/calls/${REPORT}`);
@@ -208,4 +211,65 @@ it("stays out of the way for a role that can't see the team", async () => {
   };
   await act(async () => root.render(<TeamActivity saved={null} />));
   expect(container.textContent).toBe("");
+});
+
+// Owner Home v3 (28 Oct 2026, C): the day as hours, who did what in each.
+it("groups the lines by the hour they happened in, newest first", () => {
+  const at = (hours: number, minutes: number) =>
+    new Date(2026, 9, 28, hours, minutes).toISOString();
+  const line = (key: string, when: string): TeamRow => ({
+    key,
+    at: when,
+    actor: "Meera Example",
+    title: "Meera called Asha Fictional",
+    line: "",
+    kind: "call",
+    report: null,
+    leadId: null,
+  });
+  const groups = byHour([
+    line("a", at(10, 42)),
+    line("b", at(10, 28)),
+    line("c", at(9, 54)),
+    line("d", at(14, 5)),
+  ]);
+  expect(groups.map((group) => group.hour)).toEqual(["10 am", "9 am", "2 pm"]);
+  expect(groups[0].rows.map((row) => row.key)).toEqual(["a", "b"]);
+});
+
+it("shows a short preview by the hour, and all of today one tap away", async () => {
+  answer.body = {
+    items: Array.from({ length: TEAM_ROWS + 3 }, (_, index) =>
+      work(`n${index}`, "asha fictional", {
+        kind: "note",
+        actor_name: "Meera Example",
+        note: "Wants the brochure",
+        at: minutesAgo(5 + index * 7),
+      }),
+    ),
+    next_before: null,
+    counts: {},
+  };
+  await act(async () => root.render(<TeamActivity saved={null} />));
+  const preview = container.querySelector(
+    'ol[aria-label="Team today, newest first"]',
+  );
+  expect(preview?.querySelectorAll("a[data-sx-action]")).toHaveLength(
+    TEAM_ROWS,
+  );
+  // Each line says who wrote the note, and when in its hour.
+  expect(preview?.textContent).toContain("Meera");
+  expect(preview?.querySelector("time")?.textContent).toMatch(
+    /^\d{1,2}:\d{2}$/,
+  );
+  const all = Array.from(container.querySelectorAll("button")).find((button) =>
+    button.textContent?.includes("All activity"),
+  );
+  expect(all).toBeDefined();
+  await act(async () => all?.click());
+  const sheet = document.querySelector("dialog[open]");
+  expect(sheet?.querySelectorAll("a[data-sx-action]")).toHaveLength(
+    TEAM_ROWS + 3,
+  );
+  expect(sheet?.textContent).toContain("8 things so far today");
 });

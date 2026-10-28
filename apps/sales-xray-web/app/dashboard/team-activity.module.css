@@ -1,0 +1,91 @@
+/* Team today as a timeline (owner Home v3, 28 Oct 2026: C's hourly,
+   actor-first lines). The rows keep home-v2.module.css's activity row. */
+.card {
+  padding: 6px 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.hours {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+/* The hour, on the line that joins the day. */
+.hour {
+  position: relative;
+  display: grid;
+  padding-left: 18px;
+}
+
+.hour::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 18px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--sx-line);
+  content: "";
+}
+
+.hour:first-child::before {
+  top: 14px;
+}
+
+.hour:last-child::before {
+  bottom: 14px;
+}
+
+.hourLabel {
+  position: relative;
+  padding: 8px 0 2px 16px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+.hourLabel::before {
+  position: absolute;
+  top: 12px;
+  left: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sx-accent);
+  content: "";
+}
+
+.lines {
+  display: grid;
+  margin: 0;
+  padding: 0 0 0 4px;
+  list-style: none;
+}
+
+.lines > li > a {
+  padding-left: 12px;
+}
+
+.all {
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sheetLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 48px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  color: var(--sx-ink);
+  font-weight: 650;
+  text-decoration: none;
+}
