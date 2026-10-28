@@ -1,0 +1,91 @@
+#!/usr/bin/env python3
+# ruff: noqa: S603, S607 -- reviewed argv, fixed utilities, no shell interpolation
+"""Run a production CLI on AWS through SSH, or open a loopback-only DB tunnel.
+
+No installation/mutation by default. Use --execute after reviewing the argv.
+The wrapper does not pretend a DB port redirects Docker-exec consumers.
+"""
+
+import argparse
+import json
+import subprocess
+import sys
+
+
+def argv(args):
+    base = [
+        "ssh",
+        "-T",
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "ExitOnForwardFailure=yes",
+        "-o",
+        "ServerAliveInterval=15",
+        "-o",
+        "ServerAliveCountMax=3",
+        "-i",
+        args.identity,
+    ]
+    if args.mode == "tunnel":
+        if not 1024 <= args.local_port <= 65535 or not 1024 <= args.remote_port <= 65535:
+            raise ValueError("unprivileged loopback port required")
+        return base + [
+            "-N",
+            "-L",
+            f"127.0.0.1:{args.local_port}:127.0.0.1:{args.remote_port}",
+            args.host,
+        ]
+    # Arguments cross an SSH shell. Quote each one, never concatenate raw caller input.
+    import shlex
+
+    programs = {
+        "bugs": "/usr/local/bin/ac-bugs",
+        "friction": "/usr/local/sbin/ac-telemetry-friction",
+        "metrics": "/usr/local/sbin/ac-metrics-collect",
+    }
+    if args.mode == "friction-runner":
+        remote = [
+            "sudo",
+            "-n",
+            "docker",
+            "exec",
+            "ac-application-production-sales-xray-worker-1",
+            "python",
+            "-m",
+            "ac_platform.telemetry.friction_cli",
+            "--database-url-file",
+            "/run/ac-sales-xray/database-url",
+            *args.arguments,
+        ]
+    else:
+        remote = ["sudo", "-n", programs[args.mode], *args.arguments]
+    return base + [args.host, shlex.join(remote)]
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("mode", choices=["tunnel", "bugs", "friction", "friction-runner", "metrics"])
+    p.add_argument("--identity", required=True)
+    p.add_argument("--host", default="ubuntu@3.25.123.75")
+    p.add_argument("--local-port", type=int, default=15439)
+    p.add_argument("--remote-port", type=int, default=15432)
+    p.add_argument("--execute", action="store_true")
+    raw = sys.argv[1:]
+    forwarded = []
+    if "--" in raw:
+        split = raw.index("--")
+        raw, forwarded = raw[:split], raw[split + 1 :]
+    args = p.parse_args(raw)
+    args.arguments = forwarded
+    if args.mode == "tunnel" and forwarded:
+        p.error("tunnel takes no forwarded arguments")
+    cmd = argv(args)
+    if args.execute:
+        return subprocess.run(cmd, check=False).returncode
+    print(json.dumps(cmd))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

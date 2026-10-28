@@ -1,0 +1,177 @@
+{
+  "environment": "production",
+  "inventory_review_record": null,
+  "freeze_budget_seconds": 600,
+  "step_timeout": 600,
+  "bwlimit_kib": 4096,
+  "rsync_ssh": "ssh -o BatchMode=yes -i /etc/authority-closers/secrets/aws-cutover-ssh",
+  "rsync_path": "sudo -n nice -n 19 ionice -c 3 rsync",
+  "source": {
+    "host": "",
+    "database": [
+      "python3",
+      "/usr/local/lib/ac-cutover/endpoint.py",
+      "database",
+      "--permit-production-restore",
+      "ac-application-production-postgres-1",
+      "ac_platform"
+    ],
+    "manifest": [
+      "python3",
+      "/usr/local/lib/ac-cutover/endpoint.py",
+      "manifest",
+      "--ownership"
+    ]
+  },
+  "target": {
+    "host": "ubuntu@3.25.123.75",
+    "database": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-i",
+      "/etc/authority-closers/secrets/aws-cutover-ssh",
+      "ubuntu@3.25.123.75",
+      "sudo -n python3 /usr/local/lib/ac-cutover/endpoint.py database --permit-production-restore ac-application-production-postgres-1 ac_platform"
+    ],
+    "manifest": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-i",
+      "/etc/authority-closers/secrets/aws-cutover-ssh",
+      "ubuntu@3.25.123.75",
+      "sudo -n python3 /usr/local/lib/ac-cutover/endpoint.py manifest --ownership"
+    ]
+  },
+  "files": [
+    {
+      "source": "/REPLACE_FROM_REVIEWED_PRODUCTION_MOUNT_INVENTORY/recordings",
+      "target": "/REPLACE_FROM_REVIEWED_PRODUCTION_MOUNT_INVENTORY/recordings"
+    },
+    {
+      "source": "/REPLACE_FROM_REVIEWED_PRODUCTION_MOUNT_INVENTORY/media",
+      "target": "/REPLACE_FROM_REVIEWED_PRODUCTION_MOUNT_INVENTORY/media"
+    },
+    {
+      "source": "/REPLACE_FROM_REVIEWED_PRODUCTION_MOUNT_INVENTORY/spool",
+      "target": "/REPLACE_FROM_REVIEWED_PRODUCTION_MOUNT_INVENTORY/spool"
+    }
+  ],
+  "hooks": {
+    "hold_source": [
+      "python3",
+      "/usr/local/lib/ac-cutover/host.py",
+      "--profile",
+      "/etc/authority-closers/cutover-host.json",
+      "--execute",
+      "hold"
+    ],
+    "drain_source": [
+      "python3",
+      "/usr/local/lib/ac-cutover/host.py",
+      "--profile",
+      "/etc/authority-closers/cutover-host.json",
+      "--execute",
+      "drain"
+    ],
+    "fence_source": [
+      "python3",
+      "/usr/local/lib/ac-cutover/host.py",
+      "--profile",
+      "/etc/authority-closers/cutover-host.json",
+      "--execute",
+      "fence"
+    ],
+    "open_source": [
+      "python3",
+      "/usr/local/lib/ac-cutover/host.py",
+      "--profile",
+      "/etc/authority-closers/cutover-host.json",
+      "--execute",
+      "open"
+    ],
+    "start_source_held": [
+      "python3",
+      "/usr/local/lib/ac-cutover/host.py",
+      "--profile",
+      "/etc/authority-closers/cutover-host.json",
+      "--execute",
+      "start-held"
+    ],
+    "source_held_canary": [
+      "python3",
+      "/usr/local/lib/ac-cutover/host.py",
+      "--profile",
+      "/etc/authority-closers/cutover-host.json",
+      "--execute",
+      "assert-held"
+    ],
+    "source_canary": [
+      "python3",
+      "/usr/local/lib/ac-cutover/canary.py",
+      "--config",
+      "/etc/authority-closers/cutover-public-canary.json"
+    ],
+    "hold_target": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-i",
+      "/etc/authority-closers/secrets/aws-cutover-ssh",
+      "ubuntu@3.25.123.75",
+      "sudo -n python3 /usr/local/lib/ac-cutover/host.py --profile /etc/authority-closers/cutover-host.json --execute hold"
+    ],
+    "drain_target": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-i",
+      "/etc/authority-closers/secrets/aws-cutover-ssh",
+      "ubuntu@3.25.123.75",
+      "sudo -n python3 /usr/local/lib/ac-cutover/host.py --profile /etc/authority-closers/cutover-host.json --execute drain"
+    ],
+    "fence_target": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-i",
+      "/etc/authority-closers/secrets/aws-cutover-ssh",
+      "ubuntu@3.25.123.75",
+      "sudo -n python3 /usr/local/lib/ac-cutover/host.py --profile /etc/authority-closers/cutover-host.json --execute fence"
+    ],
+    "open_target": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-i",
+      "/etc/authority-closers/secrets/aws-cutover-ssh",
+      "ubuntu@3.25.123.75",
+      "sudo -n python3 /usr/local/lib/ac-cutover/host.py --profile /etc/authority-closers/cutover-host.json --execute open"
+    ],
+    "start_target_held": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-i",
+      "/etc/authority-closers/secrets/aws-cutover-ssh",
+      "ubuntu@3.25.123.75",
+      "sudo -n python3 /usr/local/lib/ac-cutover/host.py --profile /etc/authority-closers/cutover-host.json --execute start-held"
+    ],
+    "target_held_canary": [
+      "ssh",
+      "-o",
+      "BatchMode=yes",
+      "-i",
+      "/etc/authority-closers/secrets/aws-cutover-ssh",
+      "ubuntu@3.25.123.75",
+      "sudo -n python3 /usr/local/lib/ac-cutover/host.py --profile /etc/authority-closers/cutover-host.json --execute assert-held"
+    ],
+    "target_canary": [
+      "python3",
+      "/usr/local/lib/ac-cutover/canary.py",
+      "--config",
+      "/etc/authority-closers/cutover-public-canary.json"
+    ]
+  }
+}

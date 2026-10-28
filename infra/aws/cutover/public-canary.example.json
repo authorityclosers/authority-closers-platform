@@ -1,0 +1,32 @@
+[
+  {
+    "name": "API ready",
+    "url": "https://api.authorityclosers.com/health/ready",
+    "status": 200
+  },
+  {
+    "name": "App",
+    "url": "https://app.authorityclosers.com/",
+    "status": 200
+  },
+  {
+    "name": "Learner",
+    "url": "https://learner.authorityclosers.com/",
+    "status": 200
+  },
+  {
+    "name": "Admin",
+    "url": "https://admin.authorityclosers.com/",
+    "status": 200
+  },
+  {
+    "name": "Coach",
+    "url": "https://coach.authorityclosers.com/",
+    "status": 200
+  },
+  {
+    "name": "Sales Xray",
+    "url": "https://salesxray.authorityclosers.com/",
+    "status": 200
+  }
+]

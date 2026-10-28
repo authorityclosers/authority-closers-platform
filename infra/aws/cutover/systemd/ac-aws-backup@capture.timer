@@ -1,0 +1,9 @@
+[Unit]
+Description=AWS dump every 15 minutes, retained locally 24 hours
+[Timer]
+OnCalendar=*:0/15
+AccuracySec=1s
+Persistent=true
+Unit=ac-aws-backup@capture.service
+[Install]
+WantedBy=timers.target

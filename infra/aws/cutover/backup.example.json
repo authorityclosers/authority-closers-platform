@@ -1,0 +1,13 @@
+{
+  "environment": "production",
+  "backup_root": "/srv/authority-closers/backups/aws",
+  "database": [
+    "python3",
+    "/usr/local/lib/ac-cutover/endpoint.py",
+    "database",
+    "ac-application-production-postgres-1",
+    "ac_platform"
+  ],
+  "encryption_certificate": "/etc/authority-closers/aws-backup-public.pem",
+  "archive_credentials_helper": "/usr/local/sbin/ac-archive-put"
+}

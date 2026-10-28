@@ -1,0 +1,10 @@
+# Admit and project through the authorised release tool before real execution.
+# This cutover hold intentionally fences intake too. Existing release hold spools.
+@cutover_production host app.authorityclosers.com learner.authorityclosers.com admin.authorityclosers.com coach.authorityclosers.com api.authorityclosers.com salesxray.authorityclosers.com
+handle @cutover_production {
+    import base_security_headers
+    header X-Authority-Closers-Route "cutover-hold-production"
+    header Cache-Control "no-store"
+    header Retry-After "30"
+    respond "Updating. Please try again shortly.\n" 503
+}
