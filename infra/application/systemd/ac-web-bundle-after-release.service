@@ -1,0 +1,10 @@
+[Unit]
+Description=Publish the signed web bundle of each release that is live on production (phone apps' live web updates)
+Documentation=file:///home/acdev/src/dev-live/authority-closers-platform/docs/ops/LIVE-WEB-BUNDLES.md
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-web-bundle-after-release
+Nice=10
+TimeoutStartSec=45min

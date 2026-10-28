@@ -10,6 +10,9 @@ services:
       AC_MEDIA_FILESYSTEM_AVATAR_ROOT: /var/lib/ac-media/avatar-objects
       AC_MEDIA_SCANNER_UNIX_SOCKET: /run/ac-media-safety/clamd.sock
       AC_MEDIA_MAX_UPLOAD_BYTES: "2000000000"
+      # The phone apps' signed web bundles (docs/ops/LIVE-WEB-BUNDLES.md): published beside the media objects by
+      # ac-web-bundle-after-release, read-only to the api, served at /v1/app-web/. Empty until it is turned on.
+      AC_APP_WEB_ROOT: /var/lib/ac-media/app-web
     volumes:
       - type: bind
         source: ${AC_MEDIA_FILESYSTEM_HOST_ROOT:?AC_MEDIA_FILESYSTEM_HOST_ROOT is required}

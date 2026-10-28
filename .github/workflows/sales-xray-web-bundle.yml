@@ -1,0 +1,85 @@
+name: Sales Xray web bundle
+
+# The phone apps' live web update for one exact commit (owner, 28 Oct 2026: web releases reach the app with no
+# Play build). Builds the same static export the apps carry (sales-xray-apps build-web-shell.sh), packs it with
+# infra/application/scripts/sx-web-bundle (web files only; sx-web.json; zip named by its SHA-256) and keeps it as
+# the run's sx-web-bundle artifact. Nothing here signs or publishes: ac-web-bundle-after-release on ac downloads
+# it, signs the manifest with the key only Infisical holds, and publishes it. docs/ops/LIVE-WEB-BUNDLES.md.
+on:
+  workflow_dispatch:
+    inputs:
+      frozen_sha:
+        description: "Exact 40-character lowercase commit to build (the release's main commit)"
+        required: true
+        type: string
+      host:
+        description: "The site the bundle is for"
+        required: false
+        default: salesxray.authorityclosers.com
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sales-xray-web-bundle-${{ inputs.frozen_sha }}
+  cancel-in-progress: false
+
+jobs:
+  bundle:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      FROZEN_SHA: ${{ inputs.frozen_sha }}
+      BUNDLE_HOST: ${{ inputs.host }}
+    steps:
+      - name: Validate the requested commit and site
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$FROZEN_SHA" =~ ^[0-9a-f]{40}$ ]] || { echo "frozen_sha must be 40 lowercase hex characters" >&2; exit 2; }
+          case "$BUNDLE_HOST" in
+            salesxray.authorityclosers.com|salesxray-dev.authorityclosers.com) ;;
+            *) echo "unknown site $BUNDLE_HOST" >&2; exit 2 ;;
+          esac
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ inputs.frozen_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Prove the checked out commit
+        shell: bash
+        run: test "$(git rev-parse HEAD)" = "$FROZEN_SHA"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Enable pinned pnpm
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate
+      - name: Install locked Node dependencies for the Sales Xray web app
+        run: pnpm install --frozen-lockfile --filter "@ac/sales-xray-web..."
+      - name: Build the static export (as the phone apps carry it)
+        env:
+          AC_SALES_XRAY_STATIC_PREVIEW: "1"
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter @ac/sales-xray-web build
+      - name: Pack the bundle (web files only, sx-web.json, zip named by its SHA-256)
+        shell: bash
+        run: |
+          set -euo pipefail
+          commit_ms=$(( $(git log -1 --format=%ct) * 1000 ))
+          python3 infra/application/scripts/sx-web-bundle pack apps/sales-xray-web/out \
+            --out "$RUNNER_TEMP/sx-web-bundle" --host "$BUNDLE_HOST" --sha "$FROZEN_SHA" \
+            --ref "$FROZEN_SHA" --commit-at-ms "$commit_ms" | tee "$RUNNER_TEMP/facts.json"
+          {
+            echo "### Web bundle for ${FROZEN_SHA:0:9}"
+            echo
+            echo '```json'
+            cat "$RUNNER_TEMP/facts.json"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sx-web-bundle
+          path: ${{ runner.temp }}/sx-web-bundle
+          if-no-files-found: error
+          retention-days: 30
