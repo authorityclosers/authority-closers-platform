@@ -1529,3 +1529,162 @@ def test_the_account_sheet_reads_and_sets_taking_new_leads(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_person_work_without_reports_and_scope_fences(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Owner bugs #60–#64: real desk work survives missing reports and a quiet today."""
+    from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            seller = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            teammate = await seed(setup.engine, tenant_id=setup.state.tenant_id, role="member")
+            outsider = await seed(setup.engine)
+            now = datetime(2026, 10, 28, 10, tzinfo=UTC)
+            yesterday = now - timedelta(days=1)
+            admin = Viewer(setup.state.person_id, setup.state.tenant_id, "admin", "Owner Example")
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                added = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Morgan Fictional",
+                        "phone": "9876543210",
+                    },
+                    headers=WRITE,
+                )
+                assert added.status_code == 201, added.text
+                lead_id = UUID(added.json()["lead"]["lead_id"])
+            async with setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(Lead)
+                    .where(Lead.id == lead_id)
+                    .values(
+                        owner_person_id=seller.person_id,
+                        assigned_at=yesterday,
+                    )
+                )
+                desk = LeadDesk(db, admin, now=now)
+                lead = await db.get(Lead, lead_id)
+                assert lead is not None
+                phone_event = None
+                # Identical timestamps model a single phone sync batch.
+                for kind, data in (
+                    ("call", {"via": "phone", "direction": "outgoing", "duration_seconds": 80}),
+                    ("note", {"note": "Asked to call after lunch"}),
+                    ("message", {"channel": "sms"}),
+                    ("stage", {"v": 2, "to_label": "Follow up"}),
+                    ("scheduled", {"follow_up_at": (now + timedelta(hours=1)).isoformat()}),
+                    ("assigned", {"to": str(teammate.person_id)}),
+                    ("task", {"action": "done", "kind": "call_back"}),
+                ):
+                    event = desk._event(lead, kind, data, actor=seller.person_id, at=yesterday)
+                    event.created_at = yesterday
+                    if kind == "call":
+                        phone_event = event
+                assert phone_event is not None
+                recording_id = uuid4()
+                desk._event(
+                    lead,
+                    "call",
+                    {
+                        "recording": True,
+                        "for_call": str(phone_event.id),
+                        "submission_id": str(recording_id),
+                    },
+                    actor=seller.person_id,
+                )
+                desk._event(lead, "stage", {"source": "merge"}, actor=seller.person_id)
+                desk._event(
+                    lead, "note", {"note": "Another seller's note"}, actor=teammate.person_id
+                )
+                private = desk._event(
+                    lead, "call", {"via": "phone"}, actor=seller.person_id, at=yesterday
+                )
+                desk._event(
+                    lead,
+                    "edited",
+                    {"private_call": str(private.id), "private": True},
+                    actor=seller.person_id,
+                )
+                removed = desk._event(lead, "note", {"note": "Superseded"}, actor=seller.person_id)
+                # Use the store's actual marker key, not a parallel undo convention.
+                from ac_platform.lead_desk.store import UNDO_OF
+
+                desk._event(lead, "edited", {UNDO_OF: str(removed.id)}, actor=seller.person_id)
+                foreign = LeadDesk(
+                    db,
+                    Viewer(outsider.person_id, outsider.tenant_id, "admin", "Other Example"),
+                    now=now,
+                )
+                # A separate tenant's lead and events must never join this tenant's.
+                assert (await foreign.activity(day="recent", person=seller.person_id)).items == ()
+                await db.flush()
+            async with setup.sessions() as db:
+                desk = LeadDesk(db, admin, now=now)
+                page = await desk.activity(
+                    day="recent", person=seller.person_id, team=True, limit=2
+                )
+                assert {item.event.kind for item in page.items} == {
+                    "call",
+                    "stage",
+                    "note",
+                    "message",
+                    "scheduled",
+                    "assigned",
+                    "task",
+                }
+                assert all(item.event.actor_person_id == seller.person_id for item in page.items)
+                assert page.counts["call"] == 1 and page.counts["note"] == 1
+                assert page.today_counts["call"] == 0
+                assert page.week_counts["call"] == 1
+                assert page.last_active_at == yesterday
+                assert page.last_call_at == yesterday
+                phone = next(item for item in page.items if item.event.kind == "call")
+                assert phone.event.recording and phone.event.submission_id == recording_id
+                assert (
+                    await desk.activity(
+                        day="recent", person=seller.person_id, before=page.next_before
+                    )
+                ).items == ()
+                viewer = LeadDesk(
+                    db,
+                    Viewer(teammate.person_id, admin.tenant_id, "viewer", "Viewer Example"),
+                    now=now,
+                )
+                assert (
+                    len((await viewer.activity(day="recent", person=seller.person_id)).items) == 7
+                )
+                own = LeadDesk(
+                    db,
+                    Viewer(seller.person_id, admin.tenant_id, "member", "Seller Example"),
+                    now=now,
+                )
+                assert (await own.activity(day="recent")).counts["call"] == 2
+                with pytest.raises(DeskError):
+                    await own.activity(day="recent", person=teammate.person_id)
+                with pytest.raises(DeskError):
+                    await own.activity(day="recent", team=True)
+                today_lead = await db.get(Lead, lead_id)
+                assert today_lead is not None
+                own._event(
+                    today_lead,
+                    "call",
+                    {"via": "phone", "duration_seconds": 90},
+                    actor=seller.person_id,
+                )
+                await db.flush()
+                today = await desk.activity(day="recent", person=seller.person_id)
+                assert today.today_counts["call"] == today.today_counts["connected"] == 1
+                assert today.week_counts["call"] == 2
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

@@ -137,6 +137,7 @@ export type LeadEvent = {
     | "edited"
     | "message"
     | "scheduled"
+    | "task"
     | "stage"
     | "meeting"
     | "suggestion";
@@ -176,6 +177,7 @@ export type LeadEvent = {
   event_id?: string | null;
   can_hide?: boolean;
   private?: boolean;
+  task_action?: string | null;
   /** A stage move (Lead OS): how, from where, by whom or what, and why. */
   action?: "move" | "close" | "reopen" | "reclassify" | string | null;
   from_label?: string | null;
@@ -742,7 +744,7 @@ export function readLeads(
 }
 
 /** My work: what the seller did, today, yesterday or this week. */
-export type WorkDay = "today" | "yesterday" | "week";
+export type WorkDay = "today" | "yesterday" | "week" | "recent";
 export type ActivityItem = {
   event_id: string;
   lead_id: string;
@@ -754,7 +756,23 @@ export type ActivityPage = {
   items: ActivityItem[];
   next_before: string | null;
   counts: Record<string, number>;
+  today_counts?: Record<string, number>;
+  week_counts?: Record<string, number>;
+  last_active_at?: string | null;
+  last_call_at?: string | null;
+  timezone?: string;
 };
+
+/** Shared activity feed, filtered by actor on the server before counting. */
+export function readPersonWork(
+  person: string,
+  before: string | null = null,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({ day: "recent", person });
+  if (before) params.set("before", before);
+  return request<ActivityPage>(`/activity?${params}`, { signal });
+}
 
 export function readActivity(
   day: WorkDay,

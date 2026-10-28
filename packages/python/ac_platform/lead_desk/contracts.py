@@ -189,7 +189,7 @@ LeadSort = Literal["next_action", "last_contact", "name", "created"]
 LeadDue = Literal["late", "today", "week", "none"]
 LeadSince = Literal["today", "week", "month", "never"]
 LeadMade = Literal["today", "week", "month"]
-WorkDay = Literal["today", "yesterday", "week"]
+WorkDay = Literal["today", "yesterday", "week", "recent"]
 
 
 class ActivityItem(Model):
@@ -212,6 +212,12 @@ class ActivityPage(Model):
     next_before: datetime | None
     # How many of each kind in the whole window: "12 calls, 3 notes".
     counts: dict[str, int] = Field(default_factory=dict)
+
+    today_counts: dict[str, int] = Field(default_factory=dict)
+    week_counts: dict[str, int] = Field(default_factory=dict)
+    last_active_at: datetime | None = None
+    last_call_at: datetime | None = None
+    timezone: str = "Asia/Kolkata"
 
 
 class LeadPage(Model):
