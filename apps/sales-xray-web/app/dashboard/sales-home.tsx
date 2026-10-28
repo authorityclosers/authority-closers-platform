@@ -46,7 +46,7 @@ import {
   type Performance,
   type Period,
 } from "../leads/leads-client";
-import { ActionList, ActionRow, Avatar, Segmented } from "../ui/kit";
+import { ActionList, ActionRow, Avatar } from "../ui/kit";
 import { NeedsYou } from "./needs-you";
 import { OutcomeTiles } from "./outcome-tiles";
 import { StuckFunnel } from "./stuck-funnel";
@@ -456,11 +456,6 @@ function useHomeView(): [HomeView, (next: HomeView) => void] {
   return [view, choose];
 }
 
-const VIEWS: { key: HomeView; label: string }[] = [
-  { key: "team", label: "Team" },
-  { key: "mine", label: "My day" },
-];
-
 /** All the organisation's leads, for an owner or admin; null until read, and
  *  still null if the read fails (Home then stays as it is). */
 function useTeamLeadCount(enabled: boolean): number | null {
@@ -561,13 +556,17 @@ export function SalesHome({
     <div className={styles.home}>
       {manager && (works || manages) ? (
         <div className={styles.homeBar}>
+          {/* Owner Home v3 (28 Oct 2026): one tap to your own calls and back;
+              the period keeps the screen's one segmented control. */}
           {works ? (
-            <Segmented
-              label="Show"
-              value={view}
-              onChange={setView}
-              items={VIEWS}
-            />
+            <button
+              type="button"
+              className={styles.viewShortcut}
+              onClick={() => setView(view === "team" ? "mine" : "team")}
+            >
+              {view === "team" ? "My day" : "Team"}
+              <ChevronRight size={16} aria-hidden="true" />
+            </button>
           ) : null}
           {/* Owner Home v3 (28 Oct 2026, #52): targets, nudges and the lead
               rules behind one labelled gear, not in the scroll. */}

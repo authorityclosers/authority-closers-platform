@@ -283,6 +283,14 @@ it("says so when nothing needs the owner, and switches to My day", async () => {
   await act(async () => Promise.resolve());
   expect(host.querySelector("h2")?.textContent).toBe("Today");
   expect(window.location.search).toBe("?view=mine");
+  // Owner Home v3: one tap back to the team, and no segmented Team | My day.
+  expect(host.querySelector('[aria-label="Show"]')).toBeNull();
+  const back = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Team",
+  )!;
+  await act(async () => back.click());
+  await act(async () => Promise.resolve());
+  expect(window.location.search).toBe("");
 });
 
 // Owner, #20 (26 Oct 2026): a brand-new workspace starts with three steps.
