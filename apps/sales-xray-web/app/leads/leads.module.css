@@ -7028,3 +7028,19 @@ fieldset.form {
 .pickerRow {
   box-sizing: border-box;
 }
+
+/* Keep Select inside the smallest phone: the status uses two short lines,
+   rather than taking space from the 44 px controls. */
+@media (max-width: 375px) {
+  .listHead:has(.syncChip) {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+  .listHead:has(.syncChip) > .listTotal {
+    font-size: 12px;
+  }
+  .listHead:has(.syncChip) > .syncChip {
+    max-width: 60px;
+    white-space: normal;
+    line-height: 12px;
+  }
+}

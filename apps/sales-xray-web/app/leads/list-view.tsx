@@ -18,7 +18,14 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 
 import { cachedLeadPage, readFirstLeads } from "./list-cache";
 import { notify } from "../notice-center";
@@ -44,6 +51,8 @@ import {
 import { BulkSheet } from "./bulk-sheet";
 import { QuickAddBar, type PasteRows } from "./quick-add";
 import styles from "./leads.module.css";
+
+const CachedLeadLine = memo(LeadLine);
 
 const LeadsTable = dynamic(
   () => import("./leads-table").then((m) => m.LeadsTable),
@@ -642,7 +651,7 @@ export function ListView({
                         onToggle={toggle}
                       />
                     ) : (
-                      <LeadLine
+                      <CachedLeadLine
                         key={row.lead_id}
                         row={row}
                         onOpen={onOpen}
