@@ -211,6 +211,14 @@
 .routing > section > header > p {
   display: none;
 }
+/* An off rule keeps readable conditions; its switch carries the off state. */
+.routing :global(li[data-off]) {
+  opacity: 1;
+}
+/* The reused seller sheet renders in a portal. Scope its tab ink to this setup. */
+:global(body):has(.sellerScope) :global(dialog [aria-pressed]) {
+  color: var(--sx-ink);
+}
 @media (min-width: 900px) {
   .footer {
     bottom: 16px;

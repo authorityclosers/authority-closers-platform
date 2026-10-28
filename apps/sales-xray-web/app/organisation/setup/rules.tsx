@@ -111,7 +111,7 @@ function SellerRules({ mode }: { mode: "people" | "limits" }) {
     }
   };
   return (
-    <div className={styles.stack}>
+    <div className={`${styles.stack} ${styles.sellerScope}`}>
       {mode === "people" ? (
         <>
           <p className={styles.help}>
