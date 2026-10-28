@@ -64,3 +64,24 @@ it("does not request browser capture on an insecure origin", async () => {
   expect(host.textContent).toContain("HTTPS");
   expect(get).not.toHaveBeenCalled();
 });
+
+it("keeps known blocked access and its Windows recovery steps when capture is unsupported", async () => {
+  const get = vi.fn(async () => {
+    throw new DOMException("unsupported", "NotSupportedError");
+  });
+  vi.stubGlobal("navigator", {
+    permissions: {
+      query: vi.fn(async () => ({
+        state: "denied",
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+      })),
+    },
+    mediaDevices: { getUserMedia: get },
+  });
+  await render();
+  await tap();
+  expect(get).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("Windows");
+  expect(host.textContent).toContain("site’s permissions");
+});

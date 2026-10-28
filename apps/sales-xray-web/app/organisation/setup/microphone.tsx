@@ -59,6 +59,16 @@ export function MicrophoneAccess() {
   const request = async () => {
     setState("busy");
     try {
+      const permission = navigator.permissions?.query
+        ? await navigator.permissions
+            .query({ name: "microphone" as PermissionName })
+            .catch(() => null)
+        : null;
+      if (!alive.current) return;
+      if (permission?.state === "denied") {
+        setState("denied");
+        return;
+      }
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((track) => track.stop());
       if (alive.current) setState("granted");
