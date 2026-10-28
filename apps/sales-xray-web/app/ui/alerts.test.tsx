@@ -19,7 +19,9 @@ vi.mock("next/link", () => ({
 }));
 
 const haptic = vi.fn();
-vi.mock("./haptics", () => ({ haptic: (kind: string) => haptic(kind) }));
+vi.mock("@ac/ui/kit/haptics", () => ({
+  haptic: (kind: string) => haptic(kind),
+}));
 
 import { AlertHost, clearAlert, raiseAlert } from "./alerts";
 import { resetBackCloseForTests } from "./back-close";

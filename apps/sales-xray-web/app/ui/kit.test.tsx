@@ -197,7 +197,10 @@ it("keeps the draft and says why when a save fails", async () => {
 
 it("uses only the shared tokens: no raw colours in the kit's styles", () => {
   const css = readFileSync(
-    join(dirname(fileURLToPath(import.meta.url)), "kit.module.css"),
+    join(
+      dirname(fileURLToPath(import.meta.url)),
+      "../../../../packages/typescript/ui/src/kit/kit.module.css",
+    ),
     "utf8",
   );
   expect(css).not.toMatch(/#[0-9a-f]{3,8}\b/i);

@@ -7,7 +7,18 @@
     ".": "./src/index.ts",
     "./blob-sha256": "./src/blob-sha256.ts",
     "./sx": "./src/sx/index.ts",
-    "./sx/client": "./src/sx/kit-client.tsx"
+    "./sx/client": "./src/sx/kit-client.tsx",
+    "./kit": "./src/kit/index.ts",
+    "./kit/haptics": "./src/kit/haptics.ts",
+    "./kit/back-close": "./src/kit/back-close.ts",
+    "./kit/sheet": "./src/kit/sheet.tsx",
+    "./kit/kit": "./src/kit/kit.tsx",
+    "./kit/side-scroll": "./src/kit/side-scroll.tsx",
+    "./kit/alerts": "./src/kit/alerts.tsx",
+    "./kit/page-skeleton": "./src/kit/page-skeleton.tsx",
+    "./kit/icons": "./src/kit/icons.tsx",
+    "./kit/tokens/palette.css": "./src/kit/tokens/palette.css",
+    "./kit/tokens/screen.css": "./src/kit/tokens/screen.css"
   },
   "scripts": {
     "typecheck": "tsc --noEmit --jsx react-jsx --module preserve --moduleResolution bundler --target es2022 --skipLibCheck src/index.ts --incremental --tsBuildInfoFile node_modules/.cache/tsc/tsconfig.tsbuildinfo"
