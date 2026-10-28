@@ -268,7 +268,11 @@ export function OrganisationSources() {
         <header className={styles.head}>
           <div>
             <h2>Facebook & Instagram</h2>
-            <p>{pages.length} Pages · Choose forms for new leads.</p>
+            <p>
+              {pages.length
+                ? `${pages.length} Pages · Choose forms for new leads.`
+                : "Connect an account to choose lead forms."}
+            </p>
           </div>
           <button
             className={styles.button}
@@ -281,23 +285,25 @@ export function OrganisationSources() {
         </header>
         {catalogue?.configured ? (
           <>
-            <div className={styles.tools}>
-              <a
-                className={pages.length ? styles.button : styles.primary}
-                href="/v1/lead-desk/meta/connect-sources"
-                onClick={add}
-              >
-                <Link2 size={16} />
-                Add Pages
-              </a>
-              <a
-                className={styles.button}
-                href="/v1/lead-desk/meta/connect-another"
-                onClick={another}
-              >
-                Another account
-              </a>
-            </div>
+            {pages.length ? (
+              <div className={styles.tools}>
+                <a
+                  className={pages.length ? styles.button : styles.primary}
+                  href="/v1/lead-desk/meta/connect-sources"
+                  onClick={add}
+                >
+                  <Link2 size={16} />
+                  Add Pages
+                </a>
+                <a
+                  className={styles.button}
+                  href="/v1/lead-desk/meta/connect-another"
+                  onClick={another}
+                >
+                  Another account
+                </a>
+              </div>
+            ) : null}
             <p className={styles.help}>
               Meta review pending · Test leads only.
             </p>
@@ -501,6 +507,25 @@ export function OrganisationSources() {
         </p>
       </details>
       <MicrophoneAccess />
+      {catalogue?.configured && !pages.length ? (
+        <div className={styles.footer}>
+          <a
+            className={styles.button}
+            href="/v1/lead-desk/meta/connect-another"
+            onClick={another}
+          >
+            Another account
+          </a>
+          <a
+            className={styles.primary}
+            href="/v1/lead-desk/meta/connect-sources"
+            onClick={add}
+          >
+            <Link2 size={16} />
+            Add Pages
+          </a>
+        </div>
+      ) : null}
     </div>
   );
 }
