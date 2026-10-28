@@ -1388,20 +1388,23 @@ a.repName {
     max-width: 96px;
   }
 
-  /* Phones (owner, 25 Oct 2026: the name squeezed beside the stage pill):
-     the name and its lines take the row's width; Call, WhatsApp and Email sit
-     on a line under them, the stage at its end. */
+  /* Phones (owner, #73, 29 Oct 2026: "so much clutter"): two lines, the
+     name and when it is due; Call and WhatsApp on the right with the stage
+     under them. (25 Oct's squeeze was the stage pill beside the name; it now
+     sits under the buttons.) Interest, city and Email are on the lead. */
   .leadFace[data-quick] {
     grid-template-columns: minmax(0, 1fr) auto;
     grid-template-areas:
-      "main main"
-      "quick tags";
-    padding-bottom: 10px;
+      "main quick"
+      "main tags";
+    row-gap: 4px;
+    padding-block: 8px;
   }
 
   .leadFace[data-quick] .leadButton {
     grid-area: main;
-    padding-bottom: 6px;
+    min-height: 0;
+    padding-block: 0;
   }
 
   .leadEnd[data-quick] {
@@ -1410,13 +1413,23 @@ a.repName {
 
   .leadFace[data-quick] .leadQuick {
     grid-area: quick;
-    /* Under the text: the row's 12 px padding, the 34 px avatar, its 10 px gap. */
-    padding-left: 56px;
+    align-self: end;
+    justify-self: end;
+    padding-right: 12px;
   }
 
   .leadFace[data-quick] .leadTags {
     grid-area: tags;
+    align-self: start;
+    justify-self: end;
+    max-width: 120px;
     padding-right: 12px;
+    overflow: hidden;
+  }
+
+  .leadFace[data-quick] .leadSub,
+  .leadFace[data-quick] .quickAct[data-channel="email"] {
+    display: none;
   }
 
   .leadEnd[data-quick] .leadOwner {
@@ -6719,7 +6732,8 @@ fieldset.form {
   min-width: 0;
 }
 
-.viewHeader > nav {
+.viewHeader > nav,
+.viewHeader > .stageTabs {
   flex: 1 1 auto;
   min-width: 0;
   max-width: none;
