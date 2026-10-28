@@ -1,0 +1,60 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "f2b10f9bb45c6002e4b0d2fac17f2efa5e3d5ea8",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/dashboard/dashboard-body.tsx",
+    "apps/sales-xray-web/app/dashboard/dashboard-view.test.tsx",
+    "apps/sales-xray-web/app/dashboard/home-today.module.css",
+    "apps/sales-xray-web/app/dashboard/home-today.tsx",
+    "apps/sales-xray-web/app/dashboard/home-v2.tsx",
+    "apps/sales-xray-web/app/dashboard/my-day.test.tsx",
+    "apps/sales-xray-web/app/dashboard/my-day.tsx",
+    "apps/sales-xray-web/app/dashboard/outcome-tiles.module.css",
+    "apps/sales-xray-web/app/dashboard/outcome-tiles.tsx",
+    "apps/sales-xray-web/app/dashboard/sales-home.test.tsx",
+    "apps/sales-xray-web/app/dashboard/sales-home.tsx",
+    "apps/sales-xray-web/app/dashboard/team-activity.tsx",
+    "apps/sales-xray-web/app/review-fixture/home/home-preview.tsx",
+    "infra/aws/rehearsal/Caddyfile",
+    "infra/aws/rehearsal/README.md",
+    "infra/aws/rehearsal/boot.sh",
+    "infra/aws/rehearsal/compose.rehearsal.yaml",
+    "infra/aws/rehearsal/compose.sh",
+    "infra/aws/rehearsal/jobs.py",
+    "infra/aws/rehearsal/load.js",
+    "infra/aws/rehearsal/probe.py",
+    "infra/aws/rehearsal/release.sh",
+    "infra/aws/rehearsal/restore.sh",
+    "infra/aws/rehearsal/sample.py",
+    "infra/aws/rehearsal/seed.py",
+    "infra/aws/rehearsal/setup.py",
+    "infra/aws/rehearsal/test_rehearsal.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "infra/aws/rehearsal/test_rehearsal.py",
+    "tests/infra/test_production_lean.py"
+  ],
+  "include_paths": [
+    "infra/aws/rehearsal/jobs.py",
+    "infra/aws/rehearsal/restore.sh",
+    "infra/aws/rehearsal/compose.sh",
+    "infra/aws/rehearsal/test_rehearsal.py",
+    "infra/aws/rehearsal/release.sh",
+    "infra/aws/rehearsal/README.md",
+    "infra/aws/rehearsal/Caddyfile",
+    "infra/aws/rehearsal/setup.py",
+    "infra/aws/rehearsal/boot.sh",
+    "infra/aws/rehearsal/compose.rehearsal.yaml",
+    "infra/aws/rehearsal/sample.py",
+    "infra/aws/rehearsal/probe.py",
+    "infra/aws/rehearsal/seed.py",
+    "infra/aws/rehearsal/load.js"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}

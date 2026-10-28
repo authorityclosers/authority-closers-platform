@@ -1,0 +1,31 @@
+{
+ admin off
+ auto_https off
+}
+:8080 {
+ import /etc/caddy/auth.caddy
+ @api host api.authorityclosers.com
+ handle @api { 
+  reverse_proxy api:8000
+ }
+ @learner host learner.authorityclosers.com
+ handle @learner {
+  reverse_proxy learner-web:3000
+ }
+ @admin host admin.authorityclosers.com
+ handle @admin {
+  reverse_proxy admin-web:3001
+ }
+ @coach host coach.authorityclosers.com
+ handle @coach {
+  reverse_proxy coach-web:3002
+ }
+ @spool path /spool/*
+ handle @spool {
+  uri strip_prefix /spool
+  reverse_proxy intake-spool:8080
+ }
+ handle {
+  reverse_proxy sales-xray-web:3016
+ }
+}
