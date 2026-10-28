@@ -126,7 +126,11 @@ def open_(
 
 
 def return_page(
-    provider: Provider, *, handoff: str | None = None, result: str | None = None
+    provider: Provider,
+    *,
+    handoff: str | None = None,
+    result: str | None = None,
+    hub_sources: bool = False,
 ) -> HTMLResponse:
     """A small page that sends the browser back to the app with the outcome.
 
@@ -135,7 +139,12 @@ def return_page(
     the /v1 policy allows no script or style, so a meta refresh opens the app and
     the link is the manual fallback.
     """
-    parts: dict[str, Any] = {"provider": provider, "path": RETURN_PATHS[provider]}
+    path = (
+        "/organisation?tab=leads&part=sources"
+        if provider == "meta" and hub_sources
+        else RETURN_PATHS[provider]
+    )
+    parts: dict[str, Any] = {"provider": provider, "path": path}
     if handoff is not None:
         parts["handoff"] = handoff
     else:

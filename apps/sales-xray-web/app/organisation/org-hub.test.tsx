@@ -30,6 +30,9 @@ vi.mock("../settings/sections", () => ({
     headless?: boolean;
   }) => <div data-section={id} data-headless={headless ? "" : undefined} />,
 }));
+vi.mock("./setup/sources", () => ({
+  OrganisationSources: () => <div data-section="sources" />,
+}));
 vi.mock("./analytics-view", () => ({
   AnalyticsView: ({ team }: { team: boolean }) => (
     <div data-analytics={team ? "team" : "own"} />

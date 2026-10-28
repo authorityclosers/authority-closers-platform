@@ -33,6 +33,7 @@ import { OrganisationView } from "./organisation-view";
 import { HUB_PATH, HUB_TABS, hubHref, type HubTab } from "./hub-tabs";
 import { hubTabsFor } from "./setup-tabs";
 import styles from "./org-hub.module.css";
+import { OrganisationSources } from "./setup/sources";
 
 type Part = { key: string; label: string; section: SettingsSectionId };
 
@@ -123,11 +124,15 @@ function Parts({
           }}
         />
       </SideScroll>
-      <SettingsSectionView
-        key={current.section}
-        id={current.section}
-        headless
-      />
+      {current.section === "sources" ? (
+        <OrganisationSources key="sources" />
+      ) : (
+        <SettingsSectionView
+          key={current.section}
+          id={current.section}
+          headless
+        />
+      )}
     </div>
   );
 }

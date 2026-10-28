@@ -547,16 +547,20 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         except (meta.MetaError, gads.GoogleAdsApiError):
             return False
 
-    def hand_off(provider: app_return.Provider, key: bytes, request: Request) -> Response:
+    def hand_off(
+        provider: app_return.Provider, key: bytes, request: Request, *, hub_sources: bool = False
+    ) -> Response:
         """The provider came back in the phone's browser: hand the result to the app."""
         params = request.query_params
         if params.get("error"):
-            return app_return.return_page(provider, result="cancelled")
+            return app_return.return_page(provider, result="cancelled", hub_sources=hub_sources)
         code, state = params.get("code", ""), params.get("state", "")
         if not code:
-            return app_return.return_page(provider, result="failed")
+            return app_return.return_page(provider, result="failed", hub_sources=hub_sources)
         return app_return.return_page(
-            provider, handoff=app_return.seal(key, provider=provider, code=code[:2048], state=state)
+            provider,
+            handoff=app_return.seal(key, provider=provider, code=code[:2048], state=state),
+            hub_sources=hub_sources,
         )
 
     def handed_off(
@@ -571,6 +575,8 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         if not app_return.answers(body.get("a"), verifier):
             raise DeskError(403, "That didn't come from this app. Connect again.")
 
+    @router.get("/meta/connect-sources", response_model=None)
+    @router.get("/meta/connect-another", response_model=None)
     @router.get("/meta/connect", response_model=None)
     async def meta_connect(
         request: Request,
@@ -592,9 +598,16 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
                 person_id=desk.viewer.person_id,
                 app_challenge=challenge,
                 card=settings_card,
+                hub_sources=request.url.path.endswith(("/connect-sources", "/connect-another")),
             )
         return started(
-            meta.dialog_url(cfg, redirect_uri=callback_url(), state=state, switch=switch), reply
+            meta.dialog_url(
+                cfg,
+                redirect_uri=callback_url(),
+                state=state,
+                switch=switch or request.url.path.endswith("/connect-another"),
+            ),
+            reply,
         )
 
     @router.get("/meta/callback", response_model=None)
@@ -602,9 +615,19 @@ def install_connectors_http(application: FastAPI, ctx: RouteContext) -> None:
         cfg = meta_config()
         state = request.query_params.get("state", "")
         if from_app(lambda: meta.peek_state(cfg.app_secret, state)):
-            return hand_off("meta", cfg.token_key, request)
+            return hand_off(
+                "meta",
+                cfg.token_key,
+                request,
+                hub_sources=meta.peek_state(cfg.app_secret, state).get("hs") is True,
+            )
         card = returning(lambda: meta.peek_state(cfg.app_secret, state), META_CARDS)
-        back = f"{app_url()}/leads?tab=sources"
+        try:
+            hub_sources = meta.peek_state(cfg.app_secret, state).get("hs") is True
+        except meta.MetaError:
+            hub_sources = False
+        back_path = "/organisation?tab=leads&part=sources" if hub_sources else "/leads?tab=sources"
+        back = f"{app_url()}{back_path}"
 
         def done(outcome: str) -> Response:
             url = (
