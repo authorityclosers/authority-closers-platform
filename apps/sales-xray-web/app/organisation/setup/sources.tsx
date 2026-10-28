@@ -1,5 +1,13 @@
 "use client";
-import { Check, History, Link2, RefreshCw, ShieldCheck } from "lucide-react";
+import {
+  AlertTriangle,
+  Check,
+  History,
+  Link2,
+  RefreshCw,
+  Search,
+  ShieldCheck,
+} from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { notify } from "../../notice-center";
@@ -11,6 +19,7 @@ import {
   type MetaForm,
   type MetaPage,
 } from "../../leads/sources-view";
+import { BrandTile } from "../../ui/brand-tile";
 import { Skeleton } from "../../ui/kit";
 import {
   formKey,
@@ -32,8 +41,19 @@ const outcomes: Record<string, string> = {
 const selectedOn = (page: MetaPage, form: MetaForm) =>
   page.active &&
   (!page.forms || page.forms === "all" || page.forms.includes(form.id));
+const plural = (value: number, word: string) =>
+  `${value} ${word}${value === 1 ? "" : "s"}`;
+/** Search only earns its place once there are more forms than fit a screen. */
+const SEARCH_FROM = 7;
 
-/** One catalogue: every connected Facebook account, Page and form. Selection is a draft until Save. */
+/**
+ * Leads setup → Sources (owner bugs #75 and #76, 29 Oct 2026: "clutter … make
+ * it psychologically appealing"; "selecting is nice but could be cleaner").
+ * One summary card, then each Page as a grouped list with a check on the
+ * right. Selection is a draft until Save; the save bar shows only while
+ * there is something to save. Help and other sources sit in one list of
+ * folded rows at the end.
+ */
 export function OrganisationSources() {
   const params = useSearchParams();
   const router = useRouter();
@@ -179,13 +199,30 @@ export function OrganisationSources() {
       key: formKey(page.pageId, form.id),
     })),
   );
+  /** What is saved now: Discard puts the checks back to it. */
+  const saved = () =>
+    new Set(
+      entries
+        .filter(({ page, form }) => selectedOn(page, form))
+        .map(({ key }) => key),
+    );
+  const discard = () => {
+    dirtyRef.current = false;
+    setDirty(false);
+    setPicked(saved());
+  };
+  const changes = dirty
+    ? (() => {
+        const before = saved();
+        return entries.filter(({ key }) => before.has(key) !== picked.has(key))
+          .length;
+      })()
+    : 0;
   const visible = entries.filter(({ page, form }) =>
     `${page.name} ${page.account?.name ?? ""} ${form.name}`
       .toLocaleLowerCase()
       .includes(search.toLocaleLowerCase()),
   );
-  const allVisible =
-    visible.length > 0 && visible.every((item) => picked.has(item.key));
   const act = async (kind: "save" | "older") => {
     if (actionLock.current) return;
     actionLock.current = true;
@@ -263,104 +300,117 @@ export function OrganisationSources() {
     actionLock.current = false;
     setBusy(false);
   };
+
+  const configured = catalogue?.configured === true;
+  const total = entries.length;
+  const summary = failed
+    ? "Forms didn't load. Your saved connections are kept."
+    : !catalogue
+      ? "Checking your connected Pages…"
+      : !configured
+        ? "Facebook connections are not set up in this environment."
+        : !pages.length
+          ? "Connect an account to choose lead forms."
+          : `${picked.size} of ${plural(total, "form")} bring in leads · ${plural(pages.length, "Page")}`;
   return (
     <div className={styles.stack}>
-      <section className={styles.card} aria-label="Facebook accounts">
-        <header className={styles.head}>
-          <div>
-            <h2>Facebook & Instagram</h2>
-            <p>
-              {pages.length
-                ? `${pages.length} Pages · Choose forms for new leads.`
-                : "Connect an account to choose lead forms."}
-            </p>
+      <section className={styles.hero} aria-label="Facebook accounts">
+        <div className={styles.heroHead}>
+          <BrandTile brands={["facebook", "instagram"]} size={44} />
+          <div className={styles.heroCopy}>
+            <h2>Facebook &amp; Instagram</h2>
+            <p>{summary}</p>
           </div>
           <button
-            className={styles.button}
+            className={styles.iconButton}
             aria-label="Refresh Facebook forms"
+            title="Refresh"
             disabled={busy || loadingForms}
             onClick={() => void load()}
           >
-            <RefreshCw size={18} />
+            <RefreshCw
+              size={18}
+              aria-hidden="true"
+              className={loadingForms ? styles.spin : undefined}
+            />
           </button>
-        </header>
-        {catalogue?.configured ? (
-          <>
-            {pages.length ? (
-              <div className={styles.tools}>
-                <a
-                  className={pages.length ? styles.button : styles.primary}
-                  href="/v1/lead-desk/meta/connect-sources"
-                  onClick={add}
-                >
-                  <Link2 size={16} />
-                  Add Pages
-                </a>
-                <a
-                  className={styles.button}
-                  href="/v1/lead-desk/meta/connect-another"
-                  onClick={another}
-                >
-                  Another account
-                </a>
-              </div>
-            ) : null}
-            <p className={styles.help}>
-              Meta review pending · Test leads only.
-            </p>
-          </>
-        ) : !catalogue && !failed ? (
-          <Skeleton height={44} />
+        </div>
+        {configured && pages.length ? (
+          <div className={styles.chips}>
+            <a
+              className={styles.chip}
+              href="/v1/lead-desk/meta/connect-sources"
+              onClick={add}
+            >
+              <Link2 size={16} aria-hidden="true" />
+              Add Pages
+            </a>
+            <button
+              className={styles.chip}
+              disabled={busy || dirty || !picked.size || loadingForms}
+              onClick={() => void act("older")}
+            >
+              <History size={16} aria-hidden="true" />
+              {busy ? "Working…" : "Fetch old leads"}
+            </button>
+            <span
+              className={styles.status}
+              data-tone="warn"
+              title="Meta is still reviewing the app"
+            >
+              Test leads only
+            </span>
+          </div>
+        ) : configured && catalogue ? (
+          <div className={styles.chips}>
+            <a
+              className={styles.primary}
+              href="/v1/lead-desk/meta/connect-sources"
+              onClick={add}
+            >
+              <Link2 size={16} aria-hidden="true" />
+              Add Pages
+            </a>
+            <a
+              className={styles.chip}
+              href="/v1/lead-desk/meta/connect-another"
+              onClick={another}
+            >
+              Another account
+            </a>
+          </div>
+        ) : failed ? (
+          <div className={styles.chips}>
+            <button className={styles.chip} onClick={() => void load()}>
+              <RefreshCw size={16} aria-hidden="true" />
+              Try again
+            </button>
+          </div>
+        ) : !catalogue ? (
+          <Skeleton height={36} />
         ) : null}
       </section>
       {!catalogue && !failed ? (
-        <div aria-label="Loading forms" aria-busy="true">
-          <Skeleton height={160} />
-          <Skeleton height={160} />
+        <div
+          className={styles.stack}
+          aria-label="Loading forms"
+          aria-busy="true"
+        >
+          <Skeleton height={148} />
+          <Skeleton height={148} />
         </div>
       ) : null}
-      {failed ? (
-        <button className={styles.button} onClick={() => void load()}>
-          Try loading forms again
-        </button>
-      ) : null}
-      {catalogue && !catalogue.configured ? (
-        <p className={styles.help}>
-          Facebook connections are not set up in this environment.
-        </p>
-      ) : null}
-      {pages.length ? (
-        <>
+      {total >= SEARCH_FROM ? (
+        <label className={styles.searchField}>
+          <Search size={18} aria-hidden="true" />
           <input
-            className={styles.search}
             type="search"
             aria-label="Search accounts, Pages and forms"
-            placeholder="Find an account, Page or form"
+            placeholder="Find a Page or form"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
           />
-          <div className={styles.tools}>
-            <button
-              className={styles.button}
-              disabled={busy || !visible.length}
-              onClick={() => {
-                const next = new Set(picked);
-                visible.forEach((item) =>
-                  allVisible ? next.delete(item.key) : next.add(item.key),
-                );
-                change(next);
-              }}
-            >
-              {allVisible ? "Clear shown" : "Select all shown"}
-            </button>
-            <span className={styles.badge}>{picked.size} selected</span>
-            {loadingForms ? (
-              <span role="status" className={styles.help}>
-                Checking forms…
-              </span>
-            ) : null}
-          </div>
-        </>
+        </label>
       ) : null}
       {pages.map((page) => {
         const items = visible.filter(
@@ -368,48 +418,74 @@ export function OrganisationSources() {
         );
         const listed = forms[page.pageId];
         if (search && !items.length) return null;
+        const on = items.filter((item) => picked.has(item.key)).length;
+        const all = items.length > 0 && on === items.length;
         return (
           <section
             key={page.pageId}
-            className={styles.card}
+            className={styles.group}
             aria-label={`Forms on ${page.name}`}
           >
-            <div className={styles.copy}>
-              <h3>{page.name}</h3>
-              <small>
-                {page.account?.name ?? "Facebook account"} ·{" "}
-                {page.active ? "On" : "Off"} · {listed?.length ?? "—"} forms
-              </small>
-            </div>
-            {page.problem || listed === null ? (
-              <div className={styles.tools}>
-                <span className={styles.help}>
-                  {page.problem?.kind === "token"
-                    ? "Sign in again to restore access."
-                    : (page.problem?.text ??
-                      "Forms could not refresh. Reconnect or try again.")}
-                </span>
-                <a
-                  href="/v1/lead-desk/meta/connect-another"
-                  onClick={another}
-                  className={styles.button}
-                >
-                  Sign in again
-                </a>
+            <header className={styles.groupHead}>
+              <div className={styles.groupTitle}>
+                <h3>{page.name}</h3>
+                <small>
+                  {page.account?.name ?? "Facebook account"} ·{" "}
+                  {listed ? plural(listed.length, "form") : "Forms unknown"}
+                </small>
               </div>
-            ) : null}
-            {!items.length && listed !== null ? (
-              <p className={styles.help}>
-                {loadingForms
-                  ? "Checking this Page’s forms…"
-                  : "No forms shared by Meta. Check Page access, then refresh."}
-              </p>
-            ) : null}
-            <ul className={styles.list}>
+              <span
+                className={styles.status}
+                data-tone={page.active ? "good" : "off"}
+              >
+                {page.active ? "On" : "Off"}
+              </span>
+              {items.length > 1 ? (
+                <button
+                  className={styles.textButton}
+                  disabled={busy}
+                  onClick={() => {
+                    const next = new Set(picked);
+                    items.forEach((item) =>
+                      all ? next.delete(item.key) : next.add(item.key),
+                    );
+                    change(next);
+                  }}
+                >
+                  {all ? "Clear" : "Select all"}
+                </button>
+              ) : null}
+            </header>
+            <ul className={styles.rows}>
+              {page.problem || listed === null ? (
+                <li className={styles.problem}>
+                  <AlertTriangle size={18} aria-hidden="true" />
+                  <span>
+                    {page.problem?.kind === "token"
+                      ? "Sign in again to restore access."
+                      : (page.problem?.text ??
+                        "Forms could not refresh. Reconnect or try again.")}
+                  </span>
+                  <a
+                    href="/v1/lead-desk/meta/connect-another"
+                    onClick={another}
+                    className={styles.chip}
+                  >
+                    Sign in again
+                  </a>
+                </li>
+              ) : null}
+              {!items.length && listed !== null ? (
+                <li className={styles.rowNote}>
+                  {loadingForms
+                    ? "Checking this Page’s forms…"
+                    : "No forms shared by Meta. Check Page access, then refresh."}
+                </li>
+              ) : null}
               {items.map(({ form, key }) => (
                 <li key={key}>
                   <button
-                    className={styles.choice}
+                    className={styles.pick}
                     aria-pressed={picked.has(key)}
                     disabled={busy}
                     onClick={() => {
@@ -419,33 +495,38 @@ export function OrganisationSources() {
                       change(next);
                     }}
                   >
-                    <span className={styles.check} aria-hidden="true">
-                      {picked.has(key) ? <Check size={16} /> : null}
-                    </span>
-                    <span className={styles.copy}>
+                    <span className={styles.pickCopy}>
                       <strong>{form.name}</strong>
-                      <small>
+                      <small data-status={form.status}>
                         {metaFormStatus(form.status)}
                         {form.leads == null
                           ? ""
-                          : ` · ${form.leads} leads on Meta`}
+                          : ` · ${plural(form.leads, "lead")}`}
                       </small>
+                    </span>
+                    <span className={styles.tick} aria-hidden="true">
+                      {picked.has(key) ? (
+                        <Check size={15} strokeWidth={3} />
+                      ) : null}
                     </span>
                   </button>
                 </li>
               ))}
+              {page.backfill ? (
+                <li className={styles.rowNote} role="status">
+                  <History size={14} aria-hidden="true" />
+                  <span>
+                    {page.backfill.state === "running"
+                      ? "Reading older leads"
+                      : page.backfill.state === "blocked"
+                        ? "Import needs attention"
+                        : "Last import"}{" "}
+                    · {page.backfill.seen} read · {page.backfill.created} new ·{" "}
+                    {alreadyHere(page.backfill)} already here
+                  </span>
+                </li>
+              ) : null}
             </ul>
-            {page.backfill ? (
-              <p className={styles.help} role="status">
-                {page.backfill.state === "running"
-                  ? "Reading older leads"
-                  : page.backfill.state === "blocked"
-                    ? "Import needs attention"
-                    : "Last import"}{" "}
-                · {page.backfill.seen} read · {page.backfill.created} new ·{" "}
-                {alreadyHere(page.backfill)} already here
-              </p>
-            ) : null}
           </section>
         );
       })}
@@ -453,78 +534,86 @@ export function OrganisationSources() {
         <p className={styles.help}>No matching forms. Clear your search.</p>
       ) : null}
       {notice ? (
-        <p role="status" className={styles.help}>
+        <p role="status" className={styles.notice}>
           {notice}
         </p>
       ) : null}
-      {pages.length ? (
-        <div className={styles.footer}>
+      {dirty && pages.length ? (
+        <div
+          className={styles.saveBar}
+          role="region"
+          aria-label="Unsaved forms"
+        >
+          <span className={styles.saveCount}>
+            {changes
+              ? `${plural(changes, "change")} not saved`
+              : "Not saved yet"}
+          </span>
           <button
-            className={styles.button}
-            disabled={busy || dirty || !picked.size || loadingForms}
-            onClick={() => void act("older")}
+            className={styles.textButton}
+            disabled={busy}
+            onClick={discard}
           >
-            <History size={16} />
-            {busy ? "Working…" : "Fetch old leads"}
+            Discard
           </button>
           <button
             className={styles.primary}
-            disabled={busy || !dirty || loadingForms}
+            disabled={busy || loadingForms}
             onClick={() => void act("save")}
           >
             {busy ? "Saving…" : "Save forms"}
           </button>
         </div>
       ) : null}
-      <p className={styles.help}>
-        <ShieldCheck size={16} aria-hidden="true" /> Imports use your existing
-        duplicate checks: certain matches merge; uncertain matches wait for
-        review. Paused forms can supply older leads.
-      </p>
-      <details
-        className={styles.details}
-        onToggle={(event) => setShowOther(event.currentTarget.open)}
-      >
-        <summary>Other lead sources</summary>
-        {showOther ? (
-          <div className={styles.otherProviders}>
-            <SourcesView
-              sandbox={false}
-              onChanged={() => undefined}
-              onImport={() => router.push("/leads?import=file")}
-              onImportGoogle={() => router.push("/leads?import=google")}
-            />
-          </div>
+      <div className={styles.more}>
+        <details
+          className={styles.details}
+          onToggle={(event) => setShowOther(event.currentTarget.open)}
+        >
+          <summary>Other lead sources</summary>
+          {showOther ? (
+            <div className={styles.otherProviders}>
+              <SourcesView
+                sandbox={false}
+                onChanged={() => undefined}
+                onImport={() => router.push("/leads?import=file")}
+                onImportGoogle={() => router.push("/leads?import=google")}
+              />
+            </div>
+          ) : null}
+        </details>
+        {configured && pages.length ? (
+          <details className={styles.details}>
+            <summary>Page missing or wrong account?</summary>
+            <div className={styles.detailBody}>
+              <p className={styles.help}>
+                Sign in as the Page’s manager and allow its Pages. Your other
+                connected accounts stay. If Meta asks to edit previous access,
+                select every Page you want.
+              </p>
+              <a
+                className={styles.chip}
+                href="/v1/lead-desk/meta/connect-another"
+                onClick={another}
+              >
+                <Link2 size={16} aria-hidden="true" />
+                Another account
+              </a>
+            </div>
+          </details>
         ) : null}
-      </details>
-      <details className={styles.details}>
-        <summary>Page missing or wrong account?</summary>
-        <p className={styles.help}>
-          Choose Another account, sign in as the Page’s manager and allow its
-          Pages. Your other connected accounts stay. If Meta asks to edit
-          previous access, select every Page you want.
-        </p>
-      </details>
-      <MicrophoneAccess />
-      {catalogue?.configured && !pages.length ? (
-        <div className={styles.footer}>
-          <a
-            className={styles.button}
-            href="/v1/lead-desk/meta/connect-another"
-            onClick={another}
-          >
-            Another account
-          </a>
-          <a
-            className={styles.primary}
-            href="/v1/lead-desk/meta/connect-sources"
-            onClick={add}
-          >
-            <Link2 size={16} />
-            Add Pages
-          </a>
-        </div>
-      ) : null}
+        <details className={styles.details}>
+          <summary>Duplicates and older leads</summary>
+          <div className={styles.detailBody}>
+            <p className={styles.help}>
+              <ShieldCheck size={16} aria-hidden="true" /> Imports use your
+              existing duplicate checks: certain matches merge; uncertain
+              matches wait for review. Paused forms can supply older leads.
+            </p>
+          </div>
+        </details>
+        <MicrophoneAccess />
+      </div>
     </div>
   );
 }
