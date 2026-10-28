@@ -1,11 +1,37 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Segmented } from "../../ui/kit";
 import { DEFAULT_FILTERS } from "../../organisation/insights/insights-data";
 import { InsightsView } from "../../organisation/insights/insights-view";
-import sandbox from "./sandbox.json";
+import source from "./sandbox.json";
+import { InsightsSkeleton } from "../../organisation/insights/insights-skeleton";
+
+// Review fixtures must never display customer or real organisation names.
+const sandbox = structuredClone(source);
+sandbox.overview.people.forEach((person, index) => {
+  person.name = `Fictional seller ${index + 1}`;
+  if (person.team) person.team = `Example team ${(index % 6) + 1}`;
+});
+sandbox.overview.facets.people.forEach((person, index) => {
+  person.name = `Fictional seller ${index + 1}`;
+  if (person.team) person.team = `Example team ${(index % 6) + 1}`;
+});
+sandbox.overview.teams.forEach((team, index) => {
+  team.name = `Example team ${index + 1}`;
+});
+sandbox.overview.facets.teams.forEach((team, index) => {
+  team.name = `Example team ${index + 1}`;
+});
+for (const row of [
+  ...sandbox.overview.calls.strongest,
+  ...sandbox.overview.calls.weakest,
+  ...sandbox.calls.items,
+]) {
+  row.person = "Fictional seller";
+  if (row.team) row.team = "Example team";
+}
 
 type View = "sandbox" | "team" | "empty" | "denied";
 
@@ -36,6 +62,21 @@ function teamOf(body: typeof sandbox): unknown {
 
 export function InsightsFixture() {
   const [view, setView] = useState<View>("sandbox");
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      const state = new URLSearchParams(location.search).get("state");
+      if (state === "empty" || state === "denied") setView(state);
+      if (state === "loading") setLoading(true);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, []);
+  if (loading)
+    return (
+      <div style={{ padding: 16 }}>
+        <InsightsSkeleton />
+      </div>
+    );
   const team = { ...sandbox.calls, synthetic: false };
   const seeds: Record<View, { status: number; body: unknown }> = {
     sandbox: { status: 200, body: sandbox.overview },

@@ -6,7 +6,10 @@ import { Window } from "happy-dom";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const appDir = join(here, "..");
-const derivative = readFileSync(join(here, "tokens.css"), "utf8");
+const derivative = readFileSync(
+  join(here, "../../../../packages/typescript/ui/src/kit/tokens/palette.css"),
+  "utf8",
+);
 const source = readFileSync(
   join(
     appDir,

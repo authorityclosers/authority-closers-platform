@@ -264,7 +264,7 @@
 }
 
 .page [data-key="unknown"] {
-  background: var(--sx-line-strong);
+  background: var(--sx-muted);
 }
 
 .plot {
@@ -477,7 +477,7 @@ button.barRow:focus-visible {
   display: block;
   height: 100%;
   border-radius: 0 4px 4px 0;
-  background: color-mix(in oklab, var(--sx-accent) 70%, var(--sx-surface));
+  background: var(--sx-accent);
 }
 
 .barValue,
@@ -569,7 +569,7 @@ button.barRow:focus-visible {
 }
 
 .split i[data-key="observed"] {
-  background: color-mix(in oklab, var(--sx-accent) 70%, var(--sx-surface));
+  background: var(--sx-accent);
 }
 
 .skillValue {
@@ -1019,5 +1019,99 @@ a.callTitle:hover {
 
   .page {
     transition: none;
+  }
+}
+
+.filterDetails {
+  min-width: 0;
+}
+.filterDetails summary {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  cursor: pointer;
+  font-weight: 600;
+}
+.filterDetails summary:focus-visible {
+  outline: 2px solid var(--sx-accent);
+}
+.filterFields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 0;
+}
+@media (max-width: 700px) {
+  .filterDetails {
+    width: 100%;
+  }
+  .filterFields > select {
+    flex: 1;
+    min-width: 130px;
+    min-height: 44px;
+  }
+}
+
+.chartPaging {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--sx-muted);
+  font-size: 12px;
+}
+.chartPaging button {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 8px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.chartPaging button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.fixtureBadge {
+  color: var(--sx-ink);
+  background: var(--sx-surface);
+  padding: 2px 6px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+/* Phone labels stay complete; counts sit beside them and the bar uses the next line. */
+@media (max-width: 700px) {
+  .page {
+    --sx-control-h: 44px;
+  }
+  .barRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    min-height: 44px;
+    padding: 8px 0;
+  }
+  .barLabel {
+    grid-column: 1;
+    grid-row: 1;
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+  }
+  .barValue {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .barTrack {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    height: 6px;
   }
 }

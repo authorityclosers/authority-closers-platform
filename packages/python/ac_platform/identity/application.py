@@ -627,6 +627,7 @@ class AsyncIdentityApplication:
         user_agent: str | None,
         ip_address: str | None,
         audience: SessionAudience = SessionAudience.ACCOUNT,
+        auto_select_tenant: bool = True,
     ) -> IssuedSession:
         # Every sign-in ends here. Settings -> Security -> Delete account closes the
         # account while its deletion request is open (close_account), so no way in
@@ -636,7 +637,7 @@ class AsyncIdentityApplication:
         token = secrets.token_urlsafe(self._token_length_bytes)
         selected_tenant_id = (
             None
-            if audience is SessionAudience.REVIEWER
+            if audience is SessionAudience.REVIEWER or not auto_select_tenant
             else await self._repository.get_sole_active_tenant_id(person.id)
         )
         stored = StoredSession(
@@ -660,8 +661,12 @@ class AsyncIdentityApplication:
         user_agent: str | None = None,
         ip_address: str | None = None,
         now: datetime | None = None,
+        auto_select_tenant: bool = True,
     ) -> IssuedSession:
-        """Issue a session only after the canonical person is reloaded and verified."""
+        """Issue a session only after the canonical person is reloaded and verified.
+
+        Bridges can defer tenant selection until their own admission checks pass.
+        """
 
         self._require_transaction()
         current_time = _now(now)
@@ -671,6 +676,7 @@ class AsyncIdentityApplication:
             current_time=current_time,
             user_agent=user_agent,
             ip_address=ip_address,
+            auto_select_tenant=auto_select_tenant,
         )
 
     async def issue_reviewer_session(

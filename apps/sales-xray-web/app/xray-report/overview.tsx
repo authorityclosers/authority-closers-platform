@@ -17,6 +17,7 @@ import {
 import { useId, useRef, useState, type ReactNode } from "react";
 
 import {
+  CALL_OUTCOME_LABELS,
   parseHumanCallOutcome,
   type CallOutcomeKind,
   type HumanCallOutcome,
@@ -569,8 +570,60 @@ export function OverviewScore({
   const { strength, improvement } = coach
     ? brain4Highlights(coach)
     : view.overview;
+  const { state } = useCallOutcome();
+  const outcomeEditor = useRef<HTMLDivElement>(null);
+  const recorded = state.status === "ready" ? state.record.value : null;
+  const resultLabel = recorded
+    ? CALL_OUTCOME_LABELS[recorded.outcome]
+    : state.status === "loading"
+      ? "Loading outcome…"
+      : state.status === "unavailable"
+        ? "Outcome unavailable"
+        : "Not recorded yet";
   return (
     <div className={styles.xr} data-xray-part="overview">
+      <section
+        className={`${styles.card} ${styles.resultFirst}`}
+        aria-label="Call result"
+      >
+        <span className={styles.square} aria-hidden="true">
+          <TargetArrow />
+        </span>
+        <div>
+          <span className={styles.statLabel}>Recorded outcome</span>
+          <strong>{resultLabel}</strong>
+          {view.outcome.nextSteps[0] ? (
+            <p className={styles.body}>
+              <span className={styles.statLabel}>Next step heard:</span>{" "}
+              <LineWithClip
+                line={{
+                  text: view.outcome.nextSteps[0].text,
+                  sources: view.outcome.nextSteps[0].source
+                    ? [view.outcome.nextSteps[0].source]
+                    : [],
+                }}
+                title="Next step heard"
+                onSelect={onSelect}
+              />
+            </p>
+          ) : null}
+          {state.status === "ready" && state.record.can_edit && !recorded ? (
+            <button
+              type="button"
+              className={styles.save}
+              onClick={() => {
+                const editor = outcomeEditor.current;
+                editor?.scrollIntoView({ block: "center" });
+                editor?.querySelector<HTMLButtonElement>("button")?.focus({
+                  preventScroll: true,
+                });
+              }}
+            >
+              Record outcome
+            </button>
+          ) : null}
+        </div>
+      </section>
       <section
         className={`${styles.card} ${styles.summary}`}
         aria-label="Call summary"
@@ -752,7 +805,11 @@ export function OverviewScore({
         </div>
       </section>
 
-      <DealOutcomeBar example={view.illustrative ? view.outcome.kind : null} />
+      <div ref={outcomeEditor}>
+        <DealOutcomeBar
+          example={view.illustrative ? view.outcome.kind : null}
+        />
+      </div>
 
       {view.guest ? (
         <section

@@ -1,0 +1,10 @@
+[Unit]
+Description=Every 5 minutes: a release that is live on production gets its signed web bundle (off until enabled)
+
+[Timer]
+OnBootSec=6min
+OnCalendar=*:2/5
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

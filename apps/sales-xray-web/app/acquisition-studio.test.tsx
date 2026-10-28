@@ -1552,6 +1552,15 @@ it("keeps a deep-linked call neutral until its owner read returns, then opens it
     calls.filter(({ init }) => init.method && init.method !== "GET"),
   ).toHaveLength(0);
   expect(calls.some(({ path }) => path.endsWith("/upload-policy"))).toBe(false);
+  expect(calls.some(({ path }) => path.endsWith("/entry"))).toBe(false);
+  expect(calls.some(({ path }) => path.endsWith("/session"))).toBe(false);
+  // The canonical owner read is reused; no duplicate before report/transcript.
+  const reportRead = calls.findIndex(({ path }) => path.endsWith("/report"));
+  expect(
+    calls
+      .slice(0, reportRead)
+      .filter(({ path }) => path.endsWith(`/submissions/${submissionId}`)),
+  ).toHaveLength(1);
 });
 
 it("drops the prior report before restoring a different call selector", async () => {

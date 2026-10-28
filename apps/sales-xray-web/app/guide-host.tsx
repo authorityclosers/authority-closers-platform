@@ -179,6 +179,21 @@ export function firstCallGuideFits(pathname: string | null): boolean {
   return !/^\/(leads|chats|settings)(\/|$)/.test(pathname);
 }
 
+/** Entry for the upload walkthrough; result pages keep the answer in view. */
+export function firstCallGuideStartsHere(pathname: string | null): boolean {
+  const route = pathname?.replace(/\/$/, "") || "/";
+  return (
+    firstCallGuideFits(pathname) &&
+    !(
+      route === "/dashboard" ||
+      route === "/calls" ||
+      route === "/analysis/calls" ||
+      route.startsWith("/analysis/calls/") ||
+      route === "/analysis/sample"
+    )
+  );
+}
+
 export function FirstCallGuide() {
   const access = useWorkspaceAccess();
   const pathname = usePathname();
@@ -190,7 +205,7 @@ export function FirstCallGuide() {
     access.authenticated !== true ||
     !access.context ||
     workspace?.sales_xray_enabled === false ||
-    !firstCallGuideFits(pathname)
+    !firstCallGuideStartsHere(pathname)
   )
     return null;
   return (

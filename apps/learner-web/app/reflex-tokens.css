@@ -1,0 +1,117 @@
+/* Reflex inherits both themes from the shared palette. No app-local colours. */
+:root,
+:root[data-theme],
+:root[data-accent],
+:root[data-theme][data-accent] {
+  --sx-accent: var(--lx-focus);
+  /* This palette pair is also suitable for coaching orange in both themes. */
+  --sx-accent-ink: var(--lx-on-teal);
+  --sx-accent-soft: color-mix(in oklab, var(--sx-accent) 12%, transparent);
+  --sx-focus-ring: 0 0 0 2px var(--sx-surface), 0 0 0 4px var(--sx-accent);
+  --theme-canvas: var(--sx-paper);
+  --theme-surface: var(--sx-surface);
+  --theme-surface-raised: var(--sx-elevated);
+  --theme-surface-subtle: var(--sx-sunken);
+  --theme-input: var(--sx-surface);
+  --theme-text: var(--sx-ink);
+  --theme-text-muted: var(--sx-muted);
+  --theme-text-subtle: var(--sx-muted);
+  --theme-border: var(--sx-line);
+  --theme-border-strong: var(--sx-line-strong);
+  --theme-action: var(--sx-accent);
+  --theme-action-hover: color-mix(
+    in oklab,
+    var(--sx-accent) 88%,
+    var(--sx-ink)
+  );
+  --theme-action-text: var(--sx-accent-ink);
+  --theme-focus: var(--sx-accent);
+  --theme-info-surface: var(--sx-sunken);
+  --theme-info-text: var(--sx-ink-2);
+  --theme-disabled-surface: var(--sx-sunken);
+  --theme-disabled-text: var(--sx-muted);
+  --ink: var(--sx-ink);
+  --ink-soft: var(--sx-ink-2);
+  --paper: var(--sx-paper);
+  --paper-deep: var(--sx-sunken);
+  --paper-light: var(--sx-surface);
+  --muted: var(--sx-muted);
+  --line: var(--sx-line);
+  --line-strong: var(--sx-line-strong);
+  --acid: var(--sx-accent-soft);
+  --public-navy: var(--sx-ink);
+  --public-blue: var(--sx-accent);
+  --public-blue-soft: var(--sx-accent-soft);
+  --public-muted: var(--sx-muted);
+  --public-line: var(--sx-line);
+}
+html:root,
+html:root body {
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+}
+/* The public entry previously painted its own light canvas over dark mode. */
+html:root .site-frame:not(.site-frame--learner) {
+  --public-navy: var(--sx-ink);
+  --public-blue: var(--sx-accent);
+  --public-blue-soft: var(--sx-accent-soft);
+  --public-muted: var(--sx-muted);
+  --public-line: var(--sx-line);
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+}
+html:root
+  .site-frame:not(.site-frame--learner)
+  :is(.site-header, .site-footer) {
+  background: var(--sx-glass-thick);
+  color: var(--sx-ink);
+  border-color: var(--sx-line);
+}
+html:root
+  .site-frame:not(.site-frame--learner)
+  :is(.public-nav, .ac-public-proof) {
+  color: var(--sx-muted);
+}
+html:root
+  .site-frame:not(.site-frame--learner)
+  :is(
+    .ac-public-method,
+    .ac-public-program-card,
+    .ac-public-catalog-state,
+    .ac-public-button--secondary,
+    .public-module-card,
+    .public-module-detail-card,
+    .public-program-storefront,
+    .public-program-hero
+  ) {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  border-color: var(--sx-line);
+}
+html:root
+  .site-frame:not(.site-frame--learner)
+  :is(.ac-public-button--primary, .public-nav .button) {
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+html:root
+  .site-frame:not(.site-frame--learner)
+  :is(.ac-public-hero__visual, .ac-public-hero__status) {
+  background: var(--lx-sunken);
+  color: var(--lx-film-text);
+}
+html:root
+  .site-frame:not(.site-frame--learner)
+  :is(.ac-public-program-card__art, .ac-public-hero__visual) {
+  background: var(--sx-sunken);
+}
+html:root
+  .site-frame:not(.site-frame--learner)
+  :is(
+    .ac-public-method__number,
+    .ac-public-program-card__meta,
+    .ac-public-program-card__description,
+    .ac-public-section-heading__copy
+  ) {
+  color: var(--sx-muted);
+}

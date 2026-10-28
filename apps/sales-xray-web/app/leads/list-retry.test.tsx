@@ -63,7 +63,9 @@ it("a list that didn't load offers Try again, which asks once more", async () =>
     ),
   );
   await settle();
-  const status = host.querySelector('[role="status"]');
+  const status = host.querySelector(
+    '[role="status"]:not([aria-label="Lead sync"])',
+  );
   expect(status?.textContent).toContain("Sales X-Ray isn't answering");
   expect(status?.textContent).toContain("Your leads are safe.");
   expect(host.querySelector('[role="alert"]')).toBeNull();
@@ -77,4 +79,41 @@ it("a list that didn't load offers Try again, which asks once more", async () =>
   await settle();
   expect(host.textContent).not.toContain("Your leads are safe.");
   expect(host.textContent).toContain("No leads yet");
+});
+
+it("asks again after a workspace change even when the list filters are identical", async () => {
+  down = false;
+  const render = (workspace: string) =>
+    act(async () =>
+      root.render(
+        <ListView
+          canManage
+          stage="open"
+          stageLabel="Open"
+          scope="team"
+          query=""
+          onOpen={() => undefined}
+          version={0}
+          layoutOwner={workspace}
+        />,
+      ),
+    );
+  await render("fictional-cedar");
+  await settle();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  let answer!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+  );
+  await render("fictional-maple");
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(host.querySelector('[aria-label="Loading leads"]')).not.toBeNull();
+  await act(async () =>
+    answer(Response.json({ leads: [], total: 0, next_offset: null })),
+  );
+  await settle();
+  expect(host.querySelector('[aria-label="Loading leads"]')).toBeNull();
 });

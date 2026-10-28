@@ -18,6 +18,7 @@ vi.mock("next/link", () => ({
 }));
 
 import { SalesHome } from "./sales-home";
+import type { LibrarySubmission } from "../acquisition-client";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -109,11 +110,19 @@ function answer(routes: Record<string, unknown>) {
   );
 }
 
-async function mount(manager: boolean) {
+async function mount(
+  manager: boolean,
+  layout: "v1" | "v2" = "v1",
+  recent: LibrarySubmission[] | null = null,
+) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  await act(async () => root.render(<SalesHome manager={manager} />));
+  await act(async () =>
+    root.render(
+      <SalesHome manager={manager} layout={layout} recent={recent} />,
+    ),
+  );
   await act(async () => Promise.resolve());
 }
 
@@ -139,7 +148,7 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
       sellers: [
         {
           person_id: "s1",
-          name: "swamini fictional",
+          name: "priya example",
           calls: 12,
           connected: 6,
           interested: 3,
@@ -156,21 +165,34 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
   expect(titles).toEqual([
     "How sales are going",
     "Needs you",
+    "Where leads get stuck",
     "Sellers",
-    "Targets",
-    "Open leads by stage",
   ]);
-  const figures = Array.from(host.querySelectorAll("dt"), (dt) =>
-    dt.textContent?.trim(),
+  // Owner Home v3: targets and nudges sit behind the labelled gear.
+  expect(
+    Array.from(host.querySelectorAll("button")).some(
+      (button) => button.textContent === "Controls",
+    ),
+  ).toBe(true);
+  // Owner Home v3: the outcomes are tiles, each opening its detail.
+  const figures = Array.from(
+    host.querySelectorAll("button[data-tile]"),
+    (tile) => tile.firstElementChild?.textContent?.trim(),
   );
   expect(figures).toEqual(["Won", "Interested", "New leads", "Connected"]);
   expect(host.textContent).toContain("13% of 16 leads called");
-  expect(host.textContent).toContain("Swamini Fictional");
+  expect(host.textContent).toContain("Priya Example");
   expect(host.textContent).toContain(
     "2\u00a0won · 3\u00a0interested · 12\u00a0calls",
   );
   expect(host.textContent).toContain("Late follow-ups");
-  expect(host.textContent).toContain("6 open now");
+  // Owner Home v3: the screen's one primary action, Review follow-ups.
+  const review = Array.from(host.querySelectorAll("a")).find((link) =>
+    link.textContent?.startsWith("Review "),
+  );
+  expect(review?.textContent).toBe("Review 1 late follow-up");
+  expect(review?.getAttribute("href")).toBe("/leads?tab=all&due=late");
+  expect(host.textContent).toContain("6 open leads · right now");
   const seller = host.querySelector<HTMLAnchorElement>(
     'a[href="/organisation/people/s1"]',
   );
@@ -276,6 +298,14 @@ it("says so when nothing needs the owner, and switches to My day", async () => {
   await act(async () => Promise.resolve());
   expect(host.querySelector("h2")?.textContent).toBe("Today");
   expect(window.location.search).toBe("?view=mine");
+  // Owner Home v3: one tap back to the team, and no segmented Team | My day.
+  expect(host.querySelector('[aria-label="Show"]')).toBeNull();
+  const back = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Team",
+  )!;
+  await act(async () => back.click());
+  await act(async () => Promise.resolve());
+  expect(window.location.search).toBe("");
 });
 
 // Owner, #20 (26 Oct 2026): a brand-new workspace starts with three steps.
@@ -371,4 +401,34 @@ it("gives a Viewer the team's Home with nothing to change", async () => {
   expect(host.textContent).toContain("Waiting for a seller or the lead rules");
   expect(host.querySelector('a[href="/settings/lead-rules"]')).toBeNull();
   expect(host.textContent).not.toContain("Invite sellers");
+  expect(host.textContent).not.toContain("late follow-up");
+  expect(
+    Array.from(host.querySelectorAll("button")).some(
+      (button) => button.textContent === "Controls",
+    ),
+  ).toBe(false);
+});
+
+// #18: the seller dashboard answers who needs a call before showing history.
+it("puts Today and the next call before recent work on the seller dashboard", async () => {
+  answer({
+    "/v1/lead-desk/activity*": { items: [], next_before: null },
+    "/v1/lead-desk": desk([
+      row("ravi sample", { overdue: true, why_kind: "due" }),
+    ]),
+  });
+  await mount(false, "v2", [
+    {
+      id: "00000000-0000-4000-8000-000000000501",
+      createdAt: new Date().toISOString(),
+      durationSeconds: 120,
+      state: "completed",
+      hasReport: true,
+      label: { displayName: "Fictional discovery", revision: 1 },
+    },
+  ]);
+  expect(host.querySelector("h2")?.textContent).toBe("Today");
+  expect(host.textContent).toContain("Call Ravi");
+  const text = host.textContent!;
+  expect(text.indexOf("Today")).toBeLessThan(text.indexOf("Recent calls"));
 });

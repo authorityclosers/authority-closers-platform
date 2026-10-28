@@ -119,6 +119,9 @@ services:
       timeout: 5s
       retries: 20
       start_period: 20s
+      # Checked every second while starting, so a release's hold ends as soon as
+      # this service is up (Docker's default start interval is 5 seconds).
+      start_interval: 1s
     security_opt:
       - no-new-privileges:true
     cap_drop:
@@ -227,6 +230,9 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+      # Checked every second while starting, so a release's hold ends as soon as
+      # this service is up (Docker's default start interval is 5 seconds).
+      start_interval: 1s
     pids_limit: 256
     cpus: 1.5
     mem_limit: 768m
@@ -323,6 +329,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+      start_interval: 1s
     pids_limit: 256
     cpus: 1.0
     mem_limit: 512m
@@ -355,6 +362,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+      start_interval: 1s
     pids_limit: 256
     cpus: 1.0
     mem_limit: 512m
@@ -386,6 +394,7 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+      start_interval: 1s
     pids_limit: 256
     cpus: 1.0
     mem_limit: 512m

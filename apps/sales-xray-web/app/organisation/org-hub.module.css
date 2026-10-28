@@ -13,6 +13,10 @@
   padding: 20px 24px 32px;
 }
 
+.hub :global([data-pulse-panel] [data-tone="warn"]) {
+  color: var(--sx-ink);
+}
+
 .header {
   display: flex;
   align-items: center;

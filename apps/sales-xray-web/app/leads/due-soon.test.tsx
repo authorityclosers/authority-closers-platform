@@ -19,7 +19,9 @@ vi.mock("next/link", () => ({
 }));
 
 const haptic = vi.fn();
-vi.mock("../ui/haptics", () => ({ haptic: (kind: string) => haptic(kind) }));
+vi.mock("@ac/ui/kit/haptics", () => ({
+  haptic: (kind: string) => haptic(kind),
+}));
 
 import { AlertHost, clearAlert } from "../ui/alerts";
 import { DueSoonWatch, readSoon, showSoon, type SoonItem } from "./due-soon";

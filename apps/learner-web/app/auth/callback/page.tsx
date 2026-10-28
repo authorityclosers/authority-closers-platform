@@ -231,3 +231,5 @@ export default async function CallbackPage({
     </AuthFlowPage>
   );
 }
+
+export const metadata = { title: "Sign in" };

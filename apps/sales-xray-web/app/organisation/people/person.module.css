@@ -16,32 +16,104 @@
 /* ---------- Header ---------- */
 
 .header {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px 14px;
+  gap: 10px;
   min-width: 0;
 }
-
 .who {
   display: grid;
-  flex: 1 1 260px;
-  gap: 4px;
+  gap: 5px;
   min-width: 0;
 }
-
-.name {
+.nameLine {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 6px 8px;
+  min-width: 0;
+  gap: 4px;
+}
+.name {
+  flex: 1;
+  min-width: 0;
   margin: 0;
-  font: var(--sx-text-title);
+  font-size: 20px;
+  line-height: 1.25;
   letter-spacing: -0.01em;
 }
-
-.name > span:first-child {
-  overflow-wrap: anywhere;
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  font-size: var(--sx-text-xs);
+  color: var(--sx-muted);
+}
+.email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+.iconButton {
+  display: inline-grid;
+  place-items: center;
+  min-width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-ink-2);
+  cursor: pointer;
+}
+.menuChoices {
+  display: grid;
+  gap: 8px;
+}
+.menuChoices button {
+  display: block;
+  width: 100%;
+  min-height: 48px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.menuChoices button[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+}
+.menuChoices [role="group"] {
+  display: grid;
+  gap: 8px;
+}
+.menuHint {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+.renameField {
+  display: grid;
+  gap: 8px;
+}
+.renameField input {
+  width: 100%;
+  box-sizing: border-box;
+  min-height: 48px;
+  padding: 10px;
+  font-size: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink);
+  background: var(--sx-surface);
+}
+.renameField small {
+  color: var(--sx-muted);
 }
 
 /* Each fact carries a 14 px separator and the line is clipped by that much
@@ -682,4 +754,11 @@
   .skeletonTiles {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+.reportToggle {
+  min-height: 44px;
+  padding: 12px;
+  cursor: pointer;
+  color: var(--sx-ink-2);
 }

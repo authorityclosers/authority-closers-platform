@@ -35,7 +35,7 @@ it("uses the app's own faces: no Georgia or Cascadia", () => {
 
 it("draws every page title with the one title style", () => {
   const titles: [string, string][] = [
-    ["ui/kit.module.css", ".title {"],
+    ["../../../packages/typescript/ui/src/kit/kit.module.css", ".title {"],
     ["shell/lightbox-shell.module.css", ".pageHeading h1 {"],
     ["calls-library.module.css", ".headerCopy h1 {"],
     ["organisation/organisation.module.css", ".headerCopy h1 {"],

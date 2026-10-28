@@ -34,8 +34,6 @@ import {
   EmptyState,
   List,
   ListRow,
-  Stat,
-  StatStrip,
   Tabs,
   Tag,
   type Hue,
@@ -119,12 +117,14 @@ export function SellerSections({
   firstName,
   isYou,
   canManage,
+  canSeeTeam = canManage,
   overview,
 }: {
   personId: string;
   firstName: string;
   isYou: boolean;
   canManage: boolean;
+  canSeeTeam?: boolean;
   overview: ReactNode;
 }) {
   const [tab, setTab] = useTab();
@@ -212,23 +212,15 @@ export function SellerSections({
             </p>
           ) : null}
           {rep ? (
-            <StatStrip>
-              <Stat
-                value={rep.open_leads}
-                unit={rep.max_open === null ? undefined : `/ ${rep.max_open}`}
-                label={
-                  rep.max_open === null ? "Open leads, no limit" : "Open leads"
-                }
-              />
-              <Stat value={rep.due_now} label="Due now" />
-              <Stat value={rep.calls_today} label="Calls today" />
-              <Stat value={rep.connected_today} label="Connected today" />
-              <Stat
-                value={rep.first_call_minutes ?? "–"}
-                unit={rep.first_call_minutes != null ? "min" : undefined}
-                label="First call, 7 days"
-              />
-            </StatStrip>
+            <p className={styles.workload}>
+              <span>
+                <strong>{rep.open_leads}</strong>{" "}
+                {rep.max_open === null ? "Open leads, no limit" : "Open leads"}
+              </span>
+              <span>
+                <strong>{rep.due_now}</strong> Due now
+              </span>
+            </p>
           ) : null}
         </div>
       ) : null}
@@ -244,7 +236,7 @@ export function SellerSections({
             personId={personId}
             firstName={firstName}
             isYou={isYou}
-            canManage={canManage}
+            canManage={canSeeTeam}
           />
         ) : tab === "settings" && canManage ? (
           <SellerSettings
@@ -278,22 +270,48 @@ function SellerLeads({
     null,
   );
   const [failed, setFailed] = useState(false);
+  const [clock] = useState(() => Date.now());
+  const [filter, setFilter] = useState(() =>
+    typeof window === "undefined"
+      ? "open"
+      : (new URLSearchParams(window.location.search).get("insight") ?? "open"),
+  );
+  const [visible, setVisible] = useState(20);
   useEffect(() => {
+    if (!canManage && !isYou) return;
     const controller = new AbortController();
-    readLeads(
-      canManage
-        ? { scope: "team", owner: personId, stage: "open" }
-        : { scope: "mine", stage: "open" },
-      controller.signal,
-    )
-      .then((value) => setPage({ leads: value.leads, total: value.total }))
-      .catch((reason: unknown) => {
-        if (controller.signal.aborted) return;
-        setFailed(true);
-        problem("seller-leads", "Leads didn't load", reason);
-      });
+    async function load() {
+      const rows: LeadRow[] = [];
+      // Read every page before calculating insights. A first page is never a total.
+      for (const stage of ["open", "won", "lost"]) {
+        let offset = 0;
+        while (!controller.signal.aborted) {
+          const next = await readLeads(
+            canManage
+              ? { scope: "team", owner: personId, stage, offset }
+              : { scope: "mine", stage, offset },
+            controller.signal,
+          );
+          rows.push(...next.leads);
+          offset += next.leads.length;
+          if (offset >= next.total || !next.leads.length) break;
+        }
+      }
+      if (!controller.signal.aborted)
+        setPage({
+          leads: [
+            ...new Map(rows.map((lead) => [lead.lead_id, lead])).values(),
+          ],
+          total: rows.length,
+        });
+    }
+    load().catch((reason: unknown) => {
+      if (controller.signal.aborted) return;
+      setFailed(true);
+      problem("seller-leads", "Leads didn't load", reason);
+    });
     return () => controller.abort();
-  }, [personId, canManage]);
+  }, [personId, canManage, isYou]);
 
   if (!canManage && !isYou)
     return (
@@ -330,44 +348,112 @@ function SellerLeads({
         leads.
       </EmptyState>
     );
+  const open = (lead: LeadRow) =>
+    !["won", "lost", "junk"].includes(lead.group ?? lead.stage);
+  const weekStart = new Date();
+  // The desk uses India time; Monday starts the calendar working week.
+  const local = new Date(clock + 330 * 60000);
+  weekStart.setTime(
+    Date.UTC(
+      local.getUTCFullYear(),
+      local.getUTCMonth(),
+      local.getUTCDate() - ((local.getUTCDay() + 6) % 7),
+    ) -
+      330 * 60000,
+  );
+  const thisWeek = (lead: LeadRow) =>
+    !!lead.stage_at && Date.parse(lead.stage_at) >= weekStart.getTime();
+  const matches = (lead: LeadRow, key: string) =>
+    key === "open"
+      ? open(lead)
+      : key === "late"
+        ? open(lead) && !!lead.overdue
+        : key === "untouched"
+          ? lead.stage === "new" && lead.last_contact_at == null
+          : key === "won" || key === "lost"
+            ? (lead.group ?? lead.stage) === key && thisWeek(lead)
+            : open(lead) && (lead.step ?? lead.stage) === key;
+  const stages = [
+    ...new Map(
+      page.leads
+        .filter(open)
+        .map((lead) => [lead.step ?? lead.stage, lead.stage_label]),
+    ).entries(),
+  ];
+  const insights = [
+    ["open", "Open leads"],
+    ["late", "Late follow-ups"],
+    ["untouched", "Untouched new leads"],
+    ["won", "Won this week"],
+    ["lost", "Lost this week"],
+    ...stages,
+  ];
+  const filtered = page.leads.filter((lead) => matches(lead, filter));
+  const choose = (key: string) => {
+    setFilter(key);
+    setVisible(20);
+    const url = new URL(window.location.href);
+    url.searchParams.set("insight", key);
+    window.history.replaceState(window.history.state, "", url);
+  };
   return (
-    <Card
-      title="Open leads"
-      sub={`${page.total} open, next call first`}
-      action={
-        <Button size="sm" variant="ghost" href="/leads?tab=all">
-          All leads
-        </Button>
-      }
-      pad="md"
-    >
-      <List label="Open leads">
-        {page.leads.map((lead) => (
-          <ListRow
-            key={lead.lead_id}
-            href={`/leads#lead=${encodeURIComponent(lead.lead_id)}`}
-            title={lead.name}
-            sub={
-              [lead.city, lead.interest].filter(Boolean).join(" · ") ||
-              lead.source_label
-            }
-            meta={
-              <Tag hue={STAGE_HUE[lead.stage] ?? "slate"}>
-                {lead.overdue ? "Late · " : ""}
-                {lead.stage_label}
-              </Tag>
-            }
-            chevron
-          />
+    <>
+      <div className={styles.insights} aria-label="Seller lead insights">
+        {insights.map(([key, label]) => (
+          <button
+            type="button"
+            key={key}
+            aria-pressed={filter === key}
+            onClick={() => choose(key)}
+          >
+            <strong>
+              {page.leads.filter((lead) => matches(lead, key)).length}
+            </strong>
+            <span>{label}</span>
+          </button>
         ))}
-      </List>
-      {page.total > page.leads.length ? (
-        <p className={styles.more}>
-          Showing {page.leads.length} of {page.total}. The rest are in All
-          leads.
-        </p>
-      ) : null}
-    </Card>
+      </div>
+      <Card
+        title={insights.find(([key]) => key === filter)?.[1] ?? "Leads"}
+        sub={`${filtered.length} leads, next call first`}
+        pad="md"
+      >
+        {filtered.length ? (
+          <List label="Seller leads">
+            {filtered.slice(0, visible).map((lead) => (
+              <ListRow
+                key={lead.lead_id}
+                href={`/leads#lead=${encodeURIComponent(lead.lead_id)}`}
+                title={lead.name}
+                sub={
+                  [lead.city, lead.interest].filter(Boolean).join(" · ") ||
+                  lead.source_label
+                }
+                meta={
+                  <Tag hue={STAGE_HUE[lead.stage] ?? "slate"}>
+                    {lead.overdue ? "Late · " : ""}
+                    {lead.stage_label}
+                  </Tag>
+                }
+                chevron
+              />
+            ))}
+          </List>
+        ) : (
+          <p className={styles.quiet}>
+            No leads match this view.{" "}
+            <button type="button" onClick={() => choose("open")}>
+              Show open leads
+            </button>
+          </p>
+        )}
+        {filtered.length > visible ? (
+          <Button variant="ghost" onClick={() => setVisible((n) => n + 20)}>
+            Show more
+          </Button>
+        ) : null}
+      </Card>
+    </>
   );
 }
 

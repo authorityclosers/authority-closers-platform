@@ -1,0 +1,39 @@
+/* Keep StateSwitch's accessible name, haptic, confirmation and save behavior. */
+.chip {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+}
+
+.mark {
+  position: absolute;
+  z-index: 1;
+  left: 12px;
+  display: grid;
+  place-items: center;
+  color: var(--sx-accent);
+  pointer-events: none;
+}
+
+.chip[data-on="false"] .mark {
+  color: var(--sx-ink-2);
+}
+
+.chip > button {
+  padding-left: 40px;
+}
+
+.chip > button > span[aria-hidden="true"] {
+  display: none;
+}
+
+@media (max-width: 899.98px) {
+  .chip > button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    padding: 0;
+    font-size: 0;
+  }
+}

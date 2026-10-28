@@ -97,7 +97,8 @@ it("is a chip on Leads that opens the switch instead of flipping", async () => {
   expect(toggle().getAttribute("aria-checked")).toBe("true");
   await act(async () => toggle().click());
   await act(async () => inSheet("Stop taking leads").click());
-  expect(chip.textContent).toBe("Not taking leads");
+  expect(host.querySelector("button")?.textContent).toBe("Not taking leads");
+  expect(document.querySelector("dialog[open]")).toBeNull();
 });
 
 it("lets an owner hand leads out after hours, after asking", async () => {

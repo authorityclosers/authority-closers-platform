@@ -2,7 +2,12 @@
 
 import { ChevronsUpDown, LogIn } from "lucide-react";
 import Link from "next/link";
-import type { MouseEvent, RefObject } from "react";
+import {
+  useLayoutEffect,
+  useRef,
+  type MouseEvent,
+  type RefObject,
+} from "react";
 import type { PendingInvite } from "../organisation/organisation-api";
 import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
 import type { Branding } from "./branding-store";
@@ -16,6 +21,29 @@ import {
 import styles from "./workspace-switcher.module.css";
 
 type Workspace = SalesXrayWorkspace;
+
+/** The list's width on a computer: whole names, not the sidebar's width. */
+export const MENU_WIDTH = 340;
+const EDGE = 8;
+
+/**
+ * Where the list goes: under the switcher, at most MENU_WIDTH wide, never
+ * past the window's edges, as tall as the window leaves below it.
+ */
+export function menuPlace(
+  anchor: { left: number; bottom: number },
+  view: { width: number; height: number },
+) {
+  const width = Math.min(MENU_WIDTH, view.width - 2 * EDGE);
+  const left = Math.max(EDGE, Math.min(anchor.left, view.width - width - EDGE));
+  const top = anchor.bottom + 6;
+  return {
+    top,
+    left,
+    width,
+    maxHeight: Math.max(160, view.height - top - EDGE),
+  };
+}
 
 /**
  * The sidebar's switcher (design system v2): the current workspace, what it
@@ -75,6 +103,29 @@ export function WorkspaceSwitcher({
     branding && current && branding.tenantId === current.tenant_id
       ? branding.logoUrl
       : null;
+  // The list floats over the page, anchored to the switcher (owner, #66,
+  // 28 Oct 2026: inside the sidebar's scrolling panel it was clipped to the
+  // panel's width and cut every name short). Placed before paint.
+  const menuRef = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const menu = menuRef.current;
+      const anchor = containerRef.current;
+      if (!menu || !anchor) return;
+      const spot = menuPlace(anchor.getBoundingClientRect(), {
+        width: window.innerWidth,
+        height: window.innerHeight,
+      });
+      menu.style.top = `${spot.top}px`;
+      menu.style.left = `${spot.left}px`;
+      menu.style.width = `${spot.width}px`;
+      menu.style.maxHeight = `${spot.maxHeight}px`;
+    };
+    place();
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [open, containerRef]);
   return (
     <div className={styles.container} ref={containerRef}>
       <button
@@ -115,7 +166,12 @@ export function WorkspaceSwitcher({
         />
       </button>
       {open && (
-        <div className={styles.menu} role="menu" aria-label="Switch account">
+        <div
+          ref={menuRef}
+          className={styles.menu}
+          role="menu"
+          aria-label="Switch account"
+        >
           <WorkspacePicker
             menu
             workspaces={workspaces}

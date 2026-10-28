@@ -1,0 +1,10 @@
+[Unit]
+Description=Every 5 minutes: a release that is live on production gets its Play build
+
+[Timer]
+OnBootSec=5min
+OnCalendar=*:0/5
+AccuracySec=10s
+
+[Install]
+WantedBy=timers.target

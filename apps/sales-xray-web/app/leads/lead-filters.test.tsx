@@ -36,6 +36,13 @@ afterEach(async () => {
   resetBackCloseForTests();
 });
 
+const openChoices = (label: string) =>
+  act(async () => {
+    [...document.querySelectorAll("summary")]
+      .find((item) => item.textContent?.startsWith(label))!
+      .click();
+  });
+
 const button = (label: string) =>
   [...document.querySelectorAll("button")].find(
     (item) => item.textContent?.trim() === label,
@@ -76,7 +83,9 @@ it("applies a name, whose leads and a pipeline together", async () => {
     set.call(input, "  pune ");
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
+  await openChoices("Whose leads");
   await act(async () => button("Mine").click());
+  await openChoices("Pipeline");
   await act(async () => button("Partner outreach").click());
   await act(async () => button("Show leads").click());
   expect(onApply).toHaveBeenCalledWith({
@@ -158,8 +167,11 @@ it("filters by the next follow-up and the last contact, and sorts the whole list
       />,
     ),
   );
+  await openChoices("Next follow-up");
   await act(async () => button("Due today").click());
+  await openChoices("Last contact");
   await act(async () => button("Never talked").click());
+  await openChoices("Sort by");
   await act(async () => button("Name").click());
   await act(async () => button("Show leads").click());
   expect(onApply).toHaveBeenCalledWith({

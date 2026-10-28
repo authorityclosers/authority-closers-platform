@@ -39,9 +39,8 @@ const ICONS: Record<string, ReactNode> = {
 };
 
 const GROUPS = [
-  { label: "Getting leads in", keys: ["sources", "import", "test"] },
-  { label: "Who works them", keys: ["team", "share"] },
-  { label: "Your pipeline", keys: ["stages", "numbers"] },
+  { label: "Set up leads", keys: ["sources", "stages", "team"] },
+  { label: "Manage leads", keys: ["share", "import", "numbers", "test"] },
 ];
 
 export function LeadsMenu({
@@ -54,7 +53,13 @@ export function LeadsMenu({
   items: LeadsMenuItem[];
 }) {
   return (
-    <Sheet open={open} onClose={onClose} title="Leads settings" wide="center">
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Leads settings"
+      wide="center"
+      className={styles.sheet}
+    >
       <div className={styles.groups}>
         {GROUPS.map((group) => {
           const rows = group.keys.flatMap((key) =>

@@ -1,0 +1,114 @@
+#!/bin/bash
+# ac-web-bundle-after-release: after every production release, publish its signed web bundle, so the phone apps
+# pick up the web release by themselves within minutes, with no Play build and no store review (live web updates).
+# Owner, 28 Oct 2026: "Why aren't I getting the app update on Play Store automatically ... I need new updated".
+#
+# Reads ac-ship.log for the latest "is live on production" and that release's "merged to main", builds the bundle
+# from that exact commit on GitHub (sales-xray-web-bundle.yml: the same static export the app carries), signs its
+# manifest with the Ed25519 key that only Infisical holds (prod /app-web, AC_SX_WEB_BUNDLE_SIGNING_KEY, injected
+# into the signer alone), checks it with the public key the apps pin, and publishes both where the production API
+# serves them (/v1/app-web/). A production rollback publishes the older release again, signed anew, so the apps
+# follow it back. Runs from ac-web-bundle-after-release.timer. docs/ops/LIVE-WEB-BUNDLES.md.
+#
+# Off until the owner says yes: ENABLED=1 and PUBLIC_KEY in the config. Without them it does nothing.
+set -uo pipefail
+SHIPLOG=${AC_WEB_BUNDLE_SHIP_LOG:-/var/log/ac-ship.log}
+LOG=${AC_WEB_BUNDLE_LOG:-/var/log/ac-web-bundle-after-release.log}
+STATE_DIR=${AC_WEB_BUNDLE_STATE:-/var/lib/ac-web-bundle-after-release}
+CONF=${AC_WEB_BUNDLE_CONF:-/etc/ac-web-bundle-after-release.conf}
+NOTIFY=${AC_WEB_BUNDLE_NOTIFY:-/usr/local/sbin/ac-notify-owner}
+TOOL=${AC_WEB_BUNDLE_TOOL:-/usr/local/sbin/sx-web-bundle}
+SECRETS=${AC_WEB_BUNDLE_SECRETS:-/usr/local/sbin/ac-infisical-run}
+CURL=${AC_WEB_BUNDLE_CURL:-curl}
+PAUSE=${AC_WEB_BUNDLE_PAUSE:-20}
+ROUNDS=${AC_WEB_BUNDLE_ROUNDS:-90}
+PLATFORM=authorityclosers/authority-closers-platform
+HOST=salesxray.authorityclosers.com
+# The production API's media volume, mounted in the api at /var/lib/ac-media (AC_APP_WEB_ROOT=/var/lib/ac-media/app-web).
+ROOT=/srv/authority-closers/volumes/media-video/production/app-web
+# The apps' native contract this release's web needs (sales-xray-apps LiveWebRules.NATIVE_CONTRACT).
+MIN_NATIVE=1
+ENABLED=0
+PUBLIC_KEY=""
+# shellcheck source=/dev/null
+[ -f "$CONF" ] && . "$CONF"
+[ "$ENABLED" = 1 ] || exit 0
+say() { echo "$(date -u +%FT%TZ) $*" >> "$LOG"; }
+tell() { say "$*"; "$NOTIFY" "$*" >/dev/null 2>&1 || true; }
+gh() {
+  if [ -n "${AC_WEB_BUNDLE_GH:-}" ]; then "$AC_WEB_BUNDLE_GH" "$@"; else sudo -u acdev -H /home/acdev/.local/bin/gh "$@"; fi
+}
+[[ "$PUBLIC_KEY" =~ ^[0-9a-f]{64}$ ]] || { say "PUBLIC_KEY in $CONF is not a 64-character hex key; nothing published"; exit 1; }
+
+VER=$(grep -oE "v[0-9]+\.[0-9]+\.[0-9]+ is live on production" "$SHIPLOG" 2>/dev/null | tail -1 | awk '{print $1}')
+[ -n "$VER" ] || exit 0
+mkdir -p "$STATE_DIR"
+[ "$(cat "$STATE_DIR/last" 2>/dev/null)" = "$VER" ] && exit 0
+SHORT=$(grep -oE "$VER merged to main as [0-9a-f]+" "$SHIPLOG" | tail -1 | awk '{print $NF}')
+[ -n "$SHORT" ] || { say "$VER is live but its main commit is not in $SHIPLOG; not published"; exit 1; }
+SHA=$(gh api "repos/$PLATFORM/commits/$SHORT" --jq .sha 2>/dev/null)
+[[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || { say "$VER: main commit $SHORT unreadable on GitHub; will retry"; exit 1; }
+
+# One build per release: a run already started for it (an earlier tick that stopped) is waited on, not repeated.
+RUN=""
+if [ -f "$STATE_DIR/run" ] && read -r run_ver run_id < "$STATE_DIR/run" && [ "$run_ver" = "$VER" ]; then
+  RUN=$run_id
+fi
+if [ -z "$RUN" ]; then
+  BEFORE=$(gh run list -R "$PLATFORM" --workflow sales-xray-web-bundle.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null)
+  gh workflow run sales-xray-web-bundle.yml -R "$PLATFORM" --ref main -f frozen_sha="$SHA" -f host="$HOST" >/dev/null 2>&1 \
+    || { say "$VER: sales-xray-web-bundle.yml dispatch refused; will retry"; exit 1; }
+  for _ in $(seq 1 12); do
+    sleep "$PAUSE"
+    RUN=$(gh run list -R "$PLATFORM" --workflow sales-xray-web-bundle.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null)
+    [ -n "$RUN" ] && [ "$RUN" != "$BEFORE" ] && break
+    RUN=""
+  done
+  [ -n "$RUN" ] || { say "$VER: the bundle build was started but its run did not show up; will retry"; exit 1; }
+  echo "$VER $RUN" > "$STATE_DIR/run"
+  say "$VER: sales-xray-web-bundle.yml run $RUN started (web ${SHA:0:9})"
+fi
+URL="https://github.com/$PLATFORM/actions/runs/$RUN"
+
+OUTCOME=""
+for _ in $(seq 1 "$ROUNDS"); do
+  OUTCOME=$(gh run view "$RUN" -R "$PLATFORM" --json status,conclusion --jq '.status + " " + .conclusion' 2>/dev/null)
+  case "$OUTCOME" in
+    "completed success") break ;;
+    completed*)
+      echo "$VER" > "$STATE_DIR/last"
+      tell "The phone apps' web bundle for $VER did not build ($OUTCOME); phones keep their web app until the next release: $URL"
+      exit 1 ;;
+  esac
+  sleep "$PAUSE"
+done
+[ "$OUTCOME" = "completed success" ] || { say "$VER: bundle run $RUN still running; will look again"; exit 1; }
+
+WORK=$(mktemp -d "$STATE_DIR/work.XXXXXX")
+trap 'rm -rf "$WORK"' EXIT
+gh run download "$RUN" -R "$PLATFORM" -n sx-web-bundle -D "$WORK" >/dev/null 2>&1 \
+  || { say "$VER: bundle run $RUN has no sx-web-bundle artifact; will retry"; exit 1; }
+DIGEST=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha256"])' "$WORK/bundle.json" 2>/dev/null)
+[[ "$DIGEST" =~ ^[0-9a-f]{64}$ ]] && [ -f "$WORK/$DIGEST.zip" ] || { say "$VER: bundle artifact incomplete"; exit 1; }
+SHA_IN=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["sha"])' "$WORK/bundle.json" 2>/dev/null)
+[ "$SHA_IN" = "$SHA" ] || { say "$VER: bundle built from $SHA_IN, not the release's $SHA; not published"; exit 1; }
+
+# The signing key reaches the signer alone, from Infisical, for this one call; it is never printed or written.
+SEQUENCE=$(date +%s%3N)
+AC_INFISICAL_ENVIRONMENT=prod AC_INFISICAL_PATH=/app-web "$SECRETS" -- "$TOOL" sign \
+  --bundle-json "$WORK/bundle.json" --version "${VER#v}" --sequence "$SEQUENCE" --min-native "$MIN_NATIVE" \
+  --out "$WORK/manifest.json" >/dev/null 2>>"$LOG" || { say "$VER: signing failed; will retry"; exit 1; }
+"$TOOL" verify "$WORK/manifest.json" --key "$PUBLIC_KEY" --host "$HOST" --bundle "$WORK/$DIGEST.zip" >/dev/null 2>>"$LOG" \
+  || { say "$VER: the signed manifest does not open with the apps' pinned key; not published"; exit 1; }
+"$TOOL" publish --manifest "$WORK/manifest.json" --bundle "$WORK/$DIGEST.zip" --root "$ROOT" --key "$PUBLIC_KEY" >/dev/null 2>>"$LOG" \
+  || { say "$VER: publishing failed; will retry"; exit 1; }
+# What the phones will read: production's own address.
+if ! "$CURL" --fail --silent --show-error --max-time 20 "https://$HOST/v1/app-web/manifest.json" -o "$WORK/live.json" 2>>"$LOG" \
+  || ! "$TOOL" verify "$WORK/live.json" --key "$PUBLIC_KEY" --host "$HOST" > "$WORK/live-fields.json" 2>>"$LOG" \
+  || ! grep -q "\"$DIGEST\"" "$WORK/live-fields.json"; then
+  say "$VER: published, but https://$HOST/v1/app-web/manifest.json does not show it yet; will check again"
+  exit 1
+fi
+echo "$VER" > "$STATE_DIR/last"
+rm -f "$STATE_DIR/run"
+tell "Phones pick up $VER's web app by themselves now (live web update, no Play build; bundle ${DIGEST:0:12})"

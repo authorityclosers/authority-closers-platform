@@ -6650,3 +6650,459 @@ fieldset.form {
     align-self: center;
   }
 }
+
+/* Owner bugs #57/#58: the first screen belongs to leads, with one row of
+   navigation and status tools. The shell already names the page. */
+.viewHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.viewHeader > nav {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+}
+
+.viewHeader .toolbar[data-head] {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.root[data-tab="all"] {
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.root[data-tab="all"] .listHead {
+  box-sizing: border-box;
+  min-height: 48px;
+  padding-block: 2px;
+}
+
+@media (max-width: 899.98px) {
+  .viewHeader > nav {
+    padding: 0;
+  }
+
+  .viewHeader > nav > button {
+    padding-inline: 4px;
+  }
+
+  .viewHeader .toolbarEnd {
+    margin-left: 0;
+  }
+}
+
+@media (min-width: 900px) {
+  .root[data-tab="all"] {
+    padding-top: 8px;
+  }
+}
+
+/* A visible, compact call-log control rather than a link buried in a sentence. */
+.logThis {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.logThisHint {
+  flex: 1 1 120px;
+}
+
+.logThisButton {
+  flex: none;
+  justify-content: center;
+  gap: 8px;
+  padding-inline: 12px;
+  border: 1px solid var(--sx-line-strong);
+  background: var(--sx-surface);
+  color: var(--sx-accent);
+}
+
+.pipelineOverview summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.pipelineOverview summary::-webkit-details-marker {
+  display: none;
+}
+
+.pipelineOverview summary > span {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pipelineOverview summary small {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+}
+
+.pipelineOverview summary > svg:first-child {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+.pipelineOverview[open] summary > svg:last-child {
+  transform: rotate(180deg);
+}
+
+.pipelineOverview summary:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+  border-radius: var(--sx-radius-sm);
+}
+
+.pipelineStages {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.pipelineStages ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.pipelineStages li {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.pipelineStages li[aria-current] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+  font-weight: 650;
+}
+
+.pipelineStages li small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sx-accent);
+}
+
+/* Inline keyboard entry belongs after the real leads on computers. On a
+   phone, creation starts from the shell's + so the list stays in view. */
+@media (max-width: 899.98px) {
+  .quickAddAfter {
+    display: none;
+  }
+}
+
+/* Stage tabs are the list's one navigation strip. Now and More stay in it;
+   the list's own filters sit beside its count and List/Table controls. */
+.viewHeader > .stageTabs {
+  flex: 1 1 0;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.listFilter {
+  display: inline-flex;
+}
+
+.listFilter button {
+  width: 44px;
+  min-height: 44px;
+  padding-inline: 0;
+  gap: 4px;
+  font-size: 0;
+}
+
+.listFilter button span {
+  font-size: var(--sx-text-xs);
+}
+
+.root[data-tab="all"] .listHead {
+  padding-inline: 8px;
+}
+
+/* The field boundary and hint remain clear in both themes, also before focus. */
+.noteBox {
+  border-color: color-mix(in srgb, var(--sx-muted) 70%, var(--sx-surface));
+}
+
+.noteBox textarea {
+  font-size: 16px;
+}
+
+.noteBox textarea::placeholder {
+  color: var(--sx-muted);
+  opacity: 1;
+}
+
+.ownerAction {
+  gap: 8px;
+}
+
+.ownerAction > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+/* One call action, kept in the sheet footer while the seller reads below. */
+.primaryDock {
+  width: 100%;
+  min-width: 0;
+}
+
+.primaryDock .callButton {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+}
+
+.desktopCall {
+  display: none;
+}
+.root[data-tab="desk"] {
+  gap: 8px;
+  padding-top: 4px;
+}
+@media (min-width: 900px) {
+  .desktopCall {
+    display: inline-flex;
+  }
+}
+
+/* A steady status beside the total; data stays usable during refresh. */
+.syncChip {
+  flex: 0 0 auto;
+  color: var(--sx-muted);
+  font-size: 11px;
+  line-height: 16px;
+  white-space: nowrap;
+}
+@media (max-width: 599px) {
+  .listHead {
+    flex-wrap: wrap;
+    column-gap: 8px;
+  }
+  .syncChip {
+    margin-inline-start: auto;
+  }
+  .listHead > .listTools {
+    margin-inline-start: auto;
+  }
+}
+
+.listHead:has(.syncChip) {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 8px;
+  row-gap: 0;
+}
+.listHead:has(.syncChip) > .listTotal {
+  grid-column: 1;
+  grid-row: 1;
+  align-self: end;
+}
+.listHead:has(.syncChip) > .syncChip {
+  grid-column: 1;
+  grid-row: 2;
+  align-self: start;
+  margin: 0;
+  color: var(--sx-muted);
+}
+.listHead:has(.syncChip) > .listTools {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  justify-self: end;
+  min-width: 0;
+}
+.pickerGroup {
+  border-bottom: 1px solid var(--sx-line);
+  min-width: 0;
+}
+.pickerGroup > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding-block: 8px;
+  cursor: pointer;
+  list-style: none;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+.pickerGroup > summary::-webkit-details-marker {
+  display: none;
+}
+.pickerGroup > summary > svg {
+  flex-shrink: 0;
+  margin-inline-start: auto;
+}
+.pickerGroup[open] > summary > svg {
+  transform: rotate(180deg);
+}
+.pickerValue {
+  margin-inline-start: auto;
+  color: var(--sx-muted);
+  text-align: end;
+  font-weight: 400;
+}
+.pickerGroup > summary > .pickerValue + svg {
+  margin-inline-start: 0;
+}
+.pickerOptions {
+  display: grid;
+  gap: 8px;
+  padding-block: 0 12px;
+}
+.pickerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid transparent;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+.pickerRow[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: color-mix(in srgb, var(--sx-accent) 10%, var(--sx-surface));
+  font-weight: 600;
+}
+.pickerRow:focus-visible,
+.pickerGroup > summary:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+.sellerChoices > div {
+  display: grid;
+  gap: 8px;
+  padding-block: 0 12px;
+  overflow: visible;
+}
+.sellerChoices button {
+  width: 100%;
+  min-height: 48px;
+  justify-content: start;
+  border-radius: var(--sx-radius-sm);
+}
+.sellerChoices button > span:last-child {
+  margin-inline-start: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.filterForm:has(.pickerGroup) {
+  gap: 8px;
+}
+
+.pickerGroup > summary,
+.pickerRow {
+  box-sizing: border-box;
+}
+
+/* Keep Select inside the smallest phone: the status uses two short lines,
+   rather than taking space from the 44 px controls. */
+@media (max-width: 375px) {
+  .listHead:has(.syncChip) {
+    grid-template-columns: 60px minmax(0, 1fr);
+  }
+  .listHead:has(.syncChip) > .listTotal {
+    font-size: 12px;
+  }
+  .listHead:has(.syncChip) > .syncChip {
+    max-width: 60px;
+    white-space: normal;
+    line-height: 12px;
+  }
+}
+
+/* Cold reads reserve the same row height as the list, including phone actions. */
+.listSkeleton:has(.listLoadingRow) {
+  gap: 0;
+  padding: 0;
+}
+.listLoadingRow {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 84px;
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--sx-line);
+}
+.listLoadingText {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.listLoadingActions {
+  display: none;
+}
+@media (max-width: 599px) {
+  .listLoadingRow {
+    min-height: 134px;
+  }
+  .listLoadingActions {
+    display: block;
+  }
+}
+
+/* The sync sign stays in view while the loaded rows scroll beneath it. */
+.listPanel:has(.syncChip) {
+  overflow: clip;
+}
+.listHead:has(.syncChip) {
+  position: sticky;
+  top: 48px;
+  z-index: 3;
+  background: var(--sx-surface);
+}
+@media (max-width: 899px) {
+  .listHead:has(.syncChip) {
+    top: calc(62px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* Offscreen loaded rows retain their natural size without painting every
+   avatar, gesture layer and control on each sync. Keyboard focus still reveals
+   a row, and browsers without content-visibility keep the ordinary list. */
+.leadList > .leadLine {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 84px;
+}
+
+@media (max-width: 767px) {
+  .leadList > .leadLine {
+    contain-intrinsic-block-size: auto 134px;
+  }
+}

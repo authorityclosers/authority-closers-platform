@@ -1352,3 +1352,22 @@ it("makes someone the owner only after the organisation's name is typed", async 
   await typeOrganisationName("  authority   closers ");
   expect(makeOwner().disabled).toBe(false);
 });
+
+it("uses the shared measured display name in People rows without rewriting identity", async () => {
+  const name = "Alexandria Fictional Longfamilyname";
+  routes["/v1/organisation/members"] = {
+    members: [{ ...active, name, email: "alexandria@example.test" }],
+  };
+  await render();
+  await click("Members");
+  const link = host.querySelector<HTMLAnchorElement>(
+    `[aria-label="People"] a[href="/organisation/people/${ownerId}"]`,
+  )!;
+  expect(
+    link.querySelector(
+      '[aria-label="Alexandria Fictional Longfamilyname"][title]',
+    ),
+  ).not.toBeNull();
+  expect(link.querySelectorAll("span")).toHaveLength(3);
+  expect(writes()).toHaveLength(0);
+});

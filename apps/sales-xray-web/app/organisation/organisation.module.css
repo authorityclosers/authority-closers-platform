@@ -2153,3 +2153,21 @@
     animation: none;
   }
 }
+
+/* People use the same measured one-line name as the person page (#62). */
+.memberLink {
+  display: block;
+  flex: 1;
+  min-width: 0;
+  -webkit-line-clamp: unset;
+  line-clamp: unset;
+  white-space: nowrap;
+}
+.personName b > :not(.memberLink) {
+  flex: none;
+}
+.personName small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -18,7 +18,7 @@ from typing import Any, Literal
 from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, case, delete, func, or_, select, true
+from sqlalchemy import String, and_, case, cast, delete, func, or_, select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -62,6 +62,7 @@ from ac_platform.lead_desk.contracts import (
     ConversionView,
     Counts,
     DayCalls,
+    DayOutcome,
     DeleteLeads,
     Desk,
     DeviceCommand,
@@ -183,8 +184,19 @@ SELLER_ROLES = roles_with("leads.work")
 QUEUE_LIMIT = 30
 UPCOMING_LIMIT = 20
 PAGE_SIZE = 50
-# My work: what a seller does on a lead (not imports, edits or assignments).
-WORK_KINDS = ("call", "result", "note", "stage", "meeting", "message", "scheduled")
+# My work includes assignments and follow-up tasks; bookkeeping stays out.
+WORK_KINDS = (
+    "call",
+    "result",
+    "note",
+    "stage",
+    "meeting",
+    "message",
+    "scheduled",
+    "task",
+    "assigned",
+    "reassigned",
+)
 # The team's day (Home's Team today, 27 Oct 2026) adds the leads given out and the leads
 # that came in.
 TEAM_KINDS = (*WORK_KINDS, "assigned", "reassigned", "captured")
@@ -1254,19 +1266,21 @@ class LeadDesk:
         if team and not self.viewer.can_see_team:
             raise DeskError(403, "Your role sees your own work only.")
         who = person or self.viewer.person_id
-        if not team and who != self.viewer.person_id and not self.viewer.can_manage:
+        if who != self.viewer.person_id and not self.viewer.can_see_team:
             raise DeskError(403, "Only owners and admins see someone else's work.")
         limit = max(1, min(WORK_PAGE, limit))
         start = self._day_start()
         if day == "yesterday":
             after, upto = start - timedelta(days=1), start
+        elif day == "recent":
+            after, upto = datetime(1970, 1, 1, tzinfo=UTC), self.now + timedelta(minutes=1)
         elif day == "week":
             after, upto = start - timedelta(days=6), self.now + timedelta(minutes=1)
         else:
             after, upto = start, self.now + timedelta(minutes=1)
         window = [
             LeadEvent.tenant_id == self.tenant_id,
-            *(() if team else (LeadEvent.actor_person_id == who,)),
+            *(() if team and person is None else (LeadEvent.actor_person_id == who,)),
             LeadEvent.kind.in_(TEAM_KINDS if team else WORK_KINDS),
             LeadEvent.created_at >= after,
             LeadEvent.created_at < upto,
@@ -1279,20 +1293,89 @@ class LeadDesk:
                     tuple(transitions.BOOKKEEPING)
                 ),
             ),
-            self._seen() if team else self._visible(),
+            self._seen(),
         ]
         joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
-        counts = {
-            str(kind): int(count)
-            for kind, count in (
-                await self.db.execute(
-                    select(LeadEvent.kind, func.count())
-                    .join(Lead, joined)
-                    .where(*window)
-                    .group_by(LeadEvent.kind)
+        # Apply privacy and undo fences before aggregates and pagination too.
+        hidden = await self._private_calls(after)
+        if hidden:
+            window.append(
+                or_(
+                    LeadEvent.id.not_in(tuple(UUID(value) for value in hidden)),
+                    LeadEvent.actor_person_id == self.viewer.person_id,
                 )
-            ).all()
-        }
+            )
+        undone = select(LeadEvent.data[UNDO_OF].as_string()).where(
+            LeadEvent.tenant_id == self.tenant_id,
+            LeadEvent.kind == "edited",
+            LeadEvent.data[UNDO_OF].as_string().is_not(None),
+        )
+        # UUID text comparison keeps undo markers append-only.
+        window.append(cast(LeadEvent.id, String).not_in(undone))
+        parent = LeadEvent.__table__.alias("activity_parent")
+        # A recording attached later is part of its phone call, not a second call.
+        window.append(
+            ~and_(
+                LeadEvent.kind == "call",
+                LeadEvent.data["for_call"].as_string().is_not(None),
+                select(parent.c.id)
+                .where(
+                    parent.c.tenant_id == LeadEvent.tenant_id,
+                    cast(parent.c.id, String) == LeadEvent.data["for_call"].as_string(),
+                )
+                .exists(),
+            )
+        )
+        aggregate = (
+            select(
+                LeadEvent.kind,
+                func.count(),
+                func.count().filter(LeadEvent.created_at >= start),
+                func.count().filter(LeadEvent.created_at >= start - timedelta(days=6)),
+            )
+            .join(Lead, joined)
+            .where(*window)
+            .group_by(LeadEvent.kind)
+        )
+        grouped = (await self.db.execute(aggregate)).all()
+        counts = {str(kind): int(total) for kind, total, _, _ in grouped}
+        today_counts = {str(kind): int(today) for kind, _, today, _ in grouped}
+        week_counts = {str(kind): int(week) for kind, _, _, week in grouped}
+        connected = and_(
+            LeadEvent.kind == "call",
+            or_(
+                LeadEvent.data["connected"].as_boolean().is_(True),
+                LeadEvent.data["duration_seconds"].as_integer() > 0,
+            ),
+        )
+        today_counts["connected"] = int(
+            await self.db.scalar(
+                select(func.count())
+                .select_from(LeadEvent)
+                .join(Lead, joined)
+                .where(*window, connected, LeadEvent.created_at >= start)
+            )
+            or 0
+        )
+        week_counts["connected"] = int(
+            await self.db.scalar(
+                select(func.count())
+                .select_from(LeadEvent)
+                .join(Lead, joined)
+                .where(*window, connected, LeadEvent.created_at >= start - timedelta(days=6))
+            )
+            or 0
+        )
+        latest = (
+            await self.db.execute(
+                select(
+                    func.max(LeadEvent.created_at),
+                    func.max(LeadEvent.created_at).filter(LeadEvent.kind == "call"),
+                )
+                .join(Lead, joined)
+                .where(*window)
+            )
+        ).one()
         page = [*window]
         if before is not None:
             page.append(LeadEvent.created_at < before)
@@ -1307,11 +1390,31 @@ class LeadDesk:
         ).all()
         more = len(rows) > limit
         rows = rows[:limit]
-        hidden = (
-            await self._private_calls(after)
-            if team or who != self.viewer.person_id
-            else frozenset()
-        )
+        # The public cursor is a timestamp. Include every event at the boundary
+        # so a batch of synced calls with identical timestamps is never skipped.
+        if more and rows:
+            boundary = rows[-1][0].created_at
+            ties = (
+                await self.db.execute(
+                    select(LeadEvent, Lead)
+                    .join(Lead, joined)
+                    .where(*page, LeadEvent.created_at == boundary)
+                    .order_by(LeadEvent.id.desc())
+                )
+            ).all()
+            rows = [row for row in rows if row[0].created_at != boundary] + list(ties)
+        recordings = (
+            await self.db.scalars(
+                select(LeadEvent)
+                .where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.kind == "call",
+                    LeadEvent.data["for_call"].as_string().in_([str(row[0].id) for row in rows]),
+                )
+                .order_by(LeadEvent.created_at.desc())
+            )
+        ).all()
+        joined_recordings = self._joined_recordings([*recordings, *(row[0] for row in rows)])
         removed = await self._undone(
             str(event.id)
             for event, _ in rows
@@ -1337,7 +1440,9 @@ class LeadDesk:
         labels: dict[str, journeys.Journey] = {}
         items: list[ActivityItem] = []
         for event, lead in rows:
-            if str(event.id) in hidden or str(event.id) in removed:
+            if (str(event.id) in hidden and event.actor_person_id != self.viewer.person_id) or str(
+                event.id
+            ) in removed:
                 continue
             key = journeys.pipeline_of(lead)
             if key not in labels:
@@ -1348,13 +1453,24 @@ class LeadDesk:
                     lead_id=lead.id,
                     lead_name=lead.name,
                     stage_label=labels[key].label(lead.stage, lead.step),
-                    event=self._event_view(event, names, photos=photos),
+                    event=self._event_view(
+                        event,
+                        names,
+                        photos=photos,
+                        hidden=hidden,
+                        recording=joined_recordings.get(str(event.id)),
+                    ),
                 )
             )
         return ActivityPage(
             items=tuple(items),
             next_before=rows[-1][0].created_at if more and rows else None,
             counts=counts,
+            today_counts=today_counts,
+            week_counts=week_counts,
+            last_active_at=latest[0],
+            last_call_at=latest[1],
+            timezone=str(IST),
         )
 
     async def detail(self, lead_id: UUID) -> LeadDetail:
@@ -4333,12 +4449,15 @@ class LeadDesk:
 
         current, previous = blank(), blank()
         per: dict[UUID, dict[str, Any]] = {}
+        by_day: dict[date, dict[str, Any]] = {}
         for event_id, actor, lead_id, kind, data, at in rows:
             if not isinstance(data, dict) or str(event_id) in hidden:
                 continue
             tallies = [current if at >= begin else previous]
             if actor is not None and at >= begin:
                 tallies.append(per.setdefault(actor, blank()))
+            if at >= begin:
+                tallies.append(by_day.setdefault(at.astimezone(IST).date(), blank()))
             if kind == "result" or (kind == "call" and counted_phone_call(data)):
                 for tally in tallies:
                     tally["calls"] += 1
@@ -4353,6 +4472,8 @@ class LeadDesk:
                 for tally in tallies:
                     tally[stage].add(lead_id)
 
+        arrivals_by_day: dict[date, int] = {}
+
         async def arrived(since: datetime, until: datetime | None) -> tuple[int, int | None]:
             where = [
                 Lead.tenant_id == self.tenant_id,
@@ -4363,14 +4484,20 @@ class LeadDesk:
                 where.append(until > ARRIVED)
             leads = (
                 await self.db.execute(
-                    select(Lead.created_at, Lead.first_contact_at).where(*where).limit(50000)
+                    select(Lead.created_at, Lead.first_contact_at, ARRIVED)
+                    .where(*where)
+                    .limit(50000)
                 )
             ).all()
             speeds = [
                 minutes
-                for created, first in leads
+                for created, first, _ in leads
                 if (minutes := first_call_minutes(created, first)) is not None
             ]
+            if until is None:
+                for _, _, came in leads:
+                    day = came.astimezone(IST).date()
+                    arrivals_by_day[day] = arrivals_by_day.get(day, 0) + 1
             return len(leads), median(speeds)
 
         def outcomes(tally: dict[str, Any], arrivals: tuple[int, int | None]) -> Outcomes:
@@ -4433,15 +4560,31 @@ class LeadDesk:
         ).all():
             pipeline[str(stage)] = pipeline.get(str(stage), 0) + int(count)
             pipelines.setdefault(str(owner_pipeline), {})[str(stage)] = int(count)
+        now_outcomes = outcomes(current, await arrived(begin, None))
+        daily = []
+        for offset in range(days):
+            day = start + timedelta(days=offset)
+            tally = by_day.get(day, blank())
+            daily.append(
+                DayOutcome(
+                    day=day,
+                    calls=tally["calls"],
+                    connected=tally["connected"],
+                    interested=len(tally["interested"]),
+                    won=len(tally["won"]),
+                    new_leads=arrivals_by_day.get(day, 0),
+                )
+            )
         return Performance(
             days=days,
             start=start,
             end=end,
-            current=outcomes(current, await arrived(begin, None)),
+            current=now_outcomes,
             previous=outcomes(previous, await arrived(before, begin)),
             sellers=tuple(sellers),
             pipeline=pipeline,
             pipelines=pipelines,
+            daily=tuple(daily),
         )
 
     async def save_rep(self, person_id: UUID, command: RepRules) -> Team:

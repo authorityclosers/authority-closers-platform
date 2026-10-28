@@ -526,6 +526,169 @@ class SalesXrayAppHandoffCodec:
         return handoff
 
 
+CROSS_APP_HANDOFF_TTL_SECONDS = 60
+CROSS_APP_HANDOFF_ERROR = "This sign-in link has expired. Try again from Sales X-Ray."
+_CROSS_APP_HANDOFF_AAD = b"ac-platform:cross-app-handoff:v1"
+# The sealed return path may contain 512 Unicode characters, in addition to
+# the origin and session binding. Bound the wire size before base64 decoding.
+CROSS_APP_HANDOFF_MAX_LENGTH = 4096
+
+
+def cross_app_return_path(value: str) -> str:
+    """Accept an exact local path, without normalizing an unsafe destination."""
+
+    if (
+        not isinstance(value, str)
+        or not value.startswith("/")
+        or value.startswith("//")
+        or len(value) > 512
+        or "\\" in value
+        or any(ord(character) < 32 or 127 <= ord(character) <= 159 for character in value)
+        or urlsplit(value).scheme
+        or urlsplit(value).netloc
+    ):
+        raise InvalidAuthTransaction(CROSS_APP_HANDOFF_ERROR)
+    return value
+
+
+@dataclass(frozen=True, slots=True)
+class CrossAppHandoff:
+    session_token: str
+    session_id: UUID
+    challenge: str
+    source_surface: str
+    target_surface: str
+    target_origin: str
+    return_path: str
+    issued_at: int
+    expires_at: int
+
+
+class CrossAppHandoffCodec:
+    """An independently keyed browser handoff; never interchangeable with Android."""
+
+    def __init__(self, transaction_secret: bytes | str) -> None:
+        if isinstance(transaction_secret, str):
+            transaction_secret = transaction_secret.encode("utf-8")
+        if len(transaction_secret) < 32:
+            raise ValueError("OAuth transaction secret must contain at least 32 bytes")
+        self._aead = AESGCM(
+            hmac.new(transaction_secret, _CROSS_APP_HANDOFF_AAD + b"\x00", hashlib.sha256).digest()
+        )
+
+    def encode(
+        self,
+        *,
+        session_token: str,
+        session_id: UUID,
+        challenge: str,
+        source_surface: str,
+        target_surface: str,
+        target_origin: str,
+        return_path: str = "/home",
+        now: int | None = None,
+    ) -> str:
+        issued_at = int(time() if now is None else now)
+        payload = {
+            "v": 1,
+            "session_token": session_token,
+            "session_id": str(session_id),
+            "challenge": challenge,
+            "source_surface": source_surface,
+            "target_surface": target_surface,
+            "target_origin": target_origin,
+            "return_path": cross_app_return_path(return_path),
+            "issued_at": issued_at,
+            "expires_at": issued_at + CROSS_APP_HANDOFF_TTL_SECONDS,
+        }
+        serialized = json.dumps(
+            payload, sort_keys=True, separators=(",", ":"), ensure_ascii=False
+        ).encode("utf-8")
+        nonce = secrets.token_bytes(12)
+        code = _base64url_encode(
+            nonce + self._aead.encrypt(nonce, serialized, _CROSS_APP_HANDOFF_AAD)
+        )
+        # Apply exactly the same shape/value checks on issuance and redemption.
+        self.decode(code, now=issued_at)
+        return code
+
+    def decode(self, value: str, *, now: int | None = None) -> CrossAppHandoff:
+        try:
+            if not isinstance(value, str) or len(value) > CROSS_APP_HANDOFF_MAX_LENGTH:
+                raise ValueError("size")
+            sealed = _base64url_decode(value)
+            if len(sealed) < 12 + 16:
+                raise ValueError("size")
+            serialized = self._aead.decrypt(sealed[:12], sealed[12:], _CROSS_APP_HANDOFF_AAD)
+            payload = json.loads(serialized)
+            if not isinstance(payload, dict) or set(payload) != {
+                "v",
+                "session_token",
+                "session_id",
+                "challenge",
+                "source_surface",
+                "target_surface",
+                "target_origin",
+                "return_path",
+                "issued_at",
+                "expires_at",
+            }:
+                raise ValueError("shape")
+            if type(payload["v"]) is not int or payload["v"] != 1:
+                raise ValueError("version")
+            if type(payload["issued_at"]) is not int or type(payload["expires_at"]) is not int:
+                raise ValueError("time")
+            for name in (
+                "session_token",
+                "session_id",
+                "challenge",
+                "source_surface",
+                "target_surface",
+                "target_origin",
+                "return_path",
+            ):
+                if not isinstance(payload[name], str):
+                    raise ValueError("value")
+            if (
+                re.fullmatch(r"[A-Za-z0-9_-]{32,160}", payload["session_token"]) is None
+                or SALES_XRAY_APP_CHALLENGE_PATTERN.fullmatch(payload["challenge"]) is None
+                or payload["source_surface"] != "sales_xray"
+                or payload["target_surface"] != "learner"
+            ):
+                raise ValueError("binding")
+            origin = urlsplit(payload["target_origin"])
+            if (
+                origin.scheme not in {"http", "https"}
+                or not origin.hostname
+                or origin.username is not None
+                or origin.password is not None
+                or origin.path
+                or origin.query
+                or origin.fragment
+                or len(payload["target_origin"]) > 256
+            ):
+                raise ValueError("origin")
+            handoff = CrossAppHandoff(
+                **{
+                    name: value
+                    for name, value in payload.items()
+                    if name not in {"v", "session_id"}
+                },
+                session_id=UUID(payload["session_id"]),
+            )
+            cross_app_return_path(handoff.return_path)
+            current_time = int(time() if now is None else now)
+            if (
+                handoff.expires_at - handoff.issued_at != CROSS_APP_HANDOFF_TTL_SECONDS
+                or handoff.issued_at > current_time + AUTH_TRANSACTION_FUTURE_SKEW_SECONDS
+                or handoff.expires_at <= current_time
+            ):
+                raise ValueError("expiry")
+            return handoff
+        except (InvalidTag, InvalidAuthTransaction, TypeError, ValueError, KeyError) as exc:
+            raise InvalidAuthTransaction(CROSS_APP_HANDOFF_ERROR) from exc
+
+
 # Apple posts its sign-in result cross-site (response_mode=form_post), so the
 # SameSite=Lax transaction cookie is not sent with that POST. The POST only seals
 # what Apple sent into this short cookie and redirects to a same-site GET, where
@@ -663,12 +826,18 @@ __all__ = [
     "SALES_XRAY_COMPLETION_RECEIPT_TTL_SECONDS",
     "AuthTransaction",
     "AuthTransactionCodec",
+    "CROSS_APP_HANDOFF_ERROR",
+    "CROSS_APP_HANDOFF_MAX_LENGTH",
+    "CROSS_APP_HANDOFF_TTL_SECONDS",
+    "CrossAppHandoff",
+    "CrossAppHandoffCodec",
     "InvalidAuthTransaction",
     "SalesXrayAppHandoff",
     "SalesXrayAppHandoffCodec",
     "SalesXrayCompletionReceipt",
     "SalesXrayCompletionReceiptCodec",
     "normalize_return_path",
+    "cross_app_return_path",
     "sales_xray_app_verifier_matches",
     "sales_xray_completion_flow_id",
 ]

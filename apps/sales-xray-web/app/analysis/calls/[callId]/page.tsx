@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { UUID } from "../../../acquisition-client";
-import { AcquisitionStudio } from "../../../acquisition-studio";
+import { SavedReportPage } from "./saved-report";
 import { ReportSettingsWarmUp } from "../../../report-settings-warm";
 
 // The static preview build needs one concrete path; real calls render on
@@ -21,7 +21,7 @@ export default async function CallAnalysisPage({
     <>
       {/* The Report's settings version is read beside the call's reads. */}
       <ReportSettingsWarmUp />
-      <AcquisitionStudio requestedCallId={callId} />
+      <SavedReportPage callId={callId} />
     </>
   );
 }

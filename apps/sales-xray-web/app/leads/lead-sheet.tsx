@@ -44,6 +44,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { createPortal } from "react-dom";
+
 import { callHref, type UploadPolicy } from "../acquisition-client";
 import { notify } from "../notice-center";
 import { rememberOpened } from "../pick-up";
@@ -83,6 +85,7 @@ import {
 import { PersonAvatar } from "../people/person-avatar";
 import { LastCallBrief } from "./call-brief-card";
 import { ReassignSheet } from "./reassign-sheet";
+import { PipelineOverview } from "./pipeline-overview";
 import { InAppCallHint } from "./call-hint";
 import { CallLink } from "./call-link";
 import type { FirstTapEvent } from "./first-tap";
@@ -812,7 +815,7 @@ export function LogThis({
         onClick={onOpen}
       >
         <NotebookPen size={16} aria-hidden="true" />
-        {hint ? "Log this" : "Log it"}
+        Log a call
       </button>
     </p>
   );
@@ -2560,6 +2563,8 @@ export function LeadCard({
   intent = null,
   afterCall = null,
   focusAt = null,
+  primarySlot = null,
+  hidePrimary = false,
 }: {
   detail: LeadDetail;
   me: Me | null;
@@ -2577,6 +2582,8 @@ export function LeadCard({
   afterCall?: { step: "outcome" | "recording"; onNext?: () => void } | null;
   /** Opened from My work: the history line made at this time. */
   focusAt?: string | null;
+  primarySlot?: HTMLElement | null;
+  hidePrimary?: boolean;
 }) {
   const { lead } = detail;
   const setup = useContext(MessageSetup);
@@ -2824,6 +2831,39 @@ export function LeadCard({
       ? chatFacts(detail.source_fields)
       : detail.source_fields;
 
+  const primaryAction = detail.phone ? (
+    <CallLink
+      className={styles.callButton}
+      phone={detail.phone}
+      aria-busy={calling || company.busy || undefined}
+      onCall={callHere}
+    >
+      <Phone size={20} aria-hidden="true" />
+      <span>
+        <strong>{calling || company.busy ? "Calling…" : "Call"}</strong>
+        <small>
+          {displayPhone(detail.phone)}
+          {company.ready ? " · company number" : ""}
+        </small>
+      </span>
+    </CallLink>
+  ) : detail.can_edit ? (
+    <button
+      type="button"
+      className={styles.callButton}
+      data-empty=""
+      onClick={() => setEditing(true)}
+    >
+      <Phone size={20} aria-hidden="true" />
+      <span>
+        <strong>Add a phone number</strong>
+        <small>to call this lead</small>
+      </span>
+    </button>
+  ) : (
+    <p className={styles.hint}>No phone number on this lead.</p>
+  );
+
   return (
     <div className={styles.card}>
       {/* One header row (owner, #29, 26 Oct 2026: the avatar floated beside
@@ -2879,38 +2919,11 @@ export function LeadCard({
       {/* Call, then one grid of equal boxes (owner, 25 Oct 2026): three to a
           row, the same size, a box that can't work greyed in its place. */}
       <div className={styles.leadActions}>
-        {detail.phone ? (
-          <CallLink
-            className={styles.callButton}
-            phone={detail.phone}
-            aria-busy={calling || company.busy || undefined}
-            onCall={callHere}
-          >
-            <Phone size={20} aria-hidden="true" />
-            <span>
-              <strong>{calling || company.busy ? "Calling…" : "Call"}</strong>
-              <small>
-                {displayPhone(detail.phone)}
-                {company.ready ? " · company number" : ""}
-              </small>
-            </span>
-          </CallLink>
-        ) : detail.can_edit ? (
-          <button
-            type="button"
-            className={styles.callButton}
-            data-empty=""
-            onClick={() => setEditing(true)}
-          >
-            <Phone size={20} aria-hidden="true" />
-            <span>
-              <strong>Add a phone number</strong>
-              <small>to call this lead</small>
-            </span>
-          </button>
-        ) : (
-          <p className={styles.hint}>No phone number on this lead.</p>
-        )}
+        {hidePrimary
+          ? null
+          : primarySlot
+            ? createPortal(primaryAction, primarySlot)
+            : primaryAction}
         {/* The call's own lines under Call (owner, #31, 26 Oct 2026): the
             phone app's hint, then "Called from another phone? Log it", or
             the call's question once it is open. */}
@@ -3216,15 +3229,16 @@ export function LeadCard({
           personId={lead.owner_person_id}
           name={lead.owner_name ?? "No owner"}
           photoUrl={lead.owner_photo_url}
-          size={40}
+          size={32}
         />
         <span className={styles.ownerWords}>
+          <small>Assigned to</small>
           <strong>
             {!lead.owner_name
               ? "Not assigned yet"
               : me && lead.owner_person_id === me.person_id
-                ? "Assigned to you"
-                : `Assigned to ${lead.owner_name}`}
+                ? "You"
+                : lead.owner_name}
           </strong>
           <small>
             {[
@@ -3256,9 +3270,7 @@ export function LeadCard({
         />
       ) : null}
 
-      {detail.can_assign ? (
-        <PipelinePanel detail={detail} onChanged={onChanged} />
-      ) : null}
+      <PipelinePanel detail={detail} onChanged={onChanged} />
     </div>
   );
 }
@@ -3317,55 +3329,61 @@ function PipelinePanel({
   const pipes = usePipelines();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  if (!several(pipes)) return null;
   const lead = detail.lead;
   const here = lead.pipeline ?? "main";
   const name =
-    pipes.pipelines.find((item) => item.key === here)?.name ?? "Leads";
+    pipes?.pipelines.find((item) => item.key === here)?.name ?? "Leads";
   return (
     <section className={styles.panel} aria-label="Pipeline">
-      <div className={styles.ownerRow}>
-        <span className={styles.pipelineMark} aria-hidden="true">
-          <Workflow size={16} />
-        </span>
-        <span>
-          <small>Pipeline</small>
-          <strong>{name}</strong>
-        </span>
-        <label className={styles.pipelineMove}>
-          <span className={styles.srOnly}>Move to pipeline</span>
-          <select
-            value=""
-            disabled={busy}
-            onChange={async (event) => {
-              const key = event.target.value;
-              if (!key) return;
-              setBusy(true);
-              setProblem(null);
-              try {
-                onChanged(await movePipeline(lead, key));
-              } catch (reason) {
-                setProblem(
-                  reason instanceof LeadsError
-                    ? reason.message
-                    : "Not moved. Try again.",
-                );
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <option value="">{busy ? "Moving…" : "Move to…"}</option>
-            {pipes.pipelines
-              .filter((item) => item.key !== here)
-              .map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.name}
-                </option>
-              ))}
-          </select>
-        </label>
-      </div>
+      <PipelineOverview
+        key={`${lead.lead_id}:${here}`}
+        lead={lead}
+        name={name}
+      />
+      {detail.can_assign && several(pipes) ? (
+        <div className={styles.ownerRow}>
+          <span className={styles.pipelineMark} aria-hidden="true">
+            <Workflow size={16} />
+          </span>
+          <span>
+            <small>Pipeline</small>
+            <strong>{name}</strong>
+          </span>
+          <label className={styles.pipelineMove}>
+            <span className={styles.srOnly}>Move to pipeline</span>
+            <select
+              value=""
+              disabled={busy}
+              onChange={async (event) => {
+                const key = event.target.value;
+                if (!key) return;
+                setBusy(true);
+                setProblem(null);
+                try {
+                  onChanged(await movePipeline(lead, key));
+                } catch (reason) {
+                  setProblem(
+                    reason instanceof LeadsError
+                      ? reason.message
+                      : "Not moved. Try again.",
+                  );
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <option value="">{busy ? "Moving…" : "Move to…"}</option>
+              {pipes.pipelines
+                .filter((item) => item.key !== here)
+                .map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
       {problem ? (
         <p className={styles.error} role="alert">
           {problem}
@@ -3401,6 +3419,7 @@ export function LeadSheet({
   // Saved here: who is next on the desk, so one tap calls them (the
   // ease-of-use wave, 22 Oct 2026: "Call next" everywhere, not only in
   // Start calling).
+  const [primarySlot, setPrimarySlot] = useState<HTMLDivElement | null>(null);
   const [nextUp, setNextUp] = useState<{
     after: string;
     lead: LeadDetail | null;
@@ -3516,6 +3535,15 @@ export function LeadSheet({
     <>
       <Sheet
         open={leadId !== null}
+        footer={
+          detail && !questionOpen && !(nextUp && nextUp.after === leadId) ? (
+            <div
+              className={styles.primaryDock}
+              data-sheet-no-drag
+              ref={setPrimarySlot}
+            />
+          ) : undefined
+        }
         label={detail?.lead.name ?? "Lead"}
         onClose={onClose}
       >
@@ -3535,6 +3563,10 @@ export function LeadSheet({
         ) : detail ? (
           <>
             <LeadCard
+              primarySlot={primarySlot}
+              hidePrimary={
+                questionOpen || !!(nextUp && nextUp.after === leadId)
+              }
               detail={detail}
               me={me}
               onChanged={update}

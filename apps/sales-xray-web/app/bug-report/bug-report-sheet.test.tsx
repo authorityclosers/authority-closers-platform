@@ -296,6 +296,38 @@ it("in the phone app, falls back to copying the page when the phone takes no pic
   expect(document.querySelector("dialog img")).not.toBeNull();
 });
 
+it("opens over a menu even when the phone screenshot bridge never answers", async () => {
+  phone.app = true;
+  const menu = document.createElement("div");
+  menu.setAttribute("role", "menu");
+  menu.textContent = "Lead actions";
+  document.body.append(menu);
+  let finish: (value: Blob | null) => void = () => {};
+  askScreenshot.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        finish = resolve;
+      }),
+  );
+  captureScreen.mockResolvedValue(null);
+  try {
+    await act(async () => openBugReport());
+    await pause(600);
+    expect(document.querySelector("dialog[open]")?.textContent).toContain(
+      "What went wrong?",
+    );
+    await act(async () => button("Cancel").click());
+    await act(async () =>
+      finish(new Blob(["late picture"], { type: "image/jpeg" })),
+    );
+    await pause(450);
+    expect(document.querySelector("dialog[open]")).toBeNull();
+    expect(menu.textContent).toBe("Lead actions");
+  } finally {
+    menu.remove();
+  }
+});
+
 it("takes no picture of screens that can show calls or messages", async () => {
   expect(privateScreen("/analysis/calls/2b1f")).toBe(true);
   expect(privateScreen("/chats")).toBe(true);

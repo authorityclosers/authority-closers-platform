@@ -99,3 +99,5 @@ export default async function OnboardingPage({
     </AuthFlowPage>
   );
 }
+
+export const metadata = { title: "Get started" };

@@ -137,6 +137,7 @@ export type LeadEvent = {
     | "edited"
     | "message"
     | "scheduled"
+    | "task"
     | "stage"
     | "meeting"
     | "suggestion";
@@ -176,6 +177,7 @@ export type LeadEvent = {
   event_id?: string | null;
   can_hide?: boolean;
   private?: boolean;
+  task_action?: string | null;
   /** A stage move (Lead OS): how, from where, by whom or what, and why. */
   action?: "move" | "close" | "reopen" | "reclassify" | string | null;
   from_label?: string | null;
@@ -742,7 +744,7 @@ export function readLeads(
 }
 
 /** My work: what the seller did, today, yesterday or this week. */
-export type WorkDay = "today" | "yesterday" | "week";
+export type WorkDay = "today" | "yesterday" | "week" | "recent";
 export type ActivityItem = {
   event_id: string;
   lead_id: string;
@@ -754,7 +756,23 @@ export type ActivityPage = {
   items: ActivityItem[];
   next_before: string | null;
   counts: Record<string, number>;
+  today_counts?: Record<string, number>;
+  week_counts?: Record<string, number>;
+  last_active_at?: string | null;
+  last_call_at?: string | null;
+  timezone?: string;
 };
+
+/** Shared activity feed, filtered by actor on the server before counting. */
+export function readPersonWork(
+  person: string,
+  before: string | null = null,
+  signal?: AbortSignal,
+) {
+  const params = new URLSearchParams({ day: "recent", person });
+  if (before) params.set("before", before);
+  return request<ActivityPage>(`/activity?${params}`, { signal });
+}
 
 export function readActivity(
   day: WorkDay,
@@ -1268,6 +1286,16 @@ export type SellerOutcome = {
   late: number;
 };
 
+/** One India-time day of the period, counted as the period is (Home's small bars). */
+export type DayOutcome = {
+  day: string;
+  calls: number;
+  connected: number;
+  interested: number;
+  won: number;
+  new_leads: number;
+};
+
 export type Performance = {
   days: number;
   start: string;
@@ -1278,6 +1306,8 @@ export type Performance = {
   pipeline: Record<string, number>;
   /** The same open leads by stage, per pipeline (by the pipeline's key). */
   pipelines?: Record<string, Record<string, number>>;
+  /** Each day of the period, oldest first (owner Home v3, 28 Oct 2026). */
+  daily?: DayOutcome[];
 };
 
 export type Period = 1 | 7 | 30;

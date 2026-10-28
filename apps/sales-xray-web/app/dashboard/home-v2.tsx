@@ -359,11 +359,10 @@ function usePhoneLogging(): { inApp: boolean; logging: boolean } {
 
 export const SAMPLE_REPORT_HREF = "/analysis/sample";
 /**
- * The sample report card waits for its page: a fictional call written for new
- * users, on the real report (27 Oct 2026). The review fixture's synthetic
- * report is a rendering test, not something to show a new user.
+ * The sample report card: its page is a fictional call written for new users,
+ * analysed once and frozen, on the real report (analysis/sample, 27 Oct 2026).
  */
-export const SAMPLE_REPORT_READY = false;
+export const SAMPLE_REPORT_READY = true;
 
 export function SetupStart({
   desk,

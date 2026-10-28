@@ -32,6 +32,7 @@ import {
   type ShareRule,
 } from "./team-engine-client";
 import styles from "./assign-sheet.module.css";
+import { ShareGuide } from "./share-guide";
 
 const RULES: { key: ShareRule; title: string; text: string }[] = [
   { key: "even", title: "Even", text: "The same number to each seller." },
@@ -336,6 +337,7 @@ export function AssignSheet({
       }
     >
       <div className={styles.body}>
+        <ShareGuide active={open} />
         <p className={styles.intro}>{introLine(target)}</p>
         <fieldset className={styles.rules}>
           <legend>How</legend>

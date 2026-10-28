@@ -1,6 +1,6 @@
 "use client";
 
-import { AudioLines, ChevronDown, GraduationCap } from "lucide-react";
+import { AudioLines, ChevronDown, GraduationCap, Pencil } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 
@@ -37,6 +37,8 @@ import {
   type Week,
 } from "./person-data";
 import styles from "./person.module.css";
+import { PersonDisplayName } from "./person-display-name";
+import { PersonSettingsMenu } from "./person-settings-menu";
 
 const shortDate = (at: number | string, dates: DisplayDates) =>
   new Intl.DateTimeFormat(dates.locale, {
@@ -62,6 +64,7 @@ export function PersonHeader({
   dates,
   onAction,
   photoUrl = null,
+  onRename,
 }: {
   member: OrgMember;
   isYou: boolean;
@@ -71,114 +74,205 @@ export function PersonHeader({
   busy: boolean;
   dates: DisplayDates;
   onAction: (action: PersonAction) => void;
-  /** Their photo (v0.93), else initials. */
   photoUrl?: string | null;
+  onRename?: (name: string) => Promise<void>;
 }) {
   const name = memberName(member);
+  const [step, setStep] = useState<
+    "menu" | "role" | "rename" | "confirm" | null
+  >(null);
   const [confirming, setConfirming] = useState<PersonAction | null>(null);
+  const [draft, setDraft] = useState(name);
+  const [savingName, setSavingName] = useState(false);
   const invited = member.status === "invited";
-  const facts = [
-    member.email && member.email !== name ? member.email : null,
-    invited
-      ? "Invited, not joined yet"
-      : member.joinedAt
-        ? `Joined ${callDate(member.joinedAt, undefined, dates)}`
-        : null,
-    member.lastActiveAt
-      ? `Last active ${callDate(member.lastActiveAt, undefined, dates)}`
-      : null,
-  ].filter(Boolean);
+  const close = () => {
+    setStep(null);
+    setConfirming(null);
+  };
+  const confirm = (action: PersonAction) => {
+    setConfirming(action);
+    setStep("confirm");
+  };
+  const valid = draft.trim().length > 0 && [...draft.trim()].length <= 40;
   return (
     <header className={styles.header}>
-      <Avatar name={name} size={48} photoUrl={photoUrl} />
+      <Avatar name={name} size={44} photoUrl={photoUrl} />
       <div className={styles.who}>
-        <h1 className={styles.name}>
-          <span>{name}</span>
+        <div className={styles.nameLine}>
+          <h1 className={styles.name}>
+            <PersonDisplayName name={name} />
+          </h1>
+          {onRename ? (
+            <button
+              type="button"
+              className={styles.iconButton}
+              aria-label={`Rename ${name}`}
+              onClick={() => {
+                setDraft(name);
+                setStep("rename");
+              }}
+            >
+              <Pencil size={16} aria-hidden />
+            </button>
+          ) : null}
+        </div>
+        <div className={styles.tags}>
           <Badge tone={member.role === "member" ? "neutral" : "accent"}>
             {ROLE_LABEL[member.role]}
           </Badge>
           {isYou ? <Badge>You</Badge> : null}
-          {invited ? <Badge tone="warn">Invited</Badge> : null}
+          {invited ? (
+            <Badge tone="warn">Invited</Badge>
+          ) : (
+            <span>Active member</span>
+          )}
           {test ? <Badge>Test account</Badge> : null}
-        </h1>
-        {facts.length ? (
-          <p className={styles.facts}>
-            {facts.map((fact) => (
-              <span key={fact}>{fact}</span>
-            ))}
-          </p>
-        ) : null}
+        </div>
+        <p className={styles.email} title={member.email ?? undefined}>
+          {member.email}
+        </p>
       </div>
-      {canChangeRole || canRemove ? (
-        <div className={styles.actions}>
-          {confirming ? (
-            <p className={styles.confirm} role="group" aria-label="Confirm">
-              <span>
-                {confirming.kind === "remove"
-                  ? invited
-                    ? `Revoke ${name}'s invitation?`
-                    : `Remove ${name}? Their calls stay with the organisation.`
-                  : `Make ${name} ${ROLE_LABEL[confirming.role].toLowerCase()}?`}
-              </span>
-              <button
-                type="button"
-                className={styles.quiet}
-                onClick={() => setConfirming(null)}
-              >
-                Cancel
-              </button>
+      {canChangeRole || canRemove || onRename ? (
+        <PersonSettingsMenu
+          name={name}
+          open={step !== null}
+          onOpen={() => setStep("menu")}
+          onClose={close}
+          title={
+            step === "role"
+              ? "Change role"
+              : step === "rename"
+                ? "Display name"
+                : step === "confirm"
+                  ? "Confirm change"
+                  : "Person settings"
+          }
+          footer={
+            step === "confirm" && confirming ? (
               <button
                 type="button"
                 className={styles.primary}
-                data-tone={confirming.kind === "remove" ? "bad" : undefined}
                 disabled={busy}
                 onClick={() => {
                   onAction(confirming);
-                  setConfirming(null);
+                  close();
                 }}
               >
                 {confirming.kind === "remove"
                   ? invited
-                    ? "Revoke"
-                    : "Remove"
+                    ? "Revoke invitation"
+                    : "Remove person"
                   : "Change role"}
               </button>
-            </p>
-          ) : (
-            <>
-              {canChangeRole ? (
-                <select
-                  className={styles.select}
-                  value={member.role}
-                  disabled={busy}
-                  aria-label={`Role for ${name}`}
-                  onChange={(event) =>
-                    setConfirming({
-                      kind: "role",
-                      role: event.target.value as OrgRole,
-                    })
+            ) : step === "rename" ? (
+              <button
+                type="button"
+                className={styles.primary}
+                disabled={!valid || savingName}
+                onClick={async () => {
+                  if (!onRename || savingName) return;
+                  setSavingName(true);
+                  try {
+                    await onRename(draft.trim());
+                    close();
+                  } catch {
+                    // Keep the draft open; the caller reports the save error.
+                  } finally {
+                    setSavingName(false);
                   }
-                >
-                  {rolesToGive(true).map((role) => (
-                    <option key={role} value={role}>
-                      {ROLE_LABEL[role]}
-                    </option>
-                  ))}
-                </select>
-              ) : null}
-              {canRemove ? (
-                <button
-                  type="button"
-                  className={styles.quiet}
-                  disabled={busy}
-                  onClick={() => setConfirming({ kind: "remove" })}
-                >
-                  {invited ? "Revoke invitation" : "Remove"}
+                }}
+              >
+                {savingName ? "Saving…" : "Save display name"}
+              </button>
+            ) : undefined
+          }
+        >
+          <div className={styles.menuChoices}>
+            {step === "menu" ? (
+              <>
+                {onRename ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraft(name);
+                      setStep("rename");
+                    }}
+                  >
+                    Rename
+                  </button>
+                ) : null}
+                {canChangeRole ? (
+                  <button type="button" onClick={() => setStep("role")}>
+                    Change role
+                  </button>
+                ) : null}
+                {canRemove ? (
+                  <button
+                    type="button"
+                    onClick={() => confirm({ kind: "remove" })}
+                  >
+                    {invited ? "Revoke invitation" : "Remove person"}
+                  </button>
+                ) : null}
+              </>
+            ) : null}
+            {step === "role" ? (
+              <div role="group" aria-label={`Role for ${name}`}>
+                {rolesToGive(true).map((role) => (
+                  <button
+                    key={role}
+                    type="button"
+                    aria-pressed={role === member.role}
+                    disabled={busy || role === member.role}
+                    onClick={() => confirm({ kind: "role", role })}
+                  >
+                    {ROLE_LABEL[role]}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+            {step === "confirm" && confirming ? (
+              <>
+                <p>
+                  {confirming.kind === "remove"
+                    ? invited
+                      ? `Revoke ${name}'s invitation?`
+                      : `Remove ${name}? Their calls stay with the organisation.`
+                    : `Make ${name} ${ROLE_LABEL[confirming.role].toLowerCase()}?`}
+                </p>
+                <button type="button" onClick={() => setStep("menu")}>
+                  Cancel
                 </button>
-              ) : null}
-            </>
-          )}
-        </div>
+              </>
+            ) : null}
+            {step === "rename" ? (
+              <label className={styles.renameField}>
+                <span>Display name</span>
+                <input
+                  value={draft}
+                  maxLength={40}
+                  autoCapitalize="words"
+                  autoComplete="name"
+                  onChange={(event) => setDraft(event.target.value)}
+                  aria-describedby="display-name-limit"
+                />
+                <small id="display-name-limit">
+                  Use 1–40 characters. This is the name shown to the team.
+                </small>
+                {!valid ? (
+                  <small role="alert">
+                    Enter a display name of 40 characters or fewer.
+                  </small>
+                ) : null}
+              </label>
+            ) : null}
+            {step === "menu" && member.joinedAt ? (
+              <p className={styles.menuHint}>
+                Joined {callDate(member.joinedAt, undefined, dates)}
+              </p>
+            ) : null}
+          </div>
+        </PersonSettingsMenu>
       ) : null}
     </header>
   );

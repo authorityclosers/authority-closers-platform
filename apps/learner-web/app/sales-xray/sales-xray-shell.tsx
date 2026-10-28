@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { StandaloneStudio } from "../../../sales-xray-web/app/standalone-studio";
-import { LearnerShell } from "../components/site-shell";
+import { ReflexShell } from "../shell/reflex-shell";
 
 export function SalesXrayShell({
   children,
@@ -13,7 +13,7 @@ export function SalesXrayShell({
   openingExistingCall?: boolean;
 }) {
   return (
-    <LearnerShell current="sales-xray">
+    <ReflexShell>
       <main id="main-content" className="learner-main" tabIndex={-1}>
         <nav
           aria-label="Sales Xray sections"
@@ -50,6 +50,6 @@ export function SalesXrayShell({
           {children}
         </StandaloneStudio>
       </main>
-    </LearnerShell>
+    </ReflexShell>
   );
 }

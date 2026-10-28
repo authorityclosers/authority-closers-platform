@@ -1,6 +1,17 @@
 "use client";
 
-import { ArrowRight, Eye, EyeOff, ShieldCheck } from "lucide-react";
+import { ArrowRight, Eye, EyeOff } from "lucide-react";
+import { Button, Field } from "@ac/ui/kit";
+import { BrandMark as SalesXrayMark } from "../../../sales-xray-web/app/shell/brand-lockup";
+import { ReflexMark } from "../shell/reflex-mark";
+import { salesXrayForHost } from "../shell/places";
+import {
+  createHandoffVerifier,
+  handoffChallenge,
+  handoffReturnPath,
+  HANDOFF_VERIFIER_KEY,
+} from "../lib/cross-app-handoff";
+import styles from "./reflex-login.module.css";
 import Link from "next/link";
 import {
   type FormEvent,
@@ -41,6 +52,8 @@ function errorMessage(error: unknown): string {
 
 type LoginFormProps = {
   sessionExpired?: boolean;
+  handoffExpired?: boolean;
+  returnPath?: string;
   stagingBridge?: boolean;
   courseIntent?: CourseIntent;
   activityIntent?: ActivityIntent;
@@ -81,17 +94,32 @@ export function routeAfterOnboarding(
 
 export function LoginForm({
   sessionExpired = false,
+  handoffExpired = false,
+  returnPath,
   stagingBridge = false,
   courseIntent = null,
   activityIntent = null,
   salesNext = null,
 }: LoginFormProps) {
+  const Heading = sessionExpired ? "h2" : "h1";
   const hydrated = useSyncExternalStore(
     subscribeHydration,
     clientHydrated,
     serverHydrated,
   );
   const [pending, setPending] = useState(false);
+  const [handoffPending, setHandoffPending] = useState(false);
+  const [showExpired, setShowExpired] = useState(handoffExpired);
+  const handoffLock = useRef(false);
+  const salesOrigin = hydrated
+    ? salesXrayForHost(window.location.hostname)
+    : null;
+  const destination = handoffReturnPath(
+    returnPath ??
+      (activityIntent || courseIntent
+        ? activityReturnHref(activityIntent, courseIntent)
+        : (salesNext ?? "/home")),
+  );
   const [error, setError] = useState<string | null>(null);
   const [verificationRequired, setVerificationRequired] = useState(false);
   const [passwordVisible, setPasswordVisible] = useState(false);
@@ -177,34 +205,70 @@ export function LoginForm({
     }
   }
 
+  async function continueWithSalesXray() {
+    if (!salesOrigin || handoffLock.current) return;
+    handoffLock.current = true;
+    setHandoffPending(true);
+    setError(null);
+    try {
+      const verifier = createHandoffVerifier();
+      sessionStorage.setItem(HANDOFF_VERIFIER_KEY, verifier);
+      const challenge = await handoffChallenge(verifier);
+      const query = new URLSearchParams({ challenge, return: destination });
+      // Sales X-Ray is another site (salesXrayForHost), so this is a full navigation, not a router push.
+      window.location.assign(
+        new URL(`/connect/reflex?${query}`, salesOrigin).href,
+      );
+    } catch {
+      try {
+        sessionStorage.removeItem(HANDOFF_VERIFIER_KEY);
+      } catch {
+        /* Storage is unavailable. */
+      }
+      handoffLock.current = false;
+      setHandoffPending(false);
+      setError("Couldn't open Sales X-Ray. Please try again.");
+    }
+  }
+
   return (
-    <div className="auth-card clarity-auth-card">
-      <div className="auth-card__topline">
-        <span className="auth-card__icon">
-          <ShieldCheck size={18} aria-hidden="true" />
-        </span>
-        <span>
-          {sessionExpired ? "Session recovery" : "Secure learner access"}
-        </span>
-      </div>
-      <h2>{sessionExpired ? "Sign in to continue." : "Welcome back."}</h2>
-      <p className="auth-card__intro">
-        {stagingBridge
-          ? "Use your verified staging email and password. Account creation, recovery, and Google sign-in continue on the deployed staging surface."
-          : "Use your verified email and password, or continue with Google."}
-      </p>
-      {sessionExpired ? (
-        <div className="auth-notice" role="status">
-          <ShieldCheck size={18} aria-hidden="true" />
-          <span>
-            We will re-check your access before returning to the learner
-            workspace.
-          </span>
-        </div>
+    <section className={styles.card} aria-labelledby="reflex-login-title">
+      <header>
+        <ReflexMark size={40} />
+        <Heading id="reflex-login-title">Sign in to Reflex</Heading>
+        <p>Sales training by Authority Closers</p>
+      </header>
+      {stagingBridge ? (
+        <p className={styles.staging}>
+          Use your verified staging email and password. Account creation,
+          recovery, and Google sign-in continue on the deployed staging surface.
+        </p>
       ) : null}
-      <form className="stack-form" method="post" onSubmit={submit}>
-        <div className="field-group">
-          <label htmlFor="login-email">Email address</label>
+      {sessionExpired ? <p role="status">Sign in to continue.</p> : null}
+      <div className={styles.options}>
+        {salesOrigin ? (
+          <Button
+            variant="primary"
+            onClick={continueWithSalesXray}
+            disabled={pending || handoffPending || !hydrated}
+          >
+            <span className={styles.mark}>
+              <SalesXrayMark markOnly />
+            </span>
+            {handoffPending
+              ? "Opening Sales X-Ray…"
+              : "Continue with Sales X-Ray"}
+          </Button>
+        ) : null}
+        <a className={styles.google} href={authenticateUrl}>
+          {stagingBridge
+            ? "Continue with Google on staging"
+            : "Continue with Google"}
+        </a>
+      </div>
+      <div className={styles.email}>Email</div>
+      <form className={styles.form} method="post" onSubmit={submit}>
+        <Field label="Email address">
           <input
             id="login-email"
             name="email"
@@ -214,10 +278,9 @@ export function LoginForm({
             required
             disabled={pending || !hydrated}
           />
-        </div>
-        <div className="field-group">
-          <label htmlFor="login-password">Password</label>
-          <div className="auth-password-field">
+        </Field>
+        <Field label="Password">
+          <span className={styles.password}>
             <input
               id="login-password"
               name="password"
@@ -227,7 +290,6 @@ export function LoginForm({
               disabled={pending || !hydrated}
             />
             <button
-              className="auth-password-toggle"
               type="button"
               aria-label={passwordVisible ? "Hide password" : "Show password"}
               aria-pressed={passwordVisible}
@@ -240,63 +302,62 @@ export function LoginForm({
                 <Eye size={18} aria-hidden="true" />
               )}
             </button>
-          </div>
-        </div>
+          </span>
+        </Field>
         {error ? (
-          <div
-            className="auth-error-summary"
-            role="alert"
-            tabIndex={-1}
-            ref={errorRef}
-          >
+          <div role="alert" tabIndex={-1} ref={errorRef}>
             <strong>Sign-in could not be completed</strong>
             <p>{error}</p>
             {verificationRequired ? (
               stagingBridge ? (
-                <a className="text-link" href={stagingHref(verificationHref)}>
+                <a href={stagingHref(verificationHref)}>
                   Request on deployed staging
                 </a>
               ) : (
-                <Link className="text-link" href={verificationHref}>
+                <Link href={verificationHref}>
                   Request a fresh verification link
                 </Link>
               )
             ) : null}
           </div>
         ) : null}
-        <button
-          className="button button--ink button--full"
-          disabled={pending || !hydrated}
-        >
+        <Button type="submit" disabled={pending || !hydrated}>
           {pending ? "Signing in…" : "Sign in"}
           <ArrowRight size={17} aria-hidden="true" />
-        </button>
+        </Button>
         {stagingBridge ? (
-          <a className="text-link" href={stagingHref(forgotPasswordHref)}>
+          <a href={stagingHref(forgotPasswordHref)}>
             Forgot your password? Continue on staging
           </a>
         ) : (
-          <Link className="text-link" href={forgotPasswordHref}>
-            Forgot your password?
-          </Link>
+          <Link href={forgotPasswordHref}>Forgot your password?</Link>
         )}
       </form>
-      <div className="auth-divider" aria-hidden="true">
-        <span>or</span>
-      </div>
-      <a className="button button--outline button--full" href={authenticateUrl}>
-        {stagingBridge
-          ? "Continue with Google on staging"
-          : "Continue with Google"}
-      </a>
-      <div className="auth-card__footer">
-        <span>First time here—including with Google?</span>
+      <div className={styles.footer}>
+        <span>First time here?</span>
         {stagingBridge ? (
           <a href={stagingHref(registrationHref)}>Create on deployed staging</a>
         ) : (
           <Link href={registrationHref}>Create your free learner account</Link>
         )}
       </div>
-    </div>
+      {showExpired ? (
+        <aside
+          className={styles.corner}
+          role="status"
+          aria-label="Sign-in link expired"
+        >
+          <Button
+            variant="ghost"
+            aria-label="Dismiss sign-in message"
+            onClick={() => setShowExpired(false)}
+          >
+            Close
+          </Button>
+          <strong>{"Let's try that again"}</strong>
+          <p>This sign-in link has expired. Try again from Sales X-Ray.</p>
+        </aside>
+      ) : null}
+    </section>
   );
 }

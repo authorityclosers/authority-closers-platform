@@ -3,9 +3,9 @@ import { createElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import ActivityPage from "../activity/[activityId]/page";
+import ActivityPage from "../(app)/activity/[activityId]/page";
 import CallbackPage from "../auth/callback/page";
-import CertificatePage from "../certificates/[certificateId]/page";
+import CertificatePage from "../(app)/certificates/[certificateId]/page";
 import { ActivityRenderer } from "../components/activity-renderers";
 import {
   ConnectedActivityWorkspace,
@@ -47,17 +47,17 @@ import {
 } from "../components/onboarding-form";
 import { ThemeControl } from "../components/theme-control";
 import { ActivityStatusPill, ProgressMeter } from "../components/shared-ui";
-import { Breadcrumbs, LearnerShell } from "../components/site-shell";
+import { Breadcrumbs } from "../components/site-shell";
 import { SurfaceStatePanel } from "../components/surface-state";
-import LearnerHomePage from "../home/page";
-import LearningPage from "../learning/page";
-import DiscoverPage from "../discover/page";
-import ProfilePage from "../profile/page";
-import NotificationsPage from "../notifications/page";
-import ProgramLearningPage from "../learn/[programSlug]/page";
-import CompletionPage from "../learn/[programSlug]/complete/page";
+import LearnerHomePage from "../(app)/home/page";
+import LearningPage from "../(app)/learning/page";
+import DiscoverPage from "../(app)/discover/page";
+import ProfilePage from "../(app)/profile/page";
+import NotificationsPage from "../(app)/notifications/page";
+import ProgramLearningPage from "../(app)/learn/[programSlug]/page";
+import CompletionPage from "../(app)/learn/[programSlug]/complete/page";
 
-import ModulePage from "../learn/[programSlug]/module/[moduleId]/page";
+import ModulePage from "../(app)/learn/[programSlug]/module/[moduleId]/page";
 import LoginPage from "../login/page";
 import ForgotPasswordPage from "../forgot-password/page";
 import manifest from "../manifest";
@@ -69,13 +69,13 @@ import {
   onboardingReturnHref,
   parseOnboardingReturnIntent,
 } from "./onboarding-route";
-import ProgressPage from "../progress/page";
+import ProgressPage from "../(app)/progress/page";
 import PublicHomePage from "../page";
 import PrivacyPage from "../privacy/page";
 import ProgramDetailPage from "../programs/[slug]/page";
 import RegisterPage from "../register/page";
 import ResetPasswordPage from "../reset-password/page";
-import SettingsPage from "../settings/page";
+import SettingsPage from "../(app)/settings/page";
 import SessionExpiredPage from "../session-expired/page";
 import TermsPage from "../terms/page";
 import VerifyEmailPage from "../verify-email/page";
@@ -110,6 +110,10 @@ import {
   type OnboardingRecoveryLockManager,
 } from "./local-drafts";
 import { markOfflineRead } from "./offline-read-cache";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: () => undefined }),
+}));
 
 function h1Count(html: string): number {
   return html.match(/<h1(?:\s|>)/g)?.length ?? 0;
@@ -371,7 +375,7 @@ describe("installable browser shell", () => {
     expect(metadata.display).toBe("standalone");
     expect(metadata.start_url).toBe("/");
     expect(metadata.scope).toBe("/");
-    expect(metadata.name).toBe("Closers Academy · Cohorva");
+    expect(metadata.name).toBe("Reflex: Sales Training");
     expect(metadata.icons).toEqual([
       expect.objectContaining({
         src: "/brand/closers-academy-v0.1/icon-192.png",
@@ -496,8 +500,8 @@ describe("canonical progression access", () => {
     });
     const html = renderToStaticMarkup(page);
 
-    expect(html).toContain("Module");
-    expect(html).toContain("Preparing your workspace");
+    expect(html).toContain("Steps");
+    expect(html).toContain('aria-label="Loading"');
     expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain('data-state="LOCKED"');
     expect(html).not.toContain("Module sequence");
@@ -582,7 +586,7 @@ describe("honest preview controls", () => {
     expect(login).toContain('href="/forgot-password"');
     expect(login).toContain('href="/register"');
     expect(login).toContain("Continue with Google");
-    expect(login).toContain("First time here—including with Google?");
+    expect(login).toContain("First time here?");
     expect(login).not.toContain("Email sign-in unavailable in preview");
     expect(onboarding).toContain("Loading your saved profile");
     expect(onboarding).not.toContain("Profile setup unavailable in preview");
@@ -1009,12 +1013,21 @@ describe("click-first onboarding", () => {
 });
 
 describe("accessibility semantics", () => {
-  it("renders exactly one h1 for every route template and universal state", async () => {
+  it("keeps legacy route headings and gives rebuilt Reflex routes to the shell", async () => {
     for (const [routeName, renderRoute] of routeRenderers) {
       for (const state of SURFACE_STATE_ORDER) {
         const html = renderToStaticMarkup(await renderRoute(queryValue(state)));
 
-        expect(h1Count(html), `${routeName} in ${state}`).toBe(1);
+        const shellOwnsHeading = [
+          "learner home",
+          "learning",
+          "discover",
+          "program learning",
+          "module",
+        ].includes(routeName);
+        expect(h1Count(html), `${routeName} in ${state}`).toBe(
+          shellOwnsHeading ? 0 : 1,
+        );
       }
     }
   }, 15_000);
@@ -1024,8 +1037,8 @@ describe("accessibility semantics", () => {
       await LearnerHomePage({ searchParams: Promise.resolve({}) }),
     );
 
-    expect(html).toContain("Learning Command Center");
-    expect(html).toContain("dashboard-skeleton");
+    expect(html).toContain("Continue learning");
+    expect(html).toContain('aria-label="Loading"');
     expect(html).not.toContain("Open reflect preview");
     expect(html).not.toContain("preview only");
     expect(html).not.toContain('aria-valuenow="0"');
@@ -2066,20 +2079,15 @@ describe("connected learner ready states", () => {
     });
   });
 
-  it("does not expose guessed course, certificate, or preview identity navigation", () => {
-    const html = renderToStaticMarkup(
-      createElement(LearnerShell, { current: "course" }, "content"),
+  it("does not expose guessed course, certificate or embedded studio links from Reflex navigation", () => {
+    const source = readFileSync(
+      new URL("../shell/reflex-shell.tsx", import.meta.url),
+      "utf8",
     );
-
-    expect(html).not.toContain("free-course");
-    expect(html).not.toContain("preview-certificate");
-    expect(html).not.toContain("Preview identity");
-    expect(html).not.toContain('aria-disabled="true"');
-    expect(html).not.toContain("Practice");
-    expect(html).not.toContain("Library");
-    expect(html).not.toContain("Search is coming later");
-    expect(html).not.toContain('href="/home#practice"');
-    expect(html).toContain('href="/progress"');
-    expect(html).toContain('href="/settings"');
+    expect(source).not.toContain("preview-certificate");
+    expect(source).not.toContain('href="/sales-xray"');
+    expect(source).not.toContain('href="/home#practice"');
+    expect(source).toContain('href: "/progress"');
+    expect(source).toContain('href: "/settings"');
   });
 });

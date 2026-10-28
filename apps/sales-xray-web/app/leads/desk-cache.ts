@@ -6,6 +6,7 @@
  * (orchestrator, 23 Oct 2026: the owner wants the app to feel instant).
  */
 import { cachedPanel, rememberPanel } from "../calls-cache";
+import { cachedLeadData, rememberLeadData } from "./list-cache";
 import type { Desk } from "./leads-client";
 
 const shelfOf = (pipeline: string | null) => `leads.desk:${pipeline ?? ""}`;
@@ -15,7 +16,10 @@ export function cachedDesk(
   identity: string | null | undefined,
   pipeline: string | null,
 ): Desk | null {
-  return cachedPanel<Desk>(identity, shelfOf(pipeline)) ?? null;
+  return (
+    cachedPanel<Desk>(identity, shelfOf(pipeline)) ??
+    cachedLeadData<Desk>(identity, shelfOf(pipeline))
+  );
 }
 
 export function rememberDesk(
@@ -24,4 +28,20 @@ export function rememberDesk(
   desk: Desk,
 ) {
   rememberPanel(identity, shelfOf(pipeline), desk);
+  rememberLeadData(identity, shelfOf(pipeline), desk);
+}
+
+/** Data and the identity that supplied it travel together, including failures. */
+export type DeskSnapshot = { identity: string | null; desk: Desk | null };
+export function deskFor(
+  snapshot: DeskSnapshot,
+  identity: string | null,
+): Desk | null {
+  return identity && snapshot.identity === identity ? snapshot.desk : null;
+}
+export function deskReadFailed(
+  snapshot: DeskSnapshot,
+  identity: string | null,
+): DeskSnapshot {
+  return snapshot.identity === identity ? snapshot : { identity, desk: null };
 }

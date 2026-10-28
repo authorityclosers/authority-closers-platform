@@ -4,8 +4,14 @@ import { fileURLToPath } from "node:url";
 import { expect, it } from "vitest";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const tokens = readFileSync(join(here, "sx-tokens.css"), "utf8");
-const lightbox = readFileSync(join(here, "../lightbox/tokens.css"), "utf8");
+const tokens = readFileSync(
+  join(here, "../../../../packages/typescript/ui/src/kit/tokens/screen.css"),
+  "utf8",
+);
+const lightbox = readFileSync(
+  join(here, "../../../../packages/typescript/ui/src/kit/tokens/palette.css"),
+  "utf8",
+);
 const styles = readFileSync(join(here, "../styles.css"), "utf8");
 
 it("holds no raw colour: every colour aliases or tints a Lightbox token", () => {

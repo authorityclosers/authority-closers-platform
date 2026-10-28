@@ -49,7 +49,7 @@ export function InstructorPortrait({
   return (
     <Image
       src={INSTRUCTOR_PORTRAIT.src}
-      alt={decorative ? "" : INSTRUCTOR_PORTRAIT.alt}
+      alt={decorative ? "" : "Your guide at Closers' Academy"}
       width={fill ? undefined : INSTRUCTOR_PORTRAIT.width}
       height={fill ? undefined : INSTRUCTOR_PORTRAIT.height}
       fill={fill}

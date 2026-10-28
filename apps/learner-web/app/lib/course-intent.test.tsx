@@ -4,7 +4,7 @@ import CallbackPage from "../auth/callback/page";
 import { LoginForm, routeAfterOnboarding } from "../components/login-form";
 import { RegistrationForm } from "../components/password-auth-forms";
 import { StagingAuthHandoff } from "../components/staging-auth-handoff";
-import HomePage from "../home/page";
+import HomePage from "../(app)/home/page";
 import LoginPage from "../login/page";
 import OnboardingPage from "../onboarding/page";
 import RegisterPage from "../register/page";

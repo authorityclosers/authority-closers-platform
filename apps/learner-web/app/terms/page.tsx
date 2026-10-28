@@ -7,7 +7,7 @@ import {
 } from "../lib/learner-policy";
 
 export const metadata: Metadata = {
-  title: "Terms of use — Authority Closers",
+  title: "Terms",
   description:
     "Terms for the Authority Closers learning application and Free Course.",
 };

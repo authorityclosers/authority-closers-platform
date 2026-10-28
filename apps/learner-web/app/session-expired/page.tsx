@@ -46,3 +46,5 @@ export default async function SessionExpiredPage({
     </AuthFlowPage>
   );
 }
+
+export const metadata = { title: "Session expired" };

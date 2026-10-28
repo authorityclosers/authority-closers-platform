@@ -28,6 +28,7 @@ import { ReleaseHoldBanner } from "./release-hold-banner";
 import { TelemetryAuto } from "./telemetry-auto";
 import { ClarityGate } from "./clarity";
 import { PressFeedback } from "./press-feedback";
+import { WebReady } from "./web-ready";
 export const metadata: Metadata = {
   title: "Sales X-Ray · Authority Closers",
   description:
@@ -131,6 +132,9 @@ export default async function Layout({
             {/* Microsoft Clarity: only for a signed-in person it is on for, in production. */}
             <ClarityGate />
             <PressFeedback />
+            {/* Inside the phone app: this page is up, so a new live web
+                update is kept rather than rolled back (web-ready.tsx). */}
+            <WebReady />
           </UploadSessionProvider>
         </ThemeProvider>
       </body>

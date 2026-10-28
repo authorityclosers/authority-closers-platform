@@ -29,9 +29,7 @@ describe("trusted academy artwork primitives", () => {
 
   it("names the verified portrait only when it contributes editorial identity", () => {
     const html = renderToStaticMarkup(<InstructorPortrait priority />);
-    expect(html).toContain(
-      'alt="Dipak Vishwakarma, your guide at Closers Academy"',
-    );
+    expect(html).toContain('alt="Your guide at Closers&#x27; Academy"');
     expect(html).toContain('width="3074"');
     expect(html).toContain('height="3864"');
     expect(html).toContain("instructor-v2%2Ffront-facing.jpeg");
