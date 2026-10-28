@@ -1,4 +1,5 @@
-import { AuthFlowPage } from "../components/auth-flow-page";
+import styles from "../components/reflex-login.module.css";
+import { handoffReturnPath } from "../lib/cross-app-handoff";
 import { LoginForm } from "../components/login-form";
 import { SurfaceStatePanel } from "../components/surface-state";
 import { ROUTES } from "../lib/routes";
@@ -18,6 +19,8 @@ type LoginPageProps = {
     course?: QueryValue;
     activity?: QueryValue;
     next?: QueryValue;
+    return?: QueryValue;
+    handoff?: QueryValue;
   }>;
 };
 
@@ -33,18 +36,7 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
   );
 
   return (
-    <AuthFlowPage
-      eyebrow="Account access"
-      heading="Sign in to your account."
-      copy="Sign in to continue your Authority Closers learning."
-      backHref={ROUTES.home}
-      backLabel="Back to the public catalog"
-      steps={[
-        { label: "Sign in", state: "current" },
-        { label: "Verify", state: "upcoming" },
-        { label: "Start learning", state: "upcoming" },
-      ]}
-    >
+    <main className={styles.page} id="main-content">
       {state !== "DEFAULT" ? (
         <SurfaceStatePanel
           state={state}
@@ -61,18 +53,24 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
             salesNext,
           )}
           backHref={ROUTES.home}
-          pageHeadingPresent
+          pageHeadingPresent={isContentVisible(state)}
         />
       ) : null}
       {isContentVisible(state) ? (
         <LoginForm
           stagingBridge={stagingBridge}
+          handoffExpired={query.handoff === "expired"}
+          returnPath={
+            typeof (query.return ?? query.next) === "string"
+              ? handoffReturnPath(query.return ?? query.next)
+              : undefined
+          }
           courseIntent={courseIntent}
           activityIntent={activityIntent}
           salesNext={salesNext}
         />
       ) : null}
-    </AuthFlowPage>
+    </main>
   );
 }
 

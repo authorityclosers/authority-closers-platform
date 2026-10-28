@@ -582,7 +582,7 @@ describe("honest preview controls", () => {
     expect(login).toContain('href="/forgot-password"');
     expect(login).toContain('href="/register"');
     expect(login).toContain("Continue with Google");
-    expect(login).toContain("First time here—including with Google?");
+    expect(login).toContain("First time here?");
     expect(login).not.toContain("Email sign-in unavailable in preview");
     expect(onboarding).toContain("Loading your saved profile");
     expect(onboarding).not.toContain("Profile setup unavailable in preview");

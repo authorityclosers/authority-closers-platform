@@ -40,13 +40,17 @@ from ac_platform.audit.service import AuditRepository
 from ac_platform.http.auth_transactions import (
     APPLE_FORM_POST_TTL_SECONDS,
     AUTH_TRANSACTION_MAX_AGE_SECONDS,
+    CROSS_APP_HANDOFF_ERROR,
+    CROSS_APP_HANDOFF_MAX_LENGTH,
     SALES_XRAY_COMPLETION_RECEIPT_TTL_SECONDS,
     AppleFormPostCodec,
     AuthTransaction,
     AuthTransactionCodec,
+    CrossAppHandoffCodec,
     InvalidAuthTransaction,
     SalesXrayAppHandoffCodec,
     SalesXrayCompletionReceiptCodec,
+    cross_app_return_path,
     normalize_return_path,
     sales_xray_app_verifier_matches,
     sales_xray_completion_flow_id,
@@ -562,6 +566,22 @@ class NativeSignInStartRequest(BaseModel):
     consent: bool = False
     age_attested: bool = False
     consent_version: str | None = Field(default=None, min_length=1, max_length=64)
+
+
+class CrossAppHandoffStartRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    target: Literal["learner"]
+    challenge: str = Field(pattern=r"^[A-Za-z0-9_-]{43}$", min_length=43, max_length=43)
+    return_path: str = Field(default="/home", min_length=1, max_length=512)
+
+    @model_validator(mode="after")
+    def safe_return(self) -> CrossAppHandoffStartRequest:
+        try:
+            cross_app_return_path(self.return_path)
+        except (InvalidAuthTransaction, ValueError) as error:
+            raise ValueError("The return path must stay within Reflex.") from error
+        return self
 
 
 class GoogleCompletionRequest(BaseModel):
@@ -1895,6 +1915,9 @@ def install_identity_http(
     app_handoff_codec = SalesXrayAppHandoffCodec(
         settings.oauth_transaction_secret.get_secret_value()
     )
+    cross_app_handoff_codec = CrossAppHandoffCodec(
+        settings.oauth_transaction_secret.get_secret_value()
+    )
     token_pepper = settings.session_token_pepper.get_secret_value()
     challenge_secret = settings.email_challenge_secret.get_secret_value()
     router = APIRouter(prefix="/v1", tags=["identity"])
@@ -2025,6 +2048,175 @@ def install_identity_http(
         except LearnerProvisioningError as error:
             raise PasswordRegistrationUnavailable(str(error)) from error
         return tenant_id
+
+    async def select_existing_learner(
+        database: AsyncSession, identity: AsyncIdentityApplication, token: str, person_id: UUID
+    ) -> None:
+        # Match the existing-account learner Google callback: never inherit the
+        # Sales X-Ray session's workspace. Select only the configured learner membership.
+        tenant_id = settings.public_learner_tenant_id
+        if tenant_id is not None:
+            membership = await database.scalar(
+                select(Membership).where(
+                    Membership.tenant_id == tenant_id,
+                    Membership.person_id == person_id,
+                    Membership.role == MembershipRole.LEARNER.value,
+                    Membership.status == MembershipStatus.ACTIVE.value,
+                )
+            )
+            if membership is not None:
+                await identity.select_tenant(token, tenant_id)
+
+    def require_handoff_surface(request: Request, surface: str) -> str:
+        origin = _surface_origin(settings, surface)
+        _require_surface_host(request, settings, surface)
+        require_safe_origin(request, settings)
+        # This credential bridge stays strict in dev too; no local/studio exception.
+        if (
+            request.url.hostname != urlsplit(origin).hostname
+            or request.headers.get("origin") != origin
+        ):
+            raise InvalidAuthTransaction(CROSS_APP_HANDOFF_ERROR)
+        return origin
+
+    @router.post("/auth/handoff/start")
+    async def cross_app_handoff_start(
+        request: Request, body: CrossAppHandoffStartRequest
+    ) -> Response:
+        try:
+            require_handoff_surface(request, "sales_xray")
+        except (InvalidAuthTransaction, RequestOriginDenied) as error:
+            raise InvalidAuthTransaction(CROSS_APP_HANDOFF_ERROR) from error
+        # The canonical resolver defaults to audience=account, rejects inactive
+        # people and takes person/session locks. Staff keys cannot substitute.
+        token = _session_cookie(request, settings)
+        if token is None:  # pragma: no cover - required session cookie narrows this value
+            raise AuthenticationRequired("A valid Authority Closers session is required.")
+        if settings.public_learner_tenant_id is None or not settings.learner_consent_version:
+            raise InvalidAuthTransaction(CROSS_APP_HANDOFF_ERROR)
+        async with sessions() as database, database.begin():
+            identity = _identity(database)
+            resolved = await identity.resolve_actor(token)
+            issued = await identity.issue_authenticated_session(
+                resolved.actor.person_id,
+                user_agent=request.headers.get("user-agent"),
+                ip_address=request.client.host if request.client else None,
+            )
+            await select_existing_learner(
+                database, identity, issued.token, resolved.actor.person_id
+            )
+            target_origin = _surface_origin(settings, "learner")
+            code = cross_app_handoff_codec.encode(
+                session_token=issued.token,
+                session_id=issued.metadata.id,
+                challenge=body.challenge,
+                source_surface="sales_xray",
+                target_surface=body.target,
+                target_origin=target_origin,
+                return_path=body.return_path,
+            )
+            await AuditRepository(database).append(
+                tenant_id=settings.public_learner_tenant_id,
+                actor_person_id=resolved.actor.person_id,
+                session_id=issued.metadata.id,
+                action="identity.cross_app_handoff_started.v1",
+                resource_type="session",
+                resource_id=issued.metadata.id,
+                payload={"source_surface": "sales_xray", "target_surface": "learner"},
+            )
+        return JSONResponse(
+            {"url": f"{target_origin}/auth/handoff#code={code}"},
+            headers={"cache-control": "no-store", "pragma": "no-cache"},
+        )
+
+    @router.post("/auth/handoff/redeem")
+    async def cross_app_handoff_redeem(request: Request) -> Response:
+        try:
+            origin = require_handoff_surface(request, "learner")
+            learner_tenant_id = settings.public_learner_tenant_id
+            if learner_tenant_id is None:
+                raise InvalidAuthTransaction(CROSS_APP_HANDOFF_ERROR)
+            raw = await request.body()
+            if len(raw) > CROSS_APP_HANDOFF_MAX_LENGTH + 512:
+                raise InvalidAuthTransaction(CROSS_APP_HANDOFF_ERROR)
+            body = json.loads(raw)
+            if (
+                not isinstance(body, dict)
+                or set(body) != {"code", "verifier"}
+                or not isinstance(body["code"], str)
+                or not isinstance(body["verifier"], str)
+            ):
+                raise InvalidAuthTransaction(CROSS_APP_HANDOFF_ERROR)
+            handoff = cross_app_handoff_codec.decode(body["code"])
+            if handoff.target_origin != origin or not sales_xray_app_verifier_matches(
+                handoff.challenge, body["verifier"]
+            ):
+                raise InvalidAuthTransaction(CROSS_APP_HANDOFF_ERROR)
+            async with sessions() as database, database.begin():
+                identity = _identity(database)
+                # resolve_actor locks and checks account audience, person lifecycle,
+                # revocation and expiry. Concurrent redemptions serialize here.
+                resolved = await identity.resolve_actor(handoff.session_token)
+                if resolved.actor.session_id != handoff.session_id:
+                    raise InvalidAuthTransaction(CROSS_APP_HANDOFF_ERROR)
+                result = "success"
+                try:
+                    tenant_id = await ensure_public_learner(database, resolved.actor.person_id)
+                except PasswordRegistrationUnavailable as error:
+                    if isinstance(error.__cause__, LearnerConsentMissingError):
+                        result = "consent_required"
+                    elif isinstance(error.__cause__, LearnerConsentUpdateRequiredError):
+                        result = "consent_update_required"
+                    else:
+                        raise
+                await identity.revoke_self(
+                    handoff.session_token, handoff.session_id, reason="Handed to Reflex"
+                )
+                issued = await identity.issue_authenticated_session(
+                    resolved.actor.person_id,
+                    user_agent=request.headers.get("user-agent"),
+                    ip_address=request.client.host if request.client else None,
+                )
+                if result == "success":
+                    await identity.select_tenant(issued.token, tenant_id)
+                else:
+                    # Consent is never accepted by the bridge. An account session
+                    # lets the existing renewal page fetch the published document.
+                    await select_existing_learner(
+                        database, identity, issued.token, resolved.actor.person_id
+                    )
+                await AuditRepository(database).append(
+                    tenant_id=learner_tenant_id,
+                    actor_person_id=resolved.actor.person_id,
+                    session_id=issued.metadata.id,
+                    action="identity.cross_app_handoff_redeemed.v1",
+                    resource_type="session",
+                    resource_id=issued.metadata.id,
+                    payload={
+                        "source_surface": handoff.source_surface,
+                        "target_surface": handoff.target_surface,
+                        "handoff_session_id": str(handoff.session_id),
+                        "result": result,
+                    },
+                )
+        except (
+            InvalidAuthTransaction,
+            RequestOriginDenied,
+            IdentityServiceError,
+            PasswordRegistrationUnavailable,
+            SQLAlchemyError,
+            OSError,
+            TimeoutError,
+            ValueError,
+            TypeError,
+        ) as error:
+            raise InvalidAuthTransaction(CROSS_APP_HANDOFF_ERROR) from error
+        response = JSONResponse(
+            {"result": result, "return_path": handoff.return_path},
+            headers={"cache-control": "no-store", "pragma": "no-cache"},
+        )
+        _set_session_cookie(response, issued.token, settings)
+        return response
 
     @router.get("/auth/email-code/config", response_model=EmailLoginCodeConfigResponse)
     async def email_login_code_config(
@@ -2900,6 +3092,8 @@ def install_identity_http(
         # The audit chain is the append-only consent history.  A person row is
         # only the current projection; earlier versions remain attributable and
         # verifiable in the chain and are never overwritten.
+        # Consent is attributed exactly as before; only the membership step below is new.
+        on_learner = request.url.hostname == settings.public_app_url.host
         tenant_id = actor.tenant_id or settings.public_learner_tenant_id
         if tenant_id is None:
             raise LearnerConsentRenewalUnavailable(
@@ -2938,6 +3132,9 @@ def install_identity_http(
         ):
             # A retried acceptance is a read of the original durable decision.
             # Do not append a second history entry or refresh its timestamp.
+            if on_learner and actor.tenant_id != settings.public_learner_tenant_id:
+                learner_tenant = await ensure_public_learner(auth.database, actor.person_id)
+                await auth.identity.select_tenant(auth.token, learner_tenant)
             return await _learner_consent_response(
                 auth,
                 response=response,
@@ -2971,6 +3168,9 @@ def install_identity_http(
             reason="Learner accepted the current published Terms and Privacy notice.",
             now=now,
         )
+        if on_learner and actor.tenant_id != settings.public_learner_tenant_id:
+            learner_tenant = await ensure_public_learner(auth.database, actor.person_id)
+            await auth.identity.select_tenant(auth.token, learner_tenant)
         return await _learner_consent_response(auth, response=response)
 
     @router.get("/auth/google/start", name="google_auth_start")
