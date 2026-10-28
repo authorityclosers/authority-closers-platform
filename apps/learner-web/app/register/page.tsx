@@ -61,3 +61,5 @@ export default async function RegisterPage({
     </AuthFlowPage>
   );
 }
+
+export const metadata = { title: "Create account" };

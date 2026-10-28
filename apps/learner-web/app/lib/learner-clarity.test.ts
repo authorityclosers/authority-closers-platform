@@ -15,7 +15,6 @@ import {
   LearningActivityNavigation,
 } from "../components/learner-runtime";
 import { isOnboardingSessionExpired } from "../components/onboarding-form";
-import { LearnerShell } from "../components/site-shell";
 import {
   ApiError,
   type ActivityResponse,
@@ -122,56 +121,41 @@ const publishedFreeCourse: ProgramSummaryResponse = {
 };
 
 describe("learner Clarity Grid slice", () => {
-  it("renders only working learner navigation", () => {
-    const html = renderToStaticMarkup(
-      createElement(LearnerShell, { current: "dashboard" }, "content"),
+  it("uses Reflex's four places and a safe-area-aware floating bar", () => {
+    const places = readFileSync(
+      new URL("../shell/places.ts", import.meta.url),
+      "utf8",
     );
-
-    expect(html).toContain('aria-label="Learner workspace navigation"');
-    expect(html).toContain('aria-label="Learner mobile navigation"');
-    expect(html).toContain('href="/learning"');
-    expect(html).toContain('href="/discover"');
-    expect(html).toContain('href="/progress"');
-    expect(html).toContain('href="/notifications"');
-    expect(html).toContain('href="/profile"');
-    expect(html).toContain('href="/settings"');
-    expect(html).not.toContain('aria-disabled="true"');
-    expect(html).not.toContain("Search is coming later");
-    expect(html).not.toContain("Certificate");
+    const shell = readFileSync(
+      new URL("../shell/reflex-shell.tsx", import.meta.url),
+      "utf8",
+    );
+    const css = readFileSync(
+      new URL("../shell/reflex-shell.module.css", import.meta.url),
+      "utf8",
+    );
+    for (const title of ["Today", "Learn", "Practice", "Me"])
+      expect(places).toContain(`title: "${title}"`);
+    expect(shell.indexOf("className={styles.content}")).toBeLessThan(
+      shell.indexOf('{navigation("tabs")}'),
+    );
+    expect(css).toContain("112px + env(safe-area-inset-bottom)");
+    expect(shell).not.toContain("MobileMoreSheet");
   });
 
-  it("keeps fixed mobile navigation after the main content in DOM order", () => {
-    const html = renderToStaticMarkup(
-      createElement(
-        LearnerShell,
-        { current: "dashboard" },
-        createElement("main", { id: "shell-content" }, "content"),
-      ),
-    );
-
-    const contentIndex = html.indexOf('<main id="shell-content">');
-    const navigationIndex = html.indexOf('<nav class="learner-bottom-nav"');
-
-    expect(contentIndex).toBeGreaterThanOrEqual(0);
-    expect(navigationIndex).toBeGreaterThan(contentIndex);
-  });
-
-  it("keeps Learning valid while incomplete onboarding redirects", () => {
+  it("keeps Learn independent of the onboarding loading state", () => {
     const redirect = renderToStaticMarkup(
       createElement(LearnerHomeOnboardingRedirect),
-    );
-    const onboardingShell = renderToStaticMarkup(
-      createElement(
-        LearnerShell,
-        { current: "none", learningHref: "/onboarding" },
-        "content",
-      ),
     );
 
     expect(redirect).toContain('id="my-learning"');
     expect(redirect).toContain('role="status"');
-    expect(onboardingShell).toContain('href="/onboarding"');
-    expect(onboardingShell).not.toContain('href="/learning"');
+    expect(redirect).toContain("Opening your learner profile");
+    const places = readFileSync(
+      new URL("../shell/places.ts", import.meta.url),
+      "utf8",
+    );
+    expect(places).toContain('title: "Learn", href: "/learning"');
   });
 
   it("offers the real published Free Course when there is no enrollment", () => {
@@ -431,7 +415,7 @@ describe("learner Clarity Grid slice", () => {
 
   it("keeps skip-link targets programmatically focusable", () => {
     const activityPage = readFileSync(
-      new URL("../activity/[activityId]/page.tsx", import.meta.url),
+      new URL("../(app)/activity/[activityId]/page.tsx", import.meta.url),
       "utf8",
     );
 
@@ -482,9 +466,12 @@ describe("learner Clarity Grid slice", () => {
     expect(themeStyles).toContain(
       'html[data-theme="dark"] .site-frame--learner .activity-mobile-path',
     );
-    expect(themeStyles).toMatch(
-      /html\[data-theme="dark"\][\s\S]*\.learner-bottom-nav[\s\S]*color: var\(--theme-text-muted\);/,
+    const shellStyles = readFileSync(
+      new URL("../shell/reflex-shell.module.css", import.meta.url),
+      "utf8",
     );
+    expect(shellStyles).toContain("background: var(--sx-glass)");
+    expect(shellStyles).toContain("color: var(--sx-ink)");
     expect(learnerStyles).toContain(".activity-mobile-path__summary-meta svg");
   });
 

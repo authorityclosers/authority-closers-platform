@@ -3,14 +3,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
-import {
-  AppShell,
-  closeAccountMenu,
-  closeNotificationPopover,
-  initialsForDisplayName,
-  LearnerShell,
-  MobileLearnerBrand,
-} from "../components/site-shell";
+import { initialsForDisplayName } from "./profile-identity";
 import {
   firstActionableActivity,
   loadDashboardData,
@@ -41,13 +34,13 @@ import {
   normalizeThemePreference,
   resolveThemePreference,
 } from "../components/theme-control";
-import DiscoverPage from "../discover/page";
-import DashboardPage from "../home/page";
-import LearningPage from "../learning/page";
-import NotificationsPage from "../notifications/page";
-import ProfilePage from "../profile/page";
-import ProgressPage from "../progress/page";
-import SettingsPage from "../settings/page";
+import DiscoverPage from "../(app)/discover/page";
+import DashboardPage from "../(app)/home/page";
+import LearningPage from "../(app)/learning/page";
+import NotificationsPage from "../(app)/notifications/page";
+import ProfilePage from "../(app)/profile/page";
+import ProgressPage from "../(app)/progress/page";
+import SettingsPage from "../(app)/settings/page";
 import {
   ApiError,
   createLearnerApi,
@@ -278,293 +271,50 @@ describe("Direction A & B UI System & Shell", () => {
     });
   });
 
-  describe("Direction A Application Shell", () => {
-    it("restores account-trigger focus when the account menu closes", () => {
-      const setOpen = vi.fn();
-      const focus = vi.fn();
-
-      closeAccountMenu(setOpen, { focus });
-
-      expect(setOpen).toHaveBeenCalledWith(false);
-      expect(focus).toHaveBeenCalledOnce();
-    });
-
-    it("restores notification-trigger focus when the popover closes", () => {
-      const setOpen = vi.fn();
-      const focus = vi.fn();
-
-      closeNotificationPopover(setOpen, { focus });
-
-      expect(setOpen).toHaveBeenCalledWith(false);
-      expect(focus).toHaveBeenCalledOnce();
-    });
-
-    it("renders the desktop wide sidebar with all 7 primary workspace and account links plus help", () => {
-      const html = renderToStaticMarkup(
-        createElement(LearnerShell, {
-          current: "dashboard",
-          userDisplayName: "Suyash R",
-        }),
-      );
-
-      // Workspace links
-      expect(html).toContain('href="/home"');
-      expect(html).toContain("Dashboard");
-      expect(html).toContain('href="/learning"');
-      expect(html).toContain("My Learning");
-      expect(html).toContain('href="/discover"');
-      expect(html).toContain("Discover");
-      expect(html).toContain('href="/progress"');
-      expect(html).toContain("Progress");
-      expect(html).toContain('href="/notifications"');
-      expect(html).toContain("Notifications");
-
-      // Account links
-      expect(html).toContain('href="/profile"');
-      expect(html).toContain("Profile");
-      expect(html).toContain('href="/settings"');
-      expect(html).toContain("Settings");
-      expect(html).toContain(
-        'href="mailto:admin@authorityclosers.com?subject=Authority%20Closers%20Learner%20Support"',
-      );
-      expect(html).toContain("Help");
-
-      // User initials pill
-      expect(html).toContain("SR");
-      expect(html).toContain("Suyash R");
-      expect(html).toContain("Learner");
-    });
-
-    it("renders the 5-item mobile bottom navigation bar with Home, Learning, Discover, Progress, More", () => {
-      const html = renderToStaticMarkup(
-        createElement(LearnerShell, { current: "learning" }),
-      );
-
-      expect(html).toContain('class="learner-bottom-nav"');
-      expect(html).toContain('aria-label="Learner mobile navigation"');
-      expect(html).toContain("Home");
-      expect(html).toContain("Learning");
-      expect(html).toContain("Discover");
-      expect(html).toContain("Progress");
-      expect(html).toContain("More");
-    });
-
-    it("marks the active route with aria-current page", () => {
-      const dashboardHtml = renderToStaticMarkup(
-        createElement(LearnerShell, { current: "dashboard" }),
-      );
-      expect(dashboardHtml).toContain('aria-current="page"');
-
-      const discoverHtml = renderToStaticMarkup(
-        createElement(LearnerShell, { current: "discover" }),
-      );
-      expect(discoverHtml).toContain('href="/discover"');
-      expect(discoverHtml).toContain('aria-current="page"');
-    });
-
-    it("includes skip-to-content link for keyboard accessibility", () => {
-      const html = renderToStaticMarkup(
-        createElement(LearnerShell, { current: "home" }),
-      );
-      expect(html).toContain('class="skip-link"');
-      expect(html).toContain('href="#main-content"');
-      expect(html).toContain("Skip to content");
-    });
-
-    it("renders the search slot with shortcut badge and link to discover", () => {
-      const html = renderToStaticMarkup(
-        createElement(LearnerShell, { current: "dashboard" }),
-      );
-      expect(html).toContain('class="learner-header__search-trigger"');
-      expect(html).toContain('href="/discover"');
-      expect(html).toContain("Search for courses, lessons, and more");
-      expect(html).toContain("⌘ K");
-    });
-
-    it("renders the notification action and profile button with accessibility attributes", () => {
-      const html = renderToStaticMarkup(
-        createElement(LearnerShell, {
-          current: "dashboard",
-          userDisplayName: "Alex Mercer",
-        }),
-      );
-      expect(html).toContain('href="/notifications"');
-      expect(html).toContain('aria-label="Notifications"');
-      expect(html).toContain(
-        'class="header-icon-button notification-bell-button"',
-      );
-      expect(html).toContain('aria-controls="learner-notifications-popover"');
-      expect(html).toContain('aria-haspopup="dialog"');
-      expect(html).toContain('class="learner-profile-button"');
-      expect(html).toContain('aria-label="Account menu for Alex Mercer"');
-      expect(html).toContain('aria-controls="learner-account-menu"');
-      expect(html).toContain('aria-haspopup="menu"');
-      expect(html).toContain("AM");
-      expect(html).toContain("Alex Mercer");
-    });
-
-    it("renders one accessible rail control and tooltip titles on navigation links", () => {
-      const html = renderToStaticMarkup(
-        createElement(LearnerShell, { current: "dashboard" }),
-      );
-      const sidebarHtml = html.slice(
-        html.indexOf('<aside id="learner-sidebar"'),
-        html.indexOf("</aside>") + "</aside>".length,
-      );
-      const headerHtml = html.slice(
-        html.indexOf('<header class="learner-header"'),
-        html.indexOf("</header>") + "</header>".length,
-      );
-      expect(html).not.toContain('class="sidebar-collapse-btn"');
-      expect(html).toContain('aria-expanded="true"');
-      expect(html).toContain('title="Collapse sidebar"');
-      expect(html).toContain('class="learner-sidebar-toggle"');
-      expect(html.match(/class="learner-sidebar-toggle"/g)).toHaveLength(1);
-      expect(html).toContain('aria-controls="learner-sidebar"');
-      expect(sidebarHtml).toContain('class="learner-sidebar-toggle"');
-      expect(headerHtml).not.toContain('class="learner-sidebar-toggle"');
-      expect(html).toContain('class="learner-sidebar-wordmark__mark"');
-      expect(html).toContain('class="learner-nav__label"');
-      expect(html).toContain('title="Dashboard"');
-      expect(html).toContain('title="My Learning"');
-      expect(html).toContain('title="Discover"');
-      expect(html).toContain('title="Progress"');
-      expect(html).toContain('title="Notifications"');
-      expect(html).toContain('title="Profile"');
-      expect(html).toContain('title="Settings"');
-      expect(html).toContain('title="Help"');
-    });
-
-    it("disables automatic prefetch for protected learner navigation", () => {
-      const shellSource = readFileSync(
-        new URL("../components/site-shell.tsx", import.meta.url),
+  describe("Reflex application shell", () => {
+    it("keeps the shell in one route-group layout with server-owned Practice availability", () => {
+      const layout = readFileSync(
+        new URL("../(app)/layout.tsx", import.meta.url),
         "utf8",
       );
-      const learnerNavLink = shellSource.slice(
-        shellSource.indexOf("function LearnerNavLink"),
-        shellSource.indexOf("const SUPPORT_MAILTO"),
-      );
-
-      expect(learnerNavLink).toContain("prefetch={false}");
-      expect(MobileLearnerBrand({}).props.prefetch).toBe(false);
-      expect(shellSource).toContain(
-        "href={ROUTES.discover}\n              prefetch={false}",
-      );
-      expect(shellSource).toContain(
-        "href={ROUTES.settings}\n                      prefetch={false}",
-      );
+      expect(layout).toContain("<ReflexShell");
+      expect(layout).toContain("isPracticeUiEnabled(process.env)");
+      expect(layout).toContain("<AppUpdatesProvider>");
     });
-
+    it("uses the floating glass places and shared account sheet", () => {
+      const shell = readFileSync(
+        new URL("../shell/reflex-shell.tsx", import.meta.url),
+        "utf8",
+      );
+      const css = readFileSync(
+        new URL("../shell/reflex-shell.module.css", import.meta.url),
+        "utf8",
+      );
+      expect(shell).toContain("<Sheet");
+      expect(shell).toContain('aria-label="Open Account"');
+      expect(shell).toContain("router.prefetch(href)");
+      expect(shell).toContain("useGlide(phone, current)");
+      expect(css).toContain("min-height: 44px");
+      expect(css).toContain("env(safe-area-inset-bottom)");
+    });
+    it("uses cached identity and accepts saved avatar updates", () => {
+      const source = readFileSync(
+        new URL("../shell/account-store.ts", import.meta.url),
+        "utf8",
+      );
+      expect(source).toContain("useSyncExternalStore");
+      expect(source).toContain("ac-profile-avatar-updated");
+      expect(source).toContain("pending ??=");
+    });
     it("uses first and last initials for stable identity fallbacks", () => {
-      expect(initialsForDisplayName("Suyash Rahegaonkar")).toBe("SR");
-      expect(initialsForDisplayName("Dipak Vishwakarma Sharma")).toBe("DS");
+      expect(initialsForDisplayName("Test Learner")).toBe("TL");
       expect(initialsForDisplayName(" Learner ")).toBe("L");
       expect(initialsForDisplayName(" ")).toBe("AC");
-    });
-
-    it("keeps routine shell actions free of implementation-status toasts", () => {
-      const shellSource = readFileSync(
-        new URL("../components/site-shell.tsx", import.meta.url),
-        "utf8",
-      );
-      expect(shellSource).not.toContain("Sidebar collapsed.");
-      expect(shellSource).not.toContain("Sidebar expanded.");
-      expect(shellSource).not.toContain("Help chat is ready;");
-      expect(shellSource).not.toContain(
-        "Notification history is not connected in this workspace yet.",
-      );
-      expect(shellSource).not.toContain("ac-toast");
-      expect(shellSource).not.toContain("learner-toast");
-      expect(shellSource).toContain("Help & Support");
-      expect(shellSource).toContain("SUPPORT_MAILTO");
-      expect(shellSource).not.toContain("learner-help-widget");
-      expect(shellSource).not.toContain("live agent");
-      expect(shellSource).not.toContain("connected LLM");
-    });
-
-    it("refreshes short-lived avatar delivery and falls back safely", () => {
-      const shellSource = readFileSync(
-        new URL("../components/site-shell.tsx", import.meta.url),
-        "utf8",
-      );
-      expect(shellSource).toContain(
-        "onError={() => setFailedAvatarUrl(imageUrl)}",
-      );
-      expect(shellSource).toContain("data-avatar-state={imageUrl ?");
-      expect(shellSource).toContain("identity.email");
-      expect(shellSource).toContain("account-menu-email");
-      expect(shellSource).toContain("4 * 60 * 1000");
-      expect(shellSource).toContain("avatarUpdateGenerationRef.current += 1");
-      expect(shellSource).toContain(
-        "updateGeneration === avatarUpdateGenerationRef.current",
-      );
-    });
-
-    it("exports AppShell as the reusable canonical alias for LearnerShell", () => {
-      expect(AppShell).toBe(LearnerShell);
-
-      const html = renderToStaticMarkup(
-        createElement(AppShell, {
-          current: "dashboard",
-          userDisplayName: "Elena Rostova",
-        }),
-      );
-      expect(html).toContain("Elena Rostova");
-      expect(html).toContain("ER");
-      expect(html).toContain('aria-label="Learner workspace navigation"');
-    });
-
-    it("enforces Direction A navigation fidelity: 44px targets, active indicator bar, safe areas, and 320px polish", () => {
-      const clarityCss = readFileSync(
-        new URL("../learner-clarity.css", import.meta.url),
-        "utf8",
-      );
-      // Skip link elevated above shell chrome with visible focus
-      expect(clarityCss).toContain(".site-frame--learner .skip-link");
-      expect(clarityCss).toContain("z-index: 100;");
-
-      // Desktop rail 44px touch targets
-      expect(clarityCss).toContain(
-        ".site-frame--learner .learner-sidebar .learner-nav__link",
-      );
-      expect(clarityCss).toContain("min-height: 44px;");
-      expect(clarityCss).toContain(
-        ".site-frame--learner.site-frame--collapsed .learner-sidebar",
-      );
-
-      // Non-color status signal: visible indicator bar on mobile bottom nav active tab
-      expect(clarityCss).toContain(
-        ".site-frame--learner .learner-bottom-nav .learner-nav__link.is-current::before",
-      );
-
-      // Safe area padding on mobile bottom nav and drawer
-      expect(clarityCss).toContain("env(safe-area-inset-bottom)");
-      expect(clarityCss).toContain("env(safe-area-inset-top)");
-
-      // Mobile keeps a visible 44px search trigger when the wide search slot hides.
-      expect(clarityCss).toMatch(
-        /\.site-frame--learner \.mobile-header-icon-button \{\s*display: inline-flex;\s*flex: 0 0 44px;/,
-      );
-      expect(clarityCss).not.toMatch(
-        /\.site-frame--learner \.mobile-header-icon-button \{\s*display: none !important;/,
-      );
-
-      // 320px ultra-compact mobile polish
-      expect(clarityCss).toContain("@media (max-width: 360px)");
-
-      // Long copy truncation protection on user affordances
-      expect(clarityCss).toContain(
-        ".site-frame--learner .learner-profile__name",
-      );
     });
   });
 
   describe("Bounded repair contracts", () => {
     it("keeps the mobile target, reduced-motion reset, copy, and long-copy guard explicit", () => {
-      const shellSource = readFileSync(
-        new URL("../components/site-shell.tsx", import.meta.url),
-        "utf8",
-      );
       const notificationSource = readFileSync(
         new URL("../components/notifications-runtime.tsx", import.meta.url),
         "utf8",
@@ -610,27 +360,10 @@ describe("Direction A & B UI System & Shell", () => {
         "utf8",
       );
 
-      expect(shellSource).toContain("accountButtonRef.current");
-      expect(shellSource).toContain('aria-controls="learner-account-menu"');
-      expect(shellSource).toContain('role="menu"');
-      expect(shellSource).toContain('role="menuitem"');
-      expect(shellSource).toContain("notificationPopoverOpen");
-      expect(shellSource).toContain("closeNotificationPopover");
       expect(notificationSource).toContain(
         'id="learner-notifications-popover"',
       );
-      expect(shellSource).toContain("href={ROUTES.notifications}");
-      expect(shellSource).not.toContain('userDisplayName = "Suyash"');
-      expect(shellSource).not.toContain('className="header-badge-dot"');
-      expect(shellSource).not.toContain("unreadCount");
-      expect(shellSource).toContain("aria-expanded={!sidebarCollapsed}");
-      expect(shellSource).toContain('className="learner-sidebar-toggle"');
-      expect(shellSource).toContain('aria-controls="learner-sidebar"');
-      expect(shellSource).toContain(
-        '<span className="learner-nav__label">Help</span>',
-      );
-      expect(shellSource).toContain("SIDEBAR_COLLAPSE_STORAGE_KEY");
-      expect(shellSource).toContain("window.localStorage.setItem(");
+
       expect(clarityCss).toContain(".learner-nav__label,");
       expect(clarityCss).not.toContain("span:not(.learner-nav__icon)");
       expect(clarityCss).not.toContain(".sidebar-collapse-btn");
@@ -642,18 +375,7 @@ describe("Direction A & B UI System & Shell", () => {
       expect(courseSurfacesCss).toMatch(
         /\.ac-program-grid\s*>\s*\.ac-program-card:only-child\s*\{[\s\S]*?width:\s*min\(100%,\s*380px\);[\s\S]*?justify-self:\s*start;/,
       );
-      expect(shellSource).not.toContain("setHelpOpen");
-      expect(shellSource).not.toContain("Open help chatbox");
-      expect(shellSource).toContain(
-        'if (event.key === "Tab") {\n      // Let the browser continue through the document\'s tab order.',
-      );
-      expect(shellSource).not.toContain(
-        'if (event.key === "Tab") {\n      event.preventDefault();\n      closeAccountMenu',
-      );
-      expect(shellSource).toContain("handlePointerDown");
-      expect(shellSource).toContain(
-        "!accountButtonRef.current?.contains(target)",
-      );
+
       expect(clarityCss).toContain(".mobile-only");
       expect(clarityCss).toContain(".desktop-only");
       expect(clarityCss).toMatch(
@@ -1203,18 +925,12 @@ describe("Direction A & B UI System & Shell", () => {
       const notificationsHtml = renderToStaticMarkup(
         createElement(NotificationsRuntime),
       );
-      const shellHtml = renderToStaticMarkup(
-        createElement(LearnerShell, { current: "profile" }),
-      );
       const signOutHtml = renderToStaticMarkup(createElement(SignOutControl));
 
       expect(discoverHtml).not.toContain("Advanced Objection Mastery");
       expect(discoverHtml).not.toContain("Enterprise Closing Architecture");
       expect(notificationsHtml).not.toContain("Welcome to Authority Closers");
       expect(notificationsHtml).not.toContain("Mark all read");
-      expect(shellHtml).toContain('aria-current="page"');
-      expect(shellHtml).toContain('aria-controls="learner-more-drawer"');
-      expect(shellHtml).not.toContain("/settings#session");
       expect(signOutHtml).toContain("Sign out");
       expect(signOutHtml).toContain("sign-out-control");
     });

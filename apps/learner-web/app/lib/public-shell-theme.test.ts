@@ -2,24 +2,19 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 describe("public shell appearance cascade", () => {
-  it("pairs dark header text with a background that outranks the public base selector", () => {
-    const theme = readFileSync(
-      new URL("../theme.css", import.meta.url),
+  it("uses the shared graphite canvas and glass surfaces throughout the public entry", () => {
+    const tokens = readFileSync(
+      new URL("../reflex-tokens.css", import.meta.url),
       "utf8",
     );
-    const base = readFileSync(
-      new URL("../styles.css", import.meta.url),
-      "utf8",
+    expect(tokens).toContain(
+      "html:root .site-frame:not(.site-frame--learner) {",
     );
-    expect(base).toContain(
-      ".site-frame:not(.site-frame--learner) .site-header {",
-    );
-    // (0,3,1) outranks the base's (0,3,0); runtime contrast is browser-tested too.
-    expect(theme).toMatch(
-      /html\[data-theme="dark"\] \.site-frame :is\(\.site-header, \.site-footer\)\s*\{[^}]*background:\s*rgba\(16, 26, 43, 0\.96\)/,
-    );
-    expect(theme).toMatch(
-      /\.site-header \.brand,[\s\S]*?color: var\(--theme-text\)/,
-    );
+    expect(tokens).toContain("background: var(--sx-paper)");
+    expect(tokens).toContain("color: var(--sx-ink)");
+    expect(tokens).toContain(":is(.site-header, .site-footer)");
+    expect(tokens).toContain("background: var(--sx-glass-thick)");
+    expect(tokens).toContain("background: var(--sx-surface)");
+    expect(tokens).not.toMatch(/#[0-9a-f]{3,8}\b/i);
   });
 });

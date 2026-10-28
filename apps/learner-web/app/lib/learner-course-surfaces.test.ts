@@ -31,8 +31,8 @@ import {
   LearningFilterTabs,
   loadLearningData,
 } from "../components/learning-runtime";
-import DiscoverPage from "../discover/page";
-import LearningPage from "../learning/page";
+import DiscoverPage from "../(app)/discover/page";
+import LearningPage from "../(app)/learning/page";
 import {
   ApiError,
   type LearnerApi,

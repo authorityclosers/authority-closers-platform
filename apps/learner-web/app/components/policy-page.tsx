@@ -6,7 +6,7 @@ import {
   LEARNER_POLICY_CONTACT,
   LEARNER_POLICY_VERSION,
 } from "../lib/learner-policy";
-import { PublicShell } from "./site-shell";
+import { PublicShell } from "./public-shell";
 
 type PolicySection = {
   heading: string;

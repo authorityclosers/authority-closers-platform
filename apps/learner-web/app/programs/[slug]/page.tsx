@@ -1,5 +1,5 @@
 import { PublicProgramDetail } from "../../components/learner-runtime";
-import { PublicShell } from "../../components/site-shell";
+import { PublicShell } from "../../components/public-shell";
 import { SurfaceStatePanel } from "../../components/surface-state";
 import { parseSurfaceState, type QueryValue } from "../../lib/surface-state";
 
@@ -31,3 +31,5 @@ export default async function ProgramDetailPage({
     </PublicShell>
   );
 }
+
+export const metadata = { title: "Course" };

@@ -1,3 +1,4 @@
+// Reflex's shell replaced this on 28 Oct 2026.
 "use client";
 
 /* Avatar delivery URLs are signed and provider-owned at runtime. */
@@ -23,14 +24,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
-import {
-  AcademyMark,
-  BrandMark,
-  COMPANY_BRAND,
-  FIRST_ACADEMY_BRAND,
-  PLATFORM_BRAND,
-  PlatformMark,
-} from "@ac/ui";
+import { AcademyMark, BrandMark, COMPANY_BRAND, PlatformMark } from "@ac/ui";
 
 import { createLearnerApi } from "../lib/learner-api";
 import { NotificationPopover } from "./notifications-runtime";
@@ -62,6 +56,9 @@ import {
   type TenantSwitcherConfig,
   useCommandPaletteShortcuts,
 } from "./learner-sidebar";
+
+const FIRST_ACADEMY_BRAND = { name: "Reflex" };
+const PLATFORM_BRAND = { name: "Reflex" };
 
 export { initialsForDisplayName } from "../lib/profile-identity";
 export {

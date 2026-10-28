@@ -75,3 +75,5 @@ export default async function LoginPage({ searchParams }: LoginPageProps) {
     </AuthFlowPage>
   );
 }
+
+export const metadata = { title: "Sign in" };

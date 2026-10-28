@@ -3,9 +3,9 @@ import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "Closers Academy · Cohorva",
-    short_name: "Closers Academy",
-    description: "Evidence-backed sales practice for deliberate professionals.",
+    name: "Reflex: Sales Training",
+    short_name: "Reflex",
+    description: "Sales training by Authority Closers",
     lang: "en",
     dir: "ltr",
     start_url: "/",
@@ -14,8 +14,8 @@ export default function manifest(): MetadataRoute.Manifest {
     // Keep future display-mode additions from changing the installed shell.
     // Browsers that do not support display_override use `display` above.
     display_override: ["standalone"],
-    background_color: "#f7f8fa",
-    theme_color: "#f7f8fa",
+    background_color: "#f2f3f7",
+    theme_color: "#f2f3f7",
     orientation: "any",
     // Explicitly opt out of related native-app promotion. This keeps the
     // install path web/PWA-first on Chromium without claiming a native app.

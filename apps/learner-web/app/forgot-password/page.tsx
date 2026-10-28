@@ -52,3 +52,5 @@ export default async function ForgotPasswordPage({
     </AuthFlowPage>
   );
 }
+
+export const metadata = { title: "Forgot password" };

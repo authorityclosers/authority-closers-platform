@@ -1,6 +1,6 @@
 import { PublicCatalogHome } from "./components/public-catalog-home";
 import { parseSurfaceState, type QueryValue } from "./lib/surface-state";
-import { PublicShell } from "./components/site-shell";
+import { PublicShell } from "./components/public-shell";
 import { SurfaceStatePanel } from "./components/surface-state";
 import { ROUTES } from "./lib/routes";
 

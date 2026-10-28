@@ -5,7 +5,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { usePracticeNavigationAvailability } from "./practice-availability";
 import { loadPracticeNavigationAvailability } from "../lib/practice-navigation";
-import { LearnerShell } from "./site-shell";
+import { ReflexShell } from "../shell/reflex-shell";
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/practice",
+  useRouter: () => ({ prefetch: vi.fn() }),
+}));
 
 vi.mock("../lib/practice-navigation", () => ({
   loadPracticeNavigationAvailability: vi.fn(),
@@ -61,23 +65,39 @@ it("reveals only confirmed availability, and removes it after fresh focus denial
   expect(container.querySelector("a")).toBeNull();
   expect(load).toHaveBeenCalledTimes(2);
 });
-it("uses the same fresh admission for the mounted desktop and mobile shell", async () => {
-  load.mockResolvedValueOnce(true).mockResolvedValue(false);
-  await act(async () => root.render(<LearnerShell current="practice" />));
+it("uses the same server-provided Practice gate on the Reflex rail and phone bar", async () => {
+  await act(async () =>
+    root.render(
+      <ReflexShell practiceEnabled>
+        <p>Content</p>
+      </ReflexShell>,
+    ),
+  );
   expect(
-    container.querySelector('.learner-sidebar a[href="/practice"]'),
+    container.querySelector(
+      'nav[aria-label="Reflex places"] a[href="/practice"]',
+    ),
   ).not.toBeNull();
   const mobile = container.querySelector(
-    '.learner-bottom-nav a[href="/practice"]',
+    'nav[aria-label="Phone places"] a[href="/practice"]',
   );
-  expect(mobile?.getAttribute("aria-label")).toBe("Practice Arcade");
+  expect(mobile?.textContent).toBe("Practice");
   expect(mobile?.getAttribute("aria-current")).toBe("page");
-  await act(async () => window.dispatchEvent(new Event("focus")));
+  await act(async () =>
+    root.render(
+      <ReflexShell practiceEnabled={false}>
+        <p>Content</p>
+      </ReflexShell>,
+    ),
+  );
   expect(container.querySelector('a[href="/practice"]')).toBeNull();
   expect(
-    container.querySelector('.learner-bottom-nav a[href="/discover"]'),
+    container.querySelector(
+      'nav[aria-label="Phone places"] a[href="/learning"]',
+    ),
   ).not.toBeNull();
 });
+
 it("cancels old scope reads and ignores late results", async () => {
   let finishOld: ((value: boolean) => void) | undefined;
   load

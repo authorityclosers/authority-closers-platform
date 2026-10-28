@@ -24,7 +24,6 @@ import {
 } from "./index";
 import {
   DEFAULT_TENANT_IDENTITY,
-  LearnerShell,
   LearnerSidebarBrand,
   MobileLearnerBrand,
 } from "../site-shell";
@@ -32,7 +31,7 @@ import { ROUTES } from "../../lib/routes";
 
 describe("P1 Learner Sidebar & Navigation Architecture", () => {
   describe("Brand hierarchy semantics", () => {
-    it("renders Closers Academy as primary sidebar identity and 'by Authority Closers' as attribution", () => {
+    it("renders Reflex as primary sidebar identity and 'by Authority Closers' as attribution", () => {
       const html = renderToStaticMarkup(
         createElement(TenantIdentity, {
           identity: DEFAULT_TENANT_IDENTITY,
@@ -40,8 +39,8 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
         }),
       );
 
-      // Primary title is Closers Academy
-      expect(html).toContain("Closers Academy");
+      // Primary title is Reflex
+      expect(html).toContain("Reflex");
       expect(html).toContain('class="tenant-identity__primary"');
 
       // Attribution is 'by Authority Closers'
@@ -49,9 +48,7 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
       expect(html).toContain('class="tenant-identity__attribution"');
 
       // Combined accessible label
-      expect(html).toContain(
-        'aria-label="Closers Academy — by Authority Closers"',
-      );
+      expect(html).toContain('aria-label="Reflex — by Authority Closers"');
       expect(html).toContain('href="/home"');
     });
 
@@ -65,10 +62,8 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
 
       expect(html).toContain("is-collapsed");
       expect(html).toContain('class="learner-sidebar-wordmark__mark"');
-      expect(html).toContain(
-        'aria-label="Closers Academy — by Authority Closers"',
-      );
-      expect(html).toContain('title="Closers Academy — by Authority Closers"');
+      expect(html).toContain('aria-label="Reflex — by Authority Closers"');
+      expect(html).toContain('title="Reflex — by Authority Closers"');
     });
 
     it("renders LearnerSidebarBrand delegating to TenantIdentity with founder-confirmed defaults", () => {
@@ -76,7 +71,7 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
         createElement(LearnerSidebarBrand, { collapsed: false }),
       );
 
-      expect(html).toContain("Closers Academy");
+      expect(html).toContain("Reflex");
       expect(html).toContain("by Authority Closers");
       expect(html).toContain('class="learner-sidebar-wordmark__mark"');
     });
@@ -103,14 +98,14 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
         'aria-label="Northstar Academy — by Northstar Enterprise"',
       );
       expect(mobileHtml).toContain("custom-mark");
-      expect(mobileHtml).not.toContain("Closers Academy");
+      expect(mobileHtml).not.toContain("Reflex");
 
       expect(html).toContain("Northstar Academy");
       expect(html).toContain("by Northstar Enterprise");
       expect(html).toContain('href="/dashboard/custom"');
       expect(html).toContain("custom-mark");
       expect(html).not.toContain("Authority Closers");
-      expect(html).not.toContain("Closers Academy");
+      expect(html).not.toContain("Reflex");
     });
 
     it("renders arbitrary SidebarNav sections and items dynamically", () => {
@@ -729,45 +724,20 @@ describe("P1 Learner Sidebar & Navigation Architecture", () => {
   });
 
   describe("LearnerShell integrated prototype", () => {
-    it("renders full workspace and account sections with tenant identity", () => {
-      const html = renderToStaticMarkup(
-        createElement(LearnerShell, {
-          current: "dashboard",
-          userDisplayName: "Alex Mercer",
-        }),
+    it("keeps the old shell unmounted and gives Reflex one shared route layout", () => {
+      const layout = readFileSync(
+        new URL("../../(app)/layout.tsx", import.meta.url),
+        "utf8",
       );
-
-      // Identity & Brand
-      expect(html).toContain("Closers Academy");
-      expect(html).toContain("by Authority Closers");
-
-      // Workspace & Account items
-      expect(html).toContain("Dashboard");
-      expect(html).toContain("My Learning");
-      expect(html).toContain("Discover");
-      expect(html).toContain("Progress");
-      expect(html).toContain("Notifications");
-      expect(html).toContain("Profile");
-      expect(html).toContain("Settings");
-      expect(html).toContain("Help");
-
-      // No fake switcher with 1 default tenant
-      expect(html).not.toContain("Switch organization");
-
-      // Mobile nav
-      expect(html).toContain('class="learner-bottom-nav"');
-
-      // Sidebar search trigger with Cmd+K
-      expect(html).toContain('class="learner-sidebar__search-trigger"');
-      expect(html).toContain("⌘K");
-
-      // Anchored account/profile footer with real user information
-      expect(html).toContain('class="learner-sidebar__footer"');
-      expect(html).toContain('class="learner-sidebar__account"');
-      expect(html).toContain("Alex Mercer");
-
-      // Redundant Dashboard context label removed from top header
-      expect(html).not.toContain('class="learner-header__context"');
+      const shell = readFileSync(
+        new URL("../../shell/reflex-shell.tsx", import.meta.url),
+        "utf8",
+      );
+      expect(layout).toContain("<ReflexShell");
+      expect(layout).not.toContain("LearnerShell");
+      expect(shell).toContain("<ReflexMark");
+      expect(shell).toContain("by Authority Closers");
+      expect(shell).not.toContain("CommandPalette");
     });
 
     it("ensures collapse affordance has sr-only label to prevent text overlap", () => {
