@@ -803,7 +803,8 @@ function Sections({
                     <TalkBands bands={data.talk} />
                     <p className={styles.caption}>
                       {count(totals.talkCalls)} calls with a confirmed seller ·
-                      good calls sit at 40–60%
+                      good calls sit at{" "}
+                      <span className={styles.nowrap}>40–60%</span>
                     </p>
                   </>
                 ) : (

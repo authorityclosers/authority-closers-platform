@@ -43,6 +43,8 @@ const selectedOn = (page: MetaPage, form: MetaForm) =>
   (!page.forms || page.forms === "all" || page.forms.includes(form.id));
 const plural = (value: number, word: string) =>
   `${value} ${word}${value === 1 ? "" : "s"}`;
+/** A no-break space, so a count never ends a line apart from its word. */
+const NBSP = String.fromCharCode(160);
 /** Search only earns its place once there are more forms than fit a screen. */
 const SEARCH_FROM = 7;
 
@@ -311,7 +313,7 @@ export function OrganisationSources() {
         ? "Facebook connections are not set up in this environment."
         : !pages.length
           ? "Connect an account to choose lead forms."
-          : `${picked.size} of ${plural(total, "form")} bring in leads · ${plural(pages.length, "Page")}`;
+          : `${picked.size} of ${plural(total, "form").replace(" ", NBSP)} bring in leads · ${plural(pages.length, "Page").replace(" ", NBSP)}`;
   return (
     <div className={styles.stack}>
       <section className={styles.hero} aria-label="Facebook accounts">

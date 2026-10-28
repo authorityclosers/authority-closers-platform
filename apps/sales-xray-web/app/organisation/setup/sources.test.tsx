@@ -73,6 +73,9 @@ afterEach(async () => {
   host.remove();
   vi.unstubAllGlobals();
 });
+// The summary keeps each count with its word through no-break spaces.
+const plain = () =>
+  (host.textContent ?? "").split(String.fromCharCode(160)).join(" ");
 async function render() {
   await act(async () => {
     root.render(<OrganisationSources />);
@@ -142,11 +145,11 @@ it("shows the save bar only while a choice is unsaved, and Discard restores it",
       item.getAttribute("aria-pressed"),
     );
   expect(saveBar()).toBeNull();
-  expect(host.textContent).toContain("3 of 3 forms bring in leads · 2 Pages");
+  expect(plain()).toContain("3 of 3 forms bring in leads · 2 Pages");
   const before = pressed();
   await tap("Earlier campaign");
   expect(saveBar()?.textContent).toContain("1 change");
-  expect(host.textContent).toContain("2 of 3 forms");
+  expect(plain()).toContain("2 of 3 forms");
   await tap("Discard");
   expect(saveBar()).toBeNull();
   expect(pressed()).toEqual(before);

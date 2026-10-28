@@ -1476,3 +1476,8 @@ a.callTitle:hover {
 .filterDetails[open] summary {
   background: var(--sx-accent-soft);
 }
+
+/* A range like 40–60% never breaks at its dash. */
+.nowrap {
+  white-space: nowrap;
+}
