@@ -65,13 +65,27 @@ elif name == "apt-get":
 elif name == "rm":
     if os.environ.get("FAKE_FAIL") == "rm" and "--one-file-system" in args:
         sys.exit(1)
+elif name == "ac-archive-put":
+    print("untrusted provider output must not reach guard logs")
+    sys.exit(1 if os.environ.get("FAKE_FAIL") == name else 0)
 """
 
 
 @pytest.fixture
 def guard(tmp_path: Path) -> Path:
     (tmp_path / "bin").mkdir()
-    for name in ["df", "docker", "journalctl", "apt-get", "ac-release", "pgrep", "rm", "du", "id"]:
+    for name in [
+        "df",
+        "docker",
+        "journalctl",
+        "apt-get",
+        "ac-release",
+        "pgrep",
+        "rm",
+        "du",
+        "id",
+        "ac-archive-put",
+    ]:
         path = tmp_path / "bin" / name
         path.write_text(f"#!{sys.executable}\n{FAKE}")
         path.chmod(path.stat().st_mode | stat.S_IEXEC)
@@ -120,6 +134,7 @@ def _run(
         "PGREP": "pgrep",
         "RM": "rm",
         "DU": "du",
+        "ARCHIVE": "ac-archive-put",
     }.items():
         env[f"AC_DISK_{key}"] = str(root / "bin" / command)
     return subprocess.run(  # noqa: S603
@@ -452,3 +467,85 @@ def test_inherited_environment_cannot_approve_backup_rotation(
     assert _run(guard).returncode == 0
     assert not _removed(guard)
     assert "backup rotation skipped" in (guard / "guard.log").read_text()
+
+
+def _archive_candidates(guard: Path) -> set[Path]:
+    old = {
+        _file(guard, "paperclip/paperclip-old.sql.gz", hours=2),
+        _file(guard, "backups/application/staging/old dump.sql.gz", hours=2),
+        _directory(guard, "backups/staging-snapshots/old snapshot", hours=2),
+    }
+    _file(guard, "paperclip/paperclip-new.sql.gz", hours=1)
+    _file(guard, "backups/application/staging/new.dump", hours=1)
+    _directory(guard, "backups/staging-snapshots/new", hours=1)
+    return old
+
+
+ARCHIVE_CONFIG = (
+    "BACKUP_ROTATION_APPROVED=1\nARCHIVE_ENABLED=1\nKEEP_PAPERCLIP_BACKUPS=1\n"
+    "KEEP_STAGING_DUMPS=1\nKEEP_SNAPSHOTS=1\n"
+)
+
+
+@pytest.mark.parametrize("fail", ["", "ac-archive-put"])
+def test_archive_before_removal_or_keep_and_continue_on_failure(guard: Path, fail: str) -> None:
+    old = _archive_candidates(guard)
+    production = _file(guard, "backups/application/production/logical/ancient.dump", hours=1000)
+    _file(guard, "backups/production-snapshots/ancient/backup.dump", hours=1000)
+    _file(guard, "backups/staging-snapshots/protected/held/backup.dump", hours=1000)
+    when = time.time() - 1000 * 3600
+    os.utime(guard / "backups/staging-snapshots/protected", (when, when))
+    assert _run(guard, config=ARCHIVE_CONFIG, fail=fail).returncode == 0
+    archives = _calls(guard, "ac-archive-put")
+    assert {Path(c[1]) for c in archives} == old
+    assert {c[2] for c in archives} == {
+        "backups/paperclip/paperclip-old.sql.gz",
+        "backups/staging/old dump.sql.gz",
+        "backups/snapshots/old snapshot",
+    }
+    assert production not in _removed(guard)
+    assert production.exists()
+    assert _removed(guard) == (set() if fail else old)
+    calls = _calls(guard)
+    for call in archives:
+        removes = [c for c in calls if c[0] == "rm" and c[-1] == call[1]]
+        assert not removes if fail else calls.index(call) < calls.index(removes[0])
+    log = (guard / "guard.log").read_text()
+    assert "untrusted provider output" not in log
+    assert "archive failed; kept" in log if fail else "archived key=" in log
+
+
+def test_archive_disabled_retains_existing_approved_rotation(guard: Path) -> None:
+    old = _archive_candidates(guard)
+    production = _file(guard, "backups/application/production/logical/old.dump", hours=25)
+    assert (
+        _run(
+            guard, config=ARCHIVE_CONFIG.replace("ARCHIVE_ENABLED=1", "ARCHIVE_ENABLED=0")
+        ).returncode
+        == 0
+    )
+    assert not _calls(guard, "ac-archive-put")
+    assert _removed(guard) == old | {production}
+
+
+def test_archive_needs_config_opt_in_and_backup_rotation_approval(
+    guard: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    old = _archive_candidates(guard)
+    monkeypatch.setenv("ARCHIVE_ENABLED", "1")
+    assert _run(guard, config=ARCHIVE_CONFIG.replace("ARCHIVE_ENABLED=1\n", "")).returncode == 0
+    assert not _calls(guard, "ac-archive-put")
+    assert _removed(guard) == old
+    (guard / "calls").unlink()
+    assert _run(guard, config="ARCHIVE_ENABLED=1\n").returncode == 0
+    assert not _calls(guard, "ac-archive-put")
+    assert not _removed(guard)
+
+
+def test_invalid_archive_configuration_fails_before_cleanup(guard: Path) -> None:
+    assert _run(guard, config="ARCHIVE_ENABLED=yes\n").returncode == 1
+    assert not _calls(guard)
+
+
+def test_archive_default_is_disabled() -> None:
+    assert "ARCHIVE_ENABLED=0" in CONF.read_text()

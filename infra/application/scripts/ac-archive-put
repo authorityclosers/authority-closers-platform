@@ -1,0 +1,227 @@
+#!/usr/bin/python3 -I
+"""Upload approved non-production backups; succeed only after size verification.
+
+Install root-owned at /usr/local/sbin/ac-archive-put. No secret is written to
+disk, passed in argv, or included in diagnostics. Overrides are for local tests.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shlex
+import stat
+import subprocess
+import sys
+from pathlib import Path
+from urllib.parse import urlencode, urlsplit
+from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+BOOTSTRAP = "/etc/authority-closers/secrets/infisical-bootstrap.env"
+PROJECT = "b421c44e-4599-4394-8df6-758ed8aedfed"
+SECRET_NAMES = (
+    "AC_ARCHIVE_AWS_ACCESS_KEY_ID",
+    "AC_ARCHIVE_AWS_SECRET_ACCESS_KEY",
+    "AC_ARCHIVE_BUCKET",
+    "AC_ARCHIVE_REGION",
+)
+
+
+class ArchiveError(Exception):
+    """Fixed, content-free failure stage; never propagate provider responses."""
+
+
+class NoRedirect(HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001, ANN201
+        raise ArchiveError("Infisical redirect refused")
+
+
+def bootstrap() -> dict[str, str]:
+    # Bootstrap is a scalar KEY=value env file. Do not execute shell expansions.
+    values = {}
+    for line in Path(os.environ.get("AC_ARCHIVE_BOOTSTRAP", BOOTSTRAP)).read_text().splitlines():
+        fields = shlex.split(line, comments=True)
+        if fields[:1] == ["export"]:
+            fields = fields[1:]
+        if not fields:
+            continue
+        if len(fields) != 1 or "=" not in fields[0]:
+            raise ArchiveError("invalid bootstrap format")
+        name, value = fields[0].split("=", 1)
+        values[name] = value
+    return values
+
+
+def credentials() -> dict[str, str]:
+    values = bootstrap()
+    base = os.environ.get("AC_ARCHIVE_API_URL", "https://app.infisical.com/api").rstrip("/")
+    parsed = urlsplit(base)
+    if (
+        (
+            parsed.scheme != "https"
+            and not (
+                parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+            )
+        )
+        or parsed.username
+        or parsed.password
+        or parsed.query
+        or parsed.fragment
+    ):
+        raise ArchiveError("invalid Infisical endpoint")
+    opener = build_opener(NoRedirect())
+
+    def request(path: str, *, body=None, token=None):  # noqa: ANN001, ANN202
+        headers = {"Content-Type": "application/json"}
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        req = Request(  # noqa: S310 - HTTPS or explicitly loopback-only test endpoint
+            base + path, data=json.dumps(body).encode() if body else None, headers=headers
+        )
+        with opener.open(req, timeout=30) as response:
+            return json.loads(response.read(256 * 1024))
+
+    login = request(
+        "/v1/auth/universal-auth/login",
+        body={
+            "clientId": values["INFISICAL_VPS_CLIENT_ID"],
+            "clientSecret": values["INFISICAL_VPS_CLIENT_SECRET"],
+        },
+    )
+    token = login["accessToken"]
+    if not isinstance(token, str) or not token or any(c.isspace() for c in token):
+        raise ArchiveError("invalid Infisical login")
+    query = urlencode(
+        {
+            "projectId": values.get("INFISICAL_PROJECT_ID", PROJECT),
+            "environment": "prod",
+            "secretPath": "/ops",
+        }
+    )
+    result = {}
+    for name in SECRET_NAMES:
+        value = request(f"/v4/secrets/{name}?{query}", token=token)["secret"]["secretValue"]
+        if not isinstance(value, str) or not value or any(c.isspace() for c in value):
+            raise ArchiveError("invalid archive configuration")
+        result[name] = value
+    if not re.fullmatch(r"[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]", result["AC_ARCHIVE_BUCKET"]):
+        raise ArchiveError("invalid archive bucket")
+    if not re.fullmatch(r"[a-z0-9-]+", result["AC_ARCHIVE_REGION"]):
+        raise ArchiveError("invalid archive region")
+    return result
+
+
+def inventory(path: Path) -> dict[Path, tuple[int, int, int, int, int]]:
+    """Reject links, mount crossings and special files rather than omit content."""
+    device = path.lstat().st_dev
+    found = {}
+
+    def visit(item: Path) -> None:
+        info = item.lstat()
+        if info.st_dev != device or item.is_symlink():
+            raise ArchiveError("unsafe backup tree")
+        if stat.S_ISREG(info.st_mode):
+            found[item] = (
+                info.st_dev,
+                info.st_ino,
+                info.st_size,
+                info.st_mtime_ns,
+                info.st_ctime_ns,
+            )
+        elif stat.S_ISDIR(info.st_mode):
+            for child in item.iterdir():
+                visit(child)
+        else:
+            raise ArchiveError("unsupported backup entry")
+
+    visit(path)
+    if not found:
+        raise ArchiveError("empty backup has no objects to verify")
+    return found
+
+
+def archive(path: Path, key: str) -> int:
+    parts = key.split("/")
+    if (
+        len(parts) != 3
+        or parts[0] != "backups"
+        or parts[1] not in {"paperclip", "staging", "snapshots"}
+        or parts[2] != path.name
+        or parts[2] in {"", ".", ".."}
+    ):
+        raise ArchiveError("key must name an approved backup kind and original name")
+    if path.is_symlink() or path.resolve(strict=True) != path:
+        raise ArchiveError("noncanonical local path")
+    before = inventory(path)
+    secrets = credentials()
+    # Start with a minimal environment: no inherited AWS profile, endpoint,
+    # debug setting, Infisical token or bootstrap identity reaches the AWS child.
+    env = {
+        "PATH": "/usr/local/bin:/usr/bin:/bin",
+        "HOME": "/root",
+        "AWS_ACCESS_KEY_ID": secrets["AC_ARCHIVE_AWS_ACCESS_KEY_ID"],
+        "AWS_SECRET_ACCESS_KEY": secrets["AC_ARCHIVE_AWS_SECRET_ACCESS_KEY"],
+        "AWS_DEFAULT_REGION": secrets["AC_ARCHIVE_REGION"],
+        "AWS_EC2_METADATA_DISABLED": "true",
+        "AWS_CONFIG_FILE": "/dev/null",
+        "AWS_SHARED_CREDENTIALS_FILE": "/dev/null",
+        "AWS_PAGER": "",
+    }
+    aws = os.environ.get("AC_ARCHIVE_AWS", "/usr/local/bin/aws")
+
+    def run(args: list[str]) -> str:
+        result = subprocess.run(  # noqa: S603 - root-owned executable, no shell
+            [aws, *args], env=env, capture_output=True, text=True, check=False, timeout=1200
+        )
+        if result.returncode:
+            raise ArchiveError("AWS upload or verification failed")
+        return result.stdout
+
+    bucket = secrets["AC_ARCHIVE_BUCKET"]
+    directory = path.is_dir()
+    run(
+        ["s3", "cp", str(path), f"s3://{bucket}/{key}" + ("/" if directory else "")]
+        + ["--storage-class", "GLACIER_IR", "--only-show-errors", "--no-progress"]
+        + (["--recursive", "--no-follow-symlinks"] if directory else [])
+    )
+    for item, info in before.items():
+        object_key = f"{key}/{item.relative_to(path).as_posix()}" if directory else key
+        metadata = json.loads(
+            run(
+                [
+                    "s3api",
+                    "head-object",
+                    "--bucket",
+                    bucket,
+                    "--key",
+                    object_key,
+                    "--output",
+                    "json",
+                ]
+            )
+        )
+        if metadata.get("ContentLength") != info[2]:
+            raise ArchiveError("uploaded object size mismatch")
+    if inventory(path) != before:
+        raise ArchiveError("local backup changed during upload")
+    size = sum(info[2] for info in before.values())
+    print(f"archived key={json.dumps(key)} size_bytes={size}")
+    return 0
+
+
+def main() -> int:
+    if len(sys.argv) != 3:
+        print("usage: ac-archive-put <local path> <s3 key>", file=sys.stderr)
+        return 2
+    try:
+        return archive(Path(os.path.abspath(sys.argv[1])), sys.argv[2])
+    except Exception:
+        # Provider errors, malformed JSON and even filesystem exceptions can
+        # contain credentials or payloads. Never print their text or traceback.
+        print("archive failed; local backup must be kept", file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

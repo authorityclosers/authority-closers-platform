@@ -5,6 +5,7 @@ set -euo pipefail
 export LC_ALL=C
 # Only the trusted config can approve backup rotation, never an inherited environment.
 BACKUP_ROTATION_APPROVED=0
+ARCHIVE_ENABLED=0
 CONF=${AC_DISK_CONF:-/etc/ac-disk-guard.conf}
 if [ -f "$CONF" ]; then
     # shellcheck source=/dev/null
@@ -36,6 +37,7 @@ RM=${AC_DISK_RM:-rm}
 DU=${AC_DISK_DU:-du}
 APT_CACHE=${AC_DISK_APT_CACHE:-/var/cache/apt/archives}
 PYTHON=${AC_DISK_PYTHON:-python3}
+ARCHIVE=${AC_DISK_ARCHIVE:-/usr/local/sbin/ac-archive-put}
 TRIED=()
 say() { printf '%s %s\n' "$(date -u +%FT%TZ)" "$*" >> "$LOG"; }
 for key in TARGET_FREE_GB CRITICAL_FREE_GB KEEP_RELEASES KEEP_PAPERCLIP_BACKUPS \
@@ -45,6 +47,9 @@ for key in TARGET_FREE_GB CRITICAL_FREE_GB KEEP_RELEASES KEEP_PAPERCLIP_BACKUPS 
         say "invalid configuration: $key"; exit 1
     fi
 done
+if [[ "$ARCHIVE_ENABLED" != 0 && "$ARCHIVE_ENABLED" != 1 ]]; then
+    say 'invalid configuration: ARCHIVE_ENABLED'; exit 1
+fi
 # Zero retained backups is never a valid rotation policy.
 if (( KEEP_PAPERCLIP_BACKUPS < 1 || KEEP_STAGING_DUMPS < 1 || KEEP_SNAPSHOTS < 1 \
     || KEEP_PROD_LOGICAL_HOURS < 1 || TARGET_FREE_GB < 1 )); then
@@ -116,7 +121,7 @@ protected() {
     return 1
 }
 remove_path() {
-    local path=$1 size nested
+    local path=$1 mode=${2:-} size nested key
     protected "$path" && { say "protected: $(printf '%q' "$path")"; return 0; }
     [ ! -L "$path" ] || return 0
     [ "$(realpath -e -- "$path")" = "$path" ] || {
@@ -133,6 +138,22 @@ remove_path() {
     fi
     size=$("$DU" -sx -B1 -- "$path") || return 1
     size=${size%%[[:space:]]*}
+    if [ "$ARCHIVE_ENABLED" = 1 ]; then
+        case "$mode" in
+            paperclip|staging|snapshots)
+                key="backups/$mode/${path##*/}"
+                # The helper emits only verified metadata. Suppress diagnostics here
+                # too, so an unexpected provider error cannot leak into guard logs.
+                if "$ARCHIVE" "$path" "$key" >/dev/null 2>&1; then
+                    say "archived key=$(printf '%q' "$key") local_size_bytes=$size"
+                else
+                    say "archive failed; kept name=$(printf '%q' "$path") key=$(printf '%q' "$key")"
+                    return 1
+                fi ;;
+            logical)
+                say "production backup kept: $(printf '%q' "$path")"; return 0 ;;
+        esac
+    fi
     if "$RM" -rf --one-file-system -- "$path"; then
         say "removed name=$(printf '%q' "$path") size_bytes=$size"
     else
@@ -197,7 +218,7 @@ file_step() {
             protected "$path" && continue
             count=$((count + 1))
             [ "$count" -gt "$keep" ] || continue
-            remove_path "$path" || status=1
+            remove_path "$path" "$mode" || status=1
             measure
             met_target && break
         done < "$listing"
@@ -236,7 +257,11 @@ step temporary-files file_step tmp "$TMP"
 if [ "$BACKUP_ROTATION_APPROVED" = 1 ]; then
     step paperclip-backups file_step paperclip "$PAPERCLIP" "$KEEP_PAPERCLIP_BACKUPS"
     step staging-dumps file_step staging "$BACKUPS/application/staging" "$KEEP_STAGING_DUMPS"
-    step production-logical file_step logical "$BACKUPS/application/production/logical"
+    if [ "$ARCHIVE_ENABLED" = 1 ]; then
+        say 'production logical backups skipped: archive mode excludes production data'
+    else
+        step production-logical file_step logical "$BACKUPS/application/production/logical"
+    fi
     step staging-snapshots file_step snapshots "$BACKUPS/staging-snapshots" "$KEEP_SNAPSHOTS"
 else
     say 'backup rotation skipped: BACKUP_ROTATION_APPROVED is not 1'

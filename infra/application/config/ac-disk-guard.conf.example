@@ -6,6 +6,9 @@ KEEP_RELEASES=3
 
 # Set to 1 ONLY after the owner approves this backup retention policy.
 BACKUP_ROTATION_APPROVED=0
+# Set to 1 to archive Paperclip/staging items to S3 before rotation. A failed
+# archive keeps the local item. Production backups are excluded in this mode.
+ARCHIVE_ENABLED=0
 KEEP_PAPERCLIP_BACKUPS=4
 KEEP_STAGING_DUMPS=3
 KEEP_PROD_LOGICAL_HOURS=24
