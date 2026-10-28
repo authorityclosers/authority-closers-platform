@@ -345,6 +345,9 @@ initialize_release_profile_contract() {
   # Keep the guest upload response budget deployment-configurable while
   # constraining it to the audited range enforced by application settings.
   profile_allowed_keys[AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS]=1
+  # Microsoft Clarity's public project id (owner, 28 Oct 2026). Production only:
+  # validate_release_profile refuses it anywhere else, so test sessions never mix in.
+  profile_allowed_keys[AC_SALES_XRAY_CLARITY_PROJECT]=1
 }
 
 initialize_release_profile_contract
@@ -467,6 +470,16 @@ validate_release_profile() {
     if ! [[ "$upload_response_budget_seconds" =~ ^[0-9]+$ ]] ||
       (( upload_response_budget_seconds < 90 || upload_response_budget_seconds > 3600 )); then
       printf 'AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS must be between 90 and 3600.\n' >&2
+      return 1
+    fi
+  fi
+  if [[ -n "${profile_values[AC_SALES_XRAY_CLARITY_PROJECT]+present}" ]]; then
+    if [[ "$target_environment" != production ]]; then
+      printf 'AC_SALES_XRAY_CLARITY_PROJECT is for production only.\n' >&2
+      return 1
+    fi
+    if ! [[ "${profile_values[AC_SALES_XRAY_CLARITY_PROJECT]}" =~ ^[a-z0-9]{6,32}$ ]]; then
+      printf 'AC_SALES_XRAY_CLARITY_PROJECT must be a Clarity project id.\n' >&2
       return 1
     fi
   fi
