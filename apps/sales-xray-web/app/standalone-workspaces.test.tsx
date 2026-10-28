@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { StandaloneStudio } from "./standalone-studio";
@@ -30,7 +30,7 @@ const personal = {
 const organisation = {
   tenant_id: "org-id",
   kind: "organisation",
-  name: "Closers Academy",
+  name: "Fictional Academy",
   role: "owner",
   sales_xray_enabled: true,
 } as const;
@@ -64,7 +64,9 @@ beforeEach(() => {
         person_id: "person-id",
         session_id: "session-id",
         selected_tenant_id: "operations-id",
-        workspaces: [{ tenant_id: "operations-id", name: "Authority Closers" }],
+        workspaces: [
+          { tenant_id: "operations-id", name: "Fictional Operations" },
+        ],
       });
     if (path === "/v1/me/sales-xray-workspaces")
       return Response.json(directory);
@@ -108,9 +110,9 @@ it("shows Personal and an organisation using server kinds; operations is absent"
   await mount();
   await act(async () => button("Current workspace: Personal").click());
   expect(host.querySelectorAll('[role="menuitemradio"]')).toHaveLength(2);
-  expect(host.textContent).toContain("Closers Academy");
+  expect(host.textContent).toContain("Fictional Academy");
   expect(host.querySelector('[role="menu"]')?.textContent).not.toContain(
-    "Authority Closers",
+    "Fictional Operations",
   );
   expect(host.querySelector('[data-kind="organisation"]')).not.toBeNull();
   expect(host.querySelector("[data-upload]")?.getAttribute("data-tenant")).toBe(
@@ -163,7 +165,7 @@ it("shows the off message and suppresses Recents and upload for a disabled works
   expect(
     fetcher.mock.calls.some(([path]) => path.startsWith("/v1/conversation/")),
   ).toBe(false);
-  await act(async () => button("Current workspace: Closers Academy").click());
+  await act(async () => button("Current workspace: Fictional Academy").click());
   expect(host.querySelectorAll('[role="menuitemradio"]')).toHaveLength(2);
 });
 
@@ -178,7 +180,7 @@ it.each([true, false])(
     await mount();
     expect(getShellState().selectedTenantId).toBe("org-id");
     await remount();
-    expect(button("Current workspace: Closers Academy")).not.toBeNull();
+    expect(button("Current workspace: Fictional Academy")).not.toBeNull();
     expect(host.textContent?.includes("Recents")).toBe(enabled);
     expect(host.querySelector("[data-upload]") !== null).toBe(enabled);
     if (enabled) {
@@ -195,19 +197,21 @@ it.each([true, false])(
         ),
       ).toBe(false);
     }
-    await act(async () => button("Current workspace: Closers Academy").click());
+    await act(async () =>
+      button("Current workspace: Fictional Academy").click(),
+    );
     const selected = host.querySelector(
       '[role="menuitemradio"][aria-checked="true"]',
     );
-    expect(selected?.textContent).toContain("Closers Academy");
+    expect(selected?.textContent).toContain("Fictional Academy");
   },
 );
 
 it("switches both ways and clears the previous workspace's cached Recents", async () => {
   await mount();
   for (const [from, to, name] of [
-    ["Personal", "org-id", "Closers Academy"],
-    ["Closers Academy", "personal-id", "Personal"],
+    ["Personal", "org-id", "Fictional Academy"],
+    ["Fictional Academy", "personal-id", "Personal"],
   ]) {
     updateShellState({
       recentCalls: [
@@ -226,4 +230,53 @@ it("switches both ways and clears the previous workspace's cached Recents", asyn
     await remount();
     expect(button(`Current workspace: ${name}`)).not.toBeNull();
   }
+});
+
+function WorkspaceDraftProbe() {
+  const access = useWorkspaceAccess();
+  const [draft, setDraft] = useState("");
+  return (
+    <div data-scope={access?.context?.tenantId}>
+      <button
+        data-draft
+        onClick={() => setDraft("Private draft in previous workspace")}
+      >
+        Edit draft
+      </button>
+      <button data-refresh onClick={() => access?.retry()}>
+        Refresh workspace
+      </button>
+      <span data-value>{draft}</span>
+    </div>
+  );
+}
+
+it("discards page drafts when the server confirms another workspace without a document reload", async () => {
+  await act(async () =>
+    root.render(
+      <StandaloneStudio>
+        <WorkspaceDraftProbe />
+      </StandaloneStudio>,
+    ),
+  );
+  await act(async () => {
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  });
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("[data-draft]")!.click(),
+  );
+  expect(host.querySelector("[data-value]")?.textContent).toBe(
+    "Private draft in previous workspace",
+  );
+  directory = { ...directory, selected_tenant_id: organisation.tenant_id };
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("[data-refresh]")!.click(),
+  );
+  await act(async () => {
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  });
+  expect(host.querySelector("[data-scope]")?.getAttribute("data-scope")).toBe(
+    organisation.tenant_id,
+  );
+  expect(host.querySelector("[data-value]")?.textContent).toBe("");
 });

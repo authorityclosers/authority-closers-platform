@@ -749,7 +749,10 @@ function StandaloneStudioView({
   if (view.kind === "ready" || (!embedded && view.kind === "unauthenticated"))
     return (
       <WorkspaceAccessProvider value={accessValue}>
-        <AppFrame embedded={embedded}>
+        <AppFrame
+          key={`${identityKey}:${view.kind === "ready" ? view.choices.selected_tenant_id : "guest"}`}
+          embedded={embedded}
+        >
           {view.kind === "ready" && !salesXrayEnabled ? (
             <AcquisitionShell
               authenticated
