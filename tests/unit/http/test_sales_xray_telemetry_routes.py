@@ -519,3 +519,32 @@ def test_privacy_settings_show_and_change_both_switches(
         headers={"Origin": "https://evil.example"},
     )
     assert len(appended) == count
+
+
+def test_clarity_goes_only_to_a_recorded_person_where_the_environment_has_a_project(
+    harness: _Harness,
+) -> None:
+    """Microsoft Clarity (owner, 28 Oct 2026): the taxonomy gives its project id to a person whose
+    usage analytics is on, and only in an environment that sets one (production)."""
+    # No project (dev, staging): never, even for a person recorded.
+    assert harness.composed().get("/v1/telemetry/taxonomy").json()["session_replay"] is None
+    harness.settings = harness.settings.model_copy(
+        update={"sales_xray_clarity_project": "z4fyjboxqs"}
+    )
+    client = harness.composed()
+    body = client.get("/v1/telemetry/taxonomy").json()
+    assert body["events"] != []
+    assert body["session_replay"] == "z4fyjboxqs"
+    # Turned off for themselves, or for the workspace: no events and no Clarity.
+    harness.choice(str(harness.person_id), False)
+    assert client.get("/v1/telemetry/taxonomy").json()["session_replay"] is None
+    harness.choice(str(harness.person_id), True)
+    harness.choice("workspace", False)
+    body = client.get("/v1/telemetry/taxonomy").json()
+    assert body["events"] == [] and body["session_replay"] is None
+    # Something that isn't a project id is never handed out.
+    harness.choice("workspace", True)
+    harness.settings = harness.settings.model_copy(
+        update={"sales_xray_clarity_project": "<script>"}
+    )
+    assert harness.composed().get("/v1/telemetry/taxonomy").json()["session_replay"] is None

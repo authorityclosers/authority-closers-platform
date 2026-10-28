@@ -137,9 +137,14 @@ class TelemetryTaxonomy(BaseModel):
         "creates canonical progress, completion, payment, entitlement, access, audit, "
         "or scoring state."
     )
+    # Microsoft Clarity's project id, for a person this surface records and only where the
+    # environment has one (production): the web app loads Clarity on nothing else.
+    session_replay: str | None = None
 
 
 _RETENTION_POLICY_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
+# A Clarity project id: ten or so lower-case letters and digits.
+_SESSION_REPLAY_PATTERN = re.compile(r"^[a-z0-9]{6,32}$")
 
 
 def _tenant(actor: ActorContext) -> UUID:
@@ -275,6 +280,7 @@ def install_telemetry_http(
     retention_policy_id: str | None = None,
     admission: TelemetryAdmission | None = None,
     surface: TelemetrySurface = LEARNER_SURFACE,
+    session_replay_project: str | None = None,
 ) -> None:
     """Install the authenticated telemetry boundary for one product surface.
 
@@ -285,7 +291,8 @@ def install_telemetry_http(
     the authoritative identity-bound grant with a write lock on each call.
     ``surface`` names the events and routes taken (the learner proposal by
     default), how stored rows are labelled, and the surface's call references
-    and per-person daily cap.
+    and per-person daily cap. ``session_replay_project`` (Microsoft Clarity's project id) goes
+    only to a person whose events are listed, and only if it looks like one.
     """
 
     configured_retention_days = (
@@ -309,6 +316,12 @@ def install_telemetry_http(
         and configured_retention_days is not None
         and configured_policy_id is not None
         and admission is not None
+    )
+    replay_project = (
+        session_replay_project.strip()
+        if session_replay_project is not None
+        and _SESSION_REPLAY_PATTERN.fullmatch(session_replay_project.strip())
+        else None
     )
     router = APIRouter(prefix="/v1", tags=["telemetry"])
     actor_dependency = Depends(require_actor)
@@ -353,6 +366,7 @@ def install_telemetry_http(
                 if listed
             ],
             disclaimer=surface.disclaimer,
+            session_replay=replay_project if listed else None,
         )
 
     @router.post(

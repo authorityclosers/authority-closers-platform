@@ -49,6 +49,8 @@ required_files = {
     "infra/application/compose.public-films.yaml",
     "infra/application/capabilities/public-films.json",
     "infra/application/data/public_films_technical_demo_12s_v1.json",
+    "infra/application/edge/Caddyfile",
+    "infra/application/edge/compose.edge.yaml",
     "infra/application/edge-routes/production-hold.caddy",
     "infra/application/edge-routes/production.caddy",
     "infra/application/edge-routes/staging-hold.caddy",

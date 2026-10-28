@@ -26,6 +26,8 @@ export function WorkspaceSwitcher({
   workspaces,
   currentId,
   personName,
+  personPhotoUrl = null,
+  personEmail = null,
   branding = null,
   pending,
   open,
@@ -40,6 +42,8 @@ export function WorkspaceSwitcher({
   workspaces: readonly Workspace[];
   currentId: string | null;
   personName: string | null;
+  personPhotoUrl?: string | null;
+  personEmail?: string | null;
   /** The selected workspace's logo, when it has one. */
   branding?: Branding | null;
   pending: boolean;
@@ -95,6 +99,8 @@ export function WorkspaceSwitcher({
             logoUrl={logo}
             size="sm"
             personName={personName}
+            personPhotoUrl={personPhotoUrl}
+            personEmail={personEmail}
           />
           {waiting ? <i className={styles.dot} /> : null}
         </span>
@@ -122,6 +128,8 @@ export function WorkspaceSwitcher({
             onJoin={onJoin}
             onCreate={onCreate}
             personName={personName}
+            personPhotoUrl={personPhotoUrl}
+            personEmail={personEmail}
           />
         </div>
       )}

@@ -26,7 +26,12 @@ from ac_platform.http.sales_xray_workspaces import (
 )
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.tenancy.models import Membership, Organisation, Tenant
-from tests.unit.http.test_workspaces import TOKEN, HttpDatabase, workspace_state  # noqa: F401
+from tests.unit.http.test_workspaces import (  # noqa: F401
+    OTHER_TOKEN,
+    TOKEN,
+    HttpDatabase,
+    workspace_state,
+)
 
 
 @pytest.fixture
@@ -105,6 +110,7 @@ async def test_exact_directory_is_read_only_and_hides_operations(state, selected
                 "name": "Personal",
                 "role": None,
                 "sales_xray_enabled": True,
+                "logo_url": None,
             },
             {
                 "tenant_id": str(state.tenants["Alpha"]),
@@ -112,6 +118,7 @@ async def test_exact_directory_is_read_only_and_hides_operations(state, selected
                 "name": "Alpha",
                 "role": "admin",
                 "sales_xray_enabled": True,
+                "logo_url": None,
             },
         ],
     }
@@ -201,3 +208,57 @@ def test_legacy_two_argument_installation_remains_synchronous(state):
         state.tenants[n] for n in ("Beta", "Alpha")
     )
     assert sales_xray_served_tenant_ids(state.settings, None) == frozenset({state.tenants["Beta"]})
+
+
+async def test_directory_logos_are_member_scoped_and_do_not_select_workspace(state):
+    from ac_platform.media.local_avatar_runtime import LocalAvatarRuntime
+    from ac_platform.organisations.settings import logo_key
+
+    logo, other_logo = uuid4(), uuid4()
+    with Session(state.engine) as db, db.begin():
+        db.get(Organisation, state.tenants["Alpha"]).logo_id = logo
+        db.get(Organisation, state.tenants["Suspended"]).logo_id = other_logo
+        db.get(IdentitySession, state.session).selected_tenant_id = state.tenants["Beta"]
+    body = (await get(state)).json()
+    assert body["workspaces"][0]["logo_url"] is None
+    url = body["workspaces"][1]["logo_url"]
+    assert url == f"/v1/me/sales-xray-workspaces/{state.tenants['Alpha']}/logo/{logo}"
+    read = []
+    # Only byte delivery is stubbed; canonical cookie auth and membership queries run.
+    runtime = object.__new__(LocalAvatarRuntime)
+    object.__setattr__(
+        runtime, "storage", SimpleNamespace(read=lambda key: read.append(key) or b"webp")
+    )
+    state.app.state.organisation_avatar_runtime = runtime
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=state.app),
+        base_url="https://learner.authorityclosers.test",
+    ) as client:
+        headers = {"cookie": f"ac_session={TOKEN}"}
+        response = await client.get(url, headers=headers)
+        assert response.status_code == 200 and response.content == b"webp"
+        assert response.headers["content-type"] == "image/webp"
+        assert "no-store" in response.headers["cache-control"]
+        assert response.headers["vary"] == "Cookie"
+        assert response.headers["cross-origin-resource-policy"] == "same-origin"
+        assert (await client.get(url)).status_code == 401
+        assert (
+            await client.get(url, headers={"cookie": f"ac_session={OTHER_TOKEN}"})
+        ).status_code == 404
+        assert all(
+            item["logo_url"] is None
+            for item in (await get(state, token=OTHER_TOKEN)).json()["workspaces"]
+        )
+        other = f"/v1/me/sales-xray-workspaces/{state.tenants['Suspended']}/logo/{other_logo}"
+        assert (await client.get(other, headers=headers)).status_code == 404
+        assert (
+            await client.get(url.replace(str(logo), str(uuid4())), headers=headers)
+        ).status_code == 404
+        with Session(state.engine) as db, db.begin():
+            membership = db.get(Membership, (state.tenants["Alpha"], state.person))
+            membership.status = "inactive"
+            membership.ended_at = datetime.now(UTC)
+        assert (await client.get(url, headers=headers)).status_code == 404
+    assert read == [logo_key(state.tenants["Alpha"], logo)]
+    with Session(state.engine) as db:
+        assert db.get(IdentitySession, state.session).selected_tenant_id == state.tenants["Beta"]

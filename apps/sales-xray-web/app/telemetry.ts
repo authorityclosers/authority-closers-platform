@@ -1019,6 +1019,9 @@ export class TelemetryClient {
   private accepted: Promise<Set<string> | null> | null = null;
   /** The server's list once read (undefined until the read has ended). */
   private known: Set<string> | null | undefined = undefined;
+  /** Microsoft Clarity's project id from the same answer: only for a person the server records. */
+  private replay: string | null = null;
+  private replayListeners = new Set<(project: string) => void>();
   private off = false;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private seen = new Set<string>();
@@ -1038,6 +1041,7 @@ export class TelemetryClient {
       for (const event of this.queue) event.session_id = sessionId;
     }
     this.session = sessionId;
+    if (sessionId) void this.notifyReplay();
     const method = sessionId ? this.sender.signIn?.() : null;
     if (method) this.track("sx.sign_in", { method });
     if (sessionId && this.queue.length) this.schedule();
@@ -1110,10 +1114,39 @@ export class TelemetryClient {
     return accepted ? accepted.size > 0 : null;
   }
 
+  /**
+   * Microsoft Clarity's project id, or null: only when the server records this
+   * person (their usage analytics is on, they are signed in) and only where the
+   * environment has a project (production). Nobody else ever loads Clarity.
+   */
+  async sessionReplay(): Promise<string | null> {
+    return (await this.collecting()) ? this.replay : null;
+  }
+
+  /**
+   * Calls `listener` with Clarity's project id once the server allows it: now,
+   * or when someone signs in (the session arrives after the workspace loads).
+   * Returns the unsubscribe.
+   */
+  whenReplay(listener: (project: string) => void): () => void {
+    this.replayListeners.add(listener);
+    void this.notifyReplay();
+    return () => {
+      this.replayListeners.delete(listener);
+    };
+  }
+
+  private async notifyReplay() {
+    if (!this.replayListeners.size) return;
+    const project = await this.sessionReplay().catch(() => null);
+    if (project) for (const listener of this.replayListeners) listener(project);
+  }
+
   /** Read the server's list again (after a switch in Settings, Privacy). */
   refresh() {
     this.accepted = null;
     this.known = undefined;
+    this.replay = null;
     this.off = false;
   }
 
@@ -1153,6 +1186,11 @@ export class TelemetryClient {
             ? (body as { events: unknown }).events
             : null;
         if (!Array.isArray(events)) return null;
+        const replay = (body as { session_replay?: unknown }).session_replay;
+        this.replay =
+          typeof replay === "string" && /^[a-z0-9]{6,32}$/.test(replay)
+            ? replay
+            : null;
         return new Set(
           events
             .map((item: unknown) =>

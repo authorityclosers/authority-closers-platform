@@ -345,6 +345,9 @@ initialize_release_profile_contract() {
   # Keep the guest upload response budget deployment-configurable while
   # constraining it to the audited range enforced by application settings.
   profile_allowed_keys[AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS]=1
+  # Microsoft Clarity's public project id (owner, 28 Oct 2026). Production only:
+  # validate_release_profile refuses it anywhere else, so test sessions never mix in.
+  profile_allowed_keys[AC_SALES_XRAY_CLARITY_PROJECT]=1
 }
 
 initialize_release_profile_contract
@@ -467,6 +470,16 @@ validate_release_profile() {
     if ! [[ "$upload_response_budget_seconds" =~ ^[0-9]+$ ]] ||
       (( upload_response_budget_seconds < 90 || upload_response_budget_seconds > 3600 )); then
       printf 'AC_SALES_XRAY_UPLOAD_RESPONSE_BUDGET_SECONDS must be between 90 and 3600.\n' >&2
+      return 1
+    fi
+  fi
+  if [[ -n "${profile_values[AC_SALES_XRAY_CLARITY_PROJECT]+present}" ]]; then
+    if [[ "$target_environment" != production ]]; then
+      printf 'AC_SALES_XRAY_CLARITY_PROJECT is for production only.\n' >&2
+      return 1
+    fi
+    if ! [[ "${profile_values[AC_SALES_XRAY_CLARITY_PROJECT]}" =~ ^[a-z0-9]{6,32}$ ]]; then
+      printf 'AC_SALES_XRAY_CLARITY_PROJECT must be a Clarity project id.\n' >&2
       return 1
     fi
   fi
@@ -665,6 +678,18 @@ validate_filesystem_media_activation() {
 validate_filesystem_media_activation
 
 with_release_secrets() {
+  # After capture_release_environment (S2, below) every call gets the same
+  # environment from memory instead of logging in and fetching again.
+  if [[ "${release_secrets_captured:-0}" == 1 ]]; then
+    (
+      for name in "${release_secrets_unset[@]}"; do unset -v "$name"; done
+      # Each entry is NAME=value; export assigns it in this subshell only.
+      # shellcheck disable=SC2163
+      for entry in "${release_secrets_set[@]}"; do export "$entry"; done
+      exec "$@"
+    )
+    return
+  fi
   # A user-scoped Infisical secret with the same name as a managed shared
   # secret must never shadow the release configuration.  The VPS machine
   # identity cannot read personal secrets, so the default CLI precedence can
@@ -740,12 +765,118 @@ if enabled:
 '
 }
 
+# One managed-secret fetch per install (docs/ops/ZERO-DOWNTIME-RELEASES.md, S2).
+# Each with_release_secrets call logged in to Infisical and fetched twice, about
+# 36 calls a release, most of them inside the hold. The environment change the
+# wrapper makes is captured once and kept only in this shell's memory (never a
+# file, an argument or a log); later calls apply the same change in a subshell.
+release_secrets_captured=0
+release_secrets_set=()
+release_secrets_unset=()
+
+capture_release_environment() {
+  local entry name
+  local -a before=() after=()
+  local -A inherited=() kept=()
+  mapfile -d '' before < <(env -0)
+  mapfile -d '' after < <(with_release_secrets env -0)
+  wait "$!" || return 1
+  for entry in "${before[@]}"; do inherited["${entry%%=*}"]="${entry#*=}"; done
+  for entry in "${after[@]}"; do
+    [[ "$entry" == *=* ]] || return 1
+    name="${entry%%=*}"
+    kept["$name"]=1
+    if ! [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      # Compose cannot use such a name; whitespace in it means stray output.
+      [[ "$name" != *[[:space:]]* ]] || return 1
+      continue
+    fi
+    case "$name" in _|SHLVL|PWD|OLDPWD) continue ;; esac
+    if [[ -z "${inherited[$name]+set}" || "${inherited[$name]}" != "${entry#*=}" ]]; then
+      release_secrets_set+=("$entry")
+    fi
+  done
+  # Stray output merged into an entry must never drop a variable such as PATH.
+  [[ -n "${kept[PATH]:-}" ]] || return 1
+  for name in "${!inherited[@]}"; do
+    [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    case "$name" in _|SHLVL|PWD|OLDPWD) continue ;; esac
+    [[ -z "${kept[$name]:-}" ]] || continue
+    # with_release_secrets removes these inherited values, and only these.
+    case "$name" in
+      AC_GOOGLE_OAUTH_CLIENT_ID|AC_GOOGLE_OAUTH_CLIENT_SECRET|AC_EMAIL_CHALLENGE_SECRET) ;;
+      AC_PUBLIC_LEARNER_TENANT_ID|AC_OPERATIONS_TENANT_ID|AC_PRACTICE_PILOT_TENANT_ID) ;;
+      *) return 1 ;;
+    esac
+    release_secrets_unset+=("$name")
+  done
+  release_secrets_captured=1
+}
+
+capture_release_environment || {
+  printf 'Managed release environment could not be loaded.\n' >&2
+  exit 1
+}
+
 # Infisical may supply a syntactically present but whitespace-only value that
 # Compose's `${VAR:?}` interpolation accepts. Reject that state before loading
 # images, creating environment state, or issuing any Docker Compose command.
 with_release_secrets \
   python3 "$release_dir/scripts/validate-google-oauth-secrets.py"
 validate_practice_pilot_references
+
+# PostgreSQL's bootstrap scripts are mounted from a root-owned, content-addressed
+# copy instead of the per-release directory (S2), so an application release
+# leaves PostgreSQL's service definition, and the running server, unchanged.
+# compose.yaml reads AC_POSTGRES_INIT_ROOT and falls back to ./postgres/init for
+# tools that only exec into the running server.
+postgres_init_copy() {
+  local target_release="$1" source listing digest copy stage store
+  source="$target_release/postgres/init"
+  [[ -d "$source" && ! -L "$source" ]] || return 1
+  store="$application_root/postgres-init"
+  if find "$source" -mindepth 1 ! -type f ! -type d -print -quit | grep -q .; then
+    return 1
+  fi
+  listing="$(cd "$source" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum)" \
+    || return 1
+  digest="$(printf '%s\n' "$listing" | sha256sum)" || return 1
+  digest="${digest%% *}"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || return 1
+  if [[ -e "$store" || -L "$store" ]]; then
+    [[ -d "$store" && ! -L "$store" ]] || return 1
+  fi
+  install -d -m 0755 -o root -g root "$store" || return 1
+  # Never inherit the application root's setgid bit.
+  chmod 0755 "$store" || return 1
+  chmod a-s "$store" || return 1
+  copy="$store/$digest"
+  if [[ ! -e "$copy" && ! -L "$copy" ]]; then
+    stage="$(mktemp -d "$store/.$digest.XXXXXX")" || return 1
+    cp -R -- "$source/." "$stage/" || return 1
+    # The non-root PostgreSQL process reads these; they hold no credentials.
+    find "$stage" -type d -exec chmod 0755 {} + || return 1
+    find "$stage" -type f -exec chmod 0644 {} + || return 1
+    chown -R root:root "$stage" || return 1
+    mv --no-target-directory --no-clobber "$stage" "$copy" || return 1
+  fi
+  [[ -d "$copy" && ! -L "$copy" ]] || return 1
+  [[ "$(stat -c '%U:%G %a' "$store")" == 'root:root 755' ]] || return 1
+  [[ "$(stat -c '%U:%G %a' "$copy")" == 'root:root 755' ]] || return 1
+  if find "$copy" -mindepth 1 \( \( ! -type f ! -type d \) -o \( -type d ! -perm 0755 \) \
+    -o \( -type f ! -perm 0644 \) \) -print -quit | grep -q .; then
+    return 1
+  fi
+  [[ "$(cd "$copy" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum)" \
+    == "$listing" ]] || return 1
+  printf '%s\n' "$copy"
+}
+
+AC_POSTGRES_INIT_ROOT="$(postgres_init_copy "$release_dir")" || {
+  printf 'PostgreSQL bootstrap scripts could not be installed at their content address.\n' >&2
+  exit 1
+}
+export AC_POSTGRES_INIT_ROOT
 
 gzip --decompress --stdout "$image_bundle_dir/application-images.tar.gz" | docker load >/dev/null
 for image_id in "$AC_API_IMAGE" "$AC_LEARNER_IMAGE" "$AC_ADMIN_IMAGE" "$AC_COACH_IMAGE"; do
@@ -1203,6 +1334,68 @@ grep -Fq '/srv/authority-closers/application/edge-routes:/etc/caddy/application-
 grep -Fq '/srv/authority-closers/application/edge-route-releases:/srv/authority-closers/application/edge-route-releases:ro' \
   "$foundation_compose_file"
 docker compose --env-file "$foundation_image_env" -f "$foundation_compose_file" config --quiet
+
+# Graceful edge switches (docs/ops/ZERO-DOWNTIME-RELEASES.md, S1). The router runs
+# this release's edge/Caddyfile: the foundation's, with Caddy's admin API on a
+# socket private to the container. It is installed at a root-owned,
+# content-addressed path, so the router keeps the same Caddyfile across releases
+# and is recreated only when that content changes. A route switch is then a
+# reload: the config swaps atomically and in-flight requests finish on the old one.
+edge_admin_socket=/run/caddy/admin.sock
+edge_caddyfile_source="$release_dir/edge/Caddyfile"
+edge_compose_override="$release_dir/edge/compose.edge.yaml"
+edge_config_root="$application_root/edge-config"
+edge_caddyfile=''
+
+prepare_edge_caddyfile() {
+  local digest config_dir config_stage
+  [[ -f "$edge_caddyfile_source" && ! -L "$edge_caddyfile_source" ]] || return 1
+  [[ -f "$edge_compose_override" && ! -L "$edge_compose_override" ]] || return 1
+  grep -Fxq $'\timport /etc/caddy/application-routes/production.caddy' "$edge_caddyfile_source" || return 1
+  grep -Fxq $'\timport /etc/caddy/application-routes/staging.caddy' "$edge_caddyfile_source" || return 1
+  grep -Fxq $'\tadmin unix/'"$edge_admin_socket" "$edge_caddyfile_source" || return 1
+  digest="$(sha256sum "$edge_caddyfile_source")" || return 1
+  digest="${digest%% *}"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || return 1
+  if [[ -e "$edge_config_root" || -L "$edge_config_root" ]]; then
+    [[ -d "$edge_config_root" && ! -L "$edge_config_root" ]] || return 1
+  fi
+  install -d -m 0755 -o root -g root "$edge_config_root" || return 1
+  # As for the route projection root, never inherit the application root's setgid bit.
+  chmod 0755 "$edge_config_root" || return 1
+  chmod a-s "$edge_config_root" || return 1
+  config_dir="$edge_config_root/$digest"
+  if [[ ! -e "$config_dir" && ! -L "$config_dir" ]]; then
+    config_stage="$(mktemp -d "$edge_config_root/.$digest.XXXXXX")" || return 1
+    install -m 0444 -o root -g root "$edge_caddyfile_source" "$config_stage/Caddyfile" || return 1
+    chmod 0755 "$config_stage" || return 1
+    chown root:root "$config_stage" || return 1
+    mv --no-target-directory --no-clobber "$config_stage" "$config_dir" || return 1
+  fi
+  [[ -d "$config_dir" && ! -L "$config_dir" ]] || return 1
+  [[ "$(stat -c '%U:%G %a' "$edge_config_root")" == 'root:root 755' ]] || return 1
+  [[ "$(stat -c '%U:%G %a' "$config_dir")" == 'root:root 755' ]] || return 1
+  [[ "$(find "$config_dir" -mindepth 1 -maxdepth 1 -printf '%f\n')" == Caddyfile ]] || return 1
+  [[ -f "$config_dir/Caddyfile" && ! -L "$config_dir/Caddyfile" ]] || return 1
+  [[ "$(stat -c '%U:%G %a' "$config_dir/Caddyfile")" == 'root:root 444' ]] || return 1
+  cmp --silent "$edge_caddyfile_source" "$config_dir/Caddyfile" || return 1
+  edge_caddyfile="$config_dir/Caddyfile"
+}
+
+edge_compose() {
+  AC_EDGE_CADDYFILE="$edge_caddyfile" docker compose --env-file "$foundation_image_env" \
+    -f "$foundation_compose_file" -f "$edge_compose_override" "$@"
+}
+
+# A release from before graceful switches (only ever a rollback target) carries
+# no edge/ and keeps the foundation's own Caddyfile, as it always did.
+if [[ -e "$edge_caddyfile_source" || -L "$edge_caddyfile_source" ]]; then
+  prepare_edge_caddyfile || {
+    printf 'Release edge Caddyfile could not be installed at its content address.\n' >&2
+    exit 1
+  }
+  edge_compose config --quiet
+fi
 edge_mount="$({
   docker inspect ac-edge-router --format \
     '{{range .Mounts}}{{if eq .Destination "/etc/caddy/application-routes"}}{{println .Source "|" .RW}}{{end}}{{end}}'
@@ -1245,7 +1438,8 @@ validate_edge_candidate() {
     --tmpfs /config:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000 \
     --tmpfs /data:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000 \
     --tmpfs /tmp:rw,noexec,nosuid,nodev,size=16m,uid=1000,gid=1000 \
-    --volume "$foundation_caddyfile:/etc/caddy/Caddyfile:ro" \
+    --tmpfs /run/caddy:rw,noexec,nosuid,nodev,size=1m,uid=1000,gid=1000,mode=0700 \
+    --volume "${edge_caddyfile:-$foundation_caddyfile}:/etc/caddy/Caddyfile:ro" \
     --volume "$candidate_dir:/etc/caddy/application-routes:ro" \
     --entrypoint caddy "$caddy_image" validate --config /etc/caddy/Caddyfile --adapter caddyfile \
     >/dev/null
@@ -1301,15 +1495,46 @@ evidence_tmp=''
 attempt_tmp=''
 attempt_file=''
 
+edge_router_has_admin_socket() {
+  docker exec ac-edge-router test -S "$edge_admin_socket"
+}
+
+edge_router_runs_release_caddyfile() {
+  local mounted_caddyfile
+  [[ -n "$edge_caddyfile" ]] || return 1
+  mounted_caddyfile="$({
+    docker inspect ac-edge-router --format \
+      '{{range .Mounts}}{{if eq .Destination "/etc/caddy/Caddyfile"}}{{println .Source "|" .RW}}{{end}}{{end}}'
+  } | tr -d '\r' | sed '/^$/d')" || return 1
+  [[ "$mounted_caddyfile" == "$edge_caddyfile | false" ]] || return 1
+  edge_router_has_admin_socket
+}
+
 reconcile_edge_router() {
-  docker compose --env-file "$foundation_image_env" -f "$foundation_compose_file" \
-    up --detach --no-deps --force-recreate --wait --wait-timeout 120 edge-router
+  if edge_router_runs_release_caddyfile ||
+    { [[ -z "$edge_caddyfile" ]] && edge_router_has_admin_socket; }; then
+    # Atomic switch: connections already open finish on the old config.
+    docker exec ac-edge-router caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile \
+      --address "unix/$edge_admin_socket" >/dev/null || return 1
+  elif [[ -n "$edge_caddyfile" ]]; then
+    # Once per Caddyfile content: a router on another Caddyfile (the
+    # foundation's own, with no admin API) moves onto this release's.
+    edge_compose up --detach --no-deps --force-recreate --wait --wait-timeout 120 edge-router \
+      || return 1
+    edge_router_runs_release_caddyfile || {
+      printf 'Recreated edge router does not run the release Caddyfile and admin socket.\n' >&2
+      return 1
+    }
+  else
+    docker compose --env-file "$foundation_image_env" -f "$foundation_compose_file" \
+      up --detach --no-deps --force-recreate --wait --wait-timeout 120 edge-router || return 1
+  fi
   local mounted_edge_routes
   mounted_edge_routes="$({
     docker inspect ac-edge-router --format \
       '{{range .Mounts}}{{if eq .Destination "/etc/caddy/application-routes"}}{{println .Source "|" .RW}}{{end}}{{end}}'
   } | tr -d '\r' | sed '/^$/d')"
-  [[ "$mounted_edge_routes" == "$edge_routes_root | false" ]]
+  [[ "$mounted_edge_routes" == "$edge_routes_root | false" ]] || return 1
   curl --fail --silent --show-error --max-time 5 http://127.0.0.1:8080/healthz >/dev/null
 }
 
@@ -1752,6 +1977,9 @@ trap finish EXIT
 intake_spool_root="$application_root/intake-spool/$target_environment"
 prepare_intake_spool_root() {
   install -d -m 0750 -o root -g acops "$application_root/intake-spool" || return 1
+  # The application root is setgid, and GNU install and chmod keep a directory's
+  # inherited setgid bit; neither spool directory needs it (v1.1.0 staging, 27 Oct).
+  chmod g-s -- "$application_root/intake-spool" || return 1
   [[ ! -L "$intake_spool_root" ]] || {
     printf 'Intake spool root cannot be a symlink.\n' >&2
     return 1
@@ -1759,6 +1987,7 @@ prepare_intake_spool_root() {
   if [[ ! -e "$intake_spool_root" ]]; then
     install -d -o 10001 -g 10001 -m 700 -- "$intake_spool_root" || return 1
   fi
+  chmod g-s -- "$intake_spool_root" || return 1
   [[ "$(stat -c '%u:%g:%a' -- "$intake_spool_root")" == 10001:10001:700 ]] || {
     printf 'Intake spool root ownership or mode is not canonical.\n' >&2
     return 1

@@ -21,6 +21,7 @@ from ac_platform.telemetry.sales_xray import (
     MAX_DWELL_MS,
     NOTICE_EFFECTIVE_AT,
     NOTICE_V1,
+    NOTICE_V2,
     NOTICE_VERSION,
     NOTICES,
     RETENTION_DAYS,
@@ -277,10 +278,22 @@ def test_the_privacy_page_shows_the_notice_of_the_version_recorded() -> None:
     for paragraph in NOTICES[NOTICE_VERSION]:
         assert f'"{paragraph}"' in page
     assert NOTICE_VERSION in page
-    assert NOTICE_VERSION == "sx-product-analytics-2026-10-24-v2"
-    # v2 (the Android app's signals and Crashlytics) is in force from 04:00 IST, 24 Oct 2026.
-    assert NOTICE_EFFECTIVE_AT.isoformat() == "2026-10-23T22:30:00+00:00"
+    assert NOTICE_VERSION == "sx-product-analytics-2026-10-28-v3"
+    # v3 (Microsoft Clarity) is in force from 02:30 IST, 28 Oct 2026: before any release carries it.
+    assert NOTICE_EFFECTIVE_AT.isoformat() == "2026-10-27T21:00:00+00:00"
     notice = " ".join(NOTICES[NOTICE_VERSION])
+    # Clarity: who provides it, that everything is masked, nobody is identified, and how long.
+    for clarity in (
+        "Microsoft Clarity (provided by Microsoft Corporation, USA)",
+        "masked on your device before anything reaches Clarity",
+        "never tells Clarity who you are",
+        "replays for 30 days",
+        "heatmaps for 13 months",
+    ):
+        assert clarity in notice
+    # v2 stays word for word, and v3 begins with it.
+    assert NOTICES[NOTICE_VERSION][: len(NOTICES[NOTICE_V2])] == NOTICES[NOTICE_V2]
+    assert "Clarity" not in " ".join(NOTICES[NOTICE_V2])
     for never in (
         "call content",
         "lead names",

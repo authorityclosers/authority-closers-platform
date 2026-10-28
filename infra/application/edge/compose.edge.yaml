@@ -1,0 +1,11 @@
+# Layered by install-application-release.sh on the installed foundation's
+# compose file, for the edge router only (docs/ops/ZERO-DOWNTIME-RELEASES.md, S1).
+# The router reads this release's edge/Caddyfile from a root-owned,
+# content-addressed copy, so it is recreated only when that content changes;
+# route switches are `caddy reload` calls on the private admin socket.
+services:
+  edge-router:
+    volumes:
+      - ${AC_EDGE_CADDYFILE:?AC_EDGE_CADDYFILE must be the installed content-addressed Caddyfile}:/etc/caddy/Caddyfile:ro
+    tmpfs:
+      - /run/caddy:rw,noexec,nosuid,nodev,size=1m,uid=1000,gid=1000,mode=0700

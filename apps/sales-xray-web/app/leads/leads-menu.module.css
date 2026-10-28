@@ -1,0 +1,23 @@
+.groups {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+
+.label {
+  margin: 0 0 8px 12px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.groups ul > li > button {
+  min-height: 64px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+}
+
+.groups small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

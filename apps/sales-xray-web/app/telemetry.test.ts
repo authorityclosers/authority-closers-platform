@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   appVersion,
@@ -32,6 +32,7 @@ import {
 const SESSION = "11111111-1111-4111-8111-111111111111";
 let calls: Array<{ url: string; body: unknown }>;
 let taxonomy: string[] | null;
+let replay: string | null;
 let ingestStatus: number;
 
 function client(enabled = true, context?: () => EventContext) {
@@ -48,6 +49,7 @@ function client(enabled = true, context?: () => EventContext) {
           return taxonomy
             ? Response.json({
                 events: taxonomy.map((event_name) => ({ event_name })),
+                ...(replay === null ? {} : { session_replay: replay }),
               })
             : new Response("{}", { status: 404 });
         return new Response("{}", { status: ingestStatus });
@@ -72,6 +74,7 @@ beforeEach(() => {
   vi.useFakeTimers();
   calls = [];
   taxonomy = [...TELEMETRY_EVENT_NAMES];
+  replay = null;
   ingestStatus = 202;
 });
 
@@ -520,4 +523,44 @@ it("sends a sign-in once the new session arrives, once, and only a fresh one", a
       payload: { method: "email_code" },
     }),
   ]);
+});
+
+describe("Microsoft Clarity's project, from the same server answer", () => {
+  it("is given only to a signed-in person the server records, where there is a project", async () => {
+    vi.useRealTimers();
+    const telemetry = client();
+    replay = "z4fyjboxqs";
+    // Signed out: nothing, and nothing asked.
+    expect(await telemetry.sessionReplay()).toBeNull();
+    telemetry.setSession(SESSION);
+    expect(await telemetry.sessionReplay()).toBe("z4fyjboxqs");
+    // Turned off (the server lists no events): never, whatever else the answer says.
+    taxonomy = [];
+    telemetry.refresh();
+    expect(await telemetry.sessionReplay()).toBeNull();
+    // No project in this environment, or something that isn't one: never.
+    taxonomy = [...TELEMETRY_EVENT_NAMES];
+    for (const value of [null, "<script>"]) {
+      replay = value;
+      telemetry.refresh();
+      expect(await telemetry.sessionReplay()).toBeNull();
+    }
+  });
+
+  it("tells a listener once someone signs in, and not before", async () => {
+    vi.useRealTimers();
+    const telemetry = client();
+    replay = "z4fyjboxqs";
+    const heard: string[] = [];
+    const stop = telemetry.whenReplay((project) => heard.push(project));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(heard).toEqual([]);
+    telemetry.setSession(SESSION);
+    await vi.waitFor(() => expect(heard).toEqual(["z4fyjboxqs"]));
+    stop();
+    telemetry.setSession(null);
+    telemetry.setSession(SESSION);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(heard).toEqual(["z4fyjboxqs"]);
+  });
 });

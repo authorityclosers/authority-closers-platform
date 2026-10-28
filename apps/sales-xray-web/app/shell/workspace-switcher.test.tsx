@@ -34,7 +34,7 @@ const personal = {
 const team = {
   tenant_id: "22222222-2222-4222-8222-222222222222",
   kind: "organisation",
-  name: "Authority Closers",
+  name: "Cedar Studio",
   role: "owner",
   sales_xray_enabled: true,
 } as const;
@@ -46,7 +46,7 @@ it("names where you are and offers only what works: no Soon items", async () => 
       <WorkspaceSwitcher
         workspaces={[personal, team]}
         currentId={team.tenant_id}
-        personName="Asha Menon"
+        personName="Mira Example"
         pending={false}
         open
         setOpen={() => {}}
@@ -57,7 +57,7 @@ it("names where you are and offers only what works: no Soon items", async () => 
   );
   expect(
     host.querySelector("[aria-haspopup=menu]")?.getAttribute("aria-label"),
-  ).toBe("Current workspace: Authority Closers");
+  ).toBe("Current workspace: Cedar Studio");
   const menu = host.querySelector("[role=menu]") as HTMLElement;
   expect(menu.textContent).not.toContain("Soon");
   expect(menu.textContent).not.toContain("Create an organisation");
@@ -78,7 +78,7 @@ it("names where you are and offers only what works: no Soon items", async () => 
   expect(onSelect).toHaveBeenCalledWith(personal.tenant_id);
 });
 
-it("shows the organisation's logo in its tile, and the icon without one", async () => {
+it("shows the organisation's logo in its tile, and its monogram without one", async () => {
   const logo = "/v1/organisation/logo/44444444-4444-4444-8444-444444444444";
   const render = (logoUrl: string | null) =>
     act(async () =>
@@ -86,7 +86,7 @@ it("shows the organisation's logo in its tile, and the icon without one", async 
         <WorkspaceSwitcher
           workspaces={[personal, team]}
           currentId={team.tenant_id}
-          personName="Asha Menon"
+          personName="Mira Example"
           branding={{ tenantId: team.tenant_id, name: team.name, logoUrl }}
           pending={false}
           open
@@ -107,7 +107,9 @@ it("shows the organisation's logo in its tile, and the icon without one", async 
   ]);
   await render(null);
   expect(trigger.querySelector("img")).toBeNull();
-  expect(trigger.querySelector("svg")).not.toBeNull();
+  expect(trigger.querySelector('[data-kind="organisation"]')?.textContent).toBe(
+    "CS",
+  );
 });
 
 const invitation = {
@@ -128,7 +130,7 @@ it("offers each invitation as one Join, and Create only where the server can", a
         <WorkspaceSwitcher
           workspaces={[personal]}
           currentId={personal.tenant_id}
-          personName="Asha Menon"
+          personName="Mira Example"
           pending={false}
           open
           setOpen={() => {}}
@@ -147,7 +149,7 @@ it("offers each invitation as one Join, and Create only where the server can", a
   ).toBe("Current workspace: Personal · 1 invitation waiting");
   // Personal shows your own initials, never "PE" for the word Personal.
   expect(host.querySelector("[aria-haspopup=menu]")?.textContent).toContain(
-    "AM",
+    "ME",
   );
   const menu = host.querySelector("[role=menu]") as HTMLElement;
   // With an invitation waiting, "not in an organisation" would be beside the point.
@@ -186,4 +188,31 @@ it("keeps the role whole under the workspace's name", () => {
   expect(
     workspaceShortLine({ tenant_id: "", kind: "personal", name: "Asha" }),
   ).toBe("Just you");
+});
+
+it("shows your profile photo in the computer switcher and its Personal row", async () => {
+  const photo = "/v1/me/sales-xray-profile/photo";
+  await act(async () =>
+    root.render(
+      <WorkspaceSwitcher
+        workspaces={[personal, team]}
+        currentId={personal.tenant_id}
+        personName="Mira Example"
+        personPhotoUrl={photo}
+        pending={false}
+        open
+        setOpen={() => {}}
+        containerRef={createRef()}
+        onSelect={() => {}}
+      />,
+    ),
+  );
+  expect(
+    host.querySelector('[aria-haspopup="menu"] img')?.getAttribute("src"),
+  ).toBe(photo);
+  expect(
+    host
+      .querySelector('[role="menuitemradio"][aria-checked="true"] img')
+      ?.getAttribute("src"),
+  ).toBe(photo);
 });

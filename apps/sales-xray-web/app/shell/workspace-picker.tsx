@@ -13,24 +13,34 @@
  *   mistaken for a place you can switch to.
  */
 import { roleLabel } from "../organisation/roles";
-import { Building2, Check, MailOpen, Plus } from "lucide-react";
+import { Check, MailOpen, Plus, UserRound } from "lucide-react";
 
 import type { PendingInvite } from "../organisation/organisation-api";
 import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
 import type { Branding } from "./branding-store";
 import { OrgLogo } from "./org-logo";
+import { AccountAvatarImage } from "../speaker-avatar";
+import { accountInitials } from "./account-initials";
 import styles from "./workspace-picker.module.css";
 
 export type PickerWorkspace = Pick<
   SalesXrayWorkspace,
   "tenant_id" | "kind" | "name"
 > &
-  Partial<Pick<SalesXrayWorkspace, "role">>;
+  Partial<Pick<SalesXrayWorkspace, "role" | "logo_url">>;
 
 export function workspaceInitials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
   if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return (name.slice(0, 2) || "·").toUpperCase();
+  return (parts[0]?.slice(0, 2) || "·").toUpperCase();
+}
+
+/** Stable across list order, reloads and themes; colours come from the kit. */
+export function workspaceTint(name: string): number {
+  let hash = 0;
+  for (const letter of name.trim().toLowerCase())
+    hash = (hash * 31 + letter.charCodeAt(0)) >>> 0;
+  return hash % 5;
 }
 
 const ROLE: Record<string, string> = {
@@ -67,32 +77,35 @@ export function WorkspaceTile({
   logoUrl = null,
   size = "md",
   personName = null,
+  personPhotoUrl = null,
+  personEmail = null,
 }: {
   workspace: PickerWorkspace;
   logoUrl?: string | null;
   size?: "sm" | "md" | "lg";
   /** Personal shows your own initials, never the word "Personal". */
   personName?: string | null;
+  personPhotoUrl?: string | null;
+  personEmail?: string | null;
 }) {
   return (
     <span
       className={styles.tile}
       data-kind={workspace.kind}
       data-size={size}
+      data-tint={workspaceTint(workspace.name)}
       aria-hidden="true"
     >
-      <OrgLogo
-        src={logoUrl}
-        fallback={
-          workspace.kind === "organisation" ? (
-            <Building2 size={size === "lg" ? 18 : 15} />
-          ) : (
-            workspaceInitials(
-              (workspace.kind === "personal" && personName) || workspace.name,
-            )
-          )
-        }
-      />
+      {workspace.kind === "personal" ? (
+        <AccountAvatarImage photoUrl={personPhotoUrl}>
+          {accountInitials(personName, personEmail) || <UserRound size={18} />}
+        </AccountAvatarImage>
+      ) : (
+        <OrgLogo
+          src={logoUrl ?? workspace.logo_url}
+          fallback={workspaceInitials(workspace.name)}
+        />
+      )}
     </span>
   );
 }
@@ -109,6 +122,8 @@ export function WorkspacePicker({
   onKeep,
   menu = false,
   personName = null,
+  personPhotoUrl = null,
+  personEmail = null,
 }: {
   workspaces: readonly PickerWorkspace[];
   currentId: string | null;
@@ -126,14 +141,18 @@ export function WorkspacePicker({
   menu?: boolean;
   /** For Personal's tile: your initials. */
   personName?: string | null;
+  personPhotoUrl?: string | null;
+  personEmail?: string | null;
 }) {
   const current =
     workspaces.find((workspace) => workspace.tenant_id === currentId) ?? null;
   const others = workspaces.filter(
     (workspace) => workspace.tenant_id !== current?.tenant_id,
   );
-  const logoFor = (tenantId: string) =>
-    branding && branding.tenantId === tenantId ? branding.logoUrl : null;
+  const logoFor = (workspace: PickerWorkspace) =>
+    branding && branding.tenantId === workspace.tenant_id
+      ? branding.logoUrl
+      : workspace.logo_url;
   const itemRole = menu ? "menuitemradio" : undefined;
   return (
     <div className={styles.picker}>
@@ -148,9 +167,11 @@ export function WorkspacePicker({
         >
           <WorkspaceTile
             workspace={current}
-            logoUrl={logoFor(current.tenant_id)}
+            logoUrl={logoFor(current)}
             size="lg"
             personName={personName}
+            personPhotoUrl={personPhotoUrl}
+            personEmail={personEmail}
           />
           <span className={styles.copy}>
             <b>{workspaceName(current)}</b>
@@ -173,8 +194,10 @@ export function WorkspacePicker({
             >
               <WorkspaceTile
                 workspace={workspace}
-                logoUrl={logoFor(workspace.tenant_id)}
+                logoUrl={logoFor(workspace)}
                 personName={personName}
+                personPhotoUrl={personPhotoUrl}
+                personEmail={personEmail}
               />
               <span className={styles.copy}>
                 <b>{workspaceName(workspace)}</b>

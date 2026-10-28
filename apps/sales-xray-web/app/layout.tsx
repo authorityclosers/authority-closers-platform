@@ -26,6 +26,7 @@ import { serverDisplayDates, serverSession } from "./server-reads";
 import { NoticeCenter } from "./notice-center";
 import { ReleaseHoldBanner } from "./release-hold-banner";
 import { TelemetryAuto } from "./telemetry-auto";
+import { ClarityGate } from "./clarity";
 import { PressFeedback } from "./press-feedback";
 export const metadata: Metadata = {
   title: "Sales X-Ray · Authority Closers",
@@ -67,7 +68,10 @@ export default async function Layout({
     // data-lx-root keeps the learner-web embed tokens out of this document.
     // The pre-paint script may change the theme attributes before hydration.
     <html lang="en" data-lx-root="" data-theme="light" suppressHydrationWarning>
-      <body className="sales-xray-document">
+      {/* data-clarity-mask: Microsoft Clarity, where it runs at all (clarity.tsx),
+          masks everything on the page, leads, calls, reports, transcripts and
+          chats included, on top of the project's own Strict masking. */}
+      <body className="sales-xray-document" data-clarity-mask="true">
         {/* Dev only: ?theme= sets the saved theme (ui/look.ts), before the
             theme script, which reads it. */}
         {themePreviewEnabled({ NODE_ENV: process.env.NODE_ENV }) ? (
@@ -124,6 +128,8 @@ export default async function Layout({
             <ReleaseHoldBanner />
             {/* Usage and performance telemetry, sent only for people it is on for. */}
             <TelemetryAuto />
+            {/* Microsoft Clarity: only for a signed-in person it is on for, in production. */}
+            <ClarityGate />
             <PressFeedback />
           </UploadSessionProvider>
         </ThemeProvider>

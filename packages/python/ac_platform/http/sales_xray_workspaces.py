@@ -7,7 +7,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import text
+from sqlalchemy import select, text
+from starlette.concurrency import run_in_threadpool
 
 from ac_platform.application.settings import Settings
 from ac_platform.conversation_intelligence.sales_xray_tenants import sales_xray_served_tenant_ids
@@ -15,6 +16,10 @@ from ac_platform.http.auth import AuthenticatedTransaction, RequireActor
 from ac_platform.http.conversation_intake import ConversationIntakeRuntime
 from ac_platform.http.sales_xray_home import lead_counts
 from ac_platform.kernel.errors import DomainError
+from ac_platform.media.errors import MediaStorageUnavailable
+from ac_platform.media.local_avatar_runtime import LocalAvatarRuntime
+from ac_platform.organisations.settings import logo_key
+from ac_platform.tenancy.models import Organisation
 from ac_platform.tenancy.roles import OrgRoleName, can
 
 
@@ -26,6 +31,7 @@ class SalesXrayWorkspaceResponse(BaseModel):
     name: str
     role: OrgRoleName | None
     sales_xray_enabled: bool
+    logo_url: str | None = None
 
 
 class SalesXrayWorkspacesResponse(BaseModel):
@@ -84,6 +90,21 @@ def install_sales_xray_workspaces_http(
     async def choices_for(auth: AuthenticatedTransaction) -> list[SalesXrayWorkspaceResponse]:
         enabled = await sales_xray_served_tenant_ids(settings, intake, auth.database)
         public, operations = settings.public_learner_tenant_id, settings.operations_tenant_id
+        memberships = [
+            item
+            for item in await auth.identity.repository.list_active_organisations(
+                auth.resolved.actor.person_id
+            )
+            if item[0] not in {public, operations}
+        ]
+        organisations = (
+            await auth.database.scalars(
+                select(Organisation).where(
+                    Organisation.tenant_id.in_([item[0] for item in memberships])
+                )
+            )
+        ).all()
+        logos = {org.tenant_id: org.logo_id for org in organisations if org.logo_id}
         choices = [
             SalesXrayWorkspaceResponse(
                 tenant_id=tenant_id,
@@ -91,11 +112,13 @@ def install_sales_xray_workspaces_http(
                 name=name,
                 role="owner" if role == "owner" else "admin" if role == "admin" else "member",
                 sales_xray_enabled=tenant_id in enabled,
+                logo_url=(
+                    f"/v1/me/sales-xray-workspaces/{tenant_id}/logo/{logos[tenant_id]}"
+                    if tenant_id in logos
+                    else None
+                ),
             )
-            for tenant_id, name, role in await auth.identity.repository.list_active_organisations(
-                auth.resolved.actor.person_id
-            )
-            if tenant_id not in {public, operations}
+            for tenant_id, name, role in memberships
         ]
         if public is not None and public != operations:
             choices.insert(
@@ -129,6 +152,37 @@ def install_sales_xray_workspaces_http(
         return SalesXrayWorkspacesResponse(
             selected_tenant_id=selected if selected in {c.tenant_id for c in choices} else None,
             workspaces=choices,
+        )
+
+    @router.get("/{tenant_id}/logo/{logo_id}")
+    async def workspace_logo(
+        tenant_id: UUID,
+        logo_id: UUID,
+        auth: AuthenticatedTransaction = read_actor_dependency,
+    ) -> Response:
+        """A current member may recognise an organisation before selecting it.
+
+        The directory's active membership filter is the authority; neither a
+        guessed tenant nor an old logo reference grants access to stored bytes.
+        """
+        expected = f"/v1/me/sales-xray-workspaces/{tenant_id}/logo/{logo_id}"
+        if not any(item.logo_url == expected for item in await choices_for(auth)):
+            raise HTTPException(
+                404, "Organisation logo is unavailable.", headers={"cache-control": "no-store"}
+            )
+        runtime = getattr(application.state, "organisation_avatar_runtime", None)
+        if not isinstance(runtime, LocalAvatarRuntime):
+            raise MediaStorageUnavailable("Organisation logo storage is unavailable.")
+        body = await run_in_threadpool(runtime.storage.read, logo_key(tenant_id, logo_id))
+        return Response(
+            content=body,
+            media_type="image/webp",
+            headers={
+                "cache-control": "private, no-store",
+                "vary": "Cookie",
+                "x-content-type-options": "nosniff",
+                "cross-origin-resource-policy": "same-origin",
+            },
         )
 
     @router.get("/leads", response_model=SalesXrayLeadsResponse)

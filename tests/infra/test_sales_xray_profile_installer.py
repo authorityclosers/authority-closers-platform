@@ -138,6 +138,35 @@ def test_installer_rejects_unreviewed_sales_xray_origin(
     assert "unexpected value for AC_SALES_XRAY_APP_URL" in result.stderr
 
 
+def test_clarity_is_production_only_and_must_be_a_project_id(tmp_path: Path) -> None:
+    """Microsoft Clarity (owner, 28 Oct 2026): production's profile carries its project id, and the
+    installer refuses it anywhere else (test sessions never mix in) or in any other shape."""
+    production = (APPLICATION / "environments" / "production.env").read_bytes()
+    assert b"\nAC_SALES_XRAY_CLARITY_PROJECT=z4fyjboxqs\n" in production
+    assert b"CLARITY" not in (APPLICATION / "environments" / "staging.env").read_bytes()
+    assert _run_profile(tmp_path, production, target_environment="production").returncode == 0
+
+    staging = (APPLICATION / "environments" / "staging.env").read_bytes()
+    result = _run_profile(
+        tmp_path,
+        staging + b"AC_SALES_XRAY_CLARITY_PROJECT=z4fyjboxqs\n",
+        target_environment="staging",
+    )
+    assert result.returncode != 0
+    assert "AC_SALES_XRAY_CLARITY_PROJECT is for production only" in result.stderr
+
+    result = _run_profile(
+        tmp_path,
+        production.replace(
+            b"AC_SALES_XRAY_CLARITY_PROJECT=z4fyjboxqs\n",
+            b"AC_SALES_XRAY_CLARITY_PROJECT=https://example.com/x.js\n",
+        ),
+        target_environment="production",
+    )
+    assert result.returncode != 0
+    assert "must be a Clarity project id" in result.stderr
+
+
 def test_compose_profile_cannot_be_overridden_by_ambient_sales_xray_url(tmp_path: Path) -> None:
     release = tmp_path / "release"
     (release / "environments").mkdir(parents=True)
