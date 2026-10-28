@@ -21,6 +21,7 @@ import {
   readAccountProfile,
   type AccountProfileRecord,
 } from "../account-profile-client";
+import { displayName } from "../display-name";
 import { notify } from "../notice-center";
 import { useCharacters } from "../people/characters";
 import { openSettings } from "../settings-open";
@@ -128,7 +129,7 @@ export function ProfileDetailsPanel() {
     draft.handle !== saved.handle ||
     draft.title !== saved.title ||
     draft.team !== saved.team;
-  const name = profile.name?.trim() || profile.email;
+  const name = displayName(profile.name?.trim() ?? "") || profile.email;
   const completion = details.completion;
   // Without a photo, the character picked for this person.
   const avatarUrl =

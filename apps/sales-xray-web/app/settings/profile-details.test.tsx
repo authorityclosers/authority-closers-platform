@@ -297,3 +297,12 @@ it("opens the picker from the avatar, and explains an unverified phone", async (
   expect(opened).toHaveBeenCalledTimes(1);
   expect(host.textContent).toContain("Your phone number isn't verified yet");
 });
+
+// Opus UX pass, 29 Oct 2026: a name saved in one case shows with capitals.
+it("shows a name saved in lower case with capitals", async () => {
+  serve(() => Response.json({ ...PROFILE, name: "vikram example" }));
+  await act(async () => root.render(<ProfileDetailsPanel />));
+  await settle();
+  expect(host.textContent).toContain("Vikram Example");
+  expect(host.textContent).not.toContain("vikram example");
+});

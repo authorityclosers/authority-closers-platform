@@ -252,6 +252,71 @@
   overflow: visible;
 }
 
+/* Settings → Your profile (owner order 29 Oct 2026, Opus UX pass): the
+   profile card sits right under the photo and work details it belongs with,
+   General after it, and its own photo row is not drawn twice. */
+.settings[data-variant="embedded"] [id="account-pane-general"] {
+  order: 1;
+}
+
+.settings[data-variant="embedded"] .row:has(.profilePhoto) {
+  display: none;
+}
+
+/* An on/off switch (the first call guide), 44 px to tap. */
+.switch {
+  position: relative;
+  flex: none;
+  width: 51px;
+  height: 31px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sx-line-strong);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.switch::before {
+  position: absolute;
+  inset: -7px -2px;
+  content: "";
+}
+
+.switch::after {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 27px;
+  height: 27px;
+  border-radius: 50%;
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+  content: "";
+}
+
+.switch[aria-checked="true"] {
+  background: var(--sx-accent);
+}
+
+.switch[aria-checked="true"]::after {
+  transform: translateX(20px);
+}
+
+.switch:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .switch,
+  .switch::after {
+    transition:
+      background-color 160ms ease,
+      transform 160ms ease;
+  }
+}
+
 .settings[data-variant="embedded"] .pane {
   padding: 14px 18px 18px;
   border: 1px solid var(--lx-line);
