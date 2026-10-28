@@ -227,3 +227,51 @@
     transform: scale(0.98);
   }
 }
+
+/* Stages read as compact rows; reordering stays a pair of 44px targets. */
+.stageCard {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px;
+  background: var(--sx-surface);
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+}
+.stageEdit {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.stageEdit:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+.stageEdit > svg {
+  flex: none;
+}
+.stageMoves {
+  display: flex;
+  gap: 8px;
+  flex: none;
+}
+.stageMoves button {
+  width: 44px;
+  padding: 0;
+}
+@media (max-width: 599px) {
+  .stageCard .number {
+    display: none;
+  }
+}

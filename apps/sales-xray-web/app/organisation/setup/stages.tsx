@@ -63,14 +63,19 @@ export function OrganisationStages() {
   };
   useEffect(() => {
     let live = true;
-    Promise.all([readPipelines(), readTemplates()]).then(
-      ([next, kinds]) => {
-        if (live) {
-          setPipes(next);
-          setTemplates(kinds);
-        }
+    readPipelines().then(
+      (next) => {
+        if (live) setPipes(next);
       },
-      () => {},
+      () => undefined,
+    );
+    readTemplates().then(
+      (next) => {
+        if (live) setTemplates(next);
+      },
+      () => {
+        if (live) setTemplates([]);
+      },
     );
     return () => {
       live = false;
@@ -221,32 +226,29 @@ export function OrganisationStages() {
       ) : (
         <ol className={styles.list} aria-label="Your lead stages">
           {active.map((stage, index) => (
-            <li className={styles.card} key={stage.id}>
-              <div className={styles.row}>
-                <span className={styles.number} aria-hidden="true">
-                  {index + 1}
+            <li className={styles.stageCard} key={stage.id}>
+              <span className={styles.number} aria-hidden="true">
+                {index + 1}
+              </span>
+              <button
+                className={styles.stageEdit}
+                disabled={!view.canEdit || busy}
+                onClick={() => setEditing({ id: stage.id, label: stage.label })}
+                title={stage.label}
+              >
+                <span className={styles.copy}>
+                  <strong>{stage.label}</strong>
+                  <small>
+                    {stage.kindWords ||
+                      view.kinds[stage.kind ?? ""] ||
+                      "Lead stage"}{" "}
+                    · {stage.leads} {stage.leads === 1 ? "lead" : "leads"}
+                  </small>
                 </span>
-                <button
-                  className={`${styles.choice} ${styles.copy}`}
-                  disabled={!view.canEdit || busy}
-                  onClick={() =>
-                    setEditing({ id: stage.id, label: stage.label })
-                  }
-                >
-                  <span className={styles.copy}>
-                    <strong>{stage.label}</strong>
-                    <small>
-                      {stage.kindWords ??
-                        view.kinds[stage.kind ?? ""] ??
-                        "Lead stage"}{" "}
-                      · {stage.leads} leads
-                    </small>
-                  </span>
-                  <Pencil size={16} aria-hidden="true" />
-                </button>
-              </div>
+                <Pencil size={16} aria-hidden="true" />
+              </button>
               {view.canEdit ? (
-                <div className={styles.tools}>
+                <span className={styles.stageMoves}>
                   <button
                     className={styles.button}
                     aria-label={`Move ${stage.label} earlier`}
@@ -256,8 +258,7 @@ export function OrganisationStages() {
                       setDirty(true);
                     }}
                   >
-                    <ArrowUp size={16} />
-                    Earlier
+                    <ArrowUp size={16} aria-hidden="true" />
                   </button>
                   <button
                     className={styles.button}
@@ -268,10 +269,9 @@ export function OrganisationStages() {
                       setDirty(true);
                     }}
                   >
-                    <ArrowDown size={16} />
-                    Later
+                    <ArrowDown size={16} aria-hidden="true" />
                   </button>
-                </div>
+                </span>
               ) : null}
             </li>
           ))}
