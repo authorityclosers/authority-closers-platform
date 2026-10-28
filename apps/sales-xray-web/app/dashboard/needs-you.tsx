@@ -7,7 +7,13 @@
  * follow-ups across the team; each row opens the work. Nothing waiting: it says so.
  */
 
-import { CalendarClock, MessageCircleWarning, UserX } from "lucide-react";
+import {
+  ArrowRight,
+  CalendarClock,
+  MessageCircleWarning,
+  UserX,
+} from "lucide-react";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { displayName } from "../display-name";
@@ -19,6 +25,9 @@ import styles from "./sales-home.module.css";
 
 /** How many named leads the waiting row lists before "See all". */
 const SHOWN = 3;
+
+/** The team's late follow-ups on Leads. */
+const LATE_HREF = "/leads?tab=all&due=late";
 
 const waited = (minutes: number) =>
   minutes < 60
@@ -120,11 +129,19 @@ export function NeedsYou({
               title="Late follow-ups"
               note="Across the team. Sellers below shows whose."
               end={<Badge tone="warn">{late}</Badge>}
-              href="/leads?tab=all&stage=open"
+              href={LATE_HREF}
             />
           ) : null}
         </ActionList>
       )}
+      {/* The screen's one primary action (owner Home v3, B: "Review
+          follow-ups"): for those who work leads, while any are late. */}
+      {!loading && late && manages ? (
+        <Link className={styles.primary} href={LATE_HREF}>
+          {`Review ${late} late ${late === 1 ? "follow-up" : "follow-ups"}`}
+          <ArrowRight size={18} aria-hidden="true" />
+        </Link>
+      ) : null}
     </section>
   );
 }

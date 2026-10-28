@@ -177,6 +177,12 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
     "2\u00a0won · 3\u00a0interested · 12\u00a0calls",
   );
   expect(host.textContent).toContain("Late follow-ups");
+  // Owner Home v3: the screen's one primary action, Review follow-ups.
+  const review = Array.from(host.querySelectorAll("a")).find((link) =>
+    link.textContent?.startsWith("Review "),
+  );
+  expect(review?.textContent).toBe("Review 1 late follow-up");
+  expect(review?.getAttribute("href")).toBe("/leads?tab=all&due=late");
   expect(host.textContent).toContain("6 open leads · right now");
   const seller = host.querySelector<HTMLAnchorElement>(
     'a[href="/organisation/people/s1"]',
@@ -386,6 +392,7 @@ it("gives a Viewer the team's Home with nothing to change", async () => {
   expect(host.textContent).toContain("Waiting for a seller or the lead rules");
   expect(host.querySelector('a[href="/settings/lead-rules"]')).toBeNull();
   expect(host.textContent).not.toContain("Invite sellers");
+  expect(host.textContent).not.toContain("late follow-up");
   expect(
     Array.from(host.querySelectorAll("button")).some(
       (button) => button.textContent === "Controls",

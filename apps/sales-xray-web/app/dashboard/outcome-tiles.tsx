@@ -141,7 +141,8 @@ function DayChart({
         <span className={styles.bars} role="img" aria-label={summary}>
           {values.map((value, index) => (
             <span key={days[index].day} className={styles.barSlot}>
-              {large ? <small>{value}</small> : null}
+              {/* Each day's number on its bar (skill rule 13: label the values). */}
+              <small>{value}</small>
               <span
                 className={styles.bar}
                 data-zero={value === 0 || undefined}

@@ -150,12 +150,16 @@
   display: flex;
   align-items: flex-end;
   gap: 4px;
-  height: 34px;
+  height: 48px;
 }
 
 .chart[data-large] .bars {
   gap: 8px;
   height: 120px;
+}
+
+.chart[data-large] .barSlot small {
+  font-size: var(--sx-text-xs);
 }
 
 .barSlot {
@@ -171,7 +175,8 @@
 
 .barSlot small {
   color: var(--sx-ink-2);
-  font-size: var(--sx-text-xs);
+  font-size: 10px;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
   text-align: center;
 }

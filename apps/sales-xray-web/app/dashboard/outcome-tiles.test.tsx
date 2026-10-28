@@ -146,6 +146,13 @@ it("draws a week's days as seven bars, a true zero kept as a mark", async () => 
   expect(bars?.getAttribute("aria-label")).toContain("Won by day:");
   expect(bars?.children).toHaveLength(7);
   expect(tile("won").querySelectorAll("[data-zero]").length).toBe(3);
+  // Each day's number sits on its bar.
+  expect(
+    Array.from(
+      bars?.querySelectorAll("small") ?? [],
+      (label) => label.textContent,
+    ),
+  ).toEqual(["0", "0", "1", "0", "1", "1", "3"]);
 });
 
 it("opens a tile's detail: the days, who did it, and the leads behind it", async () => {
