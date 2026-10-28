@@ -1,0 +1,141 @@
+# Opt-in only. Apply LAST after application + hosted + filesystem overlays.
+# Compose >=2.24.4. Never selected by the existing release installer.
+# Foundation and native-helper caps are separate: see lean/README.md.
+x-lean-worker: &lean-worker
+  restart: unless-stopped
+  oom_score_adj: 500
+  cpu_shares: 256
+
+services:
+  postgres:
+    mem_limit: 384m
+    memswap_limit: 384m
+    oom_score_adj: -900
+    restart: unless-stopped
+    shm_size: 128m
+    command:
+      - postgres
+      - -c
+      - shared_preload_libraries=pg_stat_statements
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - jit=off
+      - -c
+      - shared_buffers=128MB
+      - -c
+      - effective_cache_size=1GB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=60
+
+  pgbouncer:
+    image: ${AC_PGBOUNCER_IMAGE:?reviewed digest-pinned PgBouncer >=1.24 image required}
+    pull_policy: never
+    entrypoint: [pgbouncer]
+    command: [/etc/pgbouncer/pgbouncer.ini]
+    user: "10001:10001"
+    init: true
+    read_only: true
+    restart: unless-stopped
+    mem_limit: 64m
+    memswap_limit: 64m
+    oom_score_adj: -400
+    pids_limit: 32
+    security_opt: [no-new-privileges:true]
+    cap_drop: [ALL]
+    tmpfs: [/tmp:rw,noexec,nosuid,nodev,size=4m,uid=10001,gid=10001]
+    volumes:
+      - ./lean/pgbouncer.ini:/etc/pgbouncer/pgbouncer.ini:ro
+      - ${AC_PGBOUNCER_AUTH_FILE:?runtime-only SCRAM auth file required}:/run/pgbouncer/userlist.txt:ro
+    networks: [data]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: [CMD, pg_isready, -h, 127.0.0.1, -p, "6432", -d, ac_platform]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    logging:
+      driver: local
+      options: {max-size: "2m", max-file: "2"}
+
+  api:
+    mem_limit: 512m
+    memswap_limit: 512m
+    oom_score_adj: -500
+    restart: unless-stopped
+    environment:
+      AC_DATABASE_URL: ${AC_LEAN_DATABASE_URL:?runtime URL via pgbouncer:6432 required}
+      # The release supplies an authenticated Unix-socket forward to the heavy
+      # host. No clamd process or signature database runs in the lean project.
+      AC_MEDIA_SCANNER_UNIX_SOCKET: /run/ac-media-safety/clamd.sock
+      AC_MEDIA_SCANNER_HOST: ""
+    volumes:
+      # Replace the legacy local scanner directory by mount target.
+      - type: bind
+        source: ${AC_HEAVY_SCANNER_TUNNEL_ROOT:?private scanner tunnel socket directory required}
+        target: /run/ac-media-safety
+        read_only: true
+        bind:
+          create_host_path: false
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  sales-xray-worker:
+    <<: *lean-worker
+    mem_limit: 512m
+    memswap_limit: 512m
+    command:
+      - python
+      - -m
+      - ac_platform.conversation_intelligence.lean_service
+      - --config
+      - /run/ac-sales-xray/service.json
+      - --sha256
+      - ${AC_XRAY_SERVICE_SHA256:?pinned worker manifest required}
+      - --provider-consumers
+      - ${AC_LEAN_PROVIDER_CONSUMERS:-1}
+      - --max-jobs
+      - ${AC_LEAN_WORKER_MAX_JOBS:-100}
+      - --pooled-database-url-file
+      - /run/ac-sales-xray/pooled-database-url
+    volumes:
+      - ${AC_XRAY_POOLED_DATABASE_URL_FILE:?pooler-only runtime credential required}:/run/ac-sales-xray/pooled-database-url:ro
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  worker:
+    <<: *lean-worker
+    mem_limit: 192m
+    memswap_limit: 192m
+    environment:
+      AC_DATABASE_URL: ${AC_LEAN_DATABASE_URL:?runtime URL via pgbouncer:6432 required}
+      AC_WORKER_MAX_JOBS: ${AC_LEAN_WORKER_MAX_JOBS:-100}
+      # Only the separate heavy runner claims Studio video jobs. Keep API media
+      # capabilities enabled; do not disable scanning or acknowledge unscanned data.
+      AC_MEDIA_FILESYSTEM_ENABLED: "false"
+    depends_on:
+      pgbouncer:
+        condition: service_healthy
+
+  intake-spool:
+    mem_limit: 64m
+    memswap_limit: 64m
+    oom_score_adj: -500
+    restart: unless-stopped
+
+  # Pages deployment belongs to the static-web job. This candidate never starts
+  # legacy web servers on the small box; do not admit before Pages route proof.
+  learner-web:
+    profiles: !override [static-web-legacy]
+  admin-web:
+    profiles: !override [static-web-legacy]
+  coach-web:
+    profiles: !override [static-web-legacy]

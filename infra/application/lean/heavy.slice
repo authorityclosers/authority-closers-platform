@@ -1,0 +1,9 @@
+[Unit]
+Description=On-demand production heavy work (never attach the database)
+
+[Slice]
+CPUWeight=10
+CPUQuota=50%
+MemoryMax=3G
+MemorySwapMax=0
+TasksMax=256

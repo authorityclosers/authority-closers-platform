@@ -1,0 +1,14 @@
+# Apply last to the FOUNDATION project, never to the application project.
+services:
+  edge-router:
+    mem_limit: 64m
+    memswap_limit: 64m
+    oom_score_adj: -500
+    restart: unless-stopped
+  telemetry-collector:
+    mem_limit: 64m
+    memswap_limit: 64m
+    oom_score_adj: 500
+    restart: unless-stopped
+    environment:
+      GOMEMLIMIT: 48MiB

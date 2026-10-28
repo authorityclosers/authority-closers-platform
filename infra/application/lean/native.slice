@@ -1,0 +1,8 @@
+[Unit]
+Description=Lean native supervisor and Docker child combined ceiling
+
+[Slice]
+MemoryMax=256M
+MemorySwapMax=0
+CPUQuota=50%
+TasksMax=96
