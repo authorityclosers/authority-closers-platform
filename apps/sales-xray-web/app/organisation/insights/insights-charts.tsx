@@ -57,7 +57,11 @@ export function TrendColumns({
   unit: "week" | "month";
 }) {
   const [focus, setFocus] = useState<number | null>(null);
-  const [offset, setOffset] = useState(0);
+  const [requestedOffset, setOffset] = useState(0);
+  const offset = Math.min(
+    requestedOffset,
+    Math.max(0, Math.floor((allPoints.length - 1) / 7) * 7),
+  );
   const points = allPoints.slice(offset, offset + 7);
   const ticks = ticksFor(Math.max(0, ...allPoints.map((point) => point.calls)));
   const max = ticks[ticks.length - 1] || 1;
@@ -286,7 +290,11 @@ export function BarList({
   label: string;
   onSelect?: (key: string) => void;
 }) {
-  const [offset, setOffset] = useState(0);
+  const [requestedOffset, setOffset] = useState(0);
+  const offset = Math.min(
+    requestedOffset,
+    Math.max(0, Math.floor((rows.length - 1) / 7) * 7),
+  );
   const ordered = [...rows].sort((a, b) => b.value - a.value);
   const max = Math.max(1, ...rows.map((row) => row.value));
   return (
@@ -300,7 +308,7 @@ export function BarList({
                 <i style={{ width: `${(row.value / max) * 100}%` }} />
               </span>
               <span className={styles.barValue}>
-                {count(row.value)}
+                {count(row.value)} calls
                 {row.note ? <small>{row.note}</small> : null}
               </span>
             </>
@@ -390,7 +398,11 @@ export function Funnel({
  * and not enough evidence, as one split bar with the observed share named.
  */
 export function SkillSplit({ skills }: { skills: SkillTotal[] }) {
-  const [offset, setOffset] = useState(0);
+  const [requestedOffset, setOffset] = useState(0);
+  const offset = Math.min(
+    requestedOffset,
+    Math.max(0, Math.floor((skills.length - 1) / 4) * 4),
+  );
   return (
     <>
       <p className={styles.legendRow} aria-hidden="true">

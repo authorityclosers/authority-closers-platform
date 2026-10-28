@@ -47,6 +47,18 @@ function Answers({ children }: { children: ReactNode }) {
       if (url.pathname === "/v1/lead-desk/activity") {
         if (state === "loading") return new Promise<Response>(() => {});
         if (state === "error") return json({}, 503);
+        if (state === "messages")
+          return json({
+            items: [
+              {
+                ...analyticsFixture.items[0],
+                event: { ...analyticsFixture.items[0].event, kind: "message" },
+              },
+            ],
+            counts: {},
+            next_before: null,
+            timezone: analyticsFixture.timezone,
+          });
         const before = url.searchParams.get("before");
         const items = analyticsFixture.items
           .filter((item) => !before || item.event.at < before)

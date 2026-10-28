@@ -276,3 +276,7 @@
   color: var(--sx-muted);
   border-top: 1px solid var(--sx-hairline);
 }
+
+.card > button[data-variant="primary"] {
+  background: var(--sx-accent);
+}

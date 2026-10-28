@@ -1086,3 +1086,32 @@ a.callTitle:hover {
   border-radius: 6px;
   font-size: 12px;
 }
+
+/* Phone labels stay complete; counts sit beside them and the bar uses the next line. */
+@media (max-width: 700px) {
+  .page {
+    --sx-control-h: 44px;
+  }
+  .barRow {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    min-height: 44px;
+    padding: 8px 0;
+  }
+  .barLabel {
+    grid-column: 1;
+    grid-row: 1;
+    white-space: normal;
+    overflow: visible;
+    overflow-wrap: anywhere;
+  }
+  .barValue {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .barTrack {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    height: 6px;
+  }
+}

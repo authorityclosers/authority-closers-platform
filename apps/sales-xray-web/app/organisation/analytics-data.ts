@@ -118,7 +118,8 @@ export function activitySummary(history: AnalyticsHistory) {
       name: string;
       current: Counts;
       previous: Counts;
-      daily: (Counts | null)[];
+      work: number;
+      daily: ((Counts & { work: number }) | null)[];
     }
   >();
   const add = (id: string | null, name: string) => {
@@ -129,8 +130,9 @@ export function activitySummary(history: AnalyticsHistory) {
         name: displayName(name),
         current: zero(),
         previous: zero(),
+        work: 0,
         daily: Array.from({ length: 30 }, (_, index) =>
-          start + index > covered ? zero() : null,
+          start + index > covered ? { ...zero(), work: 0 } : null,
         ),
       });
     return people.get(key)!;
@@ -140,6 +142,7 @@ export function activitySummary(history: AnalyticsHistory) {
       add(member.personId, member.name ?? "Team member");
   const current = zero(),
     previous = zero();
+  let currentWork = 0;
   const seen = new Set<string>();
   for (const item of history.items) {
     if (seen.has(item.event_id)) continue;
@@ -165,13 +168,21 @@ export function activitySummary(history: AnalyticsHistory) {
           : event.kind === "stage"
             ? ["moves"]
             : [];
-    if (!metrics.length) continue;
+    // The shared feed defines recorded work (WORK_KINDS in Lead Desk).
+    // Team mode also returns incoming leads; those aren't a person's work.
+    if (event.kind === "captured") continue;
     const person = add(
       event.actor_person_id ?? null,
       event.actor_name ?? "Person unavailable",
     );
     const period = day >= start ? "current" : "previous";
     const totals = period === "current" ? current : previous;
+    if (period === "current") {
+      person.work += 1;
+      currentWork += 1;
+      const daily = person.daily[day - start];
+      if (daily) daily.work += 1;
+    }
     for (const metric of metrics) {
       totals[metric] += 1;
       person[period][metric] += 1;
@@ -185,6 +196,7 @@ export function activitySummary(history: AnalyticsHistory) {
     previous,
     currentComplete,
     previousComplete,
+    currentWork,
     start,
     today,
     prior,

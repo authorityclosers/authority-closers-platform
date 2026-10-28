@@ -10,7 +10,8 @@ vi.mock("next/navigation", () => ({
 }));
 
 import fixture from "../../review-fixture/insights/sandbox.json";
-import { DEFAULT_FILTERS } from "./insights-data";
+import { DEFAULT_FILTERS, parseInsights } from "./insights-data";
+import { BarList, SkillSplit, TrendColumns } from "./insights-charts";
 import { InsightsView } from "./insights-view";
 
 (
@@ -623,11 +624,38 @@ it("never lets an older answer replace newer figures", async () => {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  expect(host.textContent).toContain("222 calls");
+  expect(host.querySelector("header")?.textContent).toContain("222 calls");
   await act(async () => {
     releaseOld?.();
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-  expect(host.textContent).toContain("222 calls");
-  expect(host.textContent).not.toContain("111 calls");
+  expect(host.querySelector("header")?.textContent).toContain("222 calls");
+  expect(host.querySelector("header")?.textContent).not.toContain("111 calls");
+});
+
+it("keeps paged charts visible when a new range or filter returns fewer rows", async () => {
+  const data = parseInsights(fixture.overview);
+  await render(<TrendColumns points={data.trend} unit="week" />);
+  await act(async () => button("Later").click());
+  await render(<TrendColumns points={data.trend.slice(0, 2)} unit="week" />);
+  expect(host.querySelectorAll('button[aria-label*="calls"]')).toHaveLength(2);
+
+  const rows = Array.from({ length: 12 }, (_, index) => ({
+    key: String(index),
+    label: `Fictional outcome ${index + 1}`,
+    value: 12 - index,
+  }));
+  await render(<BarList rows={rows} label="Fictional outcomes" />);
+  await act(async () => button("Next").click());
+  await render(<BarList rows={rows.slice(0, 3)} label="Fictional outcomes" />);
+  expect(
+    host.querySelectorAll('ul[aria-label="Fictional outcomes"] li'),
+  ).toHaveLength(3);
+
+  await render(<SkillSplit skills={data.skills} />);
+  await act(async () => button("Next skills").click());
+  await render(<SkillSplit skills={data.skills.slice(0, 2)} />);
+  expect(
+    host.querySelectorAll('ul[aria-label="Skills across the calls"] li'),
+  ).toHaveLength(2);
 });

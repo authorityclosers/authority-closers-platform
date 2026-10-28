@@ -146,17 +146,18 @@ export function AnalyticsView({
   const data = activitySummary(history);
   const sorted = [...data.people].sort(
     (a, b) =>
-      b.current[metric] - a.current[metric] || a.name.localeCompare(b.name),
+      b.current[metric] - a.current[metric] ||
+      b.work - a.work ||
+      a.name.localeCompare(b.name),
   );
   const rows = all ? sorted : sorted.slice(0, 7);
   const max = Math.max(1, ...sorted.map((row) => row.current[metric]));
   const peak = Math.max(
     1,
-    ...sorted.flatMap((row) => row.daily.map((day) => day?.[metric] ?? 0)),
+    ...sorted.flatMap((row) => row.daily.map((day) => day?.work ?? 0)),
   );
   const label = METRICS.find((row) => row.key === metric)!.label.toLowerCase();
-  const empty =
-    data.currentComplete && METRICS.every((row) => data.current[row.key] === 0);
+  const empty = data.currentComplete && data.currentWork === 0;
   return (
     <section className={styles.page} aria-label="Calls and activity analytics">
       <header className={styles.header}>
@@ -210,7 +211,10 @@ export function AnalyticsView({
         {empty ? (
           <div className={styles.empty}>
             <h3>No activity recorded this period</h3>
-            <p>Calls, notes and stage moves appear as your team works leads.</p>
+            <p>
+              Calls, messages, notes and stage moves appear as your team works
+              leads.
+            </p>
             <Link className={styles.action} href="/leads">
               Open leads
             </Link>
@@ -226,8 +230,8 @@ export function AnalyticsView({
             aria-label={`People sorted by ${label}`}
           >
             {rows.map((person) => {
-              const daily = person.daily.map((day) => day?.[metric] ?? null);
-              const chartLabel = `${person.name}: daily ${label}, ${daily.map((n, index) => `${dayText(data.start + index)}: ${n === null ? "unavailable" : n}`).join("; ")}`;
+              const daily = person.daily.map((day) => day?.work ?? null);
+              const chartLabel = `${person.name}: daily activity updates, ${daily.map((n, index) => `${dayText(data.start + index)}: ${n === null ? "unavailable" : n}`).join("; ")}`;
               const body = (
                 <>
                   <div className={styles.personHead}>
@@ -248,6 +252,16 @@ export function AnalyticsView({
                       notes ·{" "}
                       {coveredCount(person.current.moves, data.currentComplete)}{" "}
                       stage moves
+                    </small>
+                  ) : null}
+                  {metric === "calls" &&
+                  person.current.calls === 0 &&
+                  person.current.notes === 0 &&
+                  person.current.moves === 0 &&
+                  person.work > 0 ? (
+                    <small className={styles.otherWork}>
+                      Other updates:{" "}
+                      {coveredCount(person.work, data.currentComplete)}
                     </small>
                   ) : null}
                   <div className={styles.visualRow}>
@@ -285,7 +299,7 @@ export function AnalyticsView({
               <span>
                 Bars: 0–{count(max)} {label}
                 <br />
-                Daily lines: 0–{count(peak)} per day
+                Daily activity: 0–{count(peak)} updates per day
               </span>
               <span>
                 {dayText(data.start)} → {dayText(data.today)}
@@ -303,7 +317,8 @@ export function AnalyticsView({
         <p>
           {team ? "Visible team work" : "Your visible work"} ·{" "}
           {history.timezone} · Calls include those without reports.
-          Conversations are connected calls.
+          Conversations are connected calls. Daily lines include other recorded
+          work.
         </p>
         <p>
           Prior: {dayText(data.prior)} – {dayText(data.start - 1)}.

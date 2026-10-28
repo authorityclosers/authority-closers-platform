@@ -50,7 +50,7 @@ it("shows a seller who only works leads when comparing notes", () => {
   );
   expect(person?.textContent).toContain("30 notes");
   expect(person?.querySelector("svg")?.getAttribute("aria-label")).toContain(
-    "daily notes",
+    "daily activity updates",
   );
 });
 it("labels partial comparisons and gaps instead of suggesting inactivity", () => {
@@ -78,5 +78,26 @@ it("offers leads as the next action for an empty period", () => {
   expect(host.querySelector("ul")).toBeNull();
   expect(host.querySelector('a[href="/leads"]')?.textContent).toBe(
     "Open leads",
+  );
+});
+
+it("shows message-only work in the daily line instead of an idle state", () => {
+  const message = {
+    ...analyticsFixture.items[0],
+    event: { ...analyticsFixture.items[0].event, kind: "message" as const },
+  };
+  act(() =>
+    root.render(
+      <AnalyticsView
+        team
+        initial={{ ...analyticsFixture, items: [message] }}
+      />,
+    ),
+  );
+  expect(host.textContent).not.toContain("No activity recorded");
+  expect(host.textContent).toContain("Other updates: 1");
+  expect(host.querySelector("ul a")?.textContent).toContain("Mira Fictional");
+  expect(host.querySelector("svg")?.getAttribute("aria-label")).toContain(
+    "daily activity updates",
   );
 });

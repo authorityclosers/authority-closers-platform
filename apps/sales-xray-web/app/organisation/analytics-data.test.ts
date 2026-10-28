@@ -54,7 +54,8 @@ it("counts Lead Desk work by actor, with no report requirement, and no duplicate
     notes: 1,
     moves: 1,
   });
-  expect(result.people[0].daily[29]).toEqual(result.current);
+  expect(result.people[0].daily[29]).toMatchObject(result.current);
+  expect(result.people[0].daily[29]?.work).toBe(5);
   expect(result.currentComplete).toBe(true);
 });
 it("uses organisation calendar days at both 30-day boundaries and excludes future events", () => {
@@ -166,4 +167,23 @@ it("does not call a failed or stuck read an empty period", async () => {
   await expect(readAnalytics({ team: true, now })).rejects.toThrow(
     "did not advance",
   );
+});
+
+it("keeps a person active through messages and meetings without adding fake calls", () => {
+  const result = activitySummary(
+    history([
+      event("message", "message", now),
+      event("meeting", "meeting", now),
+      event("intake", "captured", now),
+    ]),
+  );
+  expect(result.current).toEqual({
+    calls: 0,
+    conversations: 0,
+    notes: 0,
+    moves: 0,
+  });
+  expect(result.currentWork).toBe(2);
+  expect(result.people[0].work).toBe(2);
+  expect(result.people[0].daily[29]?.work).toBe(2);
 });

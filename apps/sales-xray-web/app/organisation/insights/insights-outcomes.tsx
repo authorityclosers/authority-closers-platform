@@ -201,7 +201,9 @@ export function OutcomeStory({
           <p className={styles.caption}>
             Won is part of Next step. A lead can appear in several calls.
           </p>
-          <Button onClick={() => onCalls()}>View matching calls</Button>
+          <Button variant="primary" onClick={() => onCalls()}>
+            View matching calls
+          </Button>
           <p className={styles.coverage}>
             {coverage.calls
               ? `${count(totals.calls)} calls analysed`
