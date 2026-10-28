@@ -396,6 +396,33 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
         # An API call slower than 1.5 s or failed: its route with every id taken out. Since 27
         # Oct 2026 slow means wait_ms, to the answer's first byte (a recording downloading is
         # not a slow server), and never while the page was out of view.
+        "sx.api_timing": _event(
+            values={
+                "status": API_STATUSES,
+                "screen": SCREENS,
+                "band": ("lt100", "100_300", "300_1000", "1000_3000", "3000_10000", "ge10000"),
+                "background": ("yes", "no"),
+            },
+            tokens=("endpoint",),
+            required=("endpoint", "status", "band", "background"),
+        ),
+        "sx.tap": _event(
+            values={"target": TAP_TARGETS, "zone": TAP_ZONES, "screen": SCREENS},
+            required=("target", "zone", "screen"),
+        ),
+        "sx.scroll_depth": _event(
+            values={"screen": SCREENS},
+            numbers={"depth": 100},
+            required=("screen", "depth"),
+        ),
+        "sx.route_timing": _event(
+            values={
+                "screen": SCREENS,
+                "nav": ("first", "push", "back"),
+                "band": ("lt100", "100_300", "300_1000", "1000_3000", "3000_10000", "ge10000"),
+            },
+            required=("screen", "nav", "band"),
+        ),
         "sx.api_slow": _event(
             values={"status": API_STATUSES, "screen": SCREENS},
             tokens=("endpoint",),
