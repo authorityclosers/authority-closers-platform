@@ -5,6 +5,8 @@ import { FixtureWorkspace } from "../../review-fixture/leads/leads-preview";
 import { OrganisationFixture } from "../../review-fixture/_fixtures/organisation-fixture";
 import { DevelopersAnswers } from "../../review-fixture/developers/developers-preview";
 import type { MetaPage } from "../../leads/sources-view";
+import { pulseFixture } from "./pulse-fixture";
+import type { Routing } from "../../leads/routing-client";
 import { brandingKey, updateBranding } from "../../shell/branding-store";
 const context = {
   personId: "00000000-0000-4000-8000-000000000001",
@@ -39,6 +41,11 @@ const pages: MetaPage[] = [
 function install() {
   if (typeof window === "undefined") return;
   const real = window.fetch.bind(window);
+  const query = new URLSearchParams(window.location.search);
+  const pulse = pulseFixture(
+    query.get("pulse") === "connected",
+    window.location.origin,
+  );
   window.fetch = async (input, init) => {
     const url = new URL(
       String(input instanceof Request ? input.url : input),
@@ -46,12 +53,59 @@ function install() {
     );
     const method = init?.method ?? "GET";
     const answer = (body: unknown) => Response.json(body);
-    if (url.pathname === "/v1/lead-desk/meta/status")
-      return answer({ configured: true, pages });
+    const pulseAnswer = pulse(url.pathname, init);
+    if (pulseAnswer !== undefined) return answer(pulseAnswer);
+    if (
+      method === "GET" &&
+      url.pathname === "/v1/organisation/members" &&
+      query.get("long") === "1"
+    ) {
+      const data = (await (await real(input, init)).json()) as {
+        members: { name: string | null }[];
+      };
+      if (data.members[0])
+        data.members[0].name = "Alexandria Fictional Longfamilyname";
+      if (data.members[1])
+        data.members[1].name = "Maximilian Example Longsurname";
+      return answer(data);
+    }
+    if (method === "GET" && url.pathname === "/v1/lead-desk/routing-rules") {
+      const data = (await (await real(input, init)).json()) as Routing;
+      return answer({
+        ...data,
+        rules: data.rules.map((rule, index) => ({
+          ...rule,
+          name: index === 0 ? "Pune enquiries" : rule.name,
+          when: rule.when.filter((condition) => condition.field !== "value"),
+        })),
+      });
+    }
+    if (url.pathname === "/v1/lead-desk/meta/status") {
+      if (query.get("state") === "loading")
+        return await new Promise<Response>((resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new DOMException("aborted", "AbortError")),
+            { once: true },
+          );
+        });
+      return answer({
+        configured: true,
+        pages: query.get("state") === "empty" ? [] : pages,
+      });
+    }
     if (
       url.pathname.endsWith("/forms") &&
       url.pathname.includes("/meta/pages/")
-    )
+    ) {
+      if (
+        query.get("state") === "partial" &&
+        url.pathname.includes("sample-two")
+      )
+        return new Response(
+          '{"detail":"Sign in again to restore Page access."}',
+          { status: 403 },
+        );
       return answer(
         url.pathname.includes("sample-one")
           ? [
@@ -78,6 +132,7 @@ function install() {
               { id: "camp", name: "Open day", status: "ARCHIVED", leads: 7 },
             ],
       );
+    }
     if (method === "POST" && url.pathname.includes("/meta/pages/")) {
       const page = pages.find((item) => url.pathname.includes(item.pageId));
       if (!page) return new Response("{}", { status: 404 });
@@ -108,6 +163,84 @@ function Answers() {
       100,
     );
     return () => clearTimeout(timer);
+  }, []);
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    const setup = query.get("setup");
+    let phase = 0,
+      attempts = 0;
+    if (!setup) return;
+    const timer = setInterval(() => {
+      if (++attempts > 35) {
+        clearInterval(timer);
+        return;
+      }
+      const buttons = [
+        ...document.querySelectorAll<HTMLButtonElement>("button"),
+      ];
+      if (setup === "rename") {
+        const stage = buttons.find((button) => button.title === "Call back");
+        if (stage) {
+          stage.click();
+          clearInterval(timer);
+        }
+        return;
+      }
+      if (setup === "microphone") {
+        const summary = [...document.querySelectorAll("summary")].find((item) =>
+          item.textContent?.includes("Microphone access"),
+        );
+        if (summary) {
+          summary.click();
+          clearInterval(timer);
+        }
+        return;
+      }
+      if (phase === 0) {
+        const tab = buttons.find(
+          (button) =>
+            button.textContent?.trim() ===
+            (setup === "limits" ? "Limits" : "Seller rules"),
+        );
+        if (tab) {
+          tab.click();
+          phase = 1;
+          if (setup === "limits") clearInterval(timer);
+        }
+        return;
+      }
+      if (phase === 1) {
+        const seller = buttons.find((button) =>
+          button.textContent?.includes("Taking leads"),
+        );
+        if (seller) {
+          seller.click();
+          phase = 2;
+          if (setup === "seller") clearInterval(timer);
+        }
+        return;
+      }
+      if (phase === 2) {
+        const edit = buttons.find((button) =>
+          button.getAttribute("aria-label")?.startsWith("Edit who "),
+        );
+        if (edit) {
+          edit.click();
+          phase = 3;
+        }
+        return;
+      }
+      if (phase === 3) {
+        const area = buttons.find(
+          (button) => button.textContent?.trim() === "Areas",
+        );
+        if (area) {
+          area.click();
+          clearInterval(timer);
+        }
+      }
+    }, 100);
+    return () => clearInterval(timer);
   }, []);
   return (
     <>
