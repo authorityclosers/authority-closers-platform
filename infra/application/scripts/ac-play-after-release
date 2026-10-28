@@ -1,0 +1,68 @@
+#!/bin/bash
+# ac-play-after-release: after every production release, start the Play build that carries it (orchestrator, 28 Oct 2026).
+# Owner, 28 Oct 2026: "Why aren't I getting the app update on Play Store automatically ... I need new updated".
+# The phone app carries its own copy of the web app (sales-xray-apps S9), so a web release reaches phones only in a new
+# Play build. This dispatches play.yml on main with web_ref = the release's main commit and track alpha (closed testing;
+# Google reviews each alpha release). Runs from ac-play-after-release.timer.
+# Approval: the run waits in GitHub's "android-release" environment unless AUTO_APPROVE=1 in the config. Owner,
+# 28 Oct 2026: "Yes: approve data change: Play builds after each production release approve themselves for closed
+# testing (alpha). Keep my approval for production and open testing." Only alpha is ever dispatched here, so hand runs
+# (internal, beta, production) still wait for the owner.
+set -uo pipefail
+SHIPLOG=${AC_PLAY_SHIP_LOG:-/var/log/ac-ship.log}
+LOG=${AC_PLAY_LOG:-/var/log/ac-play-after-release.log}
+STATE=${AC_PLAY_STATE:-/var/lib/ac-play-after-release/last}
+CONF=${AC_PLAY_CONF:-/etc/ac-play-after-release.conf}
+NOTIFY=${AC_PLAY_NOTIFY:-/usr/local/sbin/ac-notify-owner}
+PAUSE=${AC_PLAY_PAUSE:-10}
+REPO=authorityclosers/sales-xray-apps
+PLATFORM=authorityclosers/authority-closers-platform
+AUTO_APPROVE=0
+# shellcheck source=/dev/null
+[ -f "$CONF" ] && . "$CONF"
+say() { echo "$(date -u +%FT%TZ) $*" >> "$LOG"; }
+tell() { say "$*"; "$NOTIFY" "$*" >/dev/null 2>&1 || true; }
+gh() {
+  if [ -n "${AC_PLAY_GH:-}" ]; then "$AC_PLAY_GH" "$@"; else sudo -u acdev -H /home/acdev/.local/bin/gh "$@"; fi
+}
+
+VER=$(grep -oE "v[0-9]+\.[0-9]+\.[0-9]+ is live on production" "$SHIPLOG" 2>/dev/null | tail -1 | awk '{print $1}')
+[ -n "$VER" ] || exit 0
+mkdir -p "$(dirname "$STATE")"
+[ "$(cat "$STATE" 2>/dev/null)" = "$VER" ] && exit 0
+SHORT=$(grep -oE "$VER merged to main as [0-9a-f]+" "$SHIPLOG" | tail -1 | awk '{print $NF}')
+[ -n "$SHORT" ] || { say "$VER is live but its main commit is not in $SHIPLOG; not started"; exit 1; }
+SHA=$(gh api "repos/$PLATFORM/commits/$SHORT" --jq .sha 2>/dev/null)
+[ ${#SHA} -eq 40 ] || { say "$VER: main commit $SHORT unreadable on GitHub; will retry"; exit 1; }
+# What's new for testers: the release title, inside Play's 500-character limit.
+NOTES=$(gh api "repos/$PLATFORM/commits/$SHA" --jq '.commit.message' 2>/dev/null | head -1 | sed -E 's/^Release [^ ]+ \((.*)\)$/\1/' | cut -c1-480)
+[ -n "$NOTES" ] || NOTES="Sales X-Ray $VER"
+BEFORE=$(gh run list -R "$REPO" --workflow play.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null)
+gh workflow run play.yml -R "$REPO" --ref main -f web_ref="$SHA" -f track=alpha -f notes="$NOTES" >/dev/null 2>&1 \
+  || { say "$VER: play.yml dispatch refused; will retry"; exit 1; }
+echo "$VER" > "$STATE"
+RUN=""
+for _ in $(seq 1 12); do
+  sleep "$PAUSE"
+  RUN=$(gh run list -R "$REPO" --workflow play.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null)
+  [ -n "$RUN" ] && [ "$RUN" != "$BEFORE" ] && break
+  RUN=""
+done
+[ -n "$RUN" ] || { tell "Play build for $VER was started but its run did not show up; check https://github.com/$REPO/actions/workflows/play.yml"; exit 1; }
+URL="https://github.com/$REPO/actions/runs/$RUN"
+say "$VER: play.yml run $RUN started (web ${SHA:0:9}, alpha)"
+if [ "$AUTO_APPROVE" = 1 ]; then
+  ENV_ID=$(gh api "repos/$REPO/environments/android-release" --jq .id 2>/dev/null)
+  for _ in $(seq 1 30); do
+    if [ -n "$ENV_ID" ] && gh api "repos/$REPO/actions/runs/$RUN/pending_deployments" --jq '.[0].environment.id' 2>/dev/null | grep -qx "$ENV_ID"; then
+      if gh api -X POST "repos/$REPO/actions/runs/$RUN/pending_deployments" -F "environment_ids[]=$ENV_ID" -f state=approved \
+           -f comment="Automatic after $VER went live (owner's standing approval in $CONF)" >/dev/null 2>&1; then
+        tell "The phone app with $VER is building for Play closed testing; testers get it after Google's review: $URL"; exit 0
+      fi
+    fi
+    sleep "$PAUSE"
+  done
+  tell "The Play build for $VER is waiting for approval (automatic approval did not go through): $URL"
+else
+  tell "The phone app with $VER is ready to build for Play. Approve it here: $URL"
+fi

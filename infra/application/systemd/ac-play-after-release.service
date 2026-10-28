@@ -1,0 +1,10 @@
+[Unit]
+Description=Start the Play build of each release that is live on production (closed testing)
+Documentation=file:///home/acdev/src/dev-live/authority-closers-platform/AGENTS.md
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-play-after-release
+Nice=10
+TimeoutStartSec=15min
