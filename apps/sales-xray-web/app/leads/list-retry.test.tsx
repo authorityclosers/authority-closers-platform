@@ -78,3 +78,40 @@ it("a list that didn't load offers Try again, which asks once more", async () =>
   expect(host.textContent).not.toContain("Your leads are safe.");
   expect(host.textContent).toContain("No leads yet");
 });
+
+it("asks again after a workspace change even when the list filters are identical", async () => {
+  down = false;
+  const render = (workspace: string) =>
+    act(async () =>
+      root.render(
+        <ListView
+          canManage
+          stage="open"
+          stageLabel="Open"
+          scope="team"
+          query=""
+          onOpen={() => undefined}
+          version={0}
+          layoutOwner={workspace}
+        />,
+      ),
+    );
+  await render("fictional-cedar");
+  await settle();
+  expect(fetch).toHaveBeenCalledTimes(1);
+  let answer!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementationOnce(
+    () =>
+      new Promise((resolve) => {
+        answer = resolve;
+      }),
+  );
+  await render("fictional-maple");
+  expect(fetch).toHaveBeenCalledTimes(2);
+  expect(host.querySelector('[aria-label="Loading leads"]')).not.toBeNull();
+  await act(async () =>
+    answer(Response.json({ leads: [], total: 0, next_offset: null })),
+  );
+  await settle();
+  expect(host.querySelector('[aria-label="Loading leads"]')).toBeNull();
+});

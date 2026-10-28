@@ -193,6 +193,7 @@ export function ListView({
   // (pull down, back in the app) keeps the rows on screen meanwhile.
   const moreKey = JSON.stringify(refine ?? null);
   const question = JSON.stringify([
+    layoutOwner,
     scope,
     owner,
     stage,
@@ -201,6 +202,7 @@ export function ListView({
     moreKey,
   ]);
   const key = JSON.stringify([
+    layoutOwner,
     scope,
     owner,
     stage,
@@ -282,6 +284,7 @@ export function ListView({
       controller.signal,
     )
       .then((next) => {
+        if (controller.signal.aborted) return;
         setLoaded({ key, question, page: next, rows: next.leads });
         if (next.stage_counts && stage !== TEST)
           counts.current?.(next.stage_counts);
