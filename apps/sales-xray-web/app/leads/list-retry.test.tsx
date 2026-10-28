@@ -63,7 +63,9 @@ it("a list that didn't load offers Try again, which asks once more", async () =>
     ),
   );
   await settle();
-  const status = host.querySelector('[role="status"]');
+  const status = host.querySelector(
+    '[role="status"]:not([aria-label="Lead sync"])',
+  );
   expect(status?.textContent).toContain("Sales X-Ray isn't answering");
   expect(status?.textContent).toContain("Your leads are safe.");
   expect(host.querySelector('[role="alert"]')).toBeNull();

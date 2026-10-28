@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { readLeads, type LeadRow } from "./leads-client";
 import { ListView } from "./list-view";
+import { rememberLeadData, listQuestion } from "./list-cache";
 
 vi.mock("next/link", () => ({
   default: ({ children }: { children: unknown }) => children,
@@ -48,6 +49,7 @@ let host: HTMLDivElement;
 let root: Root;
 beforeEach(() => {
   localStorage.clear();
+  sessionStorage.clear();
   vi.stubGlobal(
     "fetch",
     vi.fn(async () => Response.json({})),
@@ -102,7 +104,12 @@ it("keeps the count, layout and Select together while preserving layout and sele
       (button) => button.textContent === "Table",
     )!,
   );
-  expect(host.querySelector("table")).not.toBeNull();
+  await vi.waitFor(async () => {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(host.querySelector("table")).not.toBeNull();
+  });
   expect(localStorage.getItem("sx:leads-layout:sample-workspace")).toBe(
     "table",
   );
@@ -142,4 +149,58 @@ it("keeps all three contact actions wired to the same lead", async () => {
     await click(button);
     expect(onTap).toHaveBeenLastCalledWith(row, channel);
   }
+});
+
+it("paints cached first rows while syncing, retains them on failure, and hides them on a workspace change", async () => {
+  const cedar = JSON.stringify([
+    "fictional-person",
+    "fictional-session",
+    "cedar",
+  ]);
+  const maple = JSON.stringify([
+    "fictional-person",
+    "fictional-session",
+    "maple",
+  ]);
+  rememberLeadData(
+    cedar,
+    `list:${listQuestion({ scope: "team", stage: "open", test: false })}`,
+    {
+      leads: [row],
+      total: 2000,
+      next_offset: 50,
+    },
+  );
+  let reject!: (error: Error) => void;
+  vi.mocked(readLeads).mockReturnValueOnce(
+    new Promise((_, fail) => {
+      reject = fail;
+    }),
+  );
+  const view = (identity: string) => (
+    <ListView
+      canManage
+      stage="open"
+      stageLabel="All leads"
+      scope="team"
+      query=""
+      version={0}
+      onOpen={() => {}}
+      cacheIdentity={identity}
+    />
+  );
+  await act(async () => root.render(view(cedar)));
+  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(1);
+  expect(host.querySelector('[aria-label="Lead sync"]')?.textContent).toBe(
+    "Syncing…",
+  );
+  await act(async () => reject(new Error("offline")));
+  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(1);
+  expect(host.querySelector('[aria-label="Lead sync"]')?.textContent).toBe(
+    "Sync paused",
+  );
+  vi.mocked(readLeads).mockReturnValueOnce(new Promise(() => {}));
+  await act(async () => root.render(view(maple)));
+  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(0);
+  expect(host.querySelector('[aria-label="Loading leads"]')).not.toBeNull();
 });

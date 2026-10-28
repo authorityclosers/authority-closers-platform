@@ -1,0 +1,139 @@
+/** Last first pages, on this tab only. A confirmed person + session + workspace
+ * is required, and every filter is part of the key. Ten minutes, six answers;
+ * storage being unavailable must never stop a network read. */
+import type { LeadPage } from "./leads-client";
+import { readLeads } from "./leads-client";
+
+const SLOT = "sx:leads-cache:v1";
+const MAX_AGE = 10 * 60_000;
+const MAX_ENTRIES = 6;
+type Entry = { at: number; value: unknown };
+type Store = { identity: string; entries: Record<string, Entry> };
+const valid = (identity: string | null | undefined): identity is string => {
+  if (!identity) return false;
+  try {
+    const parts: unknown = JSON.parse(identity);
+    return (
+      Array.isArray(parts) &&
+      parts.length === 3 &&
+      parts.every((part) => typeof part === "string" && !!part)
+    );
+  } catch {
+    return false;
+  }
+};
+function read(identity: string): Store {
+  try {
+    const stored = JSON.parse(
+      sessionStorage.getItem(SLOT) ?? "null",
+    ) as Store | null;
+    if (
+      stored?.identity === identity &&
+      stored.entries &&
+      typeof stored.entries === "object"
+    )
+      return stored;
+  } catch {
+    /* Private browsers may refuse site data. */
+  }
+  return { identity, entries: {} };
+}
+export function cachedLeadData<T>(
+  identity: string | null | undefined,
+  key: string,
+): T | null {
+  if (!valid(identity) || typeof window === "undefined") return null;
+  const entry = read(identity).entries[key];
+  return entry && Date.now() - entry.at >= 0 && Date.now() - entry.at < MAX_AGE
+    ? (entry.value as T)
+    : null;
+}
+export function rememberLeadData(
+  identity: string | null | undefined,
+  key: string,
+  value: unknown,
+) {
+  if (!valid(identity) || typeof window === "undefined") return;
+  const store = read(identity);
+  const entries = Object.entries(store.entries).filter(
+    ([name, entry]) => name !== key && Date.now() - entry.at < MAX_AGE,
+  );
+  store.entries = Object.fromEntries([
+    ...entries.slice(-(MAX_ENTRIES - 1)),
+    [key, { at: Date.now(), value }],
+  ]);
+  try {
+    sessionStorage.setItem(SLOT, JSON.stringify(store));
+  } catch {
+    /* The list still works without storage. */
+  }
+}
+
+export type ListAsk = Parameters<typeof readLeads>[0];
+export const listQuestion = (ask: ListAsk) =>
+  JSON.stringify([
+    ask.scope,
+    ask.owner ?? null,
+    ask.stage ?? null,
+    ask.search?.trim() ?? "",
+    ask.test ?? false,
+    ask.pipeline ?? null,
+    ask.more ?? null,
+  ]);
+export const cachedLeadPage = (
+  identity: string | null | undefined,
+  ask: ListAsk,
+) => cachedLeadData<LeadPage>(identity, `list:${listQuestion(ask)}`);
+const pending = new Map<string, Promise<LeadPage>>();
+const warming = new Map<string, { at: number; request: Promise<LeadPage> }>();
+/** Warm-up and mounted list share their first read. Callers ignore aborted results;
+ * the read itself can finish for the other reader. Never share across identities. */
+export function readFirstLeads(
+  identity: string | null | undefined,
+  ask: ListAsk,
+  signal?: AbortSignal,
+): Promise<LeadPage> {
+  if (!valid(identity)) return readLeads(ask, signal);
+  const key = JSON.stringify([identity, listQuestion(ask)]);
+  const warmed = warming.get(key);
+  if (warmed && Date.now() - warmed.at < 10_000) {
+    const clear = () => {
+      if (warming.get(key) === warmed) warming.delete(key);
+    };
+    void warmed.request.then(clear, clear);
+    return warmed.request;
+  }
+  warming.delete(key);
+  let request = pending.get(key);
+  if (!request) {
+    request = readLeads(ask).then((page) => {
+      rememberLeadData(identity, `list:${listQuestion(ask)}`, page);
+      return page;
+    });
+    pending.set(key, request);
+    const clear = () => {
+      if (pending.get(key) === request) pending.delete(key);
+    };
+    void request.then(clear, clear);
+  }
+  return request;
+}
+
+/** Keep a completed warm-up until the list mounts, so a fast API cannot create
+ * a second first-page request behind the desk. */
+export function preloadFirstLeads(
+  identity: string | null | undefined,
+  ask: ListAsk,
+) {
+  if (!valid(identity)) return;
+  const key = JSON.stringify([identity, listQuestion(ask)]);
+  if (warming.has(key)) return;
+  const request = readFirstLeads(identity, ask);
+  const entry = { at: Date.now(), request };
+  warming.set(key, entry);
+  while (warming.size > MAX_ENTRIES)
+    warming.delete(warming.keys().next().value!);
+  void request.catch(() => {
+    if (warming.get(key) === entry) warming.delete(key);
+  });
+}

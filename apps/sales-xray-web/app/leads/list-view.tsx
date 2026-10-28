@@ -7,6 +7,7 @@
  * owners and admins, and hands the stage counts up for the tabs.
  */
 
+import dynamic from "next/dynamic";
 import {
   CloudOff,
   List,
@@ -17,8 +18,9 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
+import { cachedLeadPage, readFirstLeads } from "./list-cache";
 import { notify } from "../notice-center";
 import { useRowKeys } from "../ui/row-keys";
 import { Button, Skeleton } from "../ui/kit";
@@ -40,9 +42,13 @@ import {
   type ListSort,
 } from "./leads-client";
 import { BulkSheet } from "./bulk-sheet";
-import { LeadsTable } from "./leads-table";
 import { QuickAddBar, type PasteRows } from "./quick-add";
 import styles from "./leads.module.css";
+
+const LeadsTable = dynamic(
+  () => import("./leads-table").then((m) => m.LeadsTable),
+  { ssr: false },
+);
 
 export type Scope = "mine" | "team" | "unassigned";
 
@@ -66,6 +72,7 @@ function storedLayout(owner: string | undefined): Layout {
 
 export function ListView({
   canManage,
+  cacheIdentity,
   stage,
   stageLabel,
   scope,
@@ -91,6 +98,7 @@ export function ListView({
   onSort,
 }: {
   canManage: boolean;
+  cacheIdentity?: string | null;
   /** "open", a stage kind, or "test". */
   stage: string;
   /** The tab's own words, for the count and the empty list. */
@@ -194,6 +202,7 @@ export function ListView({
   const moreKey = JSON.stringify(refine ?? null);
   const question = JSON.stringify([
     layoutOwner,
+    cacheIdentity,
     scope,
     owner,
     stage,
@@ -203,6 +212,7 @@ export function ListView({
   ]);
   const key = JSON.stringify([
     layoutOwner,
+    cacheIdentity,
     scope,
     owner,
     stage,
@@ -216,8 +226,39 @@ export function ListView({
   useEffect(() => {
     ownerCounts.current = onOwnerCounts;
   });
-  const page = loaded?.question === question ? loaded.page : null;
-  const rows = loaded?.question === question ? loaded.rows : [];
+  const remembered = useMemo(
+    () =>
+      cachedLeadPage(cacheIdentity, {
+        scope,
+        owner: owner ?? undefined,
+        stage: stage === TEST ? null : stage,
+        search: query,
+        test: stage === TEST,
+        pipeline,
+        more: JSON.parse(moreKey) as ListMore | null,
+      }),
+    [cacheIdentity, scope, owner, stage, query, pipeline, moreKey],
+  );
+  const page = loaded?.question === question ? loaded.page : remembered;
+  const rows =
+    loaded?.question === question ? loaded.rows : (remembered?.leads ?? []);
+  // Paint the visible phone rows first. Building 50 gesture-enabled rows at
+  // once monopolises a mid-range phone even when the data is already cached.
+  const [revealed, setRevealed] = useState({ question: "", count: 8 });
+  const visibleCount = revealed.question === question ? revealed.count : 8;
+  useEffect(() => {
+    if (asTable || visibleCount >= rows.length) return;
+    const timer = window.setTimeout(
+      () =>
+        setRevealed({
+          question,
+          count: Math.min(rows.length, visibleCount + 16),
+        }),
+      80,
+    );
+    return () => window.clearTimeout(timer);
+  }, [question, rows.length, visibleCount, asTable]);
+  const syncing = loaded?.key !== key;
   const error = failed?.key === key ? failed.message : null;
   const chosen = picked?.question === question ? picked.leads : NONE;
   // The page's latest counts setter, without reading the list again for it.
@@ -270,7 +311,8 @@ export function ListView({
 
   useEffect(() => {
     const controller = new AbortController();
-    readLeads(
+    readFirstLeads(
+      cacheIdentity,
       {
         scope,
         owner: owner ?? undefined,
@@ -295,6 +337,13 @@ export function ListView({
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
+        if (remembered)
+          notify({
+            id: "leads-sync",
+            tone: "error",
+            title: "Couldn't sync leads",
+            message: "Showing your last list. Try again shortly.",
+          });
         setFailed({
           key,
           message:
@@ -304,7 +353,18 @@ export function ListView({
         });
       });
     return () => controller.abort();
-  }, [key, question, scope, owner, stage, query, pipeline, moreKey]);
+  }, [
+    key,
+    question,
+    scope,
+    owner,
+    stage,
+    query,
+    pipeline,
+    moreKey,
+    cacheIdentity,
+    remembered,
+  ]);
 
   const more = async () => {
     if (!page?.next_offset || loadingMore) return;
@@ -341,7 +401,8 @@ export function ListView({
   useEffect(() => {
     loadMore.current = more;
   });
-  const hasMore = page?.next_offset != null;
+  const hasMore =
+    page?.next_offset != null && (asTable || visibleCount >= rows.length);
   useEffect(() => {
     const target = end.current;
     if (!hasMore || !target || typeof IntersectionObserver === "undefined")
@@ -434,6 +495,14 @@ export function ListView({
               ? `${page.total} ${stage === TEST ? "test " : ""}${page.total === 1 ? "lead" : "leads"}`
               : null}
           </span>
+          <span
+            className={styles.syncChip}
+            aria-label="Lead sync"
+            role="status"
+            aria-live="polite"
+          >
+            {error ? "Sync paused" : syncing ? "Syncing…" : "Updated just now"}
+          </span>
           <span className={styles.listTools}>
             {selecting ? null : tools}
             {rows.length && !selecting ? (
@@ -496,7 +565,7 @@ export function ListView({
             <span className={styles.columnsSlot} ref={setColumnsSlot} />
           </div>
         ) : null}
-        {error ? (
+        {error && !page ? (
           // Calm, with a way on (report #27, 26 Oct 2026): nothing is lost.
           <InlineEmpty
             icon={CloudOff}
@@ -562,27 +631,30 @@ export function ListView({
               />
             ) : (
               <ul className={styles.leadList} aria-label="Leads" ref={list}>
-                {rows.map((row) =>
-                  selecting ? (
-                    <SelectLine
-                      key={row.lead_id}
-                      row={row}
-                      selected={chosen.has(row.lead_id)}
-                      onToggle={toggle}
-                    />
-                  ) : (
-                    <LeadLine
-                      key={row.lead_id}
-                      row={row}
-                      onOpen={onOpen}
-                      showOwner={scope !== "mine"}
-                      actions={actions}
-                    />
-                  ),
-                )}
+                {rows
+                  .slice(0, visibleCount)
+                  .map((row) =>
+                    selecting ? (
+                      <SelectLine
+                        key={row.lead_id}
+                        row={row}
+                        selected={chosen.has(row.lead_id)}
+                        onToggle={toggle}
+                      />
+                    ) : (
+                      <LeadLine
+                        key={row.lead_id}
+                        row={row}
+                        onOpen={onOpen}
+                        showOwner={scope !== "mine"}
+                        actions={actions}
+                      />
+                    ),
+                  )}
               </ul>
             )}
-            {page.next_offset !== null ? (
+            {page.next_offset !== null &&
+            (asTable || visibleCount >= rows.length) ? (
               <div className={styles.more} ref={end}>
                 <Button onClick={more} disabled={loadingMore}>
                   {loadingMore

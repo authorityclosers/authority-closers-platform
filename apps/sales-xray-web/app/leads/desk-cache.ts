@@ -6,6 +6,7 @@
  * (orchestrator, 23 Oct 2026: the owner wants the app to feel instant).
  */
 import { cachedPanel, rememberPanel } from "../calls-cache";
+import { cachedLeadData, rememberLeadData } from "./list-cache";
 import type { Desk } from "./leads-client";
 
 const shelfOf = (pipeline: string | null) => `leads.desk:${pipeline ?? ""}`;
@@ -15,7 +16,10 @@ export function cachedDesk(
   identity: string | null | undefined,
   pipeline: string | null,
 ): Desk | null {
-  return cachedPanel<Desk>(identity, shelfOf(pipeline)) ?? null;
+  return (
+    cachedPanel<Desk>(identity, shelfOf(pipeline)) ??
+    cachedLeadData<Desk>(identity, shelfOf(pipeline))
+  );
 }
 
 export function rememberDesk(
@@ -24,4 +28,5 @@ export function rememberDesk(
   desk: Desk,
 ) {
   rememberPanel(identity, shelfOf(pipeline), desk);
+  rememberLeadData(identity, shelfOf(pipeline), desk);
 }

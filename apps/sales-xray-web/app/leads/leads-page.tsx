@@ -44,7 +44,7 @@ import {
 
 import { AcquisitionShell } from "../acquisition-shell";
 import { useCommandSource, type CommandSource } from "../ui/command-registry";
-import { DeskChats } from "../chats/desk-chats";
+
 import { SignedOutWelcome } from "../shell/signed-out-welcome";
 import { settingsPath } from "../settings/settings-sections";
 import { leavingOverlay } from "../ui/back-close";
@@ -56,13 +56,11 @@ import { savingData } from "../shell/route-prefetch";
 import type { AddWay } from "./capture-dialogs";
 import { AlertsCard } from "./alerts-card";
 import { PhoneLogCard } from "./phone-log-card";
-import { PhoneSetupBar } from "./phone-setup";
-import { UnknownCallsCard } from "./unknown-calls-card";
-import { RecordedCallsCard } from "./recorded-calls";
-import { PhoneAppBanner, PhoneAppDialog } from "./phone-app";
+
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
 import { IN_APP_CALL, InAppCallHint, useInPhoneApp } from "./call-hint";
+import { preloadFirstLeads } from "./list-cache";
 import { cachedDesk, rememberDesk } from "./desk-cache";
 import { DeskView, toCallNow, whyLine, type RowActions } from "./desk-view";
 import { PullMark, usePullToRefresh } from "../shell/pull-refresh";
@@ -80,7 +78,7 @@ import {
 import type { LeadIntent } from "./lead-sheet";
 import { publishBadge } from "./leads-badge";
 import { LeadsMenu, type LeadsMenuItem } from "./leads-menu";
-import { ShareOut } from "./assign-sheet";
+
 import { SellerChips } from "./seller-chips";
 import { useNudgeCard } from "./nudge-card";
 import {
@@ -112,10 +110,10 @@ import { MessageSetup } from "./message-sheet";
 import { forgetUnknown, onPhoneSignal } from "./native-phone";
 import { LeadsSkeleton } from "./leads-skeleton";
 import { ListView, TEST, type Scope } from "./list-view";
-import { MyWork } from "./my-work";
+
 import { NewLeadCard, useArrival } from "./new-lead-card";
 import { dueWords } from "./task-words";
-import { TasksView } from "./tasks-view";
+
 import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
 import { TakingSwitch } from "./taking-switch";
@@ -162,6 +160,7 @@ const WHO_WORDS: Record<Scope, string> = {
 // The desk reads itself again when the app comes back, and every minute.
 const REFRESH_EVERY_MS = 60 * 1000;
 const REFRESH_GAP_MS = 15 * 1000;
+const subscribeHydrated = () => () => undefined;
 
 // The handed-over lead is read once, then wiped from the address at once, so it
 // never sits in the address bar or the browser's history.
@@ -258,6 +257,41 @@ const WORK = "work";
 const TASKS = "tasks";
 /** Notes' tab: it opens /leads/notes, Notes' own place (owner, 25 Oct 2026). */
 const NOTES = "notes";
+const PhoneSetupBar = dynamic(
+  () => import("./phone-setup").then((m) => m.PhoneSetupBar),
+  { ssr: false },
+);
+const UnknownCallsCard = dynamic(
+  () => import("./unknown-calls-card").then((m) => m.UnknownCallsCard),
+  { ssr: false },
+);
+const RecordedCallsCard = dynamic(
+  () => import("./recorded-calls").then((m) => m.RecordedCallsCard),
+  { ssr: false },
+);
+const PhoneAppBanner = dynamic(
+  () => import("./phone-app").then((m) => m.PhoneAppBanner),
+  { ssr: false },
+);
+const PhoneAppDialog = dynamic(
+  () => import("./phone-app").then((m) => m.PhoneAppDialog),
+  { ssr: false },
+);
+const MyWork = dynamic(() => import("./my-work").then((m) => m.MyWork), {
+  ssr: false,
+});
+const TasksView = dynamic(
+  () => import("./tasks-view").then((m) => m.TasksView),
+  { ssr: false },
+);
+const ShareOut = dynamic(
+  () => import("./assign-sheet").then((m) => m.ShareOut),
+  { ssr: false },
+);
+const DeskChats = dynamic(
+  () => import("../chats/desk-chats").then((m) => m.DeskChats),
+  { ssr: false },
+);
 const PipelineBoard = dynamic(
   () => import("./pipeline/board").then((module) => module.PipelineBoard),
   { ssr: false },
@@ -361,15 +395,30 @@ export function LeadsRoute() {
   // Leads paints it at once and reads again quietly. Not under test, where
   // every case starts from nothing.
   const identity = identityOf(access?.context);
+  const hydrated = useSyncExternalStore(
+    subscribeHydrated,
+    () => true,
+    () => false,
+  );
   const [seed] = useState(() =>
-    process.env.NODE_ENV === "test"
+    !hydrated || process.env.NODE_ENV === "test"
       ? null
       : cachedDesk(identity, storedToCall(contextKey)),
   );
   const [desk, setDesk] = useState<Desk | null>(seed);
-  const [deskKey, setDeskKey] = useState<string | null>(
-    seed ? contextKey : null,
-  );
+  const [deskKey, setDeskKey] = useState<string | null>(seed ? identity : null);
+  if (
+    authenticated &&
+    hydrated &&
+    deskKey !== identity &&
+    process.env.NODE_ENV !== "test"
+  ) {
+    const known = cachedDesk(identity, storedToCall(contextKey));
+    if (known) {
+      setDesk(known);
+      setDeskKey(identity);
+    }
+  }
   const [error, setError] = useState<LeadsError | null>(null);
   const [version, setVersion] = useState(0);
   const [openLead, setOpenLead] = useState<string | null>(null);
@@ -554,12 +603,13 @@ export function LeadsRoute() {
     };
     readDesk(controller.signal, toCallPipeline)
       .then((next) => {
+        if (controller.signal.aborted) return;
         setDesk(next);
-        setDeskKey(contextKey);
+        setDeskKey(identity);
         rememberDesk(identity, toCallPipeline, next);
         // Once a visit: the next few leads' details and Start calling's
         // first lead, so they open on them (leads-client.ts readAhead).
-        if (!readAhead.current && !savingData()) {
+        if (requested !== "all" && !readAhead.current && !savingData()) {
           readAhead.current = true;
           setAheadScope(identity);
           likelyNext(next).forEach(readLeadAhead);
@@ -590,7 +640,7 @@ export function LeadsRoute() {
             ? reason
             : new LeadsError("Your leads didn't load. Try again.", 0),
         );
-        setDeskKey(contextKey);
+        setDeskKey(identity);
         settle();
       });
     return () => controller.abort();
@@ -601,6 +651,7 @@ export function LeadsRoute() {
     version,
     toCallPipeline,
     chooseToCall,
+    requested,
   ]);
 
   // Back in the app or the tab, an alert while open, or a minute gone: read again.
@@ -627,7 +678,7 @@ export function LeadsRoute() {
     };
   }, [authenticated, refresh]);
 
-  const current = deskKey === contextKey;
+  const current = deskKey === identity;
   // A new lead while the page is open: one card with Call, WhatsApp and Later.
   const arrival = useArrival(
     current && desk ? desk.queue : null,
@@ -686,6 +737,52 @@ export function LeadsRoute() {
         ? picked.pipeline
         : fromAddressPipeline
       : null;
+  // Start the first stage page beside the desk, using the confirmed directory
+  // role only to choose the request. The API still enforces its normal access.
+  const role = access?.workspaces?.find(
+    (item) => item.tenant_id === access.context?.tenantId,
+  )?.role;
+  const warmManager =
+    role === "owner" || role === "admin" || role === "manager";
+  const warmScope = warmManager ? (scopeChoice ?? "team") : "mine";
+  const warmMore = JSON.stringify(view === TEST ? null : more);
+  const waitingForPipeline = !!requestedPipeline && !pipes;
+  const deskReady = current && !!desk;
+  useEffect(() => {
+    if (
+      deskReady ||
+      !authenticated ||
+      !stageView ||
+      !role ||
+      waitingForPipeline
+    )
+      return;
+    preloadFirstLeads(identity, {
+      scope: view === TEST ? "team" : warmScope,
+      owner:
+        view !== TEST && warmScope === "team"
+          ? (sellerOwner ?? undefined)
+          : undefined,
+      stage: view === TEST ? null : view,
+      search: query,
+      test: view === TEST,
+      pipeline,
+      more: JSON.parse(warmMore) as ListMore | null,
+    }); // The mounted list owns errors and retry.
+  }, [
+    deskReady,
+    authenticated,
+    stageView,
+    role,
+    waitingForPipeline,
+    identity,
+    warmScope,
+    sellerOwner,
+    view,
+    query,
+    pipeline,
+    warmMore,
+  ]);
   const countsQuestion = JSON.stringify([
     contextKey,
     scope,
@@ -1249,7 +1346,7 @@ export function LeadsRoute() {
           }
         >
           <PullMark mark={spinner} />
-          <PhoneSetupBar />
+          {inApp ? <PhoneSetupBar /> : null}
           {manage ? (
             <div className={styles.wideOnly}>
               <PageHeader
@@ -1465,6 +1562,7 @@ export function LeadsRoute() {
           ) : stageView ? (
             <ListView
               canManage={can}
+              cacheIdentity={identity}
               stage={view}
               stageLabel={stageLabel}
               scope={view === TEST ? "team" : scope}
@@ -1619,7 +1717,7 @@ export function LeadsRoute() {
           onClose={() => setSettingsOpen(false)}
           items={menuItems}
         />
-        {can ? (
+        {can && sharing ? (
           <ShareOut
             open={sharing}
             target={{ kind: "unassigned", count: desk.counts.unassigned ?? 0 }}
@@ -1630,22 +1728,24 @@ export function LeadsRoute() {
             }}
           />
         ) : null}
-        <LeadSheet
-          leadId={shownLead}
-          me={desk.me}
-          intent={shownIntent}
-          focusAt={openLead ? focusAt : null}
-          onClose={() => {
-            setLinkDone(hash);
-            leaveAddressLead();
-            setOpenLead(null);
-            setIntent(null);
-            setFocusAt(null);
-          }}
-          onChanged={refresh}
-          onNext={(leadId) => open(leadId, "call")}
-          pipeline={toCallPipeline}
-        />
+        {shownLead ? (
+          <LeadSheet
+            leadId={shownLead}
+            me={desk.me}
+            intent={shownIntent}
+            focusAt={openLead ? focusAt : null}
+            onClose={() => {
+              setLinkDone(hash);
+              leaveAddressLead();
+              setOpenLead(null);
+              setIntent(null);
+              setFocusAt(null);
+            }}
+            onChanged={refresh}
+            onNext={(leadId) => open(leadId, "call")}
+            pipeline={toCallPipeline}
+          />
+        ) : null}
         <NewLeadCard
           lead={arrival.lead}
           count={arrival.count}
@@ -1694,17 +1794,19 @@ export function LeadsRoute() {
             onChanged={refresh}
           />
         ) : null}
-        <CallingLoop
-          key={`calling-${rounds.calling}`}
-          open={calling}
-          me={desk.me}
-          pipeline={toCallPipeline}
-          onClose={() => {
-            setCalling(false);
-            refresh();
-          }}
-          onChanged={refresh}
-        />
+        {calling ? (
+          <CallingLoop
+            key={`calling-${rounds.calling}`}
+            open={calling}
+            me={desk.me}
+            pipeline={toCallPipeline}
+            onClose={() => {
+              setCalling(false);
+              refresh();
+            }}
+            onChanged={refresh}
+          />
+        ) : null}
         {shared ? (
           <AddLeadDialog
             key={`shared-${hash}`}
@@ -1735,77 +1837,87 @@ export function LeadsRoute() {
             }}
           />
         ) : null}
-        <AddLeadDialog
-          key={`adding-${rounds.adding}`}
-          open={adding}
-          canManage={can}
-          onClose={() => setAdding(false)}
-          onAdded={(leadId) => {
-            setAdding(false);
-            refresh();
-            setOpenLead(leadId);
-          }}
-        />
-        <PhoneAppDialog
-          key={`apps-${rounds.apps}`}
-          open={apps}
-          onClose={() => setApps(false)}
-        />
-        <AddLeadsMenu
-          key={`menu-${rounds.menu}`}
-          open={menu}
-          canManage={can}
-          onClose={() => setMenu(false)}
-          onPick={(way: AddWay) => {
-            setMenu(false);
-            if (way === "type") begin("adding", setAdding);
-            else if (way === "file") begin("importing", setImporting);
-            else if (way === "sources") {
-              leavingOverlay();
-              if (view === "sources") return;
-              go("sources");
-            } else
-              pickContacts()
-                .then((people) => {
-                  if (!people.length) return;
-                  setPicks(people);
-                  begin("contacts", setContacts);
-                })
-                .catch(() => undefined);
-          }}
-        />
-        <ContactsDialog
-          key={`contacts-${rounds.contacts}`}
-          open={contacts}
-          picked={picks}
-          canManage={can}
-          onClose={() => setContacts(false)}
-          onDone={refresh}
-        />
-        <ImportDialog
-          key={`importing-${rounds.importing}`}
-          open={importing}
-          canManage={can}
-          pasted={pastedRows}
-          google={googleImport}
-          onClose={() => {
-            setImporting(false);
-            setGoogleImport(false);
-            setPastedRows(null);
-            // Arrived from Settings: Import doesn't open again on a refresh.
-            if (new URLSearchParams(window.location.search).has("import")) {
-              const next = new URLSearchParams(window.location.search);
-              next.delete("import");
-              const query = next.toString();
-              window.history.replaceState(
-                window.history.state,
-                "",
-                `${window.location.pathname}${query ? `?${query}` : ""}`,
-              );
-            }
-          }}
-          onDone={refresh}
-        />
+        {adding ? (
+          <AddLeadDialog
+            key={`adding-${rounds.adding}`}
+            open={adding}
+            canManage={can}
+            onClose={() => setAdding(false)}
+            onAdded={(leadId) => {
+              setAdding(false);
+              refresh();
+              setOpenLead(leadId);
+            }}
+          />
+        ) : null}
+        {apps ? (
+          <PhoneAppDialog
+            key={`apps-${rounds.apps}`}
+            open={apps}
+            onClose={() => setApps(false)}
+          />
+        ) : null}
+        {menu ? (
+          <AddLeadsMenu
+            key={`menu-${rounds.menu}`}
+            open={menu}
+            canManage={can}
+            onClose={() => setMenu(false)}
+            onPick={(way: AddWay) => {
+              setMenu(false);
+              if (way === "type") begin("adding", setAdding);
+              else if (way === "file") begin("importing", setImporting);
+              else if (way === "sources") {
+                leavingOverlay();
+                if (view === "sources") return;
+                go("sources");
+              } else
+                pickContacts()
+                  .then((people) => {
+                    if (!people.length) return;
+                    setPicks(people);
+                    begin("contacts", setContacts);
+                  })
+                  .catch(() => undefined);
+            }}
+          />
+        ) : null}
+        {contacts ? (
+          <ContactsDialog
+            key={`contacts-${rounds.contacts}`}
+            open={contacts}
+            picked={picks}
+            canManage={can}
+            onClose={() => setContacts(false)}
+            onDone={refresh}
+          />
+        ) : null}
+        {importing ? (
+          <ImportDialog
+            key={`importing-${rounds.importing}`}
+            open={importing}
+            canManage={can}
+            pasted={pastedRows}
+            google={googleImport}
+            onClose={() => {
+              setImporting(false);
+              setGoogleImport(false);
+              setPastedRows(null);
+              // Arrived from Settings: Import doesn't open again on a refresh.
+              if (new URLSearchParams(window.location.search).has("import")) {
+                const next = new URLSearchParams(window.location.search);
+                next.delete("import");
+                const query = next.toString();
+                window.history.replaceState(
+                  window.history.state,
+                  "",
+                  `${window.location.pathname}${query ? `?${query}` : ""}`,
+                );
+              }
+            }}
+            onDone={refresh}
+          />
+        ) : null}
       </MessageSetup.Provider>
     </AcquisitionShell>
   );
