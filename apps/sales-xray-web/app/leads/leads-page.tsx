@@ -1139,8 +1139,8 @@ export function LeadsRoute() {
             key: "share",
             label: "Share out leads",
             note: desk.counts.unassigned
-              ? `${desk.counts.unassigned} with no owner, by a rule you pick`
-              : "Give leads out by a rule you pick",
+              ? `${desk.counts.unassigned} ready to share`
+              : "Choose who gets each lead",
             onPick: () => {
               setSettingsOpen(false);
               setSharing(true);
@@ -1162,7 +1162,7 @@ export function LeadsRoute() {
           {
             key: "sources",
             label: "Lead sources",
-            note: "Facebook, Instagram, forms and sheets",
+            note: "Ads, forms and sheets",
             onPick: () => {
               setSettingsOpen(false);
               leavingOverlay();
@@ -1174,9 +1174,7 @@ export function LeadsRoute() {
     {
       key: "numbers",
       label: "Pipeline numbers",
-      note: can
-        ? "Where every lead stands, what converts, why leads are lost"
-        : "Where your leads stand and what converts",
+      note: can ? "See progress and results" : "See your progress and results",
       onPick: () => {
         setSettingsOpen(false);
         go("numbers");
@@ -1185,9 +1183,7 @@ export function LeadsRoute() {
     {
       key: "stages",
       label: "Lead stages",
-      note: can
-        ? "Your steps from enquiry to sale, and what your ads learn"
-        : "Your team's steps from enquiry to sale",
+      note: can ? "Set the steps to a sale" : "Your team’s steps to a sale",
       onPick: () => {
         setSettingsOpen(false);
         leavingOverlay();
@@ -1197,9 +1193,7 @@ export function LeadsRoute() {
     {
       key: "import",
       label: "Import leads",
-      note: can
-        ? "From your phone's contacts, a file or your ads"
-        : "From your phone's contacts",
+      note: can ? "From contacts, files or ads" : "From your contacts",
       onPick: () => {
         setSettingsOpen(false);
         begin("menu", setMenu);
@@ -1210,7 +1204,7 @@ export function LeadsRoute() {
           {
             key: "test",
             label: "Test leads",
-            note: "Sample and test leads, ready to clear",
+            note: "Review and clear sample leads",
             onPick: () => {
               setSettingsOpen(false);
               go(TEST);

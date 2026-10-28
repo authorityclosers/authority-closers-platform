@@ -209,7 +209,7 @@ it("lets an owner pick test leads and delete them", async () => {
   const list = host.querySelector('ul[aria-label="Leads"]')?.textContent;
   expect(list).toContain(NAMES[0]);
   expect(list).not.toContain("Test Lead One");
-  expect(host.textContent).toContain("1 lead");
+  expect(host.textContent).toContain("1 test lead");
 });
 
 it("offers no Select to a seller", async () => {

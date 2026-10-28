@@ -71,11 +71,11 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   overflow: hidden;
-  border-radius: 9px;
-  font-size: 12px;
+  border-radius: 11px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.02em;
   color: var(--lx-on-teal);
@@ -100,8 +100,35 @@
 }
 
 .tile[data-kind="organisation"] {
-  background: var(--sx-ink);
-  color: var(--sx-surface);
+  background: var(--lx-strength-soft);
+  color: var(--lx-strength-ink);
+}
+
+.tile[data-kind="organisation"][data-tint="1"] {
+  background: var(--lx-missed-soft);
+  color: var(--lx-missed-ink);
+}
+
+.tile[data-kind="organisation"][data-tint="2"] {
+  background: var(--lx-objection-soft);
+  color: var(--lx-objection-ink);
+}
+
+.tile[data-kind="organisation"][data-tint="3"] {
+  background: var(--lx-closing-soft);
+  color: var(--lx-closing-ink);
+}
+
+.tile[data-kind="organisation"][data-tint="4"] {
+  background: var(--lx-focus-soft);
+  color: var(--lx-focus-ink);
+}
+
+.tile img[data-org-logo] {
+  box-sizing: border-box;
+  padding: 4px;
+  background: var(--sx-sunken);
+  object-fit: contain;
 }
 
 .tile[data-kind="invite"] {

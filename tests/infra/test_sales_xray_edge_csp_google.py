@@ -13,6 +13,8 @@ import pytest
 ROOT = Path(__file__).resolve().parents[2]
 ROUTES = ROOT / "infra/application/edge-routes"
 GOOGLE = ("https://apis.google.com", "https://docs.google.com", "https://content.googleapis.com")
+# Microsoft Clarity (28 Oct 2026), production only: its script, beacons and pixels.
+CLARITY = {"staging": [], "production": ["https://*.clarity.ms"]}
 
 
 def policy(environment: str) -> dict[str, list[str]]:
@@ -36,6 +38,7 @@ def test_the_picker_may_load_its_script_and_frames(environment: str) -> None:
         "https://challenges.cloudflare.com",
         "https://checkout.razorpay.com",
         "https://apis.google.com",
+        *CLARITY[environment],
     ]
     assert csp["frame-src"] == [
         "'self'",
@@ -49,6 +52,7 @@ def test_the_picker_may_load_its_script_and_frames(environment: str) -> None:
         "'self'",
         "https://api.razorpay.com",
         "https://lumberjack.razorpay.com",
+        *CLARITY[environment],
     ]
     for name, sources in csp.items():
         if name not in {"script-src", "frame-src"}:
@@ -62,3 +66,17 @@ def test_no_other_route_names_google(environment: str) -> None:
     source = (ROUTES / f"{environment}.caddy").read_text(encoding="utf-8")
     for origin in GOOGLE:
         assert source.count(origin) == 1, origin
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+def test_only_production_sales_xray_lets_clarity_in(environment: str) -> None:
+    """Clarity loads only in production (its release profile); its CSP sources match."""
+    csp = policy(environment)
+    for name in ("script-src", "img-src", "connect-src"):
+        assert [s for s in csp[name] if "clarity" in s] == CLARITY[environment], name
+    for name, sources in csp.items():
+        if name not in {"script-src", "img-src", "connect-src"}:
+            assert not any("clarity" in source for source in sources), name
+    source = (ROUTES / f"{environment}.caddy").read_text(encoding="utf-8")
+    policies = re.findall(r'header Content-Security-Policy "([^"\n]+)"', source)
+    assert sum("clarity" in header for header in policies) == (environment == "production")

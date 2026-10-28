@@ -428,15 +428,11 @@ export function ListView({
         <div className={styles.listHead}>
           <span className={styles.listTotal} aria-live="polite">
             {page
-              ? `${page.total} ${page.total === 1 ? "lead" : "leads"}`
+              ? `${page.total} ${stage === TEST ? "test " : ""}${page.total === 1 ? "lead" : "leads"}`
               : null}
           </span>
           <span className={styles.listTools}>
             {selecting ? null : tools}
-            {/* The table's Columns sit here, beside the layout they belong to. */}
-            {asTable && !selecting ? (
-              <span className={styles.columnsSlot} ref={setColumnsSlot} />
-            ) : null}
             {rows.length && !selecting ? (
               // One switch with both choices in words (owner, 25 Oct 2026:
               // "Done next to Table" read as one control).
@@ -468,7 +464,9 @@ export function ListView({
             {canManage && rows.length ? (
               <button
                 type="button"
-                className={styles.statusChip}
+                className={`${styles.statusChip} ${styles.selectToggle}`}
+                aria-label={selecting ? "Cancel" : "Select"}
+                title={selecting ? "Cancel selection" : "Select leads"}
                 aria-pressed={selecting}
                 onClick={() => {
                   setPicked(null);
@@ -478,18 +476,23 @@ export function ListView({
                 {selecting ? (
                   <>
                     <X size={14} aria-hidden="true" />
-                    Cancel
+                    <span className={styles.controlLabel}>Cancel</span>
                   </>
                 ) : (
                   <>
                     <ListChecks size={14} aria-hidden="true" />
-                    Select
+                    <span className={styles.controlLabel}>Select</span>
                   </>
                 )}
               </button>
             ) : null}
           </span>
         </div>
+        {!selecting && asTable ? (
+          <div className={styles.listAux}>
+            <span className={styles.columnsSlot} ref={setColumnsSlot} />
+          </div>
+        ) : null}
         {quickAdd &&
         page !== null &&
         !selecting &&

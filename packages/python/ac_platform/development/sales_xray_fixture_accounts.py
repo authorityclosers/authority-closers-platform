@@ -1,7 +1,7 @@
-"""Create three fictional Sales Xray password accounts on the development DB.
+"""Create three fictional Sales Xray password accounts on a development DB.
 
-Development only: it refuses every environment and database except the dev DB
-endpoint below. The three addresses are fixed; passwords come only from the
+Development only: it refuses every environment and database except the two dev
+DB endpoints below. The three addresses are fixed; passwords come only from the
 environment and are never printed. New accounts go through the app's own
 password registration, one-use verification and public-learner provisioning,
 with no email sent. An existing fixture account is authenticated with its
@@ -32,9 +32,16 @@ from ac_platform.identity.password_auth import (
 from ac_platform.tenancy.learner_provisioning import AsyncLearnerProvisioningApplication
 from ac_platform.tenancy.models import Membership, MembershipRole, MembershipStatus
 
-# The dev Postgres container on its Docker bridge (AUT-119). If the container
-# is recreated with another address, update this and the README together.
-DEVELOPMENT_DATABASE = ("172.27.0.2", 5432, "ac_platform")
+# The dev Postgres containers on the acdev-xray Docker network, each at the
+# address its create step pins: the dev API's (AUT-119) and the dev-live API's
+# (acdev-live-postgres, ac-dev-live-create-postgres --ip, 11 Oct 2026). Run with
+# that API's own environment file, so AC_DATABASE_URL is the one the API uses.
+# If a container is recreated with another address, update this and the README
+# together.
+DEVELOPMENT_DATABASES = {
+    "development": ("172.27.0.2", 5432, "ac_platform"),
+    "development-live": ("172.27.0.12", 5432, "ac_platform"),
+}
 FIXTURE_PHONE = "+14155550100"  # fictional 555-01xx number
 ACCOUNTS = {
     "owner": "sx-owner@example.test",
@@ -45,18 +52,18 @@ PASSWORD_VARIABLES = {kind: f"AC_DEV_FIXTURE_PASSWORD_{kind.upper()}" for kind i
 
 
 def require_development_target(settings: Settings, *, acknowledged: bool) -> None:
-    """Refuse before connecting unless this is exactly the dev database."""
+    """Refuse before connecting unless this is exactly one of the dev databases."""
     url = make_url(settings.database_url)
     if (
         not acknowledged
         or settings.environment != "development"
         or url.drivername != "postgresql+psycopg"
-        or (url.host, url.port or 5432, url.database) != DEVELOPMENT_DATABASE
+        or (url.host, url.port or 5432, url.database) not in DEVELOPMENT_DATABASES.values()
         or url.query
         or any(name.upper().startswith("PG") for name in os.environ)
     ):
-        host, port, database = DEVELOPMENT_DATABASE
-        raise ValueError(f"Only the development database {host}:{port}/{database} is allowed.")
+        allowed = " or ".join(f"{h}:{p}/{d}" for h, p, d in DEVELOPMENT_DATABASES.values())
+        raise ValueError(f"Only the development database {allowed} is allowed.")
 
 
 def fixture_passwords(environ: Mapping[str, str]) -> dict[str, str]:

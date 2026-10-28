@@ -159,3 +159,36 @@ it("scrolls only its own strip to show a later stage", async () => {
   await act(async () => root.unmount());
   host.remove();
 });
+
+it("keeps a selected chip 16 px inside the strip's left edge", async () => {
+  const host = document.createElement("div");
+  document.body.append(host);
+  const root = createRoot(host);
+  const rects = vi
+    .spyOn(Element.prototype, "getBoundingClientRect")
+    .mockImplementation(function (this: Element) {
+      const isStrip = this.getAttribute("role") === "tablist";
+      return {
+        left: isStrip ? 100 : 104,
+        right: isStrip ? 400 : 180,
+      } as DOMRect;
+    });
+  try {
+    await act(async () =>
+      root.render(
+        <StageTabs
+          tabs={[{ key: "won", label: "Won" }]}
+          current="won"
+          onChange={() => undefined}
+        />,
+      ),
+    );
+    expect(
+      host.querySelector<HTMLElement>('[role="tablist"]')!.scrollLeft,
+    ).toBe(-12);
+  } finally {
+    rects.mockRestore();
+    await act(async () => root.unmount());
+    host.remove();
+  }
+});

@@ -268,8 +268,10 @@
 .quickAct {
   position: relative;
   display: grid;
-  width: 44px;
-  height: 44px;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  box-sizing: border-box;
   place-items: center;
   padding: 0;
   border: 1px solid var(--sx-line);
@@ -283,7 +285,7 @@
 
 .quickAct::before {
   position: absolute;
-  inset: -4px;
+  inset: -2px;
   content: "";
 }
 
@@ -2795,11 +2797,11 @@ a.repName {
 /* Leads → Views: a saved stage, pipeline, owner and search (22 Oct 2026). */
 .listTools {
   display: inline-flex;
-  flex-wrap: wrap;
+  flex: none;
   justify-content: flex-end;
   min-width: 0;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
 }
 
 /* The view's name gives way first on a narrow phone; the count and Select stay. */
@@ -4917,21 +4919,25 @@ a.repName {
 /* Stage tabs: one strip; on a phone it scrolls inside itself. */
 .stageTabs {
   display: flex;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   overflow-x: auto;
-  padding: 2px 2px 4px;
-  margin: 0 -2px;
+  padding: 6px 16px;
+  margin: 0;
   overscroll-behavior-x: contain;
   scroll-padding-inline: 16px;
   scrollbar-width: none;
   -webkit-mask-image: linear-gradient(
     to right,
+    transparent,
+    var(--lx-film) 16px,
     var(--lx-film) calc(100% - 24px),
     transparent
   );
   mask-image: linear-gradient(
     to right,
+    transparent,
+    var(--lx-film) 16px,
     var(--lx-film) calc(100% - 24px),
     transparent
   );
@@ -4942,12 +4948,13 @@ a.repName {
 }
 
 .stageTab {
+  position: relative;
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 6px;
-  min-height: 44px;
-  padding: 0 12px;
+  min-height: 32px;
+  padding: 0 10px;
   border: 1px solid var(--sx-line);
   border-radius: var(--sx-radius-pill);
   background: var(--sx-surface);
@@ -4959,6 +4966,12 @@ a.repName {
   cursor: pointer;
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+}
+
+.stageTab::before {
+  position: absolute;
+  inset: -6px 0;
+  content: "";
 }
 
 .stageTab:last-child {
@@ -5053,12 +5066,11 @@ a.repName {
 
 .listHead {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
   min-height: 48px;
-  padding: 0 10px 0 14px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--sx-line);
 }
 
@@ -5876,13 +5888,13 @@ button.leadTags {
 .layoutSwitch button {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
   min-height: 44px;
-  padding: 0 14px;
+  padding: 0 8px;
   border: 0;
   border-radius: var(--sx-radius-pill);
   background: transparent;
-  color: var(--sx-muted);
+  color: var(--sx-ink-2);
   font: inherit;
   font-size: var(--sx-text-sm);
   font-weight: 600;
@@ -6587,4 +6599,54 @@ fieldset.form {
   margin: 0;
   padding: 0;
   border: 0;
+}
+
+/* The count, saved views, layout and Select share one inset line. Table
+   columns stay on a separate line so they remain available at phone widths. */
+.listAux {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.listAux:not(:has(button)) {
+  display: none;
+}
+
+.selectToggle {
+  justify-content: center;
+  width: 44px;
+  padding: 0;
+}
+
+.controlLabel {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .listHead .viewChip {
+    justify-content: center;
+    width: 44px;
+    padding: 0;
+  }
+
+  .listHead .viewName {
+    display: none;
+  }
+
+  .layoutSwitch svg {
+    display: none;
+  }
+
+  .leadFace[data-quick] .leadTags {
+    align-self: center;
+  }
 }

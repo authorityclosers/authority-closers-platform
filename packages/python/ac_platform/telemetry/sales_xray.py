@@ -608,10 +608,33 @@ SALES_XRAY_EVENTS: Mapping[str, TelemetryEventDefinition] = MappingProxyType(
 # (1.0.26) and Firebase Crashlytics, so its words change and so does the version.
 # v2 named app 1.0.25 until 24 Oct, corrected to 1.0.26 (1.0.25 is the review build with no
 # telemetry) before it shipped or anything was recorded under it.
+# v3 (owner, 28 Oct 2026: Microsoft Clarity, "get that done") keeps v2's words and adds
+# Clarity's session replays and heatmaps, so its words change and so does the version.
 NOTICE_V1 = "sx-product-analytics-2026-10-24-v1"
-NOTICE_VERSION = "sx-product-analytics-2026-10-24-v2"
-# v2 is in force from 22:30 UTC on 23 Oct 2026 (04:00 IST, 24 Oct).
-NOTICE_EFFECTIVE_AT = datetime(2026, 10, 23, 22, 30, tzinfo=UTC)
+NOTICE_V2 = "sx-product-analytics-2026-10-24-v2"
+NOTICE_VERSION = "sx-product-analytics-2026-10-28-v3"
+# v3 is in force from 21:00 UTC on 27 Oct 2026 (02:30 IST, 28 Oct): already past when it was
+# written and before any release could carry it, so recording never pauses for a notice not
+# yet in force (sales_xray_consent's since()). v2 was in force from 22:30 UTC on 23 Oct 2026.
+NOTICE_EFFECTIVE_AT = datetime(2026, 10, 27, 21, 0, tzinfo=UTC)
+_V2_WORDS = (
+    "Sales X-Ray records how its app is used and how fast it responds, to make it faster, "
+    "easier to use and cheaper to run. It records the screens and report sections you open"
+    " and for how long, taps and how quickly the app responds to them, errors, page speed,"
+    " the app version and the type of device and network. In the Android app it also "
+    "records how the app itself runs (how fast it starts, how smoothly it draws and why it"
+    " last closed), the phone's make, model, Android and WebView versions, its memory and "
+    "free-storage tier, its battery-saver and notification settings, its network type and "
+    "speed tier, and which of the app's permissions are on. It never records call content,"
+    " transcripts, lead names, phone numbers, email addresses, contacts or location. "
+    "Records are kept for 180 days and are never used to score you or to set your access, "
+    "payments or plan.",
+    "This is on in every workspace unless it is turned off. You can turn it off for "
+    "yourself at any time in Settings, Privacy; an owner or admin can turn it off for the "
+    "whole workspace there. Sandbox workspaces never record it. Crash reports from the "
+    "Android app go to Firebase Crashlytics (provided by Google); from app version 1.0.26 "
+    "they stop too when this is turned off.",
+)
 NOTICES: Mapping[str, tuple[str, ...]] = MappingProxyType(
     {
         NOTICE_V1: (
@@ -626,23 +649,18 @@ NOTICES: Mapping[str, tuple[str, ...]] = MappingProxyType(
             "yourself at any time in Settings, Privacy; an owner or admin can turn it off for "
             "the whole workspace there. Sandbox workspaces never record it.",
         ),
+        NOTICE_V2: _V2_WORDS,
         NOTICE_VERSION: (
-            "Sales X-Ray records how its app is used and how fast it responds, to make it faster, "
-            "easier to use and cheaper to run. It records the screens and report sections you open"
-            " and for how long, taps and how quickly the app responds to them, errors, page speed,"
-            " the app version and the type of device and network. In the Android app it also "
-            "records how the app itself runs (how fast it starts, how smoothly it draws and why it"
-            " last closed), the phone's make, model, Android and WebView versions, its memory and "
-            "free-storage tier, its battery-saver and notification settings, its network type and "
-            "speed tier, and which of the app's permissions are on. It never records call content,"
-            " transcripts, lead names, phone numbers, email addresses, contacts or location. "
-            "Records are kept for 180 days and are never used to score you or to set your access, "
-            "payments or plan.",
-            "This is on in every workspace unless it is turned off. You can turn it off for "
-            "yourself at any time in Settings, Privacy; an owner or admin can turn it off for the "
-            "whole workspace there. Sandbox workspaces never record it. Crash reports from the "
-            "Android app go to Firebase Crashlytics (provided by Google); from app version 1.0.26 "
-            "they stop too when this is turned off.",
+            *_V2_WORDS,
+            "While this is on for someone signed in, Sales X-Ray may also use Microsoft Clarity "
+            "(provided by Microsoft Corporation, USA) to see where its screens are hard to use: "
+            "replays of how pages are used and heatmaps of taps and scrolling, on the web and in "
+            "the Android app. All text, and everything in leads, calls, reports, transcripts and "
+            "chats, is masked on your device before anything reaches Clarity, and Sales X-Ray "
+            "never tells Clarity who you are. Clarity stores two cookies of its own to link a "
+            "visit's pages, keeps replays for 30 days (13 months for one we save to study) and "
+            "heatmaps for 13 months. When this is turned off, Clarity stops from the next time the "
+            "app opens.",
         ),
     }
 )
@@ -739,6 +757,7 @@ __all__ = [
     "FLOW_VIAS",
     "NOTICES",
     "NOTICE_V1",
+    "NOTICE_V2",
     "NOTICE_EFFECTIVE_AT",
     "NOTICE_VERSION",
     "PERSON_DAILY_CAP",

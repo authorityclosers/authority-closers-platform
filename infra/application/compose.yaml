@@ -94,7 +94,11 @@ services:
       # PostgreSQL 18+ stores major-versioned clusters beneath this parent so
       # in-place pg_upgrade workflows do not cross a mount boundary.
       - ${AC_STATE_ROOT:?AC_STATE_ROOT must isolate durable environment state}/postgres:/var/lib/postgresql
-      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      # The release installer mounts a root-owned, content-addressed copy of
+      # these bootstrap scripts, so this service's definition, and PostgreSQL,
+      # stay unchanged across application releases. Tools that only exec into
+      # the running server (backups, credential rotation) get the release copy.
+      - ${AC_POSTGRES_INIT_ROOT:-./postgres/init}:/docker-entrypoint-initdb.d:ro
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m
       - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,uid=999,gid=999
@@ -155,6 +159,8 @@ services:
       AC_PRACTICE_PILOT_ENABLED: ${AC_PRACTICE_PILOT_ENABLED:-false}
       AC_PRACTICE_PILOT_TENANT_ID: ${AC_PRACTICE_PILOT_TENANT_ID:-}
       AC_SALES_XRAY_APP_URL: ${AC_SALES_XRAY_APP_URL:-}
+      # Microsoft Clarity's project id: the production profile only (install-application-release.sh).
+      AC_SALES_XRAY_CLARITY_PROJECT: ${AC_SALES_XRAY_CLARITY_PROJECT:-}
       AC_META_APP_ID: ${AC_META_APP_ID:-}
       AC_META_APP_SECRET: ${AC_META_APP_SECRET:-}
       AC_META_LOGIN_CONFIG_ID: ${AC_META_LOGIN_CONFIG_ID:-}

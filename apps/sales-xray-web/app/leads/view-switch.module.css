@@ -129,6 +129,7 @@
 /* Filter first, then the view's strip (stage chips), which scrolls inside itself. */
 .tools {
   display: flex;
+  padding-top: 4px;
   align-items: center;
   gap: 8px;
   min-width: 0;
@@ -137,4 +138,16 @@
 .tools > :last-child:not(:first-child) {
   flex: 1 1 auto;
   min-width: 0;
+}
+
+.tools > button {
+  position: relative;
+  min-height: 32px;
+  padding-inline: 10px;
+}
+
+.tools > button::before {
+  position: absolute;
+  inset: -6px 0;
+  content: "";
 }

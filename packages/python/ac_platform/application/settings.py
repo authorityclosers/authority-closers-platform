@@ -215,6 +215,10 @@ class Settings(BaseSettings):
     sales_xray_acquisition_policy_revision: str | None = None
     sales_xray_challenge_secret_file: str | None = None
     sales_xray_challenge_site_key: str | None = None
+    # Microsoft Clarity's project id for the Sales X-Ray web app (owner, 28 Oct 2026): set for
+    # production only, in its release profile. The telemetry taxonomy hands it to a signed-in
+    # person whose usage analytics is on; nobody else ever loads Clarity. Public, not a secret.
+    sales_xray_clarity_project: str | None = None
     sales_xray_native_socket_path: str | None = None
     sales_xray_native_image_ref: str | None = None
     # Network admission is bounded, but must accommodate real guest uploads on

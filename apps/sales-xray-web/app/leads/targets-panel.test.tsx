@@ -61,7 +61,12 @@ const answer = (path: string) => {
   if (path === "/v1/lead-desk/nudges")
     return {
       ...team,
-      settings: { ...(team.settings as object), nudges: true, revision: 4 },
+      settings: {
+        ...(team.settings as object),
+        nudges: true,
+        nudges_off_for: (sent.at(-1)?.body as { off_for: string[] }).off_for,
+        revision: 4,
+      },
     };
   return null;
 };
@@ -168,6 +173,7 @@ it("sets a seller's targets from today, and turns nudges on", async () => {
     'button[role="switch"]',
   )!;
   expect(nudges.getAttribute("aria-checked")).toBe("false");
+  expect(host.querySelector("details")).toBeNull();
   await act(async () => nudges.click());
   await act(async () => {
     for (let index = 0; index < 8; index += 1) await Promise.resolve();
@@ -180,4 +186,107 @@ it("sets a seller's targets from today, and turns nudges on", async () => {
     off_for: [],
   });
   expect(nudges.getAttribute("aria-checked")).toBe("true");
+});
+
+it("keeps recipient disclosure in the nudges card and updates the saved count", async () => {
+  team.settings = { ...(team.settings as object), nudges: true };
+  await mount();
+  const details = host.querySelector("details")!;
+  const summary = details.querySelector("summary")!;
+  expect(details.parentElement?.querySelector('[role="switch"]')).toBeTruthy();
+  expect(details.open).toBe(false);
+  expect(summary.textContent).toBe("Who gets themAll sellers");
+  const writes = () => sent.filter((item) => item.path.endsWith("/nudges"));
+  await act(async () => summary.click());
+  expect(details.open).toBe(true);
+  expect(writes()).toHaveLength(0);
+  const chip = details.querySelector<HTMLButtonElement>("button")!;
+  await act(async () => chip.click());
+  expect(writes()[0]).toMatchObject({
+    method: "PUT",
+    body: { expected_revision: 3, enabled: true, off_for: ["p1"] },
+  });
+  expect(chip.getAttribute("aria-pressed")).toBe("false");
+  expect(summary.textContent).toContain("1 of 2 sellers");
+  expect(details.open).toBe(true);
+  await act(async () => chip.click());
+  expect(writes()[1].body).toEqual({
+    expected_revision: 4,
+    enabled: true,
+    off_for: [],
+  });
+  expect(summary.textContent).toContain("All sellers");
+  await act(async () => summary.click());
+  expect(details.open).toBe(false);
+});
+
+it("shows the saved selection for four sellers and preserves it after a failed save", async () => {
+  team.reps = [
+    ...(team.reps as object[]),
+    rep("p3", "mira fictional"),
+    rep("p4", "elin sample"),
+  ];
+  team.settings = {
+    ...(team.settings as object),
+    nudges: true,
+    nudges_off_for: ["p2"],
+  };
+  await mount();
+  const summary = host.querySelector("summary")!;
+  await act(async () => summary.click());
+  expect(summary.textContent).toContain("3 of 4 sellers");
+  vi.mocked(fetch).mockResolvedValueOnce(new Response("{}", { status: 409 }));
+  const chip = host.querySelector<HTMLButtonElement>(
+    'details button[aria-pressed="true"]',
+  )!;
+  await act(async () => chip.click());
+  expect(summary.textContent).toContain("3 of 4 sellers");
+  expect(chip.getAttribute("aria-pressed")).toBe("true");
+  expect(chip.disabled).toBe(false);
+  expect(notify).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: "nudges",
+      tone: "error",
+      title: "Nudges weren't changed",
+      message: "Someone may have changed the team just now. Try again.",
+    }),
+  );
+});
+
+it("disables seller chips and the switch until the recipient save completes", async () => {
+  team.settings = { ...(team.settings as object), nudges: true };
+  await mount();
+  await act(async () => host.querySelector("summary")!.click());
+  let finish!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementationOnce(
+    () =>
+      new Promise<Response>((resolve) => {
+        finish = resolve;
+      }),
+  );
+  const chips = Array.from(
+    host.querySelectorAll<HTMLButtonElement>("details button"),
+  );
+  await act(async () => chips[0].click());
+  expect(chips.every((chip) => chip.disabled)).toBe(true);
+  expect(
+    host.querySelector<HTMLButtonElement>('[role="switch"]')!.disabled,
+  ).toBe(true);
+  await act(async () =>
+    finish(
+      Response.json({
+        ...team,
+        settings: {
+          ...(team.settings as object),
+          nudges: true,
+          nudges_off_for: ["p1"],
+          revision: 4,
+        },
+      }),
+    ),
+  );
+  expect(chips.every((chip) => !chip.disabled)).toBe(true);
+  expect(host.querySelector("summary")!.textContent).toContain(
+    "1 of 2 sellers",
+  );
 });

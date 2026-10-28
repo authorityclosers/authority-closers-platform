@@ -103,10 +103,11 @@ export function StageTabs({
     if (!box || !chosen) return;
     const edge = box.getBoundingClientRect();
     const tab = chosen.getBoundingClientRect();
-    // Clear of the 24 px fade on the right, and of the left edge.
+    // Clear of the 24 px fade on the right and the 16 px inset on the left.
     if (tab.right > edge.right - 24)
       box.scrollLeft += tab.right - edge.right + 24;
-    else if (tab.left < edge.left) box.scrollLeft -= edge.left - tab.left;
+    else if (tab.left < edge.left + 16)
+      box.scrollLeft -= edge.left + 16 - tab.left;
   }, [current]);
   return (
     <div

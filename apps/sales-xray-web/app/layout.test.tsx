@@ -19,7 +19,7 @@ it("marks the standalone document, starts light and runs the theme preview, then
   const html = await markup();
   expect(html).toMatch(/^<html lang="en" data-lx-root="" data-theme="light">/);
   expect(html).toContain(
-    `<body class="sales-xray-document"><script id="sales-xray-theme-preview">${themePreviewScript()}</script><script id="sales-xray-theme-init">${themeInitScript()}</script><script id="sales-xray-glass-init">${glassInitScript()}</script>`,
+    `<body class="sales-xray-document" data-clarity-mask="true"><script id="sales-xray-theme-preview">${themePreviewScript()}</script><script id="sales-xray-theme-init">${themeInitScript()}</script><script id="sales-xray-glass-init">${glassInitScript()}</script>`,
   );
   expect(html).toContain("<p>Workspace</p>");
 });

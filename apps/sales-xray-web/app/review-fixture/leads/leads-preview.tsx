@@ -27,6 +27,8 @@
  * `&views=1` keeps three saved views on this browser, one of them the view in use
  * (Open, Everyone); `&tap=views` then opens Views. `&q=` searches by name or city;
  * `?tab=all&stage=open&q=nagpurx` shows an empty list's "Clear filters".
+ * `&tap=share` opens ⋯ → Share out leads (owner bug #55); `&unassigned=12` has
+ * twelve open leads wait with no owner (one unless set), `&unassigned=0` none.
  */
 
 import { Suspense, useEffect, useState, type ReactNode } from "react";
@@ -389,6 +391,78 @@ function fixtureWork(now: number) {
   };
 }
 
+/** `&unassigned=`: how many open leads wait with no owner (one unless set). */
+function waiting(): number {
+  const asked = new URLSearchParams(window.location.search).get("unassigned");
+  const count = Number(asked ?? 1);
+  return Number.isInteger(count) && count >= 0 ? count : 1;
+}
+
+/**
+ * Share out leads (owner bug #55): the plan for the leads with no owner, split
+ * over the sellers picked, two thirds from Facebook and half from Pune.
+ */
+function sharePlan(command: {
+  rule: "even" | "balanced" | "by_source" | "by_city";
+  sellers?: string[];
+  groups?: Record<string, string[]>;
+  preview: boolean;
+}) {
+  const leads = waiting();
+  const team: Record<string, [string, number]> = {
+    [SELLER]: ["swamini fictional", 38],
+    [SECOND]: ["rahul example", 21],
+  };
+  const split = (first: string, second: string, share: number) => {
+    const one = Math.ceil(leads * share);
+    return Object.fromEntries(
+      (
+        [
+          [first, one],
+          [second, leads - one],
+        ] as [string, number][]
+      ).filter(([, count]) => count),
+    );
+  };
+  const sources = split("Facebook", "Website", 2 / 3);
+  const cities = split("Pune", "Mumbai", 1 / 2);
+  const given: Record<string, number> = {};
+  const spread = (count: number, people: string[]) =>
+    people.forEach((person, index) => {
+      given[person] =
+        (given[person] ?? 0) +
+        Math.floor(count / people.length) +
+        (index < count % people.length ? 1 : 0);
+    });
+  if (command.rule === "by_source" || command.rule === "by_city")
+    Object.entries(command.rule === "by_city" ? cities : sources).forEach(
+      ([name, count]) => {
+        const people = command.groups?.[name] ?? [];
+        if (people.length) spread(count, people);
+      },
+    );
+  else if (command.sellers?.length) spread(leads, command.sellers);
+  const moved = Object.values(given).reduce((sum, count) => sum + count, 0);
+  return {
+    rule: command.rule,
+    preview: command.preview,
+    leads,
+    moved,
+    given: Object.entries(given).map(([person, count]) => ({
+      person_id: person,
+      name: team[person]?.[0] ?? "seller",
+      leads: count,
+      open_after: (team[person]?.[1] ?? 0) + count,
+      max_open: 50,
+    })),
+    left: moved < leads ? { no_seller_for_it: leads - moved } : {},
+    sources,
+    cities,
+    more: false,
+    words: `${moved} leads given out.`,
+  };
+}
+
 function answers(now: number, path: string): unknown {
   // To call's ?pipeline=: that pipeline's leads only, as the server answers.
   const [bare, query = ""] = path.split("?");
@@ -457,7 +531,7 @@ function answers(now: number, path: string): unknown {
         follow_up_due: 2,
         not_connected: 1,
         later_today: 2,
-        unassigned: 1,
+        unassigned: waiting(),
         overdue: 1,
         call_back: 0,
       },
@@ -780,7 +854,7 @@ function answers(now: number, path: string): unknown {
       },
       by_stage: { new: 2, follow_up: 2, interested: 1 },
       by_source: { meta: 4, manual: 4 },
-      unassigned: 1,
+      unassigned: waiting(),
       waiting_first_call: 1,
       first_call_minutes: 6,
     };
@@ -974,6 +1048,11 @@ function install() {
   window.fetch = async (input, init) => {
     const url = String(input instanceof Request ? input.url : input);
     const path = url.replace(/^https?:\/\/[^/]+/, "");
+    if (path === "/v1/lead-desk/leads/distribute")
+      return new Response(
+        JSON.stringify(sharePlan(JSON.parse(String(init?.body)))),
+        { status: 200, headers: { "content-type": "application/json" } },
+      );
     const body = path.startsWith("/v1/") ? answers(Date.now(), path) : null;
     if (body !== null)
       return new Response(JSON.stringify(body), {
@@ -1001,6 +1080,22 @@ function useTap() {
     if (tap === "filter") {
       const timer = window.setTimeout(() => press("Filter"), 900);
       return () => window.clearTimeout(timer);
+    }
+    // `&tap=share`: ⋯ → Share out leads (owner bug #55).
+    if (tap === "share") {
+      const timers = [
+        window.setTimeout(
+          () =>
+            document
+              .querySelector<HTMLButtonElement>(
+                'button[aria-label="Leads settings"]',
+              )
+              ?.click(),
+          900,
+        ),
+        window.setTimeout(() => press("Share out leads"), 1300),
+      ];
+      return () => timers.forEach((timer) => window.clearTimeout(timer));
     }
     // `&tap=loop` (with `?loop=1`): Start calling, then No answer.
     if (tap === "loop") {
