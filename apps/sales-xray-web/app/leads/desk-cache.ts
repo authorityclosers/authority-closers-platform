@@ -30,3 +30,18 @@ export function rememberDesk(
   rememberPanel(identity, shelfOf(pipeline), desk);
   rememberLeadData(identity, shelfOf(pipeline), desk);
 }
+
+/** Data and the identity that supplied it travel together, including failures. */
+export type DeskSnapshot = { identity: string | null; desk: Desk | null };
+export function deskFor(
+  snapshot: DeskSnapshot,
+  identity: string | null,
+): Desk | null {
+  return identity && snapshot.identity === identity ? snapshot.desk : null;
+}
+export function deskReadFailed(
+  snapshot: DeskSnapshot,
+  identity: string | null,
+): DeskSnapshot {
+  return snapshot.identity === identity ? snapshot : { identity, desk: null };
+}

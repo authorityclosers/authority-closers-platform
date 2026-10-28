@@ -2,7 +2,12 @@ import { afterEach, expect, it, vi } from "vitest";
 
 import { forgetCalls, identityOf } from "../calls-cache";
 import { EARLY_CONVERSATION_KEY, startEarlyReads } from "../early-reads";
-import { cachedDesk, rememberDesk } from "./desk-cache";
+import {
+  cachedDesk,
+  rememberDesk,
+  deskFor,
+  deskReadFailed,
+} from "./desk-cache";
 import { readDesk, type Desk } from "./leads-client";
 
 const me = identityOf({ personId: "p1", sessionId: "s1", tenantId: "t1" });
@@ -54,4 +59,23 @@ it("takes the desk read the Leads tab press started instead of asking again", as
   const read = await readDesk();
   expect(read.counts.open).toBe(4);
   expect(network).toHaveBeenCalledTimes(1);
+});
+
+it("never attaches an old desk to a new workspace when its read fails, but retains same-workspace data", () => {
+  const old = { identity: me, desk };
+  const next = identityOf({
+    personId: "p1",
+    sessionId: "s1",
+    tenantId: "fictional-maple",
+  });
+  expect(deskFor(old, next)).toBeNull(); // Hidden even before the request settles.
+  expect(deskFor(deskReadFailed(old, next), next)).toBeNull();
+  expect(deskFor(deskReadFailed(old, me), me)).toBe(desk);
+  const session = identityOf({
+    personId: "p1",
+    sessionId: "new-session",
+    tenantId: "t1",
+  });
+  expect(deskFor(deskReadFailed(old, session), session)).toBeNull();
+  expect(deskFor(old, null)).toBeNull();
 });

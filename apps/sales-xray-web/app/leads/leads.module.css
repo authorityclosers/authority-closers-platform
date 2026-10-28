@@ -7044,3 +7044,51 @@ fieldset.form {
     line-height: 12px;
   }
 }
+
+/* Cold reads reserve the same row height as the list, including phone actions. */
+.listSkeleton:has(.listLoadingRow) {
+  gap: 0;
+  padding: 0;
+}
+.listLoadingRow {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  box-sizing: border-box;
+  min-height: 84px;
+  padding: 16px 12px;
+  border-bottom: 1px solid var(--sx-line);
+}
+.listLoadingText {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+.listLoadingActions {
+  display: none;
+}
+@media (max-width: 599px) {
+  .listLoadingRow {
+    min-height: 134px;
+  }
+  .listLoadingActions {
+    display: block;
+  }
+}
+
+/* The sync sign stays in view while the loaded rows scroll beneath it. */
+.listPanel:has(.syncChip) {
+  overflow: clip;
+}
+.listHead:has(.syncChip) {
+  position: sticky;
+  top: 48px;
+  z-index: 3;
+  background: var(--sx-surface);
+}
+@media (max-width: 899px) {
+  .listHead:has(.syncChip) {
+    top: calc(62px + env(safe-area-inset-top, 0px));
+  }
+}

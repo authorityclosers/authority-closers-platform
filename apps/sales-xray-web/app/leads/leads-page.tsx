@@ -61,7 +61,12 @@ import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
 import { IN_APP_CALL, InAppCallHint, useInPhoneApp } from "./call-hint";
 import { preloadFirstLeads } from "./list-cache";
-import { cachedDesk, rememberDesk } from "./desk-cache";
+import {
+  cachedDesk,
+  rememberDesk,
+  deskFor,
+  deskReadFailed,
+} from "./desk-cache";
 import { DeskView, toCallNow, whyLine, type RowActions } from "./desk-view";
 import { PullMark, usePullToRefresh } from "../shell/pull-refresh";
 import {
@@ -405,8 +410,12 @@ export function LeadsRoute() {
       ? null
       : cachedDesk(identity, storedToCall(contextKey)),
   );
-  const [desk, setDesk] = useState<Desk | null>(seed);
-  const [deskKey, setDeskKey] = useState<string | null>(seed ? identity : null);
+  const [deskState, setDeskState] = useState<{
+    identity: string | null;
+    desk: Desk | null;
+  }>({ identity: seed ? identity : null, desk: seed });
+  const deskKey = deskState.identity;
+  const desk = deskFor(deskState, identity);
   if (
     authenticated &&
     hydrated &&
@@ -415,8 +424,7 @@ export function LeadsRoute() {
   ) {
     const known = cachedDesk(identity, storedToCall(contextKey));
     if (known) {
-      setDesk(known);
-      setDeskKey(identity);
+      setDeskState({ identity, desk: known });
     }
   }
   const [error, setError] = useState<LeadsError | null>(null);
@@ -604,8 +612,7 @@ export function LeadsRoute() {
     readDesk(controller.signal, toCallPipeline)
       .then((next) => {
         if (controller.signal.aborted) return;
-        setDesk(next);
-        setDeskKey(identity);
+        setDeskState({ identity, desk: next });
         rememberDesk(identity, toCallPipeline, next);
         // Once a visit: the next few leads' details and Start calling's
         // first lead, so they open on them (leads-client.ts readAhead).
@@ -640,7 +647,7 @@ export function LeadsRoute() {
             ? reason
             : new LeadsError("Your leads didn't load. Try again.", 0),
         );
-        setDeskKey(identity);
+        setDeskState((previous) => deskReadFailed(previous, identity));
         settle();
       });
     return () => controller.abort();
@@ -956,7 +963,17 @@ export function LeadsRoute() {
         return [...leads, ...written, ...promised];
       },
     };
-  }, [authenticated, canStart]);
+  }, [
+    authenticated,
+    canStart,
+    setAdding,
+    setCalling,
+    setDialling,
+    setFocusAt,
+    setHolding,
+    setIntent,
+    setOpenLead,
+  ]);
   useCommandSource("leads", commands);
 
   useEffect(() => {

@@ -615,7 +615,21 @@ export function ListView({
             aria-label="Loading leads"
           >
             {[0, 1, 2, 3, 4].map((key) => (
-              <Skeleton key={key} height={52} />
+              <div
+                key={key}
+                className={styles.listLoadingRow}
+                aria-hidden="true"
+              >
+                <Skeleton width={36} height={36} radius="circle" />
+                <div className={styles.listLoadingText}>
+                  <Skeleton width={144} height={16} />
+                  <Skeleton width={112} height={12} />
+                  <span className={styles.listLoadingActions}>
+                    <Skeleton width={136} height={36} radius="pill" />
+                  </span>
+                </div>
+                <Skeleton width={48} height={20} radius="pill" />
+              </div>
             ))}
           </div>
         ) : rows.length === 0 ? (
