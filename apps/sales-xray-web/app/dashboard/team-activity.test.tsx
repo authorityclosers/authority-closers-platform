@@ -273,3 +273,29 @@ it("shows a short preview by the hour, and all of today one tap away", async () 
   );
   expect(sheet?.textContent).toContain("8 things so far today");
 });
+
+it("offers recording playback only after the existing source route grants access", async () => {
+  answer.body = {
+    items: [
+      work("recorded", "Morgan Fictional", {
+        recording: true,
+        submission_id: REPORT,
+        actor_name: "Mira Example",
+      }),
+    ],
+    counts: {},
+    next_before: null,
+  };
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("/source")) {
+      expect(new Headers(init?.headers).get("Range")).toBe("bytes=0-0");
+      return new Response(null, { status: 403 });
+    }
+    return new Response(JSON.stringify(answer.body));
+  });
+  vi.stubGlobal("fetch", fetch);
+  await act(async () => root.render(<TeamActivity saved={[]} />));
+  expect(container.textContent).not.toContain("Play recording");
+  expect(container.querySelector("audio")).toBeNull();
+  expect(container.textContent).toContain("Morgan Fictional");
+});

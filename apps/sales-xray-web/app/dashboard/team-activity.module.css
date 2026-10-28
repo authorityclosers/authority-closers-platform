@@ -89,3 +89,24 @@
   font-weight: 650;
   text-decoration: none;
 }
+
+.recording {
+  padding: 0 12px 12px 52px;
+}
+.recording button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 12px;
+  color: var(--sx-accent);
+  background: var(--sx-surface);
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  font: inherit;
+  cursor: pointer;
+}
+.recording audio {
+  width: 100%;
+  max-width: 100%;
+}

@@ -124,3 +124,54 @@
   text-underline-offset: 2px;
   cursor: pointer;
 }
+
+.insights {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  padding-bottom: 8px;
+}
+.insights button {
+  flex: 0 0 130px;
+  display: grid;
+  gap: 6px;
+  min-height: 76px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: start;
+}
+.insights button[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+}
+.insights strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+}
+.insights span {
+  font-size: var(--sx-text-xs);
+}
+
+.workload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+.workload strong {
+  color: var(--sx-ink);
+}
+
+.workload > span {
+  display: inline-flex;
+  gap: 4px;
+}

@@ -1,7 +1,7 @@
 "use client";
 
 import { can, roleLabel } from "../roles";
-import { Building2, CloudOff, UserRound } from "lucide-react";
+import { Building2, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -51,8 +51,10 @@ import {
   type PersonAction,
 } from "./person-panels";
 import styles from "./person.module.css";
+import { saveOwnDisplayName } from "./person-name-client";
+import { PersonWork } from "./person-work";
 import { SellerSections } from "./seller-profile";
-import { ActivitySkeleton, PersonSkeleton } from "./person-skeleton";
+import { PersonSkeleton } from "./person-skeleton";
 
 /** Reports read for outcomes and skills: this person's newest ready calls. */
 const REPORTS_READ = 12;
@@ -283,6 +285,30 @@ function PersonPage({
             viewerRole === "owner" && manageable && member.status === "active"
           }
           canRemove={manageable}
+          onRename={
+            isYou && member.status === "active"
+              ? async (name) => {
+                  try {
+                    await saveOwnDisplayName(name);
+                    retryMembers();
+                    notify({
+                      id: "person-name",
+                      tone: "success",
+                      title: "Display name saved",
+                      timeout: 3000,
+                    });
+                  } catch (error) {
+                    notify({
+                      id: "person-name",
+                      tone: "error",
+                      title: "Display name wasn't saved",
+                      message: error instanceof Error ? error.message : OFFLINE,
+                    });
+                    throw error;
+                  }
+                }
+              : undefined
+          }
           busy={busy}
           dates={dates}
           onAction={(action) => void run(action)}
@@ -300,37 +326,52 @@ function PersonPage({
         <p className={styles.quietLine}>
           You see your own calls and reports here, not a teammate&apos;s.
         </p>
-      ) : activity.status === "ready" && personId ? (
+      ) : personId ? (
         <SellerSections
           personId={personId}
           isYou={isYou}
           canManage={can(viewerRole, "leads.manage")}
+          canSeeTeam={can(viewerRole, "team.view")}
           firstName={
             (member ? memberName(member) : "This person").split(/\s+/)[0]
           }
           overview={
-            <PersonActivityView
-              summary={activity.value}
-              personId={personId}
-              isYou={isYou}
-              firstName={
-                (member ? memberName(member) : "This person").split(/\s+/)[0]
-              }
-            />
+            <>
+              <PersonWork
+                key={personId}
+                personId={personId}
+                saved={
+                  activity.status === "ready" ? activity.value.data.listed : []
+                }
+              />
+              {activity.status === "ready" ? (
+                <details>
+                  <summary className={styles.reportToggle}>
+                    Reports and coaching · {activity.value.data.reportsReady}{" "}
+                    ready
+                  </summary>
+                  <PersonActivityView
+                    summary={activity.value}
+                    personId={personId}
+                    isYou={isYou}
+                  />
+                </details>
+              ) : activity.status === "error" ? (
+                <p className={styles.quietLine}>
+                  Reports are unavailable.{" "}
+                  <button type="button" onClick={retryActivity}>
+                    Try again
+                  </button>
+                </p>
+              ) : activity.status === "loading" ? (
+                <p className={styles.quietLine}>Reading saved calls…</p>
+              ) : (
+                <p className={styles.quietLine}>
+                  Reports appear after a recorded call is analysed.
+                </p>
+              )}
+            </>
           }
-        />
-      ) : activity.status === "loading" ? (
-        <ActivitySkeleton />
-      ) : activity.status === "error" ? (
-        <Empty
-          icon={CloudOff}
-          title={
-            isYou
-              ? "Your calls and reports couldn't be loaded"
-              : "Their calls and reports couldn't be loaded"
-          }
-          text={activity.message}
-          action={{ label: "Try again", onClick: retryActivity }}
         />
       ) : null}
     </>
@@ -341,12 +382,10 @@ function PersonActivityView({
   summary,
   personId,
   isYou,
-  firstName,
 }: {
   summary: PersonSummary;
   personId: string;
   isYou: boolean;
-  firstName: string;
 }) {
   const dates = useDisplayDates();
   const { data, weeks } = summary;
@@ -381,21 +420,7 @@ function PersonActivityView({
   const rows = skillMatrix(ready);
 
   if (data.calls === 0 && data.listed.length === 0)
-    return (
-      <>
-        <PersonTiles data={data} weeks={weeks} dates={dates} />
-        <Empty
-          icon={UserRound}
-          title={
-            isYou
-              ? "No calls in the last 12 weeks"
-              : `${firstName} has no calls in the last 12 weeks`
-          }
-          text="Charts and report findings appear after the first analysed call."
-        />
-        <CoachingPanel isYou={isYou} personId={personId} />
-      </>
-    );
+    return <CoachingPanel isYou={isYou} personId={personId} />;
 
   return (
     <>

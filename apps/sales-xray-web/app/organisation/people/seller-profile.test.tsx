@@ -249,3 +249,45 @@ it("shows No limit as no limit, never as a number", async () => {
     team.reps.splice(0, 1, before);
   }
 });
+
+it("counts and filters late leads beyond the first server page and retains the person scope", async () => {
+  const original = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = new URL(String(input), "http://localhost");
+      if (url.pathname !== "/v1/lead-desk/leads") return original(input, init);
+      expect(url.searchParams.get("owner")).toBe(SELLER);
+      expect(url.searchParams.get("scope")).toBe("team");
+      const offset = Number(url.searchParams.get("offset") ?? 0);
+      const open = url.searchParams.get("stage") === "open";
+      return new Response(
+        JSON.stringify({
+          leads: !open
+            ? []
+            : [
+                {
+                  ...leads.leads[0],
+                  lead_id: offset ? "later" : "first",
+                  name: offset ? "Morgan Example" : "Rowan Fictional",
+                  overdue: !!offset,
+                },
+              ],
+          total: open ? 2 : 0,
+        }),
+      );
+    }),
+  );
+  await show();
+  await act(async () => tab("Leads").click());
+  const late = [
+    ...host.querySelectorAll<HTMLButtonElement>(
+      '[aria-label="Seller lead insights"] button',
+    ),
+  ].find((button) => button.textContent?.includes("Late follow-ups"))!;
+  expect(late.textContent).toContain("1");
+  await act(async () => late.click());
+  expect(host.textContent).toContain("Morgan Example");
+  expect(host.textContent).not.toContain("Rowan Fictional");
+  expect(window.location.search).toContain("insight=late");
+});
