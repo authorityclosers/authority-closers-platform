@@ -36,6 +36,7 @@ const rep = (id: string, name: string) => ({
 });
 
 let sent: { method: string; path: string; body: unknown }[];
+let savedNudges: boolean | undefined;
 const team = () => ({
   reps: [rep("p1", "priya sample"), rep("p2", "rohan example")],
   settings: {
@@ -44,6 +45,7 @@ const team = () => ({
     reassign_minutes: 10,
     default_country: "IN",
     nudges_off_for: ["p2"],
+    ...(savedNudges === undefined ? {} : { nudges: savedNudges }),
   },
   by_stage: {},
   by_source: {},
@@ -86,6 +88,7 @@ let root: Root;
 let host: HTMLDivElement;
 beforeEach(() => {
   sent = [];
+  savedNudges = undefined;
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo, init?: RequestInit) => {
@@ -156,13 +159,27 @@ it("opens one sheet: targets per seller, nudges with who gets them, the lead rul
   ]);
   expect(rows[0].textContent).toContain("Priya Sample");
   expect(rows[1].textContent).toContain("Rohan Example");
+  expect(button(open, "Save targets")).toBeUndefined();
+  expect(sent.filter((each) => each.method === "PUT")).toHaveLength(0);
+  await act(async () => button(open, "Targets")?.click());
   expect(
     open?.querySelector('a[href="/settings/lead-rules"]')?.textContent,
   ).toContain("Lead rules");
 });
 
+it("opens Alerts without changing a saved off choice", async () => {
+  savedNudges = false;
+  await openControls();
+  expect(
+    sheet()?.querySelector('[role="switch"]')?.getAttribute("aria-checked"),
+  ).toBe("false");
+  expect(button(sheet(), "Save targets")).toBeUndefined();
+  expect(sent.filter((each) => each.method !== "GET")).toHaveLength(0);
+});
+
 it("steps a target and saves all eight kinds for that seller only", async () => {
   await openControls();
+  await act(async () => button(sheet(), "Targets")?.click());
   const save = button(sheet(), "Save targets");
   expect(save?.disabled).toBe(true);
   await act(async () =>
@@ -202,6 +219,7 @@ it("steps a target and saves all eight kinds for that seller only", async () => 
 
 it("switches the kind of target in place", async () => {
   await openControls();
+  await act(async () => button(sheet(), "Targets")?.click());
   await act(async () => button(sheet(), "A week")?.click());
   await act(async () => button(sheet(), "Meetings")?.click());
   expect(

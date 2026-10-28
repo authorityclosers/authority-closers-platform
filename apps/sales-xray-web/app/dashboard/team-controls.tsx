@@ -146,6 +146,7 @@ function Stepper({
 
 export function TeamControls() {
   const [open, setOpen] = useState(false);
+  const [section, setSection] = useState<"alerts" | "targets">("alerts");
   const [round, setRound] = useState(0);
   const state = useControls(open, round);
   const [team, setTeam] = useState<Team | null>(null);
@@ -230,19 +231,21 @@ export function TeamControls() {
         open={open}
         onClose={close}
         title="Team controls"
-        description="Targets and nudges for the team, in one place."
+        description="Alerts and targets for your team."
         footer={
-          <div className={styles.footer}>
-            <button
-              type="button"
-              className={styles.save}
-              disabled={!changed.length || busy}
-              onClick={() => void save()}
-            >
-              {busy ? "Saving…" : "Save targets"}
-            </button>
-            <small>From today on. 0 means no target.</small>
-          </div>
+          section === "targets" ? (
+            <div className={styles.footer}>
+              <button
+                type="button"
+                className={styles.save}
+                disabled={!changed.length || busy}
+                onClick={() => void save()}
+              >
+                {busy ? "Saving…" : "Save targets"}
+              </button>
+              <small>From today on. 0 means no target.</small>
+            </div>
+          ) : undefined
         }
       >
         {state === "error" ? (
@@ -253,7 +256,22 @@ export function TeamControls() {
           <div className={styles.loading} aria-busy="true" />
         ) : (
           <div className={styles.body}>
-            <section aria-labelledby="controls-targets">
+            <Segmented
+              label="Team controls"
+              value={section}
+              onChange={setSection}
+              items={[
+                { key: "alerts", label: "Alerts" },
+                { key: "targets", label: "Targets" },
+              ]}
+            />
+            {section === "alerts" ? (
+              <Nudges team={shownTeam} onSaved={setTeam} who="rows" />
+            ) : null}
+            <section
+              hidden={section !== "targets"}
+              aria-labelledby="controls-targets"
+            >
               <h3 id="controls-targets" className={styles.title}>
                 Targets per seller
               </h3>
@@ -328,16 +346,17 @@ export function TeamControls() {
                 </p>
               )}
             </section>
-            <Nudges team={shownTeam} onSaved={setTeam} who="rows" />
-            <ActionList label="Rules">
-              <ActionRow
-                icon={<SlidersHorizontal size={20} />}
-                tone="neutral"
-                title="Lead rules"
-                note="Who gets which leads, and how fast"
-                href="/settings/lead-rules"
-              />
-            </ActionList>
+            {section === "targets" ? (
+              <ActionList label="Rules">
+                <ActionRow
+                  icon={<SlidersHorizontal size={20} />}
+                  tone="neutral"
+                  title="Lead rules"
+                  note="Who gets which leads, and how fast"
+                  href="/settings/lead-rules"
+                />
+              </ActionList>
+            ) : null}
           </div>
         )}
       </Sheet>

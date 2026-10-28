@@ -18,6 +18,7 @@ vi.mock("next/link", () => ({
 }));
 
 import { SalesHome } from "./sales-home";
+import type { LibrarySubmission } from "../acquisition-client";
 
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
@@ -109,11 +110,19 @@ function answer(routes: Record<string, unknown>) {
   );
 }
 
-async function mount(manager: boolean) {
+async function mount(
+  manager: boolean,
+  layout: "v1" | "v2" = "v1",
+  recent: LibrarySubmission[] | null = null,
+) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
-  await act(async () => root.render(<SalesHome manager={manager} />));
+  await act(async () =>
+    root.render(
+      <SalesHome manager={manager} layout={layout} recent={recent} />,
+    ),
+  );
   await act(async () => Promise.resolve());
 }
 
@@ -398,4 +407,28 @@ it("gives a Viewer the team's Home with nothing to change", async () => {
       (button) => button.textContent === "Controls",
     ),
   ).toBe(false);
+});
+
+// #18: the seller dashboard answers who needs a call before showing history.
+it("puts Today and the next call before recent work on the seller dashboard", async () => {
+  answer({
+    "/v1/lead-desk/activity*": { items: [], next_before: null },
+    "/v1/lead-desk": desk([
+      row("ravi sample", { overdue: true, why_kind: "due" }),
+    ]),
+  });
+  await mount(false, "v2", [
+    {
+      id: "00000000-0000-4000-8000-000000000501",
+      createdAt: new Date().toISOString(),
+      durationSeconds: 120,
+      state: "completed",
+      hasReport: true,
+      label: { displayName: "Fictional discovery", revision: 1 },
+    },
+  ]);
+  expect(host.querySelector("h2")?.textContent).toBe("Today");
+  expect(host.textContent).toContain("Call Ravi");
+  const text = host.textContent!;
+  expect(text.indexOf("Today")).toBeLessThan(text.indexOf("Recent calls"));
 });

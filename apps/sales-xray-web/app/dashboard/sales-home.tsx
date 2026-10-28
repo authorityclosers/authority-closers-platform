@@ -406,13 +406,13 @@ function SellerHome({
           </>
         )}
       </section>
+      <DayNumbers desk={desk} myDay={myDay} />
       {after ?? (
         <>
           <MyStages />
           <RecentlyCalled />
         </>
       )}
-      <DayNumbers desk={desk} myDay={myDay} />
     </>
   );
 }
@@ -490,8 +490,7 @@ function brandNew(desk: HomeDesk): boolean {
   );
 }
 
-/** Home v2's seller day: where you left off and your last calls above Today,
- *  your recent activity below it, from one read of this week's work. */
+/** Today and its next action first; recent work follows the day's numbers. */
 function SellerHomeV2({
   state,
   recent,
@@ -503,13 +502,13 @@ function SellerHomeV2({
   return (
     <SellerHome
       state={state}
-      before={
+      after={
         <>
           <PickUp />
           <HomeRecentCalls week={week} saved={recent} />
+          <HomeActivity week={week} />
         </>
       }
-      after={<HomeActivity week={week} />}
     />
   );
 }
