@@ -1,6 +1,7 @@
 "use client";
 
 import { callIdFromPath } from "./analysis-routes";
+import dynamic from "next/dynamic";
 import {
   Radar,
   AudioLines,
@@ -68,13 +69,20 @@ import {
   DOCUMENT_CHAPTERS,
   type DocumentReportData,
 } from "./report-document-data";
-import { ReportDocument } from "./report-document";
-import { ReportCallCoaching } from "./report-call-coaching";
 import type { ReportEvidence } from "./report-contract";
 import type { ContextualSourcePlayback } from "./source-playback-context";
 import { OperationalPanel } from "./ui/operational-panel";
 import { trackOnce } from "./telemetry";
 import { useWorkspaceAccess } from "./workspace-access";
+
+// The saved call's summary does not need the document exporter or Coaching.
+// Load those views only when opened, leaving the report readable meanwhile.
+const ReportDocument = dynamic(() =>
+  import("./report-document").then((module) => module.ReportDocument),
+);
+const ReportCallCoaching = dynamic(() =>
+  import("./report-call-coaching").then((module) => module.ReportCallCoaching),
+);
 
 export type View =
   | "reading"

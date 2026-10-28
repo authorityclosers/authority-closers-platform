@@ -49,6 +49,14 @@ export async function observeSubmission(
     bound,
   );
   if (!progress.has_report) return { progress, result: null };
+  return { progress, result: await readSubmissionReport(bound, signal) };
+}
+
+/** Read only after this call's canonical submission confirms a saved report. */
+export async function readSubmissionReport(
+  bound: Submission,
+  signal: AbortSignal,
+) {
   const [transcriptPayload, reportPayload] = await Promise.all([
     read(`${submissionPath(bound.id)}/transcript`, signal),
     read(`${submissionPath(bound.id)}/report`, signal),
@@ -59,5 +67,5 @@ export async function observeSubmission(
     { submissionId: bound.id, recordingId: bound.recordingId },
     transcript,
   );
-  return { progress, result: { ...verified, transcript, callRecord: null } };
+  return { ...verified, transcript, callRecord: null };
 }
