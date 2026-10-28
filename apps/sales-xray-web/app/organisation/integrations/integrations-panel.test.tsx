@@ -394,20 +394,51 @@ it("hands a new key to the page, places extras after a part, and reads again whe
   clock.mockRestore();
 });
 
-it("labels each key's values, so a phone can show every key as a small card", async () => {
+it("shows each key as one calm row: name, key, permissions, use and state", async () => {
   await act(async () => root.render(<IntegrationsPanel parts={["keys"]} />));
   await flush();
-  const row = host.querySelector("tbody tr")!;
-  expect(
-    [...row.querySelectorAll("td[data-label]")].map((cell) => [
-      cell.getAttribute("data-label"),
-      cell.textContent,
-    ]),
-  ).toEqual([
-    ["Key", "sxk_test_Ab12…"],
-    ["Permissions", "Read calls and their status"],
-    ["Last used", "Never"],
-    ["Expires", "Never"],
-    ["State", "Active"],
+  // No table on any screen (owner, 29 Oct 2026): one row per key.
+  expect(host.querySelector("table")).toBeNull();
+  const row = host.querySelector('[aria-label="API keys"] > li')!;
+  expect(row.getAttribute("data-state")).toBe("active");
+  const words = row.querySelector("strong")!.parentElement!;
+  expect([...words.children].map((part) => part.textContent)).toEqual([
+    "Our CRM",
+    "sxk_test_Ab12… · Read calls and their status",
+    "Used never · Expires never",
   ]);
+  expect(row.textContent).toContain("Active");
+  expect(row.querySelector('[aria-label="Revoke Our CRM"]')).not.toBeNull();
+});
+
+it("shows a signing secret's last characters once, whatever prefix the hint has", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) =>
+      url.endsWith("/webhook/deliveries")
+        ? respond({ deliveries: [] })
+        : respond({
+            ...OVERVIEW,
+            webhook: {
+              id: "w1",
+              url: "https://partner.example.test/hooks",
+              host: "partner.example.test",
+              events: ["lead.created"],
+              facts_profile: null,
+              managed_in_app: true,
+              secret_hint: "whsec_…9f2a",
+              rotating: false,
+              next_secret_hint: null,
+              created_at: "2026-10-20T10:00:00Z",
+            },
+          }),
+    ),
+  );
+  await act(async () => root.render(<IntegrationsPanel parts={["webhook"]} />));
+  await flush();
+  expect(host.textContent).toContain("whsec_…9f2a");
+  expect(host.textContent).not.toContain("whsec_…whsec_");
+  // Its actions are compact chips in one row, the test among them.
+  expect(button("Send test event")).toBeDefined();
+  expect(button("New secret")).toBeDefined();
 });

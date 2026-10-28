@@ -19,8 +19,15 @@
   overflow-wrap: anywhere;
 }
 
+/* A fact's address or secret reads as plain monospace, never a pill that
+   breaks over two lines. */
+.facts code {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  overflow-wrap: anywhere;
+}
+
 .howto code,
-.facts code,
 .choice code,
 .secret code,
 .result code,
@@ -121,12 +128,12 @@
 
 .hook {
   display: grid;
-  gap: 12px;
+  gap: 14px;
 }
 
 .facts {
   display: grid;
-  gap: 8px;
+  gap: 10px;
   margin: 0;
 }
 
@@ -163,10 +170,12 @@
   font-size: var(--sx-text-sm);
 }
 
+/* A quiet label over a part of a panel (the delivery log, your apps). */
 .subhead {
   margin: 4px 0 0;
-  color: var(--sx-ink);
-  font: var(--sx-text-panel);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
 }
 
 .secret {
@@ -213,54 +222,200 @@
   resize: vertical;
 }
 
-/* On a phone each key is a small card: its name, then each value with its label. */
-@media (max-width: 599px) {
-  .keysTable thead {
-    display: none;
-  }
+/* ---------- Calm rows and chips (owner, 29 Oct 2026) ----------
+   Keys, deliveries and apps are one row each: an icon tile, the name, one or
+   two short lines, and the state with its one action at the end. No tables,
+   no label walls, nothing wider than the card. */
 
-  .keysTable table,
-  .keysTable tbody,
-  .keysTable th,
-  .keysTable td {
-    display: block;
-    width: auto;
-    min-width: 0;
-  }
+/* A panel's title stays on one line; its note gives way first. */
+.fit h2 {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
 
-  .keysTable tr {
-    display: grid;
-    gap: 4px;
-    padding: 12px 14px;
-    border-bottom: 1px solid var(--sx-line);
-  }
+.fit h2 > small {
+  flex: 1 1 0;
+  min-width: 0;
+}
 
-  .keysTable th,
-  .keysTable td {
-    height: auto;
-    padding: 0;
-    border: 0;
-    text-align: left;
-  }
+.inset {
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 12px 16px 16px;
+}
 
-  .keysTable th[scope="row"] {
-    font-weight: 650;
-  }
+.inset > .note,
+p.inset {
+  margin: 0;
+}
 
-  .keysTable td[data-label]::before {
-    margin-right: 6px;
-    color: var(--sx-muted);
-    font-size: var(--sx-text-xs);
-    content: attr(data-label);
-  }
+.subhead.inset {
+  padding-bottom: 0;
+}
 
-  .keysTable td:empty {
-    display: none;
+.rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 60px;
+  box-sizing: border-box;
+  padding: 10px 16px;
+}
+
+.row + .row {
+  border-top: 1px solid var(--lx-line-soft, var(--sx-line));
+}
+
+/* Inside a padded part (the webhook's delivery log) rows use its edges. */
+.inset .row {
+  padding-inline: 0;
+}
+
+.rowIcon {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border-radius: 11px;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.rowIcon[data-kind="tile"] {
+  background: none;
+}
+
+.rowIcon[data-kind="mark"] {
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+}
+
+.row[data-state="revoked"] .rowIcon,
+.row[data-state="expired"] .rowIcon,
+.row[data-state="dropped"] .rowIcon {
+  background: var(--sx-fill-soft);
+  color: var(--sx-muted);
+}
+
+.row[data-state="dead_letter"] .rowIcon,
+.row[data-state="rejected"] .rowIcon {
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+}
+
+.rowText {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.rowText > strong {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Each short line may wrap once; it never runs under the state. */
+.rowText > span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.rowText code {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+}
+
+.rowEnd {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+/* A compact action: an icon and a word or two, 36 px to see, 44 px to tap. */
+.chip.chip[data-variant] {
+  position: relative;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-sm);
+  white-space: nowrap;
+}
+
+/* In a row, an action like Revoke is a quiet word under the state. */
+.chip.chip[data-variant="ghost"] {
+  min-height: 28px;
+  padding: 0 4px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.chip.chip.off[data-variant] {
+  color: var(--sx-muted);
+}
+
+@media (pointer: coarse) {
+  .chip::after {
+    position: absolute;
+    inset: -6px 0;
+    content: "";
   }
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 /* A panel is a grid whose one column grows to its widest child: let these shrink. */
 .howto,
-.keysTable {
+.rows,
+.hook,
+.form {
   min-width: 0;
+}
+
+/* AI replies, as Connections shows it (owner, 29 Oct 2026: "AI reply … not
+   having clean UI"): one box style inside its card, so the price switch
+   matches "How it works" and the business profile instead of a bordered box
+   of its own, and the channels share one row in equal chips. Scoped here;
+   the settings themselves live in leads/ai-replies. */
+.aiPart {
+  min-width: 0;
+}
+
+.aiPart [role="group"][aria-label="Channels"] {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 8px;
+}
+
+.aiPart div:has(> label > input[role="switch"]) {
+  border-color: transparent;
+  background: var(--sx-fill-soft);
 }

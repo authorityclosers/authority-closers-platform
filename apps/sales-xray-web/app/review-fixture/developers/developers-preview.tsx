@@ -83,7 +83,7 @@ function overview(origin: string, fresh: boolean) {
       events: ["analysis.completed", "lead.created"],
       facts_profile: null,
       managed_in_app: true,
-      secret_hint: "whsec_…9f2a",
+      secret_hint: "9f2a",
       rotating: false,
       next_secret_hint: null,
       created_at: at(-10 * DAY),
