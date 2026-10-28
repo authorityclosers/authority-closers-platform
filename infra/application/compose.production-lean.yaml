@@ -32,6 +32,12 @@ services:
       - -c
       - max_connections=60
 
+  migrate:
+    # One-shot release operation; drain the analysis worker before starting it.
+    mem_limit: 256m
+    memswap_limit: 256m
+    oom_score_adj: 500
+
   pgbouncer:
     image: ${AC_PGBOUNCER_IMAGE:?reviewed digest-pinned PgBouncer >=1.24 image required}
     pull_policy: never
@@ -113,6 +119,8 @@ services:
 
   worker:
     <<: *lean-worker
+    # The lean core has no media/scanner mounts; Studio claims live separately.
+    volumes: !reset []
     mem_limit: 192m
     memswap_limit: 192m
     environment:

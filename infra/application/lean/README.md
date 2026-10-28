@@ -20,8 +20,9 @@ tracked prepared statements are used; prove reconnect and session-isolation in
 the disposable database before release.
 
 Apply `lean/compose.foundation.yaml` LAST to the **foundation** project. Caddy and
-telemetry are separate services; do not create duplicates in application. Telemetry
-needs its collector memory_limiter/queues checked under 64 MiB. Load the native
+telemetry are separate services; do not create duplicates in application. Set
+AC_LEAN_OTEL_CONFIG_FILE to the reviewed lean/otel-collector.yaml: its memory
+limiter is 48 MiB with a 12 MiB spike allowance and batches capped at 128 items. Load the native
 slice and helper service drop-in through the release installer, with the helper
 and its Docker child sharing `native.slice`. The child must use `--memory-mib 192
 --cgroup-parent native.slice`; parent limit 64 MiB + child limit 192 MiB gives a
@@ -37,7 +38,8 @@ headroom, two API colors and transient backup/migration memory need separate pro
 
 Legacy web services are profile-gated pending static Pages delivery and route
 proof; never enable `static-web-legacy` on the lean box. Sales Xray's separate web
-project must likewise be retired by the static-web job after Pages admission.
+project uses lean/compose.sales-xray-static.yaml, applied last by the static-web
+job after Pages admission.
 No Cloudflare operation is performed here.
 
 ## Heavy lane boundary

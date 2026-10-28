@@ -1,0 +1,9 @@
+[Unit]
+Description=Disposable fictional lean proof only
+
+[Slice]
+MemoryMax=4G
+MemorySwapMax=0
+CPUQuota=200%
+CPUWeight=10
+TasksMax=768

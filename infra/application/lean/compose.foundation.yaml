@@ -12,3 +12,10 @@ services:
     restart: unless-stopped
     environment:
       GOMEMLIMIT: 48MiB
+    volumes:
+      - type: bind
+        source: ${AC_LEAN_OTEL_CONFIG_FILE:?reviewed lean collector config required}
+        target: /etc/otelcol-contrib/config.yaml
+        read_only: true
+        bind:
+          create_host_path: false

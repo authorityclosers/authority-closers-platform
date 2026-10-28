@@ -90,6 +90,7 @@ def test_last_overlay_caps_and_runtime_routing(hosted: str) -> None:
         v for v in services["api"]["volumes"] if v["target"] == "/run/ac-media-safety"
     )
     assert "ac_heavy_scanner_tunnel_root" in scanner_mount["source"]
+    assert not services["worker"].get("volumes")
     assert "scanner" not in services
     assert "video-worker" not in services
     for name in ("learner-web", "admin-web", "coach-web"):
@@ -135,3 +136,11 @@ def test_native_budget_includes_docker_children() -> None:
     assert "MemoryMax=64M" in (APP / "lean/native.service.conf").read_text()
     assert "Slice=native.slice" in (APP / "lean/native.service.conf").read_text()
     assert "CPUWeight=10" in (APP / "lean/heavy.slice").read_text()
+
+
+def test_separate_sales_xray_web_is_static_only() -> None:
+    services = render(
+        ROOT / "infra/sales-xray-web/compose.yaml",
+        APP / "lean/compose.sales-xray-static.yaml",
+    )["services"]
+    assert services["sales-xray-web"]["profiles"] == ["static-web-legacy"]

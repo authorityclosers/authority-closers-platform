@@ -1,0 +1,4 @@
+# Apply last to the SEPARATE Sales Xray web project only after Pages admission.
+services:
+  sales-xray-web:
+    profiles: !override [static-web-legacy]
