@@ -119,11 +119,18 @@ def main():
     p.add_argument("--database", required=True)
     p.add_argument("--port", required=True, type=int)
     p.add_argument("--operation")
+    p.add_argument("--container", default="ac-rehearsal-postgres-1")
     args = p.parse_args()
     if not (Path.home() / "rehearsal/FICTIONAL-ONLY").is_file() or not args.database.startswith(
         "cutover_fixture_"
     ):
         raise ValueError("fictional marker and DB required")
+    if args.container != "ac-rehearsal-postgres-1" and not args.container.startswith(
+        "ac-cutover-fixture-"
+    ):
+        raise ValueError("fixture container required")
+    global CONTAINER
+    CONTAINER = args.container
     if args.action == "serve":
         serve(args.database, args.port)
     else:

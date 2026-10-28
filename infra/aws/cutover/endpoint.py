@@ -36,6 +36,8 @@ SELECT json_build_array('policy', schemaname, tablename, policyname, roles, cmd,
 SELECT json_build_array('constraint', n.nspname, c.relname, con.conname, pg_get_constraintdef(con.oid))
 FROM pg_constraint con JOIN pg_class c ON c.oid=con.conrelid JOIN pg_namespace n ON n.oid=c.relnamespace
 WHERE n.nspname NOT IN ('pg_catalog','information_schema') ORDER BY n.nspname,c.relname,con.conname;
+SELECT json_build_array('index', schemaname, tablename, indexname, indexdef)
+FROM pg_indexes WHERE schemaname NOT IN ('pg_catalog','information_schema') ORDER BY schemaname,tablename,indexname;
 SELECT json_build_array('extension', extname, extversion) FROM pg_extension ORDER BY extname;
 SELECT json_build_array('grant', table_schema, table_name, grantee, privilege_type, is_grantable)
 FROM information_schema.role_table_grants WHERE table_schema NOT IN ('pg_catalog','information_schema')
@@ -114,7 +116,7 @@ def main():
     d.add_argument("--permit-production-restore", action="store_true")
     d.add_argument("container")
     d.add_argument("database")
-    d.add_argument("action", choices=["dump", "restore", "counts"])
+    d.add_argument("action", choices=["dump", "restore", "counts", "capacity"])
     args = p.parse_args()
     if args.kind == "manifest":
         print(json.dumps(manifest(args.root, args.ownership), sort_keys=True))
@@ -125,7 +127,10 @@ def main():
         and not args.permit_production_restore
     ):
         raise RuntimeError("restore requires explicit production permit")
-    if args.action == "dump":
+    if args.action == "capacity":
+        query = b"SELECT json_build_object('server_version_num', current_setting('server_version_num'), 'max_connections', current_setting('max_connections'), 'max_locks_per_transaction', current_setting('max_locks_per_transaction'), 'max_prepared_transactions', current_setting('max_prepared_transactions'));"
+        sys.stdout.buffer.write(docker(args.container, PSQL, args.database, query))
+    elif args.action == "dump":
         sys.stdout.buffer.write(
             docker(
                 args.container,

@@ -8,7 +8,7 @@ The wrapper does not pretend a DB port redirects Docker-exec consumers.
 
 import argparse
 import json
-import subprocess
+import os
 import sys
 
 
@@ -82,7 +82,7 @@ def main():
         p.error("tunnel takes no forwarded arguments")
     cmd = argv(args)
     if args.execute:
-        return subprocess.run(cmd, check=False).returncode
+        os.execvp(cmd[0], cmd)  # noqa: S606 -- fixed ssh; preserve signals, no orphan child
     print(json.dumps(cmd))
     return 0
 

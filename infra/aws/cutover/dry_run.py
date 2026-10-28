@@ -48,6 +48,58 @@ def main():
     remote_run(["mkdir", "-m", "700", remote])
     for name in ["endpoint.py", "fixture.py", "backup.py"]:
         remote_run(["tee", remote + "/" + name], (ROOT / name).read_bytes())
+    container = "ac-cutover-fixture-" + tag
+    image = (
+        remote_run(["docker", "inspect", "--format", "{{.Image}}", "ac-rehearsal-postgres-1"])
+        .decode()
+        .strip()
+    )
+    setup = r"""import pathlib,secrets,sys
+r=pathlib.Path(sys.argv[1])
+values=['POSTGRES_USER=ac_owner','POSTGRES_DB=postgres',
+        'POSTGRES_PASSWORD='+secrets.token_hex(32),'PGDATA=/var/lib/postgresql/data']
+(r/'pg.env').write_text('\n'.join(values)+'\n')
+(r/'pg.env').chmod(0o600)
+"""
+    remote_run(["python3", "-c", setup, remote])
+    remote_run(["sudo", "install", "-d", "-o", "999", "-g", "999", "-m", "700", remote + "/pgdata"])
+    remote_run(
+        [
+            "docker",
+            "run",
+            "-d",
+            "--name",
+            container,
+            "--network",
+            "none",
+            "--memory",
+            "192m",
+            "--memory-swap",
+            "192m",
+            "--cpu-shares",
+            "128",
+            "--env-file",
+            remote + "/pg.env",
+            "--user",
+            "999:999",
+            "--mount",
+            "type=bind,source=" + remote + "/pgdata,target=/var/lib/postgresql/data",
+            "--tmpfs",
+            "/var/run/postgresql:rw,nosuid,nodev,size=16m,uid=999,gid=999",
+            image,
+            "postgres",
+            "-c",
+            "shared_buffers=32MB",
+            "-c",
+            "work_mem=1MB",
+            "-c",
+            "maintenance_work_mem=32MB",
+            "-c",
+            "max_connections=20",
+            "-c",
+            "max_locks_per_transaction=512",
+        ]
+    )
     source_db, target_db = (
         "cutover_fixture_" + tag + "_source",
         "cutover_fixture_" + tag + "_target",
@@ -59,7 +111,7 @@ def main():
                 "docker",
                 "exec",
                 "-i",
-                "ac-rehearsal-postgres-1",
+                container,
                 "sh",
                 "-euc",
                 'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -X -h 127.0.0.1 -U "$POSTGRES_USER" -d "$1" -At -v ON_ERROR_STOP=1',  # noqa: E501 -- literal SQL or fixed remote shell script
@@ -69,6 +121,19 @@ def main():
             data,
         )
 
+    for _ in range(60):
+        try:
+            sql("postgres", b"SELECT 1;")
+            break
+        except RuntimeError:
+            time.sleep(0.5)
+    else:
+        raise RuntimeError("isolated fixture PG did not start")
+    sql(
+        "postgres",
+        b"CREATE ROLE ac_runtime NOLOGIN; CREATE ROLE ac_migrator NOLOGIN; "
+        b"CREATE ROLE ac_backup NOLOGIN;",
+    )
     sql("postgres", f"CREATE DATABASE {source_db};\nCREATE DATABASE {target_db};".encode())
     # No real or existing fixture rows are copied. Schema only from the isolated app.
     schema = remote_run(
@@ -82,7 +147,18 @@ def main():
         ]
     )
     sql(source_db, schema)
-    head = sql("ac_platform", b"SELECT version_num FROM alembic_version ORDER BY version_num;")
+    head = remote_run(
+        [
+            "docker",
+            "exec",
+            "-i",
+            "ac-rehearsal-postgres-1",
+            "sh",
+            "-euc",
+            'export PGPASSWORD="$POSTGRES_PASSWORD"; exec psql -X -h 127.0.0.1 -U "$POSTGRES_USER" -d ac_platform -At',  # noqa: E501 -- fixed source schema-head query
+        ],
+        b"SELECT version_num FROM alembic_version ORDER BY version_num;",
+    )
     for revision in head.decode().splitlines():
         if not revision.replace("_", "").isalnum():
             raise ValueError("invalid fictional schema revision")
@@ -98,7 +174,17 @@ def main():
     for db, port in zip((source_db, target_db), ports, strict=True):
         # Fixed dedicated loopback fixture ports: occupied ports fail closed.
         script = shlex.join(
-            ["python3", remote + "/fixture.py", "serve", "--database", db, "--port", str(port)]
+            [
+                "python3",
+                remote + "/fixture.py",
+                "serve",
+                "--container",
+                container,
+                "--database",
+                db,
+                "--port",
+                str(port),
+            ]
         )
         remote_run(
             [
@@ -115,6 +201,8 @@ def main():
                     "python3",
                     remote + "/fixture.py",
                     "hook",
+                    "--container",
+                    container,
                     "--database",
                     source_db if side == "source" else target_db,
                     "--port",
@@ -147,11 +235,7 @@ def main():
     for side, db in [("source", source_db), ("target", target_db)]:
         config[side] = {
             "database": ssh
-            + [
-                shlex.join(
-                    ["python3", remote + "/endpoint.py", "database", "ac-rehearsal-postgres-1", db]
-                )
-            ]
+            + [shlex.join(["python3", remote + "/endpoint.py", "database", container, db])]
         }
         config[side]["manifest"] = (
             [sys.executable, str(ROOT / "endpoint.py"), "manifest"]
@@ -230,6 +314,8 @@ def main():
                 "remote_root": remote,
                 "source_database": source_db,
                 "target_database": target_db,
+                "fixture_container": container,
+                "max_locks_per_transaction": 512,
                 "rows_after_rollback": 10002,
                 "aws_window_row_preserved": True,
                 "aws_window_file_preserved": True,
@@ -242,7 +328,8 @@ def main():
     # Stop only our own private fixture processes; keep DB/files as evidence.
     for port in ports:
         remote_run(["sh", "-c", f'kill "$(cat {remote}/service-{port}.pid)"'])
-    print("fictional round trip passed; retained private evidence")
+    remote_run(["docker", "kill", "--signal=TERM", container])
+    print("fictional round trip passed; retained private evidence and stopped own PG")
 
 
 if __name__ == "__main__":

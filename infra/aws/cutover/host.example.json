@@ -3,24 +3,12 @@
   "route_selector": "/REPLACE_FROM_INSTALLED_EDGE_MOUNT/production.caddy",
   "freeze_route": "/REPLACE_FROM_ADMITTED_IMMUTABLE_RELEASE/production-cutover.caddy",
   "live_route": "/REPLACE_FROM_CURRENT_IMMUTABLE_RELEASE/production.caddy",
-  "caddy_validate": [
-    "REPLACE_REVIEWED_CADDY_VALIDATE_ARGV"
-  ],
-  "caddy_reload": [
-    "REPLACE_REVIEWED_CADDY_RELOAD_ARGV"
-  ],
-  "held_probe": [
-    "REPLACE_PRODUCTION_503_PROBE_ARGV"
-  ],
-  "fence_probe": [
-    "REPLACE_NO_ACTIVE_TRANSACTIONS_LEASES_NATIVE_PROBE_ARGV"
-  ],
-  "private_ready_probe": [
-    "REPLACE_DIRECT_ORIGIN_READY_PROBE_ARGV"
-  ],
-  "backup_ready_probe": [
-    "REPLACE_FRESH_DUMP_ARCHIVE_TIMERS_PROBE_ARGV"
-  ],
+  "caddy_validate": ["REPLACE_REVIEWED_CADDY_VALIDATE_ARGV"],
+  "caddy_reload": ["REPLACE_REVIEWED_CADDY_RELOAD_ARGV"],
+  "held_probe": ["REPLACE_PRODUCTION_503_PROBE_ARGV"],
+  "fence_probe": ["REPLACE_NO_ACTIVE_TRANSACTIONS_LEASES_NATIVE_PROBE_ARGV"],
+  "private_ready_probe": ["REPLACE_DIRECT_ORIGIN_READY_PROBE_ARGV"],
+  "backup_ready_probe": ["REPLACE_FRESH_DUMP_ARCHIVE_TIMERS_PROBE_ARGV"],
   "writers": [
     "ac-application-production-api-1",
     "ac-application-production-worker-1",
@@ -31,9 +19,7 @@
     "ac-application-production-sales-xray-worker-1",
     "ac-application-production-worker-1"
   ],
-  "writer_units": [
-    "REPLACE_FROM_HOST_WRITER_TIMER_INVENTORY"
-  ],
+  "writer_units": ["REPLACE_FROM_HOST_WRITER_TIMER_INVENTORY"],
   "held_services": [
     "ac-application-production-learner-web-1",
     "ac-application-production-admin-web-1",
@@ -48,9 +34,7 @@
   ],
   "drain_seconds": 960,
   "connection_drain_seconds": 960,
-  "opened_ready_probe": [
-    "REPLACE_DIRECT_API_READY_WITH_BOUNDED_WAIT_ARGV"
-  ],
+  "opened_ready_probe": ["REPLACE_DIRECT_API_READY_WITH_BOUNDED_WAIT_ARGV"],
   "restart_policies": {
     "ac-application-production-api-1": "REPLACE_FROM_INSTALLED_RESTART_POLICY",
     "ac-application-production-worker-1": "REPLACE_FROM_INSTALLED_RESTART_POLICY",

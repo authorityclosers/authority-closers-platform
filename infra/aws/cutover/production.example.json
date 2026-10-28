@@ -172,6 +172,15 @@
       "/usr/local/lib/ac-cutover/canary.py",
       "--config",
       "/etc/authority-closers/cutover-public-canary.json"
+    ],
+    "restore_admission": [
+      "python3",
+      "/usr/local/lib/ac-cutover/restore-admission.py",
+      "--config",
+      "/etc/authority-closers/cutover.json",
+      "--proof",
+      "/etc/authority-closers/cutover-restore-proof.json"
     ]
-  }
+  },
+  "presync_timeout_seconds": 14400
 }

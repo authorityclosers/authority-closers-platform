@@ -89,6 +89,7 @@ class Kit:
                 "target_held_canary",
                 "source_canary",
                 "target_canary",
+                "restore_admission",
             }
             for name in required:
                 if (
@@ -116,7 +117,7 @@ class Kit:
             self.c[side]["manifest"] + [self.c["files"][index][side]], timeout=self.timeout
         )
 
-    def sync(self, reverse=False):
+    def sync(self, reverse=False, bulk=False):
         sides = ("target", "source") if reverse else ("source", "target")
         if all(self.c[s].get("host") for s in sides):
             raise RuntimeError("run rsync driver on one origin")
@@ -150,7 +151,7 @@ class Kit:
                     self.c.get("rsync_ssh", "ssh -o BatchMode=yes"),
                     *ends,
                 ],
-                timeout=self.timeout,
+                timeout=int(self.c.get("presync_timeout_seconds", 14400)) if bulk else self.timeout,
             )
             with (self.root / "rsync-statistics.jsonl").open("a") as f:
                 f.write(
@@ -158,6 +159,7 @@ class Kit:
                         {
                             "direction": "reverse" if reverse else "forward",
                             "root_index": index,
+                            "phase": "presync" if bulk else "delta",
                             "statistics": stats.decode(errors="replace"),
                         }
                     )
@@ -206,6 +208,8 @@ class Kit:
         )
         if self.state.get("phase") not in allowed:
             raise RuntimeError("incorrect move phase")
+        if self.c["environment"] == "production":
+            self.step("restore_admission", partial(self.hook, "restore_admission"))
         started = time.monotonic()
         self.state["phase"] = "moving-reverse" if reverse else "moving-forward"
         self.state["freeze_started_utc"] = time.time()
@@ -305,7 +309,7 @@ def main():
         if args.action == "presync":
             if kit.state.get("phase") not in {None, "presynced"}:
                 raise RuntimeError("active move cannot be presynced")
-            kit.step("presync", kit.sync)
+            kit.step("presync", partial(kit.sync, bulk=True))
             sizes = [json.loads(kit.manifest("source", i)) for i in range(len(kit.c["files"]))]
             kit.state.update(
                 presync_files=sum(len(m) for m in sizes),

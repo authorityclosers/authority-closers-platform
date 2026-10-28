@@ -388,3 +388,158 @@ def test_decrypted_archive_is_verified_before_writing(tmp_path):
     with pytest.raises(tarfile.ReadError):
         recover(encrypted, cert, key, tmp_path / "out")
     assert not (tmp_path / "out").exists()
+
+
+@pytest.mark.parametrize("failed_probe", ["BACKUP_READY", "API_READY"])
+def test_failed_admission_keeps_live_route_closed(tmp_path, monkeypatch, failed_probe):
+    namespace = runpy.run_path(str(ROOT / "host.py"))
+    live, held, selector = (
+        tmp_path / "live.caddy",
+        tmp_path / "held.caddy",
+        tmp_path / "production.caddy",
+    )
+    live.write_text("fixture live route")
+    held.write_text("fixture held route")
+    selector.symlink_to(held)
+    c = {
+        "inventory_review_record": "fixture",
+        "writers": ["fixture-api"],
+        "drain": [],
+        "held_services": [],
+        "open_services": ["fixture-api"],
+        "writer_units": ["fixture.timer"],
+        "restart_policies": {"fixture-api": "unless-stopped"},
+        "backup_ready_probe": ["BACKUP_READY"],
+        "private_ready_probe": ["DB_READY"],
+        "opened_ready_probe": ["API_READY"],
+        "live_route": str(live),
+        "route_selector": str(selector),
+        "caddy_validate": ["VALIDATE"],
+        "caddy_reload": ["RELOAD"],
+    }
+    profile = tmp_path / "profile.json"
+    profile.write_text(json.dumps(c))
+    seen = []
+
+    def run(argv):
+        seen.append(argv)
+        if argv == [failed_probe]:
+            raise RuntimeError("fixture admission failed")
+        return ""
+
+    monkeypatch.setitem(namespace["main"].__globals__, "run", run)
+    monkeypatch.setattr(sys, "argv", ["host", "--profile", str(profile), "--execute", "open"])
+    with pytest.raises(RuntimeError, match="admission failed"):
+        namespace["main"]()
+    assert selector.resolve() == held
+    assert ["RELOAD"] not in seen
+    assert ["systemctl", "start", "fixture.timer"] not in seen
+    if failed_probe == "BACKUP_READY":
+        assert ["docker", "start", "fixture-api"] not in seen
+
+
+def test_bulk_presync_has_its_own_large_copy_budget(kit, tmp_path, monkeypatch):
+    kit.c.update(
+        source={},
+        target={},
+        files=[{"source": str(tmp_path / "source"), "target": str(tmp_path / "target")}],
+    )
+    timeouts = []
+
+    def command(argv, data=None, timeout=0):
+        timeouts.append(timeout)
+        return b"fictional rsync statistics"
+
+    monkeypatch.setitem(kit.sync.__globals__, "command", command)
+    kit.sync(bulk=True)
+    kit.sync()
+    assert timeouts == [14400, 600]
+
+
+def test_restore_admission_failure_precedes_any_hold(kit, monkeypatch):
+    seen = []
+    kit.c["environment"] = "production"
+    kit.state["phase"] = "presynced"
+
+    def hook(name):
+        seen.append(name)
+        raise RuntimeError("unproved restore capacity")
+
+    monkeypatch.setattr(kit, "hook", hook)
+    with pytest.raises(RuntimeError, match="capacity"):
+        kit.move()
+    assert seen == ["restore_admission"]
+    assert kit.state["phase"] == "presynced"
+
+
+def test_changed_postgres_lock_settings_invalidate_restore_proof(monkeypatch):
+    ns = runpy.run_path(str(ROOT / "restore-admission.py"))
+    proof = {
+        "environment": "production",
+        "owner_record": "fixture example",
+        "populated_restore_passed": True,
+        "reverse_restore_passed": True,
+        "source_capacity": {"max_locks_per_transaction": "512"},
+    }
+    monkeypatch.setitem(
+        ns["admit"].__globals__, "query", lambda cmd: {"max_locks_per_transaction": "64"}
+    )
+    with pytest.raises(ValueError, match="settings differ"):
+        ns["admit"]({"source": {"database": ["fixture"]}}, proof)
+
+
+def test_fresh_only_or_fictional_receipt_cannot_admit_production_restore():
+    ns = runpy.run_path(str(ROOT / "restore-admission.py"))
+    with pytest.raises(ValueError, match="production restore proof"):
+        ns["admit"]({}, {"environment": "fictional", "populated_restore_passed": True})
+    with pytest.raises(ValueError, match="both populated and reverse"):
+        ns["admit"](
+            {},
+            {
+                "environment": "production",
+                "owner_record": "fixture example",
+                "populated_restore_passed": False,
+                "reverse_restore_passed": True,
+            },
+        )
+
+
+def test_new_index_invalidates_restore_proof_but_live_counts_do_not():
+    digest = runpy.run_path(str(ROOT / "restore-admission.py"))["schema_digest"]
+    a = {
+        "tables": [["table", "public", "fixture", 1]],
+        "catalog": [
+            ["index", "public", "fixture", "pk", "definition"],
+            ["sequence", "public", "seq", 1, True],
+        ],
+    }
+    b = {
+        "tables": [["table", "public", "fixture", 2]],
+        "catalog": [
+            ["index", "public", "fixture", "pk", "definition"],
+            ["sequence", "public", "seq", 2, True],
+        ],
+    }
+    assert digest(a) == digest(b)
+    b["catalog"].append(["index", "public", "fixture", "new_index", "new definition"])
+    assert digest(a) != digest(b)
+
+
+def test_restore_admission_rejects_postgres_major_change(monkeypatch):
+    ns = runpy.run_path(str(ROOT / "restore-admission.py"))
+    source = {"server_version_num": "170011"}
+    target = {"server_version_num": "180001"}
+    proof = {
+        "environment": "production",
+        "owner_record": "fixture example",
+        "populated_restore_passed": True,
+        "reverse_restore_passed": True,
+        "source_capacity": source,
+        "target_capacity": target,
+    }
+    responses = iter([source, target])
+    monkeypatch.setitem(ns["admit"].__globals__, "query", lambda cmd: next(responses))
+    with pytest.raises(ValueError, match="majors must match"):
+        ns["admit"](
+            {"source": {"database": ["fixture"]}, "target": {"database": ["fixture"]}}, proof
+        )
