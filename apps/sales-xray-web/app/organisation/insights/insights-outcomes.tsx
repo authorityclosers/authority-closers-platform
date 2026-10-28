@@ -1,0 +1,250 @@
+"use client";
+
+import { Button } from "../../ui/kit";
+import {
+  count,
+  dateLabel,
+  OUTCOMES,
+  percent,
+  type Insights,
+  type OutcomeKey,
+} from "./insights-data";
+import styles from "./outcomes.module.css";
+
+/** Call outcomes are nested sets, never successive stages of unique leads. */
+export function OutcomeStory({
+  data,
+  onCalls,
+}: {
+  data: Insights;
+  onCalls: (outcome?: OutcomeKey) => void;
+}) {
+  const { totals, previous, coverage } = data;
+  const share =
+    coverage.nextStep && coverage.calls && totals.calls > 0
+      ? totals.nextStep / totals.calls
+      : null;
+  const diff =
+    previous && coverage.previousWon && coverage.won
+      ? totals.won - previous.won
+      : null;
+  const headline =
+    diff === null
+      ? "How your calls ended"
+      : diff === 0
+        ? "Wins held steady this period"
+        : `${count(Math.abs(diff))} ${diff > 0 ? "more" : "fewer"} won calls this period`;
+  const outcomes = OUTCOMES.map(({ key, label }) => ({
+    key,
+    label,
+    value: data.outcomes.find((row) => row.outcome === key)?.calls ?? null,
+  })).sort((a, b) => (b.value ?? -1) - (a.value ?? -1));
+  const complete =
+    coverage.calls &&
+    coverage.nextStep &&
+    coverage.won &&
+    totals.calls >= totals.nextStep &&
+    totals.nextStep >= totals.won;
+  const nextHeight =
+    complete && totals.calls ? (94 * totals.nextStep) / totals.calls : 0;
+  const wonHeight =
+    complete && totals.calls ? (94 * totals.won) / totals.calls : 0;
+  const other = complete ? totals.calls - totals.nextStep : null;
+  const missing = outcomes.some((row) => row.value === null);
+  return (
+    <>
+      <section className={styles.story} aria-label="The sales story">
+        <p className={styles.eyebrow}>The sales story</p>
+        <h2>{headline}</h2>
+        <div className={styles.storyNumbers}>
+          <strong>
+            {coverage.won ? count(totals.won) : "—"}
+            <small>won calls</small>
+          </strong>
+          <p>
+            {previous && coverage.previousWon
+              ? `Previous period: ${count(previous.won)} won calls`
+              : "Previous period unavailable"}
+            <br />
+            {coverage.calls
+              ? `${count(totals.calls)} analysed calls`
+              : "Call count unavailable"}{" "}
+            ·{" "}
+            {percent(
+              coverage.won && coverage.calls && totals.calls
+                ? totals.won / totals.calls
+                : null,
+            )}{" "}
+            won
+          </p>
+        </div>
+        <p className={styles.caption}>
+          {data.window.from && data.window.to
+            ? `${dateLabel(data.window.from)} – ${dateLabel(data.window.to)}`
+            : "Period dates unavailable"}{" "}
+          · One outcome per call
+        </p>
+      </section>
+      <div className={styles.grid}>
+        <section className={styles.card} aria-label="Next steps and outcomes">
+          <h2>
+            {share === null
+              ? "Next-step share unavailable"
+              : `${percent(share)} of calls agreed a next step`}
+          </h2>
+          <div className={styles.ringBody}>
+            <button
+              className={styles.ring}
+              type="button"
+              onClick={() => onCalls()}
+              aria-label={`${coverage.nextStep ? count(totals.nextStep) : "Unknown"} of ${coverage.calls ? count(totals.calls) : "unknown"} analysed calls agreed a next step. View calls.`}
+            >
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle className={styles.track} cx="60" cy="60" r="50" />
+                <circle
+                  className={styles.share}
+                  cx="60"
+                  cy="60"
+                  r="50"
+                  pathLength="100"
+                  strokeDasharray={`${share === null ? 0 : Math.max(0, Math.min(100, share * 100))} 100`}
+                />
+              </svg>
+              <span>
+                <b>{percent(share)}</b>
+                <small>
+                  {coverage.nextStep ? count(totals.nextStep) : "—"} calls
+                </small>
+              </span>
+            </button>
+            <div className={styles.key}>
+              {OUTCOMES.slice(0, 3).map((row) => (
+                <button
+                  type="button"
+                  key={row.key}
+                  onClick={() => onCalls(row.key)}
+                >
+                  <span>{row.label}</span>
+                  <b>
+                    {(() => {
+                      const value = data.outcomes.find(
+                        (item) => item.outcome === row.key,
+                      )?.calls;
+                      return value == null ? "—" : count(value);
+                    })()}
+                  </b>
+                </button>
+              ))}
+              <p>
+                <span>Other endings</span>
+                <b>{other === null ? "—" : count(other)}</b>
+              </p>
+            </div>
+          </div>
+          <p className={styles.caption}>
+            Won, meeting booked or follow-up set · Of{" "}
+            {coverage.calls ? count(totals.calls) : "—"} analysed calls
+          </p>
+        </section>
+        <section className={styles.card} aria-label="Counted call funnel">
+          <h2>Where calls move forward</h2>
+          <p className={styles.caption}>
+            Nested call outcomes · Same count scale
+          </p>
+          {complete ? (
+            <svg
+              className={styles.funnel}
+              viewBox="0 0 330 170"
+              role="img"
+              aria-label={`${count(totals.calls)} analysed calls; ${count(totals.nextStep)} agreed a next step, including ${count(totals.won)} won. ${count(other ?? 0)} other endings.`}
+            >
+              <path
+                className={styles.ribbon}
+                d={`M8 42 C55 42 68 48 120 48 V${48 + nextHeight} C68 ${48 + nextHeight} 55 ${42 + nextHeight} 8 ${42 + nextHeight} Z`}
+              />
+              <path
+                className={styles.ribbon}
+                d={`M128 48 C170 48 174 54 222 54 V${54 + wonHeight} C174 ${54 + wonHeight} 170 ${48 + nextHeight} 128 ${48 + nextHeight} Z`}
+              />
+              <path
+                className={styles.otherRibbon}
+                d={`M8 ${42 + nextHeight} C55 ${42 + nextHeight} 68 ${58 + nextHeight} 120 ${58 + nextHeight} V152 C68 152 55 136 8 136 Z`}
+              />
+              <rect x="0" y="42" width="8" height="94" rx="2" />
+              <rect x="120" y="48" width="8" height={nextHeight} rx="2" />
+              <rect x="222" y="54" width="8" height={wonHeight} rx="2" />
+              <text x="0" y="14">
+                Analysed
+              </text>
+              <text x="0" y="31" className={styles.svgCount}>
+                {count(totals.calls)} calls
+              </text>
+              <text x="120" y="14">
+                Next step
+              </text>
+              <text x="120" y="31" className={styles.svgCount}>
+                {count(totals.nextStep)}
+              </text>
+              <text x="242" y="58">
+                Won
+              </text>
+              <text x="242" y="77" className={styles.svgCount}>
+                {count(totals.won)}
+              </text>
+              <text x="140" y="150">
+                Other · {count(other ?? 0)}
+              </text>
+            </svg>
+          ) : (
+            <p className={styles.unavailable}>— Funnel counts unavailable</p>
+          )}
+          <p className={styles.caption}>
+            Won is part of Next step. A lead can appear in several calls.
+          </p>
+          <Button onClick={() => onCalls()}>View matching calls</Button>
+          <p className={styles.coverage}>
+            {coverage.calls
+              ? `${count(totals.calls)} calls analysed`
+              : "Analysed count unavailable"}
+            {data.pending > 0
+              ? ` · ${count(data.pending)} pending`
+              : coverage.pending
+                ? " · No calls pending"
+                : " · Pending count unavailable"}
+          </p>
+        </section>
+      </div>
+      <section className={styles.card} aria-label="Every call outcome">
+        <h2>Every ending, counted</h2>
+        <p className={styles.caption}>
+          Each bar uses the same scale: 0–
+          {coverage.calls ? count(totals.calls) : "—"} analysed calls
+        </p>{" "}
+        <ul className={styles.outcomes} aria-label="Calls by outcome">
+          {outcomes.map((row) => (
+            <li key={row.key}>
+              <button type="button" onClick={() => onCalls(row.key)}>
+                <span className={styles.outcomeLabel}>
+                  {row.label}
+                  <b>
+                    {row.value === null ? "—" : `${count(row.value)} calls`}
+                  </b>
+                </span>
+                <span className={styles.bar} aria-hidden="true">
+                  <i
+                    style={{
+                      width: `${totals.calls && row.value !== null ? (row.value / totals.calls) * 100 : 0}%`,
+                    }}
+                  />
+                </span>
+              </button>
+            </li>
+          ))}
+        </ul>
+        {missing ? (
+          <p className={styles.caption}>— Outcome count unavailable</p>
+        ) : null}
+      </section>
+    </>
+  );
+}

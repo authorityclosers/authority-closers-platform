@@ -423,8 +423,10 @@ it("renders a seeded sandbox page whole, labelled synthetic, without reading", a
   );
   const text = host.textContent ?? "";
   expect(text).toContain("Synthetic sandbox data");
-  expect(text).toContain("Calls analysed");
-  expect(text).toContain("Agreed a next step");
+  expect(text).toContain("The sales story");
+  expect(text).toContain("Where calls move forward");
+  expect(text).not.toContain("quoted");
+  expect(text).toContain("of calls agreed a next step");
   expect(text).toContain("Calls over time");
   expect(text).toContain("Common mistakes");
   expect(text).toContain("not an official score");

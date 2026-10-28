@@ -144,10 +144,17 @@ export type Insights = {
   synthetic: boolean;
   window: { from: string | null; to: string | null; unit: "week" | "month" };
   pending: number;
+  coverage: {
+    calls: boolean;
+    nextStep: boolean;
+    won: boolean;
+    previousWon: boolean;
+    pending: boolean;
+  };
   totals: Totals;
   previous: Totals | null;
   trend: TrendPoint[];
-  outcomes: { outcome: string; calls: number }[];
+  outcomes: { outcome: string; calls: number | null }[];
   skills: SkillTotal[];
   people: Group[];
   teams: Group[];
@@ -264,6 +271,13 @@ export function parseInsights(body: unknown): Insights {
       unit: window.unit === "week" ? "week" : "month",
     },
     pending: num(raw.pending),
+    coverage: {
+      calls: maybe(record(raw.totals).calls) !== null,
+      previousWon: maybe(record(raw.previous).won) !== null,
+      pending: maybe(raw.pending) !== null,
+      nextStep: maybe(record(raw.totals).next_step) !== null,
+      won: maybe(record(raw.totals).won) !== null,
+    },
     totals: totals(raw.totals),
     previous: raw.previous ? totals(raw.previous) : null,
     trend: list(raw.trend).map((point) => {
@@ -281,7 +295,7 @@ export function parseInsights(body: unknown): Insights {
       const item = record(entry);
       return {
         outcome: str(item.outcome) ?? "unclear",
-        calls: num(item.calls),
+        calls: maybe(item.calls),
       };
     }),
     skills: list(raw.skills).map((entry) => {

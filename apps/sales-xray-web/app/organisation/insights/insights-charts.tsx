@@ -15,6 +15,7 @@ import {
   SKILLS,
   bucketLabel,
   count,
+  dateLabel,
   observedShare,
   percent,
   type Group,
@@ -47,14 +48,18 @@ const plural = (value: number, word: string) =>
  * finger across to read a period.
  */
 export function TrendColumns({
-  points,
+  points: allPoints,
   unit,
+  window,
 }: {
+  window?: { from: string | null; to: string | null };
   points: TrendPoint[];
   unit: "week" | "month";
 }) {
   const [focus, setFocus] = useState<number | null>(null);
-  const ticks = ticksFor(Math.max(0, ...points.map((point) => point.calls)));
+  const [offset, setOffset] = useState(0);
+  const points = allPoints.slice(offset, offset + 7);
+  const ticks = ticksFor(Math.max(0, ...allPoints.map((point) => point.calls)));
   const max = ticks[ticks.length - 1] || 1;
   const shown = focus === null ? null : points[focus];
   const total = points.reduce((sum, point) => sum + point.calls, 0);
@@ -142,6 +147,41 @@ export function TrendColumns({
           ))}
         </ol>
       </div>
+      {window ? (
+        <p className={styles.caption}>
+          Window: {window.from ? dateLabel(window.from) : "—"} –{" "}
+          {window.to ? dateLabel(window.to) : "—"}. First and last {unit}s may
+          be partial.
+        </p>
+      ) : null}
+      {allPoints.length > 7 ? (
+        <div className={styles.chartPaging}>
+          <button
+            type="button"
+            disabled={offset === 0}
+            onClick={() => {
+              setOffset(Math.max(0, offset - 7));
+              setFocus(null);
+            }}
+          >
+            Earlier
+          </button>
+          <span>
+            {offset + 1}–{Math.min(offset + 7, allPoints.length)} of{" "}
+            {allPoints.length} {unit}s
+          </span>
+          <button
+            type="button"
+            disabled={offset + 7 >= allPoints.length}
+            onClick={() => {
+              setOffset(offset + 7);
+              setFocus(null);
+            }}
+          >
+            Later
+          </button>
+        </div>
+      ) : null}
     </figure>
   );
 }
@@ -246,39 +286,64 @@ export function BarList({
   label: string;
   onSelect?: (key: string) => void;
 }) {
+  const [offset, setOffset] = useState(0);
+  const ordered = [...rows].sort((a, b) => b.value - a.value);
   const max = Math.max(1, ...rows.map((row) => row.value));
   return (
-    <ul className={styles.barList} aria-label={label}>
-      {rows.map((row) => {
-        const body = (
-          <>
-            <span className={styles.barLabel}>{row.label}</span>
-            <span className={styles.barTrack} aria-hidden="true">
-              <i style={{ width: `${(row.value / max) * 100}%` }} />
-            </span>
-            <span className={styles.barValue}>
-              {count(row.value)}
-              {row.note ? <small>{row.note}</small> : null}
-            </span>
-          </>
-        );
-        return (
-          <li key={row.key}>
-            {onSelect ? (
-              <button
-                type="button"
-                className={styles.barRow}
-                onClick={() => onSelect(row.key)}
-              >
-                {body}
-              </button>
-            ) : (
-              <span className={styles.barRow}>{body}</span>
-            )}
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      <ul className={styles.barList} aria-label={label}>
+        {ordered.slice(offset, offset + 7).map((row) => {
+          const body = (
+            <>
+              <span className={styles.barLabel}>{row.label}</span>
+              <span className={styles.barTrack} aria-hidden="true">
+                <i style={{ width: `${(row.value / max) * 100}%` }} />
+              </span>
+              <span className={styles.barValue}>
+                {count(row.value)}
+                {row.note ? <small>{row.note}</small> : null}
+              </span>
+            </>
+          );
+          return (
+            <li key={row.key}>
+              {onSelect ? (
+                <button
+                  type="button"
+                  className={styles.barRow}
+                  onClick={() => onSelect(row.key)}
+                >
+                  {body}
+                </button>
+              ) : (
+                <span className={styles.barRow}>{body}</span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {rows.length > 7 ? (
+        <div className={styles.chartPaging}>
+          <button
+            type="button"
+            disabled={offset === 0}
+            onClick={() => setOffset(Math.max(0, offset - 7))}
+          >
+            Previous
+          </button>
+          <span>
+            {offset + 1}–{Math.min(offset + 7, rows.length)} of {rows.length}
+          </span>
+          <button
+            type="button"
+            disabled={offset + 7 >= rows.length}
+            onClick={() => setOffset(offset + 7)}
+          >
+            Next
+          </button>
+        </div>
+      ) : null}
+    </>
   );
 }
 
@@ -325,6 +390,7 @@ export function Funnel({
  * and not enough evidence, as one split bar with the observed share named.
  */
 export function SkillSplit({ skills }: { skills: SkillTotal[] }) {
+  const [offset, setOffset] = useState(0);
   return (
     <>
       <p className={styles.legendRow} aria-hidden="true">
@@ -339,7 +405,7 @@ export function SkillSplit({ skills }: { skills: SkillTotal[] }) {
         </span>
       </p>
       <ul className={styles.skillList} aria-label="Skills across the calls">
-        {skills.map((skill) => {
+        {skills.slice(offset, offset + 4).map((skill) => {
           const observed = skill.strong + skill.observed;
           const whole = observed + skill.needsAttention + skill.unknown;
           const share = whole ? observed / whole : null;
@@ -369,6 +435,28 @@ export function SkillSplit({ skills }: { skills: SkillTotal[] }) {
           );
         })}
       </ul>
+      {skills.length > 4 ? (
+        <div className={styles.chartPaging}>
+          <button
+            type="button"
+            disabled={offset === 0}
+            onClick={() => setOffset(Math.max(0, offset - 4))}
+          >
+            Previous skills
+          </button>
+          <span>
+            {offset + 1}–{Math.min(offset + 4, skills.length)} of{" "}
+            {skills.length}
+          </span>
+          <button
+            type="button"
+            disabled={offset + 4 >= skills.length}
+            onClick={() => setOffset(offset + 4)}
+          >
+            Next skills
+          </button>
+        </div>
+      ) : null}
     </>
   );
 }

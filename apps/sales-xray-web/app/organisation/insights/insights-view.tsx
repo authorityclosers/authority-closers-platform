@@ -23,7 +23,6 @@ import {
 import { callPath } from "../../analysis-routes";
 import { notify } from "../../notice-center";
 import {
-  Badge,
   Button,
   Delta,
   Empty,
@@ -37,7 +36,6 @@ import {
 } from "../../ui/kit";
 import {
   BarList,
-  Funnel,
   ShareLine,
   SkillDots,
   SkillHeatmap,
@@ -61,7 +59,6 @@ import {
   parseInsights,
   percent,
   queryOf,
-  rupees,
   type CallPage,
   type CallRow,
   type Filters,
@@ -71,6 +68,7 @@ import {
   type View,
 } from "./insights-data";
 import styles from "./insights.module.css";
+import { OutcomeStory } from "./insights-outcomes";
 import { InsightsSkeleton } from "./insights-skeleton";
 
 type Read =
@@ -322,7 +320,7 @@ export function InsightsView({
   const teams = data.facets.teams;
   const personName = people.find((item) => item.key === filters.person)?.name;
   const teamName = teams.find((item) => item.key === filters.team)?.name;
-  const empty = data.totals.calls === 0;
+  const empty = data.coverage.calls && data.totals.calls === 0;
 
   return (
     <div className={styles.page} data-updating={updating ? "" : undefined}>
@@ -343,11 +341,13 @@ export function InsightsView({
         }
         context={[
           RANGE_TEXT[filters.range],
-          `${count(data.totals.calls)} calls · ${count(data.totals.people)} people`,
+          data.coverage.calls
+            ? `${count(data.totals.calls)} calls · ${count(data.totals.people)} people`
+            : "Call count unavailable",
           synthetic ? (
-            <Badge key="synthetic" tone="warn">
+            <span key="synthetic" className={styles.fixtureBadge}>
               Synthetic sandbox data
-            </Badge>
+            </span>
           ) : null,
         ]}
       />
@@ -395,12 +395,15 @@ export function InsightsView({
         <Sections
           section={section}
           data={data}
-          filters={filters}
           go={go}
           linkFor={linkFor}
           calls={calls}
           more={more}
           moreLoading={moreLoading}
+          onCalls={(outcome) => {
+            if (outcome) go({ outcome });
+            setSection("calls");
+          }}
         />
       )}
       <p className={styles.footnote}>
@@ -436,89 +439,98 @@ function FilterBar({
         value={filters.range}
         onChange={(range) => onChange({ range })}
       />
-      <select
-        className={styles.select}
-        aria-label="Person"
-        value={filters.person ?? ""}
-        onChange={(event) => onChange({ person: event.target.value || null })}
-      >
-        <option value="">Everyone</option>
-        {filters.person && !personName ? (
-          <option value={filters.person}>Selected person</option>
-        ) : null}
-        {data.facets.people.map((person) => (
-          <option key={person.key} value={person.key}>
-            {person.name}
-          </option>
-        ))}
-      </select>
-      {data.facets.teams.length ? (
-        <select
-          className={styles.select}
-          aria-label="Team"
-          value={filters.team ?? ""}
-          onChange={(event) => onChange({ team: event.target.value || null })}
-        >
-          <option value="">All teams</option>
-          {filters.team && !teamName ? (
-            <option value={filters.team}>Selected team</option>
+      <details className={styles.filterDetails}>
+        <summary>Filter{active ? ` · ${active} applied` : ""}</summary>
+        <div className={styles.filterFields}>
+          <select
+            className={styles.select}
+            aria-label="Person"
+            value={filters.person ?? ""}
+            onChange={(event) =>
+              onChange({ person: event.target.value || null })
+            }
+          >
+            <option value="">Everyone</option>
+            {filters.person && !personName ? (
+              <option value={filters.person}>Selected person</option>
+            ) : null}
+            {data.facets.people.map((person) => (
+              <option key={person.key} value={person.key}>
+                {person.name}
+              </option>
+            ))}
+          </select>
+          {data.facets.teams.length ? (
+            <select
+              className={styles.select}
+              aria-label="Team"
+              value={filters.team ?? ""}
+              onChange={(event) =>
+                onChange({ team: event.target.value || null })
+              }
+            >
+              <option value="">All teams</option>
+              {filters.team && !teamName ? (
+                <option value={filters.team}>Selected team</option>
+              ) : null}
+              {data.facets.teams.map((team) => (
+                <option key={team.key} value={team.key}>
+                  {team.name}
+                </option>
+              ))}
+            </select>
           ) : null}
-          {data.facets.teams.map((team) => (
-            <option key={team.key} value={team.key}>
-              {team.name}
-            </option>
-          ))}
-        </select>
-      ) : null}
-      <select
-        className={styles.select}
-        aria-label="Outcome"
-        value={filters.outcome ?? ""}
-        onChange={(event) =>
-          onChange({
-            outcome: (event.target.value || null) as Filters["outcome"],
-          })
-        }
-      >
-        <option value="">Any outcome</option>
-        {OUTCOMES.map((outcome) => (
-          <option key={outcome.key} value={outcome.key}>
-            {outcome.label}
-          </option>
-        ))}
-      </select>
-      {data.facets.languages.length > 1 || filters.language ? (
-        <select
-          className={styles.select}
-          aria-label="Language"
-          value={filters.language ?? ""}
-          onChange={(event) =>
-            onChange({ language: event.target.value || null })
-          }
-        >
-          <option value="">Any language</option>
-          {data.facets.languages.map((language) => (
-            <option key={language.key} value={language.key}>
-              {language.label}
-            </option>
-          ))}
-        </select>
-      ) : null}
-      {active ? (
-        <Button
-          variant="ghost"
-          onClick={() =>
-            onChange({
-              person: null,
-              team: null,
-              outcome: null,
-              language: null,
-            })
-          }
-        >
-          <X size={13} aria-hidden="true" /> Clear {active}
-        </Button>
-      ) : null}
+          <select
+            className={styles.select}
+            aria-label="Outcome"
+            value={filters.outcome ?? ""}
+            onChange={(event) =>
+              onChange({
+                outcome: (event.target.value || null) as Filters["outcome"],
+              })
+            }
+          >
+            <option value="">Any outcome</option>
+            {OUTCOMES.map((outcome) => (
+              <option key={outcome.key} value={outcome.key}>
+                {outcome.label}
+              </option>
+            ))}
+          </select>
+          {data.facets.languages.length > 1 || filters.language ? (
+            <select
+              className={styles.select}
+              aria-label="Language"
+              value={filters.language ?? ""}
+              onChange={(event) =>
+                onChange({ language: event.target.value || null })
+              }
+            >
+              <option value="">Any language</option>
+              {data.facets.languages.map((language) => (
+                <option key={language.key} value={language.key}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
+          ) : null}
+          {active ? (
+            <Button
+              variant="ghost"
+              onClick={() =>
+                onChange({
+                  person: null,
+                  team: null,
+                  outcome: null,
+                  language: null,
+                })
+              }
+            >
+              <X size={13} aria-hidden="true" /> Clear {active}
+            </Button>
+          ) : null}
+        </div>
+      </details>
     </div>
   );
 }
@@ -536,16 +548,16 @@ function shareDelta(now: number | null, before: number | null): ReactNode {
 function Sections({
   section,
   data,
-  filters,
   go,
   linkFor,
   calls,
   more,
   moreLoading,
+  onCalls,
 }: {
   section: View;
+  onCalls: (outcome?: Filters["outcome"]) => void;
   data: Insights;
-  filters: Filters;
   go: (next: Partial<Filters>) => void;
   linkFor: ((key: string) => string) | null;
   calls: CallPage | null;
@@ -554,15 +566,6 @@ function Sections({
 }) {
   const { totals, previous } = data;
   const [grouping, setGrouping] = useState<"people" | "teams">("people");
-  const outcomeRows = data.outcomes
-    .filter((row) => row.calls > 0)
-    .sort((a, b) => b.calls - a.calls)
-    .map((row) => ({
-      key: row.outcome,
-      label: outcomeLabel(row.outcome),
-      value: row.calls,
-      note: percent(totals.calls ? row.calls / totals.calls : null),
-    }));
   const attention = useMemo(
     () =>
       [...data.skills]
@@ -594,88 +597,70 @@ function Sections({
     .filter((person) => (person.needsAttentionChange ?? 0) > 0.005)
     .reverse()
     .slice(0, 4);
-  const value = rupees(totals.wonValue);
 
   return (
     <>
-      <Tiles label="This period">
-        <Kpi
-          label="Calls analysed"
-          value={count(totals.calls)}
-          delta={
-            previous ? (
-              <Delta value={totals.calls} previous={previous.calls} />
-            ) : null
-          }
-          note={`${minutes(totals.minutes)} · ${count(totals.people)} people`}
-        />
-        <Kpi
-          label="Agreed a next step"
-          value={percent(totals.nextStepShare)}
-          delta={shareDelta(
-            totals.nextStepShare,
-            previous?.nextStepShare ?? null,
-          )}
-          note={`${count(totals.nextStep)} calls`}
-        />
-        <Kpi
-          label="Won"
-          value={count(totals.won)}
-          delta={
-            previous ? (
-              <Delta value={totals.won} previous={previous.won} />
-            ) : null
-          }
-          note={
-            value
-              ? `${percent(totals.winShare)} · ${value} quoted`
-              : `${percent(totals.winShare)} of calls`
-          }
-        />
-        <Kpi
-          label="Skills needing attention"
-          value={percent(totals.needsAttentionShare)}
-          delta={shareDelta(
-            totals.needsAttentionShare,
-            previous?.needsAttentionShare ?? null,
-          )}
-          note="Lower is better"
-        />
-      </Tiles>
+      {section !== "overview" ? (
+        <Tiles label="This period">
+          <Kpi
+            label="Calls analysed"
+            value={count(totals.calls)}
+            delta={
+              previous ? (
+                <Delta value={totals.calls} previous={previous.calls} />
+              ) : null
+            }
+            note={`${minutes(totals.minutes)} · ${count(totals.people)} people`}
+          />
+          <Kpi
+            label="Agreed a next step"
+            value={percent(totals.nextStepShare)}
+            delta={shareDelta(
+              totals.nextStepShare,
+              previous?.nextStepShare ?? null,
+            )}
+            note={`${count(totals.nextStep)} calls`}
+          />
+          <Kpi
+            label="Won"
+            value={count(totals.won)}
+            delta={
+              previous ? (
+                <Delta value={totals.won} previous={previous.won} />
+              ) : null
+            }
+            note={`${percent(totals.winShare)} of calls`}
+          />
+          <Kpi
+            label="Skills needing attention"
+            value={percent(totals.needsAttentionShare)}
+            delta={shareDelta(
+              totals.needsAttentionShare,
+              previous?.needsAttentionShare ?? null,
+            )}
+            note="Lower is better"
+          />
+        </Tiles>
+      ) : null}
 
       {section === "overview" ? (
         <>
+          <OutcomeStory data={data} onCalls={onCalls} />
           <Panel
             title="Calls over time"
             sub={`By ${data.window.unit}`}
             className={styles.wide}
           >
             <div className={styles.inset}>
-              <TrendColumns points={data.trend} unit={data.window.unit} />
+              <TrendColumns
+                points={data.trend}
+                unit={data.window.unit}
+                window={data.window}
+              />
             </div>
           </Panel>
 
           <div className={styles.grid}>
-            <Panel title="How calls ended" sub="As each report read it">
-              <div className={styles.inset}>
-                <Funnel
-                  calls={totals.calls}
-                  nextStep={totals.nextStep}
-                  won={totals.won}
-                />
-                <BarList
-                  rows={outcomeRows}
-                  label="Calls by outcome"
-                  onSelect={(key) =>
-                    go({
-                      outcome: (filters.outcome === key
-                        ? null
-                        : key) as Filters["outcome"],
-                    })
-                  }
-                />
-              </div>
-            </Panel>
             <Panel
               title="Skills across the calls"
               sub="Eight skills, every call"
