@@ -904,7 +904,7 @@
       "category": "apps",
       "value": "An iPhone-grade look on every phone, with a lighter mode for low-memory phones.",
       "for": ["Sellers", "Business owners"],
-      "anchors": ["apps/sales-xray-web/app/ui/sx-tokens.css#glass"],
+      "anchors": ["packages/typescript/ui/src/kit/tokens/screen.css#glass"],
       "fixture": "/review-fixture/shell"
     },
     {

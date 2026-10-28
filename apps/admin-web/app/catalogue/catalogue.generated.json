@@ -1,14 +1,14 @@
 {
   "schema": 1,
   "source": {
-    "commit": "93afe423",
-    "date": "2026-10-22T19:48:33+00:00",
+    "commit": "f8a8cc1d8",
+    "date": "2026-10-28T08:06:26+00:00",
     "main": "origin/main"
   },
   "latest_release": {
-    "version": "v0.84.0",
-    "date": "2026-10-22",
-    "title": "OpenAI identities per environment, Brain 4.0 coaching score structure, cost meter, analysis engine page, Liquid Glass look and owner Home/Leads/Settings slices, CI prerequisites cache"
+    "version": "v1.2.0",
+    "date": "2026-10-28",
+    "title": "Sales Xray v1.2: each organisation shows its own logo in the switcher, a clearer Leads header and settings, Share out leads explains itself, a tidier Who gets them row, masked usage analytics, and smoother releases"
   },
   "products": [
     {
@@ -159,7 +159,7 @@
       ],
       "api": {
         "prefixes": ["/v1/lead-desk"],
-        "routes": 144
+        "routes": 200
       },
       "fixture": "/review-fixture/cold-calling",
       "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/cold-calling",
@@ -418,7 +418,7 @@
       ],
       "api": {
         "prefixes": ["/v1/lead-desk"],
-        "routes": 144
+        "routes": 200
       },
       "fixture": "/review-fixture/leads",
       "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/leads",
@@ -491,7 +491,7 @@
       ],
       "api": {
         "prefixes": ["/v1/lead-desk"],
-        "routes": 144
+        "routes": 200
       },
       "fixture": "/review-fixture/stage-options",
       "preview": "https://salesxray-dev.authorityclosers.com/review-fixture/stage-options",
@@ -1397,7 +1397,7 @@
       ],
       "api": {
         "prefixes": ["/v1/organisation", "/v1/me/sales-xray-workspaces"],
-        "routes": 21
+        "routes": 24
       },
       "fixture": null,
       "preview": null,
@@ -1992,7 +1992,7 @@
       ],
       "api": {
         "prefixes": ["/v1/platform"],
-        "routes": 13
+        "routes": 14
       },
       "fixture": null,
       "preview": null,
@@ -2132,8 +2132,12 @@
       "for": ["AC staff"],
       "details": [],
       "switch": null,
-      "status": "dev",
-      "since": null,
+      "status": "live",
+      "since": {
+        "version": "v0.86.0",
+        "date": "2026-10-24",
+        "or_earlier": false
+      },
       "anchors": [
         {
           "anchor": "admin:/catalogue",
@@ -2486,16 +2490,12 @@
       "for": ["Sellers", "Business owners"],
       "details": [],
       "switch": null,
-      "status": "live",
-      "since": {
-        "version": "v0.70.0",
-        "date": "2026-10-21",
-        "or_earlier": false
-      },
+      "status": "dev",
+      "since": null,
       "anchors": [
         {
-          "anchor": "apps/sales-xray-web/app/ui/sx-tokens.css#glass",
-          "path": "apps/sales-xray-web/app/ui/sx-tokens.css",
+          "anchor": "packages/typescript/ui/src/kit/tokens/screen.css#glass",
+          "path": "packages/typescript/ui/src/kit/tokens/screen.css",
           "exists": true
         }
       ],
@@ -2811,7 +2811,7 @@
       ],
       "api": {
         "prefixes": ["/v1/auth", "/v1/me/sign-in-methods"],
-        "routes": 20
+        "routes": 22
       },
       "fixture": null,
       "preview": null,
@@ -3042,12 +3042,13 @@
     {
       "app": "Sales X-Ray",
       "key": "sx",
-      "pages": 38,
-      "fixtures": 40,
+      "pages": 43,
+      "fixtures": 55,
       "named": 18,
       "unnamed": [
         "/",
         "/account",
+        "/account-closed",
         "/account/billing",
         "/account/billing/return",
         "/analysis",
@@ -3058,25 +3059,33 @@
         "/dashboard",
         "/delivery",
         "/leads",
+        "/leads/notes",
         "/pricing",
         "/prospects/[prospectId]",
         "/provider-review",
         "/refunds",
+        "/reports",
         "/review/figures",
         "/settings",
         "/settings/[section]",
-        "/terms"
+        "/terms",
+        "/testers",
+        "/welcome"
       ]
     },
     {
       "app": "AC Admin",
       "key": "admin",
-      "pages": 47,
-      "fixtures": 7,
+      "pages": 59,
+      "fixtures": 14,
       "named": 26,
       "unnamed": [
         "/",
+        "/bugs",
+        "/bugs/[bugId]",
         "/calls/[recordingId]",
+        "/economics",
+        "/feedback",
         "/learning-operations",
         "/login",
         "/people",
@@ -3095,7 +3104,15 @@
         "/sales-xray/one-pass/[subject]",
         "/sales-xray/review/[assignmentId]",
         "/sales-xray/review/report/[runId]",
-        "/synthetic/[callId]"
+        "/sellers",
+        "/sellers/[personId]",
+        "/synthetic/[callId]",
+        "/telemetry",
+        "/telemetry/devices",
+        "/telemetry/fix-next",
+        "/telemetry/friction",
+        "/telemetry/releases",
+        "/telemetry/speed"
       ]
     },
     {
@@ -3147,15 +3164,15 @@
     }
   ],
   "api": {
-    "routes": 530,
+    "routes": 663,
     "areas": [
       {
         "prefix": "/v1/lead-desk",
-        "routes": 144
+        "routes": 200
       },
       {
         "prefix": "/v1/admin",
-        "routes": 82
+        "routes": 111
       },
       {
         "prefix": "/v1/conversation",
@@ -3163,18 +3180,22 @@
       },
       {
         "prefix": "/v1/me",
-        "routes": 43
+        "routes": 52
       },
       {
         "prefix": "/v1/sales-xray",
-        "routes": 30
+        "routes": 45
       },
       {
         "prefix": "/v1/organisation",
-        "routes": 19
+        "routes": 20
       },
       {
         "prefix": "/v1/auth",
+        "routes": 19
+      },
+      {
+        "prefix": "/v1/api",
         "routes": 17
       },
       {
@@ -3182,12 +3203,12 @@
         "routes": 15
       },
       {
-        "prefix": "/v1/reviewer",
+        "prefix": "/v1/platform",
         "routes": 14
       },
       {
-        "prefix": "/v1/platform",
-        "routes": 13
+        "prefix": "/v1/reviewer",
+        "routes": 14
       },
       {
         "prefix": "/v1/media",
@@ -3202,15 +3223,15 @@
         "routes": 9
       },
       {
-        "prefix": "/v1/api",
-        "routes": 8
-      },
-      {
         "prefix": "/v1/activities",
         "routes": 6
       },
       {
         "prefix": "/v1/native",
+        "routes": 6
+      },
+      {
+        "prefix": "/v1/telemetry",
         "routes": 6
       },
       {
@@ -3222,6 +3243,10 @@
         "routes": 3
       },
       {
+        "prefix": "/v1/people",
+        "routes": 3
+      },
+      {
         "prefix": "/v1/profile",
         "routes": 3
       },
@@ -3230,11 +3255,11 @@
         "routes": 3
       },
       {
-        "prefix": "/v1/telemetry",
-        "routes": 3
+        "prefix": "/v1/analytics",
+        "routes": 2
       },
       {
-        "prefix": "/v1/analytics",
+        "prefix": "/v1/bug-reports",
         "routes": 2
       },
       {
@@ -3243,6 +3268,10 @@
       },
       {
         "prefix": "/v1/credit-notes",
+        "routes": 2
+      },
+      {
+        "prefix": "/v1/feedback",
         "routes": 2
       },
       {
@@ -3279,6 +3308,10 @@
       },
       {
         "prefix": "/v1/history",
+        "routes": 1
+      },
+      {
+        "prefix": "/v1/integrations",
         "routes": 1
       },
       {
@@ -3344,6 +3377,96 @@
   ],
   "releases": [
     {
+      "version": "v1.2.0",
+      "date": "2026-10-28",
+      "title": "Sales Xray v1.2: each organisation shows its own logo in the switcher, a clearer Leads header and settings, Share out leads explains itself, a tidier Who gets them row, masked usage analytics, and smoother releases"
+    },
+    {
+      "version": "v1.1.0",
+      "date": "2026-10-28",
+      "title": "Sales Xray v1.1: your Home redesigned with recent calls and team activity, Call works on the first tap, the Calls tab opens with your calls, Google Sheets and Drive, routing rules, website-form leads kept safe during releases, Viewers can read the team, and security updates"
+    },
+    {
+      "version": "v1.00.0",
+      "date": "2026-10-27",
+      "title": "Sales Xray v1.00: Sign in with Pulse and Pulse connections (off until set up), plans decide what connected apps may do (no change while billing is off), one-click Google Ads leads (on once its keys are set), Lead rules shows only the rules, the select bar fits a phone"
+    },
+    {
+      "version": "v0.99.0",
+      "date": "2026-10-27",
+      "title": "Sales Xray v0.99: the lead sheet in one pass (log a call, Notes, Calls and Story, reassign), a new sidebar on computers, choose your character, the /testers page, a calm Updating banner that retries through releases, the privacy page names connected AI apps"
+    },
+    {
+      "version": "v0.98.0",
+      "date": "2026-10-26",
+      "title": "Sales Xray v0.98: the Leads list stays responsive and offers Try again (#27), the lead sheet's header in one row and a notes box that saves with a tick, the Leads switch fits small phones"
+    },
+    {
+      "version": "v0.97.0",
+      "date": "2026-10-26",
+      "title": "Sales Xray v0.97: sellers can attach a recording from the lead"
+    },
+    {
+      "version": "v0.96.0",
+      "date": "2026-10-26",
+      "title": "Sales Xray v0.96: opt-in auto-analysis consent in Settings (automatic start completes in v0.97)"
+    },
+    {
+      "version": "v0.95.0",
+      "date": "2026-10-26",
+      "title": "Sales Xray v0.95: shake to report fixed, Delete call, first-run Home and a seller day dashboard, org logo, analyse calls automatically (opt-in)"
+    },
+    {
+      "version": "v0.94.0",
+      "date": "2026-10-26",
+      "title": "Sales Xray v0.94: old Facebook leads keep their real arrival time, bug tool fix"
+    },
+    {
+      "version": "v0.93.0",
+      "date": "2026-10-26",
+      "title": "Sales Xray v0.93: Dipak eight stages, one-tap analysis with live progress, bug pipeline and photos, Facebook sources, new-lead push, faster report loading"
+    },
+    {
+      "version": "v0.92.0",
+      "date": "2026-10-26",
+      "title": "Sales Xray v0.92: demo-ready: report-a-bug from anywhere, member profiles and business roles, duplicate review, follow-up digests and alerts, density and type polish"
+    },
+    {
+      "version": "v0.91.0",
+      "date": "2026-10-25",
+      "title": "Sales Xray v0.91: AI apps can add notes and tasks safely (audit, caps, undo), keyboard-only focus rings, 44 px buttons and friction fixes, CRM export import"
+    },
+    {
+      "version": "v0.90.0",
+      "date": "2026-10-25",
+      "title": "Sales Xray v0.90: new Home and My day (who to call, targets), lead sheet on one grid, Notifications, alerts and haptics, one-flow first run, Reports page"
+    },
+    {
+      "version": "v0.89.0",
+      "date": "2026-10-25",
+      "title": "Sales Xray v0.89: Tasks and reminders, seller timeline in Admin, phone-first leads table, Notes, Meta connect reasons, AC nine stages"
+    },
+    {
+      "version": "v0.88.0",
+      "date": "2026-10-24",
+      "title": "Sales Xray v0.88: work saved on the phone first, Lead OS tasks engine, My work and table view, sign-in workspace, faster start"
+    },
+    {
+      "version": "v0.87.0",
+      "date": "2026-10-24",
+      "title": "Sales Xray v0.87: Lead OS pipeline, phone setup, dark mode, Google Play links, AI apps"
+    },
+    {
+      "version": "v0.86.0",
+      "date": "2026-10-24",
+      "title": "Sales Xray v0.86: Play-ready web, sign-in and onboarding, Delete account, bug reporter and reviews, usage analytics with Admin dashboard, phone fixes"
+    },
+    {
+      "version": "v0.85.0",
+      "date": "2026-10-23",
+      "title": "Sales Xray v0.85: calls name their lead, Start calling per pipeline, Team and All leads"
+    },
+    {
       "version": "v0.84.0",
       "date": "2026-10-22",
       "title": "OpenAI identities per environment, Brain 4.0 coaching score structure, cost meter, analysis engine page, Liquid Glass look and owner Home/Leads/Settings slices, CI prerequisites cache"
@@ -3402,96 +3525,6 @@
       "version": "v0.73.0",
       "date": "2026-10-21",
       "title": "Gemini Flex for call analysis (fallback to standard), Next 16.3.8, sharp and shell-quote security bumps"
-    },
-    {
-      "version": "v0.72.0",
-      "date": "2026-10-21",
-      "title": "One-pass transcription for long calls, Pillow 13 and certifi security bumps"
-    },
-    {
-      "version": "v0.71.0",
-      "date": "2026-10-21",
-      "title": "One-pass analysis with Gemini Flash-Lite transcription (owner switch, classic fallback), OpenAI as a call-analysis processor, USD-INR reference rates and pseudonymous usage export, CI runners pinned"
-    },
-    {
-      "version": "v0.70.0",
-      "date": "2026-10-21",
-      "title": "Lead stages, AI spend caps and guard, Chats inbox with read marks, Lead Desk Messenger/Instagram/WhatsApp and AI replies (off), Settings revamp and Developers page, design system v2, faster calls list, MCP sign-in discovery fix"
-    },
-    {
-      "version": "v0.69.0",
-      "date": "2026-10-20",
-      "title": "Report and budget settings, Review 2.0, developer platform (API keys, webhooks, Connect), Lead Desk Meta conversions, WhatsApp, Messenger, Instagram, ad spend and AI replies (off), Admin 2.0 settings and staff keys, sign-in with Google redirect and account linking safeguards, call-data and playback fixes"
-    },
-    {
-      "version": "v0.68.0",
-      "date": "2026-10-19",
-      "title": "Review routes never hold a database connection (fix for the 19 Oct production pool exhaustion)"
-    },
-    {
-      "version": "v0.67.0",
-      "date": "2026-10-19",
-      "title": "Phone fixes for the Android app: signed-out welcome, compact Leads with WhatsApp and SMS, one-step call flow, permissions one at a time, policy pages fixed"
-    },
-    {
-      "version": "v0.66.0",
-      "date": "2026-10-19",
-      "title": "Call data engine (fast and deep pipelines, call facts, Admin call map); Wise Life partner webhooks (off until set up); Prospect reads engine facts; smoother loading; Admin workspaces and environment switch"
-    },
-    {
-      "version": "v0.65.0",
-      "date": "2026-10-19",
-      "title": "Phone alerts for new gold reviews; calls that run out of AI budget wait and continue by themselves; one-click budget raises in Admin; budget alerts"
-    },
-    {
-      "version": "v0.64.0",
-      "date": "2026-10-19",
-      "title": "Admin: usage and cost for every environment; AI budget holds settle automatically; an analysis start survives a brief outage"
-    },
-    {
-      "version": "v0.63.0",
-      "date": "2026-10-19",
-      "title": "Prospect gets its own tab (Report | Prospect | Coaching): who the buyer is, need/budget/authority/timing with quotes, what to remember before the next call; phone setup shows where your phone saves recordings"
-    },
-    {
-      "version": "v0.62.0",
-      "date": "2026-10-19",
-      "title": "Gold review on the phone for reviewers"
-    },
-    {
-      "version": "v0.61.0",
-      "date": "2026-10-19",
-      "title": "Download page for the apps (salesxray.authorityclosers.com/apps: Android button, QR, version and checksum, install help); calls are never left as Untitled call"
-    },
-    {
-      "version": "v0.60.0",
-      "date": "2026-10-18",
-      "title": "Upload and report fixes from the owner test: the details step keeps your answers, clearer pointer wording, no more Untitled call, better speaker guess; Google Ads settings wiring"
-    },
-    {
-      "version": "v0.59.0",
-      "date": "2026-10-18",
-      "title": "Leads: Google Ads lead connector (Continue with Google; stays off until its settings are added)"
-    },
-    {
-      "version": "v0.58.0",
-      "date": "2026-10-18",
-      "title": "Leads: log work calls from the phone, after-call sheet, phone setup checklist, work hours, Call back, calls report and CSV, Save as lead, Mark private; phone app download on; updated consent asks once"
-    },
-    {
-      "version": "v0.57.0",
-      "date": "2026-10-18",
-      "title": "Minutes are used only when a report is ready: a call that fails, is cancelled or expires before its report gives its minutes back"
-    },
-    {
-      "version": "v0.56.0",
-      "date": "2026-10-18",
-      "title": "Upload terms name the AI providers and calls are kept until deleted; Leads: Taking new leads switch, Someday follow-up, Last call in short; six UI fixes"
-    },
-    {
-      "version": "v0.55.0",
-      "date": "2026-10-18",
-      "title": "Database backups: the logical Postgres dump may be up to 64 MiB (was 8 MiB), so the scheduled production backups run again"
     }
   ]
 }

@@ -13,10 +13,10 @@
  * answered by the server.
  */
 
-import { SlidersHorizontal, X } from "lucide-react";
-import { useState } from "react";
+import { Check, ChevronDown, SlidersHorizontal, X } from "lucide-react";
+import { useState, type ReactNode } from "react";
 
-import { Button, Field, Segmented } from "../ui/kit";
+import { Button, Field } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
 import type {
   ListDue,
@@ -221,45 +221,52 @@ export function ActiveFilters({
   );
 }
 
-/** One question as a row of chips that wrap: Any, then each answer. */
+/** One summary per question; opening it reveals one answer per 48 px row.
+ * Native exclusive details keep choices in this sheet, with no stacked overlay. */
 function Choices<T extends string>({
   label,
   words,
   value,
   onChange,
+  any = "Any",
 }: {
   label: string;
   words: Record<T, string>;
   value: T | null | undefined;
   onChange: (next: T | null) => void;
+  any?: string;
 }) {
   return (
-    <div className={styles.filterGroup} role="group" aria-label={label}>
-      <span className={styles.stepLabel}>{label}</span>
-      <div className={styles.filterChoices}>
-        <button
-          type="button"
-          className={styles.statusChip}
-          aria-pressed={!value}
-          data-on={!value ? "" : undefined}
-          onClick={() => onChange(null)}
-        >
-          Any
-        </button>
-        {(Object.keys(words) as T[]).map((key) => (
+    <details className={styles.pickerGroup} name="lead-filter-choice">
+      <summary>
+        <span>{label}</span>
+        <span className={styles.pickerValue}>{value ? words[value] : any}</span>
+        <ChevronDown size={16} aria-hidden="true" />
+      </summary>
+      <div className={styles.pickerOptions} role="group" aria-label={label}>
+        {[["", any], ...Object.entries(words)].map(([key, word]) => (
           <button
             key={key}
             type="button"
-            className={styles.statusChip}
-            aria-pressed={value === key}
-            data-on={value === key ? "" : undefined}
-            onClick={() => onChange(key)}
+            className={styles.pickerRow}
+            aria-pressed={(value ?? "") === key}
+            onClick={(event) => {
+              onChange(key ? (key as T) : null);
+              const group = event.currentTarget.closest("details");
+              if (group) {
+                group.open = false;
+                group.querySelector("summary")?.focus();
+              }
+            }}
           >
-            {words[key]}
+            <span>{String(word)}</span>
+            {(value ?? "") === key ? (
+              <Check size={18} aria-hidden="true" />
+            ) : null}
           </button>
         ))}
       </div>
-    </div>
+    </details>
   );
 }
 
@@ -271,6 +278,8 @@ export function FilterSheet({
   canPickWho,
   pipes,
   onApply,
+  sellerPicker,
+  onClearAll,
 }: {
   open: boolean;
   onClose: () => void;
@@ -281,6 +290,8 @@ export function FilterSheet({
   /** Several pipelines: one, or all of them. */
   pipes: Pipe[];
   onApply: (next: LeadFilters) => void;
+  sellerPicker?: ReactNode;
+  onClearAll?: () => void;
 }) {
   // A fresh sheet each opening starts from the filters on now.
   const [draft, setDraft] = useState(filters);
@@ -301,9 +312,13 @@ export function FilterSheet({
         <div className={styles.filterActions}>
           <Button
             variant="ghost"
-            onClick={() =>
-              apply({ who: defaultWho, pipeline: null, q: "", more: {} })
-            }
+            onClick={() => {
+              if (onClearAll) {
+                onClearAll();
+                onClose();
+              } else
+                apply({ who: defaultWho, pipeline: null, q: "", more: {} });
+            }}
           >
             Clear all
           </Button>
@@ -322,47 +337,36 @@ export function FilterSheet({
       >
         {/* Pipeline first: for a team with several, the choice that matters most
             (orchestrator, 25 Oct 2026); then whose leads. */}
-        {pipes.length === 2 ? (
-          <div className={styles.filterGroup}>
-            <span className={styles.stepLabel}>Pipeline</span>
-            <Segmented
-              label="Pipeline"
-              items={[
-                { key: "", label: "All" },
-                ...pipes.map((item) => ({ key: item.key, label: item.name })),
-              ]}
-              value={draft.pipeline ?? ""}
-              onChange={(key) => setDraft({ ...draft, pipeline: key || null })}
-            />
-          </div>
-        ) : pipes.length > 2 ? (
-          // Up to eight pipelines: a list, not a row of buttons, on a phone.
-          <Field label="Pipeline">
-            <select
-              value={draft.pipeline ?? ""}
-              onChange={(event) =>
-                setDraft({ ...draft, pipeline: event.target.value || null })
-              }
-            >
-              <option value="">All pipelines</option>
-              {pipes.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </Field>
+        {pipes.length > 1 ? (
+          <Choices
+            label="Pipeline"
+            words={Object.fromEntries(
+              pipes.map((pipe) => [pipe.key, pipe.name]),
+            )}
+            value={draft.pipeline}
+            any="All pipelines"
+            onChange={(pipeline) => setDraft({ ...draft, pipeline })}
+          />
         ) : null}
         {canPickWho ? (
-          <div className={styles.filterGroup}>
-            <span className={styles.stepLabel}>Whose leads</span>
-            <Segmented
-              label="Whose leads"
-              items={WHO}
-              value={draft.who}
-              onChange={(who) => setDraft({ ...draft, who })}
-            />
-          </div>
+          <Choices
+            label="Whose leads"
+            words={{ mine: "Mine", unassigned: "No owner" }}
+            value={draft.who === "team" ? null : draft.who}
+            any="Everyone"
+            onChange={(who) =>
+              setDraft({ ...draft, who: (who as Scope | null) ?? "team" })
+            }
+          />
+        ) : null}
+        {sellerPicker ? (
+          <details className={styles.pickerGroup} name="lead-filter-choice">
+            <summary>
+              <span>One seller</span>
+              <ChevronDown size={16} aria-hidden="true" />
+            </summary>
+            <div className={styles.sellerChoices}>{sellerPicker}</div>
+          </details>
         ) : null}
         <Field label="Name or number">
           <input
@@ -398,21 +402,13 @@ export function FilterSheet({
           value={more.created}
           onChange={(created) => setMore({ created })}
         />
-        <Field label="Source">
-          <select
-            value={more.source ?? ""}
-            onChange={(event) =>
-              setMore({ source: event.target.value || null })
-            }
-          >
-            <option value="">Every source</option>
-            {Object.entries(SOURCE_WORDS).map(([key, label]) => (
-              <option key={key} value={key}>
-                {label}
-              </option>
-            ))}
-          </select>
-        </Field>
+        <Choices
+          label="Source"
+          words={SOURCE_WORDS}
+          value={more.source}
+          any="Every source"
+          onChange={(source) => setMore({ source })}
+        />
       </form>
     </Sheet>
   );

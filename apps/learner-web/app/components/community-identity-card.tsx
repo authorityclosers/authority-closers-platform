@@ -389,10 +389,10 @@ export function CommunityIdentityCard({
     <section className={styles.card} aria-labelledby="community-identity-title">
       <header className={styles.heading}>
         <h2 id="community-identity-title" ref={headingRef} tabIndex={-1}>
-          Cohorva username
+          Reflex username
         </h2>
         <p>
-          One public username across Cohorva and every academy you join. It is
+          One public username across Reflex and every academy you join. It is
           not your sign-in ID and never exposes your email.
         </p>
       </header>
@@ -495,7 +495,7 @@ export function CommunityIdentityCard({
         <>
           <div className={styles.claimed}>
             <strong>@{profile.username}</strong>
-            <span>Your Cohorva identity · fixed in this release</span>
+            <span>Your Reflex identity · fixed in this release</span>
           </div>
           <div className={styles.preference}>
             <label className={styles.choice}>

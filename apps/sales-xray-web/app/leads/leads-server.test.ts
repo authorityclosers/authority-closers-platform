@@ -1,0 +1,148 @@
+import { beforeEach, expect, it, vi } from "vitest";
+
+import { serverReads, serverApiOrigin } from "../server-reads";
+import { serverLeads } from "./leads-server";
+import { firstPageFor, type ServerLeads } from "./leads-seed";
+
+vi.mock("../server-reads", () => ({
+  serverApiOrigin: vi.fn(() => "http://api.example.test"),
+  serverReads: vi.fn(),
+  SESSION_PATHS: ["/v1/me/workspaces", "/v1/me/sales-xray-workspaces"],
+}));
+const identity = JSON.stringify([
+  "fictional-person",
+  "fictional-session",
+  "fictional-workspace",
+]);
+const desk = {
+  me: { person_id: "fictional-person", can_manage: true },
+  queue: [],
+  counts: { open: 2000 },
+  numbers: { calls: 0 },
+};
+const page = { leads: [], total: 2000, next_offset: 50 };
+const reads = () => ({
+  "/v1/me/workspaces": {
+    status: 200,
+    body: {
+      person_id: "fictional-person",
+      session_id: "fictional-session",
+      selected_tenant_id: "fictional-workspace",
+    },
+  },
+  "/v1/me/sales-xray-workspaces": {
+    status: 200,
+    body: { selected_tenant_id: "fictional-workspace" },
+  },
+  "/v1/lead-desk": { status: 200, body: desk },
+});
+const load = (query: Record<string, string> = { tab: "all", stage: "open" }) =>
+  serverLeads(Promise.resolve(query));
+beforeEach(() => {
+  vi.mocked(serverApiOrigin).mockReturnValue("http://api.example.test");
+  vi.mocked(serverReads)
+    .mockReset()
+    .mockResolvedValueOnce(reads())
+    .mockResolvedValueOnce({
+      "/v1/lead-desk/leads?scope=team&stage=open": { status: 200, body: page },
+    });
+});
+it("reads only the first page through the existing bounded private server reader", async () => {
+  expect(await load()).toMatchObject({
+    identity,
+    firstPage: { scope: "team", page },
+  });
+  expect(serverReads).toHaveBeenNthCalledWith(
+    1,
+    ["/v1/me/workspaces", "/v1/me/sales-xray-workspaces", "/v1/lead-desk"],
+    600,
+  );
+  expect(serverReads).toHaveBeenNthCalledWith(
+    2,
+    ["/v1/lead-desk/leads?scope=team&stage=open"],
+    600,
+  );
+});
+it("falls back before reading query parameters in a static build", async () => {
+  vi.mocked(serverApiOrigin).mockReturnValue(null);
+  expect(await serverLeads(new Promise(() => {}))).toBeNull();
+  expect(serverReads).not.toHaveBeenCalled();
+});
+it.each<Record<string, string>>([
+  { tab: "desk" },
+  { tab: "all", who: "mine" },
+  { tab: "all", q: "fictional" },
+  { tab: "all", stage: "won" },
+])(
+  "leaves other views, saved filters and their scope to the normal reader (%j)",
+  async (query) => {
+    expect(await load(query)).toBeNull();
+    expect(serverReads).not.toHaveBeenCalled();
+  },
+);
+it("does not accept data when the selected workspace or desk person differs", async () => {
+  const wrongWorkspace = reads();
+  wrongWorkspace["/v1/me/workspaces"].body.selected_tenant_id =
+    "other-workspace";
+  vi.mocked(serverReads).mockReset().mockResolvedValueOnce(wrongWorkspace);
+  expect(await load()).toBeNull();
+  vi.mocked(serverReads)
+    .mockReset()
+    .mockResolvedValueOnce({
+      ...reads(),
+      "/v1/lead-desk": {
+        status: 200,
+        body: { ...desk, me: { ...desk.me, person_id: "other-person" } },
+      },
+    });
+  expect(await load()).toBeNull();
+});
+it("keeps the desk when the list times out and rejects a malformed desk", async () => {
+  vi.mocked(serverReads)
+    .mockReset()
+    .mockResolvedValueOnce(reads())
+    .mockResolvedValueOnce(null);
+  expect(await load()).toMatchObject({ identity, firstPage: null });
+  vi.mocked(serverReads)
+    .mockReset()
+    .mockResolvedValueOnce({
+      ...reads(),
+      "/v1/lead-desk": { status: 200, body: null },
+    });
+  expect(await load()).toBeNull();
+});
+it("uses mine for a seller, leaving team permission to the ordinary API", async () => {
+  vi.mocked(serverReads)
+    .mockReset()
+    .mockResolvedValueOnce({
+      ...reads(),
+      "/v1/lead-desk": {
+        status: 200,
+        body: { ...desk, me: { ...desk.me, can_manage: false } },
+      },
+    })
+    .mockResolvedValueOnce({
+      "/v1/lead-desk/leads?scope=mine&stage=open": { status: 200, body: page },
+    });
+  expect(await load()).toMatchObject({ firstPage: { scope: "mine", page } });
+});
+it("a server page never answers another identity, scope, pipeline or filter", () => {
+  const seed = {
+    identity,
+    desk,
+    firstPage: { scope: "team", page },
+  } as unknown as ServerLeads;
+  const ask = { scope: "team", stage: "open", query: "" };
+  expect(firstPageFor(seed, identity, ask)).toBe(page);
+  expect(firstPageFor(null, undefined, ask)).toBeNull();
+  expect(firstPageFor(seed, "other-identity", ask)).toBeNull();
+  for (const change of [
+    { scope: "mine" },
+    { stage: "won" },
+    { query: "test" },
+    { pipeline: "other" },
+    { owner: "other" },
+    { more: { due: "today" } },
+  ])
+    expect(firstPageFor(seed, identity, { ...ask, ...change })).toBeNull();
+});

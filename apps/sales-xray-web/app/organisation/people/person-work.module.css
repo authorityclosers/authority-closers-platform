@@ -1,0 +1,111 @@
+.work {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+.work h2 {
+  margin: 0;
+  font-size: var(--sx-text-lg);
+}
+.presence {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+.presence span {
+  display: block;
+  margin-top: 3px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+.strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 8px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  padding-bottom: 6px;
+}
+.figure {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+  padding: 14px 12px;
+  background: var(--sx-surface);
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  scroll-snap-align: start;
+  font-variant-numeric: tabular-nums;
+}
+.figure > span {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+}
+.figure strong {
+  font-size: 28px;
+  line-height: 1.1;
+  color: var(--sx-ink);
+}
+.figure small {
+  color: var(--sx-muted);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.heading > span,
+.quiet {
+  font-size: var(--sx-text-sm);
+  color: var(--sx-muted);
+}
+.quiet {
+  margin: 0;
+}
+.timeline {
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+.more {
+  min-height: 48px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .figure {
+    animation: arrive 240ms ease-out both;
+  }
+  @keyframes arrive {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+.primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  margin-top: 16px;
+  padding: 0 18px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  text-decoration: none;
+  font-weight: 650;
+}

@@ -25,14 +25,10 @@ import {
 ).IS_REACT_ACT_ENVIRONMENT = true;
 // Keep the actual route, workspace gate, upload studio, library and report
 // mounted. The surrounding Academy chrome has its own integration coverage.
-vi.mock("../components/site-shell", () => ({
-  LearnerShell: ({
-    children,
-    current,
-  }: {
-    children: ReactNode;
-    current: string;
-  }) => <div data-learner-current={current}>{children}</div>,
+vi.mock("../shell/reflex-shell", () => ({
+  ReflexShell: ({ children }: { children: ReactNode; current: string }) => (
+    <div data-reflex-shell>{children}</div>
+  ),
 }));
 
 let root: Root, host: HTMLDivElement;
@@ -237,9 +233,7 @@ it("runs the actual learner upload and report journey under one Academy main and
   sourcePresent = false;
   await mount();
   expect(host.querySelectorAll("main")).toHaveLength(1);
-  expect(
-    host.querySelector('[data-learner-current="sales-xray"]'),
-  ).not.toBeNull();
+  expect(host.querySelector("[data-reflex-shell]")).not.toBeNull();
   expect(host.querySelector(".studio-header")).toBeNull();
   expect(
     host.querySelector('[aria-label="Sales Xray account navigation"]'),

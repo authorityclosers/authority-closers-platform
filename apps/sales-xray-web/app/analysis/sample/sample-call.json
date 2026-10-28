@@ -1,0 +1,2753 @@
+{
+  "report": {
+    "submission_id": "01ead8b3-6efc-49ba-b5cb-75d24525b6d5",
+    "schema": "ac.sales-xray.report-envelope/2",
+    "recording_id": "3d029808-ce4e-44a1-8d90-bc8f637de56d",
+    "run_id": "398a09a0-97d0-42c7-9cdb-b249c7376845",
+    "source_sha256": "c6891d67ef2e9990bd5f0679931bc2aaf5f36baf958039267524ea8b4ce371a0",
+    "transcript_revision": "c6aa90f3df74842a90e2f5b26f7b8475896feb1534cdba5cd25785e83ca17e9f",
+    "source_label": "Scribe transcript revision c6aa90f3df74842a90e2f5b26f7b8475896feb1534cdba5cd25785e83ca17e9f · source-bound",
+    "report": {
+      "schema": "ac.sales-xray.report-access/2",
+      "access": "claimed_account",
+      "review_status": "draft_not_dipak_adjudicated",
+      "numeric_publication": false,
+      "content": {
+        "summary": "You qualified Meera on timeline, budget, and decision-making criteria in under three minutes, addressed concerns on price and possession, and scheduled a joint site visit with her husband for Saturday at 11:00 AM.",
+        "strengths": [
+          {
+            "title": "Proactive objection isolation",
+            "explanation": "You asked whether anything else would prevent them from proceeding, which surfaced her strict possession deadline before the visit.",
+            "evidence": [
+              {
+                "segment_id": "s19",
+                "quote": "Great. Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?",
+                "start_ms": 124000,
+                "end_ms": 130460
+              },
+              {
+                "segment_id": "s20",
+                "quote": "The possession date. We can't wait two years.",
+                "start_ms": 131260,
+                "end_ms": 134560
+              },
+              {
+                "segment_id": "s21",
+                "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                "start_ms": 135420,
+                "end_ms": 141500
+              }
+            ]
+          }
+        ],
+        "missed_opportunities": [
+          {
+            "title": "Unexplored long-term schooling preference",
+            "explanation": "Meera stated they wanted a good school close by for later, but you moved immediately to budget without noting or exploring schooling preferences.",
+            "evidence": [
+              {
+                "segment_id": "s8",
+                "quote": "Two bedrooms is enough, but we'd like a proper balcony and a good school close by for later.",
+                "start_ms": 45800,
+                "end_ms": 52380
+              },
+              {
+                "segment_id": "s9",
+                "quote": "That makes sense. What budget have you and your husband agreed on, roughly?",
+                "start_ms": 53240,
+                "end_ms": 57640
+              }
+            ]
+          }
+        ],
+        "dimensions": [
+          {
+            "dimension_id": "human_connection_trust",
+            "label": "Human Connection & Trust",
+            "status": "observed",
+            "observation": "You introduced yourself cleanly, respected her time constraint, and acknowledged her family's pregnancy milestone naturally.",
+            "citations": [
+              {
+                "doc": "Doc-1",
+                "sections": ["§8–§10", "§52", "§54–§56"]
+              },
+              {
+                "doc": "Doc-5",
+                "sections": ["§6"]
+              }
+            ],
+            "evidence": [
+              {
+                "segment_id": "s1",
+                "quote": "Hello. Am I speaking with Meera? This is Rahul from Fictional Homes. You filled in our form about a two-bedroom flat. Is this a good time for five minutes?",
+                "start_ms": 300,
+                "end_ms": 9180
+              },
+              {
+                "segment_id": "s3",
+                "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                "start_ms": 14620,
+                "end_ms": 19000
+              },
+              {
+                "segment_id": "s5",
+                "quote": "Congratulations. That helps me a lot. So you'd wanna move in by early next year?",
+                "start_ms": 27320,
+                "end_ms": 32720
+              }
+            ]
+          },
+          {
+            "dimension_id": "discovery_deep_understanding",
+            "label": "Discovery & Deep Understanding",
+            "status": "observed",
+            "observation": "You uncovered the root driver (baby in March), move-in deadline (February), specific layout needs (balcony, two bedrooms), and schooling preferences.",
+            "citations": [
+              {
+                "doc": "Doc-1",
+                "sections": ["§4–§7", "§11–§16"]
+              },
+              {
+                "doc": "Doc-3",
+                "sections": ["§5–§11", "§16", "§45–§52"]
+              },
+              {
+                "doc": "Doc-5",
+                "sections": ["§7–§10"]
+              }
+            ],
+            "evidence": [
+              {
+                "segment_id": "s3",
+                "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                "start_ms": 14620,
+                "end_ms": 19000
+              },
+              {
+                "segment_id": "s4",
+                "quote": "We're renting at the moment. My husband and I have a baby coming in March, so we want our own place before that.",
+                "start_ms": 19840,
+                "end_ms": 26520
+              },
+              {
+                "segment_id": "s6",
+                "quote": "Ideally by February. Not later than that.",
+                "start_ms": 33600,
+                "end_ms": 36440
+              },
+              {
+                "segment_id": "s8",
+                "quote": "Two bedrooms is enough, but we'd like a proper balcony and a good school close by for later.",
+                "start_ms": 45800,
+                "end_ms": 52380
+              }
+            ]
+          },
+          {
+            "dimension_id": "qualification",
+            "label": "Qualification",
+            "status": "observed",
+            "observation": "You confirmed both budget ceiling (around eighty lac) and the key decision-maker constraint (husband must verify commute before deciding).",
+            "citations": [
+              {
+                "doc": "Doc-3",
+                "sections": ["§17–§18", "§44"]
+              },
+              {
+                "doc": "Doc-5",
+                "sections": ["§11–§13"]
+              }
+            ],
+            "evidence": [
+              {
+                "segment_id": "s9",
+                "quote": "That makes sense. What budget have you and your husband agreed on, roughly?",
+                "start_ms": 53240,
+                "end_ms": 57640
+              },
+              {
+                "segment_id": "s10",
+                "quote": "We were thinking around eighty lac, all in. The listing said eighty-five, which is a stretch.",
+                "start_ms": 58480,
+                "end_ms": 64980
+              },
+              {
+                "segment_id": "s14",
+                "quote": "Yes. He won't decide without seeing it.",
+                "start_ms": 96740,
+                "end_ms": 99400
+              },
+              {
+                "segment_id": "s15",
+                "quote": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?",
+                "start_ms": 100220,
+                "end_ms": 109660
+              }
+            ]
+          },
+          {
+            "dimension_id": "problem_impact_desire",
+            "label": "Problem, Impact & Desire Clarity",
+            "status": "observed",
+            "observation": "You identified key criteria: moving out of rented housing before childbirth, strict February move-in deadline, and sensitivity to commuting and budget constraints.",
+            "citations": [
+              {
+                "doc": "Doc-3",
+                "sections": ["§7–§15", "§19"]
+              },
+              {
+                "doc": "Doc-5",
+                "sections": ["§14–§17"]
+              }
+            ],
+            "evidence": [
+              {
+                "segment_id": "s4",
+                "quote": "We're renting at the moment. My husband and I have a baby coming in March, so we want our own place before that.",
+                "start_ms": 19840,
+                "end_ms": 26520
+              },
+              {
+                "segment_id": "s6",
+                "quote": "Ideally by February. Not later than that.",
+                "start_ms": 33600,
+                "end_ms": 36440
+              },
+              {
+                "segment_id": "s20",
+                "quote": "The possession date. We can't wait two years.",
+                "start_ms": 131260,
+                "end_ms": 134560
+              }
+            ]
+          },
+          {
+            "dimension_id": "solution_relevance_presentation",
+            "label": "Solution Relevance & Presentation",
+            "status": "observed",
+            "observation": "You adapted immediately to her price and timing needs by introducing the fourth-floor unit at seventy-nine lac with January possession rather than pushing the online listing.",
+            "citations": [
+              {
+                "doc": "Doc-3",
+                "sections": ["§20–§26"]
+              },
+              {
+                "doc": "Doc-5",
+                "sections": ["§18–§21"]
+              }
+            ],
+            "evidence": [
+              {
+                "segment_id": "s11",
+                "quote": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you.",
+                "start_ms": 65880,
+                "end_ms": 76200
+              },
+              {
+                "segment_id": "s13",
+                "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                "start_ms": 85440,
+                "end_ms": 95880
+              },
+              {
+                "segment_id": "s21",
+                "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                "start_ms": 135420,
+                "end_ms": 141500
+              }
+            ]
+          },
+          {
+            "dimension_id": "certainty_objection_intelligence",
+            "label": "Certainty & Objection Intelligence",
+            "status": "observed",
+            "observation": "You isolated commute concerns by offering a route drive and proactively checked for hidden blockers, resolving the possession date concern with a concrete documentation commitment.",
+            "citations": [
+              {
+                "doc": "Doc-4",
+                "sections": ["§3–§6", "§8–§18", "§40–§70"]
+              },
+              {
+                "doc": "Doc-5",
+                "sections": ["§22–§28"]
+              }
+            ],
+            "evidence": [
+              {
+                "segment_id": "s12",
+                "quote": "Seventy-nine is much better, but honestly, my worry is the commute. My husband works on the other side of the city.",
+                "start_ms": 77080,
+                "end_ms": 84580
+              },
+              {
+                "segment_id": "s13",
+                "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                "start_ms": 85440,
+                "end_ms": 95880
+              },
+              {
+                "segment_id": "s19",
+                "quote": "Great. Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?",
+                "start_ms": 124000,
+                "end_ms": 130460
+              },
+              {
+                "segment_id": "s20",
+                "quote": "The possession date. We can't wait two years.",
+                "start_ms": 131260,
+                "end_ms": 134560
+              },
+              {
+                "segment_id": "s21",
+                "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                "start_ms": 135420,
+                "end_ms": 141500
+              }
+            ]
+          },
+          {
+            "dimension_id": "closing_decision_management",
+            "label": "Closing & Decision Management",
+            "status": "observed",
+            "observation": "You structured the appointment around both buyers attending, locked Saturday at eleven, and reviewed the exact agenda points.",
+            "citations": [
+              {
+                "doc": "Doc-3",
+                "sections": ["§34–§42", "§48–§52"]
+              },
+              {
+                "doc": "Doc-5",
+                "sections": ["§29–§32", "§39–§42"]
+              }
+            ],
+            "evidence": [
+              {
+                "segment_id": "s15",
+                "quote": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?",
+                "start_ms": 100220,
+                "end_ms": 109660
+              },
+              {
+                "segment_id": "s16",
+                "quote": "Saturday is good. Maybe eleven?",
+                "start_ms": 110480,
+                "end_ms": 113040
+              },
+              {
+                "segment_id": "s17",
+                "quote": "Saturday at eleven. Perfect. I'll send you the location and the fourth-floor plan on WhatsApp today. Is this number on WhatsApp?",
+                "start_ms": 113900,
+                "end_ms": 121080
+              },
+              {
+                "segment_id": "s23",
+                "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                "start_ms": 145120,
+                "end_ms": 155980
+              }
+            ]
+          },
+          {
+            "dimension_id": "communication_tonality",
+            "label": "Communication & Tonality",
+            "status": "observed",
+            "observation": "Your phrasing remained structured, concise, and aligned with her available five-minute travel window without unnecessary monologues.",
+            "citations": [
+              {
+                "doc": "Doc-2",
+                "sections": ["§1–§5", "§9–§16", "§31–§55"]
+              },
+              {
+                "doc": "Doc-5",
+                "sections": ["§33–§37", "§63–§66"]
+              }
+            ],
+            "evidence": [
+              {
+                "segment_id": "s1",
+                "quote": "Hello. Am I speaking with Meera? This is Rahul from Fictional Homes. You filled in our form about a two-bedroom flat. Is this a good time for five minutes?",
+                "start_ms": 300,
+                "end_ms": 9180
+              },
+              {
+                "segment_id": "s3",
+                "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                "start_ms": 14620,
+                "end_ms": 19000
+              },
+              {
+                "segment_id": "s11",
+                "quote": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you.",
+                "start_ms": 65880,
+                "end_ms": 76200
+              },
+              {
+                "segment_id": "s23",
+                "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                "start_ms": 145120,
+                "end_ms": 155980
+              }
+            ]
+          }
+        ],
+        "next_action": {
+          "title": "Diagnose commute details before offering route solutions",
+          "explanation": "When she cited her husband's commute across town, you offered public transit data right away instead of asking where he works and how he currently travels.",
+          "evidence": [
+            {
+              "segment_id": "s12",
+              "quote": "Seventy-nine is much better, but honestly, my worry is the commute. My husband works on the other side of the city.",
+              "start_ms": 77080,
+              "end_ms": 84580
+            },
+            {
+              "segment_id": "s13",
+              "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+              "start_ms": 85440,
+              "end_ms": 95880
+            }
+          ]
+        },
+        "improvements": [
+          {
+            "title": "Diagnose commute details before offering route solutions",
+            "explanation": "When she cited her husband's commute across town, you offered public transit data right away instead of asking where he works and how he currently travels.",
+            "evidence": [
+              {
+                "segment_id": "s12",
+                "quote": "Seventy-nine is much better, but honestly, my worry is the commute. My husband works on the other side of the city.",
+                "start_ms": 77080,
+                "end_ms": 84580
+              },
+              {
+                "segment_id": "s13",
+                "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                "start_ms": 85440,
+                "end_ms": 95880
+              }
+            ]
+          }
+        ],
+        "objection_analysis": [
+          {
+            "title": "Price stretch addressed with inventory tailoring",
+            "explanation": "When eighty-five lac was stated as a stretch against an eighty lac target, you introduced a lower floor layout at seventy-nine lac rather than arguing floor premiums.",
+            "evidence": [
+              {
+                "segment_id": "s10",
+                "quote": "We were thinking around eighty lac, all in. The listing said eighty-five, which is a stretch.",
+                "start_ms": 58480,
+                "end_ms": 64980
+              },
+              {
+                "segment_id": "s11",
+                "quote": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you.",
+                "start_ms": 65880,
+                "end_ms": 76200
+              }
+            ]
+          },
+          {
+            "title": "Commute friction resolved with route verification proposal",
+            "explanation": "When commute concerns were raised, you acknowledged buyer commonality, cited metro and bus access, and proposed driving the route during the visit.",
+            "evidence": [
+              {
+                "segment_id": "s12",
+                "quote": "Seventy-nine is much better, but honestly, my worry is the commute. My husband works on the other side of the city.",
+                "start_ms": 77080,
+                "end_ms": 84580
+              },
+              {
+                "segment_id": "s13",
+                "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                "start_ms": 85440,
+                "end_ms": 95880
+              },
+              {
+                "segment_id": "s14",
+                "quote": "Yes. He won't decide without seeing it.",
+                "start_ms": 96740,
+                "end_ms": 99400
+              },
+              {
+                "segment_id": "s15",
+                "quote": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?",
+                "start_ms": 100220,
+                "end_ms": 109660
+              }
+            ]
+          },
+          {
+            "title": "Preemptive isolation of delivery timeline",
+            "explanation": "You proactively checked for other deal-breakers, uncovered the fear of a two-year construction wait, and resolved it with January readiness and documentation.",
+            "evidence": [
+              {
+                "segment_id": "s19",
+                "quote": "Great. Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?",
+                "start_ms": 124000,
+                "end_ms": 130460
+              },
+              {
+                "segment_id": "s20",
+                "quote": "The possession date. We can't wait two years.",
+                "start_ms": 131260,
+                "end_ms": 134560
+              },
+              {
+                "segment_id": "s21",
+                "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                "start_ms": 135420,
+                "end_ms": 141500
+              }
+            ]
+          }
+        ],
+        "closing_analysis": [
+          {
+            "title": "Direct and purpose-driven meeting ask",
+            "explanation": "You tied the site visit directly to inspecting the unit, testing the husband's commute route, and verifying the handover letter. This made the meeting a logical problem-solving step rather than an empty visit.",
+            "evidence": [
+              {
+                "segment_id": "s15",
+                "quote": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?",
+                "start_ms": 100220,
+                "end_ms": 109660
+              },
+              {
+                "segment_id": "s16",
+                "quote": "Saturday is good. Maybe eleven?",
+                "start_ms": 110480,
+                "end_ms": 113040
+              },
+              {
+                "segment_id": "s17",
+                "quote": "Saturday at eleven. Perfect. I'll send you the location and the fourth-floor plan on WhatsApp today. Is this number on WhatsApp?",
+                "start_ms": 113900,
+                "end_ms": 121080
+              },
+              {
+                "segment_id": "s23",
+                "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                "start_ms": 145120,
+                "end_ms": 155980
+              }
+            ]
+          }
+        ],
+        "verdict": "Strong inbound qualification and meeting lock with clear agenda alignment.",
+        "overview": {
+          "version": "dipak-14-point-v1",
+          "diagnosis": {
+            "text": "First-time buyer looking for a 2BHK under eighty lac with tight move-in timeline before childbirth and commute hurdles.",
+            "evidence": [
+              {
+                "segment_id": "s4",
+                "quote": "We're renting at the moment. My husband and I have a baby coming in March, so we want our own place before that.",
+                "start_ms": 19840,
+                "end_ms": 26520
+              },
+              {
+                "segment_id": "s6",
+                "quote": "Ideally by February. Not later than that.",
+                "start_ms": 33600,
+                "end_ms": 36440
+              },
+              {
+                "segment_id": "s10",
+                "quote": "We were thinking around eighty lac, all in. The listing said eighty-five, which is a stretch.",
+                "start_ms": 58480,
+                "end_ms": 64980
+              }
+            ]
+          },
+          "outcome": {
+            "text": "Site visit agreed for Saturday at 11:00 AM with both partners to view the flat, drive the transit route, and review possession documents.",
+            "evidence": [
+              {
+                "segment_id": "s17",
+                "quote": "Saturday at eleven. Perfect. I'll send you the location and the fourth-floor plan on WhatsApp today. Is this number on WhatsApp?",
+                "start_ms": 113900,
+                "end_ms": 121080
+              },
+              {
+                "segment_id": "s23",
+                "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                "start_ms": 145120,
+                "end_ms": 155980
+              },
+              {
+                "segment_id": "s24",
+                "quote": "Thank you, Rahul. See you Saturday.",
+                "start_ms": 156780,
+                "end_ms": 158720
+              }
+            ],
+            "kind": "follow_up"
+          },
+          "business_impact": {
+            "status": "insufficient_data",
+            "missing_inputs": [
+              "Post-visit attendance confirmation",
+              "Downstream deal status"
+            ]
+          },
+          "strength_details": [
+            {
+              "finding_index": 0,
+              "why_it_matters": "Surface hidden objections while still on the phone so you arrive at the site visit with appropriate proof documents."
+            }
+          ],
+          "improvement_details": [
+            {
+              "finding_index": 0,
+              "what_happened": {
+                "text": "You offered metro and bus details before learning where her husband commutes to or how he travels.",
+                "evidence": [
+                  {
+                    "segment_id": "s12",
+                    "quote": "Seventy-nine is much better, but honestly, my worry is the commute. My husband works on the other side of the city.",
+                    "start_ms": 77080,
+                    "end_ms": 84580
+                  },
+                  {
+                    "segment_id": "s13",
+                    "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                    "start_ms": 85440,
+                    "end_ms": 95880
+                  }
+                ]
+              },
+              "why_it_matters": "Tailoring the commute solution to his specific transit mode makes the site visit route plan more relevant and convincing.",
+              "replacement_behavior": "Ask: 'Which area or tech park does your husband travel to, and does he usually drive or use transit?' before presenting bus and metro details.",
+              "business_impact": {
+                "status": "insufficient_data",
+                "missing_inputs": [
+                  "Husband's travel mode preference",
+                  "Specific workplace sector"
+                ]
+              }
+            }
+          ],
+          "golden_moments": [
+            {
+              "strength_index": 0,
+              "evidence_index": 0,
+              "why_effective": "Directly uncovered the critical hidden constraint regarding possession timing that could have derailed interest later."
+            }
+          ],
+          "missed_details": [
+            {
+              "finding_index": 0,
+              "prospect_signal": {
+                "text": "Two bedrooms is enough, but we'd like a proper balcony and a good school close by for later.",
+                "evidence": [
+                  {
+                    "segment_id": "s8",
+                    "quote": "Two bedrooms is enough, but we'd like a proper balcony and a good school close by for later.",
+                    "start_ms": 45800,
+                    "end_ms": 52380
+                  }
+                ]
+              },
+              "closer_response": {
+                "text": "That makes sense. What budget have you and your husband agreed on, roughly?",
+                "evidence": [
+                  {
+                    "segment_id": "s9",
+                    "quote": "That makes sense. What budget have you and your husband agreed on, roughly?",
+                    "start_ms": 53240,
+                    "end_ms": 57640
+                  }
+                ]
+              },
+              "follow_up": "Which schools or boards do you prefer nearby so I can include school locations in our map pack?",
+              "potential_impact": "Strengthens emotional connection to the neighborhood for long-term family planning."
+            }
+          ],
+          "prospect_interpretations": [
+            {
+              "source": {
+                "text": "The possession date. We can't wait two years.",
+                "evidence": [
+                  {
+                    "segment_id": "s20",
+                    "quote": "The possession date. We can't wait two years.",
+                    "start_ms": 131260,
+                    "end_ms": 134560
+                  }
+                ]
+              },
+              "possible_concern": "Worried that ongoing construction might push move-in past her delivery date.",
+              "interpretation_kind": "inference"
+            }
+          ],
+          "rewatch": [
+            {
+              "text": "Observe the clean isolation question that flushed out the unspoken possession hurdle.",
+              "evidence": [
+                {
+                  "segment_id": "s19",
+                  "quote": "Great. Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?",
+                  "start_ms": 124000,
+                  "end_ms": 130460
+                }
+              ],
+              "purpose": "must_watch"
+            }
+          ],
+          "conversation_change": {
+            "before": {
+              "text": "The call had reached initial logistics about sending WhatsApp location pins.",
+              "evidence": [
+                {
+                  "segment_id": "s17",
+                  "quote": "Saturday at eleven. Perfect. I'll send you the location and the fourth-floor plan on WhatsApp today. Is this number on WhatsApp?",
+                  "start_ms": 113900,
+                  "end_ms": 121080
+                },
+                {
+                  "segment_id": "s18",
+                  "quote": "Yes, this one.",
+                  "start_ms": 121900,
+                  "end_ms": 123180
+                }
+              ]
+            },
+            "change": {
+              "text": "You asked: 'Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?' which surfaced the possession date concern.",
+              "evidence": [
+                {
+                  "segment_id": "s19",
+                  "quote": "Great. Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?",
+                  "start_ms": 124000,
+                  "end_ms": 130460
+                },
+                {
+                  "segment_id": "s20",
+                  "quote": "The possession date. We can't wait two years.",
+                  "start_ms": 131260,
+                  "end_ms": 134560
+                }
+              ]
+            },
+            "after": {
+              "text": "Meera welcomed the completion letter offer and agreed cleanly to the recap of all four agenda items for Saturday.",
+              "evidence": [
+                {
+                  "segment_id": "s21",
+                  "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                  "start_ms": 135420,
+                  "end_ms": 141500
+                },
+                {
+                  "segment_id": "s22",
+                  "quote": "Okay. That would really help.",
+                  "start_ms": 142320,
+                  "end_ms": 144260
+                },
+                {
+                  "segment_id": "s23",
+                  "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                  "start_ms": 145120,
+                  "end_ms": 155980
+                }
+              ]
+            },
+            "possible_effect": "Prevented an unaddressed deal-breaker regarding hand-over delay from surfacing after the call.",
+            "interpretation_kind": "inference"
+          },
+          "ethics_notes": [],
+          "next_call_focus": {
+            "improvement_index": 0,
+            "behavior": "Ask for exact commute destination and mode of travel before prescribing the transit route to drive.",
+            "target": "Clarify destination before demonstrating route"
+          },
+          "practice": {
+            "improvement_index": 0,
+            "instructions": "Run a scenario where a buyer mentions an office commute barrier across town. Practice asking one clarifying question about location and travel habits before mentioning metro, bus, or road links.",
+            "success_condition": "State destination inquiry before presenting transit features."
+          },
+          "progress": null,
+          "final_assessment": {
+            "repeat": "Preemptively asking for remaining deal-breakers before closing the conversation.",
+            "fix_first": "Ask for the husband's exact workplace location before suggesting specific travel options.",
+            "next_focus": "Pre-visit commute preparation.",
+            "assessment": "You ran an efficient inbound qualification call that respected the prospect's limited time. You tailored inventory to her budget, engaged the co-decision-maker's requirement, and uncovered a delivery timeline objection before concluding the call. Adding brief discovery on her husband's specific workplace location will make the scheduled route demonstration even more convincing."
+          }
+        },
+        "structure": {
+          "version": "report-structure/1",
+          "overview": {
+            "summary": "You qualified Meera on timeline, budget, and decision-making criteria in under three minutes, addressed concerns on price and possession, and scheduled a joint site visit with her husband for Saturday at 11:00 AM.",
+            "evidence": [],
+            "score": null,
+            "score_status": "not_scored",
+            "biggest_strength": {
+              "text": "You asked whether anything else would prevent them from proceeding, which surfaced her strict possession deadline before the visit.",
+              "evidence": [
+                {
+                  "segment_id": "s19",
+                  "quote": "Great. Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?",
+                  "start_ms": 124000,
+                  "end_ms": 130460
+                },
+                {
+                  "segment_id": "s20",
+                  "quote": "The possession date. We can't wait two years.",
+                  "start_ms": 131260,
+                  "end_ms": 134560
+                },
+                {
+                  "segment_id": "s21",
+                  "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                  "start_ms": 135420,
+                  "end_ms": 141500
+                }
+              ],
+              "source": "strengths[0]"
+            },
+            "biggest_improvement": {
+              "text": "When she cited her husband's commute across town, you offered public transit data right away instead of asking where he works and how he currently travels.",
+              "evidence": [
+                {
+                  "segment_id": "s12",
+                  "quote": "Seventy-nine is much better, but honestly, my worry is the commute. My husband works on the other side of the city.",
+                  "start_ms": 77080,
+                  "end_ms": 84580
+                },
+                {
+                  "segment_id": "s13",
+                  "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                  "start_ms": 85440,
+                  "end_ms": 95880
+                }
+              ],
+              "source": "improvements[0]"
+            },
+            "call_statistics": {
+              "status": "available",
+              "duration_ms": 158900,
+              "talk_share_percent": {
+                "rep": 66.0,
+                "prospect": 34.0
+              },
+              "questions_asked": {
+                "rep": 10,
+                "prospect": 1
+              },
+              "longest_turn": {
+                "speaker_id": "speaker_0",
+                "start_ms": 145120,
+                "end_ms": 155980,
+                "duration_ms": 10860
+              },
+              "longest_rep_turn": {
+                "speaker_id": "speaker_0",
+                "start_ms": 145120,
+                "end_ms": 155980,
+                "duration_ms": 10860
+              },
+              "speakers": [
+                {
+                  "speaker_id": "speaker_0",
+                  "role": "rep",
+                  "role_source": "predicted",
+                  "talk_ms": 91580,
+                  "talk_share_percent": 66.0,
+                  "questions": 10,
+                  "longest_turn_ms": 10860
+                },
+                {
+                  "speaker_id": "speaker_1",
+                  "role": "prospect",
+                  "role_source": "predicted",
+                  "talk_ms": 47580,
+                  "talk_share_percent": 34.0,
+                  "questions": 1,
+                  "longest_turn_ms": 7500
+                }
+              ],
+              "rules": "call-metrics/3",
+              "question_count_method": "transcript_question_marks",
+              "role_status": "predicted"
+            }
+          },
+          "pointers": [
+            {
+              "id": "call_opening_first_impression",
+              "number": 1,
+              "label": "Call Opening & First Impression",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "human_connection_trust",
+                  "label": "Human Connection & Trust",
+                  "status": "observed",
+                  "observation": "You introduced yourself cleanly, respected her time constraint, and acknowledged her family's pregnancy milestone naturally.",
+                  "citations": [
+                    {
+                      "doc": "Doc-1",
+                      "sections": ["§8–§10", "§52", "§54–§56"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§6"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s1",
+                      "quote": "Hello. Am I speaking with Meera? This is Rahul from Fictional Homes. You filled in our form about a two-bedroom flat. Is this a good time for five minutes?",
+                      "start_ms": 300,
+                      "end_ms": 9180
+                    },
+                    {
+                      "segment_id": "s3",
+                      "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                      "start_ms": 14620,
+                      "end_ms": 19000
+                    },
+                    {
+                      "segment_id": "s5",
+                      "quote": "Congratulations. That helps me a lot. So you'd wanna move in by early next year?",
+                      "start_ms": 27320,
+                      "end_ms": 32720
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "purpose_agenda_setting",
+              "number": 2,
+              "label": "Purpose & Agenda Setting",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "unavailable",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [],
+              "related_findings": []
+            },
+            {
+              "id": "tone_energy",
+              "number": 3,
+              "label": "Tone and Energy",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "communication_tonality",
+                  "label": "Communication & Tonality",
+                  "status": "observed",
+                  "observation": "Your phrasing remained structured, concise, and aligned with her available five-minute travel window without unnecessary monologues.",
+                  "citations": [
+                    {
+                      "doc": "Doc-2",
+                      "sections": ["§1–§5", "§9–§16", "§31–§55"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§33–§37", "§63–§66"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s1",
+                      "quote": "Hello. Am I speaking with Meera? This is Rahul from Fictional Homes. You filled in our form about a two-bedroom flat. Is this a good time for five minutes?",
+                      "start_ms": 300,
+                      "end_ms": 9180
+                    },
+                    {
+                      "segment_id": "s3",
+                      "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                      "start_ms": 14620,
+                      "end_ms": 19000
+                    },
+                    {
+                      "segment_id": "s11",
+                      "quote": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you.",
+                      "start_ms": 65880,
+                      "end_ms": 76200
+                    },
+                    {
+                      "segment_id": "s23",
+                      "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                      "start_ms": 145120,
+                      "end_ms": 155980
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "active_listening",
+              "number": 4,
+              "label": "Active Listening",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "discovery_deep_understanding",
+                  "label": "Discovery & Deep Understanding",
+                  "status": "observed",
+                  "observation": "You uncovered the root driver (baby in March), move-in deadline (February), specific layout needs (balcony, two bedrooms), and schooling preferences.",
+                  "citations": [
+                    {
+                      "doc": "Doc-1",
+                      "sections": ["§4–§7", "§11–§16"]
+                    },
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§5–§11", "§16", "§45–§52"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§7–§10"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s3",
+                      "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                      "start_ms": 14620,
+                      "end_ms": 19000
+                    },
+                    {
+                      "segment_id": "s4",
+                      "quote": "We're renting at the moment. My husband and I have a baby coming in March, so we want our own place before that.",
+                      "start_ms": 19840,
+                      "end_ms": 26520
+                    },
+                    {
+                      "segment_id": "s6",
+                      "quote": "Ideally by February. Not later than that.",
+                      "start_ms": 33600,
+                      "end_ms": 36440
+                    },
+                    {
+                      "segment_id": "s8",
+                      "quote": "Two bedrooms is enough, but we'd like a proper balcony and a good school close by for later.",
+                      "start_ms": 45800,
+                      "end_ms": 52380
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "open_ended_questions",
+              "number": 5,
+              "label": "Asking Open-Ended Questions",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "discovery_deep_understanding",
+                  "label": "Discovery & Deep Understanding",
+                  "status": "observed",
+                  "observation": "You uncovered the root driver (baby in March), move-in deadline (February), specific layout needs (balcony, two bedrooms), and schooling preferences.",
+                  "citations": [
+                    {
+                      "doc": "Doc-1",
+                      "sections": ["§4–§7", "§11–§16"]
+                    },
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§5–§11", "§16", "§45–§52"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§7–§10"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s3",
+                      "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                      "start_ms": 14620,
+                      "end_ms": 19000
+                    },
+                    {
+                      "segment_id": "s4",
+                      "quote": "We're renting at the moment. My husband and I have a baby coming in March, so we want our own place before that.",
+                      "start_ms": 19840,
+                      "end_ms": 26520
+                    },
+                    {
+                      "segment_id": "s6",
+                      "quote": "Ideally by February. Not later than that.",
+                      "start_ms": 33600,
+                      "end_ms": 36440
+                    },
+                    {
+                      "segment_id": "s8",
+                      "quote": "Two bedrooms is enough, but we'd like a proper balcony and a good school close by for later.",
+                      "start_ms": 45800,
+                      "end_ms": 52380
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "enough_questions",
+              "number": 6,
+              "label": "Asking Enough Questions",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "discovery_deep_understanding",
+                  "label": "Discovery & Deep Understanding",
+                  "status": "observed",
+                  "observation": "You uncovered the root driver (baby in March), move-in deadline (February), specific layout needs (balcony, two bedrooms), and schooling preferences.",
+                  "citations": [
+                    {
+                      "doc": "Doc-1",
+                      "sections": ["§4–§7", "§11–§16"]
+                    },
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§5–§11", "§16", "§45–§52"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§7–§10"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s3",
+                      "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                      "start_ms": 14620,
+                      "end_ms": 19000
+                    },
+                    {
+                      "segment_id": "s4",
+                      "quote": "We're renting at the moment. My husband and I have a baby coming in March, so we want our own place before that.",
+                      "start_ms": 19840,
+                      "end_ms": 26520
+                    },
+                    {
+                      "segment_id": "s6",
+                      "quote": "Ideally by February. Not later than that.",
+                      "start_ms": 33600,
+                      "end_ms": 36440
+                    },
+                    {
+                      "segment_id": "s8",
+                      "quote": "Two bedrooms is enough, but we'd like a proper balcony and a good school close by for later.",
+                      "start_ms": 45800,
+                      "end_ms": 52380
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "prospect_role",
+              "number": 7,
+              "label": "Understanding the Prospect's Role",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "qualification",
+                  "label": "Qualification",
+                  "status": "observed",
+                  "observation": "You confirmed both budget ceiling (around eighty lac) and the key decision-maker constraint (husband must verify commute before deciding).",
+                  "citations": [
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§17–§18", "§44"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§11–§13"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s9",
+                      "quote": "That makes sense. What budget have you and your husband agreed on, roughly?",
+                      "start_ms": 53240,
+                      "end_ms": 57640
+                    },
+                    {
+                      "segment_id": "s10",
+                      "quote": "We were thinking around eighty lac, all in. The listing said eighty-five, which is a stretch.",
+                      "start_ms": 58480,
+                      "end_ms": 64980
+                    },
+                    {
+                      "segment_id": "s14",
+                      "quote": "Yes. He won't decide without seeing it.",
+                      "start_ms": 96740,
+                      "end_ms": 99400
+                    },
+                    {
+                      "segment_id": "s15",
+                      "quote": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?",
+                      "start_ms": 100220,
+                      "end_ms": 109660
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "needs_challenges",
+              "number": 8,
+              "label": "Identifying Needs and Challenges",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "discovery_deep_understanding",
+                  "label": "Discovery & Deep Understanding",
+                  "status": "observed",
+                  "observation": "You uncovered the root driver (baby in March), move-in deadline (February), specific layout needs (balcony, two bedrooms), and schooling preferences.",
+                  "citations": [
+                    {
+                      "doc": "Doc-1",
+                      "sections": ["§4–§7", "§11–§16"]
+                    },
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§5–§11", "§16", "§45–§52"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§7–§10"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s3",
+                      "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                      "start_ms": 14620,
+                      "end_ms": 19000
+                    },
+                    {
+                      "segment_id": "s4",
+                      "quote": "We're renting at the moment. My husband and I have a baby coming in March, so we want our own place before that.",
+                      "start_ms": 19840,
+                      "end_ms": 26520
+                    },
+                    {
+                      "segment_id": "s6",
+                      "quote": "Ideally by February. Not later than that.",
+                      "start_ms": 33600,
+                      "end_ms": 36440
+                    },
+                    {
+                      "segment_id": "s8",
+                      "quote": "Two bedrooms is enough, but we'd like a proper balcony and a good school close by for later.",
+                      "start_ms": 45800,
+                      "end_ms": 52380
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "current_solution",
+              "number": 9,
+              "label": "Exploring Current Solution",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "discovery_deep_understanding",
+                  "label": "Discovery & Deep Understanding",
+                  "status": "observed",
+                  "observation": "You uncovered the root driver (baby in March), move-in deadline (February), specific layout needs (balcony, two bedrooms), and schooling preferences.",
+                  "citations": [
+                    {
+                      "doc": "Doc-1",
+                      "sections": ["§4–§7", "§11–§16"]
+                    },
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§5–§11", "§16", "§45–§52"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§7–§10"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s3",
+                      "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                      "start_ms": 14620,
+                      "end_ms": 19000
+                    },
+                    {
+                      "segment_id": "s4",
+                      "quote": "We're renting at the moment. My husband and I have a baby coming in March, so we want our own place before that.",
+                      "start_ms": 19840,
+                      "end_ms": 26520
+                    },
+                    {
+                      "segment_id": "s6",
+                      "quote": "Ideally by February. Not later than that.",
+                      "start_ms": 33600,
+                      "end_ms": 36440
+                    },
+                    {
+                      "segment_id": "s8",
+                      "quote": "Two bedrooms is enough, but we'd like a proper balcony and a good school close by for later.",
+                      "start_ms": 45800,
+                      "end_ms": 52380
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "business_impact",
+              "number": 10,
+              "label": "Quantifying Business Impact",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "problem_impact_desire",
+                  "label": "Problem, Impact & Desire Clarity",
+                  "status": "observed",
+                  "observation": "You identified key criteria: moving out of rented housing before childbirth, strict February move-in deadline, and sensitivity to commuting and budget constraints.",
+                  "citations": [
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§7–§15", "§19"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§14–§17"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s4",
+                      "quote": "We're renting at the moment. My husband and I have a baby coming in March, so we want our own place before that.",
+                      "start_ms": 19840,
+                      "end_ms": 26520
+                    },
+                    {
+                      "segment_id": "s6",
+                      "quote": "Ideally by February. Not later than that.",
+                      "start_ms": 33600,
+                      "end_ms": 36440
+                    },
+                    {
+                      "segment_id": "s20",
+                      "quote": "The possession date. We can't wait two years.",
+                      "start_ms": 131260,
+                      "end_ms": 134560
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "decision_process",
+              "number": 11,
+              "label": "Understanding Decision Process",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "qualification",
+                  "label": "Qualification",
+                  "status": "observed",
+                  "observation": "You confirmed both budget ceiling (around eighty lac) and the key decision-maker constraint (husband must verify commute before deciding).",
+                  "citations": [
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§17–§18", "§44"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§11–§13"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s9",
+                      "quote": "That makes sense. What budget have you and your husband agreed on, roughly?",
+                      "start_ms": 53240,
+                      "end_ms": 57640
+                    },
+                    {
+                      "segment_id": "s10",
+                      "quote": "We were thinking around eighty lac, all in. The listing said eighty-five, which is a stretch.",
+                      "start_ms": 58480,
+                      "end_ms": 64980
+                    },
+                    {
+                      "segment_id": "s14",
+                      "quote": "Yes. He won't decide without seeing it.",
+                      "start_ms": 96740,
+                      "end_ms": 99400
+                    },
+                    {
+                      "segment_id": "s15",
+                      "quote": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?",
+                      "start_ms": 100220,
+                      "end_ms": 109660
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "stakeholders",
+              "number": 12,
+              "label": "Identifying Stakeholders",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "qualification",
+                  "label": "Qualification",
+                  "status": "observed",
+                  "observation": "You confirmed both budget ceiling (around eighty lac) and the key decision-maker constraint (husband must verify commute before deciding).",
+                  "citations": [
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§17–§18", "§44"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§11–§13"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s9",
+                      "quote": "That makes sense. What budget have you and your husband agreed on, roughly?",
+                      "start_ms": 53240,
+                      "end_ms": 57640
+                    },
+                    {
+                      "segment_id": "s10",
+                      "quote": "We were thinking around eighty lac, all in. The listing said eighty-five, which is a stretch.",
+                      "start_ms": 58480,
+                      "end_ms": 64980
+                    },
+                    {
+                      "segment_id": "s14",
+                      "quote": "Yes. He won't decide without seeing it.",
+                      "start_ms": 96740,
+                      "end_ms": 99400
+                    },
+                    {
+                      "segment_id": "s15",
+                      "quote": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?",
+                      "start_ms": 100220,
+                      "end_ms": 109660
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "handling_objections",
+              "number": 13,
+              "label": "Handling Objections",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "certainty_objection_intelligence",
+                  "label": "Certainty & Objection Intelligence",
+                  "status": "observed",
+                  "observation": "You isolated commute concerns by offering a route drive and proactively checked for hidden blockers, resolving the possession date concern with a concrete documentation commitment.",
+                  "citations": [
+                    {
+                      "doc": "Doc-4",
+                      "sections": ["§3–§6", "§8–§18", "§40–§70"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§22–§28"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s12",
+                      "quote": "Seventy-nine is much better, but honestly, my worry is the commute. My husband works on the other side of the city.",
+                      "start_ms": 77080,
+                      "end_ms": 84580
+                    },
+                    {
+                      "segment_id": "s13",
+                      "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                      "start_ms": 85440,
+                      "end_ms": 95880
+                    },
+                    {
+                      "segment_id": "s19",
+                      "quote": "Great. Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?",
+                      "start_ms": 124000,
+                      "end_ms": 130460
+                    },
+                    {
+                      "segment_id": "s20",
+                      "quote": "The possession date. We can't wait two years.",
+                      "start_ms": 131260,
+                      "end_ms": 134560
+                    },
+                    {
+                      "segment_id": "s21",
+                      "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                      "start_ms": 135420,
+                      "end_ms": 141500
+                    }
+                  ]
+                }
+              ],
+              "related_findings": [
+                {
+                  "text": "When eighty-five lac was stated as a stretch against an eighty lac target, you introduced a lower floor layout at seventy-nine lac rather than arguing floor premiums.",
+                  "evidence": [
+                    {
+                      "segment_id": "s10",
+                      "quote": "We were thinking around eighty lac, all in. The listing said eighty-five, which is a stretch.",
+                      "start_ms": 58480,
+                      "end_ms": 64980
+                    },
+                    {
+                      "segment_id": "s11",
+                      "quote": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you.",
+                      "start_ms": 65880,
+                      "end_ms": 76200
+                    }
+                  ],
+                  "source": "objection_analysis[0]"
+                },
+                {
+                  "text": "When commute concerns were raised, you acknowledged buyer commonality, cited metro and bus access, and proposed driving the route during the visit.",
+                  "evidence": [
+                    {
+                      "segment_id": "s12",
+                      "quote": "Seventy-nine is much better, but honestly, my worry is the commute. My husband works on the other side of the city.",
+                      "start_ms": 77080,
+                      "end_ms": 84580
+                    },
+                    {
+                      "segment_id": "s13",
+                      "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                      "start_ms": 85440,
+                      "end_ms": 95880
+                    },
+                    {
+                      "segment_id": "s14",
+                      "quote": "Yes. He won't decide without seeing it.",
+                      "start_ms": 96740,
+                      "end_ms": 99400
+                    },
+                    {
+                      "segment_id": "s15",
+                      "quote": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?",
+                      "start_ms": 100220,
+                      "end_ms": 109660
+                    }
+                  ],
+                  "source": "objection_analysis[1]"
+                },
+                {
+                  "text": "You proactively checked for other deal-breakers, uncovered the fear of a two-year construction wait, and resolved it with January readiness and documentation.",
+                  "evidence": [
+                    {
+                      "segment_id": "s19",
+                      "quote": "Great. Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?",
+                      "start_ms": 124000,
+                      "end_ms": 130460
+                    },
+                    {
+                      "segment_id": "s20",
+                      "quote": "The possession date. We can't wait two years.",
+                      "start_ms": 131260,
+                      "end_ms": 134560
+                    },
+                    {
+                      "segment_id": "s21",
+                      "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                      "start_ms": 135420,
+                      "end_ms": 141500
+                    }
+                  ],
+                  "source": "objection_analysis[2]"
+                }
+              ]
+            },
+            {
+              "id": "solution_value",
+              "number": 14,
+              "label": "Positioning Solution Value",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "solution_relevance_presentation",
+                  "label": "Solution Relevance & Presentation",
+                  "status": "observed",
+                  "observation": "You adapted immediately to her price and timing needs by introducing the fourth-floor unit at seventy-nine lac with January possession rather than pushing the online listing.",
+                  "citations": [
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§20–§26"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§18–§21"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s11",
+                      "quote": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you.",
+                      "start_ms": 65880,
+                      "end_ms": 76200
+                    },
+                    {
+                      "segment_id": "s13",
+                      "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                      "start_ms": 85440,
+                      "end_ms": 95880
+                    },
+                    {
+                      "segment_id": "s21",
+                      "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                      "start_ms": 135420,
+                      "end_ms": 141500
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "discussing_pricing",
+              "number": 15,
+              "label": "Discussing Pricing",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "unavailable",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [],
+              "related_findings": []
+            },
+            {
+              "id": "handling_competition",
+              "number": 16,
+              "label": "Handling Competition",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "certainty_objection_intelligence",
+                  "label": "Certainty & Objection Intelligence",
+                  "status": "observed",
+                  "observation": "You isolated commute concerns by offering a route drive and proactively checked for hidden blockers, resolving the possession date concern with a concrete documentation commitment.",
+                  "citations": [
+                    {
+                      "doc": "Doc-4",
+                      "sections": ["§3–§6", "§8–§18", "§40–§70"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§22–§28"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s12",
+                      "quote": "Seventy-nine is much better, but honestly, my worry is the commute. My husband works on the other side of the city.",
+                      "start_ms": 77080,
+                      "end_ms": 84580
+                    },
+                    {
+                      "segment_id": "s13",
+                      "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                      "start_ms": 85440,
+                      "end_ms": 95880
+                    },
+                    {
+                      "segment_id": "s19",
+                      "quote": "Great. Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?",
+                      "start_ms": 124000,
+                      "end_ms": 130460
+                    },
+                    {
+                      "segment_id": "s20",
+                      "quote": "The possession date. We can't wait two years.",
+                      "start_ms": 131260,
+                      "end_ms": 134560
+                    },
+                    {
+                      "segment_id": "s21",
+                      "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                      "start_ms": 135420,
+                      "end_ms": 141500
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "checking_concerns",
+              "number": 17,
+              "label": "Checking for Concerns",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "certainty_objection_intelligence",
+                  "label": "Certainty & Objection Intelligence",
+                  "status": "observed",
+                  "observation": "You isolated commute concerns by offering a route drive and proactively checked for hidden blockers, resolving the possession date concern with a concrete documentation commitment.",
+                  "citations": [
+                    {
+                      "doc": "Doc-4",
+                      "sections": ["§3–§6", "§8–§18", "§40–§70"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§22–§28"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s12",
+                      "quote": "Seventy-nine is much better, but honestly, my worry is the commute. My husband works on the other side of the city.",
+                      "start_ms": 77080,
+                      "end_ms": 84580
+                    },
+                    {
+                      "segment_id": "s13",
+                      "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                      "start_ms": 85440,
+                      "end_ms": 95880
+                    },
+                    {
+                      "segment_id": "s19",
+                      "quote": "Great. Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?",
+                      "start_ms": 124000,
+                      "end_ms": 130460
+                    },
+                    {
+                      "segment_id": "s20",
+                      "quote": "The possession date. We can't wait two years.",
+                      "start_ms": 131260,
+                      "end_ms": 134560
+                    },
+                    {
+                      "segment_id": "s21",
+                      "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                      "start_ms": 135420,
+                      "end_ms": 141500
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "next_steps",
+              "number": 18,
+              "label": "Next Steps",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "closing_decision_management",
+                  "label": "Closing & Decision Management",
+                  "status": "observed",
+                  "observation": "You structured the appointment around both buyers attending, locked Saturday at eleven, and reviewed the exact agenda points.",
+                  "citations": [
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§34–§42", "§48–§52"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§29–§32", "§39–§42"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s15",
+                      "quote": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?",
+                      "start_ms": 100220,
+                      "end_ms": 109660
+                    },
+                    {
+                      "segment_id": "s16",
+                      "quote": "Saturday is good. Maybe eleven?",
+                      "start_ms": 110480,
+                      "end_ms": 113040
+                    },
+                    {
+                      "segment_id": "s17",
+                      "quote": "Saturday at eleven. Perfect. I'll send you the location and the fourth-floor plan on WhatsApp today. Is this number on WhatsApp?",
+                      "start_ms": 113900,
+                      "end_ms": 121080
+                    },
+                    {
+                      "segment_id": "s23",
+                      "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                      "start_ms": 145120,
+                      "end_ms": 155980
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "call_control",
+              "number": 19,
+              "label": "Call Control",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "communication_tonality",
+                  "label": "Communication & Tonality",
+                  "status": "observed",
+                  "observation": "Your phrasing remained structured, concise, and aligned with her available five-minute travel window without unnecessary monologues.",
+                  "citations": [
+                    {
+                      "doc": "Doc-2",
+                      "sections": ["§1–§5", "§9–§16", "§31–§55"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§33–§37", "§63–§66"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s1",
+                      "quote": "Hello. Am I speaking with Meera? This is Rahul from Fictional Homes. You filled in our form about a two-bedroom flat. Is this a good time for five minutes?",
+                      "start_ms": 300,
+                      "end_ms": 9180
+                    },
+                    {
+                      "segment_id": "s3",
+                      "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                      "start_ms": 14620,
+                      "end_ms": 19000
+                    },
+                    {
+                      "segment_id": "s11",
+                      "quote": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you.",
+                      "start_ms": 65880,
+                      "end_ms": 76200
+                    },
+                    {
+                      "segment_id": "s23",
+                      "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                      "start_ms": 145120,
+                      "end_ms": 155980
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "question_talk_ratio",
+              "number": 20,
+              "label": "Question to Talk Ratio",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "unavailable",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [],
+              "related_findings": []
+            },
+            {
+              "id": "handling_silence",
+              "number": 21,
+              "label": "Handling Silence",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "unavailable",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [],
+              "related_findings": []
+            },
+            {
+              "id": "professionalism",
+              "number": 22,
+              "label": "Professionalism",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "communication_tonality",
+                  "label": "Communication & Tonality",
+                  "status": "observed",
+                  "observation": "Your phrasing remained structured, concise, and aligned with her available five-minute travel window without unnecessary monologues.",
+                  "citations": [
+                    {
+                      "doc": "Doc-2",
+                      "sections": ["§1–§5", "§9–§16", "§31–§55"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§33–§37", "§63–§66"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s1",
+                      "quote": "Hello. Am I speaking with Meera? This is Rahul from Fictional Homes. You filled in our form about a two-bedroom flat. Is this a good time for five minutes?",
+                      "start_ms": 300,
+                      "end_ms": 9180
+                    },
+                    {
+                      "segment_id": "s3",
+                      "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                      "start_ms": 14620,
+                      "end_ms": 19000
+                    },
+                    {
+                      "segment_id": "s11",
+                      "quote": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you.",
+                      "start_ms": 65880,
+                      "end_ms": 76200
+                    },
+                    {
+                      "segment_id": "s23",
+                      "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                      "start_ms": 145120,
+                      "end_ms": 155980
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "closing_attitude",
+              "number": 23,
+              "label": "Closing Attitude",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "closing_decision_management",
+                  "label": "Closing & Decision Management",
+                  "status": "observed",
+                  "observation": "You structured the appointment around both buyers attending, locked Saturday at eleven, and reviewed the exact agenda points.",
+                  "citations": [
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§34–§42", "§48–§52"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§29–§32", "§39–§42"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s15",
+                      "quote": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?",
+                      "start_ms": 100220,
+                      "end_ms": 109660
+                    },
+                    {
+                      "segment_id": "s16",
+                      "quote": "Saturday is good. Maybe eleven?",
+                      "start_ms": 110480,
+                      "end_ms": 113040
+                    },
+                    {
+                      "segment_id": "s17",
+                      "quote": "Saturday at eleven. Perfect. I'll send you the location and the fourth-floor plan on WhatsApp today. Is this number on WhatsApp?",
+                      "start_ms": 113900,
+                      "end_ms": 121080
+                    },
+                    {
+                      "segment_id": "s23",
+                      "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                      "start_ms": 145120,
+                      "end_ms": 155980
+                    }
+                  ]
+                }
+              ],
+              "related_findings": [
+                {
+                  "text": "You tied the site visit directly to inspecting the unit, testing the husband's commute route, and verifying the handover letter. This made the meeting a logical problem-solving step rather than an empty visit.",
+                  "evidence": [
+                    {
+                      "segment_id": "s15",
+                      "quote": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?",
+                      "start_ms": 100220,
+                      "end_ms": 109660
+                    },
+                    {
+                      "segment_id": "s16",
+                      "quote": "Saturday is good. Maybe eleven?",
+                      "start_ms": 110480,
+                      "end_ms": 113040
+                    },
+                    {
+                      "segment_id": "s17",
+                      "quote": "Saturday at eleven. Perfect. I'll send you the location and the fourth-floor plan on WhatsApp today. Is this number on WhatsApp?",
+                      "start_ms": 113900,
+                      "end_ms": 121080
+                    },
+                    {
+                      "segment_id": "s23",
+                      "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                      "start_ms": 145120,
+                      "end_ms": 155980
+                    }
+                  ],
+                  "source": "closing_analysis[0]"
+                }
+              ]
+            },
+            {
+              "id": "building_rapport",
+              "number": 24,
+              "label": "Building Rapport",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "human_connection_trust",
+                  "label": "Human Connection & Trust",
+                  "status": "observed",
+                  "observation": "You introduced yourself cleanly, respected her time constraint, and acknowledged her family's pregnancy milestone naturally.",
+                  "citations": [
+                    {
+                      "doc": "Doc-1",
+                      "sections": ["§8–§10", "§52", "§54–§56"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§6"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s1",
+                      "quote": "Hello. Am I speaking with Meera? This is Rahul from Fictional Homes. You filled in our form about a two-bedroom flat. Is this a good time for five minutes?",
+                      "start_ms": 300,
+                      "end_ms": 9180
+                    },
+                    {
+                      "segment_id": "s3",
+                      "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                      "start_ms": 14620,
+                      "end_ms": 19000
+                    },
+                    {
+                      "segment_id": "s5",
+                      "quote": "Congratulations. That helps me a lot. So you'd wanna move in by early next year?",
+                      "start_ms": 27320,
+                      "end_ms": 32720
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "presenting_solution",
+              "number": 25,
+              "label": "Presenting the Solution",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "solution_relevance_presentation",
+                  "label": "Solution Relevance & Presentation",
+                  "status": "observed",
+                  "observation": "You adapted immediately to her price and timing needs by introducing the fourth-floor unit at seventy-nine lac with January possession rather than pushing the online listing.",
+                  "citations": [
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§20–§26"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§18–§21"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s11",
+                      "quote": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you.",
+                      "start_ms": 65880,
+                      "end_ms": 76200
+                    },
+                    {
+                      "segment_id": "s13",
+                      "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                      "start_ms": 85440,
+                      "end_ms": 95880
+                    },
+                    {
+                      "segment_id": "s21",
+                      "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                      "start_ms": 135420,
+                      "end_ms": 141500
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "creating_value",
+              "number": 26,
+              "label": "Creating Value",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "problem_impact_desire",
+                  "label": "Problem, Impact & Desire Clarity",
+                  "status": "observed",
+                  "observation": "You identified key criteria: moving out of rented housing before childbirth, strict February move-in deadline, and sensitivity to commuting and budget constraints.",
+                  "citations": [
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§7–§15", "§19"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§14–§17"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s4",
+                      "quote": "We're renting at the moment. My husband and I have a baby coming in March, so we want our own place before that.",
+                      "start_ms": 19840,
+                      "end_ms": 26520
+                    },
+                    {
+                      "segment_id": "s6",
+                      "quote": "Ideally by February. Not later than that.",
+                      "start_ms": 33600,
+                      "end_ms": 36440
+                    },
+                    {
+                      "segment_id": "s20",
+                      "quote": "The possession date. We can't wait two years.",
+                      "start_ms": 131260,
+                      "end_ms": 134560
+                    }
+                  ]
+                },
+                {
+                  "dimension_id": "solution_relevance_presentation",
+                  "label": "Solution Relevance & Presentation",
+                  "status": "observed",
+                  "observation": "You adapted immediately to her price and timing needs by introducing the fourth-floor unit at seventy-nine lac with January possession rather than pushing the online listing.",
+                  "citations": [
+                    {
+                      "doc": "Doc-3",
+                      "sections": ["§20–§26"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§18–§21"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s11",
+                      "quote": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you.",
+                      "start_ms": 65880,
+                      "end_ms": 76200
+                    },
+                    {
+                      "segment_id": "s13",
+                      "quote": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?",
+                      "start_ms": 85440,
+                      "end_ms": 95880
+                    },
+                    {
+                      "segment_id": "s21",
+                      "quote": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it.",
+                      "start_ms": 135420,
+                      "end_ms": 141500
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            },
+            {
+              "id": "overall_communication",
+              "number": 27,
+              "label": "Overall Communication",
+              "status": "insufficient_evidence",
+              "status_reason": "No separate assessment for this pointer is saved.",
+              "score": null,
+              "score_status": "not_scored",
+              "rating": null,
+              "coverage": "related_analysis",
+              "what_happened": null,
+              "why_it_matters": null,
+              "evidence": [],
+              "how_to_improve": null,
+              "training_video": null,
+              "observations": [],
+              "related_dimensions": [
+                {
+                  "dimension_id": "communication_tonality",
+                  "label": "Communication & Tonality",
+                  "status": "observed",
+                  "observation": "Your phrasing remained structured, concise, and aligned with her available five-minute travel window without unnecessary monologues.",
+                  "citations": [
+                    {
+                      "doc": "Doc-2",
+                      "sections": ["§1–§5", "§9–§16", "§31–§55"]
+                    },
+                    {
+                      "doc": "Doc-5",
+                      "sections": ["§33–§37", "§63–§66"]
+                    }
+                  ],
+                  "evidence": [
+                    {
+                      "segment_id": "s1",
+                      "quote": "Hello. Am I speaking with Meera? This is Rahul from Fictional Homes. You filled in our form about a two-bedroom flat. Is this a good time for five minutes?",
+                      "start_ms": 300,
+                      "end_ms": 9180
+                    },
+                    {
+                      "segment_id": "s3",
+                      "quote": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?",
+                      "start_ms": 14620,
+                      "end_ms": 19000
+                    },
+                    {
+                      "segment_id": "s11",
+                      "quote": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you.",
+                      "start_ms": 65880,
+                      "end_ms": 76200
+                    },
+                    {
+                      "segment_id": "s23",
+                      "quote": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera.",
+                      "start_ms": 145120,
+                      "end_ms": 155980
+                    }
+                  ]
+                }
+              ],
+              "related_findings": []
+            }
+          ],
+          "final_call_outcome": {
+            "status": "unrecorded",
+            "outcome": null,
+            "basis": null,
+            "deal_value": null,
+            "revision": 0,
+            "follow_up_on": null,
+            "lost_reason": null
+          },
+          "prospect_signals": null,
+          "pointer_review": {
+            "status": "scoring",
+            "report_created_at": "2026-10-27T20:19:50.592003+00:00"
+          }
+        }
+      },
+      "preview": null,
+      "sections": [
+        {
+          "id": "overview",
+          "label": "Overview",
+          "access": "available"
+        },
+        {
+          "id": "moments",
+          "label": "Call moments",
+          "access": "available"
+        },
+        {
+          "id": "transcript",
+          "label": "Transcript",
+          "access": "available"
+        },
+        {
+          "id": "coaching",
+          "label": "Your coaching plan",
+          "access": "available"
+        },
+        {
+          "id": "history",
+          "label": "Your saved calls",
+          "access": "available"
+        }
+      ],
+      "unlock": null
+    },
+    "previous_call_context": {
+      "schema": "ac.sales-xray.previous-call-context/1",
+      "composition": "local_source_citations",
+      "membership_id": null,
+      "prospect_id": null,
+      "sources": []
+    },
+    "display_name": null,
+    "display_name_revision": 0
+  },
+  "transcript": {
+    "source_sha256": "c6891d67ef2e9990bd5f0679931bc2aaf5f36baf958039267524ea8b4ce371a0",
+    "revision": "c6aa90f3df74842a90e2f5b26f7b8475896feb1534cdba5cd25785e83ca17e9f",
+    "timebase_id": "elevenlabs-scribe-native-seconds",
+    "duration_ms": 158900,
+    "segments": [
+      {
+        "end_ms": 9180,
+        "id": "s1",
+        "speaker_id": "speaker_0",
+        "start_ms": 300,
+        "text": "Hello. Am I speaking with Meera? This is Rahul from Fictional Homes. You filled in our form about a two-bedroom flat. Is this a good time for five minutes?"
+      },
+      {
+        "end_ms": 13840,
+        "id": "s2",
+        "speaker_id": "speaker_1",
+        "start_ms": 10040,
+        "text": "Yes. Hi, Rahul. I have a few minutes. I'm on my way home."
+      },
+      {
+        "end_ms": 19000,
+        "id": "s3",
+        "speaker_id": "speaker_0",
+        "start_ms": 14620,
+        "text": "Thank you. I'll keep it short. Can I ask, what made you start looking right now?"
+      },
+      {
+        "end_ms": 26520,
+        "id": "s4",
+        "speaker_id": "speaker_1",
+        "start_ms": 19840,
+        "text": "We're renting at the moment. My husband and I have a baby coming in March, so we want our own place before that."
+      },
+      {
+        "end_ms": 32720,
+        "id": "s5",
+        "speaker_id": "speaker_0",
+        "start_ms": 27320,
+        "text": "Congratulations. That helps me a lot. So you'd wanna move in by early next year?"
+      },
+      {
+        "end_ms": 36440,
+        "id": "s6",
+        "speaker_id": "speaker_1",
+        "start_ms": 33600,
+        "text": "Ideally by February. Not later than that."
+      },
+      {
+        "end_ms": 45000,
+        "id": "s7",
+        "speaker_id": "speaker_0",
+        "start_ms": 37260,
+        "text": "Got it. The flat you saw online, the two bedroom on the higher floors, is that the size you have in mind or do you need a third room?"
+      },
+      {
+        "end_ms": 52380,
+        "id": "s8",
+        "speaker_id": "speaker_1",
+        "start_ms": 45800,
+        "text": "Two bedrooms is enough, but we'd like a proper balcony and a good school close by for later."
+      },
+      {
+        "end_ms": 57640,
+        "id": "s9",
+        "speaker_id": "speaker_0",
+        "start_ms": 53240,
+        "text": "That makes sense. What budget have you and your husband agreed on, roughly?"
+      },
+      {
+        "end_ms": 64980,
+        "id": "s10",
+        "speaker_id": "speaker_1",
+        "start_ms": 58480,
+        "text": "We were thinking around eighty lac, all in. The listing said eighty-five, which is a stretch."
+      },
+      {
+        "end_ms": 76200,
+        "id": "s11",
+        "speaker_id": "speaker_0",
+        "start_ms": 65880,
+        "text": "I understand. Eighty-five is for the higher floors. The same layout on the fourth floor comes to about seventy-nine, with the same balcony. And our home loan partner can do the paperwork for you."
+      },
+      {
+        "end_ms": 84580,
+        "id": "s12",
+        "speaker_id": "speaker_1",
+        "start_ms": 77080,
+        "text": "Seventy-nine is much better, but honestly, my worry is the commute. My husband works on the other side of the city."
+      },
+      {
+        "end_ms": 95880,
+        "id": "s13",
+        "speaker_id": "speaker_0",
+        "start_ms": 85440,
+        "text": "That's fair. Most of our buyers ask the same. The new metro station opens about ten minutes' walk away next year, and there's a direct bus today. Would it help if he saw the route himself?"
+      },
+      {
+        "end_ms": 99400,
+        "id": "s14",
+        "speaker_id": "speaker_1",
+        "start_ms": 96740,
+        "text": "Yes. He won't decide without seeing it."
+      },
+      {
+        "end_ms": 109660,
+        "id": "s15",
+        "speaker_id": "speaker_0",
+        "start_ms": 100220,
+        "text": "Then the best next step is a site visit with both of you. You can see the fourth-floor flat and the balcony, and we can drive the route to the station. Does Saturday morning work?"
+      },
+      {
+        "end_ms": 113040,
+        "id": "s16",
+        "speaker_id": "speaker_1",
+        "start_ms": 110480,
+        "text": "Saturday is good. Maybe eleven?"
+      },
+      {
+        "end_ms": 121080,
+        "id": "s17",
+        "speaker_id": "speaker_0",
+        "start_ms": 113900,
+        "text": "Saturday at eleven. Perfect. I'll send you the location and the fourth-floor plan on WhatsApp today. Is this number on WhatsApp?"
+      },
+      {
+        "end_ms": 123180,
+        "id": "s18",
+        "speaker_id": "speaker_1",
+        "start_ms": 121900,
+        "text": "Yes, this one."
+      },
+      {
+        "end_ms": 130460,
+        "id": "s19",
+        "speaker_id": "speaker_0",
+        "start_ms": 124000,
+        "text": "Great. Just so I'm ready, apart from the commute and the budget, is there anything else that would stop you going ahead?"
+      },
+      {
+        "end_ms": 134560,
+        "id": "s20",
+        "speaker_id": "speaker_1",
+        "start_ms": 131260,
+        "text": "The possession date. We can't wait two years."
+      },
+      {
+        "end_ms": 141500,
+        "id": "s21",
+        "speaker_id": "speaker_0",
+        "start_ms": 135420,
+        "text": "The fourth-floor tower is ready to move in by January. I'll bring the completion letter on Saturday so you can see it."
+      },
+      {
+        "end_ms": 144260,
+        "id": "s22",
+        "speaker_id": "speaker_1",
+        "start_ms": 142320,
+        "text": "Okay. That would really help."
+      },
+      {
+        "end_ms": 155980,
+        "id": "s23",
+        "speaker_id": "speaker_0",
+        "start_ms": 145120,
+        "text": "Wonderful. So, Saturday at eleven, both of you, the fourth-floor flat, the route to the station, and the January possession letter. I'll message you within the hour. Thank you, Meera."
+      },
+      {
+        "end_ms": 158720,
+        "id": "s24",
+        "speaker_id": "speaker_1",
+        "start_ms": 156780,
+        "text": "Thank you, Rahul. See you Saturday."
+      }
+    ]
+  }
+}

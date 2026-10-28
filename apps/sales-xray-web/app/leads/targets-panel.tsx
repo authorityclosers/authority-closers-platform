@@ -9,7 +9,7 @@
  * someone turned them off (owner, 26 Oct 2026, report #23).
  */
 
-import { BellRing, ChevronDown, Target } from "lucide-react";
+import { BellRing, Check, ChevronDown, Target } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { METRIC_WORDS, type Metric } from "../dashboard/my-day-client";
@@ -29,8 +29,13 @@ import {
 } from "./team-engine-client";
 import styles from "./targets-panel.module.css";
 
-const METRICS: Metric[] = ["calls", "connects", "follow_ups", "meetings"];
-const PERIODS = ["day", "week"] as const;
+export const METRICS: Metric[] = [
+  "calls",
+  "connects",
+  "follow_ups",
+  "meetings",
+];
+export const PERIODS = ["day", "week"] as const;
 
 type Loaded = { team: Team; targets: Map<string, SellerTargets> };
 
@@ -215,12 +220,15 @@ function TargetsSheet({
   );
 }
 
-function Nudges({
+export function Nudges({
   team,
   onSaved,
+  who = "chips",
 }: {
   team: Team;
   onSaved: (next: Team) => void;
+  /** Who gets them: chips in a disclosure, or rows with faces and checks (Team controls). */
+  who?: "chips" | "rows";
 }) {
   const settings = team.settings as NudgeSettings;
   // On unless an owner or manager turned them off (owner, 26 Oct 2026, report
@@ -238,6 +246,18 @@ function Nudges({
   };
   const first = (name: string) => displayName(name).split(" ")[0];
   const skipped = team.reps.filter((rep) => offFor.includes(rep.person_id));
+  const toggle = (personId: string, off: boolean) =>
+    void save(
+      true,
+      off ? offFor.filter((item) => item !== personId) : [...offFor, personId],
+    ).catch(() =>
+      notify({
+        id: "nudges",
+        tone: "error",
+        title: "Nudges weren't changed",
+        message: "Someone may have changed the team just now. Try again.",
+      }),
+    );
   return (
     <div className={styles.nudges}>
       <div className={styles.switchArea}>
@@ -269,7 +289,39 @@ function Nudges({
           onChange={(next) => save(next, offFor)}
         />
       </div>
-      {on ? (
+      {on && who === "rows" ? (
+        <div className={styles.rowsWho}>
+          <h3 className={styles.rowsHead}>
+            Who gets them
+            <span>
+              {skipped.length
+                ? `${team.reps.length - skipped.length} of ${team.reps.length} sellers`
+                : "All sellers"}
+            </span>
+          </h3>
+          <ul className={styles.recipientRows} aria-label="Nudges for">
+            {team.reps.map((rep) => {
+              const off = offFor.includes(rep.person_id);
+              return (
+                <li key={rep.person_id}>
+                  <button
+                    type="button"
+                    aria-pressed={!off}
+                    disabled={busy}
+                    onClick={() => toggle(rep.person_id, off)}
+                  >
+                    <Avatar name={rep.name} size={32} />
+                    <span>{displayName(rep.name)}</span>
+                    <span className={styles.check} aria-hidden="true">
+                      {off ? null : <Check size={14} />}
+                    </span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : on ? (
         <details className={styles.who}>
           <summary>
             <span>Who gets them</span>
@@ -290,22 +342,7 @@ function Nudges({
                   className={styles.chip}
                   aria-pressed={!off}
                   disabled={busy}
-                  onClick={() =>
-                    void save(
-                      true,
-                      off
-                        ? offFor.filter((item) => item !== rep.person_id)
-                        : [...offFor, rep.person_id],
-                    ).catch(() =>
-                      notify({
-                        id: "nudges",
-                        tone: "error",
-                        title: "Nudges weren't changed",
-                        message:
-                          "Someone may have changed the team just now. Try again.",
-                      }),
-                    )
-                  }
+                  onClick={() => toggle(rep.person_id, off)}
                 >
                   {first(rep.name)}
                 </button>

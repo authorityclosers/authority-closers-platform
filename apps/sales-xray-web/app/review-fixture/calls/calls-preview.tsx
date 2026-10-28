@@ -106,7 +106,7 @@ const LEADS: Record<number, [name: string, stage: string]> = {
 };
 
 const OWNERS: Record<string, string> = {
-  [SELLER]: "Swamini Fictional",
+  [SELLER]: "Asha Fictional",
   [SECOND]: "Rahul Example",
 };
 
@@ -184,7 +184,7 @@ function activity(now: number, empty: boolean) {
         event: {
           kind: "call",
           at: new Date(now - ago * MINUTE).toISOString(),
-          actor_name: "Swamini Fictional",
+          actor_name: "Asha Fictional",
           stage: null,
           stage_label: null,
           reason: null,

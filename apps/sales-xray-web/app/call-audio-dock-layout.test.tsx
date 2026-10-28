@@ -16,7 +16,7 @@ describe.skipIf(process.env.AC_BROWSER_LAYOUT_CHECK !== "1")(
     const readCss = (path: string) =>
       readFileSync(new URL(path, import.meta.url), "utf8");
     const css =
-      readCss("./lightbox/tokens.css") +
+      readCss("../../../packages/typescript/ui/src/kit/tokens/palette.css") +
       readCss("./styles.css") +
       readCss("./call-audio-dock.module.css")
         .replace(/:global\(([^)]+)\)/g, "$1")

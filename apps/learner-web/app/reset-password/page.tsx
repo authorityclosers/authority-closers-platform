@@ -52,3 +52,5 @@ export default async function ResetPasswordPage({
     </AuthFlowPage>
   );
 }
+
+export const metadata = { title: "Reset password" };

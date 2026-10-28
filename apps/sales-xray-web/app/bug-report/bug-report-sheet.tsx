@@ -670,8 +670,16 @@ export function BugReportHost() {
         return;
       }
       window.setTimeout(() => {
-        void askScreenshot().then(reveal, () => reveal(null));
-      }, 280);
+        // A picture is optional. Older phone bridges can take two seconds
+        // to answer; reporting must still open over a menu straight away.
+        let timer: ReturnType<typeof setTimeout>;
+        const deadline = new Promise<null>((resolve) => {
+          timer = setTimeout(() => resolve(null), 400);
+        });
+        void Promise.race([askScreenshot(), deadline])
+          .then(reveal, () => reveal(null))
+          .finally(() => clearTimeout(timer));
+      }, 120);
     };
     window.addEventListener(REPORT_PROBLEM_EVENT, show);
     // Asked for before this loaded (the frame loads it once the page is quiet).
@@ -682,7 +690,10 @@ export function BugReportHost() {
           detail: waiting.about,
         }),
       );
-    return () => window.removeEventListener(REPORT_PROBLEM_EVENT, show);
+    return () => {
+      latest += 1;
+      window.removeEventListener(REPORT_PROBLEM_EVENT, show);
+    };
   }, []);
   useCommandSource("bug-report", COMMANDS);
   const onShake = useCallback(() => {

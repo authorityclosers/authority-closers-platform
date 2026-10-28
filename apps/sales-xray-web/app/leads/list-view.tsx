@@ -7,6 +7,7 @@
  * owners and admins, and hands the stage counts up for the tabs.
  */
 
+import dynamic from "next/dynamic";
 import {
   CloudOff,
   List,
@@ -17,8 +18,20 @@ import {
   UserPlus,
   Users,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type ReactNode,
+} from "react";
 
+import { cachedLeadPage, readFirstLeads } from "./list-cache";
+import { firstPageFor, type ServerLeads } from "./leads-seed";
 import { notify } from "../notice-center";
 import { useRowKeys } from "../ui/row-keys";
 import { Button, Skeleton } from "../ui/kit";
@@ -39,10 +52,21 @@ import {
   type ListMore,
   type ListSort,
 } from "./leads-client";
-import { BulkSheet } from "./bulk-sheet";
-import { LeadsTable } from "./leads-table";
 import { QuickAddBar, type PasteRows } from "./quick-add";
 import styles from "./leads.module.css";
+
+const CachedLeadLine = memo(LeadLine);
+const subscribeHydration = () => () => {};
+
+const BulkSheet = dynamic(
+  () => import("./bulk-sheet").then((module) => module.BulkSheet),
+  { ssr: false },
+);
+
+const LeadsTable = dynamic(
+  () => import("./leads-table").then((m) => m.LeadsTable),
+  { ssr: false },
+);
 
 export type Scope = "mine" | "team" | "unassigned";
 
@@ -66,6 +90,8 @@ function storedLayout(owner: string | undefined): Layout {
 
 export function ListView({
   canManage,
+  initial = null,
+  cacheIdentity,
   stage,
   stageLabel,
   scope,
@@ -91,6 +117,8 @@ export function ListView({
   onSort,
 }: {
   canManage: boolean;
+  initial?: ServerLeads | null;
+  cacheIdentity?: string | null;
   /** "open", a stage kind, or "test". */
   stage: string;
   /** The tab's own words, for the count and the empty list. */
@@ -138,9 +166,14 @@ export function ListView({
     owner: layoutOwner,
     value: storedLayout(layoutOwner),
   }));
+  const hydrated = useSyncExternalStore(
+    subscribeHydration,
+    () => true,
+    () => false,
+  );
   if (layout.owner !== layoutOwner)
     setLayout({ owner: layoutOwner, value: storedLayout(layoutOwner) });
-  const asTable = layout.value === "table";
+  const asTable = hydrated && layout.value === "table";
   const chooseLayout = (value: Layout) => {
     setLayout({ owner: layoutOwner, value });
     if (!layoutOwner) return;
@@ -156,6 +189,36 @@ export function ListView({
     stage === "open" || stage === "new"
       ? { pipeline, onAdded: () => onChanged?.(), onPasteRows }
       : null;
+  // Counts and sync update the parent callbacks. Keep unchanged rows reusable,
+  // while their next tap always uses the handlers from the latest commit.
+  const handlers = useRef({ onOpen, actions });
+  useLayoutEffect(() => {
+    handlers.current = { onOpen, actions };
+  });
+  const openRow = useCallback((id: string) => handlers.current.onOpen(id), []);
+  const call = !!actions?.onCall;
+  const log = !!actions?.onLog;
+  const message = !!actions?.onMessage;
+  const hold = !!actions?.onHold;
+  const tap = !!actions?.onTap;
+  const rowActions = useMemo<RowActions>(
+    () => ({
+      onCall: call
+        ? (row) => handlers.current.actions?.onCall?.(row)
+        : undefined,
+      onLog: log ? (row) => handlers.current.actions?.onLog?.(row) : undefined,
+      onMessage: message
+        ? (row) => handlers.current.actions?.onMessage?.(row)
+        : undefined,
+      onHold: hold
+        ? (row) => handlers.current.actions?.onHold?.(row)
+        : undefined,
+      onTap: tap
+        ? (row, channel) => handlers.current.actions?.onTap?.(row, channel)
+        : undefined,
+    }),
+    [call, log, message, hold, tap],
+  );
   const [loaded, setLoaded] = useState<{
     key: string;
     question: string;
@@ -193,6 +256,8 @@ export function ListView({
   // (pull down, back in the app) keeps the rows on screen meanwhile.
   const moreKey = JSON.stringify(refine ?? null);
   const question = JSON.stringify([
+    layoutOwner,
+    cacheIdentity,
     scope,
     owner,
     stage,
@@ -201,6 +266,8 @@ export function ListView({
     moreKey,
   ]);
   const key = JSON.stringify([
+    layoutOwner,
+    cacheIdentity,
     scope,
     owner,
     stage,
@@ -214,8 +281,49 @@ export function ListView({
   useEffect(() => {
     ownerCounts.current = onOwnerCounts;
   });
-  const page = loaded?.question === question ? loaded.page : null;
-  const rows = loaded?.question === question ? loaded.rows : [];
+  const remembered = useMemo(
+    () =>
+      cachedLeadPage(cacheIdentity, {
+        scope,
+        owner: owner ?? undefined,
+        stage: stage === TEST ? null : stage,
+        search: query,
+        test: stage === TEST,
+        pipeline,
+        more: JSON.parse(moreKey) as ListMore | null,
+      }),
+    [cacheIdentity, scope, owner, stage, query, pipeline, moreKey],
+  );
+  const [initialRead] = useState(initial);
+  const serverPage = firstPageFor(initialRead, cacheIdentity, {
+    scope,
+    stage,
+    query,
+    pipeline,
+    owner,
+    more: refine,
+  });
+  const page =
+    loaded?.question === question ? loaded.page : (serverPage ?? remembered);
+  const rows =
+    loaded?.question === question ? loaded.rows : (page?.leads ?? []);
+  // Paint the visible phone rows first. Building 50 gesture-enabled rows at
+  // once monopolises a mid-range phone even when the data is already cached.
+  const [revealed, setRevealed] = useState({ question: "", count: 8 });
+  const visibleCount = revealed.question === question ? revealed.count : 8;
+  useEffect(() => {
+    if (asTable || visibleCount >= rows.length) return;
+    const timer = window.setTimeout(
+      () =>
+        setRevealed({
+          question,
+          count: Math.min(rows.length, visibleCount + 16),
+        }),
+      80,
+    );
+    return () => window.clearTimeout(timer);
+  }, [question, rows.length, visibleCount, asTable]);
+  const syncing = loaded?.key !== key;
   const error = failed?.key === key ? failed.message : null;
   const chosen = picked?.question === question ? picked.leads : NONE;
   // The page's latest counts setter, without reading the list again for it.
@@ -266,32 +374,58 @@ export function ListView({
     more: refine,
   };
 
+  const loadedWindow = useRef({ question, count: rows.length });
+  useEffect(() => {
+    loadedWindow.current = { question, count: rows.length };
+  }, [question, rows.length]);
   useEffect(() => {
     const controller = new AbortController();
-    readLeads(
-      {
-        scope,
-        owner: owner ?? undefined,
-        stage: stage === TEST ? null : stage,
-        search: query,
-        test: stage === TEST,
-        pipeline,
-        // The filters as one string: the same filters never ask twice.
-        more: JSON.parse(moreKey) as ListMore | null,
-      },
-      controller.signal,
-    )
-      .then((next) => {
-        setLoaded({ key, question, page: next, rows: next.leads });
-        if (next.stage_counts && stage !== TEST)
-          counts.current?.(next.stage_counts);
-        const owners = (
-          next as typeof next & { owner_counts?: Record<string, number> }
-        ).owner_counts;
+    const parameters = {
+      scope,
+      owner: owner ?? undefined,
+      stage: stage === TEST ? null : stage,
+      search: query,
+      test: stage === TEST,
+      pipeline,
+      more: JSON.parse(moreKey) as ListMore | null,
+    };
+    const keep =
+      loadedWindow.current.question === question
+        ? loadedWindow.current.count
+        : 0;
+    readFirstLeads(cacheIdentity, parameters, controller.signal)
+      .then(async (first) => {
+        if (controller.signal.aborted) return;
+        // A minute refresh must not throw away the pages already scrolled.
+        // Keep them usable while the same loaded window is revalidated.
+        let next = first;
+        const fresh = [...first.leads];
+        while (
+          fresh.length < Math.min(keep, first.total) &&
+          next.next_offset !== null
+        ) {
+          next = await readLeads(
+            { ...parameters, offset: next.next_offset },
+            controller.signal,
+          );
+          if (controller.signal.aborted) return;
+          fresh.push(...next.leads);
+        }
+        setLoaded({ key, question, page: next, rows: fresh });
+        if (first.stage_counts && stage !== TEST)
+          counts.current?.(first.stage_counts);
+        const owners = first.owner_counts;
         if (owners && Object.keys(owners).length) ownerCounts.current?.(owners);
       })
       .catch((reason: unknown) => {
         if (controller.signal.aborted) return;
+        if (remembered)
+          notify({
+            id: "leads-sync",
+            tone: "error",
+            title: "Couldn't sync leads",
+            message: "Showing your last list. Try again shortly.",
+          });
         setFailed({
           key,
           message:
@@ -301,10 +435,21 @@ export function ListView({
         });
       });
     return () => controller.abort();
-  }, [key, question, scope, owner, stage, query, pipeline, moreKey]);
+  }, [
+    key,
+    question,
+    scope,
+    owner,
+    stage,
+    query,
+    pipeline,
+    moreKey,
+    cacheIdentity,
+    remembered,
+  ]);
 
   const more = async () => {
-    if (!page?.next_offset || loadingMore) return;
+    if (!page?.next_offset || loadingMore || syncing) return;
     setLoadingMore(true);
     try {
       const next = await readLeads({ ...ask, offset: page.next_offset });
@@ -338,7 +483,10 @@ export function ListView({
   useEffect(() => {
     loadMore.current = more;
   });
-  const hasMore = page?.next_offset != null;
+  const hasMore =
+    page?.next_offset != null &&
+    !syncing &&
+    (asTable || visibleCount >= rows.length);
   useEffect(() => {
     const target = end.current;
     if (!hasMore || !target || typeof IntersectionObserver === "undefined")
@@ -431,6 +579,14 @@ export function ListView({
               ? `${page.total} ${stage === TEST ? "test " : ""}${page.total === 1 ? "lead" : "leads"}`
               : null}
           </span>
+          <span
+            className={styles.syncChip}
+            aria-label="Lead sync"
+            role="status"
+            aria-live="polite"
+          >
+            {error ? "Sync paused" : syncing ? "Syncing…" : "Updated just now"}
+          </span>
           <span className={styles.listTools}>
             {selecting ? null : tools}
             {rows.length && !selecting ? (
@@ -493,17 +649,7 @@ export function ListView({
             <span className={styles.columnsSlot} ref={setColumnsSlot} />
           </div>
         ) : null}
-        {quickAdd &&
-        page !== null &&
-        !selecting &&
-        !(asTable && rows.length) ? (
-          <QuickAddBar
-            pipeline={quickAdd.pipeline}
-            onAdded={quickAdd.onAdded}
-            onPasteRows={quickAdd.onPasteRows}
-          />
-        ) : null}
-        {error ? (
+        {error && !page ? (
           // Calm, with a way on (report #27, 26 Oct 2026): nothing is lost.
           <InlineEmpty
             icon={CloudOff}
@@ -525,7 +671,21 @@ export function ListView({
             aria-label="Loading leads"
           >
             {[0, 1, 2, 3, 4].map((key) => (
-              <Skeleton key={key} height={52} />
+              <div
+                key={key}
+                className={styles.listLoadingRow}
+                aria-hidden="true"
+              >
+                <Skeleton width={36} height={36} radius="circle" />
+                <div className={styles.listLoadingText}>
+                  <Skeleton width={144} height={16} />
+                  <Skeleton width={112} height={12} />
+                  <span className={styles.listLoadingActions}>
+                    <Skeleton width={136} height={36} radius="pill" />
+                  </span>
+                </div>
+                <Skeleton width={48} height={20} radius="pill" />
+              </div>
             ))}
           </div>
         ) : rows.length === 0 ? (
@@ -569,37 +729,55 @@ export function ListView({
               />
             ) : (
               <ul className={styles.leadList} aria-label="Leads" ref={list}>
-                {rows.map((row) =>
-                  selecting ? (
-                    <SelectLine
-                      key={row.lead_id}
-                      row={row}
-                      selected={chosen.has(row.lead_id)}
-                      onToggle={toggle}
-                    />
-                  ) : (
-                    <LeadLine
-                      key={row.lead_id}
-                      row={row}
-                      onOpen={onOpen}
-                      showOwner={scope !== "mine"}
-                      actions={actions}
-                    />
-                  ),
-                )}
+                {rows
+                  .slice(0, visibleCount)
+                  .map((row) =>
+                    selecting ? (
+                      <SelectLine
+                        key={row.lead_id}
+                        row={row}
+                        selected={chosen.has(row.lead_id)}
+                        onToggle={toggle}
+                      />
+                    ) : (
+                      <CachedLeadLine
+                        key={row.lead_id}
+                        row={row}
+                        onOpen={openRow}
+                        showOwner={scope !== "mine"}
+                        actions={actions ? rowActions : undefined}
+                      />
+                    ),
+                  )}
               </ul>
             )}
-            {page.next_offset !== null ? (
+            {page.next_offset !== null &&
+            (asTable || visibleCount >= rows.length) ? (
               <div className={styles.more} ref={end}>
-                <Button onClick={more} disabled={loadingMore}>
-                  {loadingMore
-                    ? "Loading…"
-                    : `Show more (${rows.length} of ${page.total})`}
+                <Button onClick={more} disabled={loadingMore || syncing}>
+                  {syncing
+                    ? "Syncing…"
+                    : loadingMore
+                      ? "Loading…"
+                      : `Show more (${rows.length} of ${page.total})`}
                 </Button>
               </div>
             ) : null}
           </>
         )}
+        {quickAdd &&
+        page !== null &&
+        rows.length > 0 &&
+        !selecting &&
+        !(asTable && rows.length) ? (
+          <div className={styles.quickAddAfter}>
+            <QuickAddBar
+              pipeline={quickAdd.pipeline}
+              onAdded={quickAdd.onAdded}
+              onPasteRows={quickAdd.onPasteRows}
+            />
+          </div>
+        ) : null}
       </section>
       {selecting && page && rows.length ? (
         <SelectBar

@@ -1,7 +1,7 @@
 import { CloudOff } from "lucide-react";
 import Link from "next/link";
 
-import { PublicShell } from "../components/site-shell";
+import { PublicShell } from "../components/public-shell";
 import { ROUTES } from "../lib/routes";
 
 export default function OfflinePage() {
@@ -27,3 +27,5 @@ export default function OfflinePage() {
     </PublicShell>
   );
 }
+
+export const metadata = { title: "Offline" };

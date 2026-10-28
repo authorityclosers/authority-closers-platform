@@ -17,6 +17,7 @@ import uuid
 from pathlib import Path
 
 import pytest
+import yaml
 
 ROOT = Path(__file__).resolve().parents[2]
 APPLICATION = ROOT / "infra" / "application"
@@ -278,6 +279,24 @@ def test_compose_mounts_the_installed_copy_and_falls_back_for_exec_only_tools() 
     assert INSTALLER.index("\nexport AC_POSTGRES_INIT_ROOT\n") > export
     assert export < INSTALLER.index('\ncompose_for "$release_dir" config --quiet')
     assert "AC_POSTGRES_INIT_ROOT" not in function("compose_for")
+
+
+def test_release_services_are_checked_every_second_while_starting() -> None:
+    # The hold waits for PostgreSQL (when it restarts) and the api and web
+    # services to be healthy; Docker's default start interval is 5 seconds.
+    services = yaml.safe_load(COMPOSE)["services"]
+    for name, period, interval in (
+        ("postgres", "20s", "15s"),
+        ("api", "30s", "30s"),
+        ("learner-web", "30s", "30s"),
+        ("admin-web", "30s", "30s"),
+        ("coach-web", "30s", "30s"),
+    ):
+        check = services[name]["healthcheck"]
+        assert check["start_interval"] == "1s", name
+        assert check["start_period"] == period, name
+        assert check["interval"] == interval, name
+    assert "start_interval" not in services["intake-spool"]["healthcheck"]
 
 
 def _docker() -> str:

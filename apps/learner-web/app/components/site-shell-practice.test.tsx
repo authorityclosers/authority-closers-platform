@@ -1,34 +1,27 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { afterEach, expect, it, vi } from "vitest";
-import { LearnerShell, PublicShell } from "./site-shell";
-import { getDefaultCommandPaletteItems } from "./learner-sidebar/command-palette";
-import { usePracticeNavigationAvailability } from "./practice-availability";
-
-vi.mock("./practice-availability", () => ({
-  usePracticeNavigationAvailability: vi.fn(),
+import { expect, it, vi } from "vitest";
+import { ReflexShell } from "../shell/reflex-shell";
+import { PublicShell } from "./public-shell";
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/learning",
+  useRouter: () => ({ prefetch: vi.fn() }),
 }));
-afterEach(() => {
-  vi.unstubAllEnvs();
-  vi.clearAllMocks();
-});
 it.each([false, true])(
-  "shared navigation follows actual runtime admission=%s in production",
+  "Reflex places follow the server's Practice gate=%s",
   (enabled) => {
-    vi.stubEnv("NODE_ENV", "production");
-    vi.mocked(usePracticeNavigationAvailability).mockReturnValue(enabled);
-    const markup = renderToStaticMarkup(<LearnerShell current="learning" />);
+    const markup = renderToStaticMarkup(
+      <ReflexShell practiceEnabled={enabled}>
+        <p>Content</p>
+      </ReflexShell>,
+    );
     expect(markup.includes('href="/practice"')).toBe(enabled);
-    expect(markup).toContain("My Learning");
-    expect(markup).toContain('href="/sales-xray"');
-    expect(usePracticeNavigationAvailability).toHaveBeenCalledWith("learning");
+    expect(markup).toContain("Learn");
+    expect(markup).not.toContain('href="/sales-xray"');
   },
 );
-
-it("provides a public and keyboard-search entry without adding identity to the URL", () => {
+it("keeps the public Reflex entry free of embedded studio navigation", () => {
   const markup = renderToStaticMarkup(<PublicShell />);
-  expect(markup).toContain('href="/sales-xray"');
-  const item = getDefaultCommandPaletteItems().find(
-    (entry) => entry.label === "Sales Xray",
-  );
-  expect(item?.href).toBe("/sales-xray");
+  expect(markup).toContain("Reflex");
+  expect(markup).toContain("Sales training by Authority Closers");
+  expect(markup).not.toContain('href="/sales-xray"');
 });

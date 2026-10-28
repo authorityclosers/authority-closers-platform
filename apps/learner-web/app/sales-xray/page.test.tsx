@@ -39,14 +39,10 @@ vi.mock("../../../sales-xray-web/app/standalone-studio", () => ({
     </div>
   ),
 }));
-vi.mock("../components/site-shell", () => ({
-  LearnerShell: ({
-    children,
-    current,
-  }: {
-    children: ReactNode;
-    current: string;
-  }) => <div data-current={current}>{children}</div>,
+vi.mock("../shell/reflex-shell", () => ({
+  ReflexShell: ({ children }: { children: ReactNode; current: string }) => (
+    <div data-reflex-shell>{children}</div>
+  ),
 }));
 
 import SalesXrayPage from "./page";
@@ -58,10 +54,10 @@ async function renderRoute(searchParams: Record<string, string | string[]>) {
   return renderToStaticMarkup(route);
 }
 
-it("keeps the LMS route inside the Academy shell with an internal return path", async () => {
+it("keeps the LMS route inside the Reflex shell with an internal return path", async () => {
   const markup = await renderRoute({});
 
-  expect(markup).toContain('data-current="sales-xray"');
+  expect(markup).toContain('data-reflex-shell="true"');
   expect(markup).toContain('id="main-content"');
   expect(markup).toContain('class="learner-main"');
   expect(markup).toContain('data-home-href="/home"');

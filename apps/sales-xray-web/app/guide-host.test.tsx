@@ -1,7 +1,11 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { FirstCallGuide, GuideEngine } from "./guide-host";
+import {
+  FirstCallGuide,
+  GuideEngine,
+  firstCallGuideStartsHere,
+} from "./guide-host";
 import { GuideProgressStore } from "./guide-progress";
 import { FIRST_CALL_GUIDE } from "./guide-registry";
 import { useFirstCallGuideSwitch } from "./guide-toggle";
@@ -33,6 +37,19 @@ afterEach(async () => {
 });
 const step = () =>
   document.querySelector("[data-guide-step]")?.getAttribute("data-guide-step");
+
+it("keeps Home, Calls and saved reports clear of the first-call tour", () => {
+  for (const path of [
+    "/dashboard",
+    "/dashboard/",
+    "/calls",
+    "/analysis/calls/",
+    "/analysis/calls/fictional-call",
+    "/analysis/sample",
+  ])
+    expect(firstCallGuideStartsHere(path)).toBe(false);
+  expect(firstCallGuideStartsHere("/analysis/new")).toBe(true);
+});
 const button = (text: string) =>
   [...document.querySelectorAll<HTMLButtonElement>("button")].find(
     (node) => node.textContent === text,

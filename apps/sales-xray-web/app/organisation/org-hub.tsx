@@ -27,10 +27,15 @@ import { ActionList, ActionRow, Segmented } from "../ui/kit";
 import { SideScroll, sideScrollFades, useSideScroll } from "../ui/side-scroll";
 import { useWorkspaceAccess } from "../workspace-access";
 import type { ServerOrganisation } from "./organisation-seed";
+import { AnalyticsView } from "./analytics-view";
+import { can } from "./roles";
 import { OrganisationView } from "./organisation-view";
 import { HUB_PATH, HUB_TABS, hubHref, type HubTab } from "./hub-tabs";
 import { hubTabsFor } from "./setup-tabs";
 import styles from "./org-hub.module.css";
+import { OrganisationSources } from "./setup/sources";
+import { OrganisationStages } from "./setup/stages";
+import { OrganisationRules } from "./setup/rules";
 
 type Part = { key: string; label: string; section: SettingsSectionId };
 
@@ -121,11 +126,19 @@ function Parts({
           }}
         />
       </SideScroll>
-      <SettingsSectionView
-        key={current.section}
-        id={current.section}
-        headless
-      />
+      {current.section === "sources" ? (
+        <OrganisationSources key="sources" />
+      ) : current.section === "stages" ? (
+        <OrganisationStages key="stages" />
+      ) : current.section === "lead-rules" ? (
+        <OrganisationRules key="rules" />
+      ) : (
+        <SettingsSectionView
+          key={current.section}
+          id={current.section}
+          headless
+        />
+      )}
     </div>
   );
 }
@@ -209,19 +222,32 @@ export function OrganisationHub({
       break;
     case "analytics":
       body = (
-        <OrganisationView
-          initial={initial}
-          embedded
-          headless
-          sections={["overview"]}
+        <AnalyticsView
+          key={current.tenant_id}
+          team={can(current.role, "team.view")}
+          personId={access?.context?.personId}
         />
       );
       break;
     case "leads":
-      body = <Parts tab={tab} parts={LEAD_PARTS} part={part} />;
+      body = (
+        <Parts
+          key={current.tenant_id}
+          tab={tab}
+          parts={LEAD_PARTS}
+          part={part}
+        />
+      );
       break;
     case "connections":
-      body = <Parts tab={tab} parts={CONNECTION_PARTS} part={part} />;
+      body = (
+        <Parts
+          key={current.tenant_id}
+          tab={tab}
+          parts={CONNECTION_PARTS}
+          part={part}
+        />
+      );
       break;
     case "call-ai":
       body = <SettingsSectionView id="call-ai" headless />;

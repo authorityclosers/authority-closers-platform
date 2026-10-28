@@ -302,13 +302,11 @@ it("starts a new workspace with steps, a sample report and one first action", as
   ).toBe("Add your first lead");
 });
 
-it("leaves the sample report out until its page exists", async () => {
-  await render(
-    <SetupStart
-      desk={{ counts: { open: 0 }, numbers: { calls: 0 }, team_pool: null }}
-      manager={false}
-    />,
-  );
+it("offers the sample report by default, and leaves it out when told to", async () => {
+  const desk = { counts: { open: 0 }, numbers: { calls: 0 }, team_pool: null };
+  await render(<SetupStart desk={desk} manager={false} />);
+  expect(container.querySelector('a[href="/analysis/sample"]')).not.toBeNull();
+  await render(<SetupStart desk={desk} manager={false} sample={false} />);
   expect(container.querySelector('a[href="/analysis/sample"]')).toBeNull();
   expect(container.textContent).toContain("Add your first lead");
 });

@@ -67,10 +67,22 @@ let root: Root;
 let host: HTMLDivElement;
 
 beforeEach(() => {
+  vi.stubGlobal(
+    "matchMedia",
+    vi.fn(() => ({ matches: false })),
+  );
   push.mockClear();
   notices.notify.mockClear();
   calls = [];
   routes = {
+    [`/v1/lead-desk/activity?day=recent&person=${ashaId}`]: {
+      status: 200,
+      body: { items: [], counts: {}, next_before: null },
+    },
+    [`/v1/lead-desk/activity?day=recent&person=${ownerId}`]: {
+      status: 200,
+      body: { items: [], counts: {}, next_before: null },
+    },
     "/v1/organisation/members": {
       status: 200,
       body: {
@@ -176,7 +188,10 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function show(id: string, role: "owner" | "admin" | "member" = "owner") {
+async function show(
+  id: string,
+  role: "owner" | "admin" | "member" | "viewer" = "owner",
+) {
   await act(async () =>
     root.render(
       <WorkspaceAccessContext.Provider
@@ -209,7 +224,7 @@ async function show(id: string, role: "owner" | "admin" | "member" = "owner") {
 it("shows a teammate's profile to an owner: who, figures, weekly charts, reports and calls", async () => {
   await show(ashaId);
   expect(host.querySelector("h1")?.textContent).toContain("Asha Menon");
-  expect(host.querySelector("h1")?.textContent).toContain("Seller");
+  expect(host.querySelector("header")?.textContent).toContain("Seller");
   expect(host.textContent).toContain("asha@example.com");
   const tiles = host.querySelector('[aria-label="Last 12 weeks"]');
   expect(tiles?.textContent).toContain("Calls2");
@@ -256,16 +271,26 @@ it("shows a teammate's profile to an owner: who, figures, weekly charts, reports
 
 it("asks before changing a role, then saves it through the organisation API", async () => {
   await show(ashaId);
-  const select = host.querySelector<HTMLSelectElement>(
-    'select[aria-label="Role for Asha Menon"]',
+  const click = async (label: string) =>
+    act(async () =>
+      [...document.querySelectorAll<HTMLButtonElement>("button")]
+        .find((button) => button.textContent === label)
+        ?.click(),
+    );
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Settings for Asha Menon"]',
+      )!
+      .click(),
   );
-  expect(select).not.toBeNull();
-  await act(async () => {
-    select!.value = "admin";
-    select!.dispatchEvent(new Event("change", { bubbles: true }));
-  });
-  expect(host.textContent).toContain("Make Asha Menon admin?");
-  const confirm = [...host.querySelectorAll("button")].find(
+  await click("Change role");
+  expect(
+    document.querySelector('select[aria-label="Role for Asha Menon"]'),
+  ).toBeNull();
+  await click("Admin");
+  expect(document.body.textContent).toContain("Make Asha Menon admin?");
+  const confirm = [...document.querySelectorAll("button")].find(
     (button) => button.textContent === "Change role",
   );
   await act(async () => confirm?.click());
@@ -298,9 +323,16 @@ it("shows members only their own calls and offers no actions on others", async (
 it("gives invited people a profile with an honest empty state", async () => {
   await show(inviteId);
   expect(host.querySelector("h1")?.textContent).toContain("new@example.com");
-  expect(host.querySelector("h1")?.textContent).toContain("Invited");
+  expect(host.querySelector("header")?.textContent).toContain("Invited");
   expect(host.textContent).toContain("No calls yet: invitation sent");
-  expect(host.textContent).toContain("Revoke invitation");
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Settings for new@example.com"]',
+      )!
+      .click(),
+  );
+  expect(document.body.textContent).toContain("Revoke invitation");
 });
 
 it("says so when the person isn't in this organisation", async () => {
@@ -318,10 +350,8 @@ it("says in place when their calls can't be loaded, with Try again, never a blan
   };
   await show(ashaId);
   expect(host.querySelector("h1")?.textContent).toContain("Asha Menon");
-  expect(host.textContent).toContain(
-    "Their calls and reports couldn't be loaded",
-  );
-  expect(host.textContent).toContain("Check your connection and try again.");
+  expect(host.textContent).toContain("Reports are unavailable.");
+  expect(host.textContent).toContain("Recent activity");
   expect(host.textContent).not.toContain("Internal Server Error");
   expect(notices.notify).not.toHaveBeenCalled();
 
@@ -337,7 +367,7 @@ it("says in place when their calls can't be loaded, with Try again, never a blan
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
-  expect(host.textContent).toContain("Asha has no calls in the last 12 weeks");
+  expect(host.textContent).toContain("Reports and coaching");
 });
 
 it("raises one corner card with Try again when the directory can't be read, never a crash", async () => {
@@ -745,3 +775,106 @@ it.each([0, 64])(
     expect(callsPanel().textContent).not.toContain("Matches: 0");
   },
 );
+
+it("shows desk calls and notes with no reports even when the report read fails", async () => {
+  routes["/v1/organisation/activity?days=84"] = { status: 500, body: {} };
+  const at = new Date().toISOString();
+  routes[`/v1/lead-desk/activity?day=recent&person=${ashaId}`] = {
+    status: 200,
+    body: {
+      counts: { call: 1, note: 1 },
+      today_counts: { call: 1, note: 1 },
+      week_counts: { call: 1, note: 1 },
+      next_before: null,
+      items: [
+        {
+          event_id: "call",
+          lead_id: "example",
+          lead_name: "Rowan Example",
+          stage_label: "New",
+          event: {
+            kind: "call",
+            at,
+            actor_name: "Asha Menon",
+            duration_seconds: 75,
+          },
+        },
+        {
+          event_id: "note",
+          lead_id: "example",
+          lead_name: "Rowan Example",
+          stage_label: "New",
+          event: {
+            kind: "note",
+            at,
+            actor_name: "Asha Menon",
+            note: "Send the details after lunch",
+          },
+        },
+      ],
+    },
+  };
+  await show(ashaId);
+  expect(host.textContent).toContain("Asha called Rowan Example");
+  expect(host.textContent).toContain("Send the details after lunch");
+  expect(
+    host.querySelector('[aria-label="Today and the last 7 days"]')?.textContent,
+  ).toContain("Calls1today");
+  expect(host.textContent).toContain("Reports are unavailable");
+});
+
+it("lets a read-only Viewer see the person's work without settings controls", async () => {
+  await show(ashaId, "viewer");
+  expect(host.querySelector('[aria-label="Recent activity"]')).not.toBeNull();
+  expect(
+    host.querySelector('[aria-label="Settings for Asha Menon"]'),
+  ).toBeNull();
+  expect(host.querySelector('[aria-label="Rename Asha Menon"]')).toBeNull();
+  expect(
+    calls.some(
+      (call) =>
+        call.url === `/v1/lead-desk/activity?day=recent&person=${ashaId}`,
+    ),
+  ).toBe(true);
+});
+
+it("keeps removal in the sheet until an explicit confirmation, and Cancel does not write", async () => {
+  await show(ashaId);
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>(
+        '[aria-label="Settings for Asha Menon"]',
+      )!
+      .click(),
+  );
+  await act(async () =>
+    [...document.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Remove person")!
+      .click(),
+  );
+  expect(document.body.textContent).toContain(
+    "Their calls stay with the organisation.",
+  );
+  expect(calls.some((call) => call.method === "DELETE")).toBe(false);
+  await act(async () =>
+    [...document.querySelectorAll<HTMLButtonElement>("button")]
+      .find((button) => button.textContent === "Cancel")!
+      .click(),
+  );
+  expect(calls.some((call) => call.method === "DELETE")).toBe(false);
+});
+
+it("offers the self-service rename pencil and a capped display-name form only on one's own page", async () => {
+  await show(ownerId);
+  await act(async () =>
+    host
+      .querySelector<HTMLButtonElement>('[aria-label="Rename Owner Person"]')!
+      .click(),
+  );
+  expect(
+    document.querySelector<HTMLInputElement>(
+      'input[aria-describedby="display-name-limit"]',
+    )?.maxLength,
+  ).toBe(40);
+  expect(document.body.textContent).toContain("Use 1–40 characters");
+});

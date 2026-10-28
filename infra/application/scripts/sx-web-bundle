@@ -1,0 +1,439 @@
+#!/usr/bin/env python3
+"""sx-web-bundle: signed web bundles for the Sales X-Ray phone apps' live web updates.
+
+Owner, 28 Oct 2026: "Why aren't I getting the app update on Play Store automatically ... I need new updated".
+The phone apps carry the web app's static export (sales-xray-apps, build-web-shell.sh). After each production
+release this tool turns the same export into a bundle the installed apps download, check and switch to, with no
+store build and no store review (sales-xray-apps LiveWeb.java; docs/ops/LIVE-WEB-BUNDLES.md):
+
+  pack <export> --out <dir> --host <site> --sha <commit> --commit-at-ms <ms>
+      prunes the export as the app build does, refuses anything but web files, writes sx-web.json and the zip
+      (<sha256>.zip) and bundle.json (its facts) in <dir>.
+  sign --bundle-json <file> --version <v> --sequence <n> [--min-native <n>] --out <manifest.json>
+      signs the manifest with the Ed25519 key in $AC_SX_WEB_BUNDLE_SIGNING_KEY (Infisical, injected at run time:
+      the 32-byte seed in hex, or a PKCS#8 PEM). The key is never printed, logged or written to disk.
+  verify <manifest.json> --key <hex> --host <site> [--bundle <zip>]
+      the app's own checks: format, pinned key, signature, fields, and the zip's size and SHA-256.
+  publish --manifest <m> --bundle <zip> --root <app-web dir> --key <hex> [--keep 3]
+      puts the zip at bundles/<sha256>.zip, then the manifest at manifest.json, each written whole and moved
+      into place, and keeps the newest few bundles. The API serves them at /v1/app-web/.
+  public-key
+      prints the public key of $AC_SX_WEB_BUNDLE_SIGNING_KEY (hex), for the apps' assets/live-web.json.
+
+Only files a web page shows or runs in the WebView go in a bundle (TYPES): no native code, ever (Google Play's
+Device and Network Abuse policy; sales-xray-apps apps/phone/PLAY-STORE.md). The app keeps the same list.
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+import time
+import zipfile
+from pathlib import Path
+
+FORMAT = "sx-web-bundle/1"
+CONTEXT = (FORMAT + "\n").encode("utf-8")
+KEY_ENV = "AC_SX_WEB_BUNDLE_SIGNING_KEY"
+HOSTS = ("salesxray.authorityclosers.com", "salesxray-dev.authorityclosers.com")
+TYPES = frozenset(
+    {
+        "html", "js", "mjs", "css", "json", "txt",
+        "svg", "png", "jpg", "jpeg", "webp", "avif", "gif", "ico",
+        "woff2", "woff", "ttf", "otf",
+        "webmanifest", "xml", "csv", "pdf",
+        "mp3", "mp4", "webm", "wav", "ogg", "m4a",
+    }
+)  # fmt: skip
+REQUIRED = ("index.html", "dashboard/index.html", "leads/index.html", "chats/index.html")
+# As build-web-shell.sh: review pages are for screenshots only, and pages that need the server to read their
+# address are never served from the app, so neither is carried.
+PRUNED_DIRS = ("review-fixture", "auth", "organisation/invites", "provider-review")
+# Server-only answers the export writes as plain files: the web server's health check (app/health/route.ts).
+PRUNED_FILES = ("health",)
+MAX_BUNDLE_BYTES = 64 * 1024 * 1024
+MAX_FILES = 20_000
+SHA256 = re.compile(r"^[0-9a-f]{64}$")
+SHA1 = re.compile(r"^[0-9a-f]{40}$")
+VERSION = re.compile(r"^[0-9A-Za-z][0-9A-Za-z.+-]{0,39}$")
+ZIP_TIME = (1980, 1, 1, 0, 0, 0)
+
+
+class BundleError(Exception):
+    """A bundle or manifest this tool (and the app) refuses."""
+
+
+def prune(export: Path) -> None:
+    for name in PRUNED_DIRS:
+        shutil.rmtree(export / name, ignore_errors=True)
+    for name in PRUNED_FILES:
+        (export / name).unlink(missing_ok=True)
+    for path in export.rglob("*.map"):
+        path.unlink()
+    # Developer downloads (the Python sample in /developers) stay on the website: the app asks the
+    # server for anything its copy doesn't have, and no code but the web page's ever goes in a bundle.
+    for cache in [path for path in export.rglob("__pycache__") if path.is_dir()]:
+        shutil.rmtree(cache, ignore_errors=True)
+    for pattern in ("*.py", "*.pyc"):
+        for path in export.rglob(pattern):
+            path.unlink()
+    # The brand icon packs load on demand from the server, as in the app build.
+    brands = export / "brands"
+    if brands.is_dir():
+        for path in brands.glob("?.json"):
+            path.unlink()
+
+
+def file_list(export: Path) -> list[str]:
+    files = []
+    for path in export.rglob("*"):
+        if path.is_symlink():
+            raise BundleError(f"symbolic link in the export: {path.relative_to(export).as_posix()}")
+        if path.is_file():
+            files.append(path.relative_to(export).as_posix())
+    return sorted(name for name in files if name != "sx-web.json")
+
+
+def allowed(name: str) -> bool:
+    file = name.rsplit("/", 1)[-1].lower()
+    dot = file.rfind(".")
+    return dot > 0 and file[dot + 1 :] in TYPES
+
+
+def check_files(files: list[str]) -> None:
+    refused = [name for name in files if not allowed(name)]
+    if refused:
+        raise BundleError(
+            "not a web file (only pages, scripts, styles, data, pictures, fonts and media): "
+            + ", ".join(refused[:10])
+        )
+    for name in files:
+        parts = name.split("/")
+        if name.startswith("/") or "\\" in name or ":" in name or any(p in ("", ".", "..") for p in parts):
+            raise BundleError(f"unsafe path in the export: {name}")
+    missing = [page for page in REQUIRED if page not in files]
+    if missing:
+        raise BundleError("missing pages: " + ", ".join(missing))
+    if len(files) > MAX_FILES:
+        raise BundleError(f"{len(files)} files, more than {MAX_FILES}")
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def pack(
+    export: Path,
+    out: Path,
+    *,
+    host: str,
+    sha: str,
+    ref: str,
+    commit_at_ms: int,
+    built_at_ms: int,
+) -> dict[str, object]:
+    if host not in HOSTS:
+        raise BundleError(f"unknown site {host}")
+    if not SHA1.fullmatch(sha):
+        raise BundleError("sha must be a full 40-character commit")
+    if commit_at_ms <= 0 or built_at_ms <= 0:
+        raise BundleError("commit and build times are required")
+    prune(export)
+    files = file_list(export)
+    check_files(files)
+    web = {
+        "host": host,
+        "sha": sha,
+        "ref": ref,
+        "builtAtMs": built_at_ms,
+        "commitAtMs": commit_at_ms,
+        "files": files,
+    }
+    (export / "sx-web.json").write_text(json.dumps(web), encoding="utf-8")
+    out.mkdir(parents=True, exist_ok=True)
+    staging = out / "bundle.zip.part"
+    with zipfile.ZipFile(staging, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
+        for name in [*files, "sx-web.json"]:
+            info = zipfile.ZipInfo(name, date_time=ZIP_TIME)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.create_system = 3
+            info.external_attr = 0o100644 << 16
+            archive.writestr(info, (export / name).read_bytes())
+    size = staging.stat().st_size
+    if size > MAX_BUNDLE_BYTES:
+        staging.unlink()
+        raise BundleError(f"bundle is {size} bytes, more than {MAX_BUNDLE_BYTES}")
+    digest = sha256_file(staging)
+    zip_path = out / f"{digest}.zip"
+    staging.replace(zip_path)
+    facts: dict[str, object] = {
+        "host": host,
+        "sha": sha,
+        "ref": ref,
+        "sha256": digest,
+        "bytes": size,
+        "files": len(files),
+        "commitAtMs": commit_at_ms,
+        "builtAtMs": built_at_ms,
+        "zip": zip_path.name,
+    }
+    (out / "bundle.json").write_text(json.dumps(facts, indent=2) + "\n", encoding="utf-8")
+    return facts
+
+
+def payload_text(
+    facts: dict[str, object], *, version: str, sequence: int, min_native: int
+) -> str:
+    if not VERSION.fullmatch(version):
+        raise BundleError(f"bad version {version!r}")
+    if sequence <= 0 or min_native < 1:
+        raise BundleError("sequence and minimum native version must be positive")
+    digest = str(facts["sha256"])
+    fields = {
+        "host": facts["host"],
+        "version": version,
+        "sha": facts["sha"],
+        "sequence": sequence,
+        "bundle": f"bundles/{digest}.zip",
+        "sha256": digest,
+        "bytes": facts["bytes"],
+        "minNative": min_native,
+        "commitAtMs": facts["commitAtMs"],
+        "builtAtMs": facts["builtAtMs"],
+    }
+    check_fields(fields, str(facts["host"]))
+    return json.dumps(fields, sort_keys=True, separators=(",", ":"))
+
+
+def check_fields(fields: dict[str, object], host: str) -> None:
+    digest = fields.get("sha256")
+    problems = []
+    if fields.get("host") != host:
+        problems.append("host")
+    if not isinstance(digest, str) or not SHA256.fullmatch(digest):
+        problems.append("sha256")
+    if not isinstance(fields.get("sha"), str) or not SHA1.fullmatch(str(fields.get("sha"))):
+        problems.append("sha")
+    if not isinstance(fields.get("version"), str) or not VERSION.fullmatch(str(fields.get("version"))):
+        problems.append("version")
+    for name, low in (("sequence", 1), ("minNative", 1), ("commitAtMs", 1), ("builtAtMs", 1)):
+        value = fields.get(name)
+        if not isinstance(value, int) or isinstance(value, bool) or value < low:
+            problems.append(name)
+    size = fields.get("bytes")
+    if not isinstance(size, int) or isinstance(size, bool) or not 0 < size <= MAX_BUNDLE_BYTES:
+        problems.append("bytes")
+    if fields.get("bundle") != f"bundles/{digest}.zip":
+        problems.append("bundle")
+    if problems:
+        raise BundleError("manifest fields refused: " + ", ".join(problems))
+
+
+def load_private_key(text: str):  # type: ignore[no-untyped-def]
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+    value = text.strip()
+    if re.fullmatch(r"[0-9a-fA-F]{64}", value):
+        return Ed25519PrivateKey.from_private_bytes(bytes.fromhex(value))
+    if value.startswith("-----BEGIN"):
+        key = serialization.load_pem_private_key(value.encode("ascii"), password=None)
+        if isinstance(key, Ed25519PrivateKey):
+            return key
+    # Never echo the value: only what kind of thing was expected.
+    raise BundleError(f"{KEY_ENV} is not an Ed25519 key (64 hex characters or a PKCS#8 PEM)")
+
+
+def public_hex(private_key) -> str:  # type: ignore[no-untyped-def]
+    from cryptography.hazmat.primitives import serialization
+
+    raw = private_key.public_key().public_bytes(
+        serialization.Encoding.Raw, serialization.PublicFormat.Raw
+    )
+    return raw.hex()
+
+
+def sign(payload: str, private_key) -> dict[str, str]:  # type: ignore[no-untyped-def]
+    signature = private_key.sign(CONTEXT + payload.encode("utf-8"))
+    return {
+        "format": FORMAT,
+        "key": public_hex(private_key),
+        "payload": payload,
+        "signature": signature.hex(),
+    }
+
+
+def open_manifest(text: str, keys: list[str], host: str) -> dict[str, object]:
+    """The app's checks (LiveWebRules.open), so a manifest that leaves here is one the app opens."""
+    from cryptography.exceptions import InvalidSignature
+    from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+
+    pinned = [key.strip().lower() for key in keys if key and key.strip()]
+    if not pinned:
+        raise BundleError("no public key to check against")
+    try:
+        envelope = json.loads(text)
+    except ValueError as error:
+        raise BundleError("manifest is not JSON") from error
+    if not isinstance(envelope, dict) or envelope.get("format") != FORMAT:
+        raise BundleError("manifest format refused")
+    key = str(envelope.get("key", "")).lower()
+    signature = str(envelope.get("signature", "")).lower()
+    payload = envelope.get("payload")
+    if not re.fullmatch(r"[0-9a-f]{64}", key) or not re.fullmatch(r"[0-9a-f]{128}", signature):
+        raise BundleError("manifest format refused")
+    if not isinstance(payload, str) or not payload:
+        raise BundleError("manifest format refused")
+    if key not in pinned:
+        raise BundleError("manifest signed by a key that isn't pinned")
+    try:
+        Ed25519PublicKey.from_public_bytes(bytes.fromhex(key)).verify(
+            bytes.fromhex(signature), CONTEXT + payload.encode("utf-8")
+        )
+    except InvalidSignature as error:
+        raise BundleError("manifest signature refused") from error
+    fields = json.loads(payload)
+    if not isinstance(fields, dict):
+        raise BundleError("manifest fields refused")
+    check_fields(fields, host)
+    return fields
+
+
+def check_zip(fields: dict[str, object], bundle: Path) -> None:
+    if bundle.stat().st_size != fields["bytes"]:
+        raise BundleError("the zip's size is not the manifest's")
+    if sha256_file(bundle) != fields["sha256"]:
+        raise BundleError("the zip's SHA-256 is not the manifest's")
+    with zipfile.ZipFile(bundle) as archive:
+        names = [info.filename for info in archive.infolist() if not info.is_dir()]
+    if "sx-web.json" not in names:
+        raise BundleError("the zip has no sx-web.json")
+    check_files(sorted(name for name in names if name != "sx-web.json"))
+
+
+def write_whole(target: Path, data: bytes) -> None:
+    """Written to a temporary file beside the target, flushed, then moved over it in one step."""
+    target.parent.mkdir(parents=True, exist_ok=True)
+    os.chmod(target.parent, 0o755)
+    descriptor, temporary = tempfile.mkstemp(prefix=f".{target.name}.", dir=target.parent)
+    try:
+        with os.fdopen(descriptor, "wb") as stream:
+            stream.write(data)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.chmod(temporary, 0o644)
+        os.replace(temporary, target)
+    except BaseException:
+        Path(temporary).unlink(missing_ok=True)
+        raise
+
+
+def publish(manifest: Path, bundle: Path, root: Path, key: str, keep: int) -> dict[str, object]:
+    text = manifest.read_text(encoding="utf-8")
+    envelope = json.loads(text)
+    fields = open_manifest(text, [key], str(json.loads(envelope["payload"])["host"]))
+    check_zip(fields, bundle)
+    target = root / str(fields["bundle"])
+    if not target.exists() or sha256_file(target) != fields["sha256"]:
+        write_whole(target, bundle.read_bytes())
+    # The zip is in place before the manifest that names it.
+    write_whole(root / "manifest.json", text.encode("utf-8"))
+    zips = sorted(
+        (path for path in (root / "bundles").glob("*.zip") if path != target),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for old in zips[max(keep - 1, 0) :]:
+        old.unlink()
+    return fields
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="sx-web-bundle", description=__doc__.split("\n\n")[0])
+    commands = parser.add_subparsers(dest="command", required=True)
+
+    pack_parser = commands.add_parser("pack")
+    pack_parser.add_argument("export", type=Path)
+    pack_parser.add_argument("--out", type=Path, required=True)
+    pack_parser.add_argument("--host", required=True)
+    pack_parser.add_argument("--sha", required=True)
+    pack_parser.add_argument("--ref", default="")
+    pack_parser.add_argument("--commit-at-ms", type=int, required=True)
+    pack_parser.add_argument("--built-at-ms", type=int, default=0)
+
+    sign_parser = commands.add_parser("sign")
+    sign_parser.add_argument("--bundle-json", type=Path, required=True)
+    sign_parser.add_argument("--version", required=True)
+    sign_parser.add_argument("--sequence", type=int, required=True)
+    sign_parser.add_argument("--min-native", type=int, default=1)
+    sign_parser.add_argument("--out", type=Path, required=True)
+
+    verify_parser = commands.add_parser("verify")
+    verify_parser.add_argument("manifest", type=Path)
+    verify_parser.add_argument("--key", required=True)
+    verify_parser.add_argument("--host", required=True)
+    verify_parser.add_argument("--bundle", type=Path)
+
+    publish_parser = commands.add_parser("publish")
+    publish_parser.add_argument("--manifest", type=Path, required=True)
+    publish_parser.add_argument("--bundle", type=Path, required=True)
+    publish_parser.add_argument("--root", type=Path, required=True)
+    publish_parser.add_argument("--key", required=True)
+    publish_parser.add_argument("--keep", type=int, default=3)
+
+    commands.add_parser("public-key")
+
+    args = parser.parse_args(argv)
+    try:
+        if args.command == "pack":
+            facts = pack(
+                args.export,
+                args.out,
+                host=args.host,
+                sha=args.sha,
+                ref=args.ref or args.sha,
+                commit_at_ms=args.commit_at_ms,
+                built_at_ms=args.built_at_ms or int(time.time() * 1000),
+            )
+            print(json.dumps(facts))
+        elif args.command in ("sign", "public-key"):
+            secret = os.environ.get(KEY_ENV, "")
+            if not secret:
+                raise BundleError(f"{KEY_ENV} is not set (it comes from Infisical at run time)")
+            private_key = load_private_key(secret)
+            del secret
+            if args.command == "public-key":
+                print(public_hex(private_key))
+                return 0
+            facts = json.loads(args.bundle_json.read_text(encoding="utf-8"))
+            text = payload_text(
+                facts, version=args.version, sequence=args.sequence, min_native=args.min_native
+            )
+            write_whole(args.out, (json.dumps(sign(text, private_key)) + "\n").encode("utf-8"))
+            print(json.dumps({"signed": str(args.out), "key": public_hex(private_key)}))
+        elif args.command == "verify":
+            fields = open_manifest(args.manifest.read_text(encoding="utf-8"), [args.key], args.host)
+            if args.bundle is not None:
+                check_zip(fields, args.bundle)
+            print(json.dumps(fields))
+        elif args.command == "publish":
+            fields = publish(args.manifest, args.bundle, args.root, args.key, args.keep)
+            print(json.dumps({"published": fields["version"], "sha256": fields["sha256"]}))
+    except BundleError as error:
+        print(f"sx-web-bundle: {error}", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

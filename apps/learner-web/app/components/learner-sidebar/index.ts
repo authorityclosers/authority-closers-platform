@@ -1,3 +1,4 @@
+// Reflex's shell replaced this on 28 Oct 2026.
 export * from "./sidebar-types";
 export * from "./sidebar-badge";
 export * from "./sidebar-tooltip";

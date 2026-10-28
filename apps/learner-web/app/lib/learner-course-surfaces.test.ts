@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { createElement, type ComponentProps } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import {
   ActivityRow,
@@ -31,14 +31,18 @@ import {
   LearningFilterTabs,
   loadLearningData,
 } from "../components/learning-runtime";
-import DiscoverPage from "../discover/page";
-import LearningPage from "../learning/page";
+import DiscoverPage from "../(app)/discover/page";
+import LearningPage from "../(app)/learning/page";
 import {
   ApiError,
   type LearnerApi,
   type LearningCourseSummaryResponse,
 } from "./learner-api";
 import { getOfflineReadMetadata, markOfflineRead } from "./offline-read-cache";
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: () => undefined }),
+}));
 
 describe("learner course surface primitives", () => {
   it("keeps route headers semantic and card titles scoped", () => {
@@ -567,10 +571,10 @@ describe("learner course route wiring", () => {
       }),
     );
 
-    expect(discover).toContain("discover-skeleton");
-    expect(discover).toContain("Discover Programs");
-    expect(learning).toContain("learning-skeleton");
-    expect(learning).toContain("My Learning");
+    expect(discover).toContain('aria-label="Loading"');
+    expect(discover).toContain("Explore");
+    expect(learning).toContain('aria-label="Loading"');
+    expect(learning).toContain("My courses");
   });
 
   it("keeps responsive/PWA and reduced-motion contracts in the surface layer", () => {

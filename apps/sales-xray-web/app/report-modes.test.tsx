@@ -138,6 +138,9 @@ it("opens call Coaching from the retained report without loading another route",
       .querySelector<HTMLButtonElement>('button[title="Coaching view"]')!
       .click(),
   );
+  await act(async () => {
+    await import("./report-call-coaching");
+  });
   expect(mode().dataset.view).toBe("coaching");
   expect(window.location.search).toContain("view=coaching");
   expect(window.location.search).toContain("section=call-coaching");

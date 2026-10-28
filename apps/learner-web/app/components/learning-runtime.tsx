@@ -1,5 +1,7 @@
 "use client";
 
+// Legacy view retained; replaced by Reflex Learn on 28 Oct 2026.
+
 import { ArrowRight, BookOpen, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import {

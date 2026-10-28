@@ -130,13 +130,15 @@ a.trigger {
   width: 64px;
 }
 
-/* ---------- The list: a glass popover under the header row ---------- */
+/* ---------- The list: a glass popover under the switcher ---------- */
+/* Fixed, so the sidebar's scrolling panel can't clip it; the switcher sets
+   its place and width (menuPlace). These are its first-frame values. */
 .menu {
-  position: absolute;
+  position: fixed;
   z-index: 60;
-  top: calc(100% + 6px);
-  left: 8px;
-  right: 8px;
+  top: 64px;
+  left: 72px;
+  width: min(340px, calc(100vw - 16px));
   box-sizing: border-box;
   max-height: min(520px, calc(100dvh - 120px));
   overflow-y: auto;

@@ -61,11 +61,11 @@ const learningArtworkHashes: Record<string, string> = {
 
 const academyIconHashes: Record<string, string> = {
   "closers-academy-v0.1/icon-180.png":
-    "fda4867411d5d71c8d6af35384bc9167685c66dd07637a6ae210a400d0cbf0b0",
+    "d25ec8e4a85138d4048292dca6fc85ed6080d6ec029f16b64001474b6d9a68ef",
   "closers-academy-v0.1/icon-192.png":
-    "fc10e52eed1d810b01eb47f2240ae58cfcc2dd514a10086d32f5cfc72aa4b30f",
+    "d474df6dd0dd6756beb4176686e5c3c9b9beec9d39f1b1a54998450b6f12ee87",
   "closers-academy-v0.1/icon-512.png":
-    "9bd2911772a274c3b5e996da98b45a0bd8515907687e61551e37f144e563f57d",
+    "f126b233466a4e3207dda9ec8351b638cd3c85b1d96b0f5c5d534ba0b51fe6ab",
 };
 const platformIconHashes: Record<string, string> = {
   "cohorva-v0.1/icon-180.png":

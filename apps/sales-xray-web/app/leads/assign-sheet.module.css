@@ -255,3 +255,91 @@
     animation: none;
   }
 }
+
+.guideArea {
+  display: grid;
+  gap: 8px;
+}
+
+.guideHelp,
+.guideActions button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.guideHelp {
+  justify-self: end;
+}
+
+.guide {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+}
+
+.guide p {
+  margin: 8px 0 0;
+  line-height: 1.5;
+}
+
+.guideProgress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.guideProgress > span {
+  width: 24px;
+  height: 4px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-line-strong);
+}
+
+.guideProgress > span[data-current] {
+  background: var(--sx-accent);
+}
+
+.guideProgress small {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.guideActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.guideActions button:first-child {
+  margin-right: auto;
+  color: var(--sx-ink-2);
+}
+
+.guideHelp:focus-visible,
+.guideActions button:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .guideActions button:active,
+  .guideHelp:active {
+    transform: scale(0.97);
+  }
+}

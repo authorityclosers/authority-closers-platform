@@ -180,6 +180,7 @@ def make_state(
     now: float | None = None,
     app_challenge: str | None = None,
     card: str | None = None,
+    hub_sources: bool = False,
 ) -> str:
     """Signed state for a provider sign-in. ``app_challenge`` marks a Connect started
     in the Sales Xray app, which finishes there (see ``app_return``); ``card`` one
@@ -194,6 +195,8 @@ def make_state(
         body["a"] = app_challenge
     if card is not None:
         body["r"] = card
+    if hub_sources:
+        body["hs"] = True
     raw = _b64(json.dumps(body, separators=(",", ":")).encode())
     mac = hmac.new(secret.encode(), raw.encode(), hashlib.sha256).digest()
     return f"{raw}.{_b64(mac)}"
@@ -545,23 +548,19 @@ class Graph:
         return {"id": str(body["id"]), "name": name}
 
     async def pages(self, user_token: str) -> list[dict[str, str]]:
-        body = await self._call(
-            "GET",
-            "me/accounts",
-            fields="id,name,access_token",
-            limit=MAX_PAGES,
-            access_token=user_token,
-        )
         out = []
-        for row in body.get("data") or []:
-            if isinstance(row, Mapping) and row.get("id") and row.get("access_token"):
-                out.append(
-                    {
-                        "id": str(row["id"]),
-                        "name": str(row.get("name") or row["id"])[:100],
-                        "token": str(row["access_token"]),
-                    }
-                )
+        async for rows in self._pages(
+            "me/accounts", limit=MAX_PAGES, fields="id,name,access_token", access_token=user_token
+        ):
+            for row in rows:
+                if row.get("id") and row.get("access_token"):
+                    out.append(
+                        {
+                            "id": str(row["id"]),
+                            "name": str(row.get("name") or row["id"])[:100],
+                            "token": str(row["access_token"]),
+                        }
+                    )
         return out[:MAX_PAGES]
 
     async def forms(self, page_id: str, page_token: str) -> list[dict[str, Any]]:

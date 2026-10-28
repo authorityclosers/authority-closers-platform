@@ -153,6 +153,20 @@ DEFAULT_RATE_LIMIT_RULES = (
         refill_seconds=600,
     ),
     RateLimitRule(
+        name="cross-app-handoff-start",
+        method="POST",
+        path=re.compile(r"^/v1/auth/handoff/start$"),
+        capacity=20,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
+        name="cross-app-handoff-redeem",
+        method="POST",
+        path=re.compile(r"^/v1/auth/handoff/redeem$"),
+        capacity=20,
+        refill_seconds=600,
+    ),
+    RateLimitRule(
         name="public-program-catalog",
         method="GET",
         path=re.compile(r"^/v1/programs(?:/[^/]+)?$"),

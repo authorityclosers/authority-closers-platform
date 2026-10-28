@@ -179,7 +179,7 @@ it("puts the call's question line under Call, above the action boxes", async () 
   await show(<LogThis hint={null} onOpen={opened} />);
   const grid = host.querySelector('[data-sx-equal="lead actions"]');
   const line = grid?.previousElementSibling;
-  expect(line?.textContent).toBe("Called from another phone?Log it");
+  expect(line?.textContent).toBe("Called from another phone?Log a call");
   const button = line?.querySelector("button");
   expect(
     document.getElementById(button?.getAttribute("aria-describedby") ?? "")
@@ -191,7 +191,7 @@ it("puts the call's question line under Call, above the action boxes", async () 
 
 it("says Log this after something happened", async () => {
   await show(<LogThis hint="WhatsApp sent." onOpen={() => undefined} />);
-  expect(host.textContent).toContain("WhatsApp sent.Log this");
+  expect(host.textContent).toContain("WhatsApp sent.Log a call");
 });
 
 it("keeps an idle recording card in the Calls tab, and one to act on now on top", async () => {

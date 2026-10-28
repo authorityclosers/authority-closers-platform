@@ -1,0 +1,38 @@
+import { ScreenTitle } from "../../../shell/screen-title";
+import { LiveCertificate } from "../../../components/learner-runtime";
+import { SurfaceStatePanel } from "../../../components/surface-state";
+import { parseSurfaceState, type QueryValue } from "../../../lib/surface-state";
+
+type CertificatePageProps = {
+  params: Promise<{ certificateId: string }>;
+  searchParams: Promise<{ state?: QueryValue }>;
+};
+
+export default async function CertificatePage({
+  params,
+  searchParams,
+}: CertificatePageProps) {
+  const { certificateId } = await params;
+  const query = await searchParams;
+  const state = parseSurfaceState(query.state);
+
+  return (
+    <>
+      <ScreenTitle title="Certificate" />
+      <main id="main-content" className="learner-main" tabIndex={-1}>
+        <div className="page-container">
+          <SurfaceStatePanel
+            state={state}
+            retryHref={`/certificates/${certificateId}`}
+            backHref="/home"
+          />
+          {state === "DEFAULT" ? (
+            <LiveCertificate certificateId={certificateId} />
+          ) : null}
+        </div>
+      </main>
+    </>
+  );
+}
+
+export const metadata = { title: "Certificate" };

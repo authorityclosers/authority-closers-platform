@@ -1,0 +1,485 @@
+/*
+ * Sales Xray v0.2 "Lightbox" design tokens: the app derivative.
+ * Source: docs/design/sales-xray-v02-lightbox-20260924/tokens.css, which stays unchanged.
+ * Imported once from app/layout.tsx. The learner-web embed receives the light values
+ * through the isolated block at the top of app/styles.css instead of this file.
+ *
+ * Documented exceptions to the source (asserted by app/lightbox/tokens.test.ts):
+ * - Light --lx-muted-2 is #646D7F (source #6B7486 measures 4.31:1 on paper). It passes
+ *   4.5:1 on paper, paper-2 and surface. Never use it on --lx-sunken.
+ * - Added --lx-strength-ink (light #06736F, dark #2DD4BF): teal text on --lx-strength-soft
+ *   measures 4.38:1 in the source.
+ * - Added --lx-objection-ink (light #BE2A55, dark #FF8CAE): dark objection text on
+ *   --lx-objection-soft measures 4.42:1 with the source value.
+ * - Added --lx-on-teal (light #FFFFFF, dark #0A1220): text on --lx-teal buttons, which is
+ *   the glow colour in dark.
+ * - Added --lx-glow-ink, referenced by the source Lens assets but missing from the source.
+ * - Added --lx-film-lens-outline and --lx-film-lens-fill: the Lens on film uses the
+ *   board colours in both themes.
+ * - Dark --lx-closing-ink is #BFD0FF (the light value is unreadable on dark surfaces).
+ * - Dark values added for --lx-info, --lx-info-soft, --lx-warning, --lx-warning-soft and
+ *   --lx-hypothesis so status and inference text keep 4.5:1 in dark.
+ * - --lx-info is slate in both themes (11 Oct 2026, owner: one teal accent), not blue.
+ * - Added the [data-script="deva"] rule: Devanagari source quotes carry an unknown-language
+ *   script tag, so :lang(hi|mr) alone cannot keep them upright.
+ * - Liquid Glass (owner, 22 Oct 2026: "premium, Apple-grade"; look A of the
+ *   design-direction proposal): a cool grouped ground (#f2f3f7) under white cards,
+ *   a near-black ink ladder, a slightly deeper teal (#07746b, 5.6:1 under white
+ *   text), rounder shapes (12/16/22/30), a 62 px floating tab bar 16 px up, and
+ *   true black in dark (#000 ground, #1c1c1e cards, #2c2c2e floating layers).
+ *   Added --lx-elevated (floating layers) and --lx-avatar-top/bottom (monograms).
+ * - Added operational density tokens (AUT-1451 / study section 2.4 card 2):
+ *   --lx-control-compact-h (32px), --lx-control-h (36px), --lx-table-head-h (36px),
+ *   --lx-row-min-h (44px), --lx-panel-head-min-h (48px), --lx-tile-min-h (96px),
+ *   and corresponding --lx-density-* aliases.
+ */
+
+:root {
+  color-scheme: light;
+
+  /* ---------- Neutrals ---------- */
+  --lx-ink: #0a0c10; /* primary text, strong UI */
+  --lx-ink-2: #1d212a; /* quote text on light surfaces */
+  --lx-ink-3: #3a404c; /* secondary text */
+  --lx-muted: #5b626e; /* tertiary text; 5.5:1 on paper */
+  --lx-muted-2: #646b77; /* captions/meta; 4.8:1 on paper - never below 12px, never on sunken */
+  --lx-line: #e4e6eb; /* hairlines on paper/surface */
+  --lx-line-soft: #eceef2;
+  --lx-line-strong: #cdd1d8;
+  --lx-paper: #f2f3f7; /* app ground */
+  --lx-paper-2: #f7f8fa; /* nested/secondary surface */
+  --lx-surface: #ffffff; /* cards */
+  --lx-elevated: #ffffff; /* sheets, menus, the tab bar under its glass */
+  --lx-sunken: #ebedf1; /* segmented controls, "still unknown" wells */
+
+  /* ---------- Film (dark bands: drop zone, analysing panel, call player, focus card) ---------- */
+  --lx-film: #0a1220;
+  --lx-film-2: #16233a;
+  --lx-film-line: rgba(255, 255, 255, 0.06);
+  --lx-film-grid: rgba(255, 255, 255, 0.045);
+  --lx-film-text: #ffffff;
+  --lx-film-text-2: #c9d4e3;
+  --lx-film-text-3: #9fb0c8;
+  --lx-film-wave: #3a4c66; /* unplayed waveform */
+  --lx-film-lens-outline: #e8edf5;
+  --lx-film-lens-fill: #ffffff;
+
+  /* ---------- Brand ---------- */
+  --lx-teal: #07746b; /* primary action, links, strength */
+  --lx-teal-hover: #05625a;
+  --lx-teal-2: #14b8a6; /* wordmark gradient end */
+  --lx-teal-soft: #ddf4ef;
+  --lx-teal-tint: #eef9f6;
+  --lx-teal-edge: #b4e6da;
+  --lx-glow: #3debb0; /* Brand Mint (B "Insight", 23 Oct 2026); ONLY on film backgrounds (contrast), never text on light */
+  --lx-glow-ink: #0f8b7e; /* Lens sound waves */
+  --lx-on-teal: #ffffff; /* text on teal actions */
+  --lx-avatar-top: #a3a9b4;
+  --lx-avatar-bottom: #7d838e;
+
+  /* ---------- Moment kinds (semantic; colour never encodes performance) ---------- */
+  --lx-strength: #097870;
+  --lx-strength-soft: #dcf6ef;
+  --lx-strength-edge: #b6e9de;
+  --lx-strength-on-film: #2dd4bf;
+  --lx-strength-ink: #06736f;
+  --lx-focus: #b45309;
+  --lx-focus-soft: #fff0da;
+  --lx-focus-edge: #f5c378;
+  --lx-focus-on-film: #f59e0b;
+  --lx-focus-ink: #92400e;
+  --lx-missed: #6341e0;
+  --lx-missed-soft: #eeeaff;
+  --lx-missed-edge: #d9d0ff;
+  --lx-missed-on-film: #8b74ff;
+  --lx-missed-ink: #4c2fc0;
+  --lx-objection: #c81d55;
+  --lx-objection-soft: #ffe9f0;
+  --lx-objection-edge: #f7c6d6;
+  --lx-objection-on-film: #f0527f;
+  --lx-objection-ink: #b31749;
+  --lx-closing: #2459e0;
+  --lx-closing-soft: #e6eeff;
+  --lx-closing-ink: #1d4cc4;
+  --lx-hypothesis: #56637a;
+  --lx-hypothesis-edge: #aeb6c4; /* dashed border */
+
+  /* ---------- Status ---------- */
+  --lx-success: var(--lx-teal);
+  /* Slate, not blue: one teal accent (owner); "in progress" reads neutral.
+     5.6:1 on paper, 5.3:1 on its soft tint. */
+  --lx-info: #56637a;
+  --lx-info-soft: #eceff4;
+  --lx-warning: #b45309;
+  --lx-warning-soft: #fff5e8;
+  --lx-danger: #c0261b;
+  --lx-danger-soft: #fdebe9;
+  --lx-danger-edge: #f3c6c1;
+
+  /* ---------- Type ---------- */
+  --lx-font-display:
+    "Bricolage Grotesque Variable", "Bricolage Grotesque",
+    "Plus Jakarta Sans Variable", system-ui, sans-serif;
+  --lx-font-ui:
+    "Plus Jakarta Sans Variable", "Plus Jakarta Sans",
+    "Noto Sans Devanagari Variable", "Noto Sans Devanagari", system-ui,
+    sans-serif;
+  --lx-font-quote:
+    "Newsreader Variable", "Newsreader", "Noto Serif Devanagari Variable",
+    "Noto Serif Devanagari", Georgia, serif;
+
+  --lx-text-display-xl: 700 76px/0.98 var(--lx-font-display); /* marketing / foundations only */
+  --lx-text-display: 800 46px/1.04 var(--lx-font-display); /* page H1 desktop */
+  --lx-text-h1: 800 42px/1.04 var(--lx-font-display);
+  --lx-text-h2: 800 30px/1.1 var(--lx-font-display); /* report section titles */
+  --lx-text-verdict: 400 34px/1.28 var(--lx-font-quote); /* the verdict sentence */
+  --lx-text-quote-lg: 400 22px/1.42 var(--lx-font-quote); /* moment quotes */
+  --lx-text-quote: 400 15px/1.4 var(--lx-font-quote); /* quote chips */
+  --lx-text-body: 500 15px/1.65 var(--lx-font-ui);
+  --lx-text-ui: 600 14px/1.45 var(--lx-font-ui);
+  --lx-text-meta: 600 12.5px/1.45 var(--lx-font-ui);
+  --lx-text-eyebrow: 800 12px/1.2 var(--lx-font-ui); /* letter-spacing: .14em, uppercase */
+  --lx-tracking-display: -0.035em;
+  --lx-tracking-eyebrow: 0.14em;
+  --lx-leading-devanagari: 1.65; /* raise line-height for :lang(hi), :lang(mr) */
+
+  /* ---------- Space (4px grid) ---------- */
+  --lx-space-1: 4px;
+  --lx-space-2: 8px;
+  --lx-space-3: 12px;
+  --lx-space-4: 16px;
+  --lx-space-5: 20px;
+  --lx-space-6: 24px;
+  --lx-space-8: 32px;
+  --lx-space-10: 40px;
+  --lx-space-12: 48px;
+  --lx-space-14: 56px;
+  --lx-space-18: 72px;
+
+  /* ---------- Radius ---------- */
+  --lx-radius-xs: 6px; /* tiny tags */
+  --lx-radius-sm: 12px; /* buttons, inputs */
+  --lx-radius-md: 16px; /* chips-in-cards, inner wells */
+  --lx-radius-lg: 22px; /* cards */
+  --lx-radius-xl: 30px; /* film panels */
+  --lx-radius-pill: 999px;
+
+  /* ---------- Elevation ---------- */
+  --lx-shadow-1: 0 1px 2px rgba(11, 20, 36, 0.05);
+  --lx-shadow-2: 0 10px 26px -18px rgba(11, 20, 36, 0.45);
+  --lx-shadow-film: 0 30px 60px -32px rgba(10, 18, 32, 0.65);
+  --lx-shadow-cta: 0 14px 30px -14px rgba(8, 126, 121, 0.8);
+  --lx-ring-focus: 0 0 0 2px var(--lx-surface), 0 0 0 4px var(--lx-teal);
+
+  /* ---------- Motion ---------- */
+  --lx-ease-quick: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --lx-ease-move: cubic-bezier(0.16, 1, 0.3, 1);
+  --lx-ease-pop: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --lx-ease-scan: cubic-bezier(0.65, 0, 0.35, 1);
+  --lx-dur-quick: 120ms;
+  --lx-dur-move: 240ms;
+  --lx-dur-reveal: 420ms;
+  --lx-dur-develop: 700ms;
+  --lx-stagger: 60ms;
+
+  /* ---------- Layout ---------- */
+  --lx-rail-w: 248px;
+  --lx-rail-w-collapsed: 72px;
+  --lx-topbar-h: 64px;
+  --lx-content-max: 880px; /* report reading column */
+  --lx-chapter-rail-w: 196px;
+  --lx-bottom-nav-h: 78px; /* Liquid Glass: a 62 px capsule floating 16 px up */
+  --lx-mini-player-h: 62px;
+  --lx-gradient-brand: linear-gradient(
+    135deg,
+    #14b8a6 0%,
+    #06b6d4 50%,
+    #6366f1 100%
+  );
+  --lx-gradient-primary: linear-gradient(135deg, #097870 0%, #0e7490 100%);
+
+  /* ---------- Operational density (study section 2.4, card 2) ---------- */
+  --lx-control-compact-h: 32px;
+  --lx-control-h: 36px;
+  --lx-table-head-h: 36px;
+  --lx-row-min-h: 44px;
+  --lx-panel-head-min-h: 48px;
+  --lx-tile-min-h: 96px;
+  --lx-density-control-compact: 32px;
+  --lx-density-control: 36px;
+  --lx-density-table-head: 36px;
+  --lx-density-row-min: 44px;
+  --lx-density-panel-head: 48px;
+  --lx-density-tile-min: 96px;
+}
+
+/* Devanagari: never synthesise italics, always give it more leading. */
+:lang(hi),
+:lang(mr),
+:lang(hi-Deva),
+:lang(mr-Deva) {
+  font-style: normal !important;
+  line-height: var(--lx-leading-devanagari);
+  letter-spacing: 0 !important;
+}
+
+/* Source quotes are tagged by script (lang="und-Deva") until source-language metadata exists. */
+[data-script="deva"] {
+  font-style: normal !important;
+  line-height: var(--lx-leading-devanagari);
+  letter-spacing: 0 !important;
+}
+
+/* ---------- Dark theme (System / Light / Dark control; release requires the P6 theme matrix) ----------
+ * Design system v2 (owner, 20 Oct 2026: "this colour blue for dark mode is
+ * kinda ugly"): a graphite ladder replaces the navy one. Neutral greys with
+ * no blue cast, from the app ground up to the surfaces that float (sheets,
+ * menus: --sx-elevated mixes a little ink into the surface). Teal stays the
+ * one accent. Text pairs keep at least 5.7:1, mostly far more (tokens.test). */
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --lx-ink: #f5f5f7;
+  --lx-ink-2: #e5e5ea;
+  --lx-ink-3: #c7c7cc;
+  --lx-muted: #a1a1a8;
+  --lx-muted-2: #98989f;
+  --lx-line: #2a2a2d;
+  --lx-line-soft: #222225;
+  --lx-line-strong: #3a3a3e;
+  --lx-paper: #000000;
+  --lx-paper-2: #0b0b0c;
+  --lx-surface: #1c1c1e;
+  --lx-elevated: #2c2c2e;
+  --lx-sunken: #151517;
+  --lx-film: #0c0d10;
+  --lx-film-2: #1a1c21;
+  --lx-film-text-2: #c9cdd4;
+  --lx-film-text-3: #9fa4ad;
+  --lx-film-wave: #3a3d45;
+  --lx-teal: #2dd4bf;
+  --lx-teal-hover: #5eead4;
+  --lx-teal-soft: rgba(45, 212, 191, 0.12);
+  --lx-teal-tint: rgba(45, 212, 191, 0.08);
+  --lx-teal-edge: rgba(45, 212, 191, 0.28);
+  --lx-on-teal: #0b0c0e;
+  --lx-avatar-top: #6e727b;
+  --lx-avatar-bottom: #4f535b;
+  --lx-strength: #2dd4bf;
+  --lx-strength-soft: rgba(45, 212, 191, 0.12);
+  --lx-strength-ink: #2dd4bf;
+  --lx-focus: #f59e0b;
+  --lx-focus-soft: rgba(245, 158, 11, 0.12);
+  --lx-focus-ink: #fbbf24;
+  --lx-missed: #a78bfa;
+  --lx-missed-soft: rgba(167, 139, 250, 0.15);
+  --lx-missed-ink: #c4b8ff;
+  --lx-objection: #fb7185;
+  --lx-objection-soft: rgba(251, 113, 133, 0.14);
+  --lx-objection-ink: #ff8cae;
+  --lx-closing: #7aa7ff;
+  --lx-closing-soft: rgba(122, 167, 255, 0.15);
+  --lx-closing-ink: #bfd0ff;
+  --lx-hypothesis: #9ea3ac;
+  --lx-info: #c3c7ce;
+  --lx-info-soft: rgba(195, 199, 206, 0.12);
+  --lx-warning: #f59e0b;
+  --lx-warning-soft: rgba(245, 158, 11, 0.12);
+  --lx-danger: #f97066;
+  --lx-danger-soft: rgba(249, 112, 102, 0.12);
+  --lx-gradient-brand: linear-gradient(
+    135deg,
+    #2dd4bf 0%,
+    #22d3ee 50%,
+    #818cf8 100%
+  );
+  --lx-gradient-primary: linear-gradient(135deg, #2dd4bf 0%, #22d3ee 100%);
+}
+
+/* ---------- Light report surface ----------
+ * In light, the report document keeps its own light tokens, so theme tokens
+ * never mix with light text inside a report. Values mirror :root; asserted by
+ * app/lightbox/tokens.test.ts. In dark the report follows the app (owner,
+ * 24 Oct 2026: dark mode on every screen); its modules colour themselves
+ * from tokens, so nothing stays a light patch.
+ */
+:root:not([data-theme="dark"]) [data-lx-surface="light"] {
+  color-scheme: light;
+  --lx-ink: #0a0c10;
+  --lx-ink-2: #1d212a;
+  --lx-ink-3: #3a404c;
+  --lx-muted: #5b626e;
+  --lx-muted-2: #646b77;
+  --lx-line: #e4e6eb;
+  --lx-line-soft: #eceef2;
+  --lx-line-strong: #cdd1d8;
+  --lx-paper: #f2f3f7;
+  --lx-paper-2: #f7f8fa;
+  --lx-surface: #ffffff;
+  --lx-elevated: #ffffff; /* sheets, menus, the tab bar under its glass */
+  --lx-sunken: #ebedf1;
+  --lx-film: #0a1220;
+  --lx-film-2: #16233a;
+  --lx-film-text-2: #c9d4e3;
+  --lx-film-text-3: #9fb0c8;
+  --lx-film-wave: #3a4c66;
+  --lx-teal: #07746b;
+  --lx-teal-hover: #05625a;
+  --lx-teal-soft: #ddf4ef;
+  --lx-teal-tint: #eef9f6;
+  --lx-teal-edge: #b4e6da;
+  --lx-on-teal: #ffffff;
+  --lx-avatar-top: #a3a9b4;
+  --lx-avatar-bottom: #7d838e;
+  --lx-strength: #097870;
+  --lx-strength-soft: #dcf6ef;
+  --lx-strength-ink: #06736f;
+  --lx-focus: #b45309;
+  --lx-focus-soft: #fff0da;
+  --lx-focus-ink: #92400e;
+  --lx-missed: #6341e0;
+  --lx-missed-soft: #eeeaff;
+  --lx-missed-ink: #4c2fc0;
+  --lx-objection: #c81d55;
+  --lx-objection-soft: #ffe9f0;
+  --lx-objection-ink: #b31749;
+  --lx-closing: #2459e0;
+  --lx-closing-soft: #e6eeff;
+  --lx-closing-ink: #1d4cc4;
+  --lx-hypothesis: #56637a;
+  --lx-success: var(--lx-teal);
+  /* Slate, not blue: one teal accent (owner); "in progress" reads neutral.
+     5.6:1 on paper, 5.3:1 on its soft tint. */
+  --lx-info: #56637a;
+  --lx-info-soft: #eceff4;
+  --lx-warning: #b45309;
+  --lx-warning-soft: #fff5e8;
+  --lx-danger: #c0261b;
+  --lx-danger-soft: #fdebe9;
+  --lx-ring-focus: 0 0 0 2px var(--lx-surface), 0 0 0 4px var(--lx-teal);
+  background-color: var(--lx-paper);
+  color: var(--lx-ink);
+  --lx-gradient-brand: linear-gradient(
+    135deg,
+    #14b8a6 0%,
+    #06b6d4 50%,
+    #6366f1 100%
+  );
+  --lx-gradient-primary: linear-gradient(135deg, #097870 0%, #0e7490 100%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --lx-dur-move: 120ms;
+    --lx-dur-reveal: 120ms;
+    --lx-dur-develop: 120ms;
+    --lx-stagger: 0ms;
+  }
+}
+
+/* ---------- Sales Xray Report (15 Oct structure, xray-report/) ----------
+ * Dark values are sampled from the owner doc's images, light values from its
+ * light page (image3). Text tones keep at least 4.5:1 on their cards; the
+ * *-mark tones are for icons, rings and fills. A light report surface keeps
+ * the light values inside a dark app. */
+:root {
+  --xr-text: #0f1b2d;
+  --xr-text-2: #33435a;
+  --xr-muted: #56657c;
+  --xr-card: #ffffff;
+  --xr-card-2: #f8fafd;
+  --xr-card-3: #f1f5fa;
+  --xr-line: #e3e9f1;
+  --xr-line-2: #d3dbe7;
+  --xr-shadow: 0 1px 2px rgba(15, 27, 45, 0.04);
+  --xr-green: #077d4a;
+  --xr-green-mark: #12b26f;
+  --xr-green-soft: #ecfaf3;
+  --xr-green-line: #bfead3;
+  --xr-amber: #9a5800;
+  --xr-amber-mark: #f2a20c;
+  --xr-amber-soft: #fff7e8;
+  --xr-amber-line: #f8dfae;
+  --xr-red: #c4122f;
+  --xr-red-mark: #ef3f4f;
+  --xr-red-soft: #fdeef0;
+  --xr-red-line: #f6c7cf;
+  --xr-blue: #1d5fd6;
+  --xr-blue-mark: #2f7bf5;
+  --xr-blue-soft: #ecf3ff;
+  --xr-blue-line: #c8dbfb;
+  --xr-purple: #6a2ee6;
+  --xr-purple-mark: #8b4cf7;
+  --xr-purple-soft: #f4eeff;
+  --xr-purple-line: #ddcffd;
+  --xr-solid-text: #ffffff;
+  --xr-on-mark: #ffffff;
+}
+
+:root[data-theme="dark"] {
+  /* Design system v2: the report's cards sit on the same graphite ladder. */
+  --xr-text: #f2f3f5;
+  --xr-text-2: #c9ccd2;
+  --xr-muted: #9da1a9;
+  --xr-card: #141518;
+  --xr-card-2: #18191c;
+  --xr-card-3: #1d1e22;
+  --xr-line: #24252a;
+  --xr-line-2: #2e3036;
+  --xr-shadow: none;
+  --xr-green: #2bd283;
+  --xr-green-mark: #20c878;
+  --xr-green-soft: rgba(32, 200, 120, 0.09);
+  --xr-green-line: rgba(32, 200, 120, 0.3);
+  --xr-amber: #f7b928;
+  --xr-amber-mark: #f5b021;
+  --xr-amber-soft: rgba(245, 176, 33, 0.09);
+  --xr-amber-line: rgba(245, 176, 33, 0.32);
+  --xr-red: #f65f57;
+  --xr-red-mark: #f0544c;
+  --xr-red-soft: rgba(240, 84, 76, 0.1);
+  --xr-red-line: rgba(240, 84, 76, 0.34);
+  --xr-blue: #5eaef8;
+  --xr-blue-mark: #4fa3f6;
+  --xr-blue-soft: rgba(79, 163, 246, 0.1);
+  --xr-blue-line: rgba(79, 163, 246, 0.3);
+  --xr-purple: #c27bfa;
+  --xr-purple-mark: #b25cf6;
+  --xr-purple-soft: rgba(178, 92, 246, 0.11);
+  --xr-purple-line: rgba(178, 92, 246, 0.34);
+  --xr-solid-text: #0b0c0e;
+  --xr-on-mark: #ffffff;
+}
+
+:root:not([data-theme="dark"]) [data-lx-surface="light"] {
+  --xr-text: #0f1b2d;
+  --xr-text-2: #33435a;
+  --xr-muted: #56657c;
+  --xr-card: #ffffff;
+  --xr-card-2: #f8fafd;
+  --xr-card-3: #f1f5fa;
+  --xr-line: #e3e9f1;
+  --xr-line-2: #d3dbe7;
+  --xr-shadow: 0 1px 2px rgba(15, 27, 45, 0.04);
+  --xr-green: #077d4a;
+  --xr-green-mark: #12b26f;
+  --xr-green-soft: #ecfaf3;
+  --xr-green-line: #bfead3;
+  --xr-amber: #9a5800;
+  --xr-amber-mark: #f2a20c;
+  --xr-amber-soft: #fff7e8;
+  --xr-amber-line: #f8dfae;
+  --xr-red: #c4122f;
+  --xr-red-mark: #ef3f4f;
+  --xr-red-soft: #fdeef0;
+  --xr-red-line: #f6c7cf;
+  --xr-blue: #1d5fd6;
+  --xr-blue-mark: #2f7bf5;
+  --xr-blue-soft: #ecf3ff;
+  --xr-blue-line: #c8dbfb;
+  --xr-purple: #6a2ee6;
+  --xr-purple-mark: #8b4cf7;
+  --xr-purple-soft: #f4eeff;
+  --xr-purple-line: #ddcffd;
+  --xr-solid-text: #ffffff;
+  --xr-on-mark: #ffffff;
+}

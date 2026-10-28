@@ -900,6 +900,18 @@ export function enrollmentFailureMessage(error: unknown): {
   recoveryHref?: string;
   recoveryLabel?: string;
 } {
+  // Use the same consent recovery as the legacy dashboard; the existing
+  // renewal screen still owns document loading and explicit acceptance.
+  if (
+    error instanceof ApiError &&
+    error.code === "learner_consent_update_required"
+  ) {
+    return {
+      message: "Review the current consent before starting your course.",
+      recoveryHref: ROUTES.consentRenewal,
+      recoveryLabel: "Review current consent",
+    };
+  }
   if (error instanceof ApiError && error.status === 401) {
     return {
       message: "Your session expired before the course could start.",
@@ -3374,6 +3386,7 @@ export function LearningModules({
   );
 }
 
+// Legacy course view retained; replaced by Reflex Course on 28 Oct 2026.
 export function LiveLearningPath({
   slug,
   api = defaultApi,
@@ -3492,6 +3505,7 @@ export function LiveLearningPath({
   );
 }
 
+// Legacy module view retained; replaced by Reflex Module on 28 Oct 2026.
 export function LiveModule({
   slug,
   moduleId,

@@ -102,7 +102,11 @@ import { clearCallFacts } from "./call-facts";
 import { clearSpeakerProfiles } from "./speaker-profiles";
 import { SpeakerServerProfiles } from "./speaker-server-profiles";
 import { latestStage, projectProcessing } from "./processing-state";
-import { observeSubmission, readProcessingPlan } from "./observe-submission";
+import {
+  observeSubmission,
+  readProcessingPlan,
+  readSubmissionReport,
+} from "./observe-submission";
 import {
   parseReportLanguage,
   reportLanguageLabels,
@@ -151,6 +155,7 @@ import { dismissNotice, notify } from "./notice-center";
 import { usePurchasesAllowed } from "./purchase-policy";
 import styles from "./acquisition-studio.module.css";
 import { formatAnalysisTime } from "./analysis-time";
+import type { ScopedSavedReport } from "./report-preload";
 
 type Result = {
   report: SalesReport;
@@ -251,12 +256,14 @@ export function AcquisitionStudio({
   homeHref = "/",
   requestedCallId,
   deferRouteSelection = false,
+  initialSavedReport,
 }: {
   variant?: CallStudioVariant;
   homeHref?: string;
   /** `undefined` is reserved for static export, where the query is client-only. */
   requestedCallId?: string | null;
   deferRouteSelection?: boolean;
+  initialSavedReport?: ScopedSavedReport;
 }) {
   const embedded = variant === "embedded";
   // The standalone shell owns the page landmark; embedded mounts inherit one.
@@ -883,9 +890,34 @@ export function AcquisitionStudio({
             stalePlanRefresh.current = null;
           }
         }
+        const seedKey = JSON.stringify([
+          accessPersonId,
+          accessSessionId,
+          accessTenantId,
+        ]);
+        if (
+          requested &&
+          initialSavedReport?.callId === requested &&
+          initialSavedReport.identityKey === seedKey &&
+          accessAuthenticated === true &&
+          accessStatus === "ready"
+        ) {
+          const seed = initialSavedReport.value;
+          rememberSubmission(seed.submission.id);
+          setSubmission(seed.submission);
+          setProgress(seed.progress);
+          setResult(seed.result);
+          setExistingCallEntry({ submissionId: requested, state: "restored" });
+          setSession(true);
+          setError("");
+          return;
+        }
         let config: Entry | null = null;
         try {
-          config = parseEntry(await acquisition("/entry", { signal }));
+          // A saved report needs its own authorised reads, not upload setup.
+          // Entry and session used to add two serial network round trips here.
+          if (!requested)
+            config = parseEntry(await acquisition("/entry", { signal }));
         } catch (error) {
           if (!requested) throw error;
         }
@@ -909,7 +941,8 @@ export function AcquisitionStudio({
             : null;
         let current: Record<string, unknown> | null = null;
         try {
-          current = record(await acquisition("/session", { signal }));
+          if (!requested)
+            current = record(await acquisition("/session", { signal }));
         } catch (error) {
           if (!requested) {
             if (embedded) throw error;
@@ -950,13 +983,21 @@ export function AcquisitionStudio({
             const bound = parseSubmission(loaded);
             if (bound.id !== saved) throw new Error("submission_mismatch");
             if (requested) rememberSubmission(bound.id);
-            setSubmission(bound);
             const loadedProgress = parseProgress(loaded, bound);
+            // Reuse the canonical read we just verified. Polling the same call
+            // again before its report added another round trip on every open.
+            const ready =
+              requested && loadedProgress.has_report
+                ? await readSubmissionReport(bound, signal)
+                : null;
+            if (signal.aborted) return;
+            if (ready) setResult(ready);
+            setSubmission(bound);
             setProgress(loadedProgress);
             if (requested)
               setExistingCallEntry({
                 submissionId: requested,
-                state: loadedProgress.has_report ? "opening" : "restored",
+                state: "restored",
               });
             setDeletionOnlyId(null);
           } catch (error) {
@@ -1047,6 +1088,12 @@ export function AcquisitionStudio({
     requestedCallId,
     deferRouteSelection,
     dismissedCallId,
+    initialSavedReport,
+    accessAuthenticated,
+    accessPersonId,
+    accessSessionId,
+    accessStatus,
+    accessTenantId,
   ]);
 
   useEffect(() => {
@@ -2754,7 +2801,7 @@ export function AcquisitionStudio({
               </span>
             ))}
           </nav>
-          {!entry && !error && (
+          {!entry && !error && !requestedCallId && !report && (
             <p role="status" className="visually-hidden" aria-live="polite">
               Preparing the upload limits…
             </p>

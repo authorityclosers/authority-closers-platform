@@ -306,3 +306,75 @@
     transition: none;
   }
 }
+
+/* Who gets them as rows with faces and checks (Team controls, owner Home v3). */
+.rowsWho {
+  display: grid;
+  gap: 6px;
+}
+
+.rowsHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.rowsHead span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.recipientRows {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.recipientRows button {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 48px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: 1px solid var(--sx-line);
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.recipientRows li:last-child button {
+  border-bottom: 0;
+}
+
+.recipientRows button > span:nth-child(2) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.check {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 2px solid var(--sx-line-strong);
+  border-radius: 50%;
+  color: var(--sx-accent-ink);
+}
+
+.recipientRows button[aria-pressed="true"] .check {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent);
+}

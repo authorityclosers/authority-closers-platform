@@ -53,3 +53,5 @@ export default async function VerifyEmailPage({
     </AuthFlowPage>
   );
 }
+
+export const metadata = { title: "Verify email" };

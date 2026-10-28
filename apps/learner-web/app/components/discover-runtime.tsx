@@ -1,5 +1,7 @@
 "use client";
 
+// Legacy view retained; replaced by Reflex Learn (Explore) on 28 Oct 2026.
+
 import {
   AlertCircle,
   ArrowRight,

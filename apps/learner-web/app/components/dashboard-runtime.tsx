@@ -1,5 +1,7 @@
 "use client";
 
+// Legacy view retained; replaced by Reflex Today on 28 Oct 2026.
+
 import {
   ArrowRight,
   BookOpen,
@@ -491,7 +493,7 @@ export function DashboardRuntime({
                 {/* Presentation artwork is not a media source or player. */}
                 <div
                   className="continue-learning-media ac-media-frame"
-                  aria-label="Closers Academy course presentation"
+                  aria-label="Closers' Academy course presentation"
                 >
                   <InstructorPortrait
                     decorative
@@ -502,7 +504,7 @@ export function DashboardRuntime({
                   <div className="ac-media-frame__veil" aria-hidden="true" />
                   <div className="ac-media-frame__copy">
                     <span className="ac-media-frame__eyebrow">
-                      Closers Academy
+                      {"Closers' Academy"}
                     </span>
                     <strong>Learn with Dipak</strong>
                   </div>

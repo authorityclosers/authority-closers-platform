@@ -189,7 +189,7 @@ LeadSort = Literal["next_action", "last_contact", "name", "created"]
 LeadDue = Literal["late", "today", "week", "none"]
 LeadSince = Literal["today", "week", "month", "never"]
 LeadMade = Literal["today", "week", "month"]
-WorkDay = Literal["today", "yesterday", "week"]
+WorkDay = Literal["today", "yesterday", "week", "recent"]
 
 
 class ActivityItem(Model):
@@ -212,6 +212,12 @@ class ActivityPage(Model):
     next_before: datetime | None
     # How many of each kind in the whole window: "12 calls, 3 notes".
     counts: dict[str, int] = Field(default_factory=dict)
+
+    today_counts: dict[str, int] = Field(default_factory=dict)
+    week_counts: dict[str, int] = Field(default_factory=dict)
+    last_active_at: datetime | None = None
+    last_call_at: datetime | None = None
+    timezone: str = "Asia/Kolkata"
 
 
 class LeadPage(Model):
@@ -981,6 +987,18 @@ class SellerOutcome(Model):
     late: int
 
 
+class DayOutcome(Model):
+    """One India-time day of the period, counted as the period is (Home's small bars)."""
+
+    day: date
+    calls: int
+    connected: int
+    # Different leads moved to an interested or a won stage that day.
+    interested: int
+    won: int
+    new_leads: int
+
+
 class Performance(Model):
     """How sales went (owners and admins; owner, 22 Oct 2026): outcomes first,
     then sellers ranked by outcome, then the open leads by stage."""
@@ -996,6 +1014,9 @@ class Performance(Model):
     pipeline: dict[str, int]
     # The same open leads by stage, per pipeline (key: the pipeline's key).
     pipelines: dict[str, dict[str, int]] = Field(default_factory=dict)
+    # Each day of the period, oldest first (owner Home v3, 28 Oct 2026). A lead
+    # interested on two days counts on both; the period's own count stays distinct.
+    daily: tuple[DayOutcome, ...] = ()
 
 
 class ImportPreview(Model):

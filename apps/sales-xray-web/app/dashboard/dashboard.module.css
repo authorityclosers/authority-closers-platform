@@ -20,6 +20,15 @@
   line-height: 1.45;
 }
 
+/* One column of priorities on a computer (owner, #66, 28 Oct 2026: "feels
+   clutter" on a 14-inch MacBook, every row stretched past 1100 px). */
+@media (min-width: 900px) {
+  .page {
+    max-width: 960px;
+    margin-inline: auto;
+  }
+}
+
 .page h1,
 .page h2,
 .page p,

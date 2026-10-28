@@ -23,9 +23,7 @@ describe("premium public catalog home", () => {
     );
     expect(html).not.toContain("published catalog API");
     expect(html).toContain("instructor-v2%2Ffront-facing.jpeg");
-    expect(html).toContain(
-      'alt="Dipak Vishwakarma, your guide at Closers Academy"',
-    );
+    expect(html).toContain('alt="Your guide at Closers&#x27; Academy"');
     expect(html).not.toContain("65% complete");
     expect(html).not.toContain("weekly activity");
     expect(html).not.toContain("Live Coaching Session");

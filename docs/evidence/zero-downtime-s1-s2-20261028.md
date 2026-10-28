@@ -53,6 +53,38 @@ The first drill run (`/var/tmp/zdr-drill-s1`) gave the same numbers; there the p
 | Refused connections on the other environment | 0.4–0.6 s twice per deploy | 0 after the first deploy |
 | Hold | 168–174 s | target 45–60 s |
 
-## Staging release
+## First release with S1 and S2: v1.2.0 (main 4a6564b, 28 Oct)
 
-_Pending: the first staging release carrying S1 and S2. A watcher on ac (`/var/tmp/zdr-s1s2-proof`, 30 h from 28 Oct 00:2xZ) records the probe, Infisical fetch count and container start times for each core deploy._
+The watcher on ac (`/var/tmp/zdr-s1s2-proof/`) recorded both core deploys: the release probe on both environments every 200 ms, container start times and mounts before and after, and Infisical fetches in the release log.
+
+| | Staging core, 07:25Z | Production core, 07:34Z | v1.1.0 (before) |
+|---|---|---|---|
+| Hold (503) | **80.7 s** (07:29:47–07:31:08Z) | **62.6 s** (07:35:31–07:36:34Z) | 168.6 s / 174.2 s |
+| Refused or reset, either environment | one 0.2 s window at 07:29:47Z: the one-time edge move | **none** | 0.4–0.6 s, twice per deploy |
+| Edge router | recreated once, onto `edge-config/92a96c82…/Caddyfile`; socket `s-w------- 1000` | **not recreated** (start time unchanged); both switches reloaded | recreated twice per deploy |
+| PostgreSQL | recreated once, onto `postgres-init/b108da99…` | recreated once, onto the same copy | recreated every deploy |
+| Infisical "Injecting" lines | **2** | **2** | 72 |
+| Sales X-Ray web 502 (separate web deploy) | 1.4 s at 07:33:09Z | 1.2 s at 07:37:16Z | 1.2 s |
+
+- During the production deploy, staging served every request: the first production deploy that did not blip staging.
+- One or two idle keep-alive connections per switch were closed by the retiring config and retried (`idle-closed`); no request failed.
+- Production's 5-minute logical backups kept succeeding after the release (07:40:59Z, 07:45:43Z): `docker compose exec` works with the `./postgres/init` default. Staging's have failed since 26 Oct on their 64 MiB size bound (the hold's staging dump is 119 MB); that is unchanged by this work.
+
+**Where the holds went** (deployment receipts, dump mtimes, container start times):
+
+| Step | Staging | Production |
+|---|---|---|
+| Stop api and core worker, drain the Sales X-Ray worker | ≈10 s | ≈10 s |
+| Fenced `pg_dump` and receipt | ≈26 s (119 MB) | ≈5 s (17.5 MB) |
+| PostgreSQL recreate and first health check (one-time) | ≈7 s | ≈7 s |
+| Fence, migrator grant, migrate, product notes | ≈15 s | ≈21 s |
+| Start api and web, wait healthy (admin and coach wait for the api), switch | ≈23 s | ≈20 s |
+| **Total** | **80.7 s** | **62.6 s** |
+
+**Next release.**
+- Production should land near 56 s: same steps, without the one-time PostgreSQL recreate.
+- Staging should land near 74 s, dominated by its 119 MB dump.
+- Two cheap reductions:
+  1. `start_interval: 1s` on the PostgreSQL, api and web health checks. Docker's default 5 s start interval is why the api takes about 11 s to count as healthy, and admin and coach start only after it; this saves about 10 s per hold.
+  2. Staging's database is 7 times production's. Finding and clearing what grew it is an owner-approved staging data change, and it would also bring back staging's 5-minute backups.
+- S3 removes the hold altogether for releases without a migration.

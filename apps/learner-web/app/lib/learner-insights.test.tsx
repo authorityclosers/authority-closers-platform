@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -6,7 +7,6 @@ import {
   loadLearnerInsightsData,
   LearnerInsightsPanel,
 } from "../components/learner-insights";
-import { LearnerShell } from "../components/site-shell";
 import {
   createLearnerApi,
   type AnalyticsViewResponse,
@@ -41,18 +41,15 @@ const availableAnalytics: AnalyticsViewResponse = {
 };
 
 describe("learner descriptive insights", () => {
-  it("keeps navigation support and notifications without a floating placeholder chatbot", () => {
-    const html = renderToStaticMarkup(
-      createElement(LearnerShell, { current: "progress" }),
+  it("keeps support and notifications in the Reflex Account sheet without a placeholder chatbot", () => {
+    const shell = readFileSync(
+      new URL("../shell/reflex-shell.tsx", import.meta.url),
+      "utf8",
     );
-
-    expect(html).not.toContain('aria-label="Open help chatbox"');
-    expect(html).not.toContain('aria-controls="learner-help-chatbox"');
-    expect(html).toContain('aria-expanded="false"');
-    expect(html).toContain('aria-label="Notifications"');
-    expect(html).not.toContain("learner-help-chatbox__trigger");
-    expect(html).toContain("mailto:");
-    expect(html).toContain('aria-controls="learner-account-menu"');
+    expect(shell).toContain('title: "Notifications"');
+    expect(shell).toContain("mailto:");
+    expect(shell).toContain("<Sheet");
+    expect(shell).not.toContain("learner-help-chatbox");
   });
 
   it("presents analytics-only rhythm cues with source and state disclosures", () => {

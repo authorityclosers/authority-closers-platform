@@ -18,6 +18,7 @@ import { UserRoundCheck, UserRoundX } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { StateSwitch, type SwitchHold } from "../ui/state-switch";
+import styles from "./taking-switch.module.css";
 import {
   readTeam,
   saveWorkHours,
@@ -39,6 +40,7 @@ export function TakingSwitch({
   pausedUntil?: string | null;
 }) {
   const [on, setOn] = useState(initial);
+  const [saved, setSaved] = useState(0);
   const [until, setUntil] = useState(pausedUntil);
   // While paused, owners and admins can read the work hours and lift the
   // pause; a seller's read is refused and the row says who sets them.
@@ -58,6 +60,8 @@ export function TakingSwitch({
       const me = await setTaking(next);
       setOn(me.taking_leads ?? next);
       setUntil(me.paused_until ?? null);
+      // A successful choice is finished; close its status/confirmation sheet.
+      setSaved((value) => value + 1);
       onChanged?.();
     } catch (reason) {
       setOn(!next);
@@ -105,8 +109,9 @@ export function TakingSwitch({
       }
     : null;
 
-  return (
+  const control = (
     <StateSwitch
+      key={place === "chip" ? saved : "row"}
       icon={on ? <UserRoundCheck size={20} /> : <UserRoundX size={20} />}
       label="Taking new leads"
       meaning="While this is on, the lead rules can give you new leads. Your open leads stay with you either way."
@@ -129,5 +134,14 @@ export function TakingSwitch({
       onChange={change}
       place={place === "chip" ? "chip" : "row"}
     />
+  );
+  if (place !== "chip") return control;
+  return (
+    <span className={styles.chip} data-on={on}>
+      <span className={styles.mark} aria-hidden="true">
+        {on ? <UserRoundCheck size={20} /> : <UserRoundX size={20} />}
+      </span>
+      {control}
+    </span>
   );
 }

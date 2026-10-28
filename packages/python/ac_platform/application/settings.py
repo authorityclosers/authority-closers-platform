@@ -168,6 +168,10 @@ class Settings(BaseSettings):
     media_scanner_host: str | None = None
     media_scanner_port: int = 3310
     media_scanner_total_timeout_seconds: float = 1800.0
+    # The phone apps' live web updates: where ac-web-bundle-after-release publishes this
+    # environment's signed web bundles, served read-only at /v1/app-web/ (http/app_web.py).
+    # Unset: nothing is served.
+    app_web_root: str | None = None
     # Explicitly opt-in test fixtures are separate from provider composition.
     # They are accepted only by the staging/test fixture seam and never by
     # production runtime composition.

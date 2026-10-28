@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -10,6 +10,7 @@ import { OrganisationHub } from "./org-hub";
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+const sourceMounted = vi.hoisted(() => vi.fn());
 let query = "";
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(query),
@@ -29,6 +30,25 @@ vi.mock("../settings/sections", () => ({
     id: string;
     headless?: boolean;
   }) => <div data-section={id} data-headless={headless ? "" : undefined} />,
+}));
+vi.mock("./setup/stages", () => ({
+  OrganisationStages: () => <div data-section="stages" />,
+}));
+vi.mock("./setup/rules", () => ({
+  OrganisationRules: () => <div data-section="lead-rules" />,
+}));
+vi.mock("./setup/sources", () => ({
+  OrganisationSources: () => {
+    useEffect(() => {
+      sourceMounted();
+    }, []);
+    return <div data-section="sources" />;
+  },
+}));
+vi.mock("./analytics-view", () => ({
+  AnalyticsView: ({ team }: { team: boolean }) => (
+    <div data-analytics={team ? "team" : "own"} />
+  ),
 }));
 vi.mock("./organisation-view", () => ({
   OrganisationView: ({
@@ -63,6 +83,7 @@ afterEach(async () => {
 const render = async (
   role: "owner" | "admin" | "member" | "viewer",
   kind: "organisation" | "personal" = "organisation",
+  tenant = TENANT,
 ) => {
   await act(async () =>
     root.render(
@@ -70,10 +91,10 @@ const render = async (
         value={{
           status: "ready",
           authenticated: true,
-          context: { personId: "p", sessionId: "s", tenantId: TENANT },
+          context: { personId: "p", sessionId: "s", tenantId: tenant },
           workspaces: [
             {
-              tenant_id: TENANT,
+              tenant_id: tenant,
               kind,
               name: "Fictional Homes",
               role,
@@ -165,9 +186,7 @@ it("opens each tab here, with the hub's header only", async () => {
 
   query = "tab=analytics";
   await render("admin");
-  expect(
-    host.querySelector('[data-org-view="overview"][data-headless]'),
-  ).not.toBeNull();
+  expect(host.querySelector('[data-analytics="team"]')).not.toBeNull();
   await act(async () => root.unmount());
   root = createRoot(host);
 
@@ -300,7 +319,8 @@ it("keeps the organisation page as it was outside an organisation", async () => 
 });
 
 // Owner, #25 (26 Oct 2026): the organisation's own logo in its header card.
-it("shows the organisation's logo in its header, the icon without one", async () => {
+it("shows the organisation's logo on Analytics as well as other tabs", async () => {
+  query = "tab=analytics";
   const logo = "/v1/organisation/logo/00000000-0000-4000-8000-0000000000aa";
   resetBrandingForTests();
   const fetch = vi.fn(async (input: RequestInfo | URL) =>
@@ -327,4 +347,21 @@ it("shows the organisation's logo in its header, the icon without one", async ()
     vi.unstubAllGlobals();
     resetBrandingForTests();
   }
+});
+
+it("keeps sellers on their own activity while viewers can compare team work", async () => {
+  query = "tab=analytics";
+  await render("member");
+  expect(host.querySelector('[data-analytics="own"]')).not.toBeNull();
+  await render("viewer");
+  expect(host.querySelector('[data-analytics="team"]')).not.toBeNull();
+});
+
+it("starts Sources afresh after switching organisations so old form drafts cannot carry over", async () => {
+  sourceMounted.mockClear();
+  query = "tab=leads&part=sources";
+  await render("owner");
+  expect(sourceMounted).toHaveBeenCalledTimes(1);
+  await render("owner", "organisation", "00000000-0000-4000-8000-000000000099");
+  expect(sourceMounted).toHaveBeenCalledTimes(2);
 });

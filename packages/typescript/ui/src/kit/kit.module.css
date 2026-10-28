@@ -1,0 +1,1594 @@
+/* The Sales Xray page kit (ported from Pulse, adapted to teal). Only --sx-*
+   tokens: light and dark come from the token file. Text 12/13/14 px, panel
+   titles 15, page titles 20, figures 24; rows at least 40 px; controls
+   --sx-control-h (32 px, 44 px on touch). */
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.muted {
+  color: var(--sx-muted);
+}
+
+/* ---------- Page header ---------- */
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 8px 16px;
+  min-width: 0;
+}
+
+.headerText {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: fit-content;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--sx-ink);
+}
+
+.title {
+  margin: 0;
+  overflow: hidden;
+  color: var(--sx-ink);
+  font: var(--sx-text-title);
+  letter-spacing: var(--sx-tracking-title);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Phones (the tab-bar layout) show the page name in the top bar already. */
+@media (max-width: 899.98px) {
+  .titleInBar .title {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+}
+
+/* As in a row's meta: the dot sits in the gap before each item, so a wrapped
+   line never starts with "·" (its dot falls past the clipped left edge). */
+.context {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 14px;
+  margin: 0;
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.context > span {
+  position: relative;
+}
+
+.context > span + span::before {
+  position: absolute;
+  left: -7px;
+  content: "·";
+  transform: translateX(-50%);
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ---------- Panel ---------- */
+
+.panel {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 5%, transparent);
+}
+
+/* A panel is one grid column that grows to its widest child: every part may
+   shrink to the panel, so a long subtitle truncates instead of widening it. */
+.panel > * {
+  min-width: 0;
+}
+
+.panelHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: var(--sx-panel-head-h);
+  box-sizing: border-box;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.panelTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+  color: var(--sx-ink);
+  font: var(--sx-text-panel);
+}
+
+.panelTitle small {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panelTools {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+}
+
+.panelAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+/* Touch screens: a 44 px target around the small link, with no room taken
+   (the negative margins give back what the height adds). */
+@media (pointer: coarse) {
+  .panelAction {
+    min-height: 44px;
+    margin-block: -12.5px;
+  }
+}
+
+.panelFoot {
+  padding: 10px 14px;
+  border-top: 1px solid var(--sx-line);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* ---------- Badge, delta, spark, meter ---------- */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: var(--sx-badge-h);
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge[data-tone="accent"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.badge[data-tone="good"] {
+  background: color-mix(in oklab, var(--sx-good) 12%, transparent);
+  color: var(--sx-good);
+}
+
+.badge[data-tone="warn"] {
+  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
+  color: var(--sx-warn);
+}
+
+.badge[data-tone="bad"] {
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+}
+
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.delta[data-trend="up"] {
+  color: var(--sx-good);
+}
+
+.delta[data-trend="down"] {
+  color: var(--sx-bad);
+}
+
+.delta[data-trend="flat"] {
+  color: var(--sx-muted);
+}
+
+.spark {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  width: 72px;
+  height: 24px;
+}
+
+.spark i {
+  flex: 1;
+  min-width: 2px;
+  border-radius: 1px;
+  background: color-mix(in oklab, var(--sx-accent) 40%, transparent);
+}
+
+.spark i[data-on] {
+  background: var(--sx-accent);
+}
+
+.meter {
+  display: block;
+  width: 100%;
+  min-width: 48px;
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sx-sunken);
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sx-accent);
+}
+
+.dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: var(--sx-muted);
+}
+
+.dot[data-tone="accent"],
+.dot[data-tone="good"] {
+  background: var(--sx-good);
+}
+
+.dot[data-tone="warn"] {
+  background: var(--sx-warn);
+}
+
+.dot[data-tone="bad"] {
+  background: var(--sx-bad);
+}
+
+/* ---------- KPI tiles ---------- */
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  overflow: hidden;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: 0 1px 2px color-mix(in oklab, var(--lx-film) 5%, transparent);
+}
+
+.tile {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  min-height: var(--sx-tile-min-h);
+  box-sizing: border-box;
+  padding: 14px 16px;
+  color: inherit;
+  text-decoration: none;
+  /* Hairlines between tiles in any reflow; the panel's edge hides the outer ones. */
+  box-shadow:
+    -1px 0 0 var(--sx-line),
+    0 -1px 0 var(--sx-line);
+}
+
+a.tile {
+  transition: background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+a.tile:hover {
+  background: var(--sx-fill-soft);
+}
+
+a.tile:active {
+  background: var(--sx-fill);
+}
+
+.tileLabel {
+  display: flex;
+  align-items: center;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.tileMain {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.tileValue {
+  color: var(--sx-ink);
+  font: var(--sx-text-kpi);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.tileValue small {
+  margin-left: 3px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 500;
+}
+
+.tileSpark {
+  margin-left: auto;
+}
+
+/* Up to two lines, then an ellipsis: a phone's half-width tile showed only
+   "524 waiting for a …" (owner, 25 Oct 2026). */
+.tileNote {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- Empty, why, skeleton ---------- */
+
+.empty {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 28px 16px;
+  text-align: center;
+}
+
+.emptyIcon {
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--sx-sunken);
+  color: var(--sx-muted);
+}
+
+.emptyTitle {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 600;
+}
+
+.emptyText {
+  max-width: 44ch;
+  margin: 0 0 6px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.why {
+  position: relative;
+}
+
+.why summary {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--sx-muted);
+  cursor: pointer;
+  list-style: none;
+}
+
+.why summary::-webkit-details-marker {
+  display: none;
+}
+
+.why summary:hover,
+.why[open] summary {
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+}
+
+.whyPanel {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 6px);
+  right: 0;
+  width: min(320px, 80vw);
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  box-shadow: var(--lx-shadow-1);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+}
+
+.whyPanel p {
+  margin: 0;
+}
+
+.whyPanel p + p {
+  margin-top: 6px;
+}
+
+/* One soft sheen sweeps across every placeholder together (the gradient is
+   fixed to the window), instead of each one blinking on its own. */
+.skeleton {
+  display: block;
+  border-radius: 6px;
+  background-color: var(--sx-sunken);
+  background-image: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in oklab, var(--sx-surface) 55%, transparent) 50%,
+    transparent 70%
+  );
+  background-attachment: fixed;
+  background-repeat: no-repeat;
+  background-size: 200vw 100%;
+  animation: kit-sheen 1.8s var(--sx-ease-sheet) infinite;
+}
+
+/* A row's outline (SkeletonRow): the row's own height and gutter. */
+.skeletonRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: var(--sx-row-h);
+  box-sizing: border-box;
+  padding: 10px 16px;
+}
+
+.skeletonLines {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 7px;
+  min-width: 0;
+}
+
+@keyframes kit-sheen {
+  from {
+    background-position: 100vw 0;
+  }
+  to {
+    background-position: -100vw 0;
+  }
+}
+
+/* ---------- Tabs and segmented ---------- */
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--sx-line);
+  scrollbar-width: none;
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--sx-radius-sm) var(--sx-radius-sm) 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  transition:
+    color var(--sx-dur-fast) var(--sx-ease-out),
+    background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.tab:hover {
+  background: var(--sx-fill-soft);
+}
+
+.tab:hover,
+.tab[aria-current="page"] {
+  color: var(--sx-ink);
+}
+
+.tab[aria-current="page"]::after {
+  position: absolute;
+  right: 8px;
+  bottom: -1px;
+  left: 8px;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--sx-accent);
+  content: "";
+  animation: kit-underline var(--sx-dur-base) var(--sx-spring) both;
+}
+
+@keyframes kit-underline {
+  from {
+    transform: scaleX(0.3);
+    opacity: 0;
+  }
+}
+
+.tabCount {
+  color: var(--sx-muted);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.segmented {
+  position: relative;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-fill);
+}
+
+/* The chosen segment's lift, as one pill that slides between segments (owner
+   bug #45, 27 Oct 2026); placed by Segmented before paint. */
+.segmentPill {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  left: 0;
+  width: 0;
+  border-radius: calc(var(--sx-radius-sm) - 2px);
+  background: var(--sx-elevated);
+  box-shadow:
+    0 1px 3px color-mix(in oklab, var(--lx-film) 14%, transparent),
+    0 0 0 0.5px var(--sx-hairline);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.segmented[data-pill] .segmentPill {
+  opacity: 1;
+}
+
+.segmented[data-slide] .segmentPill {
+  transition:
+    transform var(--sx-dur-base) var(--sx-spring),
+    width var(--sx-dur-base) var(--sx-spring);
+}
+
+/* With the pill in place, the chosen segment drops its own lift. */
+.segmented[data-pill] .segment[aria-pressed="true"] {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* A full control height on its own (44 px on touch), inside the well. */
+.segment {
+  position: relative;
+  min-height: var(--sx-control-h);
+  padding: 0 10px;
+  border: 0;
+  border-radius: calc(var(--sx-radius-sm) - 2px);
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    color var(--sx-dur-fast) var(--sx-ease-out),
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    box-shadow var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.segment:hover:not([aria-pressed="true"]) {
+  color: var(--sx-ink-2);
+}
+
+.segment:active {
+  transform: scale(0.96);
+}
+
+/* Apple's segmented control: the chosen segment lifts off the well. */
+.segment[aria-pressed="true"] {
+  background: var(--sx-elevated);
+  color: var(--sx-ink);
+  box-shadow:
+    0 1px 3px color-mix(in oklab, var(--lx-film) 14%, transparent),
+    0 0 0 0.5px var(--sx-hairline);
+}
+
+/* ---------- Avatar ---------- */
+
+.avatar {
+  display: inline-grid;
+  width: var(--size, 24px);
+  height: var(--size, 24px);
+  flex: none;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in oklch, var(--sx-accent) 14%, var(--sx-sunken));
+  color: var(--sx-ink-2);
+  font-size: max(12px, calc(var(--size, 24px) * 0.4));
+  font-weight: 700;
+}
+
+.avatar[data-shape="square"] {
+  border-radius: var(--sx-radius-sm);
+}
+
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+/* ---------- List rows ---------- */
+
+.list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--sx-row-h);
+  box-sizing: border-box;
+  padding: 8px 14px;
+}
+
+.row + .row {
+  border-top: 1px solid var(--lx-line-soft);
+}
+
+/* A row that opens something answers the pointer and the press. */
+.row:has(> .rowMain > a.rowTitle) {
+  transition: background var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.row:has(> .rowMain > a.rowTitle):hover {
+  background: var(--sx-fill-soft);
+}
+
+.row:has(> .rowMain > a.rowTitle):active {
+  background: var(--sx-fill);
+}
+
+.rowIcon {
+  display: inline-flex;
+  flex: none;
+  color: var(--sx-muted);
+}
+
+.rowMain {
+  display: grid;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 1px;
+}
+
+.rowTitle {
+  overflow: hidden;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+a.rowTitle:hover {
+  color: var(--sx-accent);
+}
+
+/* A row with a link is one tap target: the title's link stretches over the
+   whole row (the meta line and chevron too), as on Pulse. Controls at the
+   row's end stay above it, and keyboard focus rings the whole row. */
+a.rowTitle::after {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  content: "";
+}
+
+a.rowTitle:focus-visible {
+  outline: none;
+}
+
+/* Inset, so a list's rounded, clipped frame never cuts the ring. */
+a.rowTitle:focus-visible::after {
+  border-radius: var(--sx-radius-sm);
+  box-shadow: inset 0 0 0 2px var(--sx-accent);
+}
+
+.rowEnd :is(a, button, input, select, textarea, summary, [tabindex]) {
+  position: relative;
+  z-index: 2;
+}
+
+/* The dot sits in the gap before each item; an item that starts a line
+   pushes its dot past the clipped left edge, so no line starts with "·". */
+.rowMeta {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 14px;
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.rowMeta > span {
+  position: relative;
+}
+
+.rowMeta > span::before {
+  position: absolute;
+  left: -7px;
+  content: "·";
+  transform: translateX(-50%);
+}
+
+.rowEnd > .meter {
+  width: 72px;
+}
+
+.rowEnd {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* ---------- Table and phone cards ---------- */
+
+.tableWrap {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sx-text-sm);
+}
+
+.table th,
+.table td {
+  height: var(--sx-row-h);
+  padding: 0 14px;
+  border-top: 1px solid var(--lx-line-soft);
+  text-align: left;
+  vertical-align: middle;
+}
+
+.table thead th {
+  height: var(--sx-table-head-h);
+  border-top: 0;
+  background: var(--sx-sunken);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.table tbody th {
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+.table tbody tr:hover {
+  background: color-mix(in oklab, var(--sx-sunken) 60%, transparent);
+}
+
+.table :is(th, td)[data-num] {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.cards {
+  display: none;
+}
+
+.card {
+  display: grid;
+  gap: 4px;
+  padding: 12px 14px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.card > strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.card + .card {
+  border-top: 1px solid var(--lx-line-soft);
+}
+
+/* A row's own action sits at its start, not across the row. */
+.card > :is(button, a) {
+  justify-self: start;
+}
+
+@media (max-width: 760px) {
+  /* Phones: tiles two across (r17 S4). */
+  .tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .tableWrap[data-has-cards] {
+    display: none;
+  }
+
+  .cards {
+    display: grid;
+  }
+}
+
+/* ---------- Buttons ---------- */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    border-color var(--sx-dur-fast) var(--sx-ease-out),
+    box-shadow var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.button:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--lx-ink) 4%, var(--sx-surface));
+}
+
+/* A press dips the button and lets it spring back. */
+.button:active:not(:disabled) {
+  transform: scale(var(--sx-press-scale));
+  transition-duration: var(--sx-dur-instant);
+}
+
+.button[data-variant="primary"] {
+  border-color: transparent;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  box-shadow: 0 6px 14px -8px
+    color-mix(in oklab, var(--sx-accent) 80%, transparent);
+}
+
+.button[data-variant="primary"]:hover:not(:disabled) {
+  background: var(--lx-teal-hover);
+}
+
+.button[data-variant="ghost"] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--sx-ink-2);
+}
+
+.button[data-variant="ghost"]:hover:not(:disabled),
+.button[data-variant="icon"]:hover:not(:disabled) {
+  background: var(--sx-fill);
+  color: var(--sx-ink);
+}
+
+.button[data-variant="icon"] {
+  width: var(--sx-control-h);
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--sx-muted);
+}
+
+.button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.button:focus-visible,
+.segment:focus-visible,
+.tab:focus-visible,
+.why summary:focus-visible,
+.inline:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button:active:not(:disabled),
+  .segment:active {
+    transform: none;
+  }
+
+  /* The pill moves at once. */
+  .segmented[data-slide] .segmentPill {
+    transition: none;
+  }
+}
+
+/* ---------- Fields and inline edit ---------- */
+
+.field {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+
+.fieldLabel {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.field :is(input, select, textarea),
+.inlineInput {
+  width: 100%;
+  min-height: var(--sx-control-h);
+  box-sizing: border-box;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  transition:
+    border-color var(--sx-dur-fast) var(--sx-ease-out),
+    box-shadow var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.field :is(input, select, textarea):hover:not(:focus),
+.inlineInput:hover:not(:focus) {
+  border-color: var(--sx-line-strong);
+}
+
+.field textarea {
+  min-height: 80px;
+  padding: 8px 10px;
+  resize: vertical;
+}
+
+.field :is(input, textarea):focus,
+.inlineInput:focus {
+  border-color: var(--sx-accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--sx-accent-soft);
+}
+
+/* A select glows for keyboards only: a tap or click left a teal glow on it
+   (owner, 25 Oct 2026, Organisation > Members > Role). */
+.field select:focus {
+  border-color: var(--sx-accent);
+  outline: none;
+}
+
+.field select:focus-visible {
+  box-shadow: var(--sx-focus-ring);
+}
+
+.fieldHint {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.fieldError {
+  color: var(--sx-bad);
+  font-size: var(--sx-text-xs);
+}
+
+.inline {
+  display: inline-flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: var(--sx-control-h);
+  margin-left: -6px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--sx-radius-sm);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  text-align: left;
+  cursor: text;
+}
+
+.inline > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.inline svg {
+  flex: none;
+  color: var(--sx-muted);
+  opacity: 0;
+}
+
+.inline:hover:not(:disabled) {
+  border-color: var(--sx-line);
+}
+
+.inline:hover svg,
+.inline:focus-visible svg {
+  opacity: 1;
+}
+
+.inline:disabled {
+  cursor: default;
+}
+
+.inlineEditing {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.inlineEditing small:empty {
+  display: none;
+}
+
+/* Phones: 16 px fields never trigger zoom-on-focus. */
+@media (max-width: 899.98px) {
+  .field :is(input, select, textarea),
+  .inlineInput {
+    font-size: 16px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
+}
+
+/* ---------- Dialog ---------- */
+
+.dialog {
+  width: min(420px, calc(100vw - 2 * var(--sx-gutter)));
+  box-sizing: border-box;
+  padding: 20px;
+  border: 1px solid var(--sx-glass-edge);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-glass-thick);
+  -webkit-backdrop-filter: var(--sx-glass-blur);
+  backdrop-filter: var(--sx-glass-blur);
+  color: var(--sx-ink);
+  box-shadow: var(--sx-glass-shine), var(--sx-glass-shadow);
+}
+
+.dialog::backdrop {
+  background: var(--sx-scrim);
+}
+
+/* It rises in with a calm spring over a dimmed page. */
+.dialog[open] {
+  display: grid;
+  gap: 14px;
+  animation: kit-dialog-in var(--sx-dur-sheet) var(--sx-spring-calm) both;
+}
+
+.dialog[open]::backdrop {
+  animation: kit-fade-in var(--sx-dur-base) linear both;
+}
+
+@keyframes kit-dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.97);
+  }
+}
+
+@keyframes kit-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dialog[open] {
+    animation-name: kit-fade-in;
+    animation-duration: 160ms;
+  }
+}
+
+/* showModal() focuses the dialog itself; its controls show focus instead. */
+.dialog:focus,
+.dialog:focus-visible {
+  outline: none;
+}
+
+.dialogTitle {
+  margin: 0;
+  font: var(--sx-text-panel);
+}
+
+/* The title shares its row with a visible close X in the corner. */
+.dialogHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -6px -8px 0 0;
+}
+
+.dialogHead > .dialogTitle {
+  min-width: 0;
+  padding-top: 6px;
+}
+
+.dialogClose {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: var(--sx-control-h);
+  height: var(--sx-control-h);
+  padding: 0;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+  cursor: pointer;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.dialogClose:hover {
+  background: var(--sx-fill-strong);
+  color: var(--sx-ink);
+}
+
+.dialogClose:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+.dialogClose:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 1px;
+}
+
+.dialogText {
+  margin: -8px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+.dialogActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---------- Action rows (menus, settings lists, action sheets) ----------
+   The Liquid Glass block below groups them into one inset card. */
+
+.actionList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.actionItem {
+  min-width: 0;
+}
+
+/* A row with an action of its own beside it (remove, more): the row's
+   button takes the room, the action keeps its 44 px. */
+.actionItem[data-trailing] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.actionTrailing {
+  display: inline-flex;
+  align-items: center;
+  padding-right: 6px;
+}
+
+.actionRow {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto auto;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 60px;
+  box-sizing: border-box;
+  padding: 10px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.actionRow:not(:has(.actionIcon)) {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.actionRow:hover:not(:disabled) {
+  background: color-mix(in oklab, var(--lx-ink) 3%, var(--sx-surface));
+}
+
+.actionRow:active:not(:disabled) {
+  transform: scale(0.985);
+  transition-duration: var(--sx-dur-instant);
+}
+
+.actionRow:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.actionRow:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.actionIcon {
+  display: inline-grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.actionIcon[data-tone="neutral"] {
+  background: var(--sx-fill);
+  color: var(--sx-ink-2);
+}
+
+.actionIcon[data-tone="good"] {
+  background: color-mix(in oklab, var(--sx-good) 12%, transparent);
+  color: var(--sx-good);
+}
+
+.actionIcon[data-tone="warn"] {
+  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
+  color: var(--lx-focus-ink);
+}
+
+.actionIcon[data-tone="bad"] {
+  background: var(--sx-bad-soft);
+  color: var(--sx-bad);
+}
+
+.actionWords {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.actionWords strong {
+  font-size: var(--sx-text-md);
+  font-weight: 650;
+}
+
+.actionWords small {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.actionEnd {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.actionChevron {
+  color: var(--sx-muted);
+}
+
+/* ---------- Liquid Glass (owner's pick, 22 Oct 2026) ----------
+   Capsule buttons, filled secondary buttons and fields, soft tinted badges,
+   borderless cards on the grouped ground, Apple's grey monogram avatars,
+   separators that start where the text does. */
+
+.button {
+  padding: 0 16px;
+  border-color: transparent;
+  border-radius: 999px;
+  background: var(--sx-fill);
+  font-weight: 650;
+}
+
+.button:hover:not(:disabled) {
+  background: var(--sx-fill-strong);
+}
+
+.button[data-variant="primary"] {
+  background: linear-gradient(
+    180deg,
+    color-mix(in oklab, var(--lx-teal-2) 30%, var(--lx-teal)),
+    var(--lx-teal)
+  );
+  box-shadow:
+    inset 0 1px 0.5px color-mix(in oklab, white 35%, transparent),
+    0 8px 18px -10px color-mix(in oklab, var(--lx-teal) 90%, transparent);
+}
+
+.button[data-variant="primary"]:hover:not(:disabled) {
+  background: var(--lx-teal-hover);
+}
+
+.button[data-variant="ghost"],
+.button[data-variant="icon"] {
+  background: transparent;
+}
+
+.badge {
+  padding: 0 9px;
+  font-weight: 650;
+}
+
+.badge:not([data-tone]),
+.badge[data-tone="neutral"] {
+  background: var(--sx-fill);
+}
+
+.panel,
+.tiles {
+  border-color: transparent;
+  border-radius: var(--lx-radius-lg);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.panelHead {
+  border-bottom-color: var(--lx-line-soft);
+}
+
+.segmented {
+  padding: 3px;
+  border-radius: 999px;
+}
+
+.segment {
+  border-radius: 999px;
+  padding: 0 14px;
+}
+
+.segment[aria-pressed="true"] {
+  box-shadow:
+    0 2px 6px color-mix(in oklab, var(--lx-ink) 10%, transparent),
+    0 0 0 0.5px var(--sx-hairline);
+}
+
+.field :is(input, select, textarea),
+.inlineInput {
+  min-height: max(var(--sx-control-h), 40px);
+  padding: 0 14px;
+  border-color: transparent;
+  border-radius: 12px;
+  background: var(--sx-fill);
+}
+
+.field :is(input, select, textarea):hover:not(:focus) {
+  border-color: transparent;
+  background: var(--sx-fill-strong);
+}
+
+.field :is(input, select, textarea):focus,
+.inlineInput:focus {
+  border-color: var(--sx-accent);
+  background: var(--sx-surface);
+}
+
+.avatar {
+  background: linear-gradient(
+    180deg,
+    var(--lx-avatar-top),
+    var(--lx-avatar-bottom)
+  );
+  color: white;
+  font-weight: 650;
+}
+
+/* Separators start where the text does, as in iOS lists. */
+.row {
+  padding: 10px 16px;
+}
+
+.row + .row {
+  border-top: 0;
+}
+
+.row + .row::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 16px;
+  height: 1px;
+  background: var(--lx-line-soft);
+  content: "";
+}
+
+.row:has(> .avatar) + .row::before {
+  left: 60px;
+}
+
+.dialog {
+  padding: 22px;
+  border-radius: 30px;
+}
+
+.emptyIcon {
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+/* B: precision. */
+
+/* A badge is a word with a coloured dot on a hairline. */
+
+/* Action rows: one inset card with separators that start at the text, as in
+   iOS Settings. */
+
+.actionList {
+  gap: 0;
+  overflow: hidden;
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.actionList {
+  box-shadow: var(--sx-shadow-1);
+}
+
+.actionItem {
+  position: relative;
+}
+
+.actionItem + .actionItem::before {
+  position: absolute;
+  z-index: 1;
+  top: 0;
+  right: 0;
+  left: 64px;
+  height: 1px;
+  background: var(--lx-line-soft);
+  content: "";
+}
+
+.actionRow {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.actionRow:hover:not(:disabled) {
+  background: var(--sx-fill-soft);
+}
+
+.actionRow:active:not(:disabled) {
+  background: var(--sx-fill);
+  transform: none;
+}
+
+.actionIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+}
+
+.actionIcon[data-tone="neutral"] {
+  background: var(--lx-avatar-bottom);
+  color: white;
+}
+
+.actionIcon[data-tone="good"] {
+  background: var(--sx-good);
+  color: var(--sx-accent-ink);
+}
+
+.actionIcon[data-tone="warn"] {
+  background: var(--lx-warning);
+  color: white;
+}
+
+.actionIcon[data-tone="bad"] {
+  background: var(--lx-danger);
+  color: white;
+}

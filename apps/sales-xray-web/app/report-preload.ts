@@ -40,6 +40,13 @@ export type SavedReportPreload =
     }
   | { state: "unavailable"; message: string; result: null };
 
+/** Browser-memory handoff; usable only by the exact confirmed reader. */
+export type ScopedSavedReport = {
+  callId: string;
+  identityKey: string;
+  value: Extract<SavedReportPreload, { state: "ready" }>;
+};
+
 const UNAVAILABLE: SavedReportPreload = {
   state: "unavailable",
   message: "This saved call is unavailable. Try again.",

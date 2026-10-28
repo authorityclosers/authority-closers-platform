@@ -19,11 +19,13 @@ export function Sheet({
   label,
   onClose,
   children,
+  footer,
 }: {
   open: boolean;
   label: string;
   onClose: () => void;
   children: ReactNode;
+  footer?: ReactNode;
 }) {
   return (
     <KitSheet
@@ -33,6 +35,7 @@ export function Sheet({
       hideTitle
       closeButton={false}
       className={styles.sheet}
+      footer={footer}
     >
       <div className={styles.sheetBody}>
         <button

@@ -7,7 +7,7 @@ import {
 } from "../lib/learner-policy";
 
 export const metadata: Metadata = {
-  title: "Privacy notice — Authority Closers",
+  title: "Privacy",
   description:
     "How Authority Closers handles account, learning and optional profile data, and how to make a privacy request.",
 };
