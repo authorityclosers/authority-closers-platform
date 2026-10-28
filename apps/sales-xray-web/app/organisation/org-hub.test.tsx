@@ -30,6 +30,11 @@ vi.mock("../settings/sections", () => ({
     headless?: boolean;
   }) => <div data-section={id} data-headless={headless ? "" : undefined} />,
 }));
+vi.mock("./analytics-view", () => ({
+  AnalyticsView: ({ team }: { team: boolean }) => (
+    <div data-analytics={team ? "team" : "own"} />
+  ),
+}));
 vi.mock("./organisation-view", () => ({
   OrganisationView: ({
     sections,
@@ -165,9 +170,7 @@ it("opens each tab here, with the hub's header only", async () => {
 
   query = "tab=analytics";
   await render("admin");
-  expect(
-    host.querySelector('[data-org-view="overview"][data-headless]'),
-  ).not.toBeNull();
+  expect(host.querySelector('[data-analytics="team"]')).not.toBeNull();
   await act(async () => root.unmount());
   root = createRoot(host);
 
@@ -327,4 +330,12 @@ it("shows the organisation's logo in its header, the icon without one", async ()
     vi.unstubAllGlobals();
     resetBrandingForTests();
   }
+});
+
+it("keeps sellers on their own activity while viewers can compare team work", async () => {
+  query = "tab=analytics";
+  await render("member");
+  expect(host.querySelector('[data-analytics="own"]')).not.toBeNull();
+  await render("viewer");
+  expect(host.querySelector('[data-analytics="team"]')).not.toBeNull();
 });

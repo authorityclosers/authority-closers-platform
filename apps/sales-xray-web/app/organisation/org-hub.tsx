@@ -27,6 +27,8 @@ import { ActionList, ActionRow, Segmented } from "../ui/kit";
 import { SideScroll, sideScrollFades, useSideScroll } from "../ui/side-scroll";
 import { useWorkspaceAccess } from "../workspace-access";
 import type { ServerOrganisation } from "./organisation-seed";
+import { AnalyticsView } from "./analytics-view";
+import { can } from "./roles";
 import { OrganisationView } from "./organisation-view";
 import { HUB_PATH, HUB_TABS, hubHref, type HubTab } from "./hub-tabs";
 import { hubTabsFor } from "./setup-tabs";
@@ -209,11 +211,10 @@ export function OrganisationHub({
       break;
     case "analytics":
       body = (
-        <OrganisationView
-          initial={initial}
-          embedded
-          headless
-          sections={["overview"]}
+        <AnalyticsView
+          key={current.tenant_id}
+          team={can(current.role, "team.view")}
+          personId={access?.context?.personId}
         />
       );
       break;
