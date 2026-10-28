@@ -3,9 +3,9 @@ from pathlib import Path
 
 import pytest
 
+from ac_platform.conversation_intelligence.lean_native_runtime import LeanDockerNativeRuntime
 from ac_platform.conversation_intelligence.lean_service import cap_consumers
 from ac_platform.conversation_intelligence.native_runtime import (
-    DockerNativeRuntime,
     NativeRuntimeError,
 )
 from ac_platform.conversation_intelligence.runner import PipelinedConversationWorkerRunner
@@ -104,7 +104,7 @@ async def test_core_recycles_after_exact_job_count(monkeypatch: pytest.MonkeyPat
 
 
 def test_native_child_joins_combined_cgroup_and_has_hard_cap(tmp_path: Path) -> None:
-    runtime = DockerNativeRuntime(
+    runtime = LeanDockerNativeRuntime(
         "sha256:" + "a" * 64,
         workspace_root=tmp_path,
         memory_mib=192,
@@ -120,4 +120,4 @@ def test_native_child_joins_combined_cgroup_and_has_hard_cap(tmp_path: Path) -> 
 @pytest.mark.parametrize("parent", ["/prod", "../native.slice", "native.slice --privileged", ""])
 def test_native_rejects_unbounded_parent(tmp_path: Path, parent: str) -> None:
     with pytest.raises(NativeRuntimeError):
-        DockerNativeRuntime("sha256:" + "a" * 64, workspace_root=tmp_path, cgroup_parent=parent)
+        LeanDockerNativeRuntime("sha256:" + "a" * 64, workspace_root=tmp_path, cgroup_parent=parent)

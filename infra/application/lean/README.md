@@ -23,11 +23,15 @@ Apply `lean/compose.foundation.yaml` LAST to the **foundation** project. Caddy a
 telemetry are separate services; do not create duplicates in application. Set
 AC_LEAN_OTEL_CONFIG_FILE to the reviewed lean/otel-collector.yaml: its memory
 limiter is 48 MiB with a 12 MiB spike allowance and batches capped at 128 items. Load the native
-slice and helper service drop-in through the release installer, with the helper
-and its Docker child sharing `native.slice`. The child must use `--memory-mib 192
---cgroup-parent native.slice`; parent limit 64 MiB + child limit 192 MiB gives a
-combined 256 MiB ceiling, including the existing output tmpfs. Merely limiting the
-Python supervisor does not limit a Docker-daemon-owned child.
+slice and helper service drop-in only after a lean helper is separately reviewed,
+packaged and admitted. The shipped helper keeps its reviewed 2 GiB child recipe
+and does not accept lean cap flags. The opt-in `LeanDockerNativeRuntime` candidate
+provides a 192 MiB child in `native.slice`; it is not imported by the shipped
+helper. Until that candidate is admitted, the lean native budget is unproven and
+the lean profile must not be activated. The intended parent limit 64 MiB + child
+limit 192 MiB gives a combined 256 MiB ceiling, including the existing output
+tmpfs. Merely limiting the Python supervisor does not limit a Docker-daemon-owned
+child.
 
 All specified memory+swap limits are equal: no service may use swap. Steady app
 ceilings: DB 384, pooler 64, API 512, Sales Xray worker 512, core worker 192,
