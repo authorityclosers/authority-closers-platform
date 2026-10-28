@@ -30,6 +30,12 @@ vi.mock("../settings/sections", () => ({
     headless?: boolean;
   }) => <div data-section={id} data-headless={headless ? "" : undefined} />,
 }));
+vi.mock("./setup/stages", () => ({
+  OrganisationStages: () => <div data-section="stages" />,
+}));
+vi.mock("./setup/rules", () => ({
+  OrganisationRules: () => <div data-section="lead-rules" />,
+}));
 vi.mock("./setup/sources", () => ({
   OrganisationSources: () => <div data-section="sources" />,
 }));
@@ -306,7 +312,8 @@ it("keeps the organisation page as it was outside an organisation", async () => 
 });
 
 // Owner, #25 (26 Oct 2026): the organisation's own logo in its header card.
-it("shows the organisation's logo in its header, the icon without one", async () => {
+it("shows the organisation's logo on Analytics as well as other tabs", async () => {
+  query = "tab=analytics";
   const logo = "/v1/organisation/logo/00000000-0000-4000-8000-0000000000aa";
   resetBrandingForTests();
   const fetch = vi.fn(async (input: RequestInfo | URL) =>
