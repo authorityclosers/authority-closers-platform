@@ -117,7 +117,7 @@ it("says who is next after a save, and calls them in one tap", async () => {
   );
   await flush();
   // No call yet: the question waits behind its light chip.
-  await act(async () => tile("Log it").click());
+  await act(async () => tile("Log a call").click());
   await act(async () => tile("Didn't get through").click());
   await act(async () => tile("No answer").click());
   await act(async () => tile("Save").click());
@@ -161,7 +161,7 @@ it("keeps the question behind a light chip until a real call", async () => {
   await flush();
   expect(host.textContent).not.toContain("How did the call");
   expect(document.body.textContent).not.toContain("How did the call");
-  await act(async () => tile("Log it").click());
+  await act(async () => tile("Log a call").click());
   expect(document.body.textContent).toContain("How did the call with Ravi go?");
 });
 
@@ -205,5 +205,5 @@ it("asks straight away after a call the phone logged with talk time", async () =
   expect(text).toContain(
     "Your phone says you talked for 1\u00a0min 22\u00a0s.",
   );
-  expect(tile("Log it")).toBeUndefined();
+  expect(tile("Log a call")).toBeUndefined();
 });

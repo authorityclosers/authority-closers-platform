@@ -496,16 +496,6 @@ export function ListView({
             <span className={styles.columnsSlot} ref={setColumnsSlot} />
           </div>
         ) : null}
-        {quickAdd &&
-        page !== null &&
-        !selecting &&
-        !(asTable && rows.length) ? (
-          <QuickAddBar
-            pipeline={quickAdd.pipeline}
-            onAdded={quickAdd.onAdded}
-            onPasteRows={quickAdd.onPasteRows}
-          />
-        ) : null}
         {error ? (
           // Calm, with a way on (report #27, 26 Oct 2026): nothing is lost.
           <InlineEmpty
@@ -603,6 +593,19 @@ export function ListView({
             ) : null}
           </>
         )}
+        {quickAdd &&
+        page !== null &&
+        rows.length > 0 &&
+        !selecting &&
+        !(asTable && rows.length) ? (
+          <div className={styles.quickAddAfter}>
+            <QuickAddBar
+              pipeline={quickAdd.pipeline}
+              onAdded={quickAdd.onAdded}
+              onPasteRows={quickAdd.onPasteRows}
+            />
+          </div>
+        ) : null}
       </section>
       {selecting && page && rows.length ? (
         <SelectBar

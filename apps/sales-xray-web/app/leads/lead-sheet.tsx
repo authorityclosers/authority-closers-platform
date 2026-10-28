@@ -83,6 +83,7 @@ import {
 import { PersonAvatar } from "../people/person-avatar";
 import { LastCallBrief } from "./call-brief-card";
 import { ReassignSheet } from "./reassign-sheet";
+import { PipelineOverview } from "./pipeline-overview";
 import { InAppCallHint } from "./call-hint";
 import { CallLink } from "./call-link";
 import type { FirstTapEvent } from "./first-tap";
@@ -812,7 +813,7 @@ export function LogThis({
         onClick={onOpen}
       >
         <NotebookPen size={16} aria-hidden="true" />
-        {hint ? "Log this" : "Log it"}
+        Log a call
       </button>
     </p>
   );
@@ -3216,15 +3217,16 @@ export function LeadCard({
           personId={lead.owner_person_id}
           name={lead.owner_name ?? "No owner"}
           photoUrl={lead.owner_photo_url}
-          size={40}
+          size={32}
         />
         <span className={styles.ownerWords}>
+          <small>Assigned to</small>
           <strong>
             {!lead.owner_name
               ? "Not assigned yet"
               : me && lead.owner_person_id === me.person_id
-                ? "Assigned to you"
-                : `Assigned to ${lead.owner_name}`}
+                ? "You"
+                : lead.owner_name}
           </strong>
           <small>
             {[
@@ -3256,9 +3258,7 @@ export function LeadCard({
         />
       ) : null}
 
-      {detail.can_assign ? (
-        <PipelinePanel detail={detail} onChanged={onChanged} />
-      ) : null}
+      <PipelinePanel detail={detail} onChanged={onChanged} />
     </div>
   );
 }
@@ -3317,55 +3317,61 @@ function PipelinePanel({
   const pipes = usePipelines();
   const [busy, setBusy] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
-  if (!several(pipes)) return null;
   const lead = detail.lead;
   const here = lead.pipeline ?? "main";
   const name =
-    pipes.pipelines.find((item) => item.key === here)?.name ?? "Leads";
+    pipes?.pipelines.find((item) => item.key === here)?.name ?? "Leads";
   return (
     <section className={styles.panel} aria-label="Pipeline">
-      <div className={styles.ownerRow}>
-        <span className={styles.pipelineMark} aria-hidden="true">
-          <Workflow size={16} />
-        </span>
-        <span>
-          <small>Pipeline</small>
-          <strong>{name}</strong>
-        </span>
-        <label className={styles.pipelineMove}>
-          <span className={styles.srOnly}>Move to pipeline</span>
-          <select
-            value=""
-            disabled={busy}
-            onChange={async (event) => {
-              const key = event.target.value;
-              if (!key) return;
-              setBusy(true);
-              setProblem(null);
-              try {
-                onChanged(await movePipeline(lead, key));
-              } catch (reason) {
-                setProblem(
-                  reason instanceof LeadsError
-                    ? reason.message
-                    : "Not moved. Try again.",
-                );
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            <option value="">{busy ? "Moving…" : "Move to…"}</option>
-            {pipes.pipelines
-              .filter((item) => item.key !== here)
-              .map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.name}
-                </option>
-              ))}
-          </select>
-        </label>
-      </div>
+      <PipelineOverview
+        key={`${lead.lead_id}:${here}`}
+        lead={lead}
+        name={name}
+      />
+      {detail.can_assign && several(pipes) ? (
+        <div className={styles.ownerRow}>
+          <span className={styles.pipelineMark} aria-hidden="true">
+            <Workflow size={16} />
+          </span>
+          <span>
+            <small>Pipeline</small>
+            <strong>{name}</strong>
+          </span>
+          <label className={styles.pipelineMove}>
+            <span className={styles.srOnly}>Move to pipeline</span>
+            <select
+              value=""
+              disabled={busy}
+              onChange={async (event) => {
+                const key = event.target.value;
+                if (!key) return;
+                setBusy(true);
+                setProblem(null);
+                try {
+                  onChanged(await movePipeline(lead, key));
+                } catch (reason) {
+                  setProblem(
+                    reason instanceof LeadsError
+                      ? reason.message
+                      : "Not moved. Try again.",
+                  );
+                } finally {
+                  setBusy(false);
+                }
+              }}
+            >
+              <option value="">{busy ? "Moving…" : "Move to…"}</option>
+              {pipes.pipelines
+                .filter((item) => item.key !== here)
+                .map((item) => (
+                  <option key={item.key} value={item.key}>
+                    {item.name}
+                  </option>
+                ))}
+            </select>
+          </label>
+        </div>
+      ) : null}
       {problem ? (
         <p className={styles.error} role="alert">
           {problem}

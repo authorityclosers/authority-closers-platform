@@ -855,7 +855,7 @@ export function LeadsRoute() {
       () => undefined,
     );
     return () => controller.abort();
-  }, [can]);
+  }, [can, contextKey]);
 
   // Opened from a nudge (?nudge=1): its words as the urgent card, with Start
   // calling (owner program, 25 Oct 2026, section 3).
@@ -1032,8 +1032,10 @@ export function LeadsRoute() {
   const filtersOn =
     !!query ||
     (can && scopeChoice !== null && scopeChoice !== "team") ||
+    !!sellerOwner ||
     !!(more.source || more.due || more.contact || more.created);
   const clearFilters = () => {
+    setSellerOwner(null);
     setScopeChoice(null);
     setSearch("");
     setQuery("");
@@ -1227,56 +1229,58 @@ export function LeadsRoute() {
         >
           <PullMark mark={spinner} />
           <PhoneSetupBar />
-          <div className={styles.wideOnly}>
-            <PageHeader
-              title={manage ? MANAGE_TITLE[manage] : "Leads"}
-              titleInBar
-              context={[
-                desk.me.can_manage
-                  ? "Your calls and your team's leads"
-                  : "Who to call today",
-                desk.sandbox ? (
-                  <Badge key="label">Test leads</Badge>
-                ) : desk.call_mode === "simulated" ? (
-                  <Badge key="label">Sample calls</Badge>
-                ) : null,
-              ]}
-              actions={
-                <>
-                  {/* On a computer the header's tools share this row (owner,
+          {!stageView ? (
+            <div className={styles.wideOnly}>
+              <PageHeader
+                title={manage ? MANAGE_TITLE[manage] : "Leads"}
+                titleInBar
+                context={[
+                  desk.me.can_manage
+                    ? "Your calls and your team's leads"
+                    : "Who to call today",
+                  desk.sandbox ? (
+                    <Badge key="label">Test leads</Badge>
+                  ) : desk.call_mode === "simulated" ? (
+                    <Badge key="label">Sample calls</Badge>
+                  ) : null,
+                ]}
+                actions={
+                  <>
+                    {/* On a computer the header's tools share this row (owner,
                       25 Oct 2026: the top half of Leads was empty space). */}
-                  <TakingSwitch
-                    key={`taking-head-${desk.me.taking_leads !== false}`}
-                    initial={desk.me.taking_leads !== false}
-                    place="chip"
-                    pausedUntil={desk.me.paused_until ?? null}
-                    onChanged={refresh}
-                  />
-                  <button
-                    type="button"
-                    className={styles.toolButton}
-                    aria-label="Leads settings"
-                    aria-haspopup="dialog"
-                    onClick={() => setSettingsOpen(true)}
-                  >
-                    <SettingsIcon size={20} aria-hidden="true" />
-                  </button>
-                  <Button onClick={() => begin("menu", setMenu)}>
-                    <Plus size={14} aria-hidden="true" />
-                    Add leads
-                  </Button>
-                  <Button
-                    variant="primary"
-                    onClick={() => begin("calling", setCalling)}
-                    disabled={desk.counts.open === 0}
-                  >
-                    <PhoneCall size={14} aria-hidden="true" />
-                    Start calling
-                  </Button>
-                </>
-              }
-            />
-          </div>
+                    <TakingSwitch
+                      key={`taking-head-${desk.me.taking_leads !== false}`}
+                      initial={desk.me.taking_leads !== false}
+                      place="chip"
+                      pausedUntil={desk.me.paused_until ?? null}
+                      onChanged={refresh}
+                    />
+                    <button
+                      type="button"
+                      className={styles.toolButton}
+                      aria-label="Leads settings"
+                      aria-haspopup="dialog"
+                      onClick={() => setSettingsOpen(true)}
+                    >
+                      <SettingsIcon size={20} aria-hidden="true" />
+                    </button>
+                    <Button onClick={() => begin("menu", setMenu)}>
+                      <Plus size={14} aria-hidden="true" />
+                      Add leads
+                    </Button>
+                    <Button
+                      variant="primary"
+                      onClick={() => begin("calling", setCalling)}
+                      disabled={desk.counts.open === 0}
+                    >
+                      <PhoneCall size={14} aria-hidden="true" />
+                      Start calling
+                    </Button>
+                  </>
+                }
+              />
+            </div>
+          ) : null}
           {manage ? (
             <div className={styles.toolbar}>
               <button
@@ -1294,35 +1298,52 @@ export function LeadsRoute() {
               {/* One header on every view (owner, 25 Oct 2026): Taking leads and the
                   gear for Leads settings, in the same place on each (on a
                   computer they sit in the page header's row). */}
-              <div className={styles.toolbar} data-head="">
-                <TakingSwitch
-                  key={`taking-${desk.me.taking_leads !== false}`}
-                  initial={desk.me.taking_leads !== false}
-                  place="chip"
-                  pausedUntil={desk.me.paused_until ?? null}
-                  onChanged={refresh}
-                />
-                <PhoneLogCard as="chip" />
-                <span className={styles.toolbarEnd}>
-                  <button
-                    type="button"
-                    className={styles.toolButton}
-                    aria-label="Leads settings"
-                    aria-haspopup="dialog"
-                    onClick={() => setSettingsOpen(true)}
-                  >
-                    <SettingsIcon size={20} aria-hidden="true" />
-                  </button>
-                </span>
+              <div className={styles.viewHeader}>
+                {stageView ? (
+                  <StageTabs
+                    tabs={[
+                      { key: "desk", label: "Now", count: toCall },
+                      stageStrip[0],
+                      { key: "more", label: "More" },
+                      ...stageStrip.slice(1),
+                    ]}
+                    current={view}
+                    onChange={(next) =>
+                      next === "more" ? setMoreOpen(true) : go(next)
+                    }
+                  />
+                ) : (
+                  <ViewSwitch
+                    section={section}
+                    nowCount={toCall}
+                    moreLabel={moreView?.label ?? "More"}
+                    onNow={() => go("desk")}
+                    onAll={() => go(stageView ? view : "open")}
+                    onMore={() => setMoreOpen(true)}
+                  />
+                )}
+                <div className={styles.toolbar} data-head="">
+                  <TakingSwitch
+                    key={`taking-${desk.me.taking_leads !== false}`}
+                    initial={desk.me.taking_leads !== false}
+                    place="chip"
+                    pausedUntil={desk.me.paused_until ?? null}
+                    onChanged={refresh}
+                  />
+                  <PhoneLogCard as="chip" />
+                  <span className={styles.toolbarEnd}>
+                    <button
+                      type="button"
+                      className={styles.toolButton}
+                      aria-label="Leads settings"
+                      aria-haspopup="dialog"
+                      onClick={() => setSettingsOpen(true)}
+                    >
+                      <SettingsIcon size={20} aria-hidden="true" />
+                    </button>
+                  </span>
+                </div>
               </div>
-              <ViewSwitch
-                section={section}
-                nowCount={toCall}
-                moreLabel={moreView?.label ?? "More"}
-                onNow={() => go("desk")}
-                onAll={() => go(stageView ? view : "open")}
-                onMore={() => setMoreOpen(true)}
-              />
               <MoreViews
                 open={moreOpen}
                 onClose={() => setMoreOpen(false)}
@@ -1338,22 +1359,21 @@ export function LeadsRoute() {
                   />
                 </ViewTools>
               ) : null}
-              {filterable || stageView ? (
+              {filterable && !stageView ? (
                 <ViewTools>
-                  {filterable ? (
-                    <FilterChip
-                      count={countFilters(shownFilters, defaultWho)}
-                      onOpen={() =>
-                        setFiltering((current) => ({
-                          round: (current?.round ?? 0) + 1,
-                          open: true,
-                        }))
-                      }
-                    />
-                  ) : null}
-                  {stageView ? (
-                    <StageTabs tabs={stageStrip} current={view} onChange={go} />
-                  ) : null}
+                  {" "}
+                  <FilterChip
+                    count={
+                      countFilters(shownFilters, defaultWho) +
+                      (sellerOwner ? 1 : 0)
+                    }
+                    onOpen={() =>
+                      setFiltering((current) => ({
+                        round: (current?.round ?? 0) + 1,
+                        open: true,
+                      }))
+                    }
+                  />
                 </ViewTools>
               ) : null}
               {filterable ? (
@@ -1362,35 +1382,6 @@ export function LeadsRoute() {
                   defaultWho={defaultWho}
                   pipes={pipes?.pipelines ?? []}
                   onChange={applyFilters}
-                />
-              ) : null}
-              {can && stageView && view !== TEST && team && team.length > 1 ? (
-                <SellerChips
-                  reps={team}
-                  counts={
-                    ownerCounts ??
-                    Object.fromEntries(
-                      team.map((rep) => [rep.person_id, rep.open_leads]),
-                    )
-                  }
-                  unassigned={desk.counts.unassigned ?? null}
-                  pick={{
-                    owner: scope === "team" ? sellerOwner : null,
-                    unassigned: scope === "unassigned",
-                  }}
-                  onPick={(next) => {
-                    setSellerOwner(next.owner);
-                    const url = new URL(window.location.href);
-                    if (next.owner) url.searchParams.set("seller", next.owner);
-                    else url.searchParams.delete("seller");
-                    window.history.replaceState(
-                      window.history.state,
-                      "",
-                      url.pathname + url.search + url.hash,
-                    );
-                    const who = next.unassigned ? "unassigned" : "team";
-                    if (scope !== who) applyFilters({ ...shownFilters, who });
-                  }}
                 />
               ) : null}
             </>
@@ -1473,12 +1464,28 @@ export function LeadsRoute() {
               }}
               tools={
                 view === TEST ? null : (
-                  <ViewsChip
-                    owner={contextKey}
-                    current={shown}
-                    describe={describeView}
-                    onApply={applyView}
-                  />
+                  <>
+                    <span className={styles.listFilter}>
+                      <FilterChip
+                        count={
+                          countFilters(shownFilters, defaultWho) +
+                          (sellerOwner ? 1 : 0)
+                        }
+                        onOpen={() =>
+                          setFiltering((current) => ({
+                            round: (current?.round ?? 0) + 1,
+                            open: true,
+                          }))
+                        }
+                      />
+                    </span>
+                    <ViewsChip
+                      owner={contextKey}
+                      current={shown}
+                      describe={describeView}
+                      onApply={applyView}
+                    />
+                  </>
                 )
               }
             />
@@ -1532,6 +1539,40 @@ export function LeadsRoute() {
             canPickWho={can}
             pipes={several(pipes) ? pipes.pipelines : []}
             onApply={applyFilters}
+            sellerPicker={
+              can && stageView && view !== TEST && team && team.length > 1 ? (
+                <SellerChips
+                  reps={team}
+                  counts={
+                    ownerCounts ??
+                    Object.fromEntries(
+                      team.map((rep) => [rep.person_id, rep.open_leads]),
+                    )
+                  }
+                  unassigned={desk.counts.unassigned ?? null}
+                  pick={{
+                    owner: scope === "team" ? sellerOwner : null,
+                    unassigned: scope === "unassigned",
+                  }}
+                  onPick={(next) => {
+                    setSellerOwner(next.owner);
+                    const url = new URL(window.location.href);
+                    if (next.owner) url.searchParams.set("seller", next.owner);
+                    else url.searchParams.delete("seller");
+                    window.history.replaceState(
+                      window.history.state,
+                      "",
+                      url.pathname + url.search + url.hash,
+                    );
+                    setFiltering(
+                      (current) => current && { ...current, open: false },
+                    );
+                    const who = next.unassigned ? "unassigned" : "team";
+                    if (scope !== who) applyFilters({ ...shownFilters, who });
+                  }}
+                />
+              ) : null
+            }
           />
         ) : null}
         <LeadsMenu

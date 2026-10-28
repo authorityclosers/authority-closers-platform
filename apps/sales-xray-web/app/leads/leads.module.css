@@ -6650,3 +6650,219 @@ fieldset.form {
     align-self: center;
   }
 }
+
+/* Owner bugs #57/#58: the first screen belongs to leads, with one row of
+   navigation and status tools. The shell already names the page. */
+.viewHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.viewHeader > nav {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+}
+
+.viewHeader .toolbar[data-head] {
+  display: flex;
+  flex: none;
+  gap: 8px;
+}
+
+.root[data-tab="all"] {
+  gap: 4px;
+  padding-top: 4px;
+}
+
+.root[data-tab="all"] .listHead {
+  box-sizing: border-box;
+  min-height: 48px;
+  padding-block: 2px;
+}
+
+@media (max-width: 899.98px) {
+  .viewHeader > nav {
+    padding: 0;
+  }
+
+  .viewHeader > nav > button {
+    padding-inline: 4px;
+  }
+
+  .viewHeader .toolbarEnd {
+    margin-left: 0;
+  }
+}
+
+@media (min-width: 900px) {
+  .root[data-tab="all"] {
+    padding-top: 8px;
+  }
+}
+
+/* A visible, compact call-log control rather than a link buried in a sentence. */
+.logThis {
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.logThisHint {
+  flex: 1 1 120px;
+}
+
+.logThisButton {
+  flex: none;
+  justify-content: center;
+  gap: 8px;
+  padding-inline: 12px;
+  border: 1px solid var(--sx-line-strong);
+  background: var(--sx-surface);
+  color: var(--sx-accent);
+}
+
+.pipelineOverview summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.pipelineOverview summary::-webkit-details-marker {
+  display: none;
+}
+
+.pipelineOverview summary > span {
+  display: grid;
+  flex: 1;
+  gap: 4px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.pipelineOverview summary small {
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+}
+
+.pipelineOverview summary > svg:first-child {
+  flex: none;
+  color: var(--sx-accent);
+}
+
+.pipelineOverview[open] summary > svg:last-child {
+  transform: rotate(180deg);
+}
+
+.pipelineOverview summary:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+  border-radius: var(--sx-radius-sm);
+}
+
+.pipelineStages {
+  display: grid;
+  gap: 12px;
+  padding-top: 12px;
+  margin-top: 8px;
+  border-top: 1px solid var(--sx-line);
+}
+
+.pipelineStages ul {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.pipelineStages li {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.pipelineStages li[aria-current] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+  font-weight: 650;
+}
+
+.pipelineStages li small {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--sx-accent);
+}
+
+/* Inline keyboard entry belongs after the real leads on computers. On a
+   phone, creation starts from the shell's + so the list stays in view. */
+@media (max-width: 899.98px) {
+  .quickAddAfter {
+    display: none;
+  }
+}
+
+/* Stage tabs are the list's one navigation strip. Now and More stay in it;
+   the list's own filters sit beside its count and List/Table controls. */
+.viewHeader > .stageTabs {
+  flex: 1 1 0;
+  flex-wrap: nowrap;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.listFilter {
+  display: inline-flex;
+}
+
+.listFilter button {
+  width: 44px;
+  min-height: 44px;
+  padding-inline: 0;
+  gap: 4px;
+  font-size: 0;
+}
+
+.listFilter button span {
+  font-size: var(--sx-text-xs);
+}
+
+.root[data-tab="all"] .listHead {
+  padding-inline: 8px;
+}
+
+/* The field boundary and hint remain clear in both themes, also before focus. */
+.noteBox {
+  border-color: color-mix(in srgb, var(--sx-muted) 70%, var(--sx-surface));
+}
+
+.noteBox textarea {
+  font-size: 16px;
+}
+
+.noteBox textarea::placeholder {
+  color: var(--sx-muted);
+  opacity: 1;
+}
+
+.ownerAction {
+  gap: 8px;
+}
+
+.ownerAction > svg {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}

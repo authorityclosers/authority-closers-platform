@@ -14,7 +14,7 @@
  */
 
 import { SlidersHorizontal, X } from "lucide-react";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
 import { Button, Field, Segmented } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
@@ -271,6 +271,7 @@ export function FilterSheet({
   canPickWho,
   pipes,
   onApply,
+  sellerPicker,
 }: {
   open: boolean;
   onClose: () => void;
@@ -281,6 +282,7 @@ export function FilterSheet({
   /** Several pipelines: one, or all of them. */
   pipes: Pipe[];
   onApply: (next: LeadFilters) => void;
+  sellerPicker?: ReactNode;
 }) {
   // A fresh sheet each opening starts from the filters on now.
   const [draft, setDraft] = useState(filters);
@@ -363,6 +365,9 @@ export function FilterSheet({
               onChange={(who) => setDraft({ ...draft, who })}
             />
           </div>
+        ) : null}
+        {sellerPicker ? (
+          <div className={styles.filterGroup}>{sellerPicker}</div>
         ) : null}
         <Field label="Name or number">
           <input
