@@ -1,0 +1,67 @@
+#!/usr/bin/python3 -I
+"""Root-owned SSH forced command; install separately, never run by CI."""
+
+import os
+import re
+import sys
+from dataclasses import replace
+from pathlib import Path
+
+# Only root-owned installed siblings are importable, even under isolated Python.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from ac_release import Engine  # noqa: E402
+from ac_remote import (  # noqa: E402
+    ROOT,
+    Executor,
+    HostBackend,
+    RemoteError,
+    encoded,
+    load,
+    receive_scp,
+)
+
+
+def main():
+    command = os.environ.get("SSH_ORIGINAL_COMMAND", "")
+    os.environ.clear()
+    os.environ.update(
+        PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+        HOME="/root",
+        LANG="C.UTF-8",
+        GIT_CONFIG_NOSYSTEM="1",
+        GIT_CONFIG_GLOBAL="/dev/null",
+        GIT_NO_REPLACE_OBJECTS="1",
+    )
+    os.umask(0o077)
+    if os.getuid() != 0:
+        raise RemoteError("executor requires installed root boundary")
+    if command.startswith("scp "):
+        receive_scp(command, ROOT, sys.stdin.buffer, sys.stdout.buffer)
+        return
+    match = re.fullmatch(
+        r"ac-release-executor (prepare|install|status|backup|canary|rollback-app)", command
+    )
+    if match is None:
+        raise RemoteError("forced command refused")
+    raw = sys.stdin.buffer.read(1_000_001)
+    if len(raw) > 1_000_000:
+        raise RemoteError("request too large")
+    import json
+
+    request = json.loads(raw)
+    engine = Engine()
+    engine.paths = replace(engine.paths, engine=Path("/opt/ac-release-executor"))
+    engine._executor_host = True
+    engine.sync_mirror = lambda: None  # Host consumes only the verified offline Git bundle.
+    host = load(Path("/etc/ac-release/executor.json"))["target"]
+    with engine.locked(wait=True):
+        response = Executor(HostBackend(engine), host).handle(match[1], request)
+    sys.stdout.buffer.write(encoded(response))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception:
+        print("ac-release-executor: refused; inspect host receipt", file=sys.stderr)
+        raise SystemExit(2) from None

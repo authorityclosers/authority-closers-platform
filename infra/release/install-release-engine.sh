@@ -27,6 +27,7 @@ fi
 release_dir="/opt/ac-release/releases/$commit"
 install -d -m 0755 /opt/ac-release /opt/ac-release/releases "$release_dir"
 install -m 0644 "$source_dir/ac_release.py" "$release_dir/ac_release.py"
+install -m 0644 "$source_dir/ac_remote.py" "$release_dir/ac_remote.py"
 install -m 0644 "$source_dir/release_notes.py" "$release_dir/release_notes.py"
 install -m 0644 "$source_dir/ac_train_notify.py" "$release_dir/ac_train_notify.py"
 install -m 0644 "$source_dir/ac_train_watch.py" "$release_dir/ac_train_watch.py"

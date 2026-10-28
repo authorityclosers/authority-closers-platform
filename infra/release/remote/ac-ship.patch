@@ -1,0 +1,64 @@
+--- a/ac-ship
++++ b/ac-ship
+@@ -32,12 +32,18 @@
+ gh() { asacdev /home/acdev/.local/bin/gh "$@"; }
+ fail() { tell "Ship $VER stopped: $*"; exit 1; }
+ NATIVE_RELEASE=0
++PRODUCTION_MODE=$(/usr/local/sbin/ac-release production-target) || fail "production target map refused"
+ # Native release (--native): the engine switches the Sales Xray native helper only through a prepared transition
+ # whose target core keeps the current migration head. Store the builds (dry run), then prepare against the
+ # environment's installed native units descriptor.
+ native_prepare() {
+   local env="$1" target="${2:-$M}" units digest
+   /usr/local/sbin/ac-release deploy "$env" "$target" --component core --dry-run >/dev/null 2>&1 || true
++  if [ "$env" = production ] && [ "$PRODUCTION_MODE" = remote ]; then
++    /usr/local/sbin/ac-release remote-op prepare-native --sha "$target" \
++      || { /usr/local/sbin/ac-release pause staging >/dev/null 2>&1; fail "remote native preparation refused"; }
++    return
++  fi
+   units=$(ls -td /srv/authority-closers/application/operator-inputs/"$env"/native-[0-9a-f]*-*/inputs/native-units.json 2>/dev/null | head -1)
+   [ -n "$units" ] || fail "no installed native units descriptor for $env"
+   digest=$(sha256sum "$units" | cut -d' ' -f1)
+@@ -314,9 +320,13 @@
+ fi
+ # Snapshot first. The bounded R2 logical backup refuses databases over its fixed dump size; the owner chose
+ # (12 Oct 2026) not to raise it, so a verified full snapshot on Google Drive stands in for it.
++if [ "$PRODUCTION_MODE" = remote ]; then
++  /usr/local/sbin/ac-release remote-op backup >/dev/null || fail "remote backup refused; not promoting"
++else
+ if ! /usr/local/sbin/ac-postgres-backup --capture-only --environment production >/dev/null 2>&1; then
+   SNAP=$(/usr/local/sbin/ac-db-snapshot production "before-$VER" 2>>"$LOG" | tail -1) || fail "production snapshot failed; not promoting"
+   say "bounded backup refused; production snapshot $SNAP (also on Google Drive)"
++fi
+ fi
+ # Revalidate the pair after backup before any bridge runtime change.
+ if [ -n "$NATIVE_BRIDGE" ]; then
+@@ -329,20 +339,28 @@
+     /usr/local/sbin/ac-release deploy production "$BRIDGE" --component core || fail "production native bridge refused"
+   fi
+   [ "$(current_core production)" = "${BRIDGE:0:12}" ] || fail "production native bridge readback did not match"
++  if [ "$PRODUCTION_MODE" = remote ]; then
++    /usr/local/sbin/ac-release remote-op canary >/dev/null || fail "remote bridge canary failed; final promotion was not run"
++  else
+   systemctl start ac-canary@production.service
+   if [ "$(systemctl show ac-canary@production.service -p Result --value)" != success ]; then
+     /usr/local/sbin/ac-release pause production >/dev/null 2>&1
+     fail "production native bridge canary failed; final promotion was not run"
+   fi
++  fi
+   [ "$(current_core staging)" = "${M:0:12}" ] || fail "staging moved after production native bridge"
+   [ "$(current_core production)" = "${BRIDGE:0:12}" ] || fail "production moved after native bridge canary"
+ fi
+ # A paused production refuses promotion; ac-ship is the owner's release path, so lift it (owner order 12 Oct).
+ case "$(/usr/local/sbin/ac-release status 2>/dev/null | awk '$1 == "production" && $2 ~ /^core=/ {print $NF; exit}')" in paused) /usr/local/sbin/ac-release resume production >/dev/null 2>&1 && say "production resumed" ;; esac
+ /usr/local/sbin/ac-release promote --bump minor --version "$VER" >/dev/null 2>&1 || fail "production promotion of $VER failed"
++if [ "$PRODUCTION_MODE" = remote ]; then
++  /usr/local/sbin/ac-release remote-op canary >/dev/null || fail "remote canary failed after $VER"
++else
+ systemctl start ac-canary@production.service
+ if [ "$(systemctl show ac-canary@production.service -p Result --value)" != success ]; then
+   fail "production canary failed after $VER; check now (rollback: ac-release rollback production)"
+ fi
++fi
+ tell "$VER is live on production and its canary passed: https://salesxray.authorityclosers.com"
+ say "=== ship $VER done"

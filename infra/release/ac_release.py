@@ -1494,6 +1494,65 @@ class Engine:
     _lock_depth: int = field(default=0, init=False)
     _read_only: bool = field(default=False, init=False)
 
+    def remote_target(self, environment: str = "production") -> Any:
+        # The absent-config path does not import transport code or issue commands.
+        if (
+            getattr(self, "_executor_host", False)
+            or not (self.paths.config / "targets.json").exists()
+        ):
+            return None
+        try:
+            name = "ac_release_remote_transport"
+            module = sys.modules.get(name)
+            if module is None:
+                spec = importlib.util.spec_from_file_location(
+                    name, Path(__file__).with_name("ac_remote.py")
+                )
+                if spec is None or spec.loader is None:
+                    raise ReleaseError("remote transport module unavailable")
+                module = importlib.util.module_from_spec(spec)
+                sys.modules[name] = module
+                spec.loader.exec_module(module)
+            return module.target(self, environment)
+        except (OSError, ValueError, RuntimeError) as error:
+            raise ReleaseError("invalid remote release configuration") from error
+
+    def remote_call(self, client: Any, method: str, *args: Any, **kwargs: Any) -> Any:
+        try:
+            return getattr(client, method)(*args, **kwargs)
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
+            raise ReleaseError(
+                "remote operation refused or unknown; inspect durable receipt"
+            ) from error
+
+    def remote_operation(self, operation: str, sha: str | None = None) -> Any:
+        client = self.remote_target()
+        if client is None:
+            raise ReleaseError("production remote target is not configured")
+        with self.locked(wait=True):
+            if operation == "prepare-native":
+                if sha is None or not SHA_RE.fullmatch(sha):
+                    raise ReleaseError("native source pin missing")
+                build = self.stored_build(sha, "core")
+                if build is None:
+                    raise ReleaseError("native transition needs admitted core build")
+                status = self.remote_call(client, "status")
+                return self.remote_call(
+                    client,
+                    "deploy",
+                    "core",
+                    build,
+                    dry_run=False,
+                    native=True,
+                    units_digest=status["units_digest"],
+                )
+            if operation == "canary":
+                pair = self.remote_call(client, "status")["pair"]
+                return self.remote_call(client, "operation", "canary", pair=pair)
+            if operation == "backup":
+                return self.remote_call(client, "operation", "backup", supervised=True)
+            raise ReleaseError("remote operation not allowed")
+
     # -- state ---------------------------------------------------------------
 
     def recover_edge_projections(
@@ -1623,6 +1682,9 @@ class Engine:
     # -- what runs where -----------------------------------------------------
 
     def current_core(self, environment: str) -> str | None:
+        remote = self.remote_target(environment)
+        if remote is not None:
+            return self.remote_call(remote, "status")["pair"]["core"]
         link = self.paths.application / f"current-{environment}"
         with contextlib.suppress(OSError):
             name = Path(os.path.realpath(link)).name
@@ -1636,6 +1698,10 @@ class Engine:
     def current_web(self, environment: str) -> tuple[str | None, str | None]:
         """Return (release sha, image id) of the running Sales Xray web container."""
 
+        remote = self.remote_target(environment)
+        if remote is not None:
+            status = self.remote_call(remote, "status")
+            return status["pair"]["web"], status["web_image"]
         container = self.web_container(environment)
         inspected = self.run(
             ["docker", "inspect", "--format", "{{.Image}}", container], check=False
@@ -1836,6 +1902,8 @@ class Engine:
                 **({"train": train} if train is not None else {}),
             }
             _validate_release_record(record)  # Before any production mutation.
+            if self.remote_target() is not None:
+                self._remote_expected_pair = {"core": production_core, "web": production_web}
             if dry_run:
                 if trigger == "train":
                     raise ReleaseError("the train does not rehearse through promote")
@@ -1869,6 +1937,17 @@ class Engine:
             )
             if attempts[-1]["result"] != "success":
                 return attempts
+            if self.remote_target() is not None:
+                try:
+                    self.remote_call(
+                        self.remote_target(),
+                        "operation",
+                        "canary",
+                        pair={"core": core_sha, "web": web_sha},
+                    )
+                except ReleaseError:
+                    self.set_paused("production", True, "remote production canary failed")
+                    raise
             self.append_release(record)
             return attempts
 
@@ -1879,6 +1958,9 @@ class Engine:
 
     def restore_check_evidence(self) -> dict[str, str] | None:
         """Latest production off-host proof, not a local backup or staging drill."""
+        remote = self.remote_target()
+        if remote is not None:
+            return self.remote_call(remote, "status")["restore_evidence"]
         try:
             result = self.run(
                 [
@@ -1918,6 +2000,11 @@ class Engine:
     def migration_head(self, sha: str | None) -> str:
         if sha is None or not SHA_RE.fullmatch(sha):
             raise ReleaseError("migration_head_missing")
+        remote = self.remote_target()
+        if remote is not None:
+            heads = self.remote_call(remote, "status")["migration_heads"]
+            if sha in heads:
+                return heads[sha]
         manifest = self.paths.application / "releases" / sha / "release-images.env"
         value = read_env_file(manifest).get("AC_MIGRATION_HEAD", "")
         if not re.fullmatch(r"[0-9]{8}_[0-9]{4}", value):
@@ -2028,6 +2115,16 @@ class Engine:
     def train_smoke(
         self, environment: str, pair: tuple[str, str], source: Path, *, reuse: bool = False
     ) -> dict[str, str]:
+        remote = self.remote_target(environment)
+        if remote is not None:
+            return self.remote_call(
+                remote,
+                "operation",
+                "canary",
+                mode="smoke",
+                pair=dict(zip(COMPONENTS, pair, strict=True)),
+                reuse=reuse,
+            )
         path = self.paths.state / "smoke" / environment / ("-".join(pair) + ".json")
 
         def read_record(max_age: int) -> dict[str, str] | None:
@@ -2112,6 +2209,10 @@ class Engine:
         return {"result": "fail", "digest": digest}
 
     def train_disk_check(self) -> None:
+        remote = self.remote_target()
+        if remote is not None:
+            self.remote_call(remote, "operation", "backup", check_only=True)
+            return
         previous = sorted(
             (self.paths.backups / "train").glob("*/backup.dump"),
             key=lambda path: path.stat().st_mtime,
@@ -2127,6 +2228,11 @@ class Engine:
             raise ReleaseError("dump_disk_low")
 
     def train_dump(self) -> str:
+        remote = self.remote_target()
+        if remote is not None:
+            backup = self.remote_call(remote, "operation", "backup")
+            self._remote_dump = {key: backup[key] for key in ("path", "sha256", "bytes")}
+            return backup["path"]
         self.train_disk_check()
         logical = self.paths.backups / "logical"
         before = set(logical.glob("*/backup.dump"))
@@ -2515,7 +2621,9 @@ class Engine:
                             "to": self.migration_head(pair[0]),
                             "classification": verdict["verdict"],
                         },
-                        "dump": {
+                        "dump": self._remote_dump
+                        if self.remote_target() is not None
+                        else {
                             "path": dump,
                             "sha256": _sha256_file(Path(dump)),
                             "bytes": Path(dump).stat().st_size,
@@ -2783,6 +2891,11 @@ class Engine:
     def deploy_core(
         self, environment: str, build: Build, *, dry_run: bool = False, rollback_only: bool = False
     ) -> dict[str, Any]:
+        remote = self.remote_target(environment)
+        if remote is not None:
+            return self.remote_call(
+                remote, "deploy", "core", build, dry_run=dry_run, rollback=rollback_only
+            )
         if environment == "staging" and not rollback_only:
             self.require_schema_rehearsal(build.sha)
         log = self.new_log(environment, "core", build.sha)
@@ -3127,6 +3240,9 @@ class Engine:
         return min(ends)
 
     def approval_expires(self, environment: str) -> int | None:
+        remote = self.remote_target(environment)
+        if remote is not None:
+            return self.remote_call(remote, "status")["approval_expires"]
         current = self.current_core(environment)
         if current is None:
             return None
@@ -3474,6 +3590,26 @@ class Engine:
         dry_run: bool,
     ) -> dict[str, Any]:
         """Prepare an exact environment transition; this operation never starts a helper."""
+        remote = self.remote_target(environment)
+        if remote is not None:
+            status = self.remote_call(remote, "status")
+            if (
+                str(previous_units) != status["units_path"]
+                or previous_digest != status["units_digest"]
+            ):
+                raise ReleaseError("remote native predecessor pins changed")
+            build = self.stored_build(sha, "core")
+            if build is None:
+                raise ReleaseError("native transition needs admitted core build")
+            return self.remote_call(
+                remote,
+                "deploy",
+                "core",
+                build,
+                dry_run=dry_run,
+                native=True,
+                units_digest=previous_digest,
+            )
         if environment not in ENVIRONMENTS:
             raise ReleaseError("native transition environment invalid")
         with self.locked(wait=True):
@@ -4324,6 +4460,9 @@ class Engine:
     def deploy_web(
         self, environment: str, build: Build, *, dry_run: bool = False
     ) -> dict[str, Any]:
+        remote = self.remote_target(environment)
+        if remote is not None:
+            return self.remote_call(remote, "deploy", "web", build, dry_run=dry_run)
         log = self.new_log(environment, "web", build.sha)
         bundle = self.store_bundle(build, "web", WEB_FILES)
         previous_sha, previous_image = self.current_web(environment)
@@ -4450,6 +4589,9 @@ class Engine:
     def web_rollback_entry(self, environment: str) -> dict[str, Any] | None:
         """The recorded web deploy whose previous image a web rollback restores."""
 
+        remote = self.remote_target(environment)
+        if remote is not None:
+            return self.remote_call(remote, "status")["web_rollback"]
         _, image = self.current_web(environment)
         return next(
             (
@@ -4468,6 +4610,13 @@ class Engine:
         entry = self.web_rollback_entry(environment)
         if entry is None:
             raise ReleaseError("no recorded web deploy with a previous image to restore")
+        remote = self.remote_target(environment)
+        if remote is not None:
+            build = self.stored_build(entry["previous"], "web")
+            if build is None:
+                raise ReleaseError("remote web rollback build missing")
+            result = self.remote_call(remote, "deploy", "web", build, dry_run=False, rollback=True)
+            return {**result, "restored_sha": build.sha, "restored_image": entry["previous_image"]}
         inputs = self.paths.application / "operator-inputs" / f"sales-xray-web-{entry['sha']}"
         source = inputs / "source" / "infra" / "sales-xray-web"
         log = self.new_log(environment, "web-rollback", entry["sha"])
@@ -5398,6 +5547,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         prog="ac-release", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     sub = parser.add_subparsers(dest="command", required=True)
+    remote = sub.add_parser(
+        "remote-op", help="operator bridge for configured remote production only"
+    )
+    remote.add_argument("operation", choices=("backup", "canary", "prepare-native"))
+    remote.add_argument("--sha")
+    sub.add_parser("production-target", help="print local or remote production execution mode")
     status = sub.add_parser("status")
     status.add_argument("--json", action="store_true")
     sub.add_parser("tick")
@@ -5462,6 +5617,10 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ),
                 True,
             )
+        elif args.command == "production-target":
+            print("remote" if engine.remote_target() is not None else "local")
+        elif args.command == "remote-op":
+            _print(engine.remote_operation(args.operation, args.sha), True)
         elif args.command == "status":
             engine.github = _load_github(paths, required=False)
             _print(engine.status(), args.json)
