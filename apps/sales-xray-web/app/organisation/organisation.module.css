@@ -2240,3 +2240,9 @@
     font-size: 16px;
   }
 }
+
+/* Company: a save row with no Save button and no message takes no space
+   (the Save buttons show only with a change to save; owner order 29 Oct). */
+.saveRow:not(:has(button)):has(> small:empty) {
+  display: none;
+}

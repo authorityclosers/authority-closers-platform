@@ -1156,8 +1156,16 @@ it.each(["owner", "admin"])(
     expect(detailsForm()?.querySelectorAll("input")).toHaveLength(8);
     const domainInput = host.querySelector('input[aria-label="Domain to add"]');
     if (role === "owner") {
-      expect(button("Save domains").disabled).toBe(false);
+      // One filled button at a time: Save domains waits for a change.
+      expect(button("Save domains")).toBeUndefined();
       expect(domainInput).not.toBeNull();
+      const join = Array.from(host.querySelectorAll("label"))
+        .find((label) => label.textContent?.includes("Join automatically"))!
+        .querySelector("input")!;
+      await act(async () => join.click());
+      expect(button("Save domains").disabled).toBe(false);
+      await act(async () => join.click());
+      expect(button("Save domains")).toBeUndefined();
     } else {
       expect(button("Save domains")).toBeUndefined();
       expect(domainInput).toBeNull();
