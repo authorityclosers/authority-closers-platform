@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { metaRequest, refreshForms } from "./meta-client";
+import { metaFormStatus, metaRequest, refreshForms } from "./meta-client";
 import type { MetaPage } from "../../leads/sources-view";
 afterEach(() => vi.unstubAllGlobals());
 it("refreshes every account's forms and isolates a refused Page", async () => {
@@ -69,4 +69,10 @@ it("sends explicit selected archived forms without retrying a write", async () =
       signal: undefined,
     }),
   ]);
+});
+
+it("keeps draft, archived and deleted forms distinct", () => {
+  expect(metaFormStatus("DRAFT")).toBe("Draft");
+  expect(metaFormStatus("ARCHIVED")).toBe("Archived");
+  expect(metaFormStatus("DELETED")).toBe("Deleted");
 });

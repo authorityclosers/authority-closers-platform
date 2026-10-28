@@ -67,3 +67,13 @@ export async function refreshForms(
   await Promise.all(Array.from({ length: Math.min(3, pages.length) }, worker));
 }
 export const formKey = (page: string, form: string) => `${page}:${form}`;
+
+/** Keep Meta's existing status meanings; an unpublished draft is not a paused form. */
+const FORM_STATUSES: Record<string, string> = {
+  ACTIVE: "Active",
+  ARCHIVED: "Archived",
+  DRAFT: "Draft",
+  DELETED: "Deleted",
+};
+export const metaFormStatus = (status: string): string =>
+  FORM_STATUSES[status] ?? "Not active";

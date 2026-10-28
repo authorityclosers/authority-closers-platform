@@ -14,6 +14,7 @@ import {
 import { Skeleton } from "../../ui/kit";
 import {
   formKey,
+  metaFormStatus,
   metaRequest,
   refreshForms,
   type MetaCatalogue,
@@ -424,9 +425,7 @@ export function OrganisationSources() {
                     <span className={styles.copy}>
                       <strong>{form.name}</strong>
                       <small>
-                        {form.status === "ACTIVE"
-                          ? "Active"
-                          : "Paused or archived"}
+                        {metaFormStatus(form.status)}
                         {form.leads == null
                           ? ""
                           : ` · ${form.leads} leads on Meta`}
