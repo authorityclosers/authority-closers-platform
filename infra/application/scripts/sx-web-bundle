@@ -55,6 +55,8 @@ REQUIRED = ("index.html", "dashboard/index.html", "leads/index.html", "chats/ind
 # As build-web-shell.sh: review pages are for screenshots only, and pages that need the server to read their
 # address are never served from the app, so neither is carried.
 PRUNED_DIRS = ("review-fixture", "auth", "organisation/invites", "provider-review")
+# Server-only answers the export writes as plain files: the web server's health check (app/health/route.ts).
+PRUNED_FILES = ("health",)
 MAX_BUNDLE_BYTES = 64 * 1024 * 1024
 MAX_FILES = 20_000
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -70,6 +72,8 @@ class BundleError(Exception):
 def prune(export: Path) -> None:
     for name in PRUNED_DIRS:
         shutil.rmtree(export / name, ignore_errors=True)
+    for name in PRUNED_FILES:
+        (export / name).unlink(missing_ok=True)
     for path in export.rglob("*.map"):
         path.unlink()
     # Developer downloads (the Python sample in /developers) stay on the website: the app asks the

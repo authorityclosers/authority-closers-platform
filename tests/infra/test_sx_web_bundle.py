@@ -86,6 +86,7 @@ def test_pack_prunes_like_the_app_build_and_names_the_zip_by_its_sha256(tmp_path
             "brands/index.json",
             "developers/sx.py",
             "developers/__pycache__/sx.cpython-312.pyc",
+            "health",
         ),
     )
     zip_path = tmp_path / "bundle" / f"{facts['sha256']}.zip"
@@ -107,6 +108,7 @@ def test_pack_prunes_like_the_app_build_and_names_the_zip_by_its_sha256(tmp_path
         "developers/",
     ):
         assert not any(gone in name for name in names), gone
+    assert "health" not in names
     # sx-web.json is the app's own file list format (BundledWeb), with the commit's time.
     assert web["host"] == HOST and web["sha"] == SHA and web["commitAtMs"] == 1_761_650_000_000
     assert sorted(web["files"]) == sorted(name for name in names if name != "sx-web.json")
