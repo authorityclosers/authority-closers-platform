@@ -272,6 +272,7 @@ export function FilterSheet({
   pipes,
   onApply,
   sellerPicker,
+  onClearAll,
 }: {
   open: boolean;
   onClose: () => void;
@@ -283,6 +284,7 @@ export function FilterSheet({
   pipes: Pipe[];
   onApply: (next: LeadFilters) => void;
   sellerPicker?: ReactNode;
+  onClearAll?: () => void;
 }) {
   // A fresh sheet each opening starts from the filters on now.
   const [draft, setDraft] = useState(filters);
@@ -303,9 +305,13 @@ export function FilterSheet({
         <div className={styles.filterActions}>
           <Button
             variant="ghost"
-            onClick={() =>
-              apply({ who: defaultWho, pipeline: null, q: "", more: {} })
-            }
+            onClick={() => {
+              if (onClearAll) {
+                onClearAll();
+                onClose();
+              } else
+                apply({ who: defaultWho, pipeline: null, q: "", more: {} });
+            }}
           >
             Clear all
           </Button>
@@ -367,7 +373,10 @@ export function FilterSheet({
           </div>
         ) : null}
         {sellerPicker ? (
-          <div className={styles.filterGroup}>{sellerPicker}</div>
+          <div className={styles.filterGroup}>
+            <span className={styles.stepLabel}>One seller</span>
+            {sellerPicker}
+          </div>
         ) : null}
         <Field label="Name or number">
           <input

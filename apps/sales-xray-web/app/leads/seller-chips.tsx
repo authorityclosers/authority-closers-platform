@@ -20,6 +20,7 @@ export function SellerChips({
   unassigned,
   pick,
   onPick,
+  sellersOnly = false,
 }: {
   reps: readonly RepView[];
   /** Leads per seller id (and "none") for the list's other filters. */
@@ -28,6 +29,7 @@ export function SellerChips({
   unassigned: number | null;
   pick: SellerPick;
   onPick: (next: SellerPick) => void;
+  sellersOnly?: boolean;
 }) {
   const count = (id: string) => counts[id] ?? 0;
   const sellers = [...reps].sort(
@@ -37,15 +39,17 @@ export function SellerChips({
   const everyone = Object.values(counts).reduce((sum, value) => sum + value, 0);
   return (
     <div className={styles.strip} role="group" aria-label="Whose leads">
-      <button
-        type="button"
-        className={styles.chip}
-        aria-pressed={!pick.owner && !pick.unassigned}
-        onClick={() => onPick({ owner: null, unassigned: false })}
-      >
-        Everyone
-        {everyone ? <span className={styles.count}>{everyone}</span> : null}
-      </button>
+      {sellersOnly ? null : (
+        <button
+          type="button"
+          className={styles.chip}
+          aria-pressed={!pick.owner && !pick.unassigned}
+          onClick={() => onPick({ owner: null, unassigned: false })}
+        >
+          Everyone
+          {everyone ? <span className={styles.count}>{everyone}</span> : null}
+        </button>
+      )}
       {sellers.map((rep) => (
         <button
           key={rep.person_id}
@@ -65,7 +69,7 @@ export function SellerChips({
           <span className={styles.count}>{count(rep.person_id)}</span>
         </button>
       ))}
-      {none !== null ? (
+      {!sellersOnly && none !== null ? (
         <button
           type="button"
           className={styles.chip}

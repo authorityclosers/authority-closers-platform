@@ -182,7 +182,12 @@ const onHashChange = (change: () => void) => {
 function viewHref(
   view: string,
   pipeline: string | null = null,
-  filters: { who?: Scope | null; q?: string; more?: ListMore } = {},
+  filters: {
+    who?: Scope | null;
+    q?: string;
+    more?: ListMore;
+    seller?: string | null;
+  } = {},
 ): string {
   const path = window.location.pathname || LEADS_PATH;
   if (view === "desk") return path;
@@ -197,10 +202,15 @@ function viewHref(
     ? `&pipeline=${encodeURIComponent(pipeline)}`
     : "";
   const who = filters.who ? `&who=${filters.who}` : "";
+  const seller =
+    filters.who === "team" && filters.seller
+      ? `&seller=${encodeURIComponent(filters.seller)}`
+      : "";
   const words = filters.q?.trim();
   const q = words ? `&q=${encodeURIComponent(words)}` : "";
   // The pipeline board (Lead OS): every stage at once, with the same filters.
-  if (view === BOARD) return `${path}?tab=board${inPipeline}${who}${q}`;
+  if (view === BOARD)
+    return `${path}?tab=board${inPipeline}${who}${seller}${q}`;
   // My work: the seller's own calls, notes and moves.
   if (view === WORK) return `${path}?tab=work`;
   // Tasks: the seller's promises, overdue, today and upcoming.
@@ -210,7 +220,7 @@ function viewHref(
   const more = moreParams(filters.more)
     .map(([key, value]) => `&${key}=${encodeURIComponent(value)}`)
     .join("");
-  return `${path}?tab=all&stage=${encodeURIComponent(view)}${inPipeline}${who}${q}${more}`;
+  return `${path}?tab=all&stage=${encodeURIComponent(view)}${inPipeline}${who}${seller}${q}${more}`;
 }
 
 const DUE = new Set(["late", "today", "week", "none"]);
@@ -626,7 +636,12 @@ export function LeadsRoute() {
   const can = current && desk ? desk.me.can_manage : false;
   // Only owners and admins pick whose leads; a seller's are always their own.
   const scope: Scope = can ? (scopeChoice ?? "team") : "mine";
-  const filters = { who: can ? scopeChoice : null, q: query, more };
+  const filters = {
+    who: can ? scopeChoice : null,
+    q: query,
+    more,
+    seller: sellerOwner,
+  };
 
   // From the address: the desk, a stage, or one of the settings pages.
   const stageKeys = new Set<string>([
@@ -1111,14 +1126,18 @@ export function LeadsRoute() {
       .filter(Boolean)
       .join(" · ");
   const applyFilters = (next: LeadFilters) =>
-    applyView({
-      stage: view,
-      pipeline: next.pipeline,
-      who: next.who,
-      q: next.q,
-      more: next.more ?? {},
-    });
-  const applyView = (spec: ViewSpec) => {
+    applyView(
+      {
+        stage: view,
+        pipeline: next.pipeline,
+        who: next.who,
+        q: next.q,
+        more: next.more ?? {},
+      },
+      next.who === "team" ? sellerOwner : null,
+    );
+  const applyView = (spec: ViewSpec, seller: string | null = null) => {
+    setSellerOwner(seller);
     const stage = stageKeys.has(spec.stage) ? spec.stage : "open";
     const inPipeline = several(pipes) ? spec.pipeline : null;
     const who = can ? spec.who : null;
@@ -1130,7 +1149,7 @@ export function LeadsRoute() {
     window.history.replaceState(
       null,
       "",
-      viewHref(stage, inPipeline, { who, q: spec.q, more: spec.more }),
+      viewHref(stage, inPipeline, { who, q: spec.q, more: spec.more, seller }),
     );
   };
 
@@ -1225,11 +1244,13 @@ export function LeadsRoute() {
           ref={area}
           className={styles.root}
           data-tab={manage ?? (stageView ? "all" : "desk")}
-          data-call-bar={view === "desk" && toCall > 0 ? "" : undefined}
+          data-call-bar={
+            (view === "desk" || view === "open") && toCall > 0 ? "" : undefined
+          }
         >
           <PullMark mark={spinner} />
           <PhoneSetupBar />
-          {!stageView ? (
+          {manage ? (
             <div className={styles.wideOnly}>
               <PageHeader
                 title={manage ? MANAGE_TITLE[manage] : "Leads"}
@@ -1331,6 +1352,18 @@ export function LeadsRoute() {
                     onChanged={refresh}
                   />
                   <PhoneLogCard as="chip" />
+                  {view === "desk" || view === "open" ? (
+                    <span className={styles.desktopCall}>
+                      <Button
+                        variant="primary"
+                        onClick={() => begin("calling", setCalling)}
+                        disabled={desk.counts.open === 0}
+                      >
+                        <PhoneCall size={16} aria-hidden="true" />
+                        Start calling
+                      </Button>
+                    </span>
+                  ) : null}
                   <span className={styles.toolbarEnd}>
                     <button
                       type="button"
@@ -1511,7 +1544,7 @@ export function LeadsRoute() {
           {/* Phones: the one primary action, in the thumb's reach above the
               tab bar (owner, 22 Oct: no big green card). Nobody due: no bar,
               the desk says "All caught up" (Redmi, 22 Oct). */}
-          {view === "desk" && toCall > 0 ? (
+          {(view === "desk" || view === "open") && toCall > 0 ? (
             <div className={styles.callBar}>
               <button
                 type="button"
@@ -1539,9 +1572,19 @@ export function LeadsRoute() {
             canPickWho={can}
             pipes={several(pipes) ? pipes.pipelines : []}
             onApply={applyFilters}
+            onClearAll={() =>
+              applyView({
+                stage: view,
+                pipeline: null,
+                who: defaultWho,
+                q: "",
+                more: {},
+              })
+            }
             sellerPicker={
               can && stageView && view !== TEST && team && team.length > 1 ? (
                 <SellerChips
+                  sellersOnly
                   reps={team}
                   counts={
                     ownerCounts ??
@@ -1555,20 +1598,16 @@ export function LeadsRoute() {
                     unassigned: scope === "unassigned",
                   }}
                   onPick={(next) => {
-                    setSellerOwner(next.owner);
-                    const url = new URL(window.location.href);
-                    if (next.owner) url.searchParams.set("seller", next.owner);
-                    else url.searchParams.delete("seller");
-                    window.history.replaceState(
-                      window.history.state,
-                      "",
-                      url.pathname + url.search + url.hash,
+                    applyView(
+                      {
+                        ...shown,
+                        who: next.unassigned ? "unassigned" : "team",
+                      },
+                      next.owner,
                     );
                     setFiltering(
                       (current) => current && { ...current, open: false },
                     );
-                    const who = next.unassigned ? "unassigned" : "team";
-                    if (scope !== who) applyFilters({ ...shownFilters, who });
                   }}
                 />
               ) : null

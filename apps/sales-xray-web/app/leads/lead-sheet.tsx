@@ -44,6 +44,8 @@ import {
   type ReactNode,
 } from "react";
 
+import { createPortal } from "react-dom";
+
 import { callHref, type UploadPolicy } from "../acquisition-client";
 import { notify } from "../notice-center";
 import { rememberOpened } from "../pick-up";
@@ -2561,6 +2563,8 @@ export function LeadCard({
   intent = null,
   afterCall = null,
   focusAt = null,
+  primarySlot = null,
+  hidePrimary = false,
 }: {
   detail: LeadDetail;
   me: Me | null;
@@ -2578,6 +2582,8 @@ export function LeadCard({
   afterCall?: { step: "outcome" | "recording"; onNext?: () => void } | null;
   /** Opened from My work: the history line made at this time. */
   focusAt?: string | null;
+  primarySlot?: HTMLElement | null;
+  hidePrimary?: boolean;
 }) {
   const { lead } = detail;
   const setup = useContext(MessageSetup);
@@ -2825,6 +2831,39 @@ export function LeadCard({
       ? chatFacts(detail.source_fields)
       : detail.source_fields;
 
+  const primaryAction = detail.phone ? (
+    <CallLink
+      className={styles.callButton}
+      phone={detail.phone}
+      aria-busy={calling || company.busy || undefined}
+      onCall={callHere}
+    >
+      <Phone size={20} aria-hidden="true" />
+      <span>
+        <strong>{calling || company.busy ? "Calling…" : "Call"}</strong>
+        <small>
+          {displayPhone(detail.phone)}
+          {company.ready ? " · company number" : ""}
+        </small>
+      </span>
+    </CallLink>
+  ) : detail.can_edit ? (
+    <button
+      type="button"
+      className={styles.callButton}
+      data-empty=""
+      onClick={() => setEditing(true)}
+    >
+      <Phone size={20} aria-hidden="true" />
+      <span>
+        <strong>Add a phone number</strong>
+        <small>to call this lead</small>
+      </span>
+    </button>
+  ) : (
+    <p className={styles.hint}>No phone number on this lead.</p>
+  );
+
   return (
     <div className={styles.card}>
       {/* One header row (owner, #29, 26 Oct 2026: the avatar floated beside
@@ -2880,38 +2919,11 @@ export function LeadCard({
       {/* Call, then one grid of equal boxes (owner, 25 Oct 2026): three to a
           row, the same size, a box that can't work greyed in its place. */}
       <div className={styles.leadActions}>
-        {detail.phone ? (
-          <CallLink
-            className={styles.callButton}
-            phone={detail.phone}
-            aria-busy={calling || company.busy || undefined}
-            onCall={callHere}
-          >
-            <Phone size={20} aria-hidden="true" />
-            <span>
-              <strong>{calling || company.busy ? "Calling…" : "Call"}</strong>
-              <small>
-                {displayPhone(detail.phone)}
-                {company.ready ? " · company number" : ""}
-              </small>
-            </span>
-          </CallLink>
-        ) : detail.can_edit ? (
-          <button
-            type="button"
-            className={styles.callButton}
-            data-empty=""
-            onClick={() => setEditing(true)}
-          >
-            <Phone size={20} aria-hidden="true" />
-            <span>
-              <strong>Add a phone number</strong>
-              <small>to call this lead</small>
-            </span>
-          </button>
-        ) : (
-          <p className={styles.hint}>No phone number on this lead.</p>
-        )}
+        {hidePrimary
+          ? null
+          : primarySlot
+            ? createPortal(primaryAction, primarySlot)
+            : primaryAction}
         {/* The call's own lines under Call (owner, #31, 26 Oct 2026): the
             phone app's hint, then "Called from another phone? Log it", or
             the call's question once it is open. */}
@@ -3407,6 +3419,7 @@ export function LeadSheet({
   // Saved here: who is next on the desk, so one tap calls them (the
   // ease-of-use wave, 22 Oct 2026: "Call next" everywhere, not only in
   // Start calling).
+  const [primarySlot, setPrimarySlot] = useState<HTMLDivElement | null>(null);
   const [nextUp, setNextUp] = useState<{
     after: string;
     lead: LeadDetail | null;
@@ -3522,6 +3535,15 @@ export function LeadSheet({
     <>
       <Sheet
         open={leadId !== null}
+        footer={
+          detail && !questionOpen && !(nextUp && nextUp.after === leadId) ? (
+            <div
+              className={styles.primaryDock}
+              data-sheet-no-drag
+              ref={setPrimarySlot}
+            />
+          ) : undefined
+        }
         label={detail?.lead.name ?? "Lead"}
         onClose={onClose}
       >
@@ -3541,6 +3563,10 @@ export function LeadSheet({
         ) : detail ? (
           <>
             <LeadCard
+              primarySlot={primarySlot}
+              hidePrimary={
+                questionOpen || !!(nextUp && nextUp.after === leadId)
+              }
               detail={detail}
               me={me}
               onChanged={update}

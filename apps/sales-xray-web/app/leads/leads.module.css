@@ -6866,3 +6866,28 @@ fieldset.form {
   height: 16px;
   flex: none;
 }
+
+/* One call action, kept in the sheet footer while the seller reads below. */
+.primaryDock {
+  width: 100%;
+  min-width: 0;
+}
+
+.primaryDock .callButton {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 56px;
+}
+
+.desktopCall {
+  display: none;
+}
+.root[data-tab="desk"] {
+  gap: 8px;
+  padding-top: 4px;
+}
+@media (min-width: 900px) {
+  .desktopCall {
+    display: inline-flex;
+  }
+}
