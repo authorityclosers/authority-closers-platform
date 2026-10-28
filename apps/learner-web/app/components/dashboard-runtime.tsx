@@ -1,5 +1,7 @@
 "use client";
 
+// Legacy view retained; replaced by Reflex Today on 28 Oct 2026.
+
 import {
   ArrowRight,
   BookOpen,

@@ -1,11 +1,9 @@
 import { ScreenTitle } from "../../shell/screen-title";
 import { notFound } from "next/navigation";
 import { isPracticeUiEnabled } from "../../lib/practice-availability";
-import { PracticeArcade } from "../../components/practice-arcade";
-import {
-  PracticeEngine,
-  PracticeRecognition,
-} from "../../components/practice-engine";
+import { PracticeHub } from "../../reflex/practice";
+import { parseSurfaceState, type QueryValue } from "../../lib/surface-state";
+import { PracticeEngine } from "../../components/practice-engine";
 
 // Evaluate the deployment opt-in at request time, never while building the shared image.
 export const dynamic = "force-dynamic";
@@ -16,10 +14,11 @@ export default async function PracticePage({
   searchParams: Promise<{
     set?: string | string[];
     attempt?: string | string[];
+    state?: QueryValue;
   }>;
 }) {
   if (!isPracticeUiEnabled(process.env)) notFound();
-  const { set, attempt } = await searchParams;
+  const { set, attempt, state } = await searchParams;
   if (
     (set !== undefined &&
       (typeof set !== "string" || !/^[a-z0-9-]{1,64}$/.test(set))) ||
@@ -47,11 +46,7 @@ export default async function PracticePage({
   return (
     <>
       <ScreenTitle title="Practice" />
-      <main id="main-content" className="learner-main" tabIndex={-1}>
-        <div className="page-container">
-          <PracticeArcade durable recognition={<PracticeRecognition />} />
-        </div>
-      </main>
+      <PracticeHub state={parseSurfaceState(state)} />
     </>
   );
 }

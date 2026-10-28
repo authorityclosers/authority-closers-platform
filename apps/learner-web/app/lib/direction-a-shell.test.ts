@@ -3,6 +3,10 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: () => undefined }),
+}));
+
 import { initialsForDisplayName } from "./profile-identity";
 import {
   firstActionableActivity,
@@ -505,9 +509,9 @@ describe("Direction A & B UI System & Shell", () => {
     });
 
     it.each([
-      ["dashboard", DashboardPage, "dashboard-skeleton"],
-      ["learning", LearningPage, "learning-skeleton"],
-      ["discover", DiscoverPage, "discover-skeleton"],
+      ["dashboard", DashboardPage, null],
+      ["learning", LearningPage, null],
+      ["discover", DiscoverPage, null],
       ["notifications", NotificationsPage, "notifications-skeleton"],
       ["profile", ProfilePage, "profile-skeleton"],
       ["progress", ProgressPage, "progress-skeleton"],
@@ -520,7 +524,9 @@ describe("Direction A & B UI System & Shell", () => {
         });
         const html = renderToStaticMarkup(element);
 
-        expect(html).toContain(`class="${className}`);
+        expect(html).toContain(
+          className ? `class="${className}` : 'aria-label="Loading"',
+        );
         expect(html).not.toContain("Getting the next useful thing ready");
       },
     );

@@ -1,5 +1,7 @@
 "use client";
 
+// Legacy view retained; replaced by Reflex Practice hub on 28 Oct 2026.
+
 import Image from "next/image";
 import {
   ActionButton,

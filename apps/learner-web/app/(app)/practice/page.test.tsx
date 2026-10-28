@@ -1,6 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import PracticePage, { dynamic } from "./page";
 import { GET, dynamic as availabilityDynamic } from "./availability/route";
+import { PracticeHub } from "../../reflex/practice";
 import { PracticeEngine } from "../../components/practice-engine";
 
 vi.mock("next/navigation", () => ({
@@ -8,8 +9,8 @@ vi.mock("next/navigation", () => ({
     throw new Error("not-found");
   },
 }));
-vi.mock("../../components/practice-arcade", () => ({
-  PracticeArcade: "practice-catalog",
+vi.mock("../../reflex/practice", () => ({
+  PracticeHub: "practice-hub",
 }));
 vi.mock("../../components/practice-engine", () => ({
   PracticeEngine: "practice-engine",
@@ -90,4 +91,20 @@ it.each([
   await expect(
     PracticePage({ searchParams: Promise.resolve(query) }),
   ).rejects.toThrow("not-found");
+});
+
+it("hands the new hub selectors to the unchanged keyed round engine and focus marker", async () => {
+  enable();
+  const hub = await PracticePage({ searchParams: Promise.resolve({}) });
+  expect(hub.props.children[1].type).toBe(PracticeHub);
+  const focused = await PracticePage({
+    searchParams: Promise.resolve({ set: "next-move" }),
+  });
+  expect(focused.props["data-reflex-focus"]).toBe(true);
+  expect(focused.props.children[1].type).toBe(PracticeEngine);
+  expect(focused.props.children[1].key).toBe("next-move:new");
+  expect(focused.props.children[1].props).toEqual({
+    setId: "next-move",
+    attemptId: undefined,
+  });
 });

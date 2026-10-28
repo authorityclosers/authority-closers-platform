@@ -111,6 +111,10 @@ import {
 } from "./local-drafts";
 import { markOfflineRead } from "./offline-read-cache";
 
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ replace: () => undefined }),
+}));
+
 function h1Count(html: string): number {
   return html.match(/<h1(?:\s|>)/g)?.length ?? 0;
 }
@@ -496,8 +500,8 @@ describe("canonical progression access", () => {
     });
     const html = renderToStaticMarkup(page);
 
-    expect(html).toContain("Module");
-    expect(html).toContain("Preparing your workspace");
+    expect(html).toContain("Steps");
+    expect(html).toContain('aria-label="Loading"');
     expect(html).toContain('aria-busy="true"');
     expect(html).not.toContain('data-state="LOCKED"');
     expect(html).not.toContain("Module sequence");
@@ -1009,12 +1013,21 @@ describe("click-first onboarding", () => {
 });
 
 describe("accessibility semantics", () => {
-  it("renders exactly one h1 for every route template and universal state", async () => {
+  it("keeps legacy route headings and gives rebuilt Reflex routes to the shell", async () => {
     for (const [routeName, renderRoute] of routeRenderers) {
       for (const state of SURFACE_STATE_ORDER) {
         const html = renderToStaticMarkup(await renderRoute(queryValue(state)));
 
-        expect(h1Count(html), `${routeName} in ${state}`).toBe(1);
+        const shellOwnsHeading = [
+          "learner home",
+          "learning",
+          "discover",
+          "program learning",
+          "module",
+        ].includes(routeName);
+        expect(h1Count(html), `${routeName} in ${state}`).toBe(
+          shellOwnsHeading ? 0 : 1,
+        );
       }
     }
   }, 15_000);
@@ -1024,8 +1037,8 @@ describe("accessibility semantics", () => {
       await LearnerHomePage({ searchParams: Promise.resolve({}) }),
     );
 
-    expect(html).toContain("Learning Command Center");
-    expect(html).toContain("dashboard-skeleton");
+    expect(html).toContain("Continue learning");
+    expect(html).toContain('aria-label="Loading"');
     expect(html).not.toContain("Open reflect preview");
     expect(html).not.toContain("preview only");
     expect(html).not.toContain('aria-valuenow="0"');
