@@ -29,6 +29,7 @@ from ac_platform.bug_reports import http as bug_http
 from ac_platform.bug_reports.models import BugReport, BugReportEvent, BugReportHistoryError
 from ac_platform.bug_reports.store import BugReportStore
 from ac_platform.http.routes import RouteContext
+from ac_platform.tenancy.models import Membership, Tenant
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_conversation_submission_http_postgresql import ORIGIN, _setup
@@ -266,12 +267,21 @@ def test_a_tester_reports_a_bug_and_the_team_works_it(
                 assert [item["bug_id"] for item in still_open["items"]] == [second_id]
                 assert still_open["counts"]["fixed"] == 1
 
-                # A person sends at most twelve an hour.
-                codes = [
-                    (await http.post("/v1/bug-reports", json=_report(), headers=WRITE)).status_code
-                    for _ in range(11)
-                ]
-                assert codes[:10] == [201] * 10 and codes[10] == 429
+                # A non-staff person gets sixty reports, then the same helpful refusal.
+                # Two reports already consumed tokens; the earlier replay did not.
+                for _ in range(58):
+                    sent = await http.post("/v1/bug-reports", json=_report(), headers=WRITE)
+                    assert sent.status_code == 201, sent.text
+                limited = await http.post("/v1/bug-reports", json=_report(), headers=WRITE)
+                assert limited.status_code == 429
+                assert limited.json()["detail"] == (
+                    "That's a lot of reports in an hour. Send again a little later."
+                )
+                assert int(limited.headers["Retry-After"]) > 0
+                # Even an exhausted bucket cannot block replay of an accepted command.
+                replay = await http.post("/v1/bug-reports", json=first, headers=WRITE)
+                assert replay.status_code == 200
+                assert replay.json()["bug_id"] == bug_id
             async with setup.sessions() as db:
                 audited = (
                     await db.execute(
@@ -284,6 +294,54 @@ def test_a_tester_reports_a_bug_and_the_team_works_it(
                 ["status", "severity", "note"],
                 ["status", "area"],
             ]
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+@pytest.mark.parametrize("role", ["support", "admin", "owner"])
+def test_platform_staff_can_report_without_consuming_a_bucket(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch, role: str
+) -> None:
+    async def must_not_consume(*args: Any, **kwargs: Any) -> Any:
+        raise AssertionError("Platform staff must never consume a report token")
+
+    monkeypatch.setattr(bug_http.InMemoryTokenBucketLimiter, "consume", must_not_consume)
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            # Staff membership may be outside the workspace currently selected in the app.
+            async with setup.sessions() as db, db.begin():
+                platform_id = uuid4()
+                db.add(Tenant(id=platform_id, slug=platform_id.hex, name="Test operations"))
+                await db.flush()
+                db.add(
+                    Membership(tenant_id=platform_id, person_id=setup.state.person_id, role=role)
+                )
+            bug_http.install_bug_reports_http(
+                setup.app, RouteContext(setup.settings, setup.require_actor, setup.sessions)
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as http:
+                http.cookies.set(setup.settings.session_cookie_name, setup.token)
+                first = _report()
+                for index in range(70):
+                    sent = await http.post(
+                        "/v1/bug-reports", json=first if index == 0 else _report(), headers=WRITE
+                    )
+                    assert sent.status_code == 201, sent.text
+                    if index == 0:
+                        bug_id = sent.json()["bug_id"]
+                replay = await http.post("/v1/bug-reports", json=first, headers=WRITE)
+                assert replay.status_code == 200
+                assert replay.json()["bug_id"] == bug_id
+                blank = await http.post("/v1/bug-reports", json=_report(words="  "), headers=WRITE)
+                assert blank.status_code == 422
+                unsafe = await http.post("/v1/bug-reports", json=_report())
+                assert unsafe.status_code == 403
         finally:
             await setup.engine.dispose()
 

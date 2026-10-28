@@ -220,7 +220,7 @@ it("with no connection, keeps the report on the phone and says it will go later"
   expect(notify).not.toHaveBeenCalled();
 });
 
-it("keeps everything when sending fails and offers Send again in a corner card", async () => {
+it("keeps everything when sending fails and offers Try again in a corner card", async () => {
   captureScreen.mockResolvedValue(null);
   vi.stubGlobal(
     "fetch",
@@ -251,6 +251,7 @@ it("keeps everything when sending fails and offers Send again in a corner card",
       tone: "error",
       title: "Your report didn't go",
       message: "That's a lot of reports in an hour.",
+      action: expect.objectContaining({ label: "Try again" }),
       noReport: true,
     }),
   );
@@ -264,6 +265,141 @@ it("keeps everything when sending fails and offers Send again in a corner card",
   );
   expect(body.screenshot).toBeNull();
 });
+
+it.each(["429", "network"] as const)(
+  "retains words, picture, voice and command id after %s and retries the current draft",
+  async (failure) => {
+    captureScreen.mockResolvedValue(
+      new Blob([new Uint8Array([1, 2, 3])], { type: "image/webp" }),
+    );
+    const mediaDevices = Object.getOwnPropertyDescriptor(
+      navigator,
+      "mediaDevices",
+    );
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: {
+        getUserMedia: async () => ({ getTracks: () => [{ stop: vi.fn() }] }),
+      },
+    });
+    vi.stubGlobal(
+      "MediaRecorder",
+      class {
+        static isTypeSupported = () => true;
+        state = "inactive";
+        mimeType = "audio/webm";
+        ondataavailable: ((event: { data: Blob }) => void) | null = null;
+        onstop: (() => void) | null = null;
+        start() {
+          this.state = "recording";
+        }
+        stop() {
+          this.state = "inactive";
+          this.ondataavailable?.({
+            data: new Blob([new Uint8Array([4, 5, 6])], {
+              type: this.mimeType,
+            }),
+          });
+          this.onstop?.();
+        }
+      },
+    );
+    const fetcher = vi.fn<typeof fetch>();
+    if (failure === "429") {
+      fetcher.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ detail: "That's a lot of reports in an hour." }),
+          {
+            status: 429,
+            headers: {
+              "content-type": "application/json",
+              "Retry-After": "60",
+            },
+          },
+        ),
+      );
+    } else {
+      fetcher.mockRejectedValueOnce(new TypeError("Failed to fetch"));
+    }
+    fetcher.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          bug_id: "b-retried",
+          screenshot: "kept",
+          voice: "kept",
+        }),
+        { status: 201, headers: { "content-type": "application/json" } },
+      ),
+    );
+    vi.stubGlobal("fetch", fetcher);
+    try {
+      await act(async () => openBugReport());
+      await pause(450);
+      await act(async () => type("The note vanished"));
+      await act(async () => button("This stops my work").click());
+      await act(async () => button("Add a voice note").click());
+      await act(async () => button("Stop").click());
+      expect(document.querySelector("dialog audio")).not.toBeNull();
+      await submit();
+
+      expect(document.querySelector("dialog")?.open).toBe(true);
+      expect(document.querySelector("textarea")?.value).toBe(
+        "The note vanished",
+      );
+      expect(document.querySelector("dialog img")).not.toBeNull();
+      expect(document.querySelector("dialog audio")).not.toBeNull();
+      expect(button("This stops my work").getAttribute("aria-pressed")).toBe(
+        "true",
+      );
+      expect(button("Try again").disabled).toBe(false);
+      const first = JSON.parse(String(fetcher.mock.calls[0][1]?.body));
+      expect(first.screenshot).toEqual({
+        content_type: "image/webp",
+        data: "AQID",
+        source: "auto",
+      });
+      expect(first.voice).toEqual({
+        content_type: "audio/webm",
+        data: "BAUG",
+        seconds: 1,
+      });
+      if (failure === "network") {
+        // If local storage is unavailable, all attachments still stay in the sheet.
+        expect(keep).toHaveBeenCalledWith(
+          expect.objectContaining({ body: first }),
+        );
+      } else {
+        expect(keep).not.toHaveBeenCalled();
+      }
+
+      await act(async () => type("The note vanished after saving"));
+      if (failure === "429") {
+        // The corner card must submit current state, not the failed send's closure.
+        const notice = notify.mock.calls.find(
+          ([item]) => item.id === "bug-report-failed",
+        )![0];
+        expect(notice.action.label).toBe("Try again");
+        await act(async () => notice.action.run());
+      } else {
+        await act(async () => button("Try again").click());
+      }
+      await pause(20);
+      expect(fetcher).toHaveBeenCalledTimes(2);
+      const retried = JSON.parse(String(fetcher.mock.calls[1][1]?.body));
+      expect(retried).toEqual({
+        ...first,
+        words: "The note vanished after saving",
+      });
+      expect(document.querySelector("dialog")?.textContent).toContain(
+        "Sent. We'll tell you when it's fixed.",
+      );
+    } finally {
+      if (mediaDevices)
+        Object.defineProperty(navigator, "mediaDevices", mediaDevices);
+      else Reflect.deleteProperty(navigator, "mediaDevices");
+    }
+  },
+);
 
 it("in the phone app, uses the phone's own picture of the screen, taken before the sheet opens", async () => {
   phone.app = true;

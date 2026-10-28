@@ -18,7 +18,7 @@
  * - Sent: "We'll tell you when it's fixed", or, with no connection, "Saved on
  *   this phone, it goes when you're back online".
  * - Your reports: what they sent and where each stands.
- * A failure that cannot wait is a corner card with Send again; the sheet
+ * A failure that cannot wait is a corner card with Try again; the sheet
  * keeps everything.
  */
 
@@ -190,6 +190,7 @@ export function BugReportSheet({
   const [include, setInclude] = useState(true);
   const [sensitive, setSensitive] = useState(false);
   const [sending, setSending] = useState(false);
+  const [sendFailed, setSendFailed] = useState(false);
   const [pictureNote, setPictureNote] = useState<string | null>(null);
   const [route, setRoute] = useState("/");
   const [step, setStep] = useState<Step>("write");
@@ -197,6 +198,7 @@ export function BugReportSheet({
   const [shownOpen, setShownOpen] = useState(false);
   const command = useRef(commandId());
   const fileInput = useRef<HTMLInputElement>(null);
+  const form = useRef<HTMLFormElement>(null);
   const textArea = useRef<HTMLTextAreaElement>(null);
   const opening = useRef(0);
   const wordsId = useId();
@@ -212,6 +214,7 @@ export function BugReportSheet({
       setSensitive(hidden);
       setInclude(!hidden);
       setPictureNote(null);
+      setSendFailed(false);
       setStep("write");
       setPicture(hidden ? { state: "none" } : { state: "taking" });
     }
@@ -290,6 +293,7 @@ export function BugReportSheet({
     const text = words.trim();
     if (!text || sending) return;
     setSending(true);
+    setSendFailed(false);
     const id = command.current;
     let request: Record<string, unknown> | null = null;
     try {
@@ -330,6 +334,7 @@ export function BugReportSheet({
         setOutcome("queued");
         setStep("sent");
       } else {
+        setSendFailed(true);
         notify({
           id: "bug-report-failed",
           tone: "error",
@@ -338,7 +343,11 @@ export function BugReportSheet({
             error instanceof BugReportError
               ? error.message
               : "Send again in a moment.",
-          action: { label: "Send again", run: () => void send() },
+          // Submit the current form so retry uses the latest draft and sending state.
+          action: {
+            label: "Try again",
+            run: () => form.current?.requestSubmit(),
+          },
           noReport: true,
         });
       }
@@ -359,7 +368,7 @@ export function BugReportSheet({
           disabled={!words.trim() || sending}
           aria-busy={sending || undefined}
         >
-          {sending ? "Sending…" : "Send report"}
+          {sending ? "Sending…" : sendFailed ? "Try again" : "Send report"}
         </Button>
       </>
     ) : step === "sent" ? (
@@ -434,6 +443,7 @@ export function BugReportSheet({
         <MyReportsList />
       ) : (
         <form
+          ref={form}
           id={formId}
           // Its own picture leaves the reporter out (capture.ts).
           data-bug-reporter=""
