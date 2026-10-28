@@ -37,7 +37,7 @@ beforeEach(() => {
           reps: [
             {
               person_id: SELLER,
-              name: "swamini fictional",
+              name: "nisha example",
               open_leads: 12,
               available: true,
             },
@@ -159,8 +159,8 @@ it("gives the ticked leads to one person in one request", async () => {
   expect(dialog.textContent).not.toContain("Move to a pipeline");
   await act(async () => press("Give to a person").click());
   await flush();
-  expect(dialog.textContent).toContain("Swamini Fictional");
-  await act(async () => press("Swamini Fictional").click());
+  expect(dialog.textContent).toContain("Nisha Example");
+  await act(async () => press("Nisha Example").click());
   await flush();
   const bulk = sent.find((item) => item.url === "/v1/lead-desk/leads/bulk");
   expect(bulk?.body).toMatchObject({

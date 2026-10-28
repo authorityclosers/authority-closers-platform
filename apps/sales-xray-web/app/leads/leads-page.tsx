@@ -1226,12 +1226,9 @@ export function LeadsRoute({
     (view === "open" ? "All leads" : "this stage");
   // One switch (owner, 25 Oct 2026: "unclear what to focus on"): Now first,
   // All leads beside it, the other views under More.
+  // Board is off More (owner's meeting, 28 Oct 2026: "nearly the same as the
+  // list"); an old ?tab=board link still opens it. Notes search stays.
   const moreViews = [
-    {
-      key: BOARD,
-      label: "Board",
-      note: "Every stage as a column; drag a lead to move it",
-    },
     {
       key: WORK,
       label: "My work",
