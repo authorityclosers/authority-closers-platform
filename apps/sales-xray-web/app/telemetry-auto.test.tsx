@@ -708,3 +708,66 @@ it("observes every API resource without endpoint cooldown or slow-call sampling"
     vi.unstubAllGlobals();
   }
 });
+
+it("captures successful and rejected fetches once, preserving responses, errors and cleanup", async () => {
+  const response = Response.json({}, { status: 201 });
+  const error = new TypeError("Fictional private error");
+  const original = window.fetch;
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(response)
+    .mockRejectedValueOnce(error);
+  window.fetch = fetcher;
+  try {
+    const track = vi.spyOn(telemetry, "track");
+    const root = await mount();
+    expect(await window.fetch("/v1/leads/fictional-person")).toBe(response);
+    await expect(window.fetch("/v1/leads")).rejects.toBe(error);
+    const calls = track.mock.calls.filter(([name]) => name === "sx.api_timing");
+    expect(calls).toHaveLength(2);
+    expect(calls[0][1]).toMatchObject({
+      endpoint: "v1_leads_id",
+      status: "2xx",
+      band: "lt100",
+    });
+    expect(calls[1][1]).toMatchObject({ status: "network" });
+    expect(JSON.stringify(calls)).not.toMatch(/Fictional|fictional-person/);
+    await act(async () => root.unmount());
+    expect(window.fetch).toBe(fetcher);
+  } finally {
+    window.fetch = original;
+  }
+});
+
+it("captures XHR completion and network failures even without Resource Timing", async () => {
+  class FakeXhr extends EventTarget {
+    status = 200;
+    open() {}
+    send() {
+      this.dispatchEvent(new Event("loadend"));
+    }
+  }
+  vi.stubGlobal("XMLHttpRequest", FakeXhr);
+  try {
+    const original = FakeXhr.prototype.send;
+    const track = vi.spyOn(telemetry, "track");
+    const root = await mount();
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "/v1/leads/fictional-person");
+    xhr.send();
+    (xhr as unknown as FakeXhr).status = 0;
+    xhr.open("GET", "/v1/leads");
+    xhr.send();
+    const calls = track.mock.calls.filter(([name]) => name === "sx.api_timing");
+    expect(calls).toHaveLength(2);
+    expect(calls[0][1]).toMatchObject({
+      endpoint: "v1_leads_id",
+      status: "2xx",
+    });
+    expect(calls[1][1]).toMatchObject({ status: "network" });
+    await act(async () => root.unmount());
+    expect(FakeXhr.prototype.send).toBe(original);
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

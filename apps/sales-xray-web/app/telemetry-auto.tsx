@@ -19,8 +19,9 @@
  *   CPU test and, on Android, the phone's model (27 Oct 2026).
  * - Script errors: their class and a fingerprint of where they were thrown,
  *   never the message.
- * - API calls whose answer took over 1.5 s to start, or that failed, with every
- *   id taken out of the path; never one the page spent out of view.
+ * - Every API fetch/XHR timing (including failure and background), in bands;
+ *   legacy slow-call metrics also remain. Ordinary clicks carry only role/grid,
+ *   scroll reports depth quarters, and routes report time through paint frames.
  * - Rage taps (three in a second on one spot) and dead taps (a tap on
  *   something that looks tappable and changes nothing), with the screen zone
  *   and the element as the code names it (its data-sx-action or
@@ -295,6 +296,142 @@ export function apiTiming(
       ? "yes"
       : "no",
   };
+}
+
+/** Observe completion and rejection of every fetch. Resource Timing supplies
+ * earlier buffered requests and XHR; fetch failures may have no resource entry. */
+function watchFetch(
+  hidden: HiddenSpans,
+  cleanups: Array<() => void>,
+): number | null {
+  if (typeof window.fetch !== "function") return null;
+  const original = window.fetch;
+  const installed = performance.now();
+  const wrapped: typeof fetch = (input, init) => {
+    const start = performance.now();
+    const screen = here();
+    const report = (code: number) => {
+      try {
+        if (!telemetry.active()) return;
+        const raw =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        const end = performance.now();
+        const call = apiTiming(
+          {
+            name: new URL(raw, window.location.origin).href,
+            initiatorType: "fetch",
+            startTime: start,
+            duration: end - start,
+            responseStart: code ? end : 0,
+            responseEnd: code ? end : 0,
+            responseStatus: code,
+          },
+          window.location.origin,
+          hidden,
+        );
+        if (call) track("sx.api_timing", { ...call, screen });
+      } catch {
+        /* Measurement never changes a fetch outcome. */
+      }
+    };
+    try {
+      return original.call(window, input, init).then(
+        (response) => {
+          report(response.status);
+          return response;
+        },
+        (error: unknown) => {
+          report(0);
+          throw error;
+        },
+      );
+    } catch (error) {
+      report(0);
+      throw error;
+    }
+  };
+  window.fetch = wrapped;
+  cleanups.push(() => {
+    if (window.fetch === wrapped) window.fetch = original;
+  });
+  return installed;
+}
+
+/** XHR completion/error/abort, including browsers that omit failed resource entries. */
+function watchXhr(
+  hidden: HiddenSpans,
+  cleanups: Array<() => void>,
+): number | null {
+  if (typeof XMLHttpRequest === "undefined") return null;
+  const proto = XMLHttpRequest.prototype;
+  const open = proto.open;
+  const send = proto.send;
+  const urls = new WeakMap<XMLHttpRequest, string>();
+  const pending = new Set<() => void>();
+  const installed = performance.now();
+  const opened: typeof proto.open = function (
+    this: XMLHttpRequest,
+    method: string,
+    url: string | URL,
+    async: boolean = true,
+    user?: string | null,
+    password?: string | null,
+  ) {
+    urls.set(this, String(url));
+    return open.call(this, method, url, async, user, password);
+  };
+  const sent: typeof proto.send = function (this: XMLHttpRequest, body) {
+    const start = performance.now();
+    const screen = here();
+    const raw = urls.get(this);
+    const cleanup = () => {
+      this.removeEventListener("loadend", finished);
+      pending.delete(cleanup);
+    };
+    const finished = () => {
+      cleanup();
+      try {
+        if (!raw || !telemetry.active()) return;
+        const end = performance.now();
+        const call = apiTiming(
+          {
+            name: new URL(raw, window.location.origin).href,
+            initiatorType: "xmlhttprequest",
+            startTime: start,
+            duration: end - start,
+            responseStart: this.status ? end : 0,
+            responseEnd: this.status ? end : 0,
+            responseStatus: this.status,
+          },
+          window.location.origin,
+          hidden,
+        );
+        if (call) track("sx.api_timing", { ...call, screen });
+      } catch {
+        /* Never expose a body, status exception or request URL. */
+      }
+    };
+    pending.add(cleanup);
+    this.addEventListener("loadend", finished, { once: true });
+    try {
+      return send.call(this, body);
+    } catch (error) {
+      finished();
+      throw error;
+    }
+  };
+  proto.open = opened;
+  proto.send = sent;
+  cleanups.push(() => {
+    for (const cleanup of pending) cleanup();
+    if (proto.open === opened) proto.open = open;
+    if (proto.send === sent) proto.send = send;
+  });
+  return installed;
 }
 
 export function scrollDepth(
@@ -741,6 +878,8 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
   cleanups.push(() =>
     document.removeEventListener("visibilitychange", onHidden),
   );
+  const fetchSince = watchFetch(hidden, cleanups);
+  const xhrSince = watchXhr(hidden, cleanups);
   let slowApis = 0;
   const lastSlow = new Map<string, number>();
   if (typeof PerformanceObserver !== "undefined") {
@@ -748,7 +887,11 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
       const resources = new PerformanceObserver((list) => {
         if (!telemetry.active()) return;
         for (const entry of list.getEntries() as PerformanceResourceTiming[]) {
-          const all = apiTiming(entry, window.location.origin, hidden);
+          const since = entry.initiatorType === "fetch" ? fetchSince : xhrSince;
+          const all =
+            since !== null && entry.startTime >= since
+              ? null
+              : apiTiming(entry, window.location.origin, hidden);
           if (all) track("sx.api_timing", { ...all, screen: here() });
           const call = slowCall(entry, window.location.origin, hidden);
           if (!call) continue;
