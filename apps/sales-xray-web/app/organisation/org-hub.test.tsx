@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, useEffect } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
@@ -10,6 +10,7 @@ import { OrganisationHub } from "./org-hub";
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
+const sourceMounted = vi.hoisted(() => vi.fn());
 let query = "";
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(query),
@@ -37,7 +38,12 @@ vi.mock("./setup/rules", () => ({
   OrganisationRules: () => <div data-section="lead-rules" />,
 }));
 vi.mock("./setup/sources", () => ({
-  OrganisationSources: () => <div data-section="sources" />,
+  OrganisationSources: () => {
+    useEffect(() => {
+      sourceMounted();
+    }, []);
+    return <div data-section="sources" />;
+  },
 }));
 vi.mock("./analytics-view", () => ({
   AnalyticsView: ({ team }: { team: boolean }) => (
@@ -77,6 +83,7 @@ afterEach(async () => {
 const render = async (
   role: "owner" | "admin" | "member" | "viewer",
   kind: "organisation" | "personal" = "organisation",
+  tenant = TENANT,
 ) => {
   await act(async () =>
     root.render(
@@ -84,10 +91,10 @@ const render = async (
         value={{
           status: "ready",
           authenticated: true,
-          context: { personId: "p", sessionId: "s", tenantId: TENANT },
+          context: { personId: "p", sessionId: "s", tenantId: tenant },
           workspaces: [
             {
-              tenant_id: TENANT,
+              tenant_id: tenant,
               kind,
               name: "Fictional Homes",
               role,
@@ -348,4 +355,13 @@ it("keeps sellers on their own activity while viewers can compare team work", as
   expect(host.querySelector('[data-analytics="own"]')).not.toBeNull();
   await render("viewer");
   expect(host.querySelector('[data-analytics="team"]')).not.toBeNull();
+});
+
+it("starts Sources afresh after switching organisations so old form drafts cannot carry over", async () => {
+  sourceMounted.mockClear();
+  query = "tab=leads&part=sources";
+  await render("owner");
+  expect(sourceMounted).toHaveBeenCalledTimes(1);
+  await render("owner", "organisation", "00000000-0000-4000-8000-000000000099");
+  expect(sourceMounted).toHaveBeenCalledTimes(2);
 });

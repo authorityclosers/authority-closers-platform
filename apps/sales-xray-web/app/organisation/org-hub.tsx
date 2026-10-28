@@ -230,10 +230,24 @@ export function OrganisationHub({
       );
       break;
     case "leads":
-      body = <Parts tab={tab} parts={LEAD_PARTS} part={part} />;
+      body = (
+        <Parts
+          key={current.tenant_id}
+          tab={tab}
+          parts={LEAD_PARTS}
+          part={part}
+        />
+      );
       break;
     case "connections":
-      body = <Parts tab={tab} parts={CONNECTION_PARTS} part={part} />;
+      body = (
+        <Parts
+          key={current.tenant_id}
+          tab={tab}
+          parts={CONNECTION_PARTS}
+          part={part}
+        />
+      );
       break;
     case "call-ai":
       body = <SettingsSectionView id="call-ai" headless />;
