@@ -28,7 +28,6 @@ vi.mock("../ui/haptics", async (importOriginal) => ({
   tick: () => felt("tap"),
 }));
 const notify = vi.fn();
-const retry = vi.fn();
 vi.mock("../notice-center", async (importOriginal) => ({
   ...(await importOriginal<object>()),
   notify: (notice: unknown) => notify(notice),
@@ -73,7 +72,6 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   felt.mockClear();
   notify.mockClear();
-  retry.mockClear();
   sessionStorage.clear();
 });
 
@@ -92,7 +90,7 @@ const render = () =>
             {
               tenant_id: "org-one",
               kind: "organisation",
-              name: "Cedar Studio",
+              name: "Authority Closers",
               role: "owner",
               sales_xray_enabled: true,
             },
@@ -104,7 +102,7 @@ const render = () =>
               sales_xray_enabled: true,
             },
           ],
-          retry,
+          retry: () => {},
         }}
       >
         <AcquisitionShell authenticated active="calls">
@@ -123,7 +121,7 @@ const choose = (tenantId: string) =>
 
 it("answers a workspace tap at once: a haptic, the new name, the page's outline", async () => {
   await render();
-  expect(shown()).toBe("Cedar Studio");
+  expect(shown()).toBe("Authority Closers");
   await choose("org-two");
   // Before the server has answered.
   expect(felt).toHaveBeenCalledWith("tap");
@@ -139,7 +137,7 @@ it("puts the old workspace back when the switch fails, and says so", async () =>
   await render();
   await choose("org-two");
   await act(async () => contextReply(new Error("offline")));
-  expect(shown()).toBe("Cedar Studio");
+  expect(shown()).toBe("Authority Closers");
   expect(host.querySelector("[data-standing-in]")).toBeNull();
   expect(felt).toHaveBeenLastCalledWith("error");
   expect(notify).toHaveBeenCalledWith(
@@ -149,13 +147,4 @@ it("puts the old workspace back when the switch fails, and says so", async () =>
     }),
   );
   expect(sessionStorage.getItem("sx-switch-timing")).toBeNull();
-});
-
-it("refreshes the confirmed session in place after a successful switch", async () => {
-  await render();
-  await choose("org-two");
-  await act(async () => contextReply(Response.json({ tenant_id: "org-two" })));
-  expect(retry).toHaveBeenCalledTimes(1);
-  expect(shown()).toBe("Fictional Traders");
-  expect(host.querySelector("[data-standing-in]")).not.toBeNull();
 });

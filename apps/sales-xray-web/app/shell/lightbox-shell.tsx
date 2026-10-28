@@ -773,7 +773,8 @@ function LightboxShellFrame({
     switching.current = tenantId;
     // The tap answers at once (owner, 25 Oct 2026, Admin #17: switching
     // "feels slow"): a haptic, the switcher closes, and the header names the
-    // new workspace over the page's outline while the context is confirmed.
+    // new workspace over the page's outline while the context changes and
+    // the page reloads into it.
     tick();
     markSwitchStart(tenantId);
     setSwitcherOpen(false);
@@ -803,8 +804,8 @@ function LightboxShellFrame({
           selected.tenant_id !== tenantId
         )
           throw new Error("workspace_not_selected");
-        // Keep old page reads paused until the directory confirms the new
-        // context and the workspace's page frame is replaced.
+        // The next document reads the new context. Do not start reads here
+        // between the successful context change and its reload.
         setWorkspaceReloadPending(true);
         setSwitcherOpen(false);
         setRecentCalls([]);
@@ -816,11 +817,8 @@ function LightboxShellFrame({
           recentCallsContextKey: null,
           recentFetchedAt: null,
         });
-        // Re-read the authoritative directory in place. The app session keys
-        // its page frame by confirmed identity, so old page state is discarded
-        // without fetching and booting the whole document again.
+        // Every list on the page belongs to the workspace: reload into it.
         if (next) window.location.assign(next);
-        else if (access) access.retry();
         else window.location.reload();
         return true;
       }
