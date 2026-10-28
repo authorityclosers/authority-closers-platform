@@ -2049,24 +2049,6 @@ def install_identity_http(
             raise PasswordRegistrationUnavailable(str(error)) from error
         return tenant_id
 
-    async def select_existing_learner(
-        database: AsyncSession, identity: AsyncIdentityApplication, token: str, person_id: UUID
-    ) -> None:
-        # Match the existing-account learner Google callback: never inherit the
-        # Sales X-Ray session's workspace. Select only the configured learner membership.
-        tenant_id = settings.public_learner_tenant_id
-        if tenant_id is not None:
-            membership = await database.scalar(
-                select(Membership).where(
-                    Membership.tenant_id == tenant_id,
-                    Membership.person_id == person_id,
-                    Membership.role == MembershipRole.LEARNER.value,
-                    Membership.status == MembershipStatus.ACTIVE.value,
-                )
-            )
-            if membership is not None:
-                await identity.select_tenant(token, tenant_id)
-
     def require_handoff_surface(request: Request, surface: str) -> str:
         origin = _surface_origin(settings, surface)
         _require_surface_host(request, settings, surface)
@@ -2101,9 +2083,7 @@ def install_identity_http(
                 resolved.actor.person_id,
                 user_agent=request.headers.get("user-agent"),
                 ip_address=request.client.host if request.client else None,
-            )
-            await select_existing_learner(
-                database, identity, issued.token, resolved.actor.person_id
+                auto_select_tenant=False,
             )
             target_origin = _surface_origin(settings, "learner")
             code = cross_app_handoff_codec.encode(
@@ -2176,15 +2156,10 @@ def install_identity_http(
                     resolved.actor.person_id,
                     user_agent=request.headers.get("user-agent"),
                     ip_address=request.client.host if request.client else None,
+                    auto_select_tenant=False,
                 )
                 if result == "success":
                     await identity.select_tenant(issued.token, tenant_id)
-                else:
-                    # Consent is never accepted by the bridge. An account session
-                    # lets the existing renewal page fetch the published document.
-                    await select_existing_learner(
-                        database, identity, issued.token, resolved.actor.person_id
-                    )
                 await AuditRepository(database).append(
                     tenant_id=learner_tenant_id,
                     actor_person_id=resolved.actor.person_id,
@@ -3092,9 +3067,14 @@ def install_identity_http(
         # The audit chain is the append-only consent history.  A person row is
         # only the current projection; earlier versions remain attributable and
         # verifiable in the chain and are never overwritten.
-        # Consent is attributed exactly as before; only the membership step below is new.
         on_learner = request.url.hostname == settings.public_app_url.host
-        tenant_id = actor.tenant_id or settings.public_learner_tenant_id
+        # The learner host always records and replays consent in its configured
+        # tenant, even when an older session still has an organisation selected.
+        tenant_id = (
+            settings.public_learner_tenant_id
+            if on_learner
+            else actor.tenant_id or settings.public_learner_tenant_id
+        )
         if tenant_id is None:
             raise LearnerConsentRenewalUnavailable(
                 "A learner tenant is required to record consent safely."

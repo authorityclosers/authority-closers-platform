@@ -5,6 +5,8 @@ from __future__ import annotations
 import base64
 import copy
 import hashlib
+import ipaddress
+import json
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
@@ -13,13 +15,18 @@ import pytest
 
 import ac_platform.http.auth as auth_module
 import ac_platform.http.auth_transactions as transactions
+from ac_platform.application.settings import Settings
 from ac_platform.http.auth_transactions import (
     CROSS_APP_HANDOFF_ERROR,
     CrossAppHandoffCodec,
     InvalidAuthTransaction,
     SalesXrayAppHandoffCodec,
 )
-from ac_platform.http.rate_limits import DEFAULT_RATE_LIMIT_RULES, RateLimitMiddleware
+from ac_platform.http.rate_limits import (
+    DEFAULT_RATE_LIMIT_RULES,
+    InMemoryTokenBucketLimiter,
+    RateLimitMiddleware,
+)
 from ac_platform.identity.services import (
     AccountClosedError,
     AccountUnavailableError,
@@ -32,6 +39,7 @@ from ac_platform.tenancy.learner_provisioning import (
     LearnerConsentUpdateRequiredError,
     LearnerProvisioningError,
 )
+from tests.unit.application.test_settings import _deployment_values
 from tests.unit.http.test_auth_routes import (
     DEPLOYMENT_SESSION_COOKIE,
     VALID_SESSION_TOKEN,
@@ -40,6 +48,7 @@ from tests.unit.http.test_auth_routes import (
 )
 from tests.unit.http.test_sales_xray_auth import (
     APP_USER_AGENT,
+    SALES_PRODUCTION_ORIGIN,
     SALES_STAGING_HOST,
     SALES_STAGING_ORIGIN,
     _sales_staging_settings,
@@ -85,6 +94,7 @@ class Identity:
 
     async def issue_authenticated_session(self, person_id, **kwargs):
         assert person_id == PERSON
+        assert kwargs["auto_select_tenant"] is False
         if self.deleting:
             raise AccountClosedError("closed")
         token = uuid4().hex + "x" * 11
@@ -270,7 +280,7 @@ def test_happy_path_revokes_carried_session_sets_host_only_cookie_and_audits(cli
     code = get_code(started)
     handoff = decode(code)
     assert handoff.session_token != VALID_SESSION_TOKEN
-    assert Identity.records[handoff.session_token]["tenant"] == SETTINGS.public_learner_tenant_id
+    assert Identity.records[handoff.session_token].get("tenant") is None
     assert DEPLOYMENT_SESSION_COOKIE not in started.cookies
     response = redeem(client, code)
     assert response.status_code == 200
@@ -312,6 +322,8 @@ def test_consent_never_silently_changes_but_account_can_open_renewal(client, fai
     response = redeem(client, code)
     assert response.json() == {"result": result, "return_path": "/learning?tab=mine"}
     assert DEPLOYMENT_SESSION_COOKIE in response.cookies
+    assert Identity.records[response.cookies[DEPLOYMENT_SESSION_COOKIE]].get("tenant") is None
+    assert not Identity.selected
     assert Identity.records[decode(code).session_token]["revoked"]
     assert Audit.events[-1]["payload"]["result"] == result
     assert_expired(redeem(client, code))
@@ -475,7 +487,10 @@ def test_codec_is_sealed_bounded_and_handles_longest_unicode_path():
         codec.decode(code, now=969)
 
 
-def test_learner_renewal_selects_public_context_and_keeps_audit_idempotent(monkeypatch):
+@pytest.mark.parametrize("initial_context", ["none", "organisation"])
+def test_learner_renewal_selects_public_context_and_keeps_audit_idempotent(
+    monkeypatch, initial_context
+):
     from dataclasses import replace
 
     from tests.unit.http import test_learner_consent_routes as consent_tests
@@ -484,6 +499,14 @@ def test_learner_renewal_selects_public_context_and_keeps_audit_idempotent(monke
     client, database = consent_tests._client(person, monkeypatch)
     original_dependency = next(iter(client.app.dependency_overrides.values()))
     selected = []
+    organisation_id = uuid4()
+    original_append = consent_tests._FakeAuditRepository.append
+
+    async def append(repository, **kwargs):
+        assert kwargs["tenant_id"] == consent_tests.TENANT_ID
+        return await original_append(repository, **kwargs)
+
+    monkeypatch.setattr(consent_tests._FakeAuditRepository, "append", append)
 
     async def select_tenant(token, tenant_id):
         selected.append((token, tenant_id))
@@ -494,7 +517,14 @@ def test_learner_renewal_selects_public_context_and_keeps_audit_idempotent(monke
         async for auth in original_dependency(request):
             # The first learner sign-in may have no learner membership yet.
             actor = replace(
-                auth.resolved.actor, tenant_id=None if not selected else consent_tests.TENANT_ID
+                auth.resolved.actor,
+                tenant_id=(
+                    consent_tests.TENANT_ID
+                    if selected
+                    else organisation_id
+                    if initial_context == "organisation"
+                    else None
+                ),
             )
             yield replace(auth, identity=identity, resolved=SimpleNamespace(actor=actor))
 
@@ -518,3 +548,222 @@ def test_learner_renewal_selects_public_context_and_keeps_audit_idempotent(monke
     assert len(Provisioning.calls) == 1
     assert len(selected) == 1 and selected[0][1] == consent_tests.TENANT_ID
     assert len(database.audit_events) == 1
+
+
+@pytest.mark.parametrize("attack", ["malformed", "wrong_verifier", "consumed"])
+@pytest.mark.parametrize("proxy", [False, True])
+def test_redeem_throttles_attacks_despite_forwarded_header_spoofing(client, attack, proxy):
+    code = get_code(start(client))
+    if attack == "consumed":
+        assert redeem(client, code).status_code == 200
+    client = _client(settings=SETTINGS)
+    rules = {rule.name: rule for rule in DEFAULT_RATE_LIMIT_RULES}
+    rule = rules["cross-app-handoff-redeem"]
+    assert (rule.capacity, rule.refill_seconds) == (20, 600)
+    client.app.add_middleware(
+        RateLimitMiddleware,
+        limiter=InMemoryTokenBucketLimiter(clock=lambda: 1000.0),
+        trusted_proxy_addresses=frozenset({ipaddress.ip_address("172.20.0.2")}),
+    )
+    # TestClient's peer is untrusted. In the proxy case, install an exact trusted
+    # peer, with the stable Cloudflare identity taking precedence over spoofed XFF.
+    if proxy:
+
+        @client.app.middleware("http")
+        async def trusted_peer(request, call_next):
+            request.scope["client"] = ("172.20.0.2", 1000)
+            return await call_next(request)
+
+    before = copy.deepcopy(Identity.records)
+    for index in range(21):
+        response = client.post(
+            "/v1/auth/handoff/redeem",
+            json={
+                "code": "malformed" if attack == "malformed" else code,
+                "verifier": "b" * 43 if attack == "wrong_verifier" else VERIFIER,
+            },
+            headers={
+                "host": urlsplit(LEARNER).hostname,
+                "origin": LEARNER,
+                "cf-connecting-ip": "8.8.8.8" if proxy else f"1.1.1.{index + 1}",
+                "x-forwarded-for": f"9.9.9.{index + 1}",
+            },
+        )
+        if index < 20:
+            assert_expired(response)
+        else:
+            assert response.status_code == 429
+            assert int(response.headers["retry-after"]) > 0
+            assert DEPLOYMENT_SESSION_COOKIE not in response.cookies
+    assert Identity.records == before
+
+
+@pytest.mark.parametrize("environment", ["staging", "production"])
+@pytest.mark.parametrize("endpoint", ["start", "redeem"])
+@pytest.mark.parametrize("origin_kind", ["absent", "null", "sibling", "lookalike"])
+def test_handoff_rejects_hostile_origins_before_issuing_sessions(
+    client, environment, endpoint, origin_kind
+):
+    values = _deployment_values(environment)
+    values.update(
+        {
+            "sales_xray_app_url": SALES_STAGING_ORIGIN
+            if environment == "staging"
+            else SALES_PRODUCTION_ORIGIN,
+            "public_learner_tenant_id": str(SETTINGS.public_learner_tenant_id),
+            "learner_consent_version": SETTINGS.learner_consent_version,
+        }
+    )
+    configured = Settings(environment=environment, _env_file=None, **values)
+    client = _client(settings=configured)
+    expected = str(
+        configured.sales_xray_app_url if endpoint == "start" else configured.public_app_url
+    ).rstrip("/")
+    headers = {"host": urlsplit(expected).hostname}
+    origins = {
+        "null": "null",
+        "sibling": "https://sibling.authorityclosers.test",
+        "lookalike": expected + ".attacker.test",
+    }
+    if origin_kind != "absent":
+        headers["origin"] = origins[origin_kind]
+    if endpoint == "start":
+        headers["cookie"] = f"{DEPLOYMENT_SESSION_COOKIE}={VALID_SESSION_TOKEN}"
+        body = {"target": "learner", "challenge": CHALLENGE}
+    else:
+        code = CrossAppHandoffCodec(configured.oauth_transaction_secret.get_secret_value()).encode(
+            session_token=VALID_SESSION_TOKEN,
+            session_id=Identity.records[VALID_SESSION_TOKEN]["id"],
+            challenge=CHALLENGE,
+            source_surface="sales_xray",
+            target_surface="learner",
+            target_origin=str(configured.public_app_url).rstrip("/"),
+        )
+        body = {"code": code, "verifier": VERIFIER}
+    before = copy.deepcopy(Identity.records)
+    response = client.post(f"/v1/auth/handoff/{endpoint}", headers=headers, json=body)
+    assert_expired(response)
+    assert Identity.records == before
+
+
+@pytest.mark.parametrize(
+    "injection", [{"target": "admin"}, {"tenant_id": str(uuid4())}, {"role": "owner"}]
+)
+def test_start_rejects_scope_injection(client, injection):
+    before = copy.deepcopy(Identity.records)
+    response = client.post(
+        "/v1/auth/handoff/start",
+        headers={
+            "host": SALES_STAGING_HOST,
+            "origin": SALES_STAGING_ORIGIN,
+            "cookie": f"{DEPLOYMENT_SESSION_COOKIE}={VALID_SESSION_TOKEN}",
+        },
+        json={"target": "learner", "challenge": CHALLENGE, **injection},
+    )
+    assert response.status_code == 422
+    assert DEPLOYMENT_SESSION_COOKIE not in response.cookies
+    assert Identity.records == before
+
+
+@pytest.mark.parametrize("credential", ["staff_key", "duplicate_cookie"])
+def test_start_requires_one_account_cookie_even_with_other_credentials(client, credential):
+    headers = {"host": SALES_STAGING_HOST, "origin": SALES_STAGING_ORIGIN}
+    if credential == "staff_key":
+        headers["authorization"] = "Bearer synthetic-staff-key"
+        headers["x-ac-staff-key"] = "synthetic-staff-key"
+    else:
+        headers["cookie"] = "; ".join([f"{DEPLOYMENT_SESSION_COOKIE}={VALID_SESSION_TOKEN}"] * 2)
+    before = copy.deepcopy(Identity.records)
+    response = client.post(
+        "/v1/auth/handoff/start",
+        headers=headers,
+        json={"target": "learner", "challenge": CHALLENGE},
+    )
+    assert response.status_code == 401
+    assert DEPLOYMENT_SESSION_COOKIE not in response.cookies
+    assert Identity.records == before
+
+
+@pytest.mark.parametrize("invalid", ["disabled", "deleting", "revoked", "expired"])
+def test_start_rejects_unusable_source_sessions(client, invalid):
+    if invalid in {"disabled", "deleting"}:
+        setattr(Identity, invalid, True)
+    else:
+        Identity.records[VALID_SESSION_TOKEN][invalid] = True
+    before = copy.deepcopy(Identity.records)
+    response = start(client)
+    assert response.status_code in {401, 403}
+    assert DEPLOYMENT_SESSION_COOKIE not in response.cookies
+    assert Identity.records == before
+    assert not Audit.events
+
+
+@pytest.mark.parametrize(
+    "tamper",
+    [
+        "bit_flip",
+        "other_key",
+        "session_id",
+        "source_surface",
+        "target_surface",
+        "challenge",
+        "return_path",
+    ],
+)
+def test_cross_app_tampering_is_generic_and_does_not_consume_session(client, tamper):
+    code = get_code(start(client))
+    codec = CrossAppHandoffCodec(SETTINGS.oauth_transaction_secret.get_secret_value())
+    sealed = base64.urlsafe_b64decode(code + "=" * (-len(code) % 4))
+    if tamper == "bit_flip":
+        sealed = sealed[:-1] + bytes([sealed[-1] ^ 1])
+    elif tamper == "other_key":
+        handoff = decode(code)
+        code = CrossAppHandoffCodec("different-synthetic-key-that-is-long-enough").encode(
+            session_token=handoff.session_token,
+            session_id=handoff.session_id,
+            challenge=CHALLENGE,
+            source_surface="sales_xray",
+            target_surface="learner",
+            target_origin=LEARNER,
+        )
+    else:
+        # Seal altered claims with the real key to exercise binding validation,
+        # independently of AES-GCM authentication of the outer ciphertext.
+        nonce = sealed[:12]
+        payload = json.loads(
+            codec._aead.decrypt(nonce, sealed[12:], transactions._CROSS_APP_HANDOFF_AAD)
+        )
+        payload[tamper] = {
+            "session_id": str(uuid4()),
+            "source_surface": "learner",
+            "target_surface": "admin",
+            "challenge": "b" * 43,
+            "return_path": "//attacker.test",
+        }[tamper]
+        sealed = nonce + codec._aead.encrypt(
+            nonce, json.dumps(payload).encode(), transactions._CROSS_APP_HANDOFF_AAD
+        )
+    if tamper != "other_key":
+        code = base64.urlsafe_b64encode(sealed).rstrip(b"=").decode()
+    before = copy.deepcopy(Identity.records)
+    assert_expired(redeem(client, code))
+    assert Identity.records == before
+    assert len(Audit.events) == 1
+
+
+@pytest.mark.parametrize("victim_signed_in", [False, True])
+@pytest.mark.parametrize("verifier", [None, "", "victim-verifier-with-distinct-entropy-00000000"])
+def test_foreign_code_cannot_replace_existing_learner_cookie(client, victim_signed_in, verifier):
+    code = get_code(start(client))
+    victim_token = "v" * 43
+    Identity.records[victim_token] = {"id": uuid4(), "tenant": SETTINGS.public_learner_tenant_id}
+    headers = {"host": urlsplit(LEARNER).hostname, "origin": LEARNER}
+    if victim_signed_in:
+        headers["cookie"] = f"{DEPLOYMENT_SESSION_COOKIE}={victim_token}"
+    body = {"code": code}
+    if verifier is not None:
+        body["verifier"] = verifier
+    before = copy.deepcopy(Identity.records)
+    response = client.post("/v1/auth/handoff/redeem", headers=headers, json=body)
+    assert_expired(response)
+    assert Identity.records == before
