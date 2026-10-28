@@ -59,6 +59,7 @@ import {
 } from "./organisation-skeleton";
 import { CompanyDetailsPanel } from "./company-details-panel";
 import { type PulsePerson, readPulsePeople } from "./pulse/pulse-client";
+import { PersonDisplayName } from "./people/person-display-name";
 import { CompanyLogoPanel } from "./company-logo-panel";
 import {
   addMember,
@@ -1714,7 +1715,7 @@ function MembersPanel({
                         prefetch={false}
                         className={`${styles.nameText} ${styles.memberLink}`}
                       >
-                        {name}
+                        <PersonDisplayName name={name} />
                       </Link>
                       {isYou ? (
                         <span className={styles.you}> (you)</span>
