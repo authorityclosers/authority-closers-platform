@@ -83,3 +83,9 @@ network-disabled PostgreSQL container with a 384 MiB cap and new credentials.
 It compares all public-table counts. Only its named restore container is removed;
 the dump, row inventories and timing result remain on AWS for review. This is a
 same-host logical restore drill, not independent backup/disaster recovery proof.
+
+`inventory.py` checks both database-referenced recordings and unreferenced inbox
+objects. A timeout can leave an uncertain client outcome, and interruption can
+leave bytes without a canonical row. Report those counts separately; the tool
+never deletes them. Retry the original external ID and checksum to check
+idempotency, and reconcile abandoned objects through the normal retention rules.

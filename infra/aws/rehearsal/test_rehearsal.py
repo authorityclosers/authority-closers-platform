@@ -60,3 +60,19 @@ def test_probe_refuses_non_loopback_before_network(monkeypatch):
     monkeypatch.setattr("sys.argv", ["probe.py", "--url", "https://production.example.test"])
     with pytest.raises(SystemExit, match="SSH loopback required"):
         namespace["main"]()
+
+
+def test_inventory_reports_unreferenced_upload_without_removing_it(tmp_path):
+    audit = runpy.run_path(str(ROOT / "inventory.py"))["inbox_audit"]
+    referenced = tmp_path / "valid.bin"
+    orphan = tmp_path / "orphan.bin"
+    referenced.write_bytes(b"fictional accepted recording")
+    orphan.write_bytes(b"fictional interrupted recording")
+    result = audit(tmp_path, {referenced})
+    assert result == {
+        "inbox_file_count": 2,
+        "unreferenced_file_count": 1,
+        "unreferenced_bytes": len(b"fictional interrupted recording"),
+    }
+    assert orphan.read_bytes() == b"fictional interrupted recording"
+    assert referenced.read_bytes() == b"fictional accepted recording"

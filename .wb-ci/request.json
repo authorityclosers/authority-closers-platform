@@ -1,0 +1,25 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "fb14ca51a8c029f0336b5c7ba9cea608fb4b81a0",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "infra/aws/rehearsal/README.md",
+    "infra/aws/rehearsal/compose.rehearsal.yaml",
+    "infra/aws/rehearsal/inventory.py",
+    "infra/aws/rehearsal/test_rehearsal.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "infra/aws/rehearsal/test_rehearsal.py"
+  ],
+  "include_paths": [
+    "infra/aws/rehearsal/inventory.py",
+    "infra/aws/rehearsal/test_rehearsal.py",
+    "infra/aws/rehearsal/README.md"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}
