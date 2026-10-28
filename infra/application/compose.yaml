@@ -94,7 +94,11 @@ services:
       # PostgreSQL 18+ stores major-versioned clusters beneath this parent so
       # in-place pg_upgrade workflows do not cross a mount boundary.
       - ${AC_STATE_ROOT:?AC_STATE_ROOT must isolate durable environment state}/postgres:/var/lib/postgresql
-      - ./postgres/init:/docker-entrypoint-initdb.d:ro
+      # The release installer mounts a root-owned, content-addressed copy of
+      # these bootstrap scripts, so this service's definition, and PostgreSQL,
+      # stay unchanged across application releases. Tools that only exec into
+      # the running server (backups, credential rotation) get the release copy.
+      - ${AC_POSTGRES_INIT_ROOT:-./postgres/init}:/docker-entrypoint-initdb.d:ro
     tmpfs:
       - /tmp:rw,noexec,nosuid,nodev,size=64m
       - /var/run/postgresql:rw,noexec,nosuid,nodev,size=16m,uid=999,gid=999

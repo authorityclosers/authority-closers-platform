@@ -665,6 +665,18 @@ validate_filesystem_media_activation() {
 validate_filesystem_media_activation
 
 with_release_secrets() {
+  # After capture_release_environment (S2, below) every call gets the same
+  # environment from memory instead of logging in and fetching again.
+  if [[ "${release_secrets_captured:-0}" == 1 ]]; then
+    (
+      for name in "${release_secrets_unset[@]}"; do unset -v "$name"; done
+      # Each entry is NAME=value; export assigns it in this subshell only.
+      # shellcheck disable=SC2163
+      for entry in "${release_secrets_set[@]}"; do export "$entry"; done
+      exec "$@"
+    )
+    return
+  fi
   # A user-scoped Infisical secret with the same name as a managed shared
   # secret must never shadow the release configuration.  The VPS machine
   # identity cannot read personal secrets, so the default CLI precedence can
@@ -740,12 +752,118 @@ if enabled:
 '
 }
 
+# One managed-secret fetch per install (docs/ops/ZERO-DOWNTIME-RELEASES.md, S2).
+# Each with_release_secrets call logged in to Infisical and fetched twice, about
+# 36 calls a release, most of them inside the hold. The environment change the
+# wrapper makes is captured once and kept only in this shell's memory (never a
+# file, an argument or a log); later calls apply the same change in a subshell.
+release_secrets_captured=0
+release_secrets_set=()
+release_secrets_unset=()
+
+capture_release_environment() {
+  local entry name
+  local -a before=() after=()
+  local -A inherited=() kept=()
+  mapfile -d '' before < <(env -0)
+  mapfile -d '' after < <(with_release_secrets env -0)
+  wait "$!" || return 1
+  for entry in "${before[@]}"; do inherited["${entry%%=*}"]="${entry#*=}"; done
+  for entry in "${after[@]}"; do
+    [[ "$entry" == *=* ]] || return 1
+    name="${entry%%=*}"
+    kept["$name"]=1
+    if ! [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+      # Compose cannot use such a name; whitespace in it means stray output.
+      [[ "$name" != *[[:space:]]* ]] || return 1
+      continue
+    fi
+    case "$name" in _|SHLVL|PWD|OLDPWD) continue ;; esac
+    if [[ -z "${inherited[$name]+set}" || "${inherited[$name]}" != "${entry#*=}" ]]; then
+      release_secrets_set+=("$entry")
+    fi
+  done
+  # Stray output merged into an entry must never drop a variable such as PATH.
+  [[ -n "${kept[PATH]:-}" ]] || return 1
+  for name in "${!inherited[@]}"; do
+    [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
+    case "$name" in _|SHLVL|PWD|OLDPWD) continue ;; esac
+    [[ -z "${kept[$name]:-}" ]] || continue
+    # with_release_secrets removes these inherited values, and only these.
+    case "$name" in
+      AC_GOOGLE_OAUTH_CLIENT_ID|AC_GOOGLE_OAUTH_CLIENT_SECRET|AC_EMAIL_CHALLENGE_SECRET) ;;
+      AC_PUBLIC_LEARNER_TENANT_ID|AC_OPERATIONS_TENANT_ID|AC_PRACTICE_PILOT_TENANT_ID) ;;
+      *) return 1 ;;
+    esac
+    release_secrets_unset+=("$name")
+  done
+  release_secrets_captured=1
+}
+
+capture_release_environment || {
+  printf 'Managed release environment could not be loaded.\n' >&2
+  exit 1
+}
+
 # Infisical may supply a syntactically present but whitespace-only value that
 # Compose's `${VAR:?}` interpolation accepts. Reject that state before loading
 # images, creating environment state, or issuing any Docker Compose command.
 with_release_secrets \
   python3 "$release_dir/scripts/validate-google-oauth-secrets.py"
 validate_practice_pilot_references
+
+# PostgreSQL's bootstrap scripts are mounted from a root-owned, content-addressed
+# copy instead of the per-release directory (S2), so an application release
+# leaves PostgreSQL's service definition, and the running server, unchanged.
+# compose.yaml reads AC_POSTGRES_INIT_ROOT and falls back to ./postgres/init for
+# tools that only exec into the running server.
+postgres_init_copy() {
+  local target_release="$1" source listing digest copy stage store
+  source="$target_release/postgres/init"
+  [[ -d "$source" && ! -L "$source" ]] || return 1
+  store="$application_root/postgres-init"
+  if find "$source" -mindepth 1 ! -type f ! -type d -print -quit | grep -q .; then
+    return 1
+  fi
+  listing="$(cd "$source" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum)" \
+    || return 1
+  digest="$(printf '%s\n' "$listing" | sha256sum)" || return 1
+  digest="${digest%% *}"
+  [[ "$digest" =~ ^[0-9a-f]{64}$ ]] || return 1
+  if [[ -e "$store" || -L "$store" ]]; then
+    [[ -d "$store" && ! -L "$store" ]] || return 1
+  fi
+  install -d -m 0755 -o root -g root "$store" || return 1
+  # Never inherit the application root's setgid bit.
+  chmod 0755 "$store" || return 1
+  chmod a-s "$store" || return 1
+  copy="$store/$digest"
+  if [[ ! -e "$copy" && ! -L "$copy" ]]; then
+    stage="$(mktemp -d "$store/.$digest.XXXXXX")" || return 1
+    cp -R -- "$source/." "$stage/" || return 1
+    # The non-root PostgreSQL process reads these; they hold no credentials.
+    find "$stage" -type d -exec chmod 0755 {} + || return 1
+    find "$stage" -type f -exec chmod 0644 {} + || return 1
+    chown -R root:root "$stage" || return 1
+    mv --no-target-directory --no-clobber "$stage" "$copy" || return 1
+  fi
+  [[ -d "$copy" && ! -L "$copy" ]] || return 1
+  [[ "$(stat -c '%U:%G %a' "$store")" == 'root:root 755' ]] || return 1
+  [[ "$(stat -c '%U:%G %a' "$copy")" == 'root:root 755' ]] || return 1
+  if find "$copy" -mindepth 1 \( \( ! -type f ! -type d \) -o \( -type d ! -perm 0755 \) \
+    -o \( -type f ! -perm 0644 \) \) -print -quit | grep -q .; then
+    return 1
+  fi
+  [[ "$(cd "$copy" && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum)" \
+    == "$listing" ]] || return 1
+  printf '%s\n' "$copy"
+}
+
+AC_POSTGRES_INIT_ROOT="$(postgres_init_copy "$release_dir")" || {
+  printf 'PostgreSQL bootstrap scripts could not be installed at their content address.\n' >&2
+  exit 1
+}
+export AC_POSTGRES_INIT_ROOT
 
 gzip --decompress --stdout "$image_bundle_dir/application-images.tar.gz" | docker load >/dev/null
 for image_id in "$AC_API_IMAGE" "$AC_LEARNER_IMAGE" "$AC_ADMIN_IMAGE" "$AC_COACH_IMAGE"; do
