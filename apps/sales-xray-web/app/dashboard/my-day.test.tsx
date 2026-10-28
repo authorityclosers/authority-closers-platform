@@ -158,25 +158,16 @@ it("words why a lead is there, biggest reason first", () => {
   expect(becauseLine([])).toBe("");
 });
 
-// Owner program, 25 Oct 2026: "what to do now" first, with why.
-it("lists My day's ranked work with why, and calls the first one", async () => {
+// Owner program, 25 Oct 2026: "what to do now" first. Home's calm layout
+// (28 Oct 2026): the four, and one primary action calling My day's first.
+it("calls the first of My day's ranked work in one tap", async () => {
   answer({ "/v1/lead-desk": desk(), "/v1/lead-desk/my-day": myDay() });
   await mount();
-  expect(text()).toContain("Promised a call back · 2 h overdue");
-  expect(text()).toContain("New lead, 12 min waiting");
-  expect(host!.querySelector('[data-late=""]')?.textContent).toContain(
-    "Priya Sample",
-  );
   const primary = Array.from(host!.querySelectorAll("a")).find((link) =>
     link.textContent?.startsWith("Call "),
   );
   expect(primary?.textContent).toBe("Call Priya");
-  // Today's numbers beside yesterday's; no zero chips.
-  const today = host!.querySelector('[aria-label="Today"]');
-  expect(today?.textContent).toContain("Calls18");
-  expect(today?.textContent).toContain("Yesterday 12");
-  expect(today?.textContent).not.toContain("Follow-ups done");
-  expect(text()).not.toMatch(/\b0 (to call now|later today)/);
+  expect(host!.querySelectorAll("a[data-four]")).toHaveLength(4);
 });
 
 it("shows targets with progress and how far behind pace", async () => {
@@ -244,10 +235,8 @@ it("shows what is next and this week beside last week on an empty day", async ()
   expect(host!.querySelector('[aria-label="Next up"]')?.textContent).toContain(
     "Meera Fictional",
   );
-  const week = host!.querySelector('[aria-label="This week"]');
-  expect(week?.textContent).toContain("Calls40");
-  expect(week?.textContent).toContain("25%");
-  expect(text()).not.toContain("Calls0");
+  // The week's own numbers are one tap away in My work.
+  expect(text()).toContain("Analyse yourself");
 });
 
 it("tells a seller with no leads what the team has", async () => {
@@ -291,9 +280,7 @@ it("falls back to the desk's queue and numbers when My day doesn't load", async 
     "/v1/lead-desk": desk({ numbers: numbers(5, 2, 1) }),
   });
   await mount();
-  expect(text()).toContain("Priya Sample");
   expect(text()).toContain("Call Priya");
-  const today = host!.querySelector('[aria-label="Today"]');
-  expect(today?.textContent).toContain("Follow-ups done1");
-  expect(today?.textContent).toContain("Yesterday 3");
+  const work = host!.querySelector('[aria-labelledby="my-work-title"]');
+  expect(work?.textContent).toContain("Follow-ups done1");
 });

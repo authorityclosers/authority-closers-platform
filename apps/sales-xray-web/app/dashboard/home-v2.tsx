@@ -110,12 +110,17 @@ export const RECENT_CALLS = 3;
 export function HomeRecentCalls({
   week,
   saved,
+  bare = false,
 }: {
   week: WeekActivity;
   /** The latest saved calls Home already reads, or null while unknown. */
   saved: readonly LibrarySubmission[] | null;
+  /** Just the rows, for Home's Recent block (it has its own heading). */
+  bare?: boolean;
 }) {
   const [now] = useState(() => new Date());
+  if (bare && (week.status === "off" || week.status === "error"))
+    return <p className={homeStyles.quiet}>Your calls show here.</p>;
   if (week.status === "off" || week.status === "error") return null;
   const rows =
     week.status === "ready"
@@ -124,6 +129,21 @@ export function HomeRecentCalls({
           (saved ?? []).map(rowFromSaved),
         ).slice(0, RECENT_CALLS)
       : [];
+  if (bare)
+    return week.status === "loading" ? (
+      <CallRowsSkeleton label="Recent calls" />
+    ) : rows.length ? (
+      <CallRows
+        rows={rows}
+        now={now}
+        days={false}
+        label="Recent calls, newest first"
+      />
+    ) : (
+      <p className={homeStyles.quiet}>
+        No calls this week yet. Calls you make show here.
+      </p>
+    );
   if (week.status === "ready" && rows.length === 0) return null;
   return (
     <section className={homeStyles.block} aria-labelledby="recent-calls-title">
@@ -177,11 +197,63 @@ export function activityLine(item: ActivityItem): string {
     .title;
 }
 
-export function HomeActivity({ week }: { week: WeekActivity }) {
+export function HomeActivity({
+  week,
+  bare = false,
+}: {
+  week: WeekActivity;
+  /** Just the rows, for Home's Recent block (it has its own heading). */
+  bare?: boolean;
+}) {
   const go = useGo();
   const [now] = useState(() => new Date());
   const items = activityItems(week).slice(0, RECENT_ACTIVITY);
+  if (bare && week.status === "loading")
+    return <CallRowsSkeleton label="Activity" />;
+  if (bare && items.length === 0)
+    return (
+      <p className={homeStyles.quiet}>
+        Notes, messages and stage moves show here.
+      </p>
+    );
   if (week.status !== "ready" || items.length === 0) return null;
+  const list = (
+    <ol className={styles.activity} aria-label="Recent activity, newest first">
+      {items.map((item) => {
+        const Icon = ACTIVITY_ICONS[item.event.kind] ?? Clock;
+        return (
+          <li key={item.event_id}>
+            <Link
+              className={styles.activityRow}
+              href="/leads"
+              data-lead-row=""
+              onClick={(click) => {
+                click.preventDefault();
+                handOverLead(item.lead_id, false, item.event.at);
+                go("/leads");
+              }}
+            >
+              <span
+                className={styles.dot}
+                data-kind={item.event.kind}
+                aria-hidden="true"
+              >
+                <Icon size={15} />
+              </span>
+              <span className={styles.words}>
+                <strong>{displayName(item.lead_name)}</strong>
+                <span>{activityLine(item)}</span>
+              </span>
+              <time dateTime={item.event.at}>
+                {shortWhen(item.event.at, now)}
+              </time>
+            </Link>
+          </li>
+        );
+      })}
+    </ol>
+  );
+  if (bare) return list;
   return (
     <section className={homeStyles.block} aria-labelledby="activity-title">
       <div className={homeStyles.head}>
@@ -191,43 +263,7 @@ export function HomeActivity({ week }: { week: WeekActivity }) {
           <ChevronRight size={16} aria-hidden="true" />
         </Link>
       </div>
-      <ol
-        className={styles.activity}
-        aria-label="Recent activity, newest first"
-      >
-        {items.map((item) => {
-          const Icon = ACTIVITY_ICONS[item.event.kind] ?? Clock;
-          return (
-            <li key={item.event_id}>
-              <Link
-                className={styles.activityRow}
-                href="/leads"
-                data-lead-row=""
-                onClick={(click) => {
-                  click.preventDefault();
-                  handOverLead(item.lead_id, false, item.event.at);
-                  go("/leads");
-                }}
-              >
-                <span
-                  className={styles.dot}
-                  data-kind={item.event.kind}
-                  aria-hidden="true"
-                >
-                  <Icon size={15} />
-                </span>
-                <span className={styles.words}>
-                  <strong>{displayName(item.lead_name)}</strong>
-                  <span>{activityLine(item)}</span>
-                </span>
-                <time dateTime={item.event.at}>
-                  {shortWhen(item.event.at, now)}
-                </time>
-              </Link>
-            </li>
-          );
-        })}
-      </ol>
+      {list}
     </section>
   );
 }

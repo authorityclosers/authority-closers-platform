@@ -385,11 +385,20 @@ export function ActivityTimeline({
   );
 }
 
+/** The kinds that are a call, for Home's Recent calls. */
+const CALL_KINDS = new Set(["call", "missed", "result", "report"]);
+
 export function TeamActivity({
   saved,
+  bare = false,
+  only,
 }: {
   /** The latest saved calls Home already reads (the team's, for owners). */
   saved: readonly LibrarySubmission[] | null;
+  /** Just the lines, for Home's Recent block (it has its own heading). */
+  bare?: boolean;
+  /** "calls": the team's calls and Reports only (Home's Recent calls). */
+  only?: "calls";
 }) {
   const [work, setWork] = useState<Work>({ status: "loading" });
   const [now] = useState(() => new Date());
@@ -411,9 +420,67 @@ export function TeamActivity({
     );
     return () => controller.abort();
   }, []);
-  if (work.status === "off") return null;
-  const every =
+  if (work.status === "off")
+    return bare ? (
+      <p className={homeStyles.quiet}>The team&apos;s day shows here.</p>
+    ) : null;
+  const rows =
     work.status === "ready" ? teamRows(work.items, saved ?? [], now) : [];
+  const every =
+    only === "calls" ? rows.filter((row) => CALL_KINDS.has(row.kind)) : rows;
+  const sheet = (
+    <Sheet
+      open={all}
+      onClose={() => setAll(false)}
+      title={only === "calls" ? "Today's calls" : "Team today"}
+      description={`${every.length} ${only === "calls" ? "calls" : "things"} so far today, newest first`}
+      footer={
+        <Link className={timeline.sheetLink} href="/organisation?tab=team">
+          Open the team
+          <ChevronRight size={16} aria-hidden="true" />
+        </Link>
+      }
+    >
+      {all ? (
+        <ActivityTimeline rows={every} label="All of today, newest first" />
+      ) : null}
+    </Sheet>
+  );
+  if (bare)
+    return work.status === "loading" ? (
+      <CallRowsSkeleton label="Team today" rows={4} />
+    ) : every.length === 0 ? (
+      <p className={homeStyles.quiet}>
+        {only === "calls"
+          ? "No calls yet today. The team's calls show here."
+          : "Nothing yet today. Calls, notes and lead moves show here."}
+      </p>
+    ) : (
+      <>
+        <div className={timeline.card}>
+          <ActivityTimeline
+            rows={every.slice(0, TEAM_ROWS)}
+            label={
+              only === "calls"
+                ? "Today's calls, newest first"
+                : "Team today, newest first"
+            }
+          />
+        </div>
+        {every.length > TEAM_ROWS ? (
+          <button
+            type="button"
+            className={`${styles.more} ${timeline.all}`}
+            aria-haspopup="dialog"
+            onClick={() => setAll(true)}
+          >
+            {`All ${every.length} today`}
+            <ChevronRight size={16} aria-hidden="true" />
+          </button>
+        ) : null}
+        {sheet}
+      </>
+    );
   return (
     <section className={homeStyles.block} aria-labelledby="team-activity-title">
       <div className={homeStyles.head}>
@@ -450,22 +517,7 @@ export function TeamActivity({
           />
         </div>
       )}
-      <Sheet
-        open={all}
-        onClose={() => setAll(false)}
-        title="Team today"
-        description={`${every.length} things so far today, newest first`}
-        footer={
-          <Link className={timeline.sheetLink} href="/organisation?tab=team">
-            Open the team
-            <ChevronRight size={16} aria-hidden="true" />
-          </Link>
-        }
-      >
-        {all ? (
-          <ActivityTimeline rows={every} label="All of today, newest first" />
-        ) : null}
-      </Sheet>
+      {sheet}
     </section>
   );
 }

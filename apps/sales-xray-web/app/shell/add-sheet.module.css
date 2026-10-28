@@ -86,3 +86,8 @@
     transform: none;
   }
 }
+
+.icon[data-tone="task"] {
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}

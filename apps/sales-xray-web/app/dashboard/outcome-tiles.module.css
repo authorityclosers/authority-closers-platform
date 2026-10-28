@@ -12,6 +12,40 @@
   }
 }
 
+/* Home's slider (owner, 28 Oct 2026): one sideways row of small cards, the
+   next one peeking, snapping card by card; a grid again on a computer. */
+.slider {
+  display: flex;
+  gap: 10px;
+  margin-inline: -16px;
+  padding: 2px 16px 6px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-padding-inline: 16px;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.slider::-webkit-scrollbar {
+  display: none;
+}
+
+.slider > .tile {
+  flex: 0 0 148px;
+  min-height: 0;
+  scroll-snap-align: start;
+}
+
+@media (min-width: 900px) {
+  .slider {
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    margin-inline: 0;
+    padding: 0;
+    overflow: visible;
+  }
+}
+
 .tile {
   --tone: var(--lx-teal);
   display: grid;

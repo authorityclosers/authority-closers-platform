@@ -4,6 +4,7 @@ import { useSearchParams } from "next/navigation";
 import { OrganisationHub } from "../../organisation/org-hub";
 import { OrganisationFixture } from "../_fixtures/organisation-fixture";
 import { FixtureWorkspace } from "../leads/leads-preview";
+import { activitySummary } from "../../organisation/analytics-data";
 import { analyticsFixture, FIXTURE_NOW } from "./fixture";
 
 /** Route all activity reads to fictional events; exercise the real hub and reader. */
@@ -44,39 +45,51 @@ function Answers({ children }: { children: ReactNode }) {
             calls_30d: 0,
           })),
         });
-      if (url.pathname === "/v1/lead-desk/activity") {
+      if (url.pathname === "/v1/lead-desk/activity/summary") {
         if (state === "loading") return new Promise<Response>(() => {});
         if (state === "error") return json({}, 503);
-        if (state === "messages")
-          return json({
-            items: [
-              {
-                ...analyticsFixture.items[0],
-                event: { ...analyticsFixture.items[0].event, kind: "message" },
-              },
-            ],
-            counts: {},
-            next_before: null,
-            timezone: analyticsFixture.timezone,
-          });
-        const before = url.searchParams.get("before");
-        const items = analyticsFixture.items
-          .filter((item) => !before || item.event.at < before)
-          .sort((a, b) => b.event.at.localeCompare(a.event.at));
-        const boundary =
-          state === "partial" && items.length > 10 ? items[9].event.at : null;
-        return json({
+        const history = {
+          ...analyticsFixture,
           items:
             state === "empty"
               ? []
-              : boundary
-                ? items.filter((item) => item.event.at >= boundary)
-                : items,
-          counts: {},
-          next_before: boundary,
-          timezone: analyticsFixture.timezone,
+              : state === "messages"
+                ? [
+                    {
+                      ...analyticsFixture.items[0],
+                      event: {
+                        ...analyticsFixture.items[0].event,
+                        kind: "message" as const,
+                      },
+                    },
+                  ]
+                : analyticsFixture.items,
+        };
+        const data = activitySummary(history);
+        const iso = (day: number) =>
+          new Date(day * 86400000).toISOString().slice(0, 10);
+        return json({
+          schema: "lead-desk/1",
+          days: 30,
+          now: FIXTURE_NOW,
+          timezone: data.timezone,
+          start: iso(data.start),
+          prior: iso(data.prior),
+          today: iso(data.today),
+          current: { ...data.current, work: data.currentWork },
+          previous: { ...data.previous, work: 0 },
+          people: data.people.map((person) => ({
+            ...person,
+            current: { ...person.current, work: person.work },
+            previous: { ...person.previous, work: 0 },
+            daily: person.daily.map((day, i) => ({
+              ...day,
+              day: iso(data.start + i),
+            })),
+          })),
         });
       }
+
       return original(input, init);
     };
     const frame = requestAnimationFrame(() => setReady(true));

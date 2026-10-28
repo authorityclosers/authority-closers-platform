@@ -135,90 +135,154 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-// Owner, 22 Oct 2026: owners and admins first see how sales are going.
-it("shows owners outcomes first, then sellers ranked and open leads by stage", async () => {
-  answer({
-    "/v1/lead-desk": owner(desk([])),
-    "/v1/lead-desk/reports/performance*": {
-      days: 7,
-      start: "2026-10-16",
-      end: "2026-10-22",
-      current: outcomes(2),
-      previous: outcomes(1),
-      sellers: [
-        {
-          person_id: "s1",
-          name: "priya example",
-          calls: 12,
-          connected: 6,
-          interested: 3,
-          won: 2,
-          open_leads: 20,
-          late: 1,
-        },
-      ],
-      pipeline: { new: 4, follow_up: 2 },
+/** The team's report, for the four and the slider (fictional numbers). */
+const performance = (extra: Record<string, unknown> = {}) => ({
+  days: 7,
+  start: "2026-10-16",
+  end: "2026-10-22",
+  current: outcomes(2),
+  previous: outcomes(1),
+  sellers: [
+    {
+      person_id: "s1",
+      name: "priya example",
+      calls: 12,
+      connected: 6,
+      interested: 3,
+      won: 2,
+      open_leads: 20,
+      late: 1,
     },
+  ],
+  pipeline: { new: 4, not_connected: 3, follow_up: 2 },
+  ...extra,
+});
+
+const four = () =>
+  Array.from(host.querySelectorAll("a[data-four]"), (tile) => [
+    tile.getAttribute("data-four"),
+    tile.querySelector("strong")?.textContent,
+    tile.hasAttribute("data-red"),
+  ]);
+
+// Owner's meeting, 28 Oct 2026 (bugs #70–#72): today's four on top, each red
+// until its rule is met, the second figures sideways, recent work below.
+it("gives an owner the team's four, the slider and recent work, in few words", async () => {
+  answer({
+    "/v1/lead-desk": owner({
+      ...desk([]),
+      counts: { ...desk([]).counts, unassigned: 2 },
+    }),
+    "/v1/lead-desk/reports/performance*": performance(),
+    "/v1/lead-desk/team": team({ new: 4, not_connected: 3, won: 3 }),
+    "/v1/lead-desk/activity*": { items: [], next_before: null },
   });
   await mount(true);
-  const titles = Array.from(host.querySelectorAll("h2"), (h) => h.textContent);
-  expect(titles).toEqual([
-    "How sales are going",
-    "Needs you",
-    "Where leads get stuck",
-    "Sellers",
+  await act(async () => Promise.resolve());
+  expect(host.querySelector("h2")?.textContent).toBe("Today");
+  // New leads untouched; open leads 3 of 10 (30%, above 20%); one late
+  // follow-up; two leads with no owner. All four red.
+  expect(four()).toEqual([
+    ["new", "4", true],
+    ["open", "30%", true],
+    ["follow_ups", "1", true],
+    ["no_owner", "2", true],
   ]);
-  // Owner Home v3: targets and nudges sit behind the labelled gear.
-  expect(
-    Array.from(host.querySelectorAll("button")).some(
-      (button) => button.textContent === "Controls",
-    ),
-  ).toBe(true);
-  // Owner Home v3: the outcomes are tiles, each opening its detail.
-  const figures = Array.from(
-    host.querySelectorAll("button[data-tile]"),
-    (tile) => tile.firstElementChild?.textContent?.trim(),
+  const links = Array.from(host.querySelectorAll("a[data-four]"), (tile) =>
+    tile.getAttribute("href"),
   );
-  expect(figures).toEqual(["Won", "Interested", "New leads", "Connected"]);
-  expect(host.textContent).toContain("13% of 16 leads called");
-  expect(host.textContent).toContain("Priya Example");
-  expect(host.textContent).toContain(
-    "2\u00a0won · 3\u00a0interested · 12\u00a0calls",
-  );
-  expect(host.textContent).toContain("Late follow-ups");
-  // Owner Home v3: the screen's one primary action, Review follow-ups.
+  expect(links).toEqual([
+    "/leads?tab=all&stage=new",
+    "/leads?tab=all&stage=not_connected",
+    "/leads?tab=all&due=late",
+    "/leads?tab=all&stage=open&who=unassigned",
+  ]);
+  // The screen's one primary action.
   const review = Array.from(host.querySelectorAll("a")).find((link) =>
     link.textContent?.startsWith("Review "),
   );
   expect(review?.textContent).toBe("Review 1 late follow-up");
-  expect(review?.getAttribute("href")).toBe("/leads?tab=all&due=late");
-  expect(host.textContent).toContain("6 open leads · right now");
-  const seller = host.querySelector<HTMLAnchorElement>(
-    'a[href="/organisation/people/s1"]',
+  // The second figures, sideways.
+  expect(
+    Array.from(
+      host.querySelectorAll("[data-layout=slider] [data-tile]"),
+      (tile) => tile.getAttribute("data-tile"),
+    ),
+  ).toEqual(["won", "interested", "connected", "calls", "new_leads"]);
+  // Gone from Home: the long lists and their words.
+  expect(host.textContent).not.toContain("Needs you");
+  expect(host.textContent).not.toContain("Where leads get stuck");
+  expect(host.textContent).not.toContain("leads called");
+  // Controls, My day, the team and the reports stay one tap away.
+  const buttons = Array.from(
+    host.querySelectorAll("button"),
+    (button) => button.textContent,
   );
-  expect(seller).not.toBeNull();
-  // Owner, 23 Oct 2026: team and organisation one tap from Home.
-  const team = host.querySelector<HTMLAnchorElement>('a[href="/organisation"]');
-  expect(team?.textContent).toContain("Organisation");
+  expect(buttons).toContain("Controls");
+  expect(buttons).toContain("My day");
+  expect(
+    host.querySelector('a[href="/organisation?tab=team"]')?.textContent,
+  ).toContain("Your team");
+  expect(host.querySelector('a[href="/reports"]')).not.toBeNull();
+  // Recent calls first, Activity one tap away.
+  expect(host.querySelector('[aria-label="Recent"]')?.textContent).toContain(
+    "No calls yet today",
+  );
+  expect(host.textContent).toContain("Analyse yourself");
 });
 
-it("gives a seller today's calls with one primary action", async () => {
+it("keeps a calm tile for a rule that is met", async () => {
   answer({
-    "/v1/lead-desk": desk([
-      row("ravi sample", { overdue: true, why_kind: "due" }),
-      row("asha fictional"),
-    ]),
+    "/v1/lead-desk": owner({
+      ...desk([]),
+      counts: { ...desk([]).counts, unassigned: 0 },
+    }),
+    "/v1/lead-desk/reports/performance*": performance({
+      sellers: [],
+      pipeline: { new: 0, not_connected: 1 },
+    }),
+    "/v1/lead-desk/team": team({ not_connected: 1, won: 9 }),
+  });
+  await mount(true);
+  await act(async () => Promise.resolve());
+  expect(four()).toEqual([
+    ["new", "0", false],
+    ["open", "10%", false],
+    ["follow_ups", "0", false],
+    ["no_owner", "0", false],
+  ]);
+  expect(
+    Array.from(host.querySelectorAll("a")).some((link) =>
+      link.textContent?.startsWith("Review "),
+    ),
+  ).toBe(false);
+});
+
+it("gives a seller their own four and one primary action", async () => {
+  answer({
+    "/v1/lead-desk": {
+      ...desk([row("ravi sample", { overdue: true, why_kind: "due" })]),
+      counts: { ...desk([]).counts, follow_up_due: 2, later_today: 1 },
+    },
+    "/v1/lead-desk/tasks*": { tasks: [], counts: { today: 2, overdue: 1 } },
   });
   await mount(false);
+  await act(async () => Promise.resolve());
   expect(host.querySelector("h2")?.textContent).toBe("Today");
-  // The day as tiles (owner, #18): one overdue, opening the late leads.
-  const late = host.querySelector('a[href="/leads?tab=all&due=late"]');
-  expect(late?.textContent).toBe("1Overdue");
+  expect(four()).toEqual([
+    ["new", "1", true],
+    ["open", "0", false],
+    ["follow_ups", "3", true],
+    ["tasks", "3", true],
+  ]);
   const primary = Array.from(host.querySelectorAll("a")).find((link) =>
     link.textContent?.startsWith("Call "),
   );
   expect(primary?.textContent).toBe("Call Ravi");
-  expect(host.textContent).toContain("Follow-ups done");
+  // My work: today's own numbers.
+  const work = host.querySelector('[aria-labelledby="my-work-title"]');
+  expect(work?.textContent).toContain("Attempted5");
+  expect(work?.textContent).toContain("Talk time5m");
 });
 
 it("says all caught up when nobody is due", async () => {
@@ -232,80 +296,29 @@ it("says all caught up when nobody is due", async () => {
   ).toBe(false);
 });
 
-// Approved map, slice 8 (22 Oct 2026): "Needs you", from facts the server counts.
-it("tells an owner what needs them, each row opening the work", async () => {
-  answer({
-    "/v1/lead-desk": owner({
-      ...desk([]),
-      counts: { ...desk([]).counts, unassigned: 2 },
-    }),
-    "/v1/lead-desk/reports/performance*": {
-      days: 7,
-      start: "2026-10-16",
-      end: "2026-10-22",
-      current: outcomes(2),
-      previous: outcomes(1),
-      sellers: [],
-      pipeline: {},
-    },
-    "/v1/lead-desk/reports/sla": {
-      settings: { on: true, minutes: 10, alertManagers: false, targets: [] },
-      start: "2026-10-16",
-      end: "2026-10-22",
-      sellers: [],
-      late: [
-        {
-          leadId: "11111111-1111-4111-8111-111111111111",
-          leadName: "meera fictional",
-          seller: "rahul example",
-          minutesLate: 25,
-        },
-      ],
-    },
-  });
-  await mount(true);
-  const needs = host.querySelector('[aria-label="Needs you"]');
-  expect(needs?.textContent).toContain("Waiting for a first response");
-  expect(needs?.textContent).toContain("Meera Fictional");
-  expect(needs?.textContent).toContain("Waiting 25 min · Rahul Example");
-  expect(needs?.textContent).toContain("New leads with no owner");
-  const links = Array.from(needs?.querySelectorAll("a") ?? [], (a) =>
-    a.getAttribute("href"),
-  );
-  expect(links).toContain("/leads?lead=11111111-1111-4111-8111-111111111111");
-  expect(links).toContain("/leads?tab=all&stage=open&who=unassigned");
-});
-
-it("says so when nothing needs the owner, and switches to My day", async () => {
+it("switches an owner to My day and back in one tap", async () => {
   answer({
     "/v1/lead-desk": owner(desk([row("ravi sample", { overdue: true })])),
-    "/v1/lead-desk/reports/performance*": {
-      days: 7,
-      start: "2026-10-16",
-      end: "2026-10-22",
-      current: outcomes(2),
-      previous: outcomes(1),
-      sellers: [],
-      pipeline: {},
-    },
+    "/v1/lead-desk/reports/performance*": performance(),
   });
   await mount(true);
-  expect(host.textContent).toContain("Nothing needs you right now.");
   const mine = Array.from(host.querySelectorAll("button")).find(
     (button) => button.textContent === "My day",
   )!;
   await act(async () => mine.click());
   await act(async () => Promise.resolve());
-  expect(host.querySelector("h2")?.textContent).toBe("Today");
   expect(window.location.search).toBe("?view=mine");
-  // Owner Home v3: one tap back to the team, and no segmented Team | My day.
-  expect(host.querySelector('[aria-label="Show"]')).toBeNull();
+  // Tasks that didn't load say so, instead of waiting forever.
+  expect(host.querySelector("a[data-four=tasks] strong")?.textContent).toBe(
+    "–",
+  );
   const back = Array.from(host.querySelectorAll("button")).find(
     (button) => button.textContent === "Team",
   )!;
   await act(async () => back.click());
   await act(async () => Promise.resolve());
   expect(window.location.search).toBe("");
+  expect(host.querySelector("a[data-four=no_owner]")).not.toBeNull();
 });
 
 // Owner, #20 (26 Oct 2026): a brand-new workspace starts with three steps.
@@ -396,12 +409,11 @@ it("gives a Viewer the team's Home with nothing to change", async () => {
     ),
   ).toBe(false);
   expect(host.textContent).toContain("How sales are going");
-  // What is waiting, in words that ask nothing of them, and no way into settings.
-  expect(host.textContent).toContain("Needs attention");
-  expect(host.textContent).toContain("Waiting for a seller or the lead rules");
+  // The team's four, read only: no Review button, no settings, no My work.
+  expect(host.querySelector("a[data-four=no_owner]")).not.toBeNull();
   expect(host.querySelector('a[href="/settings/lead-rules"]')).toBeNull();
-  expect(host.textContent).not.toContain("Invite sellers");
   expect(host.textContent).not.toContain("late follow-up");
+  expect(host.textContent).not.toContain("Analyse yourself");
   expect(
     Array.from(host.querySelectorAll("button")).some(
       (button) => button.textContent === "Controls",
@@ -431,4 +443,12 @@ it("puts Today and the next call before recent work on the seller dashboard", as
   expect(host.textContent).toContain("Call Ravi");
   const text = host.textContent!;
   expect(text.indexOf("Today")).toBeLessThan(text.indexOf("Recent calls"));
+  // Activity sits beside Recent calls, one tap away.
+  const activity = Array.from(host.querySelectorAll("button")).find(
+    (button) => button.textContent === "Activity",
+  )!;
+  await act(async () => activity.click());
+  expect(host.querySelector('[aria-label="Recent"]')?.textContent).toContain(
+    "Notes, messages and stage moves show here.",
+  );
 });
