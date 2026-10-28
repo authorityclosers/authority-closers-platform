@@ -204,3 +204,73 @@ it("paints cached first rows while syncing, retains them on failure, and hides t
   expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(0);
   expect(host.querySelector('[aria-label="Loading leads"]')).not.toBeNull();
 });
+
+it("keeps scrolled pages visible until a background refresh replaces the same window", async () => {
+  const second = {
+    ...row,
+    lead_id: "00000000-0000-4000-8000-000000000002",
+    name: "Second Fictional",
+  };
+  vi.mocked(readLeads).mockReset();
+  vi.mocked(readLeads).mockResolvedValueOnce({
+    leads: [row],
+    total: 2,
+    next_offset: 1,
+  });
+  const view = (version: number) => (
+    <ListView
+      canManage
+      stage="open"
+      stageLabel="All leads"
+      scope="team"
+      query=""
+      version={version}
+      onOpen={() => {}}
+    />
+  );
+  await act(async () => root.render(view(0)));
+  vi.mocked(readLeads).mockResolvedValueOnce({
+    leads: [second],
+    total: 2,
+    next_offset: null,
+  });
+  await act(async () =>
+    [...host.querySelectorAll("button")]
+      .find((button) => button.textContent?.startsWith("Show more"))!
+      .click(),
+  );
+  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(2);
+  let finish!: (page: {
+    leads: LeadRow[];
+    total: number;
+    next_offset: null;
+  }) => void;
+  vi.mocked(readLeads).mockResolvedValueOnce({
+    leads: [{ ...row, name: "Updated Fictional" }],
+    total: 2,
+    next_offset: 1,
+  });
+  vi.mocked(readLeads).mockReturnValueOnce(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+  await act(async () => root.render(view(1)));
+  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(2);
+  expect(host.textContent).toContain("Sample Lead");
+  expect(host.querySelector('[aria-label="Lead sync"]')?.textContent).toBe(
+    "Syncing…",
+  );
+  await act(async () =>
+    finish({ leads: [second], total: 2, next_offset: null }),
+  );
+  expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(2);
+  expect(host.textContent).toContain("Updated Fictional");
+  expect(host.querySelector('[aria-label="Lead sync"]')?.textContent).toBe(
+    "Updated just now",
+  );
+  expect(readLeads).toHaveBeenLastCalledWith(
+    expect.objectContaining({ offset: 1 }),
+    expect.any(AbortSignal),
+  );
+});

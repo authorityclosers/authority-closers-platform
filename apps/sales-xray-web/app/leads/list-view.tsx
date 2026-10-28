@@ -318,30 +318,47 @@ export function ListView({
     more: refine,
   };
 
+  const loadedWindow = useRef({ question, count: rows.length });
+  useEffect(() => {
+    loadedWindow.current = { question, count: rows.length };
+  }, [question, rows.length]);
   useEffect(() => {
     const controller = new AbortController();
-    readFirstLeads(
-      cacheIdentity,
-      {
-        scope,
-        owner: owner ?? undefined,
-        stage: stage === TEST ? null : stage,
-        search: query,
-        test: stage === TEST,
-        pipeline,
-        // The filters as one string: the same filters never ask twice.
-        more: JSON.parse(moreKey) as ListMore | null,
-      },
-      controller.signal,
-    )
-      .then((next) => {
+    const parameters = {
+      scope,
+      owner: owner ?? undefined,
+      stage: stage === TEST ? null : stage,
+      search: query,
+      test: stage === TEST,
+      pipeline,
+      more: JSON.parse(moreKey) as ListMore | null,
+    };
+    const keep =
+      loadedWindow.current.question === question
+        ? loadedWindow.current.count
+        : 0;
+    readFirstLeads(cacheIdentity, parameters, controller.signal)
+      .then(async (first) => {
         if (controller.signal.aborted) return;
-        setLoaded({ key, question, page: next, rows: next.leads });
-        if (next.stage_counts && stage !== TEST)
-          counts.current?.(next.stage_counts);
-        const owners = (
-          next as typeof next & { owner_counts?: Record<string, number> }
-        ).owner_counts;
+        // A minute refresh must not throw away the pages already scrolled.
+        // Keep them usable while the same loaded window is revalidated.
+        let next = first;
+        const fresh = [...first.leads];
+        while (
+          fresh.length < Math.min(keep, first.total) &&
+          next.next_offset !== null
+        ) {
+          next = await readLeads(
+            { ...parameters, offset: next.next_offset },
+            controller.signal,
+          );
+          if (controller.signal.aborted) return;
+          fresh.push(...next.leads);
+        }
+        setLoaded({ key, question, page: next, rows: fresh });
+        if (first.stage_counts && stage !== TEST)
+          counts.current?.(first.stage_counts);
+        const owners = first.owner_counts;
         if (owners && Object.keys(owners).length) ownerCounts.current?.(owners);
       })
       .catch((reason: unknown) => {
@@ -376,7 +393,7 @@ export function ListView({
   ]);
 
   const more = async () => {
-    if (!page?.next_offset || loadingMore) return;
+    if (!page?.next_offset || loadingMore || syncing) return;
     setLoadingMore(true);
     try {
       const next = await readLeads({ ...ask, offset: page.next_offset });
@@ -411,7 +428,9 @@ export function ListView({
     loadMore.current = more;
   });
   const hasMore =
-    page?.next_offset != null && (asTable || visibleCount >= rows.length);
+    page?.next_offset != null &&
+    !syncing &&
+    (asTable || visibleCount >= rows.length);
   useEffect(() => {
     const target = end.current;
     if (!hasMore || !target || typeof IntersectionObserver === "undefined")
@@ -665,10 +684,12 @@ export function ListView({
             {page.next_offset !== null &&
             (asTable || visibleCount >= rows.length) ? (
               <div className={styles.more} ref={end}>
-                <Button onClick={more} disabled={loadingMore}>
-                  {loadingMore
-                    ? "Loading…"
-                    : `Show more (${rows.length} of ${page.total})`}
+                <Button onClick={more} disabled={loadingMore || syncing}>
+                  {syncing
+                    ? "Syncing…"
+                    : loadingMore
+                      ? "Loading…"
+                      : `Show more (${rows.length} of ${page.total})`}
                 </Button>
               </div>
             ) : null}
