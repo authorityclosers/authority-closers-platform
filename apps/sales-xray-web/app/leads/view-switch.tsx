@@ -61,18 +61,6 @@ export function ViewSwitch({
       <button
         type="button"
         className={styles.segment}
-        aria-current={section === "now" ? "page" : undefined}
-        onClick={() => {
-          haptic("tap");
-          onNow();
-        }}
-      >
-        <span className={styles.label}>Now</span>
-        <Count value={nowCount} />
-      </button>
-      <button
-        type="button"
-        className={styles.segment}
         aria-current={section === "all" ? "page" : undefined}
         onClick={() => {
           haptic("tap");
@@ -87,6 +75,18 @@ export function ViewSwitch({
           </span>
         </span>
         <Count value={allCount} />
+      </button>
+      <button
+        type="button"
+        className={styles.segment}
+        aria-current={section === "now" ? "page" : undefined}
+        onClick={() => {
+          haptic("tap");
+          onNow();
+        }}
+      >
+        <span className={styles.label}>Now</span>
+        <Count value={nowCount} />
       </button>
       <button
         type="button"

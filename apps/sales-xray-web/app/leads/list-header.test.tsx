@@ -266,9 +266,8 @@ it("keeps scrolled pages visible until a background refresh replaces the same wi
   );
   expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(2);
   expect(host.textContent).toContain("Updated Fictional");
-  expect(host.querySelector('[aria-label="Lead sync"]')?.textContent).toBe(
-    "Updated just now",
-  );
+  // Quiet while all is well (owner, #73): no "Updated just now" on every list.
+  expect(host.querySelector('[aria-label="Lead sync"]')?.textContent).toBe("");
   expect(readLeads).toHaveBeenLastCalledWith(
     expect.objectContaining({ offset: 1 }),
     expect.any(AbortSignal),

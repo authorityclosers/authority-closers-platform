@@ -196,7 +196,8 @@ function viewHref(
   } = {},
 ): string {
   const path = window.location.pathname || LEADS_PATH;
-  if (view === "desk") return path;
+  // Leads opens on All (owner's meeting, 28 Oct 2026); Now has its own address.
+  if (view === "desk") return `${path}?tab=now`;
   if (
     view === "team" ||
     view === "sources" ||
@@ -751,11 +752,11 @@ export function LeadsRoute({
     requested === TASKS ||
     (can && (requested === "team" || requested === "sources"))
       ? requested
-      : requested === "all"
-        ? requestedStage && stageKeys.has(requestedStage)
+      : requested === "now"
+        ? "desk"
+        : requestedStage && stageKeys.has(requestedStage)
           ? requestedStage
-          : "open"
-        : "desk";
+          : "open";
   const view = picked && picked.at === addressKey ? picked.view : fromAddress;
   const manage: Manage | null =
     view === "team" ||
@@ -1475,8 +1476,8 @@ export function LeadsRoute({
                 {stageView ? (
                   <StageTabs
                     tabs={[
-                      { key: "desk", label: "Now", count: toCall },
                       stageStrip[0],
+                      { key: "desk", label: "Now", count: toCall },
                       { key: "more", label: "More" },
                       ...stageStrip.slice(1),
                     ]}
@@ -1496,13 +1497,8 @@ export function LeadsRoute({
                   />
                 )}
                 <div className={styles.toolbar} data-head="">
-                  <TakingSwitch
-                    key={`taking-${desk.me.taking_leads !== false}`}
-                    initial={desk.me.taking_leads !== false}
-                    place="chip"
-                    pausedUntil={desk.me.paused_until ?? null}
-                    onChanged={refresh}
-                  />
+                  {/* Taking new leads is on Home's Today line (owner, #69:
+                      a crowded header); the views and the gear stay here. */}
                   <PhoneLogCard as="chip" />
                   {view === "desk" || view === "open" ? (
                     <span className={styles.desktopCall}>

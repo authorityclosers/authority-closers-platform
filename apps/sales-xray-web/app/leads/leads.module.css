@@ -5693,24 +5693,27 @@ a.repName {
   width: 100%;
 }
 
+/* One row of round icons with a word each, like a phone's contact card
+   (owner, #73, 29 Oct 2026: two rows of big boxes were clutter). */
 .actionGrid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  grid-auto-columns: minmax(0, 1fr);
+  grid-auto-flow: column;
+  gap: 4px;
 }
 
 .actionBox {
   container-type: inline-size;
   display: grid;
   justify-items: center;
-  align-content: center;
+  align-content: start;
   gap: 4px;
   min-width: 0;
   min-height: 64px;
-  padding: 8px 4px;
-  border: 1px solid var(--kind-edge, var(--sx-line));
+  padding: 2px;
+  border: 0;
   border-radius: var(--lx-radius-md);
-  background: var(--kind-soft, var(--sx-surface));
+  background: transparent;
   color: var(--sx-ink);
   font: inherit;
   text-decoration: none;
@@ -5720,8 +5723,13 @@ a.repName {
 }
 
 .actionBox svg {
+  box-sizing: content-box;
   width: 20px;
   height: 20px;
+  padding: 11px;
+  border: 1px solid var(--kind-edge, var(--sx-line));
+  border-radius: 50%;
+  background: var(--kind-soft, var(--sx-surface));
   color: var(--kind-ink, var(--sx-ink-2));
 }
 
@@ -5877,6 +5885,17 @@ button.leadTags {
 
 /* The list's toolbar (owner, 25 Oct 2026): List | Table as one switch in words,
    and the table's Columns beside it. */
+/* Table is for computers: a phone keeps the list (owner, #73). */
+@media (max-width: 767px) {
+  .listTools .layoutSwitch {
+    display: none;
+  }
+}
+
+.syncChip[data-quiet] {
+  display: none;
+}
+
 .layoutSwitch {
   display: inline-flex;
   gap: 2px;
@@ -6459,6 +6478,46 @@ button.leadTags {
 
 .ownerWords small:empty {
   display: none;
+}
+
+/* Who added it and how fast it was called: its own line under the row (#74). */
+.ownerNote {
+  grid-column: 1 / -1;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.ownerNote:empty {
+  display: none;
+}
+
+/* Another pipeline, chosen in the app's own list (#74: no native select). */
+.pipelineChoices {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pipelineChoices button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 0 4px;
+  border: 0;
+  border-bottom: 1px solid var(--sx-line);
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.pipelineChoices li:last-child button {
+  border-bottom: 0;
 }
 
 .ownerAction {

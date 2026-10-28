@@ -236,7 +236,7 @@ function rows(now: number) {
     source: index % 2 ? "meta" : "manual",
     source_label: index % 2 ? "Facebook ad" : "Added by hand",
     owner_person_id: index % 3 ? SELLER : SECOND,
-    owner_name: index % 3 ? "swamini fictional" : "rahul example",
+    owner_name: index % 3 ? "nisha example" : "rahul example",
     why: why === "due" ? "Call back now" : why === "new" ? "New" : "Later",
     why_kind: why,
     next_action_at: new Date(now + (index - 2) * 30 * MINUTE).toISOString(),
@@ -410,7 +410,7 @@ function sharePlan(command: {
 }) {
   const leads = waiting();
   const team: Record<string, [string, number]> = {
-    [SELLER]: ["swamini fictional", 38],
+    [SELLER]: ["nisha example", 38],
     [SECOND]: ["rahul example", 21],
   };
   const split = (first: string, second: string, share: number) => {
@@ -825,7 +825,7 @@ function answers(now: number, path: string): unknown {
   if (path === "/v1/lead-desk/team")
     return {
       reps: [
-        ["swamini fictional", SELLER, 38, 6, 22, 9],
+        ["nisha example", SELLER, 38, 6, 22, 9],
         ["rahul example", SECOND, 21, 2, 11, 4],
       ].map(([name, id, open, due, calls, connected]) => ({
         person_id: id,

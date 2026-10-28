@@ -26,7 +26,8 @@ afterEach(async () => {
 });
 const render = (node: ReactNode) => act(async () => root.render(node));
 
-it("puts Now first, All leads beside it, and names the More view that is open", async () => {
+// Leads opens on All (owner's meeting, 28 Oct 2026): All leads first, Now beside it.
+it("puts All leads first, Now beside it, and names the More view that is open", async () => {
   const onNow = vi.fn();
   const onAll = vi.fn();
   const onMore = vi.fn();
@@ -49,8 +50,8 @@ it("puts Now first, All leads beside it, and names the More view that is open", 
       .forEach((node) => node.remove());
     return copy.textContent;
   };
-  expect(buttons.map(spoken)).toEqual(["Now4", "All leads", "Board"]);
-  expect(buttons[1].querySelector('[aria-hidden="true"]')?.textContent).toBe(
+  expect(buttons.map(spoken)).toEqual(["All leads", "Now4", "Board"]);
+  expect(buttons[0].querySelector('[aria-hidden="true"]')?.textContent).toBe(
     "All",
   );
   expect(buttons[2].getAttribute("aria-current")).toBe("page");
