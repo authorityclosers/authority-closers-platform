@@ -3,7 +3,7 @@ import { act, createRef } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
-import { WorkspaceSwitcher } from "./workspace-switcher";
+import { MENU_WIDTH, menuPlace, WorkspaceSwitcher } from "./workspace-switcher";
 import { workspaceLine, workspaceShortLine } from "./workspace-picker";
 
 (
@@ -215,4 +215,59 @@ it("shows your profile photo in the computer switcher and its Personal row", asy
       .querySelector('[role="menuitemradio"][aria-checked="true"] img')
       ?.getAttribute("src"),
   ).toBe(photo);
+});
+
+// Owner, #66 (28 Oct 2026): on a 14-inch MacBook the list was clipped to the
+// sidebar and cut every name short.
+it("opens beside the sidebar wide enough for whole names, kept on screen", async () => {
+  const anchor = createRef<HTMLDivElement>();
+  const longName = { ...team, name: "Sample Sales Org" };
+  await act(async () =>
+    root.render(
+      <WorkspaceSwitcher
+        workspaces={[personal, longName]}
+        currentId={longName.tenant_id}
+        personName="Mira Example"
+        pending={false}
+        open
+        setOpen={() => {}}
+        containerRef={anchor}
+        onSelect={() => {}}
+      />,
+    ),
+  );
+  const menu = host.querySelector<HTMLElement>("[role=menu]")!;
+  // Placed by the switcher, not stretched to the sidebar's width.
+  expect(menu.style.width).toBe(
+    `${Math.min(MENU_WIDTH, window.innerWidth - 16)}px`,
+  );
+  // Whole names, with the full name as a tooltip for a very long one.
+  expect(menu.querySelector('b[title="Sample Sales Org"]')?.textContent).toBe(
+    "Sample Sales Org",
+  );
+  expect(menu.textContent).toContain("Personal · Just you");
+});
+
+it("keeps the list inside the window at any size", () => {
+  expect(
+    menuPlace({ left: 72, bottom: 58 }, { width: 1470, height: 836 }),
+  ).toEqual({
+    top: 64,
+    left: 72,
+    width: 340,
+    maxHeight: 764,
+  });
+  // A narrow window: as wide as it allows, never past an edge.
+  expect(
+    menuPlace({ left: 72, bottom: 58 }, { width: 300, height: 600 }),
+  ).toEqual({
+    top: 64,
+    left: 8,
+    width: 284,
+    maxHeight: 528,
+  });
+  // A switcher near the right edge: the list moves left to stay whole.
+  expect(
+    menuPlace({ left: 1200, bottom: 40 }, { width: 1280, height: 800 }).left,
+  ).toBe(932);
 });

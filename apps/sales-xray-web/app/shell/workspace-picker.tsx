@@ -174,7 +174,7 @@ export function WorkspacePicker({
             personEmail={personEmail}
           />
           <span className={styles.copy}>
-            <b>{workspaceName(current)}</b>
+            <b title={workspaceName(current)}>{workspaceName(current)}</b>
             <small>{workspaceLine(current)}</small>
           </span>
           <Check size={16} className={styles.check} aria-label="Current" />
@@ -200,7 +200,9 @@ export function WorkspacePicker({
                 personEmail={personEmail}
               />
               <span className={styles.copy}>
-                <b>{workspaceName(workspace)}</b>
+                <b title={workspaceName(workspace)}>
+                  {workspaceName(workspace)}
+                </b>
                 <small>{workspaceLine(workspace)}</small>
               </span>
             </button>
@@ -230,7 +232,7 @@ export function WorkspacePicker({
                 <MailOpen size={15} />
               </span>
               <span className={styles.copy}>
-                <b>{invite.organisationName}</b>
+                <b title={invite.organisationName}>{invite.organisationName}</b>
                 <small>Invited as {roleLabel(invite.role).toLowerCase()}</small>
               </span>
               <span className={styles.join} aria-hidden="true">

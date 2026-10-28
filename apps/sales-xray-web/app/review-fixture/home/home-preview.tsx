@@ -28,6 +28,31 @@ import { SalesHome } from "../../dashboard/sales-home";
 import { WorkspaceAccessContext } from "../../workspace-access";
 
 const OWNER = "00000000-0000-4000-8000-000000000001";
+
+/** `&switcher=1`: more places to switch to, with long fictional names. */
+const SWITCHER_WORKSPACES = [
+  {
+    tenant_id: "00000000-0000-4000-8000-0000000000a1",
+    kind: "personal" as const,
+    name: "Personal",
+    role: null,
+    sales_xray_enabled: true,
+  },
+  {
+    tenant_id: "00000000-0000-4000-8000-0000000000a2",
+    kind: "organisation" as const,
+    name: "Sample Sales Org",
+    role: "admin" as const,
+    sales_xray_enabled: true,
+  },
+  {
+    tenant_id: "00000000-0000-4000-8000-0000000000a3",
+    kind: "organisation" as const,
+    name: "Fictional Learning Academy Pune",
+    role: "member" as const,
+    sales_xray_enabled: true,
+  },
+];
 const SELLER = "00000000-0000-4000-8000-000000000002";
 const SECOND = "00000000-0000-4000-8000-000000000003";
 const THIRD = "00000000-0000-4000-8000-000000000007";
@@ -782,6 +807,22 @@ function Preview() {
       fresh,
     }),
   );
+  // `&switcher=1`: the workspace list open, with long fictional names: the
+  // computer's popover, or the phone's sheet (owner, #66).
+  const switcher = params.get("switcher") === "1";
+  useEffect(() => {
+    if (!switcher) return;
+    const timer = window.setTimeout(() => {
+      const phone = document.querySelector<HTMLButtonElement>(
+        'button[aria-label^="Workspace: "]',
+      );
+      const computer = document.querySelector<HTMLButtonElement>(
+        'button[aria-haspopup="menu"]',
+      );
+      (phone && phone.offsetParent !== null ? phone : computer)?.click();
+    }, 600);
+    return () => window.clearTimeout(timer);
+  }, [switcher]);
   // `&controls=1`: Team controls open, for the sheet's own shots (owner Home v3).
   const controls = params.get("controls") === "1";
   useEffect(() => {
@@ -826,6 +867,7 @@ function Preview() {
             role: seller ? "member" : "owner",
             sales_xray_enabled: true,
           },
+          ...(switcher ? SWITCHER_WORKSPACES : []),
         ],
         retry: () => {},
       }}
