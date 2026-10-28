@@ -1,0 +1,23 @@
+[Unit]
+Description=Nightly content-free learning lake export (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=AC_LAKE_EXPORT_ENABLED=0
+EnvironmentFile=-/etc/authority-closers/lake/%i.env
+ExecStart=/usr/local/sbin/ac-lake-export %i
+StateDirectory=ac-lake-export
+StateDirectoryMode=0700
+UMask=0077
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=10
+IOWeight=10
+MemoryMax=768M
+TimeoutStartSec=60min
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only

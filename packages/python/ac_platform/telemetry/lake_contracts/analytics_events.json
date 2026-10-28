@@ -1,0 +1,654 @@
+{
+  "version": "analytics_events/1",
+  "columns": {
+    "event_ref": {
+      "type": "string",
+      "max_null_rate": 0,
+      "pattern": "[0-9a-f]{64}"
+    },
+    "tenant_ref": {
+      "type": "string",
+      "max_null_rate": 0,
+      "pattern": "[0-9a-f]{64}"
+    },
+    "actor_ref": {
+      "type": "string",
+      "max_null_rate": 0,
+      "pattern": "[0-9a-f]{64}"
+    },
+    "occurred_at": {
+      "type": "timestamp",
+      "max_null_rate": 0
+    },
+    "subject_ref": {
+      "type": "string",
+      "max_null_rate": 0,
+      "pattern": "[0-9a-f]{64}"
+    },
+    "session_ref": {
+      "type": "string",
+      "max_null_rate": 1,
+      "pattern": "[0-9a-f]{64}"
+    },
+    "event_name": {
+      "type": "string",
+      "max_null_rate": 0,
+      "enum": [
+        "analytics.insight_viewed",
+        "analytics.plan_period_selected",
+        "analytics.plan_viewed",
+        "analytics.progress_viewed",
+        "analytics.up_next_opened",
+        "sx.action_timing",
+        "sx.analysis_seen_done",
+        "sx.api_slow",
+        "sx.api_timing",
+        "sx.app_exit",
+        "sx.app_frames",
+        "sx.app_launch",
+        "sx.app_start",
+        "sx.board_drag",
+        "sx.clip_played",
+        "sx.coaching_opened",
+        "sx.device_profile",
+        "sx.device_state",
+        "sx.error_shown",
+        "sx.feature_used",
+        "sx.flow",
+        "sx.full_report_requested",
+        "sx.js_error",
+        "sx.lead_open_to_action",
+        "sx.lead_stage_moved",
+        "sx.lead_suggestion",
+        "sx.mission_completed",
+        "sx.mission_started",
+        "sx.network_state",
+        "sx.on_demand_requested",
+        "sx.outcome_set",
+        "sx.paywall_clicked",
+        "sx.paywall_seen",
+        "sx.permission_prompt",
+        "sx.permission_snapshot",
+        "sx.phone_call",
+        "sx.prospect_edited",
+        "sx.reanalyse_requested",
+        "sx.report_opened",
+        "sx.route_timing",
+        "sx.screen_hidden",
+        "sx.screen_viewed",
+        "sx.scroll_depth",
+        "sx.section_action",
+        "sx.section_read",
+        "sx.shake",
+        "sx.sign_in",
+        "sx.sign_out",
+        "sx.tap",
+        "sx.tap_issue",
+        "sx.upload_finished",
+        "sx.upload_started",
+        "sx.web_vital",
+        "sx.writes_waiting"
+      ]
+    },
+    "event_version": {
+      "type": "string",
+      "max_null_rate": 0,
+      "enum": [
+        "1.0"
+      ]
+    },
+    "route": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "/",
+        "/account",
+        "/account/billing",
+        "/analysis",
+        "/analysis/calls",
+        "/analysis/calls/[callId]",
+        "/analysis/new",
+        "/apps",
+        "/billing",
+        "/calendar",
+        "/calls",
+        "/chats",
+        "/coaching",
+        "/dashboard",
+        "/developers",
+        "/home",
+        "/leads",
+        "/learning/insights",
+        "/learning/plans",
+        "/learning/up-next",
+        "/organisation",
+        "/organisation/insights",
+        "/organisation/invites",
+        "/organisation/people/[personId]",
+        "/plans",
+        "/progress",
+        "/prospects",
+        "/prospects/[prospectId]",
+        "/review",
+        "/settings",
+        "/settings/[section]",
+        "/welcome"
+      ]
+    },
+    "retention_expires_at": {
+      "type": "timestamp",
+      "max_null_rate": 0
+    },
+    "screen": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "account",
+        "analysis",
+        "apps",
+        "billing",
+        "calls",
+        "calls_list",
+        "chats",
+        "coaching",
+        "dashboard",
+        "developers",
+        "home",
+        "lead",
+        "leads",
+        "new_call",
+        "org_insights",
+        "org_invites",
+        "org_person",
+        "organisation",
+        "other",
+        "plans",
+        "prospect",
+        "prospects",
+        "report",
+        "review",
+        "settings",
+        "settings_section",
+        "welcome"
+      ]
+    },
+    "target": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "button",
+        "card",
+        "icon",
+        "image",
+        "input",
+        "link",
+        "other",
+        "row",
+        "tab",
+        "text"
+      ]
+    },
+    "zone": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "r1c1",
+        "r1c2",
+        "r1c3",
+        "r2c1",
+        "r2c2",
+        "r2c3",
+        "r3c1",
+        "r3c2",
+        "r3c3",
+        "r4c1",
+        "r4c2",
+        "r4c3"
+      ]
+    },
+    "kind": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "background",
+        "chunk",
+        "dead",
+        "error",
+        "exit",
+        "full",
+        "preview",
+        "rage",
+        "react",
+        "rejection"
+      ]
+    },
+    "action": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "accepted",
+        "back",
+        "call_start",
+        "changed",
+        "clip",
+        "collapse",
+        "copy",
+        "dismissed",
+        "expand",
+        "filter",
+        "helpful",
+        "lead_open",
+        "nav_switch",
+        "not_helpful",
+        "other",
+        "outcome_save",
+        "report_open",
+        "save",
+        "search",
+        "send",
+        "sheet_open",
+        "shown",
+        "tab_switch"
+      ]
+    },
+    "metric": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "cls",
+        "fcp",
+        "inp",
+        "lcp",
+        "ttfb"
+      ]
+    },
+    "value": {
+      "type": "float64",
+      "max_null_rate": 1,
+      "min": 0,
+      "max": 120000
+    },
+    "ms": {
+      "type": "float64",
+      "max_null_rate": 1,
+      "min": 0,
+      "max": 3600000
+    },
+    "wait_ms": {
+      "type": "float64",
+      "max_null_rate": 1,
+      "min": 0,
+      "max": 3600000
+    },
+    "stay_ms": {
+      "type": "float64",
+      "max_null_rate": 1,
+      "min": 0,
+      "max": 1800000
+    },
+    "seen_ms": {
+      "type": "float64",
+      "max_null_rate": 1,
+      "min": 0,
+      "max": 1800000
+    },
+    "dwell_ms": {
+      "type": "float64",
+      "max_null_rate": 1,
+      "min": 0,
+      "max": 600000
+    },
+    "band": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "1000_3000",
+        "100_300",
+        "3000_10000",
+        "300_1000",
+        "ge10000",
+        "lt100"
+      ]
+    },
+    "status": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "2xx",
+        "3xx",
+        "4xx",
+        "5xx",
+        "network",
+        "unknown"
+      ]
+    },
+    "background": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "no",
+        "yes"
+      ]
+    },
+    "depth": {
+      "type": "float64",
+      "max_null_rate": 1,
+      "min": 0,
+      "max": 100
+    },
+    "flow": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "add_lead",
+        "log_result",
+        "onboarding",
+        "phone_setup"
+      ]
+    },
+    "outcome": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "abandon",
+        "blocked",
+        "cancel",
+        "cancelled",
+        "denied",
+        "done",
+        "fail",
+        "granted",
+        "interrupted",
+        "near",
+        "not_opened",
+        "opened",
+        "saved",
+        "skip",
+        "start",
+        "step",
+        "unknown"
+      ]
+    },
+    "step": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "autostart",
+        "battery",
+        "bridge_error",
+        "bridge_ok",
+        "business",
+        "call_log",
+        "calls",
+        "duplicate",
+        "fallback_tel",
+        "first",
+        "form",
+        "name",
+        "next",
+        "notifications",
+        "permits",
+        "reason",
+        "recorder",
+        "recordings",
+        "rescued",
+        "save",
+        "stage",
+        "start",
+        "started",
+        "status",
+        "talk",
+        "team",
+        "touch_no_call"
+      ]
+    },
+    "via": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "after_call",
+        "all",
+        "board",
+        "bulk",
+        "business",
+        "click",
+        "fix",
+        "join",
+        "lead",
+        "meeting",
+        "prompt",
+        "quick",
+        "settings",
+        "sheet",
+        "solo",
+        "table",
+        "touch"
+      ]
+    },
+    "section": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "analysis",
+        "coaching",
+        "outcome",
+        "overview",
+        "prospect-information",
+        "transcript"
+      ]
+    },
+    "read_band": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "30_120s",
+        "5_30s",
+        "over_120s",
+        "under_5s"
+      ]
+    },
+    "device": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "desktop",
+        "phone",
+        "tablet"
+      ]
+    },
+    "app": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "android",
+        "web"
+      ]
+    },
+    "tier": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "high",
+        "low",
+        "mid",
+        "unknown"
+      ]
+    },
+    "net": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "2g",
+        "3g",
+        "4g",
+        "slow_2g",
+        "unknown"
+      ]
+    },
+    "link": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "cellular",
+        "ethernet",
+        "offline",
+        "unknown",
+        "wifi"
+      ]
+    },
+    "from": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "account",
+        "analysis",
+        "apps",
+        "billing",
+        "call",
+        "calls",
+        "calls_list",
+        "chat",
+        "chats",
+        "coaching",
+        "dashboard",
+        "developers",
+        "fix",
+        "home",
+        "lead",
+        "leads",
+        "new_call",
+        "none",
+        "org_insights",
+        "org_invites",
+        "org_person",
+        "organisation",
+        "other",
+        "plans",
+        "prospect",
+        "prospects",
+        "report",
+        "review",
+        "rule",
+        "settings",
+        "settings_section",
+        "setup",
+        "welcome"
+      ]
+    },
+    "nav": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "back",
+        "first",
+        "push",
+        "reload"
+      ]
+    },
+    "index": {
+      "type": "float64",
+      "max_null_rate": 1,
+      "min": 0,
+      "max": 20
+    },
+    "steps": {
+      "type": "float64",
+      "max_null_rate": 1,
+      "min": 0,
+      "max": 20
+    },
+    "left": {
+      "type": "float64",
+      "max_null_rate": 1,
+      "min": 0,
+      "max": 20
+    },
+    "result": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "moved",
+        "no_change",
+        "refused",
+        "settled",
+        "sheet",
+        "timeout",
+        "undone"
+      ]
+    },
+    "error": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "aborterror",
+        "chunkloaderror",
+        "error",
+        "networkerror",
+        "notallowederror",
+        "other",
+        "quotaexceedederror",
+        "rangeerror",
+        "referenceerror",
+        "securityerror",
+        "syntaxerror",
+        "typeerror"
+      ]
+    },
+    "source": {
+      "type": "string",
+      "max_null_rate": 1,
+      "enum": [
+        "ai_suggestion",
+        "app",
+        "calls",
+        "extension",
+        "lead",
+        "link",
+        "notification",
+        "other",
+        "prospect",
+        "seller",
+        "unknown",
+        "upload",
+        "vendor"
+      ]
+    }
+  },
+  "payload_columns": [
+    "screen",
+    "target",
+    "zone",
+    "kind",
+    "action",
+    "metric",
+    "value",
+    "ms",
+    "wait_ms",
+    "stay_ms",
+    "seen_ms",
+    "dwell_ms",
+    "band",
+    "status",
+    "background",
+    "depth",
+    "flow",
+    "outcome",
+    "step",
+    "via",
+    "section",
+    "read_band",
+    "device",
+    "app",
+    "tier",
+    "net",
+    "link",
+    "from",
+    "nav",
+    "index",
+    "steps",
+    "left",
+    "result",
+    "error",
+    "source"
+  ]
+}
