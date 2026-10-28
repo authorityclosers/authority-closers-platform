@@ -159,19 +159,33 @@
   font-size: var(--sx-text-xs);
 }
 
+/* The seller's load as two quiet figures (owner, 29 Oct 2026: calm like
+   Insights): the number large, its words beside it. */
 .workload {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 18px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
   margin: 0;
   color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
+  font-size: var(--sx-text-sm);
 }
 .workload strong {
   color: var(--sx-ink);
+  font-size: 22px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
 }
 
 .workload > span {
   display: inline-flex;
-  gap: 4px;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 6px;
+  min-width: 0;
+}
+
+.workload small {
+  flex-basis: 100%;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
 }

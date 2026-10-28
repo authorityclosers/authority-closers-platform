@@ -1,5 +1,6 @@
 "use client";
 
+import { RotateCw } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
   ActivityTimeline,
@@ -136,15 +137,20 @@ export function PersonWork({
         aria-busy={!failed}
       >
         {failed ? (
-          <button
-            type="button"
-            onClick={() => {
-              setFailed(false);
-              setAttempt((n) => n + 1);
-            }}
-          >
-            Try again
-          </button>
+          <p className={styles.failed}>
+            <span>Recent activity didn&apos;t load.</span>
+            <button
+              type="button"
+              className={styles.retry}
+              onClick={() => {
+                setFailed(false);
+                setAttempt((n) => n + 1);
+              }}
+            >
+              <RotateCw size={15} aria-hidden="true" />
+              Try again
+            </button>
+          </p>
         ) : (
           <>
             <div className={styles.presence}>
