@@ -7,7 +7,17 @@
  * skills are moving. One read brings every aggregate (the server sums them),
  * so the page arrives whole; filters live in the address.
  */
-import { ArrowUpRight, BarChart3, Lock, RotateCw, X } from "lucide-react";
+import {
+  ArrowUpRight,
+  BarChart3,
+  Lock,
+  RotateCw,
+  Search,
+  SlidersHorizontal,
+  TrendingDown,
+  TrendingUp,
+  X,
+} from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
@@ -38,6 +48,7 @@ import {
   BarList,
   ShareLine,
   SkillDots,
+  SkillGaps,
   SkillHeatmap,
   SkillSplit,
   TalkBands,
@@ -407,11 +418,9 @@ export function InsightsView({
         />
       )}
       <p className={styles.footnote}>
-        Outcomes and skill states are what each call’s report says, added up.
-        {synthetic
-          ? " This organisation is the synthetic sandbox: every call, person and company here is fictional."
-          : " Talk share counts only calls where the rep confirmed who the seller was."}{" "}
-        A guide for coaching, not an official score.
+        Added up from each call’s report
+        {synthetic ? ", in the fictional sandbox" : ""}. A guide for coaching,
+        not an official score.
       </p>
     </div>
   );
@@ -440,7 +449,10 @@ function FilterBar({
         onChange={(range) => onChange({ range })}
       />
       <details className={styles.filterDetails}>
-        <summary>Filter{active ? ` · ${active} applied` : ""}</summary>
+        <summary>
+          <SlidersHorizontal size={16} aria-hidden="true" />
+          Filter{active ? ` · ${active}` : ""}
+        </summary>
         <div className={styles.filterFields}>
           <select
             className={styles.select}
@@ -661,10 +673,7 @@ function Sections({
           </Panel>
 
           <div className={styles.grid}>
-            <Panel
-              title="Skills across the calls"
-              sub="Eight skills, every call"
-            >
+            <Panel title="Skills across the calls" sub="Share observed">
               <div className={styles.inset}>
                 <SkillSplit skills={data.skills} />
               </div>
@@ -672,7 +681,7 @@ function Sections({
           </div>
 
           <div className={styles.grid}>
-            <Panel title="Objections" sub="What prospects pushed back on">
+            <Panel title="Objections" sub="What prospects raised">
               <div className={styles.inset}>
                 {data.objections.length ? (
                   <BarList
@@ -693,14 +702,12 @@ function Sections({
             </Panel>
             <Panel
               title={
-                data.mistakes.length
-                  ? "Common mistakes"
-                  : "Skills most often needing work"
+                data.mistakes.length ? "Common mistakes" : "Skills needing work"
               }
               sub={
                 data.mistakes.length
-                  ? "The main mistake in each call"
-                  : "Calls where the skill needed attention"
+                  ? "Main one per call"
+                  : "Calls needing work"
               }
             >
               <div className={styles.inset}>
@@ -729,37 +736,6 @@ function Sections({
       {section === "people" ? (
         <>
           <Panel
-            title="Skills by person"
-            sub="Share of skill moments observed"
-            className={styles.wide}
-          >
-            <div className={styles.heatBar}>
-              {data.teams.length ? (
-                <Segmented
-                  label="Group by"
-                  items={[
-                    { key: "people", label: "People" },
-                    { key: "teams", label: "Teams" },
-                  ]}
-                  value={grouping}
-                  onChange={setGrouping}
-                />
-              ) : null}
-              <span className={styles.caption}>
-                Amber marks a skill that needed attention; the deeper, the more
-                often.
-              </span>
-            </div>
-            <SkillHeatmap
-              groups={heatGroups}
-              label={grouping === "teams" ? "Team" : "Person"}
-              onSelect={(key) =>
-                go(grouping === "teams" ? { team: key } : { person: key })
-              }
-            />
-          </Panel>
-
-          <Panel
             title={data.teams.length ? "People and teams" : "People"}
             sub={`${count(data.people.length)} with calls`}
             className={styles.wide}
@@ -773,13 +749,52 @@ function Sections({
             />
           </Panel>
 
+          <Panel
+            title="Skills by person"
+            sub="Where to coach"
+            className={styles.wide}
+          >
+            <div className={styles.inset}>
+              <SkillGaps
+                groups={data.people}
+                onSelect={(key) => go({ person: key })}
+              />
+              <details className={styles.gridDetails}>
+                <summary>Every skill, person by person</summary>
+                <div className={styles.heatBar}>
+                  {data.teams.length ? (
+                    <Segmented
+                      label="Group by"
+                      items={[
+                        { key: "people", label: "People" },
+                        { key: "teams", label: "Teams" },
+                      ]}
+                      value={grouping}
+                      onChange={setGrouping}
+                    />
+                  ) : null}
+                  <span className={styles.caption}>
+                    Amber marks a skill that needed work.
+                  </span>
+                </div>
+                <SkillHeatmap
+                  groups={heatGroups}
+                  label={grouping === "teams" ? "Team" : "Person"}
+                  onSelect={(key) =>
+                    go(grouping === "teams" ? { team: key } : { person: key })
+                  }
+                />
+              </details>
+            </div>
+          </Panel>
+
           <div className={styles.grid}>
             <Panel
               title="Talk share"
               sub={
                 totals.talkShare === null
-                  ? "Seller’s share of talk"
-                  : `Seller talked ${totals.talkShare}% on average`
+                  ? undefined
+                  : `${totals.talkShare}% on average`
               }
             >
               <div className={styles.inset}>
@@ -787,8 +802,8 @@ function Sections({
                   <>
                     <TalkBands bands={data.talk} />
                     <p className={styles.caption}>
-                      From {count(totals.talkCalls)} calls with a measured talk
-                      share. Most good calls sit between 40% and 60%.
+                      {count(totals.talkCalls)} calls with a confirmed seller ·
+                      good calls sit at 40–60%
                     </p>
                   </>
                 ) : (
@@ -799,35 +814,50 @@ function Sections({
                 )}
               </div>
             </Panel>
-            <Panel
-              title="Coaching progress"
-              sub="Skill moments needing attention"
-            >
+            <Panel title="Coaching progress" sub="Lower is better">
               <div className={styles.inset}>
-                <ShareLine
-                  points={data.trend.map((point) => ({
-                    at: point.at,
-                    share: point.needsAttentionShare,
-                  }))}
-                  unit={data.window.unit}
-                  label="needing attention"
-                />
-                <div className={styles.movers}>
-                  <MoverList
-                    title="Improving"
-                    people={improving}
-                    onSelect={(key) => go({ person: key })}
+                {data.trend.some(
+                  (point) => (point.needsAttentionShare ?? 0) > 0,
+                ) ? (
+                  <ShareLine
+                    points={data.trend.map((point) => ({
+                      at: point.at,
+                      share: point.needsAttentionShare,
+                    }))}
+                    unit={data.window.unit}
+                    label="needing attention"
                   />
-                  <MoverList
-                    title="Slipping"
-                    people={slipping}
-                    onSelect={(key) => go({ person: key })}
-                  />
-                </div>
-                <p className={styles.caption}>
-                  Second half of the period against the first, for people with
-                  three or more calls.
-                </p>
+                ) : (
+                  <p className={styles.bigStat}>
+                    <b>0%</b>
+                    <span>of skill moments needed work in this period</span>
+                  </p>
+                )}
+                {improving.length || slipping.length ? (
+                  <>
+                    <div className={styles.movers}>
+                      <MoverList
+                        title="Improving"
+                        tone="better"
+                        people={improving}
+                        onSelect={(key) => go({ person: key })}
+                      />
+                      <MoverList
+                        title="Slipping"
+                        tone="worse"
+                        people={slipping}
+                        onSelect={(key) => go({ person: key })}
+                      />
+                    </div>
+                    <p className={styles.caption}>
+                      Second half of the period against the first
+                    </p>
+                  </>
+                ) : (
+                  <p className={styles.muted}>
+                    Who is improving shows once people have three or more calls.
+                  </p>
+                )}
               </div>
             </Panel>
           </div>
@@ -837,13 +867,10 @@ function Sections({
       {section === "calls" ? (
         <>
           <div className={styles.grid}>
-            <Panel
-              title="Strongest calls"
-              sub="Fewest skills needing attention"
-            >
+            <Panel title="Strongest calls" sub="Fewest gaps">
               <CallList rows={data.strongest} linkFor={linkFor} />
             </Panel>
-            <Panel title="Calls to review" sub="Most skills needing attention">
+            <Panel title="Calls to review" sub="Most gaps">
               <CallList rows={data.weakest} linkFor={linkFor} />
             </Panel>
           </div>
@@ -899,6 +926,23 @@ function ProfileLink({ group }: { group: Group }) {
   );
 }
 
+/** People lists longer than this get a search field and a count line. */
+const SEARCH_FROM = 8;
+
+/** Two letters for a person's round mark ("Fictional seller 4" -> "FS"). */
+function initials(name: string): string {
+  const words = name
+    .trim()
+    .split(/\s+/)
+    .filter((word) => /\p{L}/u.test(word));
+  return (
+    words
+      .slice(0, 2)
+      .map((word) => (word.match(/\p{L}/u)?.[0] ?? "").toLocaleUpperCase())
+      .join("") || "?"
+  );
+}
+
 function PeopleTable({
   groups,
   teams,
@@ -926,30 +970,39 @@ function PeopleTable({
     : expanded
       ? groups
       : groups.slice(0, 50);
+  // A short team reads at a glance: search and the count line only earn
+  // their place on a longer list (owner bug #80: "so much text").
+  const long = groups.length > SEARCH_FROM;
   return (
     <>
-      <div className={styles.peopleSearch}>
-        <label className={styles.peopleSearchField}>
-          <span>Search people</span>
-          <input
-            ref={searchInput}
-            type="search"
-            placeholder="Name"
-            value={search}
-            aria-describedby={`${peopleId}-count`}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-        </label>
-        <Button
-          disabled={search.length === 0}
-          onClick={() => {
-            setSearch("");
-            searchInput.current?.focus();
-          }}
-        >
-          Clear search
-        </Button>
-      </div>
+      {long ? (
+        <div className={styles.peopleSearch}>
+          <label className={styles.peopleSearchField}>
+            <Search size={17} aria-hidden="true" />
+            <span className={styles.srOnly}>Search people</span>
+            <input
+              ref={searchInput}
+              type="search"
+              placeholder="Search people"
+              value={search}
+              aria-describedby={`${peopleId}-count`}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </label>
+          <button
+            type="button"
+            className={styles.clearSearch}
+            disabled={search.length === 0}
+            onClick={() => {
+              setSearch("");
+              searchInput.current?.focus();
+            }}
+          >
+            <X size={16} aria-hidden="true" />
+            <span className={styles.srOnly}>Clear search</span>
+          </button>
+        </div>
+      ) : null}
       <div id={peopleId}>
         {query && rows.length === 0 ? (
           <p className={styles.mutedInset}>No people match this name.</p>
@@ -958,27 +1011,42 @@ function PeopleTable({
             label="People"
             cards={rows.map((group) => (
               <Card key={group.key ?? group.name}>
-                <div className={styles.cardHead}>
-                  <span>
-                    <button
-                      type="button"
-                      className={`${styles.linkish} ${styles.peopleButton}`}
-                      onClick={() => group.key && onPerson(group.key)}
-                    >
-                      {group.name}
-                    </button>
-                    {profiles ? <ProfileLink group={group} /> : null}
+                <div className={styles.personRow}>
+                  <span className={styles.initials} aria-hidden="true">
+                    {initials(group.name)}
                   </span>
-                  <span>{count(group.calls)} calls</span>
-                </div>
-                <div className={styles.cardMeta}>
-                  {group.team ? <span>{group.team}</span> : null}
-                  <span>
-                    {percent(group.calls ? group.nextStep / group.calls : null)}{" "}
-                    next step
+                  <span className={styles.personMain}>
+                    <span className={styles.personName}>
+                      <button
+                        type="button"
+                        className={`${styles.linkish} ${styles.peopleButton}`}
+                        onClick={() => group.key && onPerson(group.key)}
+                      >
+                        {group.name}
+                      </button>
+                      {profiles ? <ProfileLink group={group} /> : null}
+                    </span>
+                    <span className={styles.personMeta}>
+                      {count(group.calls)} calls · {count(group.won)} won
+                      {group.team ? ` · ${group.team}` : ""}
+                      {group.needsAttentionChange !== null ? (
+                        <span
+                          className={styles.personTrend}
+                          data-trend={trendTone(group.needsAttentionChange)}
+                        >
+                          {changeText(group.needsAttentionChange)}
+                        </span>
+                      ) : null}
+                    </span>
                   </span>
-                  <span>{count(group.won)} won</span>
-                  <span>{changeText(group.needsAttentionChange)}</span>
+                  <span className={styles.personFigure}>
+                    <b>
+                      {percent(
+                        group.calls ? group.nextStep / group.calls : null,
+                      )}
+                    </b>
+                    <small>next step</small>
+                  </span>
                 </div>
               </Card>
             ))}
@@ -1046,24 +1114,26 @@ function PeopleTable({
           </Table>
         )}
       </div>
-      <div className={styles.peopleControls}>
-        <p id={`${peopleId}-count`} className={styles.caption} role="status">
-          {query ? "Matches:" : "Showing"} {count(rows.length)} of{" "}
-          {count(groups.length)} people
-        </p>
-        {!query && groups.length > 50 ? (
-          <Button
-            aria-expanded={expanded}
-            aria-controls={peopleId}
-            onClick={(event) => {
-              if (expanded) event.currentTarget.focus();
-              setExpanded(!expanded);
-            }}
-          >
-            {expanded ? "Show fewer" : "Show more"}
-          </Button>
-        ) : null}
-      </div>
+      {long ? (
+        <div className={styles.peopleControls}>
+          <p id={`${peopleId}-count`} className={styles.caption} role="status">
+            {query ? "Matches:" : "Showing"} {count(rows.length)} of{" "}
+            {count(groups.length)} people
+          </p>
+          {!query && groups.length > 50 ? (
+            <Button
+              aria-expanded={expanded}
+              aria-controls={peopleId}
+              onClick={(event) => {
+                if (expanded) event.currentTarget.focus();
+                setExpanded(!expanded);
+              }}
+            >
+              {expanded ? "Show fewer" : "Show more"}
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
     </>
   );
 }
@@ -1079,16 +1149,22 @@ const trendTone = (change: number | null) =>
 
 function MoverList({
   title,
+  tone,
   people,
   onSelect,
 }: {
   title: string;
+  tone: "better" | "worse";
   people: Group[];
   onSelect: (key: string) => void;
 }) {
+  const Icon = tone === "better" ? TrendingUp : TrendingDown;
   return (
     <div className={styles.moverList}>
-      <h3>{title}</h3>
+      <h3 data-trend={tone}>
+        <Icon size={15} aria-hidden="true" />
+        {title}
+      </h3>
       {people.length ? (
         <ul>
           {people.map((person) => (

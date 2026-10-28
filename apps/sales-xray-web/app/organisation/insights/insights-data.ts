@@ -12,7 +12,7 @@ export const INSIGHTS_PATH = "/v1/conversation/acquisition/insights";
 export const RANGES = [
   { key: "30d", label: "30 days" },
   { key: "90d", label: "90 days" },
-  { key: "12m", label: "12 months" },
+  { key: "12m", label: "1 year" },
   { key: "all", label: "All time" },
 ] as const;
 export type RangeKey = (typeof RANGES)[number]["key"];

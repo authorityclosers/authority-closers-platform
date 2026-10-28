@@ -1115,3 +1115,364 @@ a.callTitle:hover {
     height: 6px;
   }
 }
+
+/* ---------- Skills across the calls (owner bug #79, 29 Oct 2026) ----------
+   The answer first (strongest skill, the one to coach next), then all eight
+   ranked: name and share on one line, one rounded split bar under it. */
+.skillAnswer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+}
+.skillAnswer p {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  min-width: 0;
+  padding: 12px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent-soft);
+}
+.skillAnswer p[data-tone="warn"] {
+  background: color-mix(in oklab, var(--sx-warn) 12%, transparent);
+}
+.skillAnswer small {
+  color: var(--sx-ink-2);
+  font-size: 12px;
+  font-weight: 650;
+}
+.skillAnswer b {
+  font-size: 15px;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+.skillAnswer span {
+  color: var(--sx-ink-2);
+  font-size: 12px;
+}
+.skillList {
+  display: grid;
+  gap: 14px;
+}
+.skillList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 6px 12px;
+  min-height: 0;
+}
+.skillList .skillName {
+  font-size: 14px;
+}
+.skillList .skillValue {
+  display: block;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: right;
+}
+.skillList .split {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  height: 8px;
+  border-radius: var(--sx-radius-pill);
+}
+
+/* ---------- Ranked lists: objections, mistakes (owner bug #78) ----------
+   No thin lines: each row is a soft pill filled to its share; the count is
+   written in each row, so the fill only supports it. */
+.barList {
+  gap: 6px;
+}
+.barRow,
+.page .barRow {
+  position: relative;
+  isolation: isolate;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+  padding: 4px 12px;
+  border-radius: var(--sx-radius-md);
+  overflow: hidden;
+  box-sizing: border-box;
+}
+.barRow .barLabel {
+  grid-column: 1;
+  grid-row: 1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.barRow .barValue {
+  grid-column: 2;
+  grid-row: 1;
+}
+.barRow .barTrack {
+  position: absolute;
+  /* An absolute grid child with a grid area is placed in that area; auto
+     places it over the whole row. */
+  grid-area: auto;
+  inset: 0;
+  z-index: -1;
+  height: auto;
+  border-radius: inherit;
+  background: var(--sx-sunken);
+}
+.barRow .barTrack i {
+  border-radius: 0;
+  background: color-mix(in oklab, var(--sx-accent) 24%, var(--sx-surface));
+}
+
+/* ---------- People view (owner bug #80, 29 Oct 2026) ----------
+   Ranked person rows (round initials, name, one meta line, the next-step
+   share as the figure), search only on long lists, the coaching answer
+   before the grid, and short captions. */
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.peopleSearch {
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 8px;
+}
+.peopleSearchField {
+  position: relative;
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  max-width: none;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-sunken);
+  box-sizing: border-box;
+}
+.peopleSearchField input,
+.peopleSearchField input:focus-visible {
+  flex: 1;
+  min-height: 42px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  font-size: 16px;
+  outline: none;
+}
+.peopleSearchField:focus-within {
+  box-shadow: inset 0 0 0 2px var(--sx-focus-ring);
+}
+.clearSearch {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-ink-2);
+  cursor: pointer;
+}
+.clearSearch:disabled {
+  visibility: hidden;
+}
+.clearSearch:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+}
+.personRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.initials {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--sx-accent-soft);
+  color: var(--sx-ink);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.personMain {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+.personName {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+.personName .peopleButton {
+  min-height: 32px;
+  overflow: hidden;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.personMeta {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.personTrend::before {
+  content: " · ";
+  color: var(--sx-muted);
+}
+.personFigure {
+  display: grid;
+  flex: none;
+  justify-items: end;
+  font-variant-numeric: tabular-nums;
+}
+.personFigure b {
+  font-size: 17px;
+  line-height: 1.2;
+}
+.personFigure small {
+  color: var(--sx-muted);
+  font-size: 11px;
+}
+.gaps {
+  display: grid;
+  gap: 0;
+}
+.gaps li {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: start;
+  gap: 10px;
+  padding: 10px 0;
+}
+.gaps li + li {
+  border-top: 1px solid var(--sx-line);
+}
+.gapSkill {
+  display: grid;
+  gap: 2px;
+  padding-top: 6px;
+  font-weight: 650;
+}
+.gapSkill small {
+  color: var(--sx-muted);
+  font-size: 12px;
+  font-weight: 400;
+}
+.gapPeople {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+.gapPeople > button,
+.gapPeople > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--sx-warn) 12%, var(--sx-surface));
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  box-sizing: border-box;
+}
+.gapPeople > button {
+  position: relative;
+  cursor: pointer;
+}
+.gapPeople > button::after {
+  content: "";
+  position: absolute;
+  inset: -6px 0;
+}
+.gapPeople b {
+  font-variant-numeric: tabular-nums;
+}
+.gapPeople > .gapMore {
+  background: var(--sx-sunken);
+  color: var(--sx-ink-2);
+}
+.gapClear {
+  color: var(--sx-ink-2);
+}
+.gridDetails {
+  min-width: 0;
+  border-top: 1px solid var(--sx-line);
+}
+.gridDetails > summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-weight: 650;
+  cursor: pointer;
+}
+.gridDetails > .heatBar {
+  padding: 0 0 4px;
+}
+.bigStat {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.bigStat b {
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+}
+.bigStat span {
+  color: var(--sx-ink-2);
+}
+.moverList h3 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.moverList h3[data-trend="better"] svg {
+  color: var(--sx-good);
+}
+.moverList h3[data-trend="worse"] svg {
+  color: var(--sx-warn);
+}
+
+/* The filter is a compact chip beside the period, not a white box. */
+.filterDetails summary {
+  gap: 6px;
+  width: max-content;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-sunken);
+  list-style: none;
+  font-size: var(--sx-text-sm);
+}
+.filterDetails summary::-webkit-details-marker {
+  display: none;
+}
+.filterDetails summary svg {
+  color: var(--sx-accent);
+}
+.filterDetails[open] summary {
+  background: var(--sx-accent-soft);
+}

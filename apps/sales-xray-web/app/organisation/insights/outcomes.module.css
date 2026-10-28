@@ -280,3 +280,112 @@
 .card > button[data-variant="primary"] {
   background: var(--sx-accent);
 }
+
+/* ---------- How every call ended (owner bug #78, 29 Oct 2026) ----------
+   One strip split by outcome, like a phone's storage bar, and a legend list
+   under it. Cool hues for endings with a next step, warm and neutral for the
+   rest; every hue is a palette token with a dark value, 3:1 on the card. */
+.mix {
+  display: flex;
+  gap: 2px;
+  height: 20px;
+  overflow: hidden;
+  border-radius: 6px;
+}
+.mix i {
+  flex-basis: 0;
+  min-width: 4px;
+}
+.card [data-outcome="won"] {
+  background: var(--lx-teal);
+}
+.card [data-outcome="booked"] {
+  background: var(--lx-closing);
+}
+.card [data-outcome="follow_up"] {
+  background: var(--lx-missed);
+}
+.card [data-outcome="unclear"] {
+  background: var(--lx-hypothesis);
+}
+.card [data-outcome="deferred"] {
+  background: var(--lx-focus);
+}
+.card [data-outcome="lost"] {
+  background: var(--lx-objection);
+}
+.card [data-outcome="disqualified"] {
+  background: var(--lx-ink-3);
+}
+.endings,
+.endings ul {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.endings {
+  gap: 14px;
+}
+.endingHead {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 2px;
+  color: var(--sx-muted);
+  font-size: 12px;
+  font-weight: 650;
+}
+.endingHead b {
+  font-variant-numeric: tabular-nums;
+}
+.endings ul li + li {
+  border-top: 1px solid var(--sx-line);
+}
+.endings button {
+  display: grid;
+  grid-template-columns: 10px minmax(0, 1fr) auto 44px;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.endings button > i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+}
+.endingName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.endings button > b {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.endings button > small {
+  color: var(--sx-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+.endings button:focus-visible {
+  outline: 2px solid var(--sx-accent);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+@media (hover: hover) and (pointer: fine) {
+  .endings button:hover .endingName {
+    text-decoration: underline;
+  }
+}
