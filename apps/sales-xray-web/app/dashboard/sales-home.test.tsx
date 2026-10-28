@@ -156,9 +156,9 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
   expect(titles).toEqual([
     "How sales are going",
     "Needs you",
+    "Where leads get stuck",
     "Sellers",
     "Targets",
-    "Open leads by stage",
   ]);
   // Owner Home v3: the outcomes are tiles, each opening its detail.
   const figures = Array.from(
@@ -172,7 +172,7 @@ it("shows owners outcomes first, then sellers ranked and open leads by stage", a
     "2\u00a0won · 3\u00a0interested · 12\u00a0calls",
   );
   expect(host.textContent).toContain("Late follow-ups");
-  expect(host.textContent).toContain("6 open now");
+  expect(host.textContent).toContain("6 open leads · right now");
   const seller = host.querySelector<HTMLAnchorElement>(
     'a[href="/organisation/people/s1"]',
   );

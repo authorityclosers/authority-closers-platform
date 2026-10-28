@@ -1,0 +1,136 @@
+/* Where leads get stuck (owner Home v3, 28 Oct 2026, A): one insight line,
+   then the stages as a centred funnel; the fullest stage in the accent. */
+.card {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.kicker {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.insight {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  line-height: 1.35;
+}
+
+.insight strong {
+  color: var(--sx-accent);
+  font-size: var(--sx-text-large, 20px);
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+.stages {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stages a {
+  display: grid;
+  gap: 6px;
+  min-height: 52px;
+  padding: 6px 0;
+  color: var(--sx-ink);
+  text-decoration: none;
+  transition: transform 150ms var(--sx-ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.stages a:active {
+  transform: scale(var(--sx-press-scale, 0.98));
+}
+
+.stageHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--sx-text-sm);
+}
+
+.stageHead strong {
+  font-variant-numeric: tabular-nums;
+}
+
+.track {
+  display: flex;
+  justify-content: center;
+  height: 14px;
+}
+
+.bar {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--sx-accent) 45%, var(--sx-surface));
+  transform-origin: center;
+  animation: stage-in 500ms var(--sx-ease-out) both;
+}
+
+.bar[data-top] {
+  background: var(--sx-accent);
+}
+
+/* A true zero: a short mark, so the stage is plainly there and empty. */
+.bar[data-zero] {
+  width: 14px;
+  height: 2px;
+  align-self: center;
+  border-radius: 1px;
+  background: var(--sx-line-strong);
+}
+
+@keyframes stage-in {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.footnote {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bar {
+    animation: none;
+  }
+
+  .stages a {
+    transition: none;
+  }
+
+  .stages a:active {
+    transform: none;
+  }
+}
