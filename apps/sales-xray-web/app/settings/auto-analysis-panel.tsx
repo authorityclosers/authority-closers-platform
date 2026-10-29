@@ -17,6 +17,7 @@ import {
   readAutoAnalysis,
   type AutoAnalysis,
 } from "./auto-analysis-client";
+import { AutoCapturePanel } from "./auto-capture-panel";
 import { AutoAnalysisSheet } from "./auto-analysis-sheet";
 import styles from "./sections.module.css";
 
@@ -89,6 +90,7 @@ export function AutoAnalysisPanel() {
           <Button onClick={() => setAsking(true)}>Turn on</Button>
         </div>
       )}
+      <AutoCapturePanel consentOn={view.can_start} />
       <AutoAnalysisSheet
         open={asking}
         onClose={() => setAsking(false)}

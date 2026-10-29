@@ -1,0 +1,30 @@
+.page {
+  box-sizing: border-box;
+  min-height: 100dvh;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.page h1 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.calls {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.calls li {
+  display: grid;
+  gap: 4px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--sx-line);
+}
