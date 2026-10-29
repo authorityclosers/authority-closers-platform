@@ -105,6 +105,7 @@ from ac_platform.lead_desk.contracts import (
     ReasonCount,
     ReasonOption,
     Reassign,
+    RecordingCall,
     Reopen,
     RepOption,
     RepRules,
@@ -329,6 +330,8 @@ def first_call_minutes(created_at: datetime, first_contact_at: datetime | None) 
 
 def counted_phone_call(data: Any) -> bool:
     """A call the phone logged by itself that counts in a day: any call out, or one taken."""
+    if isinstance(data, dict) and data.get("via") == "dialler_recording":
+        return data.get("connected") is True
     if not isinstance(data, dict) or data.get("via") != "phone":
         return False
     return data.get("direction") == "outgoing" or (
@@ -1641,7 +1644,10 @@ class LeadDesk:
         lead_owner: UUID | None = None,
         photos: Mapping[UUID, str | None] | None = None,
     ) -> LeadEventView:
-        phone_call = event.kind == "call" and event.data.get("via") == "phone"
+        phone_call = event.kind == "call" and event.data.get("via") in {
+            "phone",
+            "dialler_recording",
+        }
         data = event.data
         by_app = data.get("by_app") if isinstance(data.get("by_app"), dict) else None
         change_id = self._uuid(by_app.get("change")) if by_app else None
@@ -1709,8 +1715,8 @@ class LeadDesk:
             template_label=TEMPLATE_LABELS.get(data["template"])
             if isinstance(data.get("template"), str)
             else None,
-            via="phone"
-            if data.get("via") == "phone"
+            via=data.get("via")
+            if data.get("via") in {"phone", "dialler_recording"}
             else "call"
             if event.kind == "edited" and data.get("via") == CALL_FILL
             else None,
@@ -3838,6 +3844,111 @@ class LeadDesk:
 
     # ----- calls the phone logged by itself (UX study item 5) -----------------------
 
+    async def recording_call(self, command: RecordingCall) -> PhoneLogged:
+        """Revalidate a recording number against exactly one call-authorised lead in this workspace.
+
+        No direction is inferred from audio. Replays return the same call event.
+        """
+        _, config = await self.settings()
+        phone = normalise_phone(
+            command.number, default_country=str(config.get("default_country") or "91")
+        )
+        start = command.started_at
+        if phone is None or not self.now - timedelta(days=3) <= start <= self.now:
+            raise DeskError(422, "This recording's number or time cannot be matched.")
+        if not work_hours.inside(work_hours.parse(config), start):
+            raise DeskError(409, "This call is outside work hours.")
+        found = (
+            await self.db.scalars(
+                select(Lead)
+                .where(
+                    self._visible(),
+                    Lead.phone == phone,
+                    true()
+                    if self.viewer.can_manage
+                    else Lead.owner_person_id == self.viewer.person_id,
+                )
+                .limit(2)
+                .with_for_update()
+            )
+        ).all()
+        if len(found) != 1 or start < found[0].created_at:
+            raise DeskError(409, "This number must match exactly one of your leads.")
+        lead = found[0]
+        private = await self._private_calls(lead_id=lead.id)
+        seen = await self._command_seen(command.command_id)
+        if seen is not None:
+            if str(seen.id) in private:
+                raise DeskError(409, "This call is private.")
+            if (
+                seen.kind != "call"
+                or seen.lead_id != lead.id
+                or seen.actor_person_id != self.viewer.person_id
+            ):
+                raise DeskError(409, "This recording belongs to another call.")
+            return PhoneLogged(
+                log_id=str(command.command_id),
+                lead_id=lead.id,
+                event_id=seen.id,
+                lead_name=lead.name,
+                connected=True,
+            )
+        # Reuse a call already logged by this seller at the recording's start.
+        candidates = (
+            await self.db.scalars(
+                select(LeadEvent).where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.lead_id == lead.id,
+                    LeadEvent.actor_person_id == self.viewer.person_id,
+                    LeadEvent.kind == "call",
+                    LeadEvent.created_at >= start - timedelta(seconds=90),
+                    LeadEvent.created_at
+                    <= start + timedelta(seconds=command.duration_seconds + 90),
+                )
+            )
+        ).all()
+        calls = [
+            event
+            for event in candidates
+            if isinstance(event.data, dict)
+            and not event.data.get("recording")
+            and not event.data.get("simulated")
+            and (
+                abs((event.created_at - start).total_seconds()) <= 90
+                or abs((event.created_at - start).total_seconds() - command.duration_seconds) <= 90
+            )
+        ]
+        if any(str(event.id) in private for event in calls):
+            raise DeskError(409, "This call is private.")
+        if len(calls) > 1:
+            raise DeskError(409, "Choose which call this recording belongs to.")
+        if calls:
+            event = calls[0]
+        else:
+            lead.calls += 1
+            lead.revision += 1
+            lead.updated_at = self.now
+            event = self._event(
+                lead,
+                "call",
+                {
+                    "via": "dialler_recording",
+                    "duration_seconds": command.duration_seconds,
+                    "connected": True,
+                },
+                actor=self.viewer.person_id,
+                command_id=command.command_id,
+                at=start,
+            )
+            await self.db.flush()
+        return PhoneLogged(
+            log_id=str(command.command_id),
+            lead_id=lead.id,
+            event_id=event.id,
+            lead_name=lead.name,
+            connected=True,
+        )
+
     async def phone_book(self) -> PhoneBook:
         """The numbers of the leads I can see, newest first: my phone logs calls with these only."""
         numbers = (
@@ -3851,6 +3962,8 @@ class LeadDesk:
         return PhoneBook(
             work_hours=hours_view(work_hours.parse((await self.settings())[1]), self.now),
             person_id=self.viewer.person_id,
+            tenant_id=self.tenant_id,
+            organisation_workspace=True,
             numbers=tuple(dict.fromkeys(number for number in numbers if number)),
             generated_at=self.now,
         )
@@ -3960,6 +4073,30 @@ class LeadDesk:
             if lead is None or start < lead.created_at - timedelta(hours=1):
                 skipped += 1
                 continue
+            # A SAF-only scan may already have registered this conversation before call-log sync.
+            recorded = (
+                await self.db.scalars(
+                    select(LeadEvent)
+                    .where(
+                        LeadEvent.tenant_id == self.tenant_id,
+                        LeadEvent.lead_id == lead.id,
+                        LeadEvent.actor_person_id == self.viewer.person_id,
+                        LeadEvent.kind == "call",
+                        LeadEvent.data["via"].as_string() == "dialler_recording",
+                        LeadEvent.created_at >= start - timedelta(seconds=90),
+                        LeadEvent.created_at <= start + timedelta(seconds=90),
+                    )
+                    .limit(2)
+                )
+            ).all()
+            if len(recorded) == 1:
+                refs.append(
+                    PhoneLogged(
+                        log_id=call.log_id, lead_id=lead.id, event_id=recorded[0].id, connected=True
+                    )
+                )
+                already += 1
+                continue
             end = start + timedelta(seconds=call.duration_seconds)
             if call.direction == "outgoing" and any(
                 start - IN_APP_BEFORE <= at <= end + IN_APP_AFTER for at in in_app.get(lead.id, ())
@@ -4040,7 +4177,7 @@ class LeadDesk:
         )
         if (
             event is None
-            or event.data.get("via") != "phone"
+            or event.data.get("via") not in {"phone", "dialler_recording"}
             or event.actor_person_id != self.viewer.person_id
         ):
             raise DeskError(404, "Only your own calls from your phone can be made private.")

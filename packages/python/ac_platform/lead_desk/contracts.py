@@ -1526,6 +1526,8 @@ class PhoneBook(Model):
     # Whose book it is: a phone that changes hands starts afresh, so one person's
     # calls are never logged as another's.
     person_id: UUID
+    tenant_id: UUID | None = None
+    organisation_workspace: bool = False
     numbers: tuple[str, ...]
     generated_at: datetime
     # A call outside these stays on the phone (Salestrail's business hours).
@@ -1538,6 +1540,7 @@ class PhoneLogged(Model):
     log_id: str
     lead_id: UUID
     event_id: UUID
+    lead_name: str | None = None
     connected: bool
 
 
@@ -1567,6 +1570,15 @@ class PhoneLogCall(Command):
     started_at: AwareDatetime
     duration_seconds: int = Field(ge=0, le=14400)
     direction: Literal["outgoing", "incoming", "missed", "rejected", "blocked"]
+
+
+class RecordingCall(Command):
+    """A dialler recording with an explicit lead number and clock, without call-log access."""
+
+    command_id: UUID
+    number: str = Field(min_length=7, max_length=40)
+    started_at: AwareDatetime
+    duration_seconds: int = Field(ge=1, le=14400)
 
 
 class PhoneLog(Command):
