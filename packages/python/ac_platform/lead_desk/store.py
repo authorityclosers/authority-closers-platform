@@ -1723,7 +1723,7 @@ class LeadDesk:
             fill_object_id=self._uuid(data.get("object_id"))
             if event.kind == "edited" and data.get("via") == CALL_FILL
             else None,
-            event_id=event.id if phone_call else None,
+            event_id=event.id if event.kind == "call" else None,
             can_hide=phone_call and event.actor_person_id == self.viewer.person_id,
             private=str(event.id) in hidden,
             direction=data["direction"] if data.get("direction") in PHONE_DIRECTIONS else None,
