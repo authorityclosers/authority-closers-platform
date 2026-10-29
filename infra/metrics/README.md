@@ -53,6 +53,18 @@ State lives in `/var/lib/ac-budget-alerts/state.json` and the log in `/var/log/a
   The previous reading is kept in `/var/lib/ac-agent-burn/cpu.json`.
 - **Counts only.** The file holds no prompt, path, file name, person or session id.
 
+## New costs found in email (30 Oct 2026)
+
+`ac-cost-detect` runs as a root timer daily at 02:30 UTC. It searches AC's mailboxes, read only, for receipts, invoices, renewals and payment notices from the last 3 days.
+
+- **Proposal.** Each charge it finds gets a proposed vendor, amount (rupees and the original currency), cadence, category, cost centre and split. The proposal comes from the sender's domain and the text, and carries a confidence.
+- **Filing.** It files one AC Pulse task per charge under "AC costs: confirm new costs from email" through `ac-pulse-tasks ensure`, with the marker `cost:<hash>`, so each email is filed once. Finance confirms the task into Pulse finance and the Admin cost register.
+- **What a task holds.** The vendor, amount, date, subject and Gmail id. Never the email's body.
+- **Gmail access.** A Google service account with domain-wide delegation for `gmail.readonly` only. Its key is `/etc/ac-cost-detect/service-account.json` (root 600, from Infisical), and the mailboxes are listed in `/etc/ac-cost-detect/env` as `AC_COST_DETECT_MAILBOXES`.
+- **Before the key exists.** The unit does nothing (`ConditionPathExists`).
+- **One-off back-scan.** `ac-cost-detect --days 60` (add `--dry-run` to print instead of filing).
+- **State.** `/var/lib/ac-cost-detect/seen.json` holds message hashes only.
+
 ## Install (dev, done 19 Oct 2026)
 
 ```bash

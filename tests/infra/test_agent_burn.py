@@ -126,6 +126,9 @@ def test_cpu_shares_since_the_last_run(tmp_path: Path) -> None:
     # A reboot resets the counters: count since boot.
     assert job.cpu_shares({"total": 5000, "apps": 1, "agents": 1}, now)["apps"] == 0.6
     assert job.cpu_shares(None, {"total": 0, "apps": 0, "agents": 0}) is None
+    # The root's counter read under its slices' sum (seen on ac, 30 Oct 2026): still 100%.
+    over = job.cpu_shares(None, {"total": 1000, "apps": 700, "agents": 330})
+    assert over == {"apps": 0.6796, "agents": 0.3204, "other": 0.0}
 
 
 def test_the_document_reads_back_and_holds_counts_only(tmp_path: Path) -> None:

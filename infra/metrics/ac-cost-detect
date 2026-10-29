@@ -1,0 +1,517 @@
+#!/usr/bin/env python3
+"""Find new company costs in AC's mailboxes and file each in AC Pulse for confirmation
+(owner, 30 Oct 2026: "a scheduled job notices new costs in email … proposes the category and
+allocation, and files them in Pulse for confirmation").
+
+Daily as root on the ac host; Gmail is only ever read:
+
+- **Mailboxes:** AC_COST_DETECT_MAILBOXES (default admin@authorityclosers.com), read by a Google
+  service account with domain-wide delegation for gmail.readonly. Its key file
+  (AC_COST_DETECT_KEY, root 600) comes from Infisical. Without the key the run does nothing.
+- **Messages:** receipts, invoices, renewals and payment notices from the last N days (default
+  3), each message once (state: /var/lib/ac-cost-detect/seen.json, message hashes only).
+- **Proposal:** vendor, amount (rupees, and the original currency), cadence, category, cost
+  centre and split, from the sender and the text, with a confidence. Zero-amount invoices
+  are skipped.
+- **Pulse:** one AC Pulse task per proposal under "AC costs: confirm new costs from email"
+  (ac-pulse-tasks ensure, marker cost:<hash>). Finance confirms it into Pulse finance and the
+  Admin cost register. A task holds the vendor, amount, date, subject and Gmail id, never the
+  email's body.
+
+Usage: ac-cost-detect [--days N] [--dry-run]
+"""
+
+from __future__ import annotations
+
+import argparse
+import base64
+import hashlib
+import html
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.parse
+import urllib.request
+from collections.abc import Callable
+from datetime import UTC, datetime
+from email.utils import parseaddr, parsedate_to_datetime
+from pathlib import Path
+
+KEY = Path(os.environ.get("AC_COST_DETECT_KEY", "/etc/ac-cost-detect/service-account.json"))
+STATE = Path(os.environ.get("AC_COST_DETECT_STATE", "/var/lib/ac-cost-detect/seen.json"))
+PULSE = os.environ.get("AC_COST_DETECT_PULSE", "/usr/local/bin/ac-pulse-tasks")
+MAILBOXES = os.environ.get("AC_COST_DETECT_MAILBOXES", "admin@authorityclosers.com").split()
+PARENT = "AC costs: confirm new costs from email"
+SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
+GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me"
+# Planning rates until Finance confirms the rupees charged (the card statement's amount wins).
+RATES = {"INR": 1.0, "USD": 88.0, "EUR": 102.0}
+SEEN_LIMIT = 5000
+QUERY = (
+    '(invoice OR receipt OR "payment received" OR "payment successful" OR "your subscription"'
+    ' OR renewal OR renewed OR billing OR "order confirmation" OR "order placed" OR debited'
+    ' OR "amount paid") -category:promotions -category:social'
+)
+
+# Sender domain -> (vendor, item, category, cost centre, split, cadence). Finance changes any of
+# these when confirming; an unknown sender is proposed as "other", company-wide, low confidence.
+VENDORS: dict[str, tuple[str, str, str, str, dict, str]] = {
+    "anthropic.com": (
+        "Anthropic",
+        "Claude plan",
+        "ai_subscriptions",
+        "agents",
+        {"rule": "token_burn", "tool": "claude"},
+        "monthly",
+    ),
+    "openai.com": (
+        "OpenAI",
+        "ChatGPT plan",
+        "ai_subscriptions",
+        "agents",
+        {"rule": "token_burn", "tool": "codex"},
+        "monthly",
+    ),
+    "elevenlabs.io": (
+        "ElevenLabs",
+        "Transcription plan",
+        "ai_product",
+        "sales_xray",
+        {"rule": "direct", "product": "sales_xray"},
+        "monthly",
+    ),
+    "openrouter.ai": (
+        "OpenRouter",
+        "Credits",
+        "ai_other",
+        "agents",
+        {"rule": "token_burn", "tool": "all"},
+        "usage",
+    ),
+    "deepgram.com": (
+        "Deepgram",
+        "Speech API",
+        "ai_product",
+        "sales_xray",
+        {"rule": "direct", "product": "sales_xray"},
+        "usage",
+    ),
+    "assemblyai.com": (
+        "AssemblyAI",
+        "Speech API",
+        "ai_product",
+        "sales_xray",
+        {"rule": "direct", "product": "sales_xray"},
+        "usage",
+    ),
+    "hostinger.com": (
+        "Hostinger",
+        "VPS",
+        "servers",
+        "sales_xray",
+        {"rule": "cpu_share"},
+        "monthly",
+    ),
+    "cloudflare.com": (
+        "Cloudflare",
+        "Account",
+        "servers",
+        "company",
+        {"rule": "direct", "product": "company"},
+        "monthly",
+    ),
+    "amazonaws.com": (
+        "AWS",
+        "Cloud",
+        "servers",
+        "sales_xray",
+        {"rule": "direct", "product": "sales_xray"},
+        "usage",
+    ),
+    "github.com": ("GitHub", "Plan", "tools", "company", {"rule": "revenue_share"}, "monthly"),
+    "facebookmail.com": (
+        "Meta",
+        "Ads and WhatsApp",
+        "marketing",
+        "sales_xray",
+        {"rule": "direct", "product": "sales_xray"},
+        "usage",
+    ),
+    "godaddy.com": (
+        "GoDaddy",
+        "Domain",
+        "workspace",
+        "company",
+        {"rule": "revenue_share"},
+        "yearly",
+    ),
+    "namecheap.com": (
+        "Namecheap",
+        "Domain",
+        "workspace",
+        "company",
+        {"rule": "revenue_share"},
+        "yearly",
+    ),
+    "amazon.in": (
+        "Amazon",
+        "Order",
+        "devices",
+        "company",
+        {"rule": "direct", "product": "company"},
+        "one_time",
+    ),
+    "flipkart.com": (
+        "Flipkart",
+        "Order",
+        "devices",
+        "company",
+        {"rule": "direct", "product": "company"},
+        "one_time",
+    ),
+    "croma.com": (
+        "Croma",
+        "Order",
+        "devices",
+        "company",
+        {"rule": "direct", "product": "company"},
+        "one_time",
+    ),
+    "mi.com": (
+        "Xiaomi",
+        "Order",
+        "devices",
+        "sales_xray",
+        {"rule": "direct", "product": "sales_xray"},
+        "one_time",
+    ),
+}
+# Google sends many kinds of bill from one address: the subject says which.
+GOOGLE = (
+    (
+        "play",
+        (
+            "Google Play",
+            "Developer fee",
+            "store_fees",
+            "sales_xray",
+            {"rule": "direct", "product": "sales_xray"},
+            "one_time",
+        ),
+    ),
+    (
+        "workspace",
+        ("Google Workspace", "Seats", "workspace", "company", {"rule": "revenue_share"}, "monthly"),
+    ),
+    (
+        "cloud",
+        (
+            "Google Cloud",
+            "Gemini API and cloud",
+            "ai_product",
+            "sales_xray",
+            {"rule": "direct", "product": "sales_xray"},
+            "usage",
+        ),
+    ),
+)
+
+# A currency mark not inside a word ("orders 12" is no money), then the figure.
+_MONEY = re.compile(
+    r"(?<![A-Za-z])(?P<cur>₹|INR|Rs\.?|US\$|USD|\$|EUR|€)\s?"
+    r"(?P<num>\d{1,3}(?:,\d{2,3})*(?:\.\d{1,2})?|\d+(?:\.\d{1,2})?)",
+    re.IGNORECASE,
+)
+_TOTAL = re.compile(r"total|amount (?:paid|charged|due)|you paid|charged|grand", re.IGNORECASE)
+_CODES = {
+    "₹": "INR",
+    "inr": "INR",
+    "rs": "INR",
+    "rs.": "INR",
+    "us$": "USD",
+    "usd": "USD",
+    "$": "USD",
+    "eur": "EUR",
+    "€": "EUR",
+}
+
+
+def amounts(text: str) -> list[tuple[str, float, bool]]:
+    """(currency, amount, near a total word) for each money figure in the text."""
+    found = []
+    for match in _MONEY.finditer(text):
+        currency = _CODES[match.group("cur").lower()]
+        value = float(match.group("num").replace(",", ""))
+        context = text[max(0, match.start() - 40) : match.start()]
+        found.append((currency, value, bool(_TOTAL.search(context))))
+    return found
+
+
+def pick(figures: list[tuple[str, float, bool]]) -> tuple[str, float] | None:
+    """The charge: the largest figure near a total word, else the largest; rupees first."""
+    if not figures:
+        return None
+    totals = [item for item in figures if item[2]] or figures
+    rupee = [item for item in totals if item[0] == "INR"]
+    currency, value, _ = max(rupee or totals, key=lambda item: item[1])
+    return currency, value
+
+
+def vendor_for(sender: str, subject: str) -> tuple[tuple[str, str, str, str, dict, str], str]:
+    """(the vendor row, confidence) for a sender's domain and the subject."""
+    domain = parseaddr(sender)[1].rpartition("@")[2].lower()
+    if domain == "google.com" or domain.endswith(".google.com"):
+        lowered = subject.lower()
+        for word, row in GOOGLE:
+            if word in lowered:
+                return row, "high"
+        return GOOGLE[2][1], "low"
+    for known, row in VENDORS.items():
+        if domain == known or domain.endswith("." + known):
+            return row, "high"
+    name = (domain.split(".")[-2] if "." in domain else domain or "Unknown").capitalize()
+    return (
+        name,
+        "Charge",
+        "other",
+        "company",
+        {"rule": "direct", "product": "company"},
+        "monthly",
+    ), "low"
+
+
+def propose(mailbox: str, message: dict) -> dict | None:
+    """One proposed cost from a Gmail message (format=full), or None when it holds no charge."""
+    headers = {h["name"].lower(): h["value"] for h in message["payload"].get("headers", [])}
+    subject = headers.get("subject", "")[:200]
+    text = " ".join([subject, message.get("snippet", ""), body_text(message["payload"])])
+    charge = pick(amounts(text))
+    if charge is None or charge[1] <= 0:
+        return None
+    (vendor, item, category, centre, split, cadence), confidence = vendor_for(
+        headers.get("from", ""), subject
+    )
+    currency, value = charge
+    try:
+        day = parsedate_to_datetime(headers["date"]).date().isoformat()
+    except (KeyError, TypeError, ValueError):
+        day = (
+            datetime.fromtimestamp(int(message.get("internalDate", 0)) / 1000, UTC)
+            .date()
+            .isoformat()
+        )
+    marker = "cost:" + hashlib.sha256(f"{mailbox}\0{message['id']}".encode()).hexdigest()[:16]
+    return {
+        "marker": marker,
+        "vendor": vendor,
+        "item": item,
+        "currency": currency,
+        "amount": value,
+        "rupees": round(value * RATES[currency], 2),
+        "converted": currency != "INR",
+        "cadence": cadence,
+        "category": category,
+        "centre": centre,
+        "split": split,
+        "confidence": confidence,
+        "date": day,
+        "subject": subject,
+        "mailbox": mailbox,
+        "gmail_id": message["id"],
+    }
+
+
+def body_text(payload: dict, limit: int = 50_000) -> str:
+    """The message's plain text (HTML stripped when there is no text part), at most ``limit``."""
+    plain: list[str] = []
+    markup: list[str] = []
+
+    def walk(part: dict) -> None:
+        data = (part.get("body") or {}).get("data")
+        mime = part.get("mimeType", "")
+        if data and mime in ("text/plain", "text/html"):
+            raw = base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)).decode("utf-8", "replace")
+            (plain if mime == "text/plain" else markup).append(raw)
+        for child in part.get("parts") or []:
+            walk(child)
+
+    walk(payload)
+    if plain:
+        return " ".join(plain)[:limit]
+    stripped = re.sub(r"<(script|style)[^>]*>.*?</\1>", " ", " ".join(markup), flags=re.S | re.I)
+    return re.sub(r"\s+", " ", html.unescape(re.sub(r"<[^>]+>", " ", stripped)))[:limit]
+
+
+def task(proposal: dict) -> dict:
+    """The ensure op for one proposal: title and notes, never the email's body."""
+    original = (
+        f"{proposal['currency']} {proposal['amount']:,.2f} (about ₹{proposal['rupees']:,.2f})"
+        if proposal["converted"]
+        else f"₹{proposal['amount']:,.2f}"
+    )
+    split = proposal["split"]
+    split_words = split["rule"] + (
+        f" {split.get('product') or split.get('tool') or ''}".rstrip() if len(split) > 1 else ""
+    )
+    title = f"Cost found: {proposal['vendor']} {original} ({proposal['date']})"[:200]
+    where = f"{proposal['mailbox']}, {proposal['date']}, “{proposal['subject']}”"
+    notes = "\n".join(
+        [
+            "Proposed from email. Confirm it into AC Pulse finance and Admin → Economics →"
+            " cost register.",
+            f"Vendor: {proposal['vendor']} · {proposal['item']}",
+            f"Amount: {original}",
+            f"Repeats: {proposal['cadence']}",
+            f"Category: {proposal['category']} · cost centre: {proposal['centre']}",
+            f"Split: {split_words}",
+            f"Confidence: {proposal['confidence']}",
+            f"Email: {where}, Gmail id {proposal['gmail_id']}",
+            f"Marker: {proposal['marker']}",
+        ]
+    )
+    return {
+        "op": "ensure",
+        "marker": proposal["marker"],
+        "fields": {"title": title, "notes": notes},
+        "parent": {"title": PARENT, "fields": {"title": PARENT}},
+    }
+
+
+def assertion(key: dict, mailbox: str, now: int) -> str:
+    """A signed JWT asking Google for a read-only Gmail token for ``mailbox`` (RS256)."""
+    from cryptography.hazmat.primitives import hashes, serialization
+    from cryptography.hazmat.primitives.asymmetric import padding
+
+    def b64(data: bytes) -> str:
+        return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+    header = b64(json.dumps({"alg": "RS256", "typ": "JWT"}).encode())
+    claims = b64(
+        json.dumps(
+            {
+                "iss": key["client_email"],
+                "sub": mailbox,
+                "scope": SCOPE,
+                "aud": key.get("token_uri", "https://oauth2.googleapis.com/token"),
+                "iat": now,
+                "exp": now + 3600,
+            }
+        ).encode()
+    )
+    signer = serialization.load_pem_private_key(key["private_key"].encode(), password=None)
+    signature = signer.sign(f"{header}.{claims}".encode(), padding.PKCS1v15(), hashes.SHA256())
+    return f"{header}.{claims}.{b64(signature)}"
+
+
+def _http(url: str, *, data: bytes | None = None, token: str | None = None) -> dict:
+    request = urllib.request.Request(url, data=data)  # noqa: S310 - fixed Google hosts
+    if token:
+        request.add_header("Authorization", f"Bearer {token}")
+    with urllib.request.urlopen(request, timeout=30) as response:  # noqa: S310
+        return json.loads(response.read())
+
+
+class Gmail:
+    """Read-only Gmail for one mailbox through the delegated service account."""
+
+    def __init__(self, key: dict, mailbox: str, http: Callable[..., dict] = _http) -> None:
+        self.http = http
+        token = http(
+            key.get("token_uri", "https://oauth2.googleapis.com/token"),
+            data=urllib.parse.urlencode(
+                {
+                    "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                    "assertion": assertion(key, mailbox, int(time.time())),
+                }
+            ).encode(),
+        )
+        self.token = token["access_token"]
+
+    def search(self, days: int) -> list[str]:
+        query = urllib.parse.urlencode({"q": f"newer_than:{days}d {QUERY}", "maxResults": 100})
+        found = self.http(f"{GMAIL}/messages?{query}", token=self.token)
+        return [row["id"] for row in found.get("messages", [])]
+
+    def message(self, message_id: str) -> dict:
+        return self.http(
+            f"{GMAIL}/messages/{urllib.parse.quote(message_id)}?format=full", token=self.token
+        )
+
+
+def pulse(op: dict, *, dry: bool) -> dict:
+    request = {"actor": "ac-cost-detect", "dry": dry, "ops": [op]}
+    done = subprocess.run(  # noqa: S603 - fixed argv
+        [PULSE, "--batch", "-"],
+        input=json.dumps(request, ensure_ascii=False),
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    if done.returncode != 0:
+        raise RuntimeError(f"ac-pulse-tasks refused (exit {done.returncode})")
+    return json.loads(done.stdout)
+
+
+def run(
+    mailboxes: list[str],
+    open_mailbox: Callable[[str], Gmail],
+    file: Callable[[dict], object],
+    seen: list[str],
+    *,
+    days: int,
+) -> tuple[list[dict], list[str]]:
+    """(the proposals filed, the seen hashes after the run)."""
+    known = set(seen)
+    filed: list[dict] = []
+    for mailbox in mailboxes:
+        gmail = open_mailbox(mailbox)
+        for message_id in gmail.search(days):
+            digest = hashlib.sha256(f"{mailbox}\0{message_id}".encode()).hexdigest()[:24]
+            if digest in known:
+                continue
+            proposal = propose(mailbox, gmail.message(message_id))
+            if proposal is not None:
+                file(task(proposal))
+                filed.append(proposal)
+            known.add(digest)
+            seen.append(digest)
+    return filed, seen[-SEEN_LIMIT:]
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--days", type=int, default=3)
+    parser.add_argument("--dry-run", action="store_true")
+    args = parser.parse_args(argv)
+    if not 1 <= args.days <= 60:
+        parser.error("--days is 1 to 60")
+    if not KEY.exists():
+        print("ac-cost-detect: no service-account key yet; nothing read")
+        return 0
+    key = json.loads(KEY.read_text(encoding="utf-8"))
+    try:
+        seen = json.loads(STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        seen = []
+    filed, seen = run(
+        MAILBOXES,
+        lambda mailbox: Gmail(key, mailbox),
+        (lambda op: print(json.dumps(op, ensure_ascii=False)))
+        if args.dry_run
+        else (lambda op: pulse(op, dry=False)),
+        list(seen),
+        days=args.days,
+    )
+    if not args.dry_run:
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(json.dumps(seen), encoding="utf-8")
+    print(json.dumps({"filed": len(filed), "mailboxes": len(MAILBOXES)}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -200,11 +200,12 @@ def cpu_shares(before: dict | None, now: dict[str, int]) -> dict[str, float] | N
     """Shares of the CPU used since ``before`` (since boot if there is none or it reset)."""
     base = before if before and all(now[key] >= before.get(key, 0) for key in now) else {}
     used = {key: now[key] - int(base.get(key, 0)) for key in now}
-    total = used["total"]
+    apps, agents = used["apps"], used["agents"]
+    # The root's counter can read a little under its slices' sum: never share above 100%.
+    total = max(used["total"], apps + agents)
     if total <= 0:
         return None
-    apps, agents = used["apps"], used["agents"]
-    other = max(0, total - apps - agents)
+    other = total - apps - agents
     return {
         "apps": round(apps / total, 4),
         "agents": round(agents / total, 4),
