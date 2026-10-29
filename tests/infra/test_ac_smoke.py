@@ -17,6 +17,9 @@ SPEC.loader.exec_module(SMOKE)
 @pytest.mark.parametrize("outcome", ["pass", "fail", "timeout"])
 def test_engine_accepts_fresh_record(tmp_path, monkeypatch, capsys, outcome):
     def checks(environment):
+        # A real smoke run takes seconds. File times come from a coarse kernel clock, so an instant
+        # fake run can stamp the record a few ms before the engine start time it is compared with.
+        time.sleep(0.05)
         if outcome == "timeout":
             raise TimeoutError("secret-password-cookie")
         return [{"check": "fixture", "ok": outcome == "pass"}]
