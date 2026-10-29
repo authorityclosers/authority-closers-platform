@@ -21,6 +21,7 @@ import {
   screenOf,
   sizeBand,
   takeSignIn,
+  timingBand,
   TELEMETRY_EVENT_NAMES,
   TelemetryClient,
   userAgentModel,
@@ -563,4 +564,127 @@ describe("Microsoft Clarity's project, from the same server answer", () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(heard).toEqual(["z4fyjboxqs"]);
   });
+});
+
+it("flushes at 50 events without sampling, or after ten seconds", async () => {
+  const telemetry = client();
+  telemetry.setSession(SESSION);
+  for (let i = 0; i < 49; i++)
+    telemetry.track("sx.tap", {
+      target: "button",
+      zone: "r1c1",
+      screen: "leads",
+    });
+  await vi.advanceTimersByTimeAsync(9_999);
+  expect(sent()).toHaveLength(0);
+  telemetry.track("sx.tap", {
+    target: "button",
+    zone: "r1c1",
+    screen: "leads",
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(sent()).toHaveLength(50);
+  telemetry.track("sx.sign_out", {});
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(sent()).toHaveLength(51);
+});
+
+it("uses beacon only after consent taxonomy, drains batches and falls back when refused", async () => {
+  const beacon = vi.fn(() => true);
+  const fetcher = vi.fn(async () =>
+    Response.json({ events: [{ event_name: "sx.sign_out" }] }),
+  );
+  const telemetry = new TelemetryClient(
+    {
+      fetch: fetcher,
+      beacon,
+      now: () => new Date(),
+      id: () => crypto.randomUUID(),
+    },
+    true,
+  );
+  telemetry.setSession(SESSION);
+  telemetry.track("sx.sign_out", {});
+  await telemetry.flush(true);
+  expect(beacon).not.toHaveBeenCalled();
+  expect(await telemetry.collecting()).toBe(true);
+  for (let i = 0; i < 100; i++) telemetry.track("sx.sign_out", {});
+  await telemetry.flush(true);
+  await Promise.resolve();
+  await Promise.resolve();
+  expect(beacon).toHaveBeenCalledTimes(3);
+  expect(beacon.mock.calls[0]).toEqual([
+    "/v1/telemetry/events",
+    expect.any(Blob),
+  ]);
+  beacon.mockReturnValue(false);
+  telemetry.track("sx.sign_out", {});
+  await telemetry.flush(true);
+  expect(fetcher).toHaveBeenLastCalledWith(
+    "/v1/telemetry/events",
+    expect.objectContaining({ keepalive: true }),
+  );
+});
+
+it("never beacons when the server disables collection", async () => {
+  const beacon = vi.fn(() => true);
+  const telemetry = new TelemetryClient(
+    {
+      fetch: vi.fn(async () => Response.json({ events: [] })),
+      beacon,
+      now: () => new Date(),
+      id: () => crypto.randomUUID(),
+    },
+    true,
+  );
+  telemetry.setSession(SESSION);
+  expect(await telemetry.collecting()).toBe(false);
+  telemetry.track("sx.sign_out", {});
+  await telemetry.flush(true);
+  expect(beacon).not.toHaveBeenCalled();
+});
+
+it.each([
+  [0, "lt100"],
+  [99, "lt100"],
+  [100, "100_300"],
+  [299, "100_300"],
+  [300, "300_1000"],
+  [999, "300_1000"],
+  [1000, "1000_3000"],
+  [2999, "1000_3000"],
+  [3000, "3000_10000"],
+  [9999, "3000_10000"],
+  [10000, "ge10000"],
+])("buckets %i ms as %s", (ms, band) => {
+  expect(timingBand(Number(ms))).toBe(band);
+});
+
+it("privacy refresh clears unsent events and invalidates an in-flight consent answer", async () => {
+  let answer: (response: Response) => void = () => {};
+  const fetcher = vi.fn(
+    () =>
+      new Promise<Response>((resolve) => {
+        answer = resolve;
+      }),
+  );
+  const beacon = vi.fn(() => true);
+  const telemetry = new TelemetryClient(
+    {
+      fetch: fetcher,
+      beacon,
+      now: () => new Date(),
+      id: () => crypto.randomUUID(),
+    },
+    true,
+  );
+  telemetry.setSession(SESSION);
+  telemetry.track("sx.sign_out", {});
+  const pending = telemetry.flush();
+  telemetry.refresh();
+  answer(Response.json({ events: [{ event_name: "sx.sign_out" }] }));
+  await pending;
+  await telemetry.flush(true);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(beacon).not.toHaveBeenCalled();
 });

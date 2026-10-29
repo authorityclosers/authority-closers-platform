@@ -5,7 +5,16 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const nav = vi.hoisted(() => ({ pathname: "/leads" }));
 vi.mock("next/navigation", () => ({ usePathname: () => nav.pathname }));
-vi.mock("next/web-vitals", () => ({ useReportWebVitals: () => undefined }));
+const vitals = vi.hoisted(() => ({
+  callback: (metric: { name: string; value: number; rating: string }) => {
+    void metric;
+  },
+}));
+vi.mock("next/web-vitals", () => ({
+  useReportWebVitals: (callback: typeof vitals.callback) => {
+    vitals.callback = callback;
+  },
+}));
 const phone = vi.hoisted(() => ({
   drain: vi.fn(async () => [] as Array<{ name: string; fields: object }>),
   tell: vi.fn(async (on: boolean) => {
@@ -20,6 +29,8 @@ vi.mock("./leads/native-phone", () => ({
 import { telemetry, timeAction } from "./telemetry";
 import {
   actionOf,
+  apiTiming,
+  scrollDepth,
   elementOf,
   endpointOf,
   errorFacts,
@@ -335,7 +346,7 @@ it("counts only the time a screen was on view, and says where the page went away
   visibility.mockReturnValue("hidden");
   document.dispatchEvent(new Event("visibilitychange"));
   expect(tracked(track, "sx.screen_hidden")).toEqual([
-    { screen: "leads", kind: "background" },
+    { screen: "leads", kind: "background", seen_ms: 2000 },
   ]);
   now = 13_000;
   visibility.mockReturnValue("visible");
@@ -506,4 +517,257 @@ it("times a Call button from the call's real start, never from a touch on it", a
     vi.advanceTimersByTime(1_100);
   });
   expect(tracked(track, "sx.action_timing")).toHaveLength(1);
+});
+
+it("records every ordinary click as role and grid only, and stops when consent is off", async () => {
+  const track = vi.spyOn(telemetry, "track");
+  html(
+    '<button aria-label="Call Fictional Person">Fictional Person +910000000000</button>',
+  );
+  const root = await mount();
+  for (let i = 0; i < 60; i++)
+    host
+      .querySelector("button")!
+      .dispatchEvent(
+        new MouseEvent("click", { bubbles: true, clientX: 10, clientY: 10 }),
+      );
+  const taps = track.mock.calls.filter(([event]) => event === "sx.tap");
+  expect(taps).toHaveLength(60);
+  expect(taps[0][1]).toEqual({
+    target: "button",
+    zone: "r1c1",
+    screen: "leads",
+  });
+  expect(JSON.stringify(taps)).not.toMatch(
+    /Fictional|910000000000|clientX|aria/,
+  );
+  vi.mocked(telemetry.active).mockReturnValue(false);
+  host.querySelector("button")!.click();
+  expect(track.mock.calls.filter(([event]) => event === "sx.tap")).toHaveLength(
+    60,
+  );
+  await act(async () => root.unmount());
+});
+
+it("coalesces nested pane scrolls and records new depth quarters without reading content", async () => {
+  const track = vi.spyOn(telemetry, "track");
+  const root = await mount();
+  const pane = document.createElement("div");
+  host.append(pane);
+  Object.defineProperties(pane, {
+    scrollHeight: { value: 1000 },
+    clientHeight: { value: 200 },
+  });
+  pane.scrollTop = 410;
+  for (let i = 0; i < 10; i++) pane.dispatchEvent(new Event("scroll"));
+  await act(async () => vi.advanceTimersByTime(250));
+  expect(
+    track.mock.calls.filter(([event]) => event === "sx.scroll_depth"),
+  ).toEqual([["sx.scroll_depth", { depth: 50, screen: "leads" }]]);
+  pane.scrollTop = 200;
+  pane.dispatchEvent(new Event("scroll"));
+  await act(async () => vi.advanceTimersByTime(250));
+  expect(
+    track.mock.calls.filter(([event]) => event === "sx.scroll_depth"),
+  ).toHaveLength(1);
+  pane.scrollTop = 800;
+  pane.dispatchEvent(new Event("scroll"));
+  await act(async () => vi.advanceTimersByTime(250));
+  expect(track).toHaveBeenCalledWith("sx.scroll_depth", {
+    depth: 100,
+    screen: "leads",
+  });
+  await act(async () => root.unmount());
+});
+
+it("keeps fast, repeated, failed and background API timings; masks even lowercase slugs", () => {
+  const entry = {
+    name: "https://app.example/v1/people/fictional-person?phone=123",
+    initiatorType: "fetch",
+    startTime: 0,
+    duration: 80,
+    responseStart: 30,
+    responseEnd: 80,
+    responseStatus: 200,
+  };
+  for (let i = 0; i < 100; i++)
+    expect(apiTiming(entry, "https://app.example", [])).toEqual({
+      endpoint: "v1_people_id",
+      status: "2xx",
+      band: "lt100",
+      background: "no",
+    });
+  expect(
+    apiTiming(entry, "https://app.example", [[10, null]])?.background,
+  ).toBe("yes");
+  expect(
+    apiTiming(
+      { ...entry, responseEnd: 0, responseStatus: 0 },
+      "https://app.example",
+      [],
+    )?.status,
+  ).toBe("network");
+  expect(
+    apiTiming(
+      { ...entry, name: "https://app.example/v1/telemetry/events" },
+      "https://app.example",
+      [],
+    ),
+  ).toBeNull();
+  expect(apiTiming(entry, "https://other.example", [])).toBeNull();
+  expect(scrollDepth(-5, 1000, 200)).toBe(0);
+  expect(scrollDepth(0, 200, 200)).toBe(100);
+});
+
+it("captures first/largest paint, repeated masked JS errors and route paint timing", async () => {
+  const track = vi.spyOn(telemetry, "track");
+  const frames: FrameRequestCallback[] = [];
+  vi.stubGlobal("requestAnimationFrame", (work: FrameRequestCallback) => {
+    frames.push(work);
+    return frames.length;
+  });
+  vi.stubGlobal("cancelAnimationFrame", vi.fn());
+  try {
+    const root = await mount();
+    vitals.callback({ name: "FCP", value: 400, rating: "good" });
+    vitals.callback({ name: "LCP", value: 900, rating: "good" });
+    expect(track).toHaveBeenCalledWith("sx.web_vital", {
+      metric: "fcp",
+      value: 400,
+      rating: "good",
+      screen: "leads",
+    });
+    expect(track).toHaveBeenCalledWith("sx.web_vital", {
+      metric: "lcp",
+      value: 900,
+      rating: "good",
+      screen: "leads",
+    });
+    for (let i = 0; i < 12; i++)
+      window.dispatchEvent(
+        new ErrorEvent("error", {
+          error: new TypeError("Fictional Person +910000000000"),
+        }),
+      );
+    const errors = track.mock.calls.filter(
+      ([event]) => event === "sx.js_error",
+    );
+    expect(errors).toHaveLength(12);
+    expect(JSON.stringify(errors)).not.toContain("Fictional");
+    frames.shift()!(1000);
+    frames.shift()!(1000);
+    expect(track).toHaveBeenCalledWith("sx.route_timing", {
+      nav: "first",
+      band: "1000_3000",
+      screen: "leads",
+    });
+    await act(async () => root.unmount());
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it("observes every API resource without endpoint cooldown or slow-call sampling", async () => {
+  const observers = new Map<
+    string,
+    (list: { getEntries: () => object[] }) => void
+  >();
+  class Observer {
+    constructor(
+      private callback: (list: { getEntries: () => object[] }) => void,
+    ) {}
+    observe(options: { type: string }) {
+      observers.set(options.type, this.callback);
+    }
+    disconnect() {}
+  }
+  vi.stubGlobal("PerformanceObserver", Observer);
+  try {
+    const track = vi.spyOn(telemetry, "track");
+    const root = await mount();
+    const entry = {
+      name: window.location.origin + "/v1/leads",
+      initiatorType: "fetch",
+      startTime: 0,
+      duration: 10,
+      responseStart: 5,
+      responseEnd: 10,
+      responseStatus: 200,
+    };
+    observers.get("resource")!({
+      getEntries: () => Array.from({ length: 65 }, () => entry),
+    });
+    expect(
+      track.mock.calls.filter(([event]) => event === "sx.api_timing"),
+    ).toHaveLength(65);
+    expect(
+      track.mock.calls.filter(([event]) => event === "sx.api_slow"),
+    ).toHaveLength(0);
+    await act(async () => root.unmount());
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it("captures successful and rejected fetches once, preserving responses, errors and cleanup", async () => {
+  const response = Response.json({}, { status: 201 });
+  const error = new TypeError("Fictional private error");
+  const original = window.fetch;
+  const fetcher = vi
+    .fn()
+    .mockResolvedValueOnce(response)
+    .mockRejectedValueOnce(error);
+  window.fetch = fetcher;
+  try {
+    const track = vi.spyOn(telemetry, "track");
+    const root = await mount();
+    expect(await window.fetch("/v1/leads/fictional-person")).toBe(response);
+    await expect(window.fetch("/v1/leads")).rejects.toBe(error);
+    const calls = track.mock.calls.filter(([name]) => name === "sx.api_timing");
+    expect(calls).toHaveLength(2);
+    expect(calls[0][1]).toMatchObject({
+      endpoint: "v1_leads_id",
+      status: "2xx",
+      band: "lt100",
+    });
+    expect(calls[1][1]).toMatchObject({ status: "network" });
+    expect(JSON.stringify(calls)).not.toMatch(/Fictional|fictional-person/);
+    await act(async () => root.unmount());
+    expect(window.fetch).toBe(fetcher);
+  } finally {
+    window.fetch = original;
+  }
+});
+
+it("captures XHR completion and network failures even without Resource Timing", async () => {
+  class FakeXhr extends EventTarget {
+    status = 200;
+    open() {}
+    send() {
+      this.dispatchEvent(new Event("loadend"));
+    }
+  }
+  vi.stubGlobal("XMLHttpRequest", FakeXhr);
+  try {
+    const original = FakeXhr.prototype.send;
+    const track = vi.spyOn(telemetry, "track");
+    const root = await mount();
+    const xhr = new XMLHttpRequest();
+    xhr.open("GET", "/v1/leads/fictional-person");
+    xhr.send();
+    (xhr as unknown as FakeXhr).status = 0;
+    xhr.open("GET", "/v1/leads");
+    xhr.send();
+    const calls = track.mock.calls.filter(([name]) => name === "sx.api_timing");
+    expect(calls).toHaveLength(2);
+    expect(calls[0][1]).toMatchObject({
+      endpoint: "v1_leads_id",
+      status: "2xx",
+    });
+    expect(calls[1][1]).toMatchObject({ status: "network" });
+    await act(async () => root.unmount());
+    expect(FakeXhr.prototype.send).toBe(original);
+  } finally {
+    vi.unstubAllGlobals();
+  }
 });

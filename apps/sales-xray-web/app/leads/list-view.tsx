@@ -579,13 +579,16 @@ export function ListView({
               ? `${page.total} ${stage === TEST ? "test " : ""}${page.total === 1 ? "lead" : "leads"}`
               : null}
           </span>
+          {/* Only when it says something (owner, #73): "Updated just now"
+              on every list was noise. */}
           <span
             className={styles.syncChip}
             aria-label="Lead sync"
             role="status"
             aria-live="polite"
+            data-quiet={error || syncing ? undefined : ""}
           >
-            {error ? "Sync paused" : syncing ? "Syncing…" : "Updated just now"}
+            {error ? "Sync paused" : syncing ? "Syncing…" : ""}
           </span>
           <span className={styles.listTools}>
             {selecting ? null : tools}

@@ -456,3 +456,23 @@ def test_phone_call_steps_take_codes_and_milliseconds_only() -> None:
     assert set(call.values["via"]) == {"touch", "click"}
     assert set(call.values["why"]) == {"drag", "moved", "long", "timeout", "error"}
     assert not {"number", "phone", "lead_id", "x", "y"} & set(call.allowed_payload_keys)
+
+
+@pytest.mark.parametrize(
+    "event,payload",
+    [
+        ("sx.tap", {"target": "input", "zone": "r4c3", "screen": "leads"}),
+        ("sx.scroll_depth", {"depth": 75, "screen": "leads"}),
+        ("sx.route_timing", {"band": "100_300", "nav": "back", "screen": "leads"}),
+        (
+            "sx.api_timing",
+            {"endpoint": "v1_leads", "status": "2xx", "band": "lt100", "background": "no"},
+        ),
+    ],
+)
+def test_lake_capture_events_have_closed_schemas(event, payload) -> None:
+    definition = SALES_XRAY_EVENTS[event]
+    check_payload_values(definition, payload)
+    first_key = next(iter(definition.values))
+    with pytest.raises(ValueError):
+        check_payload_values(definition, {**payload, first_key: "Fictional Person"})

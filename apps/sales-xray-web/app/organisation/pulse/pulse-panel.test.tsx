@@ -83,3 +83,11 @@ it("offers the connect action for an unlinked organisation", async () => {
   ).toBe(false);
   expect(syncPulse).not.toHaveBeenCalled();
 });
+it("never leaves the part blank when Pulse isn't offered here", async () => {
+  vi.mocked(readPulse).mockResolvedValue(null);
+  await act(async () => root.render(<PulsePanel />));
+  expect(host.querySelector('[aria-label="Pulse"]')?.textContent).toContain(
+    "Not available for this organisation yet.",
+  );
+  expect(host.querySelector("button")).toBeNull();
+});

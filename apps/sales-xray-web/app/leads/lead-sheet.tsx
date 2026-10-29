@@ -86,7 +86,6 @@ import { PersonAvatar } from "../people/person-avatar";
 import { LastCallBrief } from "./call-brief-card";
 import { ReassignSheet } from "./reassign-sheet";
 import { PipelineOverview } from "./pipeline-overview";
-import { InAppCallHint } from "./call-hint";
 import { CallLink } from "./call-link";
 import type { FirstTapEvent } from "./first-tap";
 import { callStep } from "./phone-call-steps";
@@ -103,7 +102,7 @@ import { CallNext } from "./call-next";
 import { chatFacts, chatOrigin } from "./chat-origin";
 import { SocialThread } from "./social-thread";
 import { WhatsAppThread } from "./whatsapp-thread";
-import { sourceText, whyLine } from "./desk-view";
+import { whyLine } from "./desk-view";
 import { firstCallWords, ownerNote } from "./owner-words";
 import { phoneCallText } from "./phone-call-text";
 import { several, usePipelines } from "./use-pipelines";
@@ -165,6 +164,7 @@ import {
 import { askFeedback } from "../feedback/ask";
 import { DeleteLeadsSheet, type Doomed } from "./delete-leads";
 import { Sheet } from "./sheet-frame";
+import { Sheet as Picker } from "../ui/sheet";
 import deleteStyles from "./delete-leads.module.css";
 import styles from "./leads.module.css";
 
@@ -2900,7 +2900,6 @@ export function LeadCard({
         ) : (
           <Badge tone={stageTone(lead.stage)}>{lead.stage_label}</Badge>
         )}
-        <Badge>{sourceText(lead)}</Badge>
         <span className={styles.leadWhy}>{whyLine(lead)}</span>
       </div>
       <SuggestedStage detail={detail} onChanged={onChanged} />
@@ -2927,7 +2926,6 @@ export function LeadCard({
         {/* The call's own lines under Call (owner, #31, 26 Oct 2026): the
             phone app's hint, then "Called from another phone? Log it", or
             the call's question once it is open. */}
-        {detail.phone ? <InAppCallHint /> : null}
         <CompanyCallStrip
           company={company}
           name={lead.name}
@@ -3240,14 +3238,6 @@ export function LeadCard({
                 ? "You"
                 : lead.owner_name}
           </strong>
-          <small>
-            {[
-              ownerNote(detail.owner_reason),
-              firstCallWords(detail.first_call_minutes, ago(lead.created_at)),
-            ]
-              .filter(Boolean)
-              .join(" · ")}
-          </small>
         </span>
         {detail.can_assign && detail.reps.length ? (
           <button
@@ -3260,6 +3250,14 @@ export function LeadCard({
             {lead.owner_name ? "Reassign" : "Assign"}
           </button>
         ) : null}
+        <small className={styles.ownerNote}>
+          {[
+            ownerNote(detail.owner_reason),
+            firstCallWords(detail.first_call_minutes, ago(lead.created_at)),
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+        </small>
       </section>
       {detail.can_assign && detail.reps.length ? (
         <ReassignSheet
@@ -3328,6 +3326,7 @@ function PipelinePanel({
 }) {
   const pipes = usePipelines();
   const [busy, setBusy] = useState(false);
+  const [moving, setMoving] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
   const lead = detail.lead;
   const here = lead.pipeline ?? "main";
@@ -3341,48 +3340,55 @@ function PipelinePanel({
         name={name}
       />
       {detail.can_assign && several(pipes) ? (
-        <div className={styles.ownerRow}>
-          <span className={styles.pipelineMark} aria-hidden="true">
-            <Workflow size={16} />
-          </span>
-          <span>
-            <small>Pipeline</small>
-            <strong>{name}</strong>
-          </span>
-          <label className={styles.pipelineMove}>
-            <span className={styles.srOnly}>Move to pipeline</span>
-            <select
-              value=""
-              disabled={busy}
-              onChange={async (event) => {
-                const key = event.target.value;
-                if (!key) return;
-                setBusy(true);
-                setProblem(null);
-                try {
-                  onChanged(await movePipeline(lead, key));
-                } catch (reason) {
-                  setProblem(
-                    reason instanceof LeadsError
-                      ? reason.message
-                      : "Not moved. Try again.",
-                  );
-                } finally {
-                  setBusy(false);
-                }
-              }}
-            >
-              <option value="">{busy ? "Moving…" : "Move to…"}</option>
+        <>
+          <button
+            type="button"
+            className={styles.ownerAction}
+            aria-haspopup="dialog"
+            disabled={busy}
+            onClick={() => setMoving(true)}
+          >
+            <Workflow size={16} aria-hidden="true" />
+            {busy ? "Moving…" : "Move to another pipeline"}
+          </button>
+          <Picker
+            open={moving}
+            onClose={() => setMoving(false)}
+            title="Move to another pipeline"
+            description="It keeps its owner and follow-ups."
+          >
+            <ul className={styles.pipelineChoices}>
               {pipes.pipelines
                 .filter((item) => item.key !== here)
                 .map((item) => (
-                  <option key={item.key} value={item.key}>
-                    {item.name}
-                  </option>
+                  <li key={item.key}>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setMoving(false);
+                        setBusy(true);
+                        setProblem(null);
+                        try {
+                          onChanged(await movePipeline(lead, item.key));
+                        } catch (reason) {
+                          setProblem(
+                            reason instanceof LeadsError
+                              ? reason.message
+                              : "Not moved. Try again.",
+                          );
+                        } finally {
+                          setBusy(false);
+                        }
+                      }}
+                    >
+                      <Workflow size={18} aria-hidden="true" />
+                      {item.name}
+                    </button>
+                  </li>
                 ))}
-            </select>
-          </label>
-        </div>
+            </ul>
+          </Picker>
+        </>
       ) : null}
       {problem ? (
         <p className={styles.error} role="alert">

@@ -60,14 +60,25 @@ function teamOf(body: typeof sandbox): unknown {
   };
 }
 
+/**
+ * ?state=team|empty|denied|loading picks the data; ?view=people|calls opens
+ * that view, as /organisation/insights?view= does (owner bug #80 is People).
+ */
 export function InsightsFixture() {
   const [view, setView] = useState<View>("sandbox");
+  const [section, setSection] = useState<"overview" | "people" | "calls">(
+    "overview",
+  );
   const [loading, setLoading] = useState(false);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
-      const state = new URLSearchParams(location.search).get("state");
-      if (state === "empty" || state === "denied") setView(state);
+      const params = new URLSearchParams(location.search);
+      const state = params.get("state");
+      if (state === "empty" || state === "denied" || state === "team")
+        setView(state);
       if (state === "loading") setLoading(true);
+      const asked = params.get("view");
+      if (asked === "people" || asked === "calls") setSection(asked);
     });
     return () => cancelAnimationFrame(frame);
   }, []);
@@ -117,7 +128,8 @@ export function InsightsFixture() {
         />
       </div>
       <InsightsView
-        key={view}
+        key={`${view}-${section}`}
+        view={section}
         fixture
         filters={DEFAULT_FILTERS}
         initial={seeds[view]}

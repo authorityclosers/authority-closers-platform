@@ -11,7 +11,7 @@
  */
 import Link from "next/link";
 import { useState } from "react";
-import { BookOpen } from "lucide-react";
+import { BookOpen, ChevronRight } from "lucide-react";
 
 import { OrganisationView } from "../organisation/organisation-view";
 import { AssistantSetup } from "./assistant-setup";
@@ -24,19 +24,19 @@ export function DevelopersSection() {
   const [refresh, setRefresh] = useState(0);
   return (
     <div className={styles.page}>
+      {/* One quiet row (owner, 29 Oct 2026: less text): the docs are a
+          reference, not the screen's main action. */}
       <section className={styles.docs} aria-label="Documentation">
         <span className={styles.docsIcon} aria-hidden="true">
-          <BookOpen size={20} />
+          <BookOpen size={18} />
         </span>
         <span className={styles.docsText}>
-          <strong>Developer documentation</strong>
-          <span>
-            Quick start, every endpoint with curl and JavaScript examples,
-            webhooks and their signatures, MCP, limits and errors.
-          </span>
+          <strong>Developer docs</strong>
+          <span>Endpoints, webhooks, MCP and limits</span>
         </span>
         <Link href="/developers" className={styles.docsLink}>
           Read the docs
+          <ChevronRight size={16} aria-hidden="true" />
         </Link>
       </section>
       <AssistantSetup />

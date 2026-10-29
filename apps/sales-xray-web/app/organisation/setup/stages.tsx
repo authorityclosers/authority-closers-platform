@@ -1,11 +1,5 @@
 "use client";
-import {
-  ArrowDown,
-  ArrowUp,
-  Building2,
-  ChevronRight,
-  Pencil,
-} from "lucide-react";
+import { ArrowDown, ArrowUp, Building2, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { notify } from "../../notice-center";
 import { Button, Segmented, Skeleton } from "../../ui/kit";
@@ -44,6 +38,8 @@ export function OrganisationStages() {
     null,
   );
   const [advanced, setAdvanced] = useState(false);
+  // The arrows show only while reordering (owner bugs #75/#76: less on screen).
+  const [reorder, setReorder] = useState(false);
   const [business, setBusiness] = useState(false);
   const [dirty, setDirty] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -176,7 +172,7 @@ export function OrganisationStages() {
       <header className={styles.head}>
         <div>
           <h2>Lead stages</h2>
-          <p>Tap a stage to edit. Save when you’re ready.</p>
+          <p>Tap a stage to rename it. Save when you’re ready.</p>
         </div>
       </header>
       <div className={styles.tools}>
@@ -197,13 +193,13 @@ export function OrganisationStages() {
           </label>
         ) : null}
         <button
-          className={styles.button}
+          className={styles.chip}
           disabled={busy || dirty || !view.canEdit}
           onClick={() => setBusiness(true)}
         >
-          <Building2 size={16} />
+          <Building2 size={16} aria-hidden="true" />
           {profile}
-          <ChevronRight size={16} />
+          <ChevronRight size={16} aria-hidden="true" />
         </button>
       </div>
       <Segmented
@@ -224,70 +220,102 @@ export function OrganisationStages() {
           </p>
         )
       ) : (
-        <ol className={styles.list} aria-label="Your lead stages">
-          {active.map((stage, index) => (
-            <li className={styles.stageCard} key={stage.id}>
-              <span className={styles.number} aria-hidden="true">
-                {index + 1}
-              </span>
+        <section className={styles.group}>
+          <header className={styles.groupHead}>
+            <div className={styles.groupTitle}>
+              <h3>
+                {active.length} {active.length === 1 ? "stage" : "stages"}
+              </h3>
+              <small>In the order leads move through them</small>
+            </div>
+            {view.canEdit && active.length > 1 ? (
               <button
-                className={styles.stageEdit}
-                disabled={!view.canEdit || busy}
-                onClick={() => setEditing({ id: stage.id, label: stage.label })}
-                title={stage.label}
+                className={styles.textButton}
+                aria-pressed={reorder}
+                onClick={() => setReorder(!reorder)}
               >
-                <span className={styles.copy}>
-                  <strong>{stage.label}</strong>
-                  <small>
-                    {stage.kindWords ||
-                      view.kinds[stage.kind ?? ""] ||
-                      "Lead stage"}{" "}
-                    · {stage.leads} {stage.leads === 1 ? "lead" : "leads"}
-                  </small>
-                </span>
-                <Pencil size={16} aria-hidden="true" />
+                {reorder ? "Done" : "Reorder"}
               </button>
-              {view.canEdit ? (
-                <span className={styles.stageMoves}>
-                  <button
-                    className={styles.button}
-                    aria-label={`Move ${stage.label} earlier`}
-                    disabled={busy || move(list, stage.id, -1) === list}
-                    onClick={() => {
-                      setList(move(list, stage.id, -1));
-                      setDirty(true);
-                    }}
-                  >
-                    <ArrowUp size={16} aria-hidden="true" />
-                  </button>
-                  <button
-                    className={styles.button}
-                    aria-label={`Move ${stage.label} later`}
-                    disabled={busy || move(list, stage.id, 1) === list}
-                    onClick={() => {
-                      setList(move(list, stage.id, 1));
-                      setDirty(true);
-                    }}
-                  >
-                    <ArrowDown size={16} aria-hidden="true" />
-                  </button>
+            ) : null}
+          </header>
+          <ol className={styles.rows} aria-label="Your lead stages">
+            {active.map((stage, index) => (
+              <li className={styles.stageRow} key={stage.id}>
+                <span className={styles.stageNumber} aria-hidden="true">
+                  {index + 1}
                 </span>
-              ) : null}
-            </li>
-          ))}
-        </ol>
+                <button
+                  className={styles.stageEdit}
+                  disabled={!view.canEdit || busy}
+                  onClick={() =>
+                    setEditing({ id: stage.id, label: stage.label })
+                  }
+                  title={stage.label}
+                >
+                  <span className={styles.pickCopy}>
+                    <strong>{stage.label}</strong>
+                    <small>
+                      {stage.kindWords ||
+                        view.kinds[stage.kind ?? ""] ||
+                        "Lead stage"}{" "}
+                      · {stage.leads} {stage.leads === 1 ? "lead" : "leads"}
+                    </small>
+                  </span>
+                  {reorder ? null : (
+                    <ChevronRight
+                      size={18}
+                      aria-hidden="true"
+                      className={styles.rowChevron}
+                    />
+                  )}
+                </button>
+                {view.canEdit && reorder ? (
+                  <span className={styles.stageMoves}>
+                    <button
+                      className={styles.iconButton}
+                      aria-label={`Move ${stage.label} earlier`}
+                      disabled={busy || move(list, stage.id, -1) === list}
+                      onClick={() => {
+                        setList(move(list, stage.id, -1));
+                        setDirty(true);
+                      }}
+                    >
+                      <ArrowUp size={18} aria-hidden="true" />
+                    </button>
+                    <button
+                      className={styles.iconButton}
+                      aria-label={`Move ${stage.label} later`}
+                      disabled={busy || move(list, stage.id, 1) === list}
+                      onClick={() => {
+                        setList(move(list, stage.id, 1));
+                        setDirty(true);
+                      }}
+                    >
+                      <ArrowDown size={18} aria-hidden="true" />
+                    </button>
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ol>
+        </section>
       )}
       {dirty ? (
-        <div className={styles.footer}>
+        <div
+          className={styles.saveBar}
+          role="region"
+          aria-label="Unsaved stages"
+        >
+          <span className={styles.saveCount}>Stages not saved yet</span>
           <button
-            className={styles.button}
+            className={styles.textButton}
             disabled={busy}
             onClick={() => {
               take(view);
               setError(null);
             }}
           >
-            Discard changes
+            Discard
           </button>
           <button
             className={styles.primary}
@@ -303,17 +331,19 @@ export function OrganisationStages() {
           {error}
         </p>
       ) : null}
-      <details
-        className={styles.details}
-        onToggle={(event) => setAdvanced(event.currentTarget.open)}
-      >
-        <summary>More stage options</summary>
-        {advanced ? (
-          <div>
-            <JourneyTab canManage={view.canEdit} />
-          </div>
-        ) : null}
-      </details>
+      <div className={styles.more}>
+        <details
+          className={styles.details}
+          onToggle={(event) => setAdvanced(event.currentTarget.open)}
+        >
+          <summary>More stage options</summary>
+          {advanced ? (
+            <div>
+              <JourneyTab canManage={view.canEdit} />
+            </div>
+          ) : null}
+        </details>
+      </div>
       <Sheet
         open={editing !== null}
         onClose={() => setEditing(null)}

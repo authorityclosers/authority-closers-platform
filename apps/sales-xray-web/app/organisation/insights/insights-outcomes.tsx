@@ -11,6 +11,113 @@ import {
 } from "./insights-data";
 import styles from "./outcomes.module.css";
 
+/** The endings that count as an agreed next step (the ring's three). */
+const FORWARD: ReadonlySet<OutcomeKey> = new Set([
+  "won",
+  "booked",
+  "follow_up",
+]);
+
+type EndingRow = { key: OutcomeKey; label: string; value: number | null };
+
+/**
+ * How every call ended, like a phone's storage bar (owner bug #78, 29 Oct
+ * 2026: "something else instead of bars"): one strip split by outcome, and a
+ * legend list under it with each count and share, grouped into the endings
+ * that agreed a next step and the rest. Each row opens its calls; the colour
+ * always sits beside its name, so nothing is colour alone.
+ */
+function EveryEnding({
+  groups,
+  calls,
+  missing,
+  onCalls,
+}: {
+  groups: { key: string; label: string; rows: EndingRow[] }[];
+  calls: number | null;
+  missing: boolean;
+  onCalls: (outcome?: OutcomeKey) => void;
+}) {
+  const rows = groups.flatMap((group) => group.rows);
+  const known = rows.reduce((sum, row) => sum + (row.value ?? 0), 0);
+  const [first, second] = [...rows].sort(
+    (a, b) => (b.value ?? -1) - (a.value ?? -1),
+  );
+  // A tie has no single most common ending.
+  const top = first && first.value !== second?.value ? first : null;
+  const share = (value: number | null) =>
+    value === null || !calls ? "—" : percent(value / calls);
+  return (
+    <section className={styles.card} aria-label="Every call outcome">
+      <h2>
+        {top && top.value
+          ? `${top.label} was the most common ending`
+          : "How every call ended"}
+      </h2>
+      <p className={styles.caption}>
+        {calls === null ? "—" : count(calls)} analysed calls · tap an ending to
+        see its calls
+      </p>
+      {known > 0 ? (
+        <div
+          className={styles.mix}
+          role="img"
+          aria-label={rows
+            .map(
+              (row) =>
+                `${row.label}: ${row.value === null ? "unknown" : count(row.value)}`,
+            )
+            .join(", ")}
+        >
+          {rows.map((row) =>
+            row.value ? (
+              <i
+                key={row.key}
+                data-outcome={row.key}
+                style={{ flexGrow: row.value }}
+              />
+            ) : null,
+          )}
+        </div>
+      ) : null}
+      <ul className={styles.endings} aria-label="Calls by outcome">
+        {groups.map((group) => (
+          <li key={group.key} className={styles.endingGroup}>
+            <p className={styles.endingHead}>
+              <span>{group.label}</span>
+              <b>
+                {group.rows.some((row) => row.value === null)
+                  ? "—"
+                  : count(
+                      group.rows.reduce(
+                        (sum, row) => sum + (row.value ?? 0),
+                        0,
+                      ),
+                    )}
+              </b>
+            </p>
+            <ul>
+              {group.rows.map((row) => (
+                <li key={row.key}>
+                  <button type="button" onClick={() => onCalls(row.key)}>
+                    <i data-outcome={row.key} aria-hidden="true" />
+                    <span className={styles.endingName}>{row.label}</span>
+                    <b>{row.value === null ? "—" : count(row.value)}</b>
+                    <small>{share(row.value)}</small>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </li>
+        ))}
+      </ul>
+      {missing ? (
+        <p className={styles.caption}>— Outcome count unavailable</p>
+      ) : null}
+    </section>
+  );
+}
+
 /** Call outcomes are nested sets, never successive stages of unique leads. */
 export function OutcomeStory({
   data,
@@ -216,37 +323,23 @@ export function OutcomeStory({
           </p>
         </section>
       </div>
-      <section className={styles.card} aria-label="Every call outcome">
-        <h2>Every ending, counted</h2>
-        <p className={styles.caption}>
-          Each bar uses the same scale: 0–
-          {coverage.calls ? count(totals.calls) : "—"} analysed calls
-        </p>{" "}
-        <ul className={styles.outcomes} aria-label="Calls by outcome">
-          {outcomes.map((row) => (
-            <li key={row.key}>
-              <button type="button" onClick={() => onCalls(row.key)}>
-                <span className={styles.outcomeLabel}>
-                  {row.label}
-                  <b>
-                    {row.value === null ? "—" : `${count(row.value)} calls`}
-                  </b>
-                </span>
-                <span className={styles.bar} aria-hidden="true">
-                  <i
-                    style={{
-                      width: `${totals.calls && row.value !== null ? (row.value / totals.calls) * 100 : 0}%`,
-                    }}
-                  />
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        {missing ? (
-          <p className={styles.caption}>— Outcome count unavailable</p>
-        ) : null}
-      </section>
+      <EveryEnding
+        groups={[
+          {
+            key: "forward",
+            label: "Agreed a next step",
+            rows: outcomes.filter((row) => FORWARD.has(row.key)),
+          },
+          {
+            key: "other",
+            label: "Other endings",
+            rows: outcomes.filter((row) => !FORWARD.has(row.key)),
+          },
+        ]}
+        calls={coverage.calls ? totals.calls : null}
+        missing={missing}
+        onCalls={onCalls}
+      />
     </>
   );
 }

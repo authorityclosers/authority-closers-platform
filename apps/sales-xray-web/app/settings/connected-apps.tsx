@@ -201,7 +201,11 @@ const GIVES: Record<AppKey, string> = {
 export function cardWords(app: AppHealth): string {
   if (app.state === "problem" && app.lastError) return app.lastError.words;
   if (app.state === "ready" || app.state === "problem") return app.words;
-  if (app.state === "not_set_up") return app.words || "Not available here yet.";
+  // The status already says "Not available here"; the line says what it does.
+  if (app.state === "not_set_up")
+    return !app.words || /^not available here/i.test(app.words)
+      ? GIVES[app.app]
+      : app.words;
   return GIVES[app.app];
 }
 
@@ -374,7 +378,7 @@ function AppCard({
       aria-labelledby={titleId}
     >
       <div className={styles.cardHead}>
-        <BrandTile {...LOGOS[app.app]} size={44} />
+        <BrandTile {...LOGOS[app.app]} size={40} />
         <div className={styles.cardTitle}>
           <h3 id={titleId}>{app.name}</h3>
           <Badge tone={status.tone}>{status.label}</Badge>
@@ -438,7 +442,7 @@ function SignInCard({ option }: { option: ConnectOption }) {
       aria-labelledby={titleId}
     >
       <div className={styles.cardHead}>
-        <BrandTile brands={[option.kind]} size={44} />
+        <BrandTile brands={[option.kind]} size={40} />
         <div className={styles.cardTitle}>
           <h3 id={titleId}>{option.label} sign-in</h3>
           <Badge tone={option.connected ? "good" : "neutral"}>
@@ -468,7 +472,7 @@ function CardSkeleton() {
   return (
     <div className={styles.card} aria-hidden="true">
       <div className={styles.cardHead}>
-        <Skeleton width={44} height={44} />
+        <Skeleton width={40} height={40} />
         <div className={styles.cardTitle}>
           <Skeleton width="62%" height={14} />
           <Skeleton width={84} height={20} />

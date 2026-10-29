@@ -152,7 +152,8 @@ it("shows a manager the seller's day, their AI level and five tabs at most", asy
   expect(host.textContent).not.toContain("Takes new leads");
   expect(host.textContent).not.toContain("AI on calls");
   expect(host.textContent).not.toContain("Over limit");
-  expect(host.textContent).toContain("Open leads");
+  expect(host.textContent).toContain("31open leads");
+  expect(host.textContent).toContain("4due now");
   expect(host.textContent).toContain("Calls and charts");
   const tabs = [...host.querySelectorAll('[role="tablist"] button')].map(
     (item) => item.textContent,
@@ -200,7 +201,7 @@ it("lets a manager set the seller's AI level back to the default", async () => {
 it("shows a seller their own level and no settings or team numbers", async () => {
   await show(false, true);
   expect(host.textContent).toContain("AI on calls: Full (default)");
-  expect(host.textContent).not.toContain("Open leads");
+  expect(host.textContent).not.toContain("open leads");
   expect(tab("Settings")).toBeUndefined();
   expect(calls.some((call) => call.url.startsWith("/v1/lead-desk/team"))).toBe(
     false,
@@ -237,7 +238,7 @@ it("shows No limit as no limit, never as a number", async () => {
   Object.assign(team.reps[0], { max_open: null });
   try {
     await show();
-    expect(host.textContent).toContain("Open leads, no limit");
+    expect(host.textContent).toContain("open leadsNo limit");
     expect(host.textContent).not.toContain("null");
     expect(host.textContent).not.toContain("Over limit");
     await act(async () => tab("Settings").click());

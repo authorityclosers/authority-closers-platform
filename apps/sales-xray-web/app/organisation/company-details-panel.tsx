@@ -71,6 +71,8 @@ function DetailsEditor({
   onPersonal,
 }: Props & { tenantId: string }) {
   const [draft, setDraft] = useState<OrganisationDetails | null>(null);
+  // What is saved now: Save shows only when the draft differs from it.
+  const [base, setBase] = useState<OrganisationDetails | null>(null);
   const [message, setMessage] = useState("");
   const [readFailed, setReadFailed] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -122,7 +124,10 @@ function DetailsEditor({
     request.current = { controller, key: null, saving: false };
     readOrganisationSettings(tenantId, controller.signal)
       .then((value) => {
-        if (!controller.signal.aborted) setDraft(value);
+        if (!controller.signal.aborted) {
+          setDraft(value);
+          setBase(value);
+        }
       })
       .catch((error: unknown) => {
         if (!controller.signal.aborted) failure(error, true);
@@ -160,6 +165,7 @@ function DetailsEditor({
       );
       if (active.controller.signal.aborted) return;
       setDraft(value);
+      setBase(value);
       setMessage("Saved.");
       setConflict(false);
       active.key = null;
@@ -214,6 +220,8 @@ function DetailsEditor({
         ) : null}
       </div>
     );
+  const changed =
+    base === null || fields.some(([key]) => draft[key] !== base[key]);
   return (
     <form
       className={styles.form}
@@ -241,9 +249,12 @@ function DetailsEditor({
         </label>
       ))}
       <div className={`${styles.saveRow} ${styles.formActions}`}>
-        <button type="submit" className={styles.primary} disabled={saving}>
-          {saving ? "Saving…" : conflict ? "Retry save" : "Save details"}
-        </button>
+        {/* One filled button per screen: Save shows only with a change to save. */}
+        {changed || saving || conflict ? (
+          <button type="submit" className={styles.primary} disabled={saving}>
+            {saving ? "Saving…" : conflict ? "Retry save" : "Save details"}
+          </button>
+        ) : null}
         <small
           className={styles.hint}
           role={message && message !== "Saved." ? "alert" : "status"}

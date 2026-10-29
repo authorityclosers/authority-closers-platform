@@ -73,6 +73,9 @@ afterEach(async () => {
   host.remove();
   vi.unstubAllGlobals();
 });
+// The summary keeps each count with its word through no-break spaces.
+const plain = () =>
+  (host.textContent ?? "").split(String.fromCharCode(160)).join(" ");
 async function render() {
   await act(async () => {
     root.render(<OrganisationSources />);
@@ -131,6 +134,49 @@ it("keeps the other source controls on the screen instead of linking back to its
   });
   expect(host.querySelector('[data-brand="google"]')).not.toBeNull();
   expect(host.textContent).toContain("Website form");
+});
+
+// Owner bugs #75 and #76: no save bar until something changes; Discard puts the checks back.
+it("shows the save bar only while a choice is unsaved, and Discard restores it", async () => {
+  await render();
+  const saveBar = () => host.querySelector('[aria-label="Unsaved forms"]');
+  const pressed = () =>
+    [...host.querySelectorAll("button[aria-pressed]")].map((item) =>
+      item.getAttribute("aria-pressed"),
+    );
+  expect(saveBar()).toBeNull();
+  expect(plain()).toContain("3 of 3 forms bring in leads · 2 Pages");
+  const before = pressed();
+  await tap("Earlier campaign");
+  expect(saveBar()?.textContent).toContain("1 change");
+  expect(plain()).toContain("2 of 3 forms");
+  await tap("Discard");
+  expect(saveBar()).toBeNull();
+  expect(pressed()).toEqual(before);
+  expect(calls.filter((call) => call.body !== null)).toHaveLength(0);
+});
+
+it("selects or clears every form of one Page from its header", async () => {
+  await render();
+  await tap("Clear");
+  const first = host.querySelector(
+    'section[aria-label="Forms on Sample One"]',
+  )!;
+  expect(
+    [...first.querySelectorAll("button[aria-pressed]")].map((item) =>
+      item.getAttribute("aria-pressed"),
+    ),
+  ).toEqual(["false", "false"]);
+  const second = host.querySelector(
+    'section[aria-label="Forms on Sample Two"]',
+  )!;
+  expect(
+    second.querySelector("button[aria-pressed]")?.getAttribute("aria-pressed"),
+  ).toBe("true");
+  await tap("Save forms");
+  expect(
+    calls.find((call) => call.path.endsWith("/p1/disconnect")),
+  ).toBeDefined();
 });
 
 it("does not send people to an unavailable Facebook connector", async () => {

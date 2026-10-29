@@ -34,6 +34,7 @@ import {
   syncPulse,
   unlinkPulse,
 } from "./pulse-client";
+import styles from "./pulse-panel.module.css";
 
 const DATE = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
@@ -58,6 +59,10 @@ const SCOPE_WORDS: Record<string, string> = {
   "leads:notes": "add notes",
   "leads:tasks": "add tasks",
 };
+
+/** "read calls, read leads" → "Read calls, read leads". */
+const sentence = (words: string) =>
+  words ? words.charAt(0).toUpperCase() + words.slice(1) : words;
 
 type Loaded =
   | { state: "loading" }
@@ -140,7 +145,18 @@ export function PulsePanel() {
         <SkeletonRow avatar={36} lines={2} />
       </Panel>
     );
-  if (loaded.state === "hidden") return null;
+  // Never a blank page (owner, 29 Oct 2026: "the Pulse connection"): when
+  // Pulse isn't offered to this organisation, say so in one calm card.
+  if (loaded.state === "hidden")
+    return (
+      <section className={styles.hero} aria-label="Pulse">
+        <PulseTile size={44} />
+        <div className={styles.heroText}>
+          <h2>Pulse</h2>
+          <p>Not available for this organisation yet.</p>
+        </div>
+      </section>
+    );
   if (loaded.state === "failed")
     return (
       <Panel title="Pulse">
@@ -159,114 +175,97 @@ export function PulsePanel() {
   const matched = pulse.members.filter((member) => member.personId);
 
   return (
-    <div data-pulse-panel="">
-      <Panel
-        title="Pulse"
-        sub="Estate Autopilots' work app: your team's profiles, and the work you share with it"
-      >
-        <div
-          style={{
-            display: "flex",
-            gap: 12,
-            alignItems: "flex-start",
-            flexWrap: "wrap",
-          }}
-        >
-          <PulseTile size={40} />
-          <div style={{ flex: "1 1 240px", minWidth: 0 }}>
-            {link ? (
-              <>
-                <p style={{ margin: 0, fontWeight: 600 }}>
-                  Linked to {link.orgName ?? "your Pulse org"}
-                </p>
-                <p style={{ margin: "2px 0 0", opacity: 0.75 }}>
-                  {[
-                    link.linkedBy ? `By ${link.linkedBy}` : null,
-                    when(link.linkedAt),
-                    link.lastSyncAt
-                      ? `Read from Pulse ${when(link.lastSyncAt)}`
-                      : "Not read yet",
-                    link.webhooks ? "updates arrive at once" : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </p>
-                {link.lastSync.problem ? (
-                  <p style={{ margin: "4px 0 0" }}>
-                    <Badge tone="warn">{link.lastSync.problem}</Badge>
-                  </p>
-                ) : null}
-              </>
-            ) : (
-              <>
-                <p style={{ margin: 0, fontWeight: 600 }}>Not linked</p>
-                <p style={{ margin: "2px 0 0", opacity: 0.75 }}>
-                  Link your Pulse org: everyone&apos;s name, photo, job title
-                  and team come from Pulse and stay up to date. A Pulse org
-                  admin approves it on Pulse. Roles here never change.
-                </p>
-              </>
-            )}
-          </div>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {link ? (
-              <>
-                <Button
-                  disabled={busy !== null}
-                  onClick={() =>
-                    void run("sync", syncPulse, "Read again from Pulse")
-                  }
-                >
-                  <RefreshCw size={14} aria-hidden="true" />
-                  {busy === "sync" ? "Reading…" : "Sync now"}
-                </Button>
-                <Button
-                  variant="ghost"
-                  disabled={busy !== null}
-                  onClick={() => {
-                    if (!confirmUnlink) {
-                      setConfirmUnlink(true);
-                      return;
-                    }
-                    setConfirmUnlink(false);
-                    void run("unlink", unlinkPulse, "Unlinked from Pulse");
-                  }}
-                >
-                  <Unplug size={14} aria-hidden="true" />
-                  {confirmUnlink ? "Unlink from Pulse?" : "Unlink"}
-                </Button>
-              </>
-            ) : (
+    <div data-pulse-panel="" className={styles.stack}>
+      {/* One calm card: the mark, whether it's linked, and its one action
+          (owner, 29 Oct 2026). */}
+      <section className={styles.hero} aria-label="Pulse">
+        <PulseTile size={44} />
+        <div className={styles.heroText}>
+          <h2>
+            {link
+              ? `Linked to ${link.orgName ?? "your Pulse org"}`
+              : "Connect Pulse"}
+          </h2>
+          <p>
+            {link
+              ? [
+                  link.lastSyncAt
+                    ? `Read ${when(link.lastSyncAt)}`
+                    : "Not read yet",
+                  link.webhooks ? "updates arrive at once" : null,
+                  link.linkedBy ? `linked by ${link.linkedBy}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
+              : pulse.configured
+                ? "Your team's names, photos, titles and teams come from Pulse. Roles here never change."
+                : "Pulse isn't set up for this Sales X-Ray yet."}
+          </p>
+          {link?.lastSync.problem ? (
+            <p className={styles.problem}>
+              <Badge tone="warn">{link.lastSync.problem}</Badge>
+            </p>
+          ) : null}
+        </div>
+        <div className={styles.heroActions}>
+          {link ? (
+            <>
               <Button
-                variant="primary"
-                disabled={busy !== null || !pulse.configured}
+                className={styles.chip}
+                disabled={busy !== null}
                 onClick={() =>
-                  void run("link", async () => {
-                    window.location.assign(await startPulseLink());
-                  })
+                  void run("sync", syncPulse, "Read again from Pulse")
                 }
               >
-                <Link2 size={14} aria-hidden="true" />
-                {busy === "link" ? "Opening Pulse…" : "Connect your Pulse org"}
+                <RefreshCw size={14} aria-hidden="true" />
+                {busy === "sync" ? "Reading…" : "Sync now"}
               </Button>
-            )}
-          </div>
+              <Button
+                variant="ghost"
+                className={styles.chip}
+                data-confirm={confirmUnlink ? "" : undefined}
+                disabled={busy !== null}
+                onClick={() => {
+                  if (!confirmUnlink) {
+                    setConfirmUnlink(true);
+                    return;
+                  }
+                  setConfirmUnlink(false);
+                  void run("unlink", unlinkPulse, "Unlinked from Pulse");
+                }}
+              >
+                <Unplug size={14} aria-hidden="true" />
+                {confirmUnlink ? "Unlink from Pulse?" : "Unlink"}
+              </Button>
+            </>
+          ) : (
+            <Button
+              variant="primary"
+              className={styles.chip}
+              disabled={busy !== null || !pulse.configured}
+              onClick={() =>
+                void run("link", async () => {
+                  window.location.assign(await startPulseLink());
+                })
+              }
+            >
+              <Link2 size={14} aria-hidden="true" />
+              {busy === "link" ? "Opening Pulse…" : "Connect your Pulse org"}
+            </Button>
+          )}
         </div>
-        {!pulse.configured && !link ? (
-          <p style={{ margin: "8px 0 0", opacity: 0.75 }}>
-            Pulse isn&apos;t set up for this Sales X-Ray yet.
-          </p>
-        ) : null}
-      </Panel>
+      </section>
 
       {link ? (
         <Panel
           title="Your team in Pulse"
-          sub={`${matched.length} matched here · ${invitable.length} not in Sales X-Ray yet`}
+          sub={`${matched.length} of ${pulse.members.length} here`}
+          className={styles.fit}
           tools={
             invitable.length ? (
               <Button
                 variant="primary"
+                className={styles.chip}
                 disabled={busy !== null}
                 onClick={() =>
                   void run(
@@ -276,9 +275,7 @@ export function PulsePanel() {
                   )
                 }
               >
-                {busy === "invite"
-                  ? "Inviting…"
-                  : `Invite ${invitable.length} as Sellers`}
+                {busy === "invite" ? "Inviting…" : `Invite ${invitable.length}`}
               </Button>
             ) : null
           }
@@ -333,7 +330,8 @@ export function PulsePanel() {
       {link ? (
         <Panel
           title="What you share"
-          sub="Each way, and whether it reads or writes. Turn any of it off here."
+          sub="Each way"
+          className={`${styles.fit} ${styles.share}`}
         >
           <SwitchRow
             label="Names, job titles and teams from Pulse (read)"
@@ -374,8 +372,9 @@ export function PulsePanel() {
       ) : null}
 
       <Panel
-        title="Pulse's access to Sales X-Ray"
-        sub="What people allowed Pulse to do here, each from their own account"
+        title="Pulse's access here"
+        sub="Allowed by each person"
+        className={styles.fit}
       >
         {access.length ? (
           <List label="Pulse connections">
@@ -383,9 +382,11 @@ export function PulsePanel() {
               <Row
                 key={item.id}
                 icon={<PulseTile size={28} />}
-                title={item.scopes
-                  .map((scope) => SCOPE_WORDS[scope] ?? scope)
-                  .join(", ")}
+                title={sentence(
+                  item.scopes
+                    .map((scope) => SCOPE_WORDS[scope] ?? scope)
+                    .join(", "),
+                )}
                 meta={[
                   `Since ${when(item.createdAt) ?? "—"}`,
                   item.lastUsedAt ? `Used ${when(item.lastUsedAt)}` : null,
@@ -393,6 +394,7 @@ export function PulsePanel() {
                 end={
                   <Button
                     variant="ghost"
+                    className={styles.chip}
                     disabled={busy !== null}
                     onClick={() =>
                       void run(
