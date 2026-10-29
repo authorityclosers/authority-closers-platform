@@ -175,11 +175,11 @@ def _directory(root: Path, name: str, *, hours: int = 100) -> Path:
 
 
 @pytest.mark.parametrize("free", ["90", "100"])
-def test_target_already_met_logs_once_without_cleanup(guard: Path, free: str) -> None:
+def test_target_already_met_logs_inventory_without_cleanup(guard: Path, free: str) -> None:
     result = _run(guard, free=free)
     assert result.returncode == 0, result.stderr
     assert [c[0] for c in _calls(guard)] == ["df"]
-    assert len((guard / "guard.log").read_text().splitlines()) == 1
+    assert len((guard / "guard.log").read_text().splitlines()) == 2
 
 
 def test_config_target_and_early_stop_after_first_step(guard: Path) -> None:
@@ -549,3 +549,16 @@ def test_invalid_archive_configuration_fails_before_cleanup(guard: Path) -> None
 
 def test_archive_default_is_disabled() -> None:
     assert "ARCHIVE_ENABLED=0" in CONF.read_text()
+
+
+def test_raw_spool_is_inventoried_even_with_sufficient_disk_and_never_pruned(guard, monkeypatch):
+    spool = guard / "raw" / "production"
+    spool.mkdir(parents=True)
+    raw = spool / "hour.ndjson"
+    raw.write_bytes(b"durable")
+    monkeypatch.setenv("AC_DISK_TELEMETRY", str(spool.parent))
+    result = _run(guard, free="100")
+    assert result.returncode == 0
+    assert "telemetry_spool=" in (guard / "guard.log").read_text()
+    assert '"bytes": 7' in (guard / "guard.log").read_text()
+    assert raw.read_bytes() == b"durable"

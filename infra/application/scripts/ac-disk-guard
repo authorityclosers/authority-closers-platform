@@ -245,6 +245,21 @@ step() {
     say "step=$name after_free_bytes=$FREE status=$status"
     if met_target; then say "target met free_bytes=$FREE target_gb=$TARGET_FREE_GB"; exit 0; fi
 }
+# Raw analytics is durable pending data, never a cleanup candidate. Inventory
+# it even when free space already meets the target so growth stays visible.
+if spool_inventory=$("$PYTHON" - "${AC_DISK_TELEMETRY:-/var/lib/ac-telemetry}" <<'PYRAW'
+import json
+import sys
+import time
+from pathlib import Path
+root = Path(sys.argv[1])
+files = [p for p in root.glob("*/*") if p.suffix in {".open", ".ndjson", ".gz"} and not p.is_symlink()]
+print(json.dumps({"bytes": sum(p.stat().st_size for p in files),
+                  "oldest_seconds": int(max((time.time() - p.stat().st_mtime for p in files), default=0)),
+                  "files": len(files)}))
+PYRAW
+); then say "telemetry_spool=$spool_inventory";
+else say 'telemetry spool inventory failed'; fi
 measure
 if met_target; then say "target met free_bytes=$FREE target_gb=$TARGET_FREE_GB; no cleanup"; exit 0; fi
 step docker-images docker_images

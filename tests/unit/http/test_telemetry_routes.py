@@ -333,7 +333,7 @@ def test_consent_revoke_between_checks_drops_and_does_not_insert(
     assert session.query(AnalyticsEvent).count() == 0
 
 
-def test_admission_seam_rejects_before_storage(
+def test_admission_seam_spools_when_hot_store_full(
     telemetry_harness: tuple[TestClient, Session, ActorContext, dict[str, object]],
 ) -> None:
     client, session, actor, state = telemetry_harness
@@ -347,8 +347,9 @@ def test_admission_seam_rejects_before_storage(
         headers=_headers(),
     )
 
-    assert response.status_code == 503
-    assert response.json()["code"] == "telemetry_backpressure"
+    assert response.status_code == 202
+    assert response.json()["hot_store_full"] is True
+    assert response.json()["spool_receipt"]
     assert len(admission.calls) == 1
     assert admission.calls[0][0] == actor.tenant_id
     assert admission.calls[0][1] == 1

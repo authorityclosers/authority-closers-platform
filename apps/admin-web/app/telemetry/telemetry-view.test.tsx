@@ -119,3 +119,19 @@ it("says plainly when nothing was recorded yet, or the API is older", () => {
   const old = render({}).textContent ?? "";
   expect(old).toContain("doesn’t answer telemetry yet");
 });
+
+it("shows a durable intake heartbeat alarm with accepted, stored and raw counts", () => {
+  const host = render({
+    ...telemetryFixture(NOW),
+    heartbeat: {
+      active: true,
+      problems: ["Raw telemetry shipper is failing"],
+      numbers: { accepted: 500, stored: 100, spooled: 500 },
+    },
+  });
+  expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+    "shipper is failing",
+  );
+  expect(host.textContent).toContain("500 accepted");
+  expect(host.textContent).toContain("100 stored");
+});

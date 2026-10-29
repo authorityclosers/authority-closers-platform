@@ -119,8 +119,11 @@ def test_worker_errors_do_not_leak_credentials(monkeypatch, capsys):
     module = runner()
     monkeypatch.setenv("AC_LAKE_EXPORT_ENABLED", "1")
     monkeypatch.setattr(module, "credentials", Mock(side_effect=ValueError("FICTIONAL-SECRET")))
+    status = Mock()
+    monkeypatch.setattr(module, "reconciliation_status", status)
     assert module.main(["dev"]) == 1
     assert "FICTIONAL-SECRET" not in capsys.readouterr().err
+    status.assert_called_once_with("dev", {"verified": False, "mismatch": True})
 
 
 def test_timer_runs_nightly_low_priority_and_configuration_defaults_off():
@@ -131,3 +134,22 @@ def test_timer_runs_nightly_low_priority_and_configuration_defaults_off():
     assert "Nice=19" in service and "IOSchedulingClass=idle" in service
     assert "OnCalendar=*-*-* 01:15:00 UTC" in timer
     assert "Persistent=true" in timer
+
+
+def test_reconciliation_status_retains_counts_and_verification_time(tmp_path, monkeypatch):
+    module = runner()
+    real_path = Path
+    monkeypatch.setattr(module, "Path", lambda _: real_path(tmp_path))
+    module.reconciliation_status(
+        "production",
+        {
+            "postgres_rows": 2,
+            "raw_rows": 8,
+            "lake_rows": 2,
+            "mismatch": True,
+            "verified": True,
+        },
+    )
+    status = json.loads((tmp_path / "production" / "reconciliation.json").read_text())
+    assert status["raw_rows"] == 8 and status["mismatch"]
+    assert status["checked_at"] and status["verified"]

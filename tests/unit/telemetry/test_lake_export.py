@@ -243,11 +243,13 @@ def test_cli_uses_read_only_snapshot_and_writes_both_validated_tables(
     tmp_path, monkeypatch, capsys
 ):
     monkeypatch.setenv("AC_LAKE_EXPORT_ENABLED", "1")
+    monkeypatch.setenv("AC_TELEMETRY_SPOOL_ROOT", str(tmp_path / "raw"))
     monkeypatch.setenv("AC_LAKE_HMAC_KEY_V1", (b"x" * 32).hex())
     database_file = tmp_path / "database-url"
     database_file.write_text("postgresql+psycopg://fictional:fictional@localhost/fictional")
     engine = MagicMock()
     connection = engine.connect.return_value.__enter__.return_value
+    connection.scalar.return_value = 0
     monkeypatch.setattr(lake_cli, "create_engine", lambda *a, **kw: engine)
     monkeypatch.setattr(lake_cli, "source_rows", lambda *a: iter([]))
     assert (
@@ -270,3 +272,22 @@ def test_cli_uses_read_only_snapshot_and_writes_both_validated_tables(
     assert len(list((tmp_path / "output").rglob("manifest.json"))) == 2
     engine.dispose.assert_called_once()
     assert "fictional:" not in capsys.readouterr().out
+
+
+def test_raw_postgres_lake_reconciliation_is_visible(tmp_path):
+    import json
+    from datetime import date
+
+    from ac_platform.telemetry.lake import write_table
+
+    manifest_path = write_table(
+        "analytics_events",
+        [],
+        key=b"x" * 32,
+        env="dev",
+        day=date(2026, 10, 28),
+        output=tmp_path,
+        reconciliation={"postgres_rows": 0, "raw_rows": 7},
+    )
+    reconciliation = json.loads(manifest_path.read_text())["reconciliation"]
+    assert reconciliation == {"postgres_rows": 0, "raw_rows": 7, "lake_rows": 0, "mismatch": True}

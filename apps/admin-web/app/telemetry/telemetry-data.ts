@@ -146,6 +146,13 @@ export type ScriptError = {
 };
 
 export type ProductTelemetry = {
+  heartbeat?: {
+    active: boolean;
+    problems: string[];
+    accepted: number;
+    stored: number;
+    spooled: number;
+  };
   available: boolean;
   environment: string;
   generatedAt: string;
@@ -271,6 +278,15 @@ export function normalizeTelemetry(raw: unknown): ProductTelemetry {
       return { value: text(row.value, "unknown"), people: count(row.people) };
     });
   return {
+    heartbeat: body.heartbeat
+      ? {
+          active: object(body.heartbeat).active === true,
+          problems: strings(object(body.heartbeat).problems),
+          accepted: count(object(object(body.heartbeat).numbers).accepted),
+          stored: count(object(object(body.heartbeat).numbers).stored),
+          spooled: count(object(object(body.heartbeat).numbers).spooled),
+        }
+      : undefined,
     available: body.schema === "ac.sales-xray.product-telemetry/1",
     environment: text(body.environment),
     generatedAt: text(body.generated_at),

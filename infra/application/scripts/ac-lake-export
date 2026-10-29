@@ -15,7 +15,8 @@ import runpy
 import subprocess
 import sys
 import tempfile
-from datetime import date
+from contextlib import suppress
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 BUCKET = "ac-archive-283923228069-apse2"
@@ -152,6 +153,21 @@ def publish(output: Path, environment: str, day: str, env: dict[str, str]) -> in
     return rows
 
 
+def reconciliation_status(environment: str, report: dict) -> None:
+    root = (
+        Path("/srv/authority-closers/sales-xray/development-live/telemetry")
+        if environment == "dev"
+        else Path("/var/lib/ac-telemetry")
+    ) / environment
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    temporary = root / "reconciliation.tmp"
+    with temporary.open("w") as handle:
+        json.dump({**report, "checked_at": datetime.now(UTC).isoformat()}, handle)
+        handle.flush()
+        os.fsync(handle.fileno())
+    temporary.replace(root / "reconciliation.json")
+
+
 def main(argv: list[str]) -> int:
     if len(argv) != 1 or argv[0] not in ENVIRONMENTS:
         print("usage: ac-lake-export dev|staging|production", file=sys.stderr)
@@ -198,6 +214,15 @@ def main(argv: list[str]) -> int:
             if answer["environment"] != environment:
                 raise ValueError("lake worker environment mismatch")
             rows = publish(output, environment, answer["day"], aws)
+            manifest = json.loads((output / "analytics_events" / "manifest.json").read_text())
+            reconciliation_status(
+                environment,
+                {
+                    **manifest["reconciliation"],
+                    "day": answer["day"],
+                    "verified": True,
+                },
+            )
             print(
                 json.dumps(
                     {
@@ -210,6 +235,8 @@ def main(argv: list[str]) -> int:
             )
         return 0
     except Exception:
+        with suppress(OSError):
+            reconciliation_status(environment, {"verified": False, "mismatch": True})
         print("lake export failed; no unverified manifest is accepted", file=sys.stderr)
         return 1
 

@@ -246,6 +246,7 @@ def write_table(
     day: date,
     output: Path,
     chunk_rows: int = CHUNK_ROWS,
+    reconciliation: dict[str, Any] | None = None,
 ) -> Path:
     if env not in ENVIRONMENTS or chunk_rows < 1 or len(key) < 32:
         raise ContractError("invalid lake export configuration")
@@ -300,6 +301,15 @@ def write_table(
         "hmac_key_id": "AC_LAKE_HMAC_KEY_V1",
         "pseudonym_version": "ac-lake/1",
     }
+    if table == "analytics_events" and reconciliation is not None:
+        lake_rows = manifest["rows"]
+        manifest["reconciliation"] = {
+            **reconciliation,
+            "lake_rows": lake_rows,
+            "mismatch": not (
+                reconciliation.get("postgres_rows") == reconciliation.get("raw_rows") == lake_rows
+            ),
+        }
     path = folder / "manifest.json"
     path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
     return path

@@ -9,10 +9,11 @@ import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func, select
 from sqlalchemy.engine import make_url
 
-from ac_platform.telemetry.lake import ENVIRONMENTS, TABLES, source_rows, write_table
+from ac_platform.telemetry.durable import day_inventory, root_for
+from ac_platform.telemetry.lake import ENVIRONMENTS, TABLES, source_query, source_rows, write_table
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -43,6 +44,18 @@ def main(argv: list[str] | None = None) -> int:
                 connection.exec_driver_sql("SET LOCAL TIME ZONE 'UTC'")
                 connection.exec_driver_sql("SET LOCAL statement_timeout = '10min'")
                 for table in TABLES:
+                    reconciliation = None
+                    if table == "analytics_events":
+                        postgres_rows = connection.scalar(
+                            select(func.count()).select_from(
+                                source_query(table, day, now).subquery()
+                            )
+                        )
+                        inventory = day_inventory(root_for(args.environment), day.isoformat())
+                        reconciliation = {
+                            "postgres_rows": postgres_rows,
+                            "raw_rows": inventory["events"],
+                        }
                     write_table(
                         table,
                         source_rows(connection, table, day, now),
@@ -50,6 +63,7 @@ def main(argv: list[str] | None = None) -> int:
                         env=args.environment,
                         day=day,
                         output=args.output,
+                        reconciliation=reconciliation,
                     )
         finally:
             engine.dispose()

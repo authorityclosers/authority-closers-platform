@@ -1,0 +1,16 @@
+[Unit]
+Description=Verify and archive closed %i raw telemetry journals
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-telemetry-raw %i
+User=root
+UMask=0077
+TimeoutStartSec=25min
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=-/var/lib/ac-telemetry -/srv/authority-closers/sales-xray/development-live/telemetry
+PrivateTmp=true

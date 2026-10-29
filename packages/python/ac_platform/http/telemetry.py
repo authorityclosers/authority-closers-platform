@@ -10,6 +10,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID, uuid4
 
+from anyio.to_thread import run_sync
 from fastapi import APIRouter, Depends, FastAPI, Request, Response, status
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func, select
@@ -23,6 +24,8 @@ from ac_platform.learning.planning_repository import (
     AnalyticsEventReplayConflict,
     PlanningRepository,
 )
+from ac_platform.telemetry import durable
+from ac_platform.telemetry.heartbeat import IntakeCounters
 from ac_platform.telemetry.ingest import (
     LEARNER_SURFACE,
     MAX_BATCH_BYTES,
@@ -110,6 +113,8 @@ class TelemetryBatchResult(BaseModel):
     dropped: int = Field(default=0, ge=0, le=MAX_BATCH_EVENTS)
     accepted_event_ids: list[str] = Field(default_factory=list, max_length=MAX_BATCH_EVENTS)
     reason: str | None = Field(default=None, max_length=64)
+    spool_receipt: str | None = None
+    hot_store_full: bool = False
     trace_id: str = Field(min_length=1, max_length=128)
     retention_expires_at: datetime | None = None
     provenance_source: str = TELEMETRY_PROVENANCE_SOURCE
@@ -466,22 +471,6 @@ def install_telemetry_http(
                 "The telemetry timestamp or batch size is invalid."
             ) from exc
 
-        try:
-            admitted = await _admit(
-                admission,
-                tenant_id=tenant_id,
-                event_count=len(batch.events),
-                payload_bytes=batch_bytes,
-            )
-        except Exception as exc:
-            raise TelemetryBackpressure(
-                "Telemetry intake admission could not be evaluated; retry later."
-            ) from exc
-        if not admitted:
-            raise TelemetryBackpressure(
-                "Telemetry intake is temporarily saturated; retry the batch later."
-            )
-
         # Admission is intentionally not the final authorization decision.  A
         # consent grant can be revoked between the initial policy check and
         # this write.  Resolve it again through the same active transaction;
@@ -561,11 +550,42 @@ def install_telemetry_http(
             )
             for event in batch.events
         ]
+        # The final, current consent decision above authorizes both copies.
+        # No hot-store admission or SQL operation may precede this fsynced journal.
+        try:
+            spool_receipt = await run_sync(
+                durable.append, durable.root_for(settings.environment), events
+            )
+        except durable.SpoolUnavailable as exc:
+            raise TelemetryBackpressure("Durable telemetry intake is unavailable; retry.") from exc
+
+        def spooled(reason: str, *, full: bool = False) -> TelemetryBatchResult:
+            return TelemetryBatchResult(
+                accepted=len(events),
+                accepted_event_ids=[row.event_id for row in events],
+                reason=reason,
+                trace_id=trace_id,
+                spool_receipt=spool_receipt,
+                hot_store_full=full,
+                retention_expires_at=retention_expires_at,
+                provenance_source=surface.provenance_source,
+                provenance_version=surface.provenance_version,
+            )
+
+        try:
+            admitted = await _admit(
+                admission, tenant_id=tenant_id, event_count=len(events), payload_bytes=batch_bytes
+            )
+        except Exception:
+            return spooled("hot_store_unavailable")
+        if not admitted:
+            return spooled("hot_store_full", full=True)
+
         named_calls = frozenset(event.call_id for event in batch.events if event.call_id)
         try:
             # Re-check the immutable identity-bound grant immediately before
             # the repository write, inside the caller-owned transaction.
-            def write(database):  # type: ignore[no-untyped-def]
+            def write(database: Any) -> Any:
                 _validate_consent_binding(authoritative_consent, actor)
                 cap = surface.person_daily_cap
                 if cap is not None and (
@@ -573,9 +593,7 @@ def install_telemetry_http(
                     + len(events)
                     > cap
                 ):
-                    raise TelemetryBackpressure(
-                        "This person's telemetry for the last 24 hours is full; retry later."
-                    )
+                    return None
                 purge = surface.purge_every
                 due = purge is not None and (
                     not last_purge or time.monotonic() - last_purge[0] >= purge.total_seconds()
@@ -599,12 +617,26 @@ def install_telemetry_http(
                     )
                 return result
 
-            stored, duplicates, stored_event_ids = await auth.database.run_sync(write)
+            def isolated_write(database: Any) -> Any:
+                # SQL errors roll back the savepoint, leaving auth's enclosing
+                # transaction usable so its dependency can finish the 202 response.
+                with database.begin_nested():
+                    result = write(database)
+                    database.flush()
+                    return result
+
+            outcome = await auth.database.run_sync(isolated_write)
+            if outcome is None:
+                return spooled("hot_store_full", full=True)
+            stored, duplicates, stored_event_ids = outcome
         except AnalyticsEventReplayConflict as exc:
             raise TelemetryIdempotencyConflict(
                 "An event id was replayed with a different immutable observation."
             ) from exc
+        except Exception:
+            return spooled("hot_store_unavailable")
         return TelemetryBatchResult(
+            spool_receipt=spool_receipt,
             accepted=stored,
             duplicate=duplicates,
             accepted_event_ids=list(stored_event_ids),
@@ -615,6 +647,11 @@ def install_telemetry_http(
             provenance_version=surface.provenance_version,
         )
 
+    application.add_middleware(
+        IntakeCounters,
+        environment=settings.environment,
+        app_url=str(settings.sales_xray_app_url or settings.public_app_url),
+    )
     application.include_router(router)
 
 

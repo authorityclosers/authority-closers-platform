@@ -1,0 +1,13 @@
+[Unit]
+Description=Production telemetry heartbeat and HQ task alarm
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/sbin/ac-telemetry-heartbeat
+UMask=0022
+TimeoutStartSec=90
+StandardOutput=journal
+StandardError=journal

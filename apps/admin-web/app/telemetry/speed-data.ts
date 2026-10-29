@@ -5,7 +5,11 @@
  * percentile comes only from 20 samples or more.
  */
 import type { Tone } from "../ui/kit";
-import { msWords } from "./telemetry-data";
+import {
+  msWords,
+  normalizeTelemetry,
+  type ProductTelemetry,
+} from "./telemetry-data";
 
 export const SPEED_WINDOWS = ["7d", "24h", "30d"] as const;
 export type SpeedWindow = (typeof SPEED_WINDOWS)[number];
@@ -94,6 +98,7 @@ export type JourneyStep = {
 };
 
 export type SpeedJourneys = {
+  heartbeat?: ProductTelemetry["heartbeat"];
   environment: string;
   generatedAt: string;
   window: string;
@@ -180,6 +185,7 @@ export function normalizeSpeed(raw: unknown): SpeedJourneys {
   const totals = object(body.totals);
   const journey = object(body.journey);
   return {
+    heartbeat: normalizeTelemetry(body).heartbeat,
     environment: text(body.environment),
     generatedAt: text(body.generated_at),
     window: text(body.window, "7d"),

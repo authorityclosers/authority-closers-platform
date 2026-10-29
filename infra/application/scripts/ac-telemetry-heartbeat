@@ -1,0 +1,4 @@
+#!/bin/sh
+# Root timer entrypoint. The orchestrator installs the reviewed package in this venv.
+set -eu
+exec /opt/ac-lake-export/.venv/bin/python -m ac_platform.telemetry.raw_cli heartbeat

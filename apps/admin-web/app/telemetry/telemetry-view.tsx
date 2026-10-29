@@ -685,6 +685,18 @@ export function TelemetryView({ telemetry }: { telemetry: ProductTelemetry }) {
   const { totals, consent } = telemetry;
   return (
     <>
+      {telemetry.heartbeat?.active ? (
+        <Panel title="Telemetry needs attention">
+          <div role="alert" className={styles.line}>
+            <p>{telemetry.heartbeat.problems.join(" · ")}</p>
+            <p>
+              Last 30 minutes: {telemetry.heartbeat.accepted} accepted ·{" "}
+              {telemetry.heartbeat.stored} stored ·{" "}
+              {telemetry.heartbeat.spooled} spooled.
+            </p>
+          </div>
+        </Panel>
+      ) : null}
       <Tiles label="Telemetry in this window">
         <Kpi
           label="People"
