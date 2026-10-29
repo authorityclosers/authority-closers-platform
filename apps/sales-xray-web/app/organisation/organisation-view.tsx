@@ -84,7 +84,7 @@ import {
 import { can, ROLE_HINT, ROLE_LABEL, rolesToGive } from "./roles";
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
-import { SeatsPanel, type SeatUse } from "./seats-panel";
+import { SeatsPanel, SeatUsePanel, type SeatUse } from "./seats-panel";
 import { TeamPatternsSection } from "./team-patterns-section";
 import {
   IntegrationsPanel,
@@ -557,18 +557,7 @@ export function OrganisationView({
 
             {shows("members") && seesSeats && (
               <SectionBoundary name="Seats">
-                <SeatsPanel
-                  version={seatsVersion}
-                  people={
-                    members.status === "ready"
-                      ? members.value.filter(
-                          (member) => member.status === "active",
-                        )
-                      : null
-                  }
-                  usage={seatUse}
-                  seesTeam={seesTeam}
-                />
+                <SeatsPanel version={seatsVersion} />
               </SectionBoundary>
             )}
 
@@ -587,6 +576,21 @@ export function OrganisationView({
                   orgName={name}
                   yourPersonId={access?.context?.personId ?? null}
                   onMissing={() => setMissing(true)}
+                />
+              </SectionBoundary>
+            )}
+
+            {shows("members") && seesSeats && seesTeam && (
+              <SectionBoundary name="Seat use">
+                <SeatUsePanel
+                  people={
+                    members.status === "ready"
+                      ? members.value.filter(
+                          (member) => member.status === "active",
+                        )
+                      : null
+                  }
+                  usage={seatUse}
                 />
               </SectionBoundary>
             )}

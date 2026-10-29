@@ -8,6 +8,7 @@ import {
   quietestFirst,
   seatSource,
   SeatsPanel,
+  SeatUsePanel,
   type SeatUse,
 } from "./seats-panel";
 
@@ -87,23 +88,9 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function show(
-  props: Partial<{
-    version: number;
-    people: OrgMember[] | null;
-    usage: Map<string, SeatUse> | null;
-    seesTeam: boolean;
-  }> = {},
-) {
+async function show(props: Partial<{ version: number }> = {}) {
   await act(async () =>
-    root.render(
-      <SeatsPanel
-        version={props.version ?? 0}
-        people={props.people ?? null}
-        usage={props.usage ?? null}
-        seesTeam={props.seesTeam ?? true}
-      />,
-    ),
+    root.render(<SeatsPanel version={props.version ?? 0} />),
   );
   await vi.waitFor(() =>
     expect(host.querySelector('[aria-busy="true"]')).toBeNull(),
@@ -191,7 +178,11 @@ it("lists seat use quietest first, with calls, call minutes and a Quiet mark", a
     [id(1), { calls: 12, minutes: 47.6 }],
     [id(2), { calls: 0, minutes: 0 }],
   ]);
-  await show({ people, usage });
+  await act(async () =>
+    root.render(<SeatUsePanel people={people} usage={usage} />),
+  );
+  expect(host.querySelector("h2")?.textContent).toBe("Seat use");
+  expect(fetchMock).not.toHaveBeenCalled();
   const rows = [...host.querySelectorAll("li")].filter((row) =>
     row.querySelector("small"),
   );
@@ -207,10 +198,18 @@ it("lists seat use quietest first, with calls, call minutes and a Quiet mark", a
   expect(rows[2].textContent).not.toContain("Quiet");
 });
 
-it("Finance sees the counts but not each person's use", async () => {
-  await show({ people: [member(1, "Busy Seller", 0)], seesTeam: false });
-  expect(host.textContent).toContain("3 of 4 seats taken");
-  expect(host.textContent).not.toContain("Busy Seller");
+it("seat use shows nothing until members load, and without calls falls back to the member count", async () => {
+  await act(async () =>
+    root.render(<SeatUsePanel people={null} usage={null} />),
+  );
+  expect(host.textContent).toBe("");
+  await act(async () =>
+    root.render(
+      <SeatUsePanel people={[member(1, "Busy Seller", 0)]} usage={null} />,
+    ),
+  );
+  expect(host.textContent).toContain("1 call · active today");
+  expect(host.textContent).not.toContain("min");
 });
 
 it("hides itself on a server without seats and retries after an error", async () => {

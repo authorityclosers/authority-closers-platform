@@ -9,7 +9,8 @@
  * invite frees a seat for someone else; the owner and Finance buy more on the
  * Plan & billing page. People who see the team also see each member's calls,
  * call minutes and last activity, quietest first, to decide whose seat to
- * reassign. Never a price or an end date (Admin only).
+ * reassign (SeatUsePanel, below People). Never a price or an end date (Admin
+ * only).
  */
 import { RefreshCw } from "lucide-react";
 import Link from "next/link";
@@ -57,24 +58,13 @@ const quietSince = (member: OrgMember, now: number) => {
 
 export function SeatsPanel({
   version,
-  people,
-  usage,
-  seesTeam,
 }: {
   /** Changes after a member change, so the counts are read again. */
   version: number;
-  /** Active members, once loaded. */
-  people: OrgMember[] | null;
-  /** Calls and call minutes per person over the last 30 days, once loaded. */
-  usage: Map<string, SeatUse> | null;
-  /** Sees everyone's seat use (team.view); Finance sees counts only. */
-  seesTeam: boolean;
 }) {
   // "off": a server without seats yet shows nothing, as before.
   const [seats, setSeats] = useState<OrgSeats | "error" | "off" | null>(null);
   const [attempt, setAttempt] = useState(0);
-  const dates = useDisplayDates();
-  const [now] = useState(() => Date.now());
 
   useEffect(() => {
     const controller = new AbortController();
@@ -134,7 +124,6 @@ export function SeatsPanel({
       Buy seats
     </Link>
   ) : null;
-  const holders = seesTeam && people ? quietestFirst(people, now) : [];
 
   return (
     <section className={styles.section} aria-labelledby="org-seats">
@@ -198,44 +187,70 @@ export function SeatsPanel({
           </>
         )}
       </div>
-      {holders.length ? (
-        <div className={styles.card} data-list="">
-          <h3 className={styles.listTitle}>Seat use · last 30 days</h3>
-          <ul className={styles.holders} aria-label="Seat use, quietest first">
-            {holders.map((member) => {
-              const use = usage?.get(member.personId ?? "");
-              const quiet = quietSince(member, now) > QUIET_DAYS * 86_400_000;
-              const calls = use?.calls ?? member.calls30d;
-              const name = member.name || member.email || "Unnamed member";
-              return (
-                <li key={member.personId} className={styles.holder}>
-                  <span className={styles.holderName}>
-                    <b>
-                      <PersonDisplayName name={name} />
-                    </b>
-                    {quiet ? <span className={styles.quiet}>Quiet</span> : null}
-                  </span>
-                  <small>
-                    {[
-                      plural(calls, "call"),
-                      use
-                        ? `${Math.round(use.minutes).toLocaleString("en-IN")} min`
-                        : null,
-                      member.lastActiveAt
-                        ? activeOn(
-                            callDate(member.lastActiveAt, undefined, dates),
-                          )
-                        : "not active yet",
-                    ]
-                      .filter(Boolean)
-                      .join(" · ")}
-                  </small>
-                </li>
-              );
-            })}
-          </ul>
-        </div>
-      ) : null}
+    </section>
+  );
+}
+
+/**
+ * Who uses their seat, below People so Invite stays near the top: each
+ * member's calls, call minutes and last activity over 30 days, quietest first.
+ */
+export function SeatUsePanel({
+  people,
+  usage,
+}: {
+  /** Active members, once loaded. */
+  people: OrgMember[] | null;
+  /** Calls and call minutes per person over the last 30 days, once loaded. */
+  usage: Map<string, SeatUse> | null;
+}) {
+  const dates = useDisplayDates();
+  const [now] = useState(() => Date.now());
+  const holders = people ? quietestFirst(people, now) : [];
+  if (!holders.length) return null;
+  return (
+    <section className={styles.section} aria-labelledby="org-seat-use">
+      <div className={styles.head}>
+        <h2 id="org-seat-use" className={styles.title}>
+          Seat use
+        </h2>
+        <span className={styles.summary}>Last 30 days, quietest first</span>
+      </div>
+      <div className={styles.card} data-list="">
+        <ul className={styles.holders} aria-label="Seat use, quietest first">
+          {holders.map((member) => {
+            const use = usage?.get(member.personId ?? "");
+            const quiet = quietSince(member, now) > QUIET_DAYS * 86_400_000;
+            const calls = use?.calls ?? member.calls30d;
+            const name = member.name || member.email || "Unnamed member";
+            return (
+              <li key={member.personId} className={styles.holder}>
+                <span className={styles.holderName}>
+                  <b>
+                    <PersonDisplayName name={name} />
+                  </b>
+                  {quiet ? <span className={styles.quiet}>Quiet</span> : null}
+                </span>
+                <small>
+                  {[
+                    plural(calls, "call"),
+                    use
+                      ? `${Math.round(use.minutes).toLocaleString("en-IN")} min`
+                      : null,
+                    member.lastActiveAt
+                      ? activeOn(
+                          callDate(member.lastActiveAt, undefined, dates),
+                        )
+                      : "not active yet",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ")}
+                </small>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </section>
   );
 }
