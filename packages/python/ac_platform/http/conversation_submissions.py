@@ -363,6 +363,19 @@ def install_submission_http(
                 owner, request, policy_sha256=upload_policy(runtime.policy)["policy_sha256"]
             )
 
+    def _capture_binding(owner: _Owner, request: Request) -> None:
+        # Native background jobs bind their expected workspace/person before streaming audio.
+        bindings = request.headers.getlist("x-auto-capture-identity")
+        if not bindings:
+            return
+        actor = owner.actor
+        if (
+            len(bindings) != 1
+            or actor is None
+            or bindings[0] != f"{actor.tenant_id}:{actor.person_id}"
+        ):
+            raise fail(409, "This call belongs to another workspace or seller.")
+
     async def _standing_consent(owner: _Owner, policy_sha256: str) -> UUID:
         """The standing consent an upload marked "standing" relies on: the seller's own,
         in their organisation, for these upload terms, with their AI level not Off."""
@@ -711,6 +724,7 @@ def install_submission_http(
         standing_consent: UUID | None = None
         async with asynccontextmanager(current_owner)(request) as owner:
             await require_sales_xray_write_profile(owner.ownership.database, owner.actor)
+            _capture_binding(owner, request)
             actor_binding = _actor_binding(owner.actor)
             if consents == ["standing"]:
                 standing_consent = await _standing_consent(owner, policies[0])
@@ -1294,6 +1308,7 @@ def install_submission_http(
             raise fail(409, "Provider analysis is not enabled for this upload yet.")
         # "standing": no tap; the seller's standing consent to have their own calls
         # analysed as they arrive (call_ai.auto_consent) accepts the plan instead.
+        _capture_binding(owner, request)
         consents = request.headers.getlist("x-upload-consent")
         if consents not in ([], ["standing"]):
             raise fail(422, "Approve the exact displayed plan and privacy terms.")
