@@ -103,6 +103,38 @@ it("does not claim private recordings are accessible and fixes open the native c
   });
   expect(folder).toHaveBeenCalledOnce();
 });
+it("counts the last recording's age from when the phone answered", async () => {
+  const setup = parseSetup({
+    checks: {},
+    recorderProfile: {
+      kind: "folder",
+      maker: "Xiaomi",
+      dialerLabel: "Phone",
+      recording: "on",
+      folders: [],
+      switchTo: null,
+    },
+    folderPicked: true,
+  });
+  const answered = Date.UTC(2026, 9, 30, 0, 0);
+  await render(
+    <CaptureHealthView
+      setup={setup}
+      status={{
+        supported: true,
+        on: true,
+        wifiOnly: true,
+        lastRecordingSeenMs: answered - 5 * 60_000,
+      }}
+      consentOn
+      checkedAt={answered}
+      onRecorder={() => {}}
+      onFolder={() => {}}
+      onRefresh={() => {}}
+    />,
+  );
+  expect(host.textContent).toContain("saved 5 minutes ago");
+});
 it("shows daily counts with no seller ranking", async () => {
   await render(
     <CaptureRatesView
