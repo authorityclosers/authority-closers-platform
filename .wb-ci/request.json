@@ -1,0 +1,45 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "455722f9c6d0d883c0a3dc9582fdcdb110370351",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/capture-guard/capture-guard.module.css",
+    "apps/sales-xray-web/app/capture-guard/capture-guard.test.tsx",
+    "apps/sales-xray-web/app/capture-guard/capture-health.tsx",
+    "apps/sales-xray-web/app/capture-guard/capture-rates.tsx",
+    "apps/sales-xray-web/app/leads/auto-capture-state.tsx",
+    "apps/sales-xray-web/app/leads/capture-guard-client.ts",
+    "apps/sales-xray-web/app/leads/native-phone.ts",
+    "apps/sales-xray-web/app/leads/private-call.test.tsx",
+    "apps/sales-xray-web/app/leads/team-view.tsx",
+    "apps/sales-xray-web/app/organisation/people/seller-profile.tsx",
+    "apps/sales-xray-web/app/review-fixture/capture-guard/page.tsx",
+    "apps/sales-xray-web/app/review-fixture/capture-guard/preview.tsx",
+    "apps/sales-xray-web/app/settings/auto-analysis-panel.tsx",
+    "apps/sales-xray-web/app/settings/auto-capture-panel.tsx",
+    "packages/python/ac_platform/lead_desk/capture_guard.py",
+    "packages/python/ac_platform/lead_desk/capture_guard_nudges.py",
+    "packages/python/ac_platform/lead_desk/http.py",
+    "packages/python/ac_platform/lead_desk/push.py",
+    "packages/python/ac_platform/lead_desk/store.py",
+    "scripts/data-changes/ac-test-data-delete.py",
+    "tests/database/test_ac_test_data_delete_postgresql.py",
+    "tests/database/test_capture_guard_nudges_postgresql.py",
+    "tests/database/test_capture_guard_postgresql.py",
+    "tests/unit/lead_desk/test_capture_guard.py",
+    "tests/unit/lead_desk/test_capture_guard_nudges.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/database/test_ac_test_data_delete_postgresql.py"
+  ],
+  "include_paths": [
+    "scripts/data-changes/ac-test-data-delete.py",
+    "tests/database/test_ac_test_data_delete_postgresql.py"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}
