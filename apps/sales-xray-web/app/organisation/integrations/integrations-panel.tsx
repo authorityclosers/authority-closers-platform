@@ -8,11 +8,14 @@
  */
 import {
   AppWindow,
+  ArrowRightLeft,
   Check,
+  ChevronRight,
   Copy,
   KeyRound,
   Link2,
   Pencil,
+  Plus,
   Power,
   RefreshCw,
   Send,
@@ -27,7 +30,6 @@ import {
   Dialog,
   Empty,
   Field,
-  Panel,
   Skeleton,
   type Tone,
 } from "../../ui/kit";
@@ -60,17 +62,14 @@ import {
 } from "./integrations-client";
 import { AiRepliesSettings } from "../../leads/ai-replies";
 import { ClaudeMark, CursorMark } from "../../settings/assistant-marks";
+import { DevCard } from "../../settings/dev-card";
 import { BrandTile } from "../../ui/brand-tile";
 import { PulseTile } from "../../ui/pulse-mark";
 import { SocialSettings } from "../../leads/social-settings";
 import { WhatsAppSettings } from "../../leads/whatsapp-settings";
+import keyStyles from "./api-keys.module.css";
 import styles from "./integrations.module.css";
 
-const STATE_TONE: Record<ApiKey["state"], Tone> = {
-  active: "good",
-  expired: "warn",
-  revoked: "neutral",
-};
 const DELIVERY_TONE: Record<string, Tone> = {
   delivered: "good",
   pending: "warn",
@@ -114,6 +113,13 @@ function appMark(name: string): { icon: ReactNode; kind?: "tile" | "mark" } {
   if (key.startsWith("cursor"))
     return { icon: <CursorMark size={18} />, kind: "mark" };
   return { icon: <AppWindow size={16} /> };
+}
+
+/** A permission in two words for a key card: "calls:read" → "Calls · read". */
+export function scopeWords(scope: string): string {
+  const [what, how] = scope.split(":");
+  const name = what ? what.charAt(0).toUpperCase() + what.slice(1) : scope;
+  return how ? `${name} · ${how}` : name;
 }
 
 /** A signing secret's last characters, whatever prefix the hint came with. */
@@ -366,77 +372,104 @@ function KeysSection({
   const [revoking, setRevoking] = useState<ApiKey | null>(null);
   const label = (key: string) =>
     data.scopes.find((scope) => scope.key === key)?.label ?? key;
+  const bearer = data.keyMode === "live" ? "sxk_live_…" : "sxk_test_…";
   return (
-    <Panel
+    <DevCard
+      icon={<KeyRound />}
+      tone="amber"
       title="API keys"
-      sub="For your other apps"
-      className={styles.fit}
+      info={
+        <>
+          {data.apiBase ? (
+            <p>
+              Send <code>Authorization: Bearer {bearer}</code> to{" "}
+              <code>{data.apiBase}</code>
+            </p>
+          ) : null}
+          <p>
+            Make one key for each app that connects, with only the permissions
+            it needs, so you can revoke one alone. A key is shown once.
+          </p>
+        </>
+      }
       tools={
-        <Button
-          variant="primary"
-          className={styles.chip}
-          onClick={() => setCreating(true)}
-        >
-          <KeyRound size={14} aria-hidden="true" /> New key
-        </Button>
+        // The empty card has its own button; never two "New key".
+        data.keys.length ? (
+          <Button
+            variant="primary"
+            className={styles.chip}
+            onClick={() => setCreating(true)}
+          >
+            <Plus size={15} aria-hidden="true" /> New key
+          </Button>
+        ) : null
       }
     >
-      {data.apiBase ? (
-        <p className={styles.howto}>
-          Send{" "}
-          <code>
-            Authorization: Bearer{" "}
-            {data.keyMode === "live" ? "sxk_live_…" : "sxk_test_…"}
-          </code>{" "}
-          to <code>{data.apiBase}</code>
-        </p>
-      ) : null}
       {data.keys.length ? (
-        <ul className={styles.rows} aria-label="API keys">
+        // Each key as a key card (owner bug #104, 29 Oct 2026: "API keys have
+        // no personality"): its name and state, the key's first characters,
+        // what it may do, and when it was used.
+        <ul className={keyStyles.keys} aria-label="API keys">
           {data.keys.map((key) => (
-            <ListRow
-              key={key.id}
-              state={key.state}
-              icon={<KeyRound size={16} />}
-              title={key.name}
-              lines={[
-                <>
-                  <code>{key.prefix}…</code> ·{" "}
-                  {key.scopes.map(label).join(", ")}
-                </>,
-                `Used ${day(key.lastUsedAt)} · Expires ${day(key.expiresAt)}`,
-              ]}
-              end={
-                <>
-                  <Badge tone={STATE_TONE[key.state]}>
+            <li key={key.id} className={keyStyles.key} data-state={key.state}>
+              <span className={keyStyles.keyMark} aria-hidden="true">
+                <KeyRound size={18} />
+              </span>
+              <span className={keyStyles.keyBody}>
+                <span className={keyStyles.keyTop}>
+                  <strong>{key.name}</strong>
+                  <span className={keyStyles.keyState} data-state={key.state}>
                     {key.state === "active"
                       ? "Active"
                       : key.state === "expired"
                         ? "Expired"
                         : "Revoked"}
-                  </Badge>
-                  {key.state === "active" ? (
-                    <Button
-                      variant="ghost"
-                      className={styles.chip}
-                      aria-label={`Revoke ${key.name}`}
-                      onClick={() => setRevoking(key)}
-                    >
-                      Revoke
-                    </Button>
-                  ) : null}
-                </>
-              }
-            />
+                  </span>
+                </span>
+                <code className={keyStyles.keyToken}>
+                  {key.prefix}…<span aria-hidden="true">••••••••</span>
+                </code>
+                <span
+                  className={keyStyles.scopes}
+                  aria-label={`May: ${key.scopes.map(label).join(", ")}`}
+                >
+                  {key.scopes.map((scope) => (
+                    <span key={scope} className={keyStyles.scope}>
+                      {scopeWords(scope)}
+                    </span>
+                  ))}
+                </span>
+                <span className={keyStyles.keyMeta}>
+                  Used {day(key.lastUsedAt)} · Expires {day(key.expiresAt)}
+                </span>
+              </span>
+              {key.state === "active" ? (
+                <button
+                  type="button"
+                  className={keyStyles.revoke}
+                  aria-label={`Revoke ${key.name}`}
+                  onClick={() => setRevoking(key)}
+                >
+                  Revoke
+                </button>
+              ) : null}
+            </li>
           ))}
         </ul>
       ) : (
-        <Empty
-          icon={KeyRound}
-          title="No API keys yet"
-          text="Make one for each app that connects, so you can revoke it alone."
-          action={{ onClick: () => setCreating(true), label: "New key" }}
-        />
+        // An empty key slot that says what a key is for, and one button.
+        <div className={keyStyles.keySlot}>
+          <span className={keyStyles.keySlotMark} aria-hidden="true">
+            <KeyRound size={22} />
+          </span>
+          <strong>No API keys yet</strong>
+          <p>
+            Make one for each app that connects, so you can revoke it alone.
+          </p>
+          <Button variant="primary" onClick={() => setCreating(true)}>
+            <Plus size={15} aria-hidden="true" /> New key
+          </Button>
+        </div>
       )}
       <NewKeyDialog
         open={creating}
@@ -487,7 +520,7 @@ function KeysSection({
           </>
         }
       />
-    </Panel>
+    </DevCard>
   );
 }
 
@@ -690,20 +723,32 @@ function WebhookSection({
   };
   if (!data.webhooksReady)
     return (
-      <Panel
+      <DevCard
+        icon={<WebhookIcon />}
+        tone="blue"
         title="Webhook"
-        sub="Events sent to your app"
-        className={styles.fit}
+        info={<p>Events sent to your app, as they happen.</p>}
       >
         <Empty
           icon={WebhookIcon}
           title="Not switched on here yet"
           text="Webhooks open on this server soon. API keys work now."
         />
-      </Panel>
+      </DevCard>
     );
   return (
-    <Panel title="Webhook" sub="Events sent to your app" className={styles.fit}>
+    <DevCard
+      icon={<WebhookIcon />}
+      tone="blue"
+      title="Webhook"
+      info={
+        <p>
+          Sales X-Ray sends a signed POST to your app for each event you pick,
+          such as a new lead or a finished call analysis. Check each one with
+          the signing secret.
+        </p>
+      }
+    >
       {!hook || editing ? (
         <WebhookForm
           data={data}
@@ -841,7 +886,7 @@ function WebhookSection({
           </>
         }
       />
-    </Panel>
+    </DevCard>
   );
 }
 
@@ -913,10 +958,16 @@ function HandoverSection({
       .finally(() => setBusy(false));
   };
   return (
-    <Panel
-      title="Hand-over to your customer app"
-      sub="Won leads go to your app"
-      className={styles.fit}
+    <DevCard
+      icon={<ArrowRightLeft />}
+      tone="teal"
+      title="Hand-over to your app"
+      info={
+        <p>
+          When a lead is won, Sales X-Ray sends it to your own customer app:
+          name and phone always, and the other parts you tick.
+        </p>
+      }
     >
       {open ? (
         <div className={`${styles.form} ${styles.inset}`}>
@@ -1069,7 +1120,7 @@ function HandoverSection({
           </>
         }
       />
-    </Panel>
+    </DevCard>
   );
 }
 
@@ -1097,13 +1148,16 @@ function AppsSection({
   const connected = data.connections.filter((item) => item.revokedAt === null);
   const apps = data.apps.filter((app) => app.revokedAt === null);
   return (
-    <Panel
+    <DevCard
+      icon={<AppWindow />}
+      tone="slate"
       title="Connected apps"
-      className={styles.fit}
-      tools={
-        <Button className={styles.chip} onClick={() => setRegistering(true)}>
-          <Link2 size={14} aria-hidden="true" /> Register app
-        </Button>
+      info={
+        <p>
+          Apps you approved to reach your organisation, such as Pulse or
+          ChatGPT. Building your own? Register it, and organisations can connect
+          it the same way.
+        </p>
       }
     >
       {connected.length ? (
@@ -1172,6 +1226,16 @@ function AppsSection({
           </ul>
         </>
       ) : null}
+      {/* Rare, so a quiet last row rather than a button in the head. */}
+      <button
+        type="button"
+        className={keyStyles.registerRow}
+        onClick={() => setRegistering(true)}
+      >
+        <Link2 size={16} aria-hidden="true" />
+        <span>Register your own app</span>
+        <ChevronRight size={16} aria-hidden="true" />
+      </button>
       <Dialog
         open={registering}
         title="Register your own app"
@@ -1263,7 +1327,7 @@ function AppsSection({
         }
         onClose={() => setMade(null)}
       />
-    </Panel>
+    </DevCard>
   );
 }
 

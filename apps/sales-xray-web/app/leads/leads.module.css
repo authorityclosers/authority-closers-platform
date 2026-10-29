@@ -7179,3 +7179,98 @@ fieldset.form {
     contain-intrinsic-block-size: auto 134px;
   }
 }
+
+/* Leads → the list's tools (owner bug #99, 29 Oct 2026: "these icons … no
+   proper personality", three bare circles in the app). Filter, Views and
+   Select say their word beside a 16 px teal icon, like the report sheet's
+   chips; on a phone they sit together in one capsule, and the count stays
+   centred beside it. */
+.listHead .listTools .statusChip,
+.listHead .listFilter button {
+  width: auto;
+  gap: 6px;
+  padding: 0 12px;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.listHead .listTools .statusChip > svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.listHead .selectToggle .controlLabel {
+  position: static;
+  width: auto;
+  height: auto;
+  overflow: visible;
+  clip-path: none;
+}
+
+.listHead .viewName {
+  display: inline;
+  max-width: 6.5em;
+}
+
+.listHead:has(.syncChip:empty) > .listTotal {
+  grid-row: 1 / span 2;
+  align-self: center;
+}
+
+@media (max-width: 767.98px) {
+  .root[data-tab="all"] .listHead {
+    padding-block: 6px;
+  }
+
+  .listHead > .listTotal {
+    font-size: var(--sx-text-xs);
+  }
+
+  .listHead .listTools {
+    gap: 0;
+    padding: 3px;
+    border: 1px solid var(--sx-line);
+    border-radius: var(--sx-radius-pill);
+    background: var(--sx-surface);
+    box-shadow: var(--sx-shadow-1);
+  }
+
+  .listHead .listTools .statusChip,
+  .listHead .listFilter button {
+    position: relative;
+    gap: 5px;
+    min-height: 38px;
+    padding: 0 9px;
+    border-color: transparent;
+    background: transparent;
+  }
+
+  /* Still 44 px to the thumb. */
+  .listHead .listTools .statusChip::after {
+    position: absolute;
+    inset: -3px 0;
+    content: "";
+  }
+
+  .listHead .listTools .statusChip[data-on],
+  .listHead .listTools .statusChip[data-view],
+  .listHead .listTools .statusChip[aria-pressed="true"] {
+    border-color: transparent;
+    background: var(--lx-teal-tint);
+  }
+}
+
+/* Phones narrower than 360 px keep the icons only. */
+@media (max-width: 359.98px) {
+  .listHead .listFilter button,
+  .listHead .viewName,
+  .listHead .selectToggle .controlLabel {
+    font-size: 0;
+  }
+
+  .listHead .listFilter button .filterCount {
+    font-size: var(--sx-text-xs);
+  }
+}

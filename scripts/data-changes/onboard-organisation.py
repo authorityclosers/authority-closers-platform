@@ -34,12 +34,16 @@ are added, so the same input with tonight's sheet re-syncs it. ``--read`` reads 
 Run inside the API container with the deployed settings (its filesystem is read-only, so the
 input goes inline):
     docker exec -i <api> python - '<input JSON>' [--apply | --read] < onboard-organisation.py
-input: {"command_id", "organisation", "approver_email", "issue",
+input: {"command_id", "organisation", "approver_email", "issue", "tenant_id"?,
         "owner": {"name", "phone"?, "email", "called_by": [variant, ...]?},
         "sellers": [{"name", "phone"?, "email", "called_by": [variant, ...]?}, ...],
-        "csv": "<the sheet as CSV text>", "label"?, "called_by_column"?,
+        "csv"?: "<the sheet as CSV text>", "label"?, "called_by_column"?,
         "mapping": {"name": header, "phone": header, "email": header, ...}?,
         "follow_up_column"?, "seller_limit": int | null?, "play_optin_url"?}
+"tenant_id" adds the people to an organisation the owner already made in the app (owner,
+30 Oct 2026: a founding client's own organisations, people added by the operator): it must
+exist and the owner must be its active Owner; it is never created or renamed. Without "csv"
+no leads are imported. Operator-added members need no paid seat, as in the app's operator path.
 Prints counts and the people's own names; a lead's name, number or email never. The Google
 emails to add as Play testers are printed in full, once, for the operator.
 """
@@ -69,7 +73,7 @@ from ac_platform.identity.repositories import AsyncSqlAlchemyIdentityRepository
 from ac_platform.identity.sales_xray_profile import normalize_profile_name, validate_e164
 from ac_platform.identity.sales_xray_profile_models import SalesXrayProfile
 from ac_platform.identity.services import PersonSnapshot
-from ac_platform.lead_desk.capture import key, normalise_phone, read_csv, suggest_mapping
+from ac_platform.lead_desk.capture import Sheet, key, normalise_phone, read_csv, suggest_mapping
 from ac_platform.lead_desk.contracts import FollowUp, RepRules
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead, LeadRep
@@ -389,9 +393,14 @@ async def run(
         await db.execute(text("SET TRANSACTION READ ONLY"))
     approver = await _person(db, str(spec["approver_email"]))
     report: dict[str, Any] = {"mode": mode, "organisation": name, "label": label}
+    existing = spec.get("tenant_id")
     prior: Organisation | None = await db.scalar(
-        select(Organisation).where(Organisation.creation_command_id == command_id)
+        select(Organisation).where(Organisation.tenant_id == UUID(str(existing)))
+        if existing
+        else select(Organisation).where(Organisation.creation_command_id == command_id)
     )
+    if existing and prior is None:
+        raise SystemExit(json.dumps({"refused": "organisation_not_found"}))
     if mode == "read":
         report["status"] = "read" if prior is not None else "not_found"
         if prior is not None:
@@ -448,11 +457,17 @@ async def run(
         await journeys.start_organisation(db, tenant_id, approver.id, now)
     else:
         tenant_id = prior.tenant_id
+        if existing:
+            held = await db.get(Membership, (tenant_id, ids[owner.email]))
+            if held is None or held.role != "owner" or held.status != "active" or held.ended_at:
+                raise SystemExit(json.dumps({"refused": "owner_is_not_this_organisations_owner"}))
         report["organisation_is"] = "found"
+    added = 0
     for person in people[1:]:
         current = await db.get(Membership, (tenant_id, ids[person.email]))
         if current is not None and current.ended_at is None and current.status == "active":
             continue
+        added += 1
         await service.add_member(
             tenant_id,
             ids[person.email],
@@ -495,7 +510,9 @@ async def run(
                 )
 
     # 3 and 4. The sheet, each row to the person its "called by" names.
-    sheet = read_csv(str(spec["csv"]).encode("utf-8"))
+    # No sheet: nothing to read, so no leads.
+    csv_text = str(spec.get("csv") or "")
+    sheet = read_csv(csv_text.encode("utf-8")) if csv_text.strip() else Sheet((), (), False)
     mapping = {str(k): str(v) for k, v in dict(spec.get("mapping") or {}).items()} or (
         suggest_mapping(sheet.headers)
     )
@@ -574,7 +591,10 @@ async def run(
         )
 
     # 5. The audit event, when anything changed.
-    changed = report["organisation_is"] == "made" or counts["created"] + counts["repeat"] > 0
+    report["members_added"] = added
+    changed = (
+        report["organisation_is"] == "made" or added > 0 or counts["created"] + counts["repeat"] > 0
+    )
     report["audited"] = changed
     if changed:
         await append_audit_event(
@@ -592,6 +612,7 @@ async def run(
                 "command_id": str(command_id),
                 "organisation": report["organisation_is"],
                 "people": len(people),
+                "members_added": added,
                 "counts": dict(counts),
                 "exact_repeats_dropped": len(dropped),
                 "by_person": {str(ids[p.email]): preview.get(p.name, 0) for p in people},

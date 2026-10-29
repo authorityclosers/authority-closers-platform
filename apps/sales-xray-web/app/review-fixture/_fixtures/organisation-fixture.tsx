@@ -224,9 +224,24 @@ function install() {
           ],
           review: {
             state: "pending",
-            since: new Date(Date.now() - 3 * 86_400_000).toISOString(),
-            worksNow: "test leads only for now",
+            // A day, as the API sends it ("19 Oct" on screen).
+            since: new Date(Date.now() - 3 * 86_400_000)
+              .toISOString()
+              .slice(0, 10),
+            worksNow:
+              "Until Meta approves Sales Xray, only people added to our Meta app as testers can connect a Page, and only test leads come through.",
+            after:
+              "Once Meta approves it, any business can connect its own Pages here.",
           },
+          blockers: [
+            {
+              short: "Ad leads: use a Website form until Meta approves",
+              reason: "Meta is still reviewing Sales Xray.",
+              fix: "Add a Website form in Leads.",
+              page: "/leads?setup=sources",
+              action: "Add a Website form",
+            },
+          ],
           tests: [{ kind: "lead", label: "Send a test lead", needs: [] }],
         },
         {
@@ -253,6 +268,28 @@ function install() {
           connections: [
             { id: "form-1", label: "Site enquiry form", state: "ready" },
           ],
+        },
+      ],
+    }),
+    // The lead ads sheet's Pages, with the older leads already read, so its
+    // long lines show at a phone's width (owner bugs #100 and #101).
+    "/v1/lead-desk/meta/status": () => ({
+      pages: [
+        {
+          pageId: "page-1",
+          name: "Fictional Homes Pune",
+          active: true,
+          received: 105,
+          forms: "all",
+          backfill: { state: "done", seen: 102, created: 2, here: 0 },
+        },
+        {
+          pageId: "page-2",
+          name: "Fictional Homes Mumbai Western Suburbs",
+          active: true,
+          received: 2,
+          forms: "all",
+          backfill: { state: "done", seen: 2, created: 0, here: 0 },
         },
       ],
     }),
@@ -336,10 +373,18 @@ function Actions() {
   const query = useSearchParams();
   const invite = query.get("invite") === "1";
   const switcher = query.get("switcher") === "open";
+  // ?app=meta: the lead ads sheet opens by itself (owner bugs #100, #101).
+  const app = query.get("app");
   // Screenshots can't type or tap on every phone: these do it once.
   useEffect(() => {
-    if (!invite && !switcher) return;
+    if (!invite && !switcher && !app) return;
     const timer = window.setTimeout(() => {
+      if (app === "meta")
+        [...document.querySelectorAll<HTMLButtonElement>("button")]
+          .find((button) =>
+            button.textContent?.includes("Manage Facebook & Instagram"),
+          )
+          ?.click();
       if (switcher) {
         const trigger = [
           ...document.querySelectorAll<HTMLButtonElement>("button[aria-label]"),
@@ -370,7 +415,7 @@ function Actions() {
       }
     }, 900);
     return () => window.clearTimeout(timer);
-  }, [invite, switcher]);
+  }, [app, invite, switcher]);
   return null;
 }
 

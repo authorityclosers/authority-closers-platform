@@ -213,3 +213,81 @@ def test_imports_into_an_existing_organisation_without_creating_one(
                 await execute("apply", uuid4())
 
     run(exercise())
+
+
+def test_calls_only_attach_to_existing_leads_by_exact_phone(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            settings = here.setup.settings.model_copy(
+                update={"operations_tenant_id": uuid4(), "public_learner_tenant_id": uuid4()}
+            )
+            monkeypatch.setattr(tool, "get_settings", lambda: settings)
+            monkeypatch.setattr(tool, "COMMAND", uuid4())
+            async with here.setup.sessions() as db:
+                email = await db.scalar(
+                    select(Person.email).where(Person.id == here.setup.state.person_id)
+                )
+            assert email
+            spec = tool.prepare([row(lead_id="fictional:4", phone_e164="+919876073004")])
+
+            def call(call_id: str, phone: str) -> dict[str, str]:
+                return {
+                    "call_id": call_id,
+                    "lead_id": "fictional:4",
+                    "phone_e164": phone,
+                    "duration_sec": "25",
+                    "started_at": "2026-07-12T12:00:00+05:30",
+                    "agent": "Fictional Seller",
+                    "direction": "",
+                }
+
+            async def execute(mode: str, calls: list[dict[str, str]], calls_only: bool) -> Any:
+                async with here.setup.sessions() as db:
+                    try:
+                        result = await tool.run(
+                            db,
+                            spec,
+                            calls,
+                            owner_email=email,
+                            mode=mode,
+                            digest="fictional-digest",
+                            now=datetime.now(UTC),
+                            tenant_id=here.tenant_id,
+                            calls_only=calls_only,
+                        )
+                        if mode == "apply":
+                            await db.commit()
+                        else:
+                            await db.rollback()
+                        return result
+                    except BaseException:
+                        await db.rollback()
+                        raise
+
+            # The lead arrives first by another path (production's came by CSV on 28 Oct).
+            seeded = await execute("apply", [], False)
+            leads_before = seeded["after"]["leads"]
+            calls = [call("fictional-a", "+919876073004"), call("fictional-b", "+919876073999")]
+            added = await execute("apply", calls, True)
+            assert added["rows"] == {"calls_only": True}
+            assert added["new_calls"] == 1 and added["unmatched_calls"] == 1
+            assert added["after"]["leads"] == leads_before
+            assert added["after"]["calls"] - added["before"]["calls"] == 1
+            replay = await execute("apply", calls, True)
+            assert replay["new_calls"] == 0 and replay["after"] == added["after"]
+            with pytest.raises(ValueError, match="existing organisation"):
+                async with here.setup.sessions() as db:
+                    await tool.run(
+                        db,
+                        spec,
+                        calls,
+                        owner_email=email,
+                        mode="dry-run",
+                        digest="fictional-digest",
+                        now=datetime.now(UTC),
+                        calls_only=True,
+                    )
+
+    run(exercise())

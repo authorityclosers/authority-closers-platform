@@ -3,7 +3,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { normalizeIntegrations, testWords } from "./integrations-client";
-import { IntegrationsPanel } from "./integrations-panel";
+import { IntegrationsPanel, scopeWords } from "./integrations-panel";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -269,7 +269,7 @@ it("sets up the hand-over with a pasted key and the form questions", async () =>
   );
   await act(async () => root.render(<IntegrationsPanel />));
   await flush();
-  expect(host.textContent).toContain("Hand-over to your customer app");
+  expect(host.textContent).toContain("Hand-over to your app");
   const type = async (
     input: HTMLInputElement | null | undefined,
     value: string,
@@ -394,21 +394,42 @@ it("hands a new key to the page, places extras after a part, and reads again whe
   clock.mockRestore();
 });
 
-it("shows each key as one calm row: name, key, permissions, use and state", async () => {
+it("shows each key as a key card: name, state, key, permissions and use", async () => {
   await act(async () => root.render(<IntegrationsPanel parts={["keys"]} />));
   await flush();
-  // No table on any screen (owner, 29 Oct 2026): one row per key.
+  // No table on any screen (owner, 29 Oct 2026): one card per key (owner bug
+  // #104: "API keys have no personality").
   expect(host.querySelector("table")).toBeNull();
-  const row = host.querySelector('[aria-label="API keys"] > li')!;
-  expect(row.getAttribute("data-state")).toBe("active");
-  const words = row.querySelector("strong")!.parentElement!;
-  expect([...words.children].map((part) => part.textContent)).toEqual([
-    "Our CRM",
-    "sxk_test_Ab12… · Read calls and their status",
-    "Used never · Expires never",
+  const card = host.querySelector('[aria-label="API keys"] > li')!;
+  expect(card.getAttribute("data-state")).toBe("active");
+  expect(card.querySelector("strong")?.textContent).toBe("Our CRM");
+  expect(card.querySelector("code")?.textContent).toContain("sxk_test_Ab12…");
+  // Permissions as short chips, with their full words for screen readers.
+  const may = card.querySelector('[aria-label^="May: "]')!;
+  expect(may.getAttribute("aria-label")).toBe(
+    "May: Read calls and their status",
+  );
+  expect([...may.children].map((chip) => chip.textContent)).toEqual([
+    "Calls · read",
   ]);
-  expect(row.textContent).toContain("Active");
-  expect(row.querySelector('[aria-label="Revoke Our CRM"]')).not.toBeNull();
+  expect(card.textContent).toContain("Used never · Expires never");
+  expect(card.textContent).toContain("Active");
+  expect(card.querySelector('[aria-label="Revoke Our CRM"]')).not.toBeNull();
+  // Its explanation waits behind the (i).
+  const about = host.querySelector<HTMLButtonElement>(
+    '[aria-label="About API keys"]',
+  )!;
+  const tip = host.querySelector('[role="note"]')!;
+  expect(tip.hasAttribute("hidden")).toBe(true);
+  await act(async () => about.click());
+  expect(tip.hasAttribute("hidden")).toBe(false);
+  expect(tip.textContent).toContain("Authorization: Bearer");
+});
+
+it("says a permission in two words", () => {
+  expect(scopeWords("calls:read")).toBe("Calls · read");
+  expect(scopeWords("leads:write")).toBe("Leads · write");
+  expect(scopeWords("webhooks:manage")).toBe("Webhooks · manage");
 });
 
 it("shows a signing secret's last characters once, whatever prefix the hint has", async () => {

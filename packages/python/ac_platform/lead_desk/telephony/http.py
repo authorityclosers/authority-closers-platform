@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import hashlib
 import hmac
-import json
 import os
 import time
 from collections.abc import AsyncIterator
@@ -34,7 +33,8 @@ from pathlib import Path
 from typing import Any
 from uuid import UUID
 
-from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
+import anyio
+from fastapi import APIRouter, BackgroundTasks, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
@@ -127,6 +127,7 @@ class CompanyCallView(_View):
     event_id: UUID | None = Field(default=None, alias="eventId")
     recording: bool = False
     requested_at: datetime = Field(alias="requestedAt")
+    hung_up_by: str | None = Field(default=None, alias="hungUpBy")
 
 
 def call_view(call: ledger.CompanyCall) -> CompanyCallView:
@@ -141,6 +142,7 @@ def call_view(call: ledger.CompanyCall) -> CompanyCallView:
         event_id=call.lead_event_id,
         recording=call.recording,
         requested_at=call.requested_at,
+        hung_up_by=call.hung_up_by,
     )
 
 
@@ -251,6 +253,7 @@ def install_telephony_http(application: FastAPI, ctx: RouteContext) -> None:
                         tenant_id=tenant_id,
                         role=row[0],
                         name=person_name(row[1]),
+                        session_id=actor.session_id,
                     ),
                 )
         except DeskError as error:
@@ -481,6 +484,42 @@ def install_telephony_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response) as desk:
             call = await own_call(desk, call_id)
             person_id = desk.viewer.person_id
+        from ac_platform.lead_desk.telephony.pipeline import STATE, STORED
+
+        intake = getattr(application.state, STATE, None)
+        if intake is not None:
+            async with ctx.sessions() as db:
+                stored = (await intake.events(db, call)).get(STORED)
+            if stored is not None:
+                path = intake.path(call.tenant_id, call.id)
+                if await anyio.to_thread.run_sync(path.is_file):
+                    content = await anyio.to_thread.run_sync(path.read_bytes)
+                    digest = hashlib.sha256(content).hexdigest()
+                    if digest != stored["sha256"]:
+                        raise HTTPException(
+                            409, "The recording could not be verified.", headers=PRIVATE
+                        )
+                    async with ctx.sessions() as db, db.begin():
+                        await ledger.recording_fetched(
+                            db,
+                            call,
+                            person_id=person_id,
+                            size=len(content),
+                            sha256=digest,
+                            now=datetime.now(UTC),
+                        )
+                    extension = "wav" if stored["content_type"] == "audio/wav" else "mp3"
+                    filename = f"company-call.{extension}"
+                    return Response(
+                        content,
+                        media_type=stored["content_type"],
+                        headers={
+                            **PRIVATE,
+                            "X-Recording-Sha256": digest,
+                            "Content-Disposition": f'attachment; filename="{filename}"',
+                            "X-Content-Type-Options": "nosniff",
+                        },
+                    )
         found = provider()
         if not call.final or not call.recording or not call.sid:
             raise HTTPException(409, "There's no recording for this call yet.", headers=PRIVATE)
@@ -517,7 +556,12 @@ def install_telephony_http(application: FastAPI, ctx: RouteContext) -> None:
     # ----- the provider's side: its status webhook and the notice it plays ----------------
 
     async def status_webhook(
-        name: str, tenant_id: UUID, call_id: UUID, mac: str, request: Request
+        name: str,
+        tenant_id: UUID,
+        call_id: UUID,
+        mac: str,
+        request: Request,
+        background: BackgroundTasks,
     ) -> dict[str, str]:
         same_host(request)
         secret = (os.environ.get("AC_TELEPHONY_WEBHOOK_SECRET") or "").strip()
@@ -534,33 +578,38 @@ def install_telephony_http(application: FastAPI, ctx: RouteContext) -> None:
             if len(raw) + len(chunk) > _MAX_WEBHOOK:
                 raise HTTPException(413, "That's too large.", headers=NO_STORE)
             raw.extend(chunk)
-        sent: providers.CallReport | None = None
-        try:
-            payload = json.loads(bytes(raw)) if raw else None
-        except (UnicodeDecodeError, ValueError):
-            payload = None
-        if isinstance(payload, dict) and name == "exotel":
-            sent = providers.exotel_report(payload)
         now = datetime.now(UTC)
-        # What the provider's API says wins; the webhook's own words only if it can't say.
+        # The signed address identifies a call; only its provider API supplies status
+        # and recording URLs. Replaying or altering a callback cannot supply new facts.
         call = await service.refresh(ctx.sessions, found, tenant_id, call_id, now=now)
-        if call is not None and not call.final and sent is not None and sent.final:
-            call = await service.refresh(
-                ctx.sessions, found, tenant_id, call_id, now=now, report=sent
-            )
+        from ac_platform.lead_desk.telephony.pipeline import STATE
+
+        intake = getattr(application.state, STATE, None)
+        if intake is not None and call is not None:
+            background.add_task(intake.resume, found, tenant_id, call_id)
         return {"call": "final" if call is not None and call.final else "open"}
 
     @router.post("/telephony/{name}/status/{tenant_id}/{call_id}/{mac}")
     async def status_hook(
-        name: str, tenant_id: UUID, call_id: UUID, mac: str, request: Request
+        name: str,
+        tenant_id: UUID,
+        call_id: UUID,
+        mac: str,
+        request: Request,
+        background: BackgroundTasks,
     ) -> dict[str, str]:
-        return await status_webhook(name, tenant_id, call_id, mac, request)
+        return await status_webhook(name, tenant_id, call_id, mac, request, background)
 
     @router.post("/meta/webhook/telephony/{name}/{tenant_id}/{call_id}/{mac}")
     async def status_hook_dev(
-        name: str, tenant_id: UUID, call_id: UUID, mac: str, request: Request
+        name: str,
+        tenant_id: UUID,
+        call_id: UUID,
+        mac: str,
+        request: Request,
+        background: BackgroundTasks,
     ) -> dict[str, str]:
-        return await status_webhook(name, tenant_id, call_id, mac, request)
+        return await status_webhook(name, tenant_id, call_id, mac, request, background)
 
     def notice_audio(file_name: str, request: Request) -> Response:
         same_host(request)

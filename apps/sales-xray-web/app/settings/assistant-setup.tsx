@@ -10,12 +10,13 @@
  * the remote server, so the download stays hidden for it.
  */
 import { useState, type ReactNode } from "react";
-import { Download, Terminal } from "lucide-react";
+import { Download, Sparkles, Terminal } from "lucide-react";
 
 import { BrandTile } from "../ui/brand-tile";
 import { ClaudeMark, CodeMark, CursorMark } from "./assistant-marks";
-import { Button, Panel } from "../ui/kit";
+import { Button } from "../ui/kit";
 import { CopyButton } from "./copy-button";
+import { DevCard, InfoFold } from "./dev-card";
 import { useOrigin } from "./use-origin";
 import styles from "./developers.module.css";
 
@@ -146,6 +147,12 @@ function AssistantMark({ assistant }: { assistant: Assistant }): ReactNode {
   );
 }
 
+const ASKS = [
+  "What objections came up in my last five calls?",
+  "Which leads are waiting for a follow-up?",
+  "Add a lead: a name, a phone number and what they asked about.",
+] as const;
+
 const STEPS = [
   "Add Sales X-Ray to your assistant",
   "Sign in",
@@ -180,27 +187,43 @@ export function AssistantSetup() {
           </button>
         ))}
       </div>
-      <span className={styles.where}>{REMOTE_WHERE[assistant]}</span>
       <Snippet
         code={remoteSnippet(assistant, origin)}
         label={`${chosen.label} setup`}
       />
+      {/* Where to paste it waits behind an (i) (owner bug #103). */}
+      <InfoFold label={`Where to add it in ${chosen.label}`}>
+        {REMOTE_WHERE[assistant]}
+      </InfoFold>
     </>,
     <span key="sign-in">
-      Your assistant opens Sales X-Ray: approve it for your account. It reads
-      what you can see, in the workspace you have open, and you can remove it
-      any time. Nothing to download, no key to copy.
+      Your assistant opens Sales X-Ray: approve it for your account. You can
+      remove it any time.
     </span>,
-    <span key="ask">
-      “What objections came up in my last five calls?” · “Which leads are
-      waiting for a follow-up?” · “Add a lead: a name, a phone number and what
-      they asked about.”
-    </span>,
+    // Three things to ask, as the chat bubbles they become.
+    <ul key="ask" className={styles.asks} aria-label="Things to ask">
+      {ASKS.map((ask) => (
+        <li key={ask}>{ask}</li>
+      ))}
+    </ul>,
   ];
   return (
-    <Panel
-      title="Connect your AI assistant"
-      className={styles.fit}
+    <DevCard
+      icon={<Sparkles />}
+      tone="violet"
+      title="AI assistant"
+      info={
+        <>
+          <p>
+            Ask ChatGPT, Claude, Cursor or VS Code about your calls and leads in
+            plain words. They connect to Sales X-Ray over MCP.
+          </p>
+          <p>
+            Add the address once and sign in: nothing to download, no key to
+            copy. It sees only what you can see.
+          </p>
+        </>
+      }
       tools={
         <span className={styles.stepCount}>
           Step {step + 1} of {STEPS.length}
@@ -289,6 +312,6 @@ export function AssistantSetup() {
           </ol>
         </details>
       )}
-    </Panel>
+    </DevCard>
   );
 }
