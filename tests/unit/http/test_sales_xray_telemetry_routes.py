@@ -353,8 +353,13 @@ def test_one_person_stores_at_most_the_daily_cap(harness: _Harness) -> None:
     assert len(harness.stored()) == 2
 
 
+@pytest.mark.parametrize(
+    "expired_name",
+    ["sx.screen_viewed", "sx.tap", "sx.scroll_depth", "sx.api_timing", "sx.route_timing"],
+)
 def test_the_composed_route_records_by_default_and_purges_expired_rows(
     harness: _Harness,
+    expired_name: str,
 ) -> None:
     long_ago = datetime.now(UTC) - timedelta(days=200)
     harness.session.add(
@@ -363,7 +368,7 @@ def test_the_composed_route_records_by_default_and_purges_expired_rows(
             tenant_id=harness.tenant_id,
             actor_person_id=harness.person_id,
             subject_person_id=harness.person_id,
-            event_name="sx.screen_viewed",
+            event_name=expired_name,
             event_version="1.0",
             occurred_at=long_ago,
             trace_id="old-trace",
@@ -548,3 +553,25 @@ def test_clarity_goes_only_to_a_recorded_person_where_the_environment_has_a_proj
         update={"sales_xray_clarity_project": "<script>"}
     )
     assert harness.composed().get("/v1/telemetry/taxonomy").json()["session_replay"] is None
+
+
+def test_real_daily_cap_accepts_20000_and_refuses_next_event(
+    harness: _Harness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from ac_platform.http import telemetry as intake
+
+    assert SALES_XRAY_SURFACE.person_daily_cap == 20_000
+    stored_today = 19_999
+    monkeypatch.setattr(intake, "_stored_today", lambda *args, **kwargs: stored_today)
+    client = harness.client()
+    accepted = client.post(
+        "/v1/telemetry/events", json={"events": [harness.event()]}, headers=_ORIGIN
+    )
+    assert accepted.status_code == 202, accepted.text
+    stored_today = 20_000
+    refused = client.post(
+        "/v1/telemetry/events", json={"events": [harness.event()]}, headers=_ORIGIN
+    )
+    assert refused.status_code == 503
+    assert refused.json()["code"] == "telemetry_backpressure"
+    assert len(harness.stored()) == 1

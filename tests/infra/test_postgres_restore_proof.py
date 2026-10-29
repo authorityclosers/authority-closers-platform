@@ -695,3 +695,29 @@ def test_units_manifest_and_wrapper_are_narrow_and_hardened() -> None:
     assert "/srv/authority-closers/recovery-tmp" in bootstrap
     assert "/srv/authority-closers/recovery-evidence" in bootstrap
     assert 'python3 "$repo_root/scripts/prepare-restore-drill-input-root.py"' in bootstrap
+
+
+@pytest.mark.parametrize(
+    "excluded",
+    [
+        {"analytics_events": 12278},
+        {"audit_events": 1},
+        {"analytics_events": True},
+        {"analytics_events": -1},
+    ],
+)
+def test_excluded_data_inventory_is_exact(tmp_path: Path, excluded: dict) -> None:
+    dump, metadata = _write_pair(tmp_path)
+    payload = json.loads(metadata.read_text())
+    payload["excluded_table_data"] = excluded
+    metadata.write_text(json.dumps(payload))
+    if excluded == {"analytics_events": 12278}:
+        _, _, counts = proof._validate_metadata(
+            metadata, dump, "staging", expected_migration_head=MIGRATION_HEAD_FIXTURE
+        )
+        assert counts == payload["row_counts"]
+    else:
+        with pytest.raises(proof.RestoreProofError, match="excluded-table inventory"):
+            proof._validate_metadata(
+                metadata, dump, "staging", expected_migration_head=MIGRATION_HEAD_FIXTURE
+            )

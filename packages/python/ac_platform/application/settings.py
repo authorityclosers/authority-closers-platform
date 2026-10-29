@@ -74,6 +74,15 @@ class Settings(BaseSettings):
     )
 
     environment: Literal["local", "test", "development", "staging", "production"] = "local"
+    # Raw strings intentionally validated fail-open by the public config installer.
+    app_min_android_version: str = "0.0.0"
+    app_min_ios_version: str = "0.0.0"
+    app_min_desktop_version: str = "0.0.0"
+    app_recommended_android_version: str = "0.0.0"
+    app_recommended_ios_version: str = "0.0.0"
+    app_recommended_desktop_version: str = "0.0.0"
+    app_features_off: str = ""
+    app_update_message: str = ""
     release_id: str = "local-unreleased"
     log_level: str = "INFO"
     database_url: str = "postgresql+psycopg://ac_runtime:local-runtime-only@127.0.0.1/ac_platform"

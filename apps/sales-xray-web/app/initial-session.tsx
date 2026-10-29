@@ -35,6 +35,9 @@ export const SERVER_RENDERED = new Set([
   "/organisation",
   // Coaching reads its data on the server itself (coaching-server.ts).
   "/coaching",
+  // All leads' desk and first page (leads-server.ts), so the rows arrive
+  // with the page instead of after the app has started (owner bug #67).
+  "/leads",
 ]);
 
 /**

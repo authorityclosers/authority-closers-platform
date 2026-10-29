@@ -1,12 +1,14 @@
 // @vitest-environment happy-dom
 import { PERSON_WEEKS } from "./organisation/people/person-data";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { readLeads } from "./leads/leads-client";
 
 import {
   allowEarlyConversationReads,
   dropEarlyReads,
   EARLY_READ_TTL_MS,
   earlyFetch,
+  earlyLeadsList,
   earlyReadsFor,
   earlyReadsScript,
   forgetSharedReads,
@@ -36,6 +38,7 @@ afterEach(() => {
   forgetSharedReads();
   delete (window as EarlyWindow).__sxEarly;
   window.sessionStorage.clear();
+  window.localStorage.clear();
   vi.unstubAllGlobals();
   vi.useRealTimers();
 });
@@ -133,7 +136,7 @@ it("keeps the server's headers on the answer it hands out", async () => {
   expect(await response.json()).toEqual({ ok: true });
 });
 
-it("starts only the session reads until this tab has seen Sales X-Ray on", () => {
+it("starts only the session reads until this device has seen Sales X-Ray on", () => {
   boot("/dashboard", false);
   expect(network.mock.calls.map(([url]) => url)).toEqual([
     "/v1/me/workspaces",
@@ -279,4 +282,105 @@ it("falls back to the server when the early read itself failed", async () => {
   const response = await earlyFetch("/v1/me/workspaces");
   expect(response.status).toBe(200);
   expect(network).toHaveBeenCalledTimes(4);
+});
+
+it("starts the desk and All leads' first page once the directory says Sales X-Ray is on", async () => {
+  const LIST = "/v1/lead-desk/leads?scope=";
+  let directory: unknown = null;
+  network.mockImplementation(async (url: string) =>
+    Response.json(url === "/v1/me/sales-xray-workspaces" ? directory : { url }),
+  );
+  const workspace = (role: string | null, sales_xray_enabled = true) => ({
+    selected_tenant_id: "cedar",
+    workspaces: [
+      { tenant_id: "maple", role: "owner", sales_xray_enabled: true },
+      { tenant_id: "cedar", role, sales_xray_enabled },
+    ],
+  });
+  const lists = () =>
+    network.mock.calls
+      .map(([url]) => String(url))
+      .filter((url) => url.startsWith(LIST));
+  const settle = async () => {
+    for (let n = 0; n < 5; n++) await new Promise((r) => setTimeout(r, 0));
+  };
+  const start = async (path: string, conversation = true) => {
+    network.mockClear();
+    forgetSharedReads();
+    delete (window as EarlyWindow).__sxEarly;
+    boot(path, conversation);
+    await settle();
+    return lists();
+  };
+  directory = workspace("admin");
+  expect(await start("/leads")).toEqual([`${LIST}team&stage=open`]);
+  expect(await start("/leads/?tab=all&stage=open&theme=dark")).toEqual([
+    `${LIST}team&stage=open`,
+  ]);
+  directory = workspace("member");
+  expect(await start("/leads?tab=all")).toEqual([`${LIST}mine&stage=open`]);
+  // Another view, a filter, a workspace without Sales X-Ray, or a device
+  // that has not seen Sales X-Ray on: the page asks for itself.
+  for (const path of [
+    "/leads?stage=won",
+    "/leads?q=Fictional",
+    "/leads?tab=now",
+  ])
+    expect(await start(path)).toEqual([]);
+  // This device's first visit: the desk and the page follow the directory.
+  expect(await start("/leads", false)).toEqual([`${LIST}mine&stage=open`]);
+  expect(network.mock.calls.map(([url]) => url)).toEqual([
+    "/v1/me/workspaces",
+    "/v1/me/sales-xray-workspaces",
+    "/v1/lead-desk",
+    `${LIST}mine&stage=open`,
+  ]);
+  // Sales X-Ray off, or signed out: nothing past the session.
+  directory = workspace("owner", false);
+  expect(await start("/leads", false)).toEqual([]);
+  expect(network).toHaveBeenCalledTimes(2);
+  network.mockImplementation(async (url: string) =>
+    Response.json(
+      { detail: "sign in" },
+      { status: url.startsWith("/v1/me/") ? 401 : 200 },
+    ),
+  );
+  expect(await start("/leads", false)).toEqual([]);
+  expect(network).toHaveBeenCalledTimes(2);
+  network.mockImplementation(async (url: string) =>
+    Response.json(url === "/v1/me/sales-xray-workspaces" ? directory : { url }),
+  );
+  // Dropped (a workspace change) before the directory answered: not started.
+  directory = workspace("owner");
+  network.mockClear();
+  delete (window as EarlyWindow).__sxEarly;
+  boot("/leads");
+  dropEarlyReads();
+  await settle();
+  expect(lists()).toEqual([]);
+  // The list takes the early answer instead of asking again.
+  expect(await start("/leads")).toEqual([earlyLeadsList("owner")]);
+  network.mockClear();
+  await (await earlyFetch(earlyLeadsList("owner"))).json();
+  expect(network).not.toHaveBeenCalled();
+});
+
+it("names All leads' first page exactly as the list asks for it", async () => {
+  expect(earlyLeadsList("owner")).toBe(
+    "/v1/lead-desk/leads?scope=team&stage=open",
+  );
+  expect(earlyLeadsList("manager")).toBe(earlyLeadsList("admin"));
+  expect(earlyLeadsList("member")).toBe(
+    "/v1/lead-desk/leads?scope=mine&stage=open",
+  );
+  expect(earlyLeadsList(null)).toBe(earlyLeadsList("member"));
+  network.mockImplementation(async () =>
+    Response.json({ leads: [], total: 0, next_offset: null, stage_counts: {} }),
+  );
+  await readLeads({ scope: "team", stage: "open" });
+  await readLeads({ scope: "mine", stage: "open" });
+  expect(network.mock.calls.map(([url]) => url)).toEqual([
+    earlyLeadsList("owner"),
+    earlyLeadsList("member"),
+  ]);
 });

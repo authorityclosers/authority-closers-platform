@@ -6,6 +6,7 @@ import { PREFETCH_PLACES, prefetchPlace } from "./route-prefetch";
 afterEach(() => {
   vi.restoreAllMocks();
   window.sessionStorage.clear();
+  window.localStorage.clear();
   delete (window as { __sxEarly?: unknown }).__sxEarly;
 });
 
@@ -33,7 +34,7 @@ it("asks for a place once while Next still holds it, and never the page on scree
 });
 
 it("starts a pressed tab's first reads, never the session's again", () => {
-  window.sessionStorage.setItem(EARLY_CONVERSATION_KEY, "1");
+  window.localStorage.setItem(EARLY_CONVERSATION_KEY, "1");
   const fetch = vi
     .spyOn(globalThis, "fetch")
     .mockResolvedValue(new Response("{}", { status: 200 }));

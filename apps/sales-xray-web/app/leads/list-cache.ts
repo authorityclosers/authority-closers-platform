@@ -1,11 +1,14 @@
-/** Last first pages, on this tab only. A confirmed person + session + workspace
- * is required, and every filter is part of the key. Ten minutes, six answers;
- * storage being unavailable must never stop a network read. */
+/** Last first pages and desks, kept on this device, so the phone app's next
+ * launch shows them at once while they sync (owner bug #67, 29 Oct 2026:
+ * "cache and previous things can be preloaded"). A confirmed person + session
+ * + workspace is required, and every filter is part of the key. One identity,
+ * a day, six answers; signing out forgets them (list-cache-slot.ts). Storage
+ * being unavailable must never stop a network read. */
 import type { LeadPage } from "./leads-client";
 import { readLeads } from "./leads-client";
+import { LEADS_CACHE_SLOT as SLOT } from "./list-cache-slot";
 
-const SLOT = "sx:leads-cache:v1";
-const MAX_AGE = 10 * 60_000;
+const MAX_AGE = 24 * 60 * 60_000;
 const MAX_ENTRIES = 6;
 type Entry = { at: number; value: unknown };
 type Store = { identity: string; entries: Record<string, Entry> };
@@ -25,7 +28,7 @@ const valid = (identity: string | null | undefined): identity is string => {
 function read(identity: string): Store {
   try {
     const stored = JSON.parse(
-      sessionStorage.getItem(SLOT) ?? "null",
+      localStorage.getItem(SLOT) ?? "null",
     ) as Store | null;
     if (
       stored?.identity === identity &&
@@ -63,7 +66,7 @@ export function rememberLeadData(
     [key, { at: Date.now(), value }],
   ]);
   try {
-    sessionStorage.setItem(SLOT, JSON.stringify(store));
+    localStorage.setItem(SLOT, JSON.stringify(store));
   } catch {
     /* The list still works without storage. */
   }

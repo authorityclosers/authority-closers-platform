@@ -1,0 +1,47 @@
+.screen {
+  min-height: 100dvh;
+  display: grid;
+  align-content: center;
+  padding: max(24px, env(safe-area-inset-top)) 20px
+    max(24px, env(safe-area-inset-bottom));
+  background: var(--sx-paper);
+  color: var(--sx-ink);
+}
+.card {
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 420px;
+  margin: auto;
+  padding: 28px 24px;
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  display: grid;
+  gap: 20px;
+  overflow-wrap: anywhere;
+}
+.card h1 {
+  margin: 0;
+  font: var(--sx-text-title);
+}
+.card p {
+  margin: 0;
+  font-size: var(--sx-text-md);
+  line-height: 1.6;
+  color: var(--sx-ink-2);
+}
+.update {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  padding: 8px 16px;
+  font-weight: 650;
+  text-decoration: none;
+}
+.update:focus-visible {
+  outline: 2px solid var(--sx-ink);
+  outline-offset: 4px;
+}

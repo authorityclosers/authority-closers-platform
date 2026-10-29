@@ -30,6 +30,10 @@ services:
     pids_limit: 128
     cpus: 0.5
     mem_limit: 384m
+    # Production's profile reserves memory and a larger CPU share over dev and
+    # agent work on the shared host (29 Oct 2026); staging keeps the defaults.
+    mem_reservation: ${AC_XRAY_WEB_MEM_RESERVATION:-0}
+    cpu_shares: ${AC_XRAY_WEB_CPU_SHARES:-1024}
     logging:
       driver: local
       options:
