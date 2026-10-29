@@ -403,16 +403,11 @@ p.inset {
 /* AI replies, as Connections shows it (owner, 29 Oct 2026: "AI reply … not
    having clean UI"): one box style inside its card, so the price switch
    matches "How it works" and the business profile instead of a bordered box
-   of its own, and the channels share one row in equal chips. Scoped here;
-   the settings themselves live in leads/ai-replies. */
+   of its own. Scoped here; the settings themselves live in leads/ai-replies,
+   which also lays out the channel tiles (a 128 px column here squeezed
+   Messenger past its chip on a 363 px phone, owner bug #102). */
 .aiPart {
   min-width: 0;
-}
-
-.aiPart [role="group"][aria-label="Channels"] {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
-  gap: 8px;
 }
 
 .aiPart div:has(> label > input[role="switch"]) {
