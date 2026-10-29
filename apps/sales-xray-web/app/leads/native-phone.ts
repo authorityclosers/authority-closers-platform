@@ -1126,6 +1126,18 @@ export type AutoCaptureStatus = {
   supported: boolean;
   on: boolean;
   wifiOnly: boolean;
+  /**
+   * Why lead calls wait on the phone (app builds with autoCaptureHealth, 30 Oct 2026): "ok", "off",
+   * or a hold reason such as "profile", "allowance", "signed_out", "consent", "network". Older builds
+   * leave it out.
+   */
+  health?: string;
+  /** Calls waiting for that reason. */
+  healthCalls?: number;
+  /** Calls on their way (waiting for the Undo window or uploading). */
+  pending?: number;
+  held?: Record<string, number>;
+  offSinceMs?: number | null;
 };
 export async function autoCaptureStatus(): Promise<AutoCaptureStatus | null> {
   if (!inPhoneApp()) return null;
@@ -1141,14 +1153,22 @@ export async function autoCaptureSetup(
 ): Promise<AutoCaptureStatus> {
   return ask<AutoCaptureStatus>("autoCaptureSetup", { on, wifiOnly }, 120_000);
 }
-let captureStatesRead: Promise<{ eventId: string; state: string }[]> | null =
-  null;
-export async function autoCaptureStates(): Promise<
-  { eventId: string; state: string }[]
-> {
+/** Try again on the capture-health card: held calls whose cause is gone upload now. */
+export async function autoCaptureRetry(): Promise<AutoCaptureStatus | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    return await ask<AutoCaptureStatus>("autoCaptureRetry", {}, 10_000);
+  } catch {
+    return null;
+  }
+}
+/** A call on the phone's upload queue; hold says why a held one waits (newer builds). */
+export type AutoCaptureItem = { eventId: string; state: string; hold?: string };
+let captureStatesRead: Promise<AutoCaptureItem[]> | null = null;
+export async function autoCaptureStates(): Promise<AutoCaptureItem[]> {
   if (!inPhoneApp()) return [];
   if (!captureStatesRead)
-    captureStatesRead = ask<{ items: { eventId: string; state: string }[] }>(
+    captureStatesRead = ask<{ items: AutoCaptureItem[] }>(
       "autoCaptureStates",
       {},
       30_000,

@@ -1,7 +1,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, expect, it, vi } from "vitest";
-import { CaptureHealthView } from "./capture-health";
+import { CaptureAttention, CaptureHealthView } from "./capture-health";
 import { CaptureRatesView } from "./capture-rates";
 import {
   AutoCaptureState,
@@ -9,12 +9,19 @@ import {
 } from "../leads/auto-capture-state";
 import { parseSetup, parseRecorder } from "../leads/native-phone";
 import { readCaptureGuard } from "../leads/capture-guard-client";
-import { autoCaptureStates } from "../leads/native-phone";
+import {
+  autoCaptureSetup,
+  autoCaptureStates,
+  autoCaptureStatus,
+} from "../leads/native-phone";
+import { AutoCapturePanel } from "../settings/auto-capture-panel";
 
 vi.mock("../leads/capture-guard-client", () => ({ readCaptureGuard: vi.fn() }));
 vi.mock("../leads/native-phone", async (original) => ({
   ...(await original<typeof import("../leads/native-phone")>()),
   autoCaptureStates: vi.fn(async () => []),
+  autoCaptureStatus: vi.fn(async () => null),
+  autoCaptureSetup: vi.fn(),
 }));
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -165,6 +172,133 @@ it("shows daily counts with no seller ranking", async () => {
   expect(host.textContent).toContain("10 calls · 9 recordings · 8 analysed");
   expect(host.querySelectorAll('[data-missing="true"]')).toHaveLength(1);
   expect(host.textContent).not.toMatch(/rank|score|best|worst/i);
+});
+
+// Redmi real-call test, 30 Oct 2026: a profile 403 and a used-up allowance lost calls silently.
+it("says why calls wait and opens the fix for an incomplete profile", async () => {
+  await render(
+    <CaptureAttention
+      status={{
+        supported: true,
+        on: true,
+        wifiOnly: true,
+        health: "profile",
+        healthCalls: 2,
+      }}
+      onFolder={() => {}}
+    />,
+  );
+  expect(host.textContent).toContain("Add your name and phone");
+  expect(host.textContent).toContain("2 lead calls wait on this phone.");
+  expect(host.textContent).toContain("upload by themselves");
+  expect(host.querySelector("a")?.getAttribute("href")).toBe(
+    "/settings/profile",
+  );
+});
+it("used-up minutes wait for minutes and Try again asks the phone", async () => {
+  const retry = vi.fn();
+  await render(
+    <CaptureAttention
+      status={{
+        supported: true,
+        on: true,
+        wifiOnly: true,
+        health: "allowance",
+        healthCalls: 1,
+      }}
+      onRetry={retry}
+      onFolder={() => {}}
+    />,
+  );
+  expect(host.textContent).toContain("Call minutes used up");
+  expect(host.textContent).toContain("1 lead call waits on this phone.");
+  await act(async () => {
+    (host.querySelector("button") as HTMLButtonElement).click();
+  });
+  expect(retry).toHaveBeenCalledOnce();
+});
+it("a blocked background network offers the battery fix", async () => {
+  const battery = vi.fn();
+  await render(
+    <CaptureAttention
+      status={{
+        supported: true,
+        on: true,
+        wifiOnly: true,
+        health: "network",
+        healthCalls: 1,
+      }}
+      onFolder={() => {}}
+      onBattery={battery}
+    />,
+  );
+  expect(host.textContent).toContain("No restrictions");
+  await act(async () => {
+    (host.querySelector("button") as HTMLButtonElement).click();
+  });
+  expect(battery).toHaveBeenCalledOnce();
+});
+it("says nothing when all is well, uploads are off or the app is older", async () => {
+  for (const health of ["ok", "off", undefined]) {
+    await render(
+      <CaptureAttention
+        status={{
+          supported: true,
+          on: true,
+          wifiOnly: true,
+          ...(health ? { health } : {}),
+        }}
+        onFolder={() => {}}
+      />,
+    );
+    expect(host.textContent).toBe("");
+    await act(async () => root?.unmount());
+    host.remove();
+  }
+  root = undefined;
+});
+it("names the hold on a call and links its fix", async () => {
+  await render(<CaptureStateLabel state="held" hold="allowance" />);
+  expect(host.textContent).toContain("Waiting for call minutes");
+  await act(async () => root?.unmount());
+  host.remove();
+  await render(<CaptureStateLabel state="held" hold="profile" />);
+  expect(host.querySelector("a")?.getAttribute("href")).toBe(
+    "/settings/profile",
+  );
+  await act(async () => root?.unmount());
+  host.remove();
+  // An older app's held call keeps the review wording.
+  await render(<CaptureStateLabel state="held" />);
+  expect(host.textContent).toContain("Upload paused · review this call");
+});
+it("carries the phone's hold reason into a lead's call row", async () => {
+  vi.mocked(autoCaptureStates).mockResolvedValue([
+    { eventId: "event", state: "held", hold: "profile" },
+  ]);
+  vi.mocked(readCaptureGuard).mockResolvedValue(null);
+  await render(<AutoCaptureState eventId="event" />);
+  expect(host.textContent).toContain("Waiting · complete your profile");
+});
+
+it("turning uploads on with an incomplete profile says so and links Profile", async () => {
+  vi.mocked(autoCaptureStatus).mockResolvedValue({
+    supported: true,
+    on: false,
+    wifiOnly: true,
+  });
+  vi.mocked(autoCaptureSetup).mockRejectedValue(new Error("profile_required"));
+  await render(<AutoCapturePanel consentOn />);
+  await act(async () => {});
+  const turnOn = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Turn uploads on",
+  );
+  await act(async () => {
+    turnOn?.click();
+  });
+  expect(autoCaptureSetup).toHaveBeenCalledWith(true, true);
+  expect(host.textContent).toContain("Complete your profile first");
+  expect(host.querySelector('a[href="/settings/profile"]')).not.toBeNull();
 });
 
 it("retains measured recording time and ignores invalid timestamps", () => {
