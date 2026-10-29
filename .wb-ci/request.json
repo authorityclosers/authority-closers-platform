@@ -1,0 +1,50 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "1576629a1534578efc2881e8c1ac4325a80b6a68",
+  "full": false,
+  "checks": [
+    "e2e",
+    "py",
+    "visual",
+    "web"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/capture-guard",
+    "apps/sales-xray-web/app/leads/auto-capture-state.tsx",
+    "apps/sales-xray-web/app/leads/capture-guard-client.ts",
+    "apps/sales-xray-web/app/leads/private-call.test.tsx",
+    "apps/sales-xray-web/app/leads/team-view.tsx",
+    "apps/sales-xray-web/app/review-fixture/capture-guard",
+    "apps/sales-xray-web/app/settings/auto-capture-panel.tsx",
+    "packages/python/ac_platform/lead_desk/capture_guard.py",
+    "packages/python/ac_platform/lead_desk/http.py",
+    "scripts/data-changes/ea-sales-import.py",
+    "tests/database/test_capture_guard_postgresql.py",
+    "tests/database/test_ea_sales_import_postgresql.py",
+    "tests/unit/lead_desk/test_capture_guard.py"
+  ],
+  "routes": [
+    "/review-fixture/capture-guard"
+  ],
+  "py_tests": [
+    "tests/unit/lead_desk/test_capture_guard.py",
+    "tests/database/test_capture_guard_postgresql.py",
+    "tests/unit/lead_desk/test_recording_capture_contract.py",
+    "tests/database/test_recording_capture_postgresql.py"
+  ],
+  "include_paths": [
+    "packages/python/ac_platform/lead_desk/capture_guard.py",
+    "packages/python/ac_platform/lead_desk/http.py",
+    "tests/unit/lead_desk/test_capture_guard.py",
+    "tests/database/test_capture_guard_postgresql.py",
+    "apps/sales-xray-web/app/leads/capture-guard-client.ts",
+    "apps/sales-xray-web/app/leads/auto-capture-state.tsx",
+    "apps/sales-xray-web/app/leads/team-view.tsx",
+    "apps/sales-xray-web/app/leads/private-call.test.tsx",
+    "apps/sales-xray-web/app/settings/auto-capture-panel.tsx",
+    "apps/sales-xray-web/app/capture-guard",
+    "apps/sales-xray-web/app/review-fixture/capture-guard"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}
