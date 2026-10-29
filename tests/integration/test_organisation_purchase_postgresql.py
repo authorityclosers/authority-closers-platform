@@ -118,6 +118,8 @@ def test_two_seat_purchase_invites_pool_and_renewal(postgres_harness):  # noqa: 
                 ] == 0
                 assert (await client.get("/v1/organisation/billing", headers=headers)).json() == {
                     "paid_seats": 0,
+                    "complimentary_seats": 0,
+                    "total_seats": 0,
                     "active_members": 1,
                     "pending_invites": 0,
                     "seats_available": 0,
@@ -271,6 +273,8 @@ def test_two_seat_purchase_invites_pool_and_renewal(postgres_harness):  # noqa: 
                 ).status_code == 403
                 assert (await client.get("/v1/organisation/billing", headers=headers)).json() == {
                     "paid_seats": 2,
+                    "complimentary_seats": 0,
+                    "total_seats": 2,
                     "active_members": 2,
                     "pending_invites": 0,
                     "seats_available": 0,

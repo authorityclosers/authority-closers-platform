@@ -25,7 +25,57 @@ from ac_platform.conversation_intelligence.acquisition_models import (
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
 from ac_platform.organisations.invitations import active_pending_invites
+from ac_platform.organisations.seat_grants import complimentary_seats
 from ac_platform.tenancy.models import Membership, OrganisationInvite
+
+
+async def current_plan(
+    database: AsyncSession, tenant_id: UUID, at: datetime
+) -> dict[str, Any] | None:
+    """The plan of the organisation's paid period covering ``at`` (Admin), or None."""
+    row = (
+        await database.execute(
+            select(
+                BillingSubscription.plan_name,
+                BillingSubscription.interval,
+                BillingSubscription.seats,
+                BillingPeriod.period_end,
+            )
+            .join(BillingPeriod, BillingPeriod.subscription_id == BillingSubscription.id)
+            .join(BillingAccount, BillingAccount.id == BillingSubscription.account_id)
+            .where(
+                BillingAccount.tenant_id == tenant_id,
+                BillingAccount.kind == "organisation",
+                BillingPeriod.period_start <= at,
+                BillingPeriod.period_end > at,
+                BillingPeriod.created_at <= at,
+            )
+            .order_by(BillingPeriod.period_start.desc(), BillingPeriod.created_at.desc())
+            .limit(1)
+        )
+    ).first()
+    if row is None:
+        return None
+    name, interval, seats, period_end = row
+    return dict(
+        name=name,
+        interval=interval,
+        seats=seats,
+        period_end=period_end.replace(tzinfo=period_end.tzinfo or UTC).isoformat(),
+    )
+
+
+async def organisation_usage(
+    database: AsyncSession, since: datetime
+) -> dict[UUID, tuple[int, int]]:
+    """Every organisation's charged seconds and calls since ``since`` (Admin's directory)."""
+    totals = await database.execute(
+        select(Usage.tenant_id, func.sum(_charged_seconds()), func.count(Usage.id))
+        .outerjoin(Settlement, Settlement.usage_id == Usage.id)
+        .where(Usage.created_at >= since, Usage.person_id.is_not(None))
+        .group_by(Usage.tenant_id)
+    )
+    return {tenant: (int(seconds or 0), calls) for tenant, seconds, calls in totals}
 
 
 async def paid_seats(database: AsyncSession, tenant_id: UUID, at: datetime) -> int:
@@ -77,6 +127,11 @@ async def paid_seats(database: AsyncSession, tenant_id: UUID, at: datetime) -> i
 
 
 async def organisation_seats(database: AsyncSession, tenant_id: UUID) -> dict[str, int]:
+    """Seats from the paid period plus live complimentary grants, and who occupies them.
+
+    A pending invite holds a seat until it is accepted, revoked or expires.
+    """
+    now = datetime.now(UTC)
     active = (
         await database.scalar(
             select(func.count())
@@ -91,12 +146,16 @@ async def organisation_seats(database: AsyncSession, tenant_id: UUID) -> dict[st
         or 0
     )
     pending = len(await active_pending_invites(database, tenant_id=tenant_id))
-    paid = await paid_seats(database, tenant_id, datetime.now(UTC))
+    paid = await paid_seats(database, tenant_id, now)
+    complimentary = await complimentary_seats(database, tenant_id, now)
+    total = paid + complimentary
     return dict(
         paid_seats=paid,
+        complimentary_seats=complimentary,
+        total_seats=total,
         active_members=active,
         pending_invites=pending,
-        seats_available=max(0, paid - active - pending),
+        seats_available=max(0, total - active - pending),
     )
 
 
@@ -127,27 +186,21 @@ def _latest_minute_kind() -> Any:
     )
 
 
+def _charged_seconds() -> Any:
+    """A call's settled seconds, else its reservation unless it was released."""
+    return func.coalesce(
+        Settlement.charged_seconds,
+        case((_latest_minute_kind() == "released", 0), else_=Usage.reserved_seconds),
+    )
+
+
 async def member_usage(
     database: AsyncSession, tenant_id: UUID, since: datetime
 ) -> dict[UUID, tuple[int, int, datetime | None]]:
     totals = await database.execute(
         select(
             Usage.person_id,
-            func.sum(
-                case(
-                    (
-                        Usage.created_at >= since,
-                        func.coalesce(
-                            Settlement.charged_seconds,
-                            case(
-                                (_latest_minute_kind() == "released", 0),
-                                else_=Usage.reserved_seconds,
-                            ),
-                        ),
-                    ),
-                    else_=0,
-                )
-            ),
+            func.sum(case((Usage.created_at >= since, _charged_seconds()), else_=0)),
             func.count(case((Usage.created_at >= since, Usage.id))),
             func.max(Usage.created_at),
         )

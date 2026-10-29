@@ -55,3 +55,32 @@ dev journey is claimed. The real dev check follows the merge of backend PR
    is absent and direct navigation makes no organisation requests.
 5. Check exact 403/404/409 details with fictional failures. No SQL or real
    account changes are part of this check.
+
+## Seats (owner order, 30 Oct 2026)
+
+The page also shows seats. The directory adds each organisation's plan, seats
+taken (members and pending invites against paid plus free seats), free seats
+and 30-day calls and minutes. Choosing an organisation opens its Seats panel:
+the counts, the paid plan's period and every complimentary grant (given,
+changed, ended) with its last day, reason and who recorded it.
+
+Only the owner (the AI budget ceiling's allowlist) sees Give free seats,
+Change and End; the server refuses anyone else with 403. Each opens a form
+(seats, last day, reason) whose Review step shows seats now and after, and
+warns when members and invites would exceed the seats (no one is removed).
+One `Idempotency-Key` is kept per intent, so a retry is answered, not
+repeated; editing the form takes a new key. The server's refusal is shown
+verbatim. The shared client's strict parsers cover the new directory fields,
+the seats view and the grant command, and the member list now accepts the
+Roles B roles (manager, viewer, finance).
+
+### Verification
+
+- Shared organisation client suite: 56 tests passed.
+- Admin Organisations console suite: 28 tests passed (owner grant with
+  before/after review, end without a date, non-owner sees no controls, the
+  server's 403 kept on screen, directory seat columns).
+- Admin lint clean; Admin TypeScript clean for these files.
+- Back end: `tests/unit/http/test_platform_seat_grants.py` and
+  `tests/unit/organisations/test_seat_grants.py` (owner-only grants, replay,
+  audit chain, supersede once, IST last day, removal frees a seat).

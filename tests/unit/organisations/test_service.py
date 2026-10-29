@@ -335,6 +335,8 @@ async def test_processing_identity_does_not_consume_paid_seat_or_bypass_invite_l
     state.session.flush()
     assert await organisation_seats(state.adapter, org.tenant_id) == {
         "paid_seats": 3,
+        "complimentary_seats": 0,
+        "total_seats": 3,
         "active_members": 1,
         "pending_invites": 0,
         "seats_available": 2,
@@ -350,6 +352,8 @@ async def test_processing_identity_does_not_consume_paid_seat_or_bypass_invite_l
     assert invited["status"] == "invited"
     assert await organisation_seats(state.adapter, org.tenant_id) == {
         "paid_seats": 3,
+        "complimentary_seats": 0,
+        "total_seats": 3,
         "active_members": 2,
         "pending_invites": 1,
         "seats_available": 0,
@@ -379,6 +383,8 @@ async def test_processing_identity_does_not_consume_paid_seat_or_bypass_invite_l
     assert accepted["status"] == "active"
     assert await organisation_seats(state.adapter, org.tenant_id) == {
         "paid_seats": 3,
+        "complimentary_seats": 0,
+        "total_seats": 3,
         "active_members": 3,
         "pending_invites": 0,
         "seats_available": 0,

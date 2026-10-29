@@ -196,6 +196,21 @@ function install() {
     "/v1/organisation": organisation,
     "/v1/organisation/members": () => ({ members: MEMBERS }),
     "/v1/organisation/invites": () => ({ invites: [] }),
+    // Seats on the Team tab (30 Oct 2026): six free seats from Authority
+    // Closers, held by the members and the one invitation.
+    "/v1/organisation/seats": () => {
+      const members = MEMBERS.filter((item) => item.status === "active").length;
+      const invites = MEMBERS.length - members;
+      return {
+        paid_seats: 0,
+        complimentary_seats: 6,
+        total_seats: 6,
+        active_members: members,
+        pending_invites: invites,
+        seats_available: Math.max(0, 6 - members - invites),
+        can_buy: true,
+      };
+    },
     "/v1/organisation/activity": () => ({
       per_day: [],
       per_rep: [],

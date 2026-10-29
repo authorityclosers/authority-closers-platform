@@ -1,0 +1,79 @@
+/* An organisation's seats in Admin: counts, the owner's editor and its confirm step.
+   Tokens only, as the plan price editor. */
+
+.counts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.counts div {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+}
+
+.counts dt {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.counts dd {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: 18px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 12px;
+  align-items: start;
+  margin: 12px 0;
+}
+
+.editor > p {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.confirm {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklab, var(--sx-accent) 35%, var(--sx-line));
+  border-radius: var(--sx-radius-sm);
+  background: color-mix(in oklab, var(--sx-accent) 6%, var(--sx-surface));
+}
+
+.confirm p {
+  margin: 0;
+}
+
+.confirm ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.actions {
+  white-space: nowrap;
+}
+
+.note {
+  margin: 12px 0 0;
+}

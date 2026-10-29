@@ -79,6 +79,7 @@ from ac_platform.product_updates import models as product_update_models
 from ac_platform.providers import models as provider_models
 from ac_platform.pulse import models as pulse_models
 from ac_platform.tenancy import models as tenancy_models
+from ac_platform.tenancy import seat_grant_models as tenancy_seat_grant_models
 from ac_platform.usage_people import models as usage_people_models
 
 MODEL_MODULES = (
@@ -86,6 +87,7 @@ MODEL_MODULES = (
     google_profile_models,
     sales_xray_profile_models,
     tenancy_models,
+    tenancy_seat_grant_models,
     app_update_models,
     product_update_models,
     community_models,
