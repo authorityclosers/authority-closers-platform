@@ -46,6 +46,7 @@ from ac_platform.conversation_intelligence.plan_facts import plan_facts
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
 from ac_platform.conversation_intelligence.run_budget_alarm import overdue_processing_plans
 from ac_platform.kernel.authz import ActorContext
+from ac_platform.lead_desk.capture_stuck import stuck_calls
 from ac_platform.outbox.models import Job
 
 MAX_DAYS = 30
@@ -418,6 +419,8 @@ class AdminAnalysisHealth:
         versions = version_rows(in_scope, job_plan, version_plans, stage)
 
         overdue = await overdue_processing_plans(self.database, limit=50, now=now)
+        # Lead calls whose recording never reached the server (owner order, 30 Oct 2026).
+        calls = await stuck_calls(self.database, now=now)
         stuck = [item for item in overdue["overdue"] if UUID(item["tenant_id"]) in scope]
         unfinished = [
             item for item in overdue["released_unfinished_runs"] if UUID(item["tenant_id"]) in scope
@@ -465,7 +468,10 @@ class AdminAnalysisHealth:
             "stuck": {
                 "plans": stuck,
                 "unfinished_runs": unfinished,
-                "truncated": bool(overdue["truncated"] or overdue["runs_truncated"]),
+                "calls": calls["calls"],
+                "truncated": bool(
+                    overdue["truncated"] or overdue["runs_truncated"] or calls["truncated"]
+                ),
             },
             "durations": {
                 "runs": stats(run_ms),

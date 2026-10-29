@@ -158,7 +158,7 @@ export default async function HealthPage({
               title="Stuck now"
               sub={health.stuckTruncated ? "first 50" : undefined}
               tools={
-                <Why detail="Plans past their budget window and released runs that never finished, from the watchdog's overdue alarm." />
+                <Why detail="Plans past their budget window and released runs that never finished, from the watchdog's overdue alarm; and lead calls (last 2 days) whose recording hadn't reached the server 30 minutes after the call ended." />
               }
             >
               {health.stuck.length ? (
@@ -167,9 +167,11 @@ export default async function HealthPage({
                     <Row
                       key={`${item.kind}-${item.id}`}
                       title={
-                        item.kind === "plan"
-                          ? "Processing plan past its window"
-                          : "Run released but unfinished"
+                        item.kind === "call"
+                          ? `Lead call with no recording · ${item.workspace}`
+                          : item.kind === "plan"
+                            ? "Processing plan past its window"
+                            : "Run released but unfinished"
                       }
                       href={
                         item.recordingId
@@ -177,8 +179,13 @@ export default async function HealthPage({
                           : undefined
                       }
                       meta={[
-                        item.state,
-                        item.since ? `since ${when(item.since)}` : null,
+                        item.kind === "call" ? item.seller : item.state,
+                        item.since
+                          ? `${item.kind === "call" ? "called" : "since"} ${when(item.since)}`
+                          : null,
+                        item.kind === "call" && item.seconds
+                          ? `${Math.round(item.seconds / 60) || 1} min`
+                          : null,
                         item.id.slice(0, 8),
                       ]}
                     />
