@@ -8,6 +8,8 @@ import { Panel, Skeleton } from "../../ui/kit";
 import styles from "./preview.module.css";
 
 const states = ["waiting", "uploading", "analysing", "report_ready"];
+// ?state=profile|allowance|network: a call held on the phone and the reason the card leads with.
+const holds: Record<string, number> = { profile: 1, allowance: 2, network: 1 };
 const noSubscription = () => () => {};
 const browser = () => true;
 
@@ -15,7 +17,7 @@ function install() {
   if (typeof window === "undefined") return;
   const state =
     new URLSearchParams(window.location.search).get("state") ?? "off";
-  let on = state === "on";
+  let on = state === "on" || state in holds;
   let wifiOnly = true;
   const listeners = new Set<(event: { data: string }) => void>();
   Object.assign(window, {
@@ -34,15 +36,35 @@ function install() {
           on = request.args.on === true;
           wifiOnly = request.args.wifiOnly !== false;
         }
+        const held = holds[state];
         const result =
           request.method === "autoCaptureStates"
             ? {
-                items: states.map((state) => ({
-                  eventId: `fictional-${state}`,
-                  state,
-                })),
+                items: [
+                  ...states.map((state) => ({
+                    eventId: `fictional-${state}`,
+                    state,
+                  })),
+                  ...(held
+                    ? [
+                        {
+                          eventId: "fictional-held",
+                          state: "held",
+                          hold: state,
+                        },
+                      ]
+                    : []),
+                ],
               }
-            : { supported: true, on, wifiOnly };
+            : {
+                supported: true,
+                on,
+                wifiOnly,
+                health: held ? state : on ? "ok" : "off",
+                healthCalls: held ?? 0,
+                pending: on ? 1 : 0,
+                held: held ? { [state]: held } : {},
+              };
         setTimeout(() => {
           for (const listener of listeners)
             listener({
@@ -69,15 +91,17 @@ export function AutoCapturePreview() {
           <AutoCapturePanel consentOn={state !== "no-consent"} />
         )}
       </Panel>
-      {state === "on" ? (
+      {state === "on" || (state !== null && state in holds) ? (
         <Panel title="Alex Example’s calls">
           <ul className={styles.calls}>
-            {states.map((state, index) => (
-              <li key={state}>
-                <span>Sales call {index + 1}</span>
-                <AutoCaptureState eventId={`fictional-${state}`} />
-              </li>
-            ))}
+            {[...states, ...(state === "on" ? [] : ["held"])].map(
+              (state, index) => (
+                <li key={state}>
+                  <span>Sales call {index + 1}</span>
+                  <AutoCaptureState eventId={`fictional-${state}`} />
+                </li>
+              ),
+            )}
           </ul>
         </Panel>
       ) : null}

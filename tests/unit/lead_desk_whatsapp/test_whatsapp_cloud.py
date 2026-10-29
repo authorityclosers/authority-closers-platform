@@ -298,3 +298,97 @@ def test_the_shared_accounts_come_from_the_tokens_granted_scopes() -> None:
         )
 
     assert asyncio.run(_api(handler).shared_accounts(TOKEN)) == ["55500001"]
+
+
+ECHOES = {
+    "object": "whatsapp_business_account",
+    "entry": [
+        {
+            "id": "55500001",
+            "changes": [
+                {
+                    "field": "smb_message_echoes",
+                    "value": {
+                        "messaging_product": "whatsapp",
+                        "metadata": {
+                            "display_phone_number": "+91 80000 00000",
+                            "phone_number_id": "10001",
+                        },
+                        "message_echoes": [
+                            {
+                                "from": "918000000000",
+                                "to": "919876543210",
+                                "id": "wamid.ECHO1",
+                                "timestamp": "1800000400",
+                                "type": "text",
+                                "text": {"body": "Sent from the phone"},
+                            },
+                            {"from": "918000000000", "to": "nobody", "id": "wamid.BAD"},
+                        ],
+                    },
+                }
+            ],
+        }
+    ],
+}
+
+
+def test_messages_sent_from_the_whatsapp_business_app_come_back_as_echoes() -> None:
+    delivery = cloud.parse(ECHOES)
+    assert delivery.inbound == []
+    assert [(e.phone_number_id, e.wa_id, e.wamid, e.kind, e.body) for e in delivery.echoes] == [
+        ("10001", "919876543210", "wamid.ECHO1", "text", "Sent from the phone")
+    ]
+    assert delivery.echoes[0].at == datetime.fromtimestamp(1800000400, UTC)
+
+
+def test_a_number_on_the_whatsapp_business_app_says_so() -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        assert "is_on_biz_app" in request.url.params["fields"]
+        return httpx.Response(
+            200,
+            json={
+                "display_phone_number": "+91 80000 00000",
+                "verified_name": "Authority Closers",
+                "is_on_biz_app": True,
+                "platform_type": "CLOUD_API",
+            },
+        )
+
+    facts = asyncio.run(_api(handler).number("10001", TOKEN))
+    assert facts["on_app"] == "yes" and facts["verified_name"] == "Authority Closers"
+
+    def cloud_only(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"display_phone_number": "+91 80000 00000"})
+
+    assert asyncio.run(_api(cloud_only).number("10001", TOKEN))["on_app"] == ""
+
+
+def test_embedded_signup_can_offer_the_whatsapp_business_app_number() -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    def extras(url: str) -> dict:
+        return json.loads(parse_qs(urlsplit(url).query)["extras"][0])
+
+    plain = cloud.dialog_url(cfg(), redirect_uri="https://app.example/cb", state="st")
+    assert extras(plain) == {"setup": {}}
+    app = cloud.dialog_url(
+        cfg(), redirect_uri="https://app.example/cb", state="st", business_app=True
+    )
+    assert extras(app) == {
+        "setup": {},
+        "featureType": "whatsapp_business_app_onboarding",
+        "sessionInfoVersion": "3",
+    }
+
+
+def test_an_app_number_asks_meta_for_its_contacts_and_history() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"messaging_product": "whatsapp", "request_id": "r1"})
+
+    asyncio.run(_api(handler).sync_app_data("10001", TOKEN, "history"))
+    assert seen[0].url.path == "/v23.0/10001/smb_app_data"
+    assert json.loads(seen[0].content) == {"messaging_product": "whatsapp", "sync_type": "history"}

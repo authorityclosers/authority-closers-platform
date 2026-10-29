@@ -14,6 +14,10 @@ export type AutoReplies = {
     template?: string | null;
     language?: string | null;
     consentQuestion?: string | null;
+    /** form_yes: ad leads whose form said yes; every_lead: every new lead. */
+    who?: "form_yes" | "every_lead";
+    agreed?: boolean;
+    agreedAt?: string | null;
   };
   outOfHours: { on: boolean; text?: string | null };
 };

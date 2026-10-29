@@ -146,7 +146,7 @@ it("starts no read while the page is being left; sends on exit once the list is 
 });
 
 it("switches off for the page when the server refuses a batch (no consent policy yet)", async () => {
-  ingestStatus = 503;
+  ingestStatus = 403;
   const telemetry = client();
   telemetry.setSession(SESSION);
   telemetry.track("sx.sign_out", {});
@@ -687,4 +687,24 @@ it("privacy refresh clears unsent events and invalidates an in-flight consent an
   await telemetry.flush(true);
   expect(fetcher).toHaveBeenCalledTimes(1);
   expect(beacon).not.toHaveBeenCalled();
+});
+
+it("retries a 503 with the same event IDs and bounded backoff", async () => {
+  vi.useFakeTimers();
+  const c = client();
+  c.setSession(SESSION);
+  c.track("sx.sign_out", {});
+  ingestStatus = 503;
+  await c.flush();
+  const first = calls.filter((call) => call.url === "/v1/telemetry/events")[0];
+  await c.flush();
+  expect(
+    calls.filter((call) => call.url === "/v1/telemetry/events"),
+  ).toHaveLength(1);
+  ingestStatus = 202;
+  await vi.advanceTimersByTimeAsync(10_000);
+  const batches = calls.filter((call) => call.url === "/v1/telemetry/events");
+  expect(batches).toHaveLength(2);
+  expect(batches[1].body).toEqual(first.body);
+  vi.useRealTimers();
 });

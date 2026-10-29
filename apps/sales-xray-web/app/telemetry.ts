@@ -1064,6 +1064,9 @@ export class TelemetryClient {
   private replayListeners = new Set<(project: string) => void>();
   private off = false;
   private generation = 0;
+  private taxonomyRetry = false;
+  private retryCount = 0;
+  private retryAt = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private seen = new Set<string>();
 
@@ -1076,6 +1079,8 @@ export class TelemetryClient {
   setSession(sessionId: string | null) {
     if (sessionId !== this.session) {
       this.generation += 1;
+      this.retryCount = 0;
+      this.retryAt = 0;
       this.accepted = null;
       this.known = undefined;
       this.replay = null;
@@ -1192,6 +1197,8 @@ export class TelemetryClient {
   /** Read the server's list again (after a switch in Settings, Privacy). */
   refresh() {
     this.generation += 1;
+    this.retryCount = 0;
+    this.retryAt = 0;
     this.queue = [];
     this.accepted = null;
     this.known = undefined;
@@ -1233,7 +1240,12 @@ export class TelemetryClient {
         headers: { accept: "application/json" },
       })
       .then(async (response) => {
-        if (!response.ok) return null;
+        if (!response.ok) {
+          this.taxonomyRetry =
+            response.status === 429 || response.status >= 500;
+          return null;
+        }
+        this.taxonomyRetry = false;
         const body: unknown = await response.json();
         const events =
           body && typeof body === "object" && "events" in body
@@ -1256,7 +1268,10 @@ export class TelemetryClient {
             .filter(Boolean),
         );
       })
-      .catch(() => null)
+      .catch(() => {
+        this.taxonomyRetry = true;
+        return null;
+      })
       .then((events) => {
         if (generation !== this.generation) return null;
         this.known = events;
@@ -1265,9 +1280,23 @@ export class TelemetryClient {
     return this.accepted;
   }
 
+  private retry(batch: Queued[] = []) {
+    this.queue = [...batch, ...this.queue].slice(-1000);
+    const delay = Math.min(
+      300_000,
+      DELAY_MS * 2 ** Math.min(this.retryCount++, 5),
+    );
+    this.retryAt = Date.now() + delay;
+    this.schedule(delay);
+  }
+
   /** Send what is queued for the current session; `keepalive` on page exit. */
   async flush(keepalive = false) {
     if (this.off || !this.session || !this.queue.length) return;
+    if (Date.now() < this.retryAt) {
+      this.schedule(this.retryAt - Date.now());
+      return;
+    }
     // Leaving the page starts no read (the browser would cancel it): events
     // go out on exit only once the server's list is known.
     if (keepalive && this.known === undefined) return;
@@ -1277,8 +1306,14 @@ export class TelemetryClient {
     const accepted = await this.taxonomy();
     if (generation !== this.generation) return;
     if (!accepted) {
-      this.off = true;
-      this.queue = [];
+      if (this.taxonomyRetry) {
+        this.accepted = null;
+        this.known = undefined;
+        this.retry();
+      } else {
+        this.off = true;
+        this.queue = [];
+      }
       return;
     }
     const batch = this.queue
@@ -1316,14 +1351,22 @@ export class TelemetryClient {
         },
         body,
       });
-      // Refused (no consent or retention policy yet, not signed in, a schema
-      // the server does not take): stop for this page, quietly.
-      if (!response.ok && response.status !== 429) {
+      if (generation !== this.generation) return;
+      if (response.status === 429 || response.status >= 500) {
+        this.retry(batch);
+        return;
+      }
+      if (!response.ok) {
         this.off = true;
         this.queue = [];
+      } else {
+        this.retryCount = 0;
+        this.retryAt = 0;
       }
     } catch {
-      // Offline: these events are not worth a retry storm; drop them.
+      if (generation !== this.generation) return;
+      this.retry(batch);
+      return;
     }
     if (this.queue.length) this.schedule();
   }

@@ -64,6 +64,7 @@ def _run(
     state: str | None = None,
     auto: int = 0,
     refuse: bool = False,
+    conf: str = "",
 ) -> subprocess.CompletedProcess[str]:
     _fake(tmp_path / "gh", GH)
     _fake(
@@ -71,7 +72,7 @@ def _run(
         "import sys\nopen(sys.argv[0] + '.log', 'a').write(sys.argv[1] + '\\n')\n",
     )
     (tmp_path / "ac-ship.log").write_text(ship_log)
-    (tmp_path / "conf").write_text(f"AUTO_APPROVE={auto}\n")
+    (tmp_path / "conf").write_text(f"AUTO_APPROVE={auto}\n{conf}")
     if state is not None:
         (tmp_path / "state").mkdir(exist_ok=True)
         (tmp_path / "state" / "last").write_text(state + "\n")
@@ -84,6 +85,7 @@ def _run(
         AC_PLAY_NOTIFY=str(tmp_path / "notify"),
         AC_PLAY_GH=str(tmp_path / "gh"),
         AC_PLAY_PAUSE="0",
+        AC_PLAY_NOTES_DIR=str(tmp_path / "notes"),
     )
     if refuse:
         env["FAKE_GH_REFUSE"] = "1"
@@ -131,6 +133,7 @@ def test_a_new_release_dispatches_alpha_with_its_full_main_commit_and_waits_for_
     assert _field(call, "web_ref") == FULL
     assert _field(call, "track") == "alpha"
     assert _field(call, "notes") == "Sales Xray v1.2: logos in the switcher"
+    assert _field(call, "update_priority") == "0"
     assert not any("-X" in c for c in _calls(tmp_path)), "no approval without AUTO_APPROVE=1"
     assert (tmp_path / "state" / "last").read_text().strip() == "v1.2.0"
     told = (tmp_path / "notify.log").read_text()
@@ -173,3 +176,24 @@ def test_units_run_the_installed_hook_every_five_minutes() -> None:
     assert "ExecStart=/usr/local/sbin/ac-play-after-release" in service
     assert "OnCalendar=*:0/5" in timer
     assert "WantedBy=timers.target" in timer
+
+
+def test_written_notes_and_a_dated_update_priority_go_with_the_build(tmp_path: Path) -> None:
+    (tmp_path / "notes").mkdir()
+    (tmp_path / "notes" / "v1.2.0.txt").write_text("Your logo now shows in the workspace switcher.")
+    result = _run(
+        tmp_path, state="v1.1.0", conf="PLAY_UPDATE_PRIORITY=4\nPLAY_PRIORITY_UNTIL=2999-01-01\n"
+    )
+    assert result.returncode == 0, result.stderr
+    call = next(c for c in _calls(tmp_path) if c[:2] == ["workflow", "run"])
+    assert _field(call, "notes") == "Your logo now shows in the workspace switcher."
+    assert _field(call, "update_priority") == "4"
+
+
+def test_the_update_priority_lapses_after_its_date(tmp_path: Path) -> None:
+    result = _run(
+        tmp_path, state="v1.1.0", conf="PLAY_UPDATE_PRIORITY=4\nPLAY_PRIORITY_UNTIL=2000-01-01\n"
+    )
+    assert result.returncode == 0, result.stderr
+    call = next(c for c in _calls(tmp_path) if c[:2] == ["workflow", "run"])
+    assert _field(call, "update_priority") == "0"

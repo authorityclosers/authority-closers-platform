@@ -79,6 +79,11 @@ class FirstReply(_Command):
     template: str | None = Field(default=None, max_length=512)
     language: str | None = Field(default=None, max_length=16)
     consent_question: str | None = Field(default=None, alias="consentQuestion", max_length=200)
+    # "form_yes": ad leads whose form said yes; "every_lead": every new lead, once a
+    # manager confirms (``agreed``) that people agreed to WhatsApp. ``agreedAt`` is read only.
+    who: Literal["form_yes", "every_lead"] = "form_yes"
+    agreed: bool = False
+    agreed_at: datetime | None = Field(default=None, alias="agreedAt")
 
 
 class OutOfHours(_Command):
@@ -414,6 +419,9 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                     template=rules["first_reply"]["template"],
                     language=rules["first_reply"]["language"],
                     consent_question=rules["first_reply"]["consent_question"],
+                    who=rules["first_reply"].get("who") or "form_yes",
+                    agreed=bool(rules["first_reply"].get("agreed_at")),
+                    agreed_at=rules["first_reply"].get("agreed_at"),
                 ),
                 out_of_hours=OutOfHours(
                     on=rules["out_of_hours"]["on"], text=rules["out_of_hours"]["text"]
@@ -468,6 +476,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
         reply: str | None = Query(default=None, alias="format"),
         return_to: str | None = Query(default=None),
         card: str | None = Query(default=None),
+        business_app: bool = Query(default=False),
     ) -> Response:
         """Connect WhatsApp: off to Meta's Embedded Signup, back to the callback. From
         the Sales Xray app, with ``app_challenge``, it finishes in the app (app_return);
@@ -488,7 +497,9 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 app_challenge=app_challenge,
                 card=settings_card,
             )
-        url = cloud.dialog_url(cfg, redirect_uri=callback_url(), state=state)
+        url = cloud.dialog_url(
+            cfg, redirect_uri=callback_url(), state=state, business_app=business_app
+        )
         if reply == "json":
             return JSONResponse({"url": url}, headers=PRIVATE)
         return RedirectResponse(url, status_code=303, headers=PRIVATE)
@@ -653,6 +664,8 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                     "out_of_hours": command.out_of_hours.model_dump(),
                 },
                 approved,
+                by=desk.viewer.person_id,
+                now=desk.now,
             )
             row.updated_at = desk.now
             await desk.db.flush()

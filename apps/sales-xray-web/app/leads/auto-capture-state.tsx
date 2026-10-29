@@ -16,20 +16,75 @@ const labels: Record<string, string> = {
   cancelled: "Upload cancelled",
   held: "Upload paused · review this call",
 };
+// Why the phone holds a call (app builds with autoCaptureHealth, 30 Oct 2026); it uploads by itself once fixed.
+const holds: Record<string, { label: string; href: string }> = {
+  profile: {
+    label: "Waiting · complete your profile",
+    href: "/settings/profile",
+  },
+  allowance: {
+    label: "Waiting for call minutes",
+    href: "/settings/privacy#calls-setup",
+  },
+  signed_out: {
+    label: "Waiting · sign in on your phone",
+    href: "/settings/privacy#calls-setup",
+  },
+  workspace: {
+    label: "Waiting · switch to your organisation",
+    href: "/settings/privacy#calls-setup",
+  },
+  folder: {
+    label: "Waiting · pick the recordings folder",
+    href: "/settings/privacy#calls-setup",
+  },
+  network: {
+    label: "Waiting · phone blocks background uploads",
+    href: "/settings/privacy#calls-setup",
+  },
+  access: {
+    label: "Waiting · tried again every hour",
+    href: "/settings/privacy#calls-setup",
+  },
+  consent: {
+    label: "Paused · automatic uploads are off",
+    href: "/settings/privacy#automatic-call-uploads",
+  },
+  notices: {
+    label: "Paused · upload notices are off",
+    href: "/settings/privacy#automatic-call-uploads",
+  },
+  off: {
+    label: "Paused · uploads are off",
+    href: "/settings/privacy#automatic-call-uploads",
+  },
+  expired: {
+    label: "Too old to upload by itself",
+    href: "/settings/privacy#calls-setup",
+  },
+};
 export function CaptureStateLabel({
   state,
   attention = false,
+  hold,
 }: {
   state: string;
   attention?: boolean;
+  /** Why the phone holds this call (newer app builds). */
+  hold?: string | null;
 }) {
+  const held = state === "held" && hold ? holds[hold] : undefined;
   return (
     <span className={styles.state} data-missing={state === "missing"}>
       <small role="status">
-        {labels[state]}
+        {held?.label ?? labels[state]}
         {attention ? " · Analysis needs attention" : ""}
       </small>
-      {state === "missing" || state === "cancelled" || state === "held" ? (
+      {held ? (
+        <Link href={held.href}>
+          {hold === "profile" ? "Open Profile" : "Fix uploads"}
+        </Link>
+      ) : state === "missing" || state === "cancelled" || state === "held" ? (
         <Link href="/settings/privacy#calls-setup">Fix recording</Link>
       ) : null}
     </span>
@@ -37,6 +92,7 @@ export function CaptureStateLabel({
 }
 export function AutoCaptureState({ eventId }: { eventId?: string | null }) {
   const [state, setState] = useState<string | null>(null);
+  const [hold, setHold] = useState<string | null>(null);
   const [readId, setReadId] = useState<string | null>(null);
   const [call, setCall] = useState<CaptureCall | null>(null);
   useEffect(() => {
@@ -54,14 +110,15 @@ export function AutoCaptureState({ eventId }: { eventId?: string | null }) {
       if (!active) return;
       const found =
         server?.calls.find((item) => item.event_id === eventId) ?? null;
-      const native =
-        items.find((item) => item.eventId === eventId)?.state ?? null;
+      const item = items.find((entry) => entry.eventId === eventId);
+      const native = item?.state ?? null;
       // Server receipts outrank a stale native queue; missing stays visible after the deadline.
-      setState(
+      const shown =
         found && (found.state !== "waiting" || !native)
           ? found.state
-          : (native ?? (server === null ? "unavailable" : null)),
-      );
+          : (native ?? (server === null ? "unavailable" : null));
+      setState(shown);
+      setHold(shown === native ? (item?.hold ?? null) : null);
       setCall(found);
       setReadId(eventId);
     };
@@ -77,6 +134,6 @@ export function AutoCaptureState({ eventId }: { eventId?: string | null }) {
     };
   }, [eventId]);
   return readId === eventId && state && labels[state] ? (
-    <CaptureStateLabel state={state} attention={call?.attention} />
+    <CaptureStateLabel state={state} attention={call?.attention} hold={hold} />
   ) : null;
 }

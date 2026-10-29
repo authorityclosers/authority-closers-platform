@@ -540,6 +540,18 @@ export function SpeedView({ speed }: { speed: SpeedJourneys }) {
   const cpu = speed.load.cpu;
   return (
     <>
+      {speed.heartbeat?.active ? (
+        <Panel title="Telemetry needs attention">
+          <div role="alert" className={styles.note}>
+            <p>{speed.heartbeat.problems.join(" · ")}</p>
+            <p>
+              Last 30 minutes: {speed.heartbeat.accepted} accepted ·{" "}
+              {speed.heartbeat.stored} stored · {speed.heartbeat.spooled} saved
+              to raw archive.
+            </p>
+          </div>
+        </Panel>
+      ) : null}
       <p className={styles.note}>
         Every number shows how many samples it comes from. Under {speed.few} is
         too few to tell; the 95% column needs {speed.minP95}.

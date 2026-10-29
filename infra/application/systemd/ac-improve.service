@@ -1,0 +1,20 @@
+[Unit]
+Description=Aggregate-only weekly improvement reports
+ConditionPathExists=/etc/authority-closers/improve-enabled
+
+[Service]
+Type=oneshot
+User=acdev
+WorkingDirectory=/home/acdev/src/dev-live/authority-closers-platform
+ExecStart=/opt/ac-improve/bin/python infra/application/scripts/ac-improve --lake-dir /var/lib/ac-improve/lake --env production --output /var/lib/ac-improve/reports
+ExecStart=/opt/ac-improve/bin/python infra/application/scripts/ac-improve --lake-dir /var/lib/ac-improve/lake --env dev --output /var/lib/ac-improve/reports
+Nice=15
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=512M
+TimeoutStartSec=10min
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/lib/ac-improve/reports

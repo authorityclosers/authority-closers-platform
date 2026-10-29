@@ -1,0 +1,50 @@
+{
+  "version": "lead_desk_events/1",
+  "columns": {
+    "event_ref": {
+      "type": "string",
+      "max_null_rate": 0,
+      "pattern": "[0-9a-f]{64}"
+    },
+    "tenant_ref": {
+      "type": "string",
+      "max_null_rate": 0,
+      "pattern": "[0-9a-f]{64}"
+    },
+    "actor_ref": {
+      "type": "string",
+      "max_null_rate": 1,
+      "pattern": "[0-9a-f]{64}"
+    },
+    "occurred_at": {
+      "type": "timestamp",
+      "max_null_rate": 0
+    },
+    "lead_ref": {
+      "type": "string",
+      "max_null_rate": 0,
+      "pattern": "[0-9a-f]{64}"
+    },
+    "kind": {
+      "type": "string",
+      "max_null_rate": 0,
+      "enum": [
+        "captured",
+        "repeat",
+        "assigned",
+        "reassigned",
+        "call",
+        "result",
+        "note",
+        "edited",
+        "message",
+        "scheduled",
+        "stage",
+        "meeting",
+        "suggestion",
+        "task",
+        "email"
+      ]
+    }
+  }
+}

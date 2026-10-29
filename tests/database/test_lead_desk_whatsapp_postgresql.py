@@ -620,3 +620,202 @@ def test_whatsapp_conversations_from_connect_to_sla(
             await setup.engine.dispose()
 
     run(exercise())
+
+
+class AppNumberCloud(FakeCloud):
+    """The number is also on the WhatsApp Business app ("coexistence")."""
+
+    async def number(self, phone_number_id: str, token: str) -> dict[str, str]:
+        return {**await super().number(phone_number_id, token), "on_app": "yes"}
+
+    async def register(self, phone_number_id: str, token: str, pin: str) -> None:
+        raise AssertionError("a WhatsApp Business app number is never registered again")
+
+    synced: list[str] = []
+
+    async def sync_app_data(self, phone_number_id: str, token: str, kind: str) -> None:
+        AppNumberCloud.synced.append(kind)
+
+
+def _echo(wamid: str, text: str, at: datetime, to: str = CALLER) -> dict[str, Any]:
+    return {
+        "object": "whatsapp_business_account",
+        "entry": [
+            {
+                "id": WABA_ID,
+                "changes": [
+                    {
+                        "field": "smb_message_echoes",
+                        "value": {
+                            "metadata": {"phone_number_id": NUMBER_ID},
+                            "message_echoes": [
+                                {
+                                    "from": "918000000000",
+                                    "to": to,
+                                    "id": wamid,
+                                    "timestamp": str(int(at.timestamp())),
+                                    "type": "text",
+                                    "text": {"body": text},
+                                }
+                            ],
+                        },
+                    }
+                ],
+            }
+        ],
+    }
+
+
+def test_a_whatsapp_business_app_number_joins_without_registering_and_its_echoes_show(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name, value in ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(cloud, "Cloud", AppNumberCloud)
+    FakeCloud.sent = []
+    FakeCloud.templates_at_meta = [WELCOME]
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+            install_whatsapp_http(
+                setup.app, RouteContext(settings, setup.require_actor, setup.sessions)
+            )
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                start = await client.get(f"{BASE}/whatsapp/start", params={"business_app": "1"})
+                assert start.status_code == 303
+                query = parse_qs(urlparse(start.headers["location"]).query)
+                assert json.loads(query["extras"][0])["featureType"] == (
+                    "whatsapp_business_app_onboarding"
+                )
+                back = await client.get(
+                    f"{BASE}/whatsapp/callback",
+                    params={"code": "signup-code", "state": query["state"][0]},
+                )
+                assert back.headers["location"].endswith("whatsapp=connected"), back.text
+                async with setup.sessions() as db:
+                    row = await db.scalar(select(LeadWhatsAppNumber))
+                    assert row is not None and row.pin is None
+                assert AppNumberCloud.synced == ["smb_app_state_sync", "history"]
+
+                now = datetime.now(UTC)
+                for payload in (
+                    _inbound("wamid.APPIN", "Hi, is this Authority Closers?", now),
+                    _echo("wamid.APPECHO", "Yes! Typed on the phone.", now + timedelta(seconds=5)),
+                    _echo("wamid.APPECHO", "Yes! Typed on the phone.", now + timedelta(seconds=5)),
+                ):
+                    body, headers = _signed(payload)
+                    got = await client.post(
+                        f"{BASE}/whatsapp/webhook", content=body, headers=headers
+                    )
+                    assert got.status_code == 200, got.text
+                async with setup.sessions() as db:
+                    rows = (
+                        await db.scalars(
+                            select(LeadWhatsAppMessage).order_by(LeadWhatsAppMessage.meta_time)
+                        )
+                    ).all()
+                    assert [(m.direction, m.status, m.body) for m in rows] == [
+                        ("in", "received", "Hi, is this Authority Closers?"),
+                        ("out", "sent", "Yes! Typed on the phone."),
+                    ]
+                    assert rows[0].lead_id is not None and rows[1].lead_id == rows[0].lead_id
+                    leads = await db.scalar(
+                        select(func.count())
+                        .select_from(Lead)
+                        .where(Lead.phone == cloud.e164(CALLER))
+                    )
+                    assert leads == 1
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_every_new_lead_gets_the_first_reply_once_a_manager_confirms_people_agreed(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name, value in ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(cloud, "Cloud", FakeCloud)
+    FakeCloud.sent = []
+    FakeCloud.templates_at_meta = [WELCOME]
+    cfg = cloud.config()
+    assert cfg is not None
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+            install_whatsapp_http(
+                setup.app, RouteContext(settings, setup.require_actor, setup.sessions)
+            )
+            tenant = setup.state.tenant_id
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                connected = await client.post(
+                    f"{BASE}/whatsapp/connect",
+                    json={"code": "signup-code", "wabaId": WABA_ID, "phoneNumberId": NUMBER_ID},
+                    headers=WRITE,
+                )
+                number_id = connected.json()["numbers"][0]["id"]
+                url = f"{BASE}/whatsapp/numbers/{number_id}/auto-replies"
+                every = {"on": True, "template": "welcome_lead", "language": "en"}
+                unconfirmed = await client.put(
+                    url, json={"firstReply": {**every, "who": "every_lead"}}, headers=WRITE
+                )
+                assert unconfirmed.status_code == 422
+                assert "agreed" in unconfirmed.text
+                saved = await client.put(
+                    url,
+                    json={"firstReply": {**every, "who": "every_lead", "agreed": True}},
+                    headers=WRITE,
+                )
+                assert saved.status_code == 200, saved.text
+                rule = saved.json()["numbers"][0]["autoReplies"]["firstReply"]
+                assert rule["who"] == "every_lead" and rule["agreed"] is True
+                assert rule["agreedAt"]
+
+            # A lead added by hand and a website lead are greeted; a file import is not.
+            async with setup.sessions() as db, db.begin():
+                desk = LeadDesk(
+                    db,
+                    Viewer(
+                        person_id=setup.state.person_id, tenant_id=tenant, role="system", name="S"
+                    ),
+                )
+                for name, phone, source in (
+                    ("Meera Shah", "+919811100022", "manual"),
+                    ("Kiran Rao", "+919811100033", "webhook"),
+                    ("Old Contact", "+919811100044", "csv"),
+                ):
+                    await desk.ingest(
+                        {"name": name, "phone": phone},
+                        source=source,
+                        source_ref=f"every-{phone}",
+                        actor=None,
+                    )
+            async with setup.sessions() as db, db.begin():
+                assert (
+                    await inbox.first_replies(db, cfg, FakeCloud(cfg), now=datetime.now(UTC)) == 2
+                )
+            assert sorted(item["to"] for item in FakeCloud.sent) == [
+                "919811100022",
+                "919811100033",
+            ]
+            async with setup.sessions() as db, db.begin():
+                assert (
+                    await inbox.first_replies(db, cfg, FakeCloud(cfg), now=datetime.now(UTC)) == 0
+                )
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

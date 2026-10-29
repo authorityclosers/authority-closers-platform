@@ -8,7 +8,8 @@
  * gear on computers) → Report a problem; the command bar; Report on any error
  * corner card; and in the phone app, a shake. One sheet, one job, one primary
  * action at each step:
- * - Write: what went wrong (a draft survives closing), "This stops my work",
+ * - Write: what went wrong (a draft survives closing and says so when it is
+ *   back; Cancel asks before discarding it), "This stops my work",
  *   a picture of the screen taken on the device as the sheet opens (shown
  *   before it goes; none on screens with call details or messages) or one they
  *   choose, which they can mark up or blur, and an optional voice note. With
@@ -94,11 +95,16 @@ type Picture =
 type Step = "write" | "markup" | "sent" | "mine";
 type Outcome = "sent" | "queued";
 
-// What was typed stays for the next opening until it is sent.
+// What was typed stays for the next opening until it is sent, cleared or
+// discarded (X, Back or the scrim keep it; Cancel asks first).
 const draft = { words: "", blocksWork: false };
 function keepDraft(words: string, blocksWork: boolean) {
   draft.words = words;
   draft.blocksWork = blocksWork;
+}
+
+export function forgetDraftForTests() {
+  keepDraft("", false);
 }
 
 const TITLES: Record<Step, string> = {
@@ -196,6 +202,12 @@ export function BugReportSheet({
   const [step, setStep] = useState<Step>("write");
   const [outcome, setOutcome] = useState<Outcome>("sent");
   const [shownOpen, setShownOpen] = useState(false);
+  // Bug 106 (29 Oct 2026): an old draft came back unseen and a tap put the
+  // cursor mid-text, so new words merged into it. A restored draft now says
+  // so, and the cursor goes to its end (on the first tap too, until typing).
+  const [restored, setRestored] = useState(false);
+  const [tapToEnd, setTapToEnd] = useState(false);
+  const [discarding, setDiscarding] = useState(false);
   const command = useRef(commandId());
   const fileInput = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
@@ -217,14 +229,24 @@ export function BugReportSheet({
       setSendFailed(false);
       setStep("write");
       setPicture(hidden ? { state: "none" } : { state: "taking" });
+      const kept = words.trim() !== "" || voice !== null;
+      setRestored(kept);
+      setTapToEnd(kept);
+      setDiscarding(false);
     }
   }
 
-  // Then the picture is taken once the sheet is up, and the words get focus.
+  // Then the picture is taken once the sheet is up, and the words get focus
+  // with the cursor after anything already there.
   useEffect(() => {
     if (!open) return;
     const round = (opening.current += 1);
-    const focus = window.setTimeout(() => textArea.current?.focus(), 320);
+    const focus = window.setTimeout(() => {
+      const area = textArea.current;
+      if (!area) return;
+      area.focus();
+      area.setSelectionRange(area.value.length, area.value.length);
+    }, 320);
     if (sensitive) return () => window.clearTimeout(focus);
     // The phone app's own picture when it took one; otherwise a copy of the page.
     const start = window.setTimeout(
@@ -286,7 +308,20 @@ export function BugReportSheet({
     setWords("");
     setBlocksWork(false);
     setVoice(null);
+    setRestored(false);
+    setTapToEnd(false);
+    setDiscarding(false);
     command.current = commandId();
+  };
+
+  // Cancel throws the draft away, asking first when something was written.
+  const cancel = () => {
+    if (words.trim() || voice) {
+      setDiscarding(true);
+      return;
+    }
+    cleared();
+    onClose();
   };
 
   const send = async () => {
@@ -358,9 +393,23 @@ export function BugReportSheet({
 
   const ready = picture.state === "ready";
   const footer =
-    step === "write" ? (
+    step === "write" && discarding ? (
+      <div className={styles.discardAsk} role="alert">
+        <span>Discard this report?</span>
+        <Button onClick={() => setDiscarding(false)}>Keep editing</Button>
+        <Button
+          variant="primary"
+          onClick={() => {
+            cleared();
+            onClose();
+          }}
+        >
+          Discard
+        </Button>
+      </div>
+    ) : step === "write" ? (
       <>
-        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={cancel}>Cancel</Button>
         <Button
           variant="primary"
           type="submit"
@@ -459,8 +508,27 @@ export function BugReportSheet({
               <span>About: {about.title}</span>
             </p>
           ) : null}
-          <label className={styles.field} htmlFor={wordsId}>
-            <span className={styles.label}>What went wrong?</span>
+          <div className={styles.field}>
+            <div className={styles.fieldHead}>
+              <label className={styles.label} htmlFor={wordsId}>
+                What went wrong?
+              </label>
+              {restored ? (
+                <p className={styles.restored} role="status">
+                  Draft restored ·
+                  <button
+                    type="button"
+                    className={styles.inlineAction}
+                    onClick={() => {
+                      cleared();
+                      textArea.current?.focus();
+                    }}
+                  >
+                    Clear
+                  </button>
+                </p>
+              ) : null}
+            </div>
             <textarea
               id={wordsId}
               ref={textArea}
@@ -470,12 +538,20 @@ export function BugReportSheet({
               maxLength={4000}
               autoCapitalize="sentences"
               placeholder="What did you do, and what happened instead?"
+              onClick={(event) => {
+                if (!tapToEnd) return;
+                setTapToEnd(false);
+                const area = event.currentTarget;
+                area.setSelectionRange(area.value.length, area.value.length);
+              }}
               onChange={(event) => {
                 setWords(event.target.value);
+                setTapToEnd(false);
+                setDiscarding(false);
                 keepDraft(event.target.value, blocksWork);
               }}
             />
-          </label>
+          </div>
           <div className={styles.chips}>
             <button
               type="button"

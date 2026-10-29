@@ -17,9 +17,10 @@ Message text is the customer's own data: it lives only in
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Any, Final
 from uuid import UUID, uuid4
 
@@ -39,14 +40,30 @@ from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, owner_names
 from ac_platform.lead_desk.whatsapp import cloud
 from ac_platform.partner_events.lead_events import consent_granted
 
+log = logging.getLogger(__name__)
+
 OPT_IN: Final[str] = "whatsapp_opt_in"  # the lead event marker (kind "edited")
 STATUS_ORDER: Final[dict[str, int]] = {"queued": 0, "sent": 1, "delivered": 2, "read": 3}
 FIRST_REPLY_WITHIN: Final[timedelta] = timedelta(minutes=30)
 OUT_OF_HOURS_EVERY: Final[timedelta] = timedelta(hours=12)
 CONVERSATION_LIMIT: Final[int] = 200
 INBOX_LIMIT: Final[int] = 100
+# Who gets the first reply: ad leads whose form said yes to WhatsApp, or every new lead
+# (forms, ads, website, added by hand) once a manager confirms people agreed to WhatsApp.
+FIRST_REPLY_WHO: Final[tuple[str, ...]] = ("form_yes", "every_lead")
+# Every new lead means leads arriving one by one; a file or sheet import of old contacts
+# never gets an automatic message, nor does test data.
+EVERY_LEAD_SOURCES: Final[tuple[str, ...]] = ("manual", "referral", "webhook", "meta")
 DEFAULT_CONFIG: Final[dict[str, Any]] = {
-    "first_reply": {"on": False, "template": None, "language": None, "consent_question": None},
+    "first_reply": {
+        "on": False,
+        "template": None,
+        "language": None,
+        "consent_question": None,
+        "who": "form_yes",
+        "agreed_by": None,
+        "agreed_at": None,
+    },
     "out_of_hours": {"on": False, "text": None},
 }
 
@@ -135,7 +152,8 @@ async def connect_number(
 ) -> LeadWhatsAppNumber:
     """Keep one number with its sealed token and a PIN we set; subscribe and register it.
     ``register=False`` keeps a number Meta registered already (its dashboard test number,
-    dev only), with no PIN of ours."""
+    dev only), with no PIN of ours. A number that is also on the WhatsApp Business app is
+    never registered: it is already, and registering again would take it off the phone."""
     elsewhere = await desk.db.scalar(
         select(LeadWhatsAppNumber.tenant_id).where(
             LeadWhatsAppNumber.phone_number_id == phone_number_id,
@@ -146,6 +164,8 @@ async def connect_number(
     if elsewhere is not None:
         raise DeskError(409, "This WhatsApp number is connected to another organisation.")
     facts = await api.number(phone_number_id, business_token)
+    if facts.get("on_app") == "yes":
+        register = False
     await api.subscribe(waba_id, business_token)
     pin = cloud.new_pin() if register else None
     if pin is not None:
@@ -182,6 +202,14 @@ async def connect_number(
     row.quality = facts["quality"] or None
     row.updated_at = desk.now
     await desk.db.flush()
+    if facts.get("on_app") == "yes":
+        # Meta keeps a WhatsApp Business app number on the API only if its contacts and
+        # history are asked for within 24 hours of joining.
+        for kind in ("smb_app_state_sync", "history"):
+            try:
+                await api.sync_app_data(phone_number_id, business_token, kind)
+            except cloud.WhatsAppError as error:
+                log.warning("whatsapp %s sync not started for %s: %s", kind, row.id, error)
     return row
 
 
@@ -195,24 +223,46 @@ async def disconnect(desk: LeadDesk, number_id: UUID) -> None:
 
 
 def save_auto_replies(
-    row: LeadWhatsAppNumber, settings: Mapping[str, Any], approved: set[tuple[str, str]]
+    row: LeadWhatsAppNumber,
+    settings: Mapping[str, Any],
+    approved: set[tuple[str, str]],
+    *,
+    by: UUID | None = None,
+    now: datetime | None = None,
 ) -> None:
-    """A manager's auto replies for one number; a first reply needs an approved template
-    and the lead form's WhatsApp consent question."""
+    """A manager's auto replies for one number. A first reply needs an approved template,
+    and either the lead form's WhatsApp consent question (ad leads who said yes) or, for
+    every new lead, the manager's word that the people who reach them agreed to WhatsApp
+    (kept with who gave it and when)."""
     first = dict(settings.get("first_reply") or {})
     late = dict(settings.get("out_of_hours") or {})
+    before = number_config(row)["first_reply"]
+    who = str(first.get("who") or "form_yes")
+    if who not in FIRST_REPLY_WHO:
+        raise DeskError(422, "Choose who gets the first reply.")
+    question = str(first.get("consent_question") or "").strip()[:200] or None
+    agreed_by, agreed_at = None, None
     if first.get("on"):
         pair = (str(first.get("template") or ""), str(first.get("language") or ""))
         if pair not in approved:
             raise DeskError(422, "Pick an approved template for the first reply.")
-        question = str(first.get("consent_question") or "").strip()
-        if not question:
+        if who == "every_lead":
+            if not first.get("agreed"):
+                raise DeskError(
+                    422,
+                    "Confirm that the people who reach you agreed to hear from you on "
+                    "WhatsApp: WhatsApp allows a first message only then.",
+                )
+            kept = before.get("on") and before.get("who") == "every_lead"
+            agreed_by = before.get("agreed_by") if kept else (str(by) if by else None)
+            agreed_at = before.get("agreed_at") if kept else (now or datetime.now(UTC)).isoformat()
+        elif not question:
             raise DeskError(
                 422,
                 "Name the lead form question where people agree to WhatsApp: the first "
                 "reply goes only to those who said yes.",
             )
-        first["consent_question"] = question[:200]
+    first["consent_question"] = question
     text_value = str(late.get("text") or "").strip()
     if late.get("on") and not text_value:
         raise DeskError(422, "Write the reply for messages that arrive after hours.")
@@ -223,6 +273,9 @@ def save_auto_replies(
             "template": first.get("template") or None,
             "language": first.get("language") or None,
             "consent_question": first.get("consent_question") or None,
+            "who": who,
+            "agreed_by": agreed_by,
+            "agreed_at": agreed_at,
         },
         "out_of_hours": {"on": bool(late.get("on")), "text": late["text"]},
     }
@@ -234,6 +287,7 @@ def save_auto_replies(
 @dataclass(slots=True)
 class Received:
     messages: int = 0
+    echoes: int = 0
     leads_created: int = 0
     statuses: int = 0
     templates: int = 0
@@ -284,6 +338,44 @@ async def receive(db: AsyncSession, delivery: cloud.Delivery, *, now: datetime) 
         if inserted.first() is not None:
             out.messages += 1
             out.leads_created += created
+            if lead is not None:
+                lead.updated_at = now
+    for echo in delivery.echoes:
+        # Sent from the WhatsApp Business app on the phone: kept in the chat, never a new
+        # lead (the business wrote it, the person didn't).
+        row = await find(echo.phone_number_id)
+        if row is None:
+            continue
+        lead = await db.scalar(
+            select(Lead).where(
+                Lead.tenant_id == row.tenant_id, Lead.phone == cloud.e164(echo.wa_id)
+            )
+        )
+        inserted = await db.execute(
+            insert(LeadWhatsAppMessage)
+            .values(
+                id=uuid4(),
+                tenant_id=row.tenant_id,
+                number_id=row.id,
+                lead_id=lead.id if lead else None,
+                wa_id=echo.wa_id,
+                direction="out",
+                wamid=echo.wamid,
+                kind=echo.kind,
+                body=echo.body,
+                media=echo.media,
+                status="sent",
+                meta_time=echo.at,
+                status_at=echo.at,
+                created_at=now,
+            )
+            .on_conflict_do_nothing(
+                index_elements=["wamid"], index_where=LeadWhatsAppMessage.wamid.is_not(None)
+            )
+            .returning(LeadWhatsAppMessage.id)
+        )
+        if inserted.first() is not None:
+            out.echoes += 1
             if lead is not None:
                 lead.updated_at = now
     for status in delivery.statuses:
@@ -419,6 +511,25 @@ async def opt_in_state(
     if question and form_said_yes(lead.payload, str(question)):
         return True, "Yes on their lead form"
     return False, None
+
+
+async def said_no(db: AsyncSession, lead: Lead) -> bool:
+    """Their latest recorded WhatsApp answer is no."""
+    marks = (
+        await db.scalars(
+            select(LeadEvent.data)
+            .where(
+                LeadEvent.tenant_id == lead.tenant_id,
+                LeadEvent.lead_id == lead.id,
+                LeadEvent.kind == "edited",
+            )
+            .order_by(LeadEvent.created_at.desc())
+        )
+    ).all()
+    for data in marks:
+        if isinstance(data, dict) and isinstance(data.get(OPT_IN), bool):
+            return data[OPT_IN] is False
+    return False
 
 
 def form_said_yes(payload: Any, question: str) -> bool:
@@ -972,28 +1083,31 @@ def first_name(name: str) -> str:
 async def first_replies(
     db: AsyncSession, cfg: cloud.WhatsAppConfig, api: cloud.Cloud, *, now: datetime
 ) -> int:
-    """An instant first reply to new ad leads who said yes to WhatsApp on their form."""
+    """An instant first reply to new ad leads who said yes to WhatsApp on their form, or
+    to every new lead when a manager chose that (never one already in a WhatsApp chat, nor
+    one who said no to WhatsApp)."""
     sent = 0
     for row in (
         await db.scalars(select(LeadWhatsAppNumber).where(LeadWhatsAppNumber.status == "active"))
     ).all():
         rule = number_config(row)["first_reply"]
-        if not (rule["on"] and rule["template"] and rule["language"] and rule["consent_question"]):
+        every = rule.get("who") == "every_lead"
+        if not (rule["on"] and rule["template"] and rule["language"]):
             continue
+        if not (rule.get("agreed_at") if every else rule["consent_question"]):
+            continue
+        chat = select(LeadWhatsAppMessage.id).where(LeadWhatsAppMessage.lead_id == Lead.id)
+        if not every:
+            chat = chat.where(LeadWhatsAppMessage.direction == "out")
         leads = (
             await db.scalars(
                 select(Lead)
                 .where(
                     Lead.tenant_id == row.tenant_id,
                     Lead.created_at >= now - FIRST_REPLY_WITHIN,
-                    Lead.source.in_(("meta", "webhook")),
+                    Lead.source.in_(EVERY_LEAD_SOURCES if every else ("meta", "webhook")),
                     Lead.phone.is_not(None),
-                    ~select(LeadWhatsAppMessage.id)
-                    .where(
-                        LeadWhatsAppMessage.lead_id == Lead.id,
-                        LeadWhatsAppMessage.direction == "out",
-                    )
-                    .exists(),
+                    ~chat.exists(),
                 )
                 .order_by(Lead.created_at)
                 .limit(50)
@@ -1001,7 +1115,10 @@ async def first_replies(
             )
         ).all()
         for lead in leads:
-            if not form_said_yes(lead.payload, rule["consent_question"]):
+            if every:
+                if await said_no(db, lead):
+                    continue
+            elif not form_said_yes(lead.payload, rule["consent_question"]):
                 continue
             desk = LeadDesk(
                 db,
