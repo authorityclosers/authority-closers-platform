@@ -3,6 +3,8 @@
  * Plan prices in Admin (owner, 29 Oct 2026: "Admin price editor"): only the owner changes a
  * price, after a confirm step that shows old and new; nothing is saved before the confirm.
  */
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -10,7 +12,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
-import { PlanPricesPanel, normalizePlanPrices } from "./plan-prices";
+import { PlanPricesPanel } from "./plan-prices";
+import { normalizePlanPrices } from "./plan-prices-data";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -200,4 +203,17 @@ it("never crashes on a partial answer", () => {
     "organisation",
     "enterprise",
   ]);
+});
+
+it("keeps the reader out of the client panel, so the server page can call it", () => {
+  // A server component calling a function from a "use client" module gets a client
+  // reference that throws, and the panel said the answer was unreadable (29 Oct 2026).
+  const read = (path: string) =>
+    readFileSync(fileURLToPath(new URL(path, import.meta.url)), "utf-8");
+  expect(read("./plan-prices-data.ts").trimStart()).not.toMatch(
+    /^["']use client/,
+  );
+  expect(read("../(console)/economics/page.tsx")).toContain(
+    'import { normalizePlanPrices } from "@/app/economics/plan-prices-data";',
+  );
 });

@@ -5,10 +5,8 @@ import {
   economicsQuery,
   normalizeEconomics,
 } from "@/app/economics/economics-data";
-import {
-  PlanPricesPanel,
-  normalizePlanPrices,
-} from "@/app/economics/plan-prices";
+import { PlanPricesPanel } from "@/app/economics/plan-prices";
+import { normalizePlanPrices } from "@/app/economics/plan-prices-data";
 import { adminRead } from "@/app/lib/server-api";
 import { Page, PageHeader, QueryTabs, Unavailable } from "@/app/ui/kit";
 
