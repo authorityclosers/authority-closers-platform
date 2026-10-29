@@ -1,0 +1,10 @@
+[Unit]
+Description=Build the signed staging phone APK for each deployed staging web revision
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-staging-app-after-release
+Nice=10
+TimeoutStartSec=2min
+StateDirectory=ac-staging-app-after-release

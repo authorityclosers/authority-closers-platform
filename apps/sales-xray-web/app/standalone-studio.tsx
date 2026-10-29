@@ -25,7 +25,6 @@ import { WriteSync } from "./sync/write-sync";
 import { StuckWatch } from "./shell/stuck-watch";
 import { useTheme } from "./lightbox/theme-provider";
 import { PageSkeleton } from "./shell/page-skeleton";
-import { DashboardSkeleton } from "./dashboard/dashboard-skeleton";
 import {
   allowEarlyConversationReads,
   dropEarlyReads,
@@ -34,15 +33,6 @@ import {
 import { telemetry } from "./telemetry";
 import { useInitialSession } from "./initial-session";
 import type { InitialSession } from "./server-reads";
-import { NewAnalysisSkeletonContent } from "./analysis/new/new-analysis-skeleton";
-import { CallOpeningSkeletonContent } from "./shell/call-opening-skeleton";
-import { CallsSkeleton } from "./calls-skeleton";
-import { OrganisationPageSkeleton } from "./organisation/organisation-skeleton";
-import { CoachingSkeleton } from "./coaching/coaching-skeleton";
-import { PersonSkeleton } from "./organisation/people/person-skeleton";
-import { InvitesSkeleton } from "./organisation/invites/invites-skeleton";
-import { InsightsSkeleton } from "./organisation/insights/insights-skeleton";
-import { SettingsSkeleton } from "./settings/settings-skeleton";
 import { ConnectionNotice } from "./connection-notice";
 import {
   WorkspaceAccessProvider,
@@ -81,6 +71,59 @@ const SalesXrayFixturePreview = dynamic(
       (module) => module.SalesXrayFixturePreview,
     ),
   { ...loadingOptions },
+);
+
+// Each page's own outline, shown while the session is checked, loads on
+// its own page only. Imported directly, they put every page's styles and
+// Home's whole body in front of every first paint (Leads cold load, owner
+// bug #67). The page being opened still draws its outline on the server.
+const DashboardSkeleton = dynamic(() =>
+  import("./dashboard/dashboard-skeleton").then(
+    (module) => module.DashboardSkeleton,
+  ),
+);
+const NewAnalysisSkeletonContent = dynamic(() =>
+  import("./analysis/new/new-analysis-skeleton").then(
+    (module) => module.NewAnalysisSkeletonContent,
+  ),
+);
+const CallOpeningSkeletonContent = dynamic(() =>
+  import("./shell/call-opening-skeleton").then(
+    (module) => module.CallOpeningSkeletonContent,
+  ),
+);
+const CallsSkeleton = dynamic(() =>
+  import("./calls-skeleton").then((module) => module.CallsSkeleton),
+);
+const OrganisationPageSkeleton = dynamic(() =>
+  import("./organisation/organisation-skeleton").then(
+    (module) => module.OrganisationPageSkeleton,
+  ),
+);
+const CoachingSkeleton = dynamic(() =>
+  import("./coaching/coaching-skeleton").then(
+    (module) => module.CoachingSkeleton,
+  ),
+);
+const PersonSkeleton = dynamic(() =>
+  import("./organisation/people/person-skeleton").then(
+    (module) => module.PersonSkeleton,
+  ),
+);
+const InvitesSkeleton = dynamic(() =>
+  import("./organisation/invites/invites-skeleton").then(
+    (module) => module.InvitesSkeleton,
+  ),
+);
+const InsightsSkeleton = dynamic(() =>
+  import("./organisation/insights/insights-skeleton").then(
+    (module) => module.InsightsSkeleton,
+  ),
+);
+const SettingsSkeleton = dynamic(() =>
+  import("./settings/settings-skeleton").then(
+    (module) => module.SettingsSkeleton,
+  ),
 );
 
 type Workspace = Readonly<{

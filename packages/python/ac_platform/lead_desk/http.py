@@ -95,10 +95,12 @@ from ac_platform.lead_desk.contracts import (
     PhoneCall,
     PhoneHealth,
     PhoneLog,
+    PhoneLogged,
     PhoneLogResult,
     PhoneReport,
     PushConfig,
     Reassign,
+    RecordingCall,
     RecordingCommand,
     RepRules,
     SearchResult,
@@ -801,6 +803,20 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 simulated=False,
                 duration_seconds=command.duration_seconds,
             )
+
+    @router.post("/recording-call", response_model=PhoneLogged, response_model_by_alias=True)
+    async def recording_call(
+        command: RecordingCall, request: Request, response: Response
+    ) -> PhoneLogged:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            identity = request.headers.getlist("x-auto-capture-identity")
+            expected = f"{lead_desk.viewer.tenant_id}:{lead_desk.viewer.person_id}"
+            if identity and identity != [expected]:
+                raise HTTPException(
+                    409, "This call belongs to another workspace or seller.", headers=PRIVATE
+                )
+            return await lead_desk.recording_call(command)
 
     @router.get("/phone-book", response_model=PhoneBook, response_model_by_alias=True)
     async def phone_book(request: Request, response: Response) -> PhoneBook:
