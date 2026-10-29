@@ -58,6 +58,7 @@ import {
 } from "../../leads/limit-field";
 import { phoneDot } from "../../leads/phone-setup-words";
 import { notify } from "../../notice-center";
+import { CaptureRates } from "../../capture-guard/capture-rates";
 import styles from "./seller-profile.module.css";
 
 export type SellerTab = "overview" | "leads" | "settings";
@@ -250,7 +251,12 @@ export function SellerSections({
             onCallAi={setCallAi}
           />
         ) : (
-          overview
+          <>
+            {overview}
+            {canManage || isYou ? (
+              <CaptureRates key={personId} personId={personId} />
+            ) : null}
+          </>
         )}
       </div>
     </DsScope>

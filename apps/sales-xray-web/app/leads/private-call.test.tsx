@@ -67,7 +67,11 @@ it("lets the seller make their own phone call private", async () => {
     (item) => item.textContent === "Make private",
   )!;
   await act(async () => button.click());
-  const [url, init] = fetchMock.mock.calls[0];
+  const write = fetchMock.mock.calls.find(([url]) =>
+    String(url).endsWith("/private"),
+  );
+  expect(write).toBeDefined();
+  const [url, init] = write!;
   expect(String(url)).toMatch(
     /\/calls\/22222222-2222-4222-8222-222222222222\/private$/,
   );
