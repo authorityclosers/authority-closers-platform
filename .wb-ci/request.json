@@ -1,0 +1,60 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "127b73ac4f1e3d2cfe23235f9d140fc3a5408292",
+  "full": false,
+  "checks": [
+    "py",
+    "visual",
+    "web"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/leads/auto-capture-state.tsx",
+    "apps/sales-xray-web/app/leads/lead-sheet.tsx",
+    "apps/sales-xray-web/app/leads/leads-client.ts",
+    "apps/sales-xray-web/app/leads/native-phone.ts",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/page.tsx",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/preview.module.css",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/preview.tsx",
+    "apps/sales-xray-web/app/settings/auto-analysis-panel.tsx",
+    "apps/sales-xray-web/app/settings/auto-capture-panel.module.css",
+    "apps/sales-xray-web/app/settings/auto-capture-panel.tsx",
+    "packages/python/ac_platform/http/conversation_submissions.py",
+    "packages/python/ac_platform/lead_desk/contracts.py",
+    "packages/python/ac_platform/lead_desk/http.py",
+    "packages/python/ac_platform/lead_desk/store.py",
+    "tests/database/test_recording_capture_postgresql.py",
+    "tests/unit/lead_desk/test_recording_capture_contract.py"
+  ],
+  "routes": [
+    "/review-fixture/auto-capture?state=on",
+    "/review-fixture/auto-capture?state=off",
+    "/review-fixture/auto-capture?state=no-consent",
+    "/review-fixture/auto-capture?state=loading"
+  ],
+  "py_tests": [
+    "tests/unit/lead_desk/test_recording_capture_contract.py",
+    "tests/database/test_recording_capture_postgresql.py",
+    "tests/database/test_auto_analysis_consent_postgresql.py",
+    "tests/database/test_lead_desk_postgresql.py"
+  ],
+  "include_paths": [
+    "packages/python/ac_platform/lead_desk/contracts.py",
+    "packages/python/ac_platform/lead_desk/store.py",
+    "packages/python/ac_platform/lead_desk/http.py",
+    "packages/python/ac_platform/http/conversation_submissions.py",
+    "tests/unit/lead_desk/test_recording_capture_contract.py",
+    "tests/database/test_recording_capture_postgresql.py",
+    "apps/sales-xray-web/app/leads/native-phone.ts",
+    "apps/sales-xray-web/app/leads/leads-client.ts",
+    "apps/sales-xray-web/app/leads/auto-capture-state.tsx",
+    "apps/sales-xray-web/app/leads/lead-sheet.tsx",
+    "apps/sales-xray-web/app/settings/auto-capture-panel.tsx",
+    "apps/sales-xray-web/app/settings/auto-capture-panel.module.css",
+    "apps/sales-xray-web/app/settings/auto-analysis-panel.tsx",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/page.tsx",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/preview.tsx",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/preview.module.css"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}

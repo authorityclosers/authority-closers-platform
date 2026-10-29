@@ -1092,3 +1092,44 @@ export async function tellPhoneTelemetry(on: boolean): Promise<void> {
     // An older build: nothing to tell.
   }
 }
+
+export type AutoCaptureStatus = {
+  supported: boolean;
+  on: boolean;
+  wifiOnly: boolean;
+};
+export async function autoCaptureStatus(): Promise<AutoCaptureStatus | null> {
+  if (!inPhoneApp()) return null;
+  try {
+    return await ask<AutoCaptureStatus>("autoCaptureStatus", {}, 5_000);
+  } catch {
+    return null;
+  }
+}
+export async function autoCaptureSetup(
+  on: boolean,
+  wifiOnly: boolean,
+): Promise<AutoCaptureStatus> {
+  return ask<AutoCaptureStatus>("autoCaptureSetup", { on, wifiOnly }, 120_000);
+}
+let captureStatesRead: Promise<{ eventId: string; state: string }[]> | null =
+  null;
+export async function autoCaptureStates(): Promise<
+  { eventId: string; state: string }[]
+> {
+  if (!inPhoneApp()) return [];
+  if (!captureStatesRead)
+    captureStatesRead = ask<{ items: { eventId: string; state: string }[] }>(
+      "autoCaptureStates",
+      {},
+      30_000,
+    )
+      .then(
+        (value) => value.items,
+        () => [],
+      )
+      .finally(() => {
+        captureStatesRead = null;
+      });
+  return captureStatesRead;
+}
