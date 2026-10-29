@@ -165,7 +165,7 @@ export type LeadEvent = {
   channel?: string | null;
   template_label?: string | null;
   /** "phone": the seller's phone logged this call by itself (UX study item 5). */
-  via?: "phone" | null;
+  via?: "phone" | "dialler_recording" | null;
   direction?:
     | "outgoing"
     | "incoming"

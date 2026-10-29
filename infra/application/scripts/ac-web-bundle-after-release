@@ -85,6 +85,8 @@ done
 [ "$OUTCOME" = "completed success" ] || { say "$VER: bundle run $RUN still running; will look again"; exit 1; }
 
 WORK=$(mktemp -d "$STATE_DIR/work.XXXXXX")
+# gh runs as acdev (its own GitHub login), so the download needs a work folder acdev can write (fix 29 Oct 2026).
+[ -n "${AC_WEB_BUNDLE_GH:-}" ] || chown acdev:acdev "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 gh run download "$RUN" -R "$PLATFORM" -n sx-web-bundle -D "$WORK" >/dev/null 2>&1 \
   || { say "$VER: bundle run $RUN has no sx-web-bundle artifact; will retry"; exit 1; }

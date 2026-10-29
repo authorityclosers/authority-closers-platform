@@ -127,6 +127,14 @@ async function flush() {
   });
 }
 
+/** Page outlines arrive with their page's own code (next/dynamic). */
+async function outline(selector: string) {
+  for (let tries = 0; tries < 50 && !container.querySelector(selector); tries++)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+}
+
 async function mount(openingExistingCall = false) {
   await act(async () =>
     root.render(
@@ -317,6 +325,7 @@ it("draws the page's own skeleton while access is checked", async () => {
     const pending = deferred<Response>();
     fetchMock.mockReturnValueOnce(pending.promise);
     await mount();
+    await outline(`[role="status"][aria-label="${label}"]`);
     expect(
       container.querySelector(`[role="status"][aria-label="${label}"]`),
     ).not.toBeNull();
@@ -329,6 +338,7 @@ it("keeps a requested saved call on a neutral access-check surface", async () =>
   const pending = deferred<Response>();
   fetchMock.mockReturnValueOnce(pending.promise);
   await mount(true);
+  await outline('[data-testid="page-skeleton"]');
   expect(
     container.querySelector('[data-testid="page-skeleton"]'),
   ).not.toBeNull();

@@ -1,4 +1,5 @@
-import { renderToStaticMarkup } from "react-dom/server";
+import { act, type ReactElement } from "react";
+import { createRoot } from "react-dom/client";
 import { expect, it, vi } from "vitest";
 
 const place = vi.hoisted(() => ({ pathname: "/leads" }));
@@ -11,6 +12,32 @@ vi.mock("next/navigation", () => ({
 
 import Loading from "../loading";
 import { routeLoadingKind } from "./route-loading";
+
+/**
+ * What the root loading screen shows, after waiting (briefly) until `settled`:
+ * a page's own outline arrives with that page's code (next/dynamic).
+ */
+async function html(
+  node: ReactElement,
+  settled: (markup: string) => boolean = () => true,
+): Promise<string> {
+  // The frame's own reads stay pending: this is the screen before they land.
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(() => new Promise<Response>(() => {})),
+  );
+  const host = document.createElement("div");
+  const root = createRoot(host);
+  await act(async () => root.render(node));
+  for (let tries = 0; tries < 50 && !settled(host.innerHTML); tries++)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    });
+  const markup = host.innerHTML;
+  await act(async () => root.unmount());
+  vi.unstubAllGlobals();
+  return markup;
+}
 
 it("loads every place with its own outline, never New analysis", () => {
   expect(routeLoadingKind("/dashboard")).toBe("dashboard");
@@ -52,19 +79,20 @@ it("keeps the app frame off pages that don't have it", () => {
   expect(routeLoadingKind(null)).toBe("new");
 });
 
-it("draws the opened page's outline at the root while it loads", () => {
+it("draws the opened page's outline at the root while it loads", async () => {
   place.pathname = "/analysis/calls";
-  const calls = renderToStaticMarkup(<Loading />);
+  const calls = await html(<Loading />);
   expect(calls).not.toContain("analyse your next call");
   expect(calls).not.toContain("Drop your call recording here");
 
   place.pathname = "/analysis/new";
-  expect(renderToStaticMarkup(<Loading />)).toContain(
-    "Drop your call recording here",
+  const studio = await html(<Loading />, (markup) =>
+    markup.includes("Drop your call recording here"),
   );
+  expect(studio).toContain("Drop your call recording here");
 
   place.pathname = "/login";
-  const plain = renderToStaticMarkup(<Loading />);
+  const plain = await html(<Loading />);
   expect(plain).toContain('aria-busy="true"');
   expect(plain).not.toContain("data-lightbox-shell");
 });
