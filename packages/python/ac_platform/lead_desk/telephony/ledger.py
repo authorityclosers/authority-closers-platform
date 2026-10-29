@@ -65,6 +65,7 @@ class CompanyCall:
     talk_seconds: int | None = None
     cost_paise: int | None = None
     recording: bool = False
+    hung_up_by: str | None = None
     lead_event_id: UUID | None = None
     updated_at: datetime | None = None
 
@@ -134,6 +135,8 @@ def fold(
                 cost_paise=0,
                 updated_at=at,
             )
+        elif action == "lead_desk.company_call.recording_stored.v1":
+            call = replace(call, recording=True, updated_at=at)
         elif action == STATUS and not call.final:
             call = replace(
                 call,
@@ -144,6 +147,9 @@ def fold(
                 lead_answered=payload.get("lead_answered")
                 if isinstance(payload.get("lead_answered"), bool)
                 else call.lead_answered,
+                hung_up_by=payload.get("hung_up_by")
+                if isinstance(payload.get("hung_up_by"), str)
+                else call.hung_up_by,
                 talk_seconds=payload.get("talk_seconds")
                 if isinstance(payload.get("talk_seconds"), int)
                 else call.talk_seconds,
@@ -322,6 +328,7 @@ async def status(
             "final": report.final,
             "seller_answered": report.seller_answered,
             "lead_answered": report.lead_answered,
+            "hung_up_by": report.hung_up_by,
             "talk_seconds": report.talk_seconds,
             "total_seconds": report.total_seconds,
             "leg_seconds": list(report.leg_seconds),

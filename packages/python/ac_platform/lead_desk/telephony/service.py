@@ -260,7 +260,7 @@ async def _history(
             "connected": talked,
             "status": report.status,
             "submission_id": None,
-            "simulated": False,
+            "simulated": call.provider == "fake",
         },
         actor=call.seller_person_id,
         command_id=key,
