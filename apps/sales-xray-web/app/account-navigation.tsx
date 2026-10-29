@@ -14,6 +14,7 @@ import {
 } from "./hooks/upload-session";
 import { useWorkspaceAccess } from "./workspace-access";
 import { clearLegacySpeakerProfiles } from "./speaker-profiles";
+import { forgetLeadData } from "./leads/list-cache-slot";
 import { confirmLogOutWithUnsent } from "./sync/write-queue";
 
 const SIGN_OUT_ERROR = "We couldn’t confirm sign out. Try again.";
@@ -49,6 +50,8 @@ export async function requestSalesXrayLogout(
     rememberSubmission(null);
     rememberPendingUpload(null);
     clearLegacySpeakerProfiles();
+    // The leads kept on this device for a quick start (list-cache.ts).
+    forgetLeadData();
     upload?.completeSignOut();
   } catch (error) {
     upload?.cancelSignOut();
