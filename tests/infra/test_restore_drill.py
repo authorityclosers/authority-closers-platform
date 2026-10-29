@@ -2329,3 +2329,36 @@ def test_restore_drill_live_opt_in() -> None:
 
 
 RESTORE_DRILL_TEST_TIMEOUT_SECONDS = 75 * 60
+
+
+def test_backup_exclusion_requires_empty_restored_analytics_and_preserves_audit_parity(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    backup, metadata, _ = _write_backup_pair(tmp_path)
+    payload = json.loads(metadata.read_text())
+    payload["excluded_table_data"] = {"analytics_events": 12278}
+    metadata.write_text(json.dumps(payload))
+    restore_drill._validate_backup_metadata(
+        str(metadata),
+        backup=backup,
+        environment="staging",
+        workspace_root=restore_drill._workspace_root(),
+    )
+    head = payload["migration_head"]
+    restore_drill._verify_backup_row_count_parity(metadata, head, payload["row_counts"])
+    wrong = {**payload["row_counts"], "audit_events": 1}
+    with pytest.raises(restore_drill.DrillError, match="parity failed"):
+        restore_drill._verify_backup_row_count_parity(metadata, head, wrong)
+    queries = []
+
+    def query(*args):
+        queries.append(args[1])
+        return "0"
+
+    monkeypatch.setattr(restore_drill, "_query", query)
+    restore_drill._verify_excluded_table_data(None, metadata)
+    assert queries == ["SELECT count(*) FROM public.analytics_events"]
+    monkeypatch.setattr(restore_drill, "_query", lambda *args: "1")
+    with pytest.raises(restore_drill.DrillError, match="must be empty"):
+        restore_drill._verify_excluded_table_data(None, metadata)

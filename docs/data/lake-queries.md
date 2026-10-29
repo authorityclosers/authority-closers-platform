@@ -56,7 +56,7 @@ rows and audit history are never changed by export.
 
 ## Browser capture
 
-Capture is unsampled within the existing intake limits (2,000 events/person/day,
+Capture is unsampled within the existing intake limits (20,000 events/person/rolling 24 hours,
 1,200 events/workspace/minute). Every same-origin `/v1/` fetch is timed through response headers or network
 rejection, including fast and background requests. The original response/error
 is preserved. XHR is timed through load-end (including failure/abort). Resource Timing
@@ -198,3 +198,20 @@ builder. After green checks, the operator installs the tested revision:
 The `-I` script uses fixed root-owned executables, a minimal child environment,
 private temporary files and low CPU/I/O priority. Provider errors and source
 exceptions are replaced with fixed diagnostics; credentials never enter argv.
+
+
+## Source capacity and logical recovery
+
+All analytics kinds keep their original **180-day** `retention_expires_at`;
+there is no 14-day source expiry in this repair. Yesterday's export and the SQL
+expiry filters above continue to use that lifetime. The 20,000-person daily cap
+is independent of lake retention.
+
+Bounded logical backups retain the `analytics_events` schema but exclude its
+data. Their `excluded_table_data.analytics_events` records the actual source
+snapshot count; the restore drill explicitly requires zero restored analytics rows.
+All other public-table parity checks remain exact. A logical restore loses
+analytics not yet exported; lake history is queried separately, not restored
+automatically into Postgres. See [capacity and recovery operations](../ops/TELEMETRY-CAPACITY.md)
+for the workload estimate, disk-growth budget, unchanged 64 MiB bound and
+matching-helper installation requirement.

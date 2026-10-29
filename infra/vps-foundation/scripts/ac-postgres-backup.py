@@ -1821,14 +1821,19 @@ def dump_command(target: ApplicationTarget, snapshot_id: str) -> list[str]:
             "-euc",
             'umask 077; export PGPASSWORD="$AC_DB_BACKUP_PASSWORD"; '
             "exec pg_dump --no-password -h 127.0.0.1 "
-            f'-U ac_backup -d "$POSTGRES_DB" --format=custom --create --snapshot={snapshot_id}',
+            '-U ac_backup -d "$POSTGRES_DB" --format=custom --create '
+            f"--exclude-table-data=public.analytics_events --snapshot={snapshot_id}",
         ),
     ]
 
 
-def parity_command(target: ApplicationTarget, snapshot_id: str) -> list[str]:
+def parity_command(
+    target: ApplicationTarget, snapshot_id: str, *, include_excluded: bool = False
+) -> list[str]:
     snapshot_id = validate_exported_snapshot_id(snapshot_id)
     tables = parity_tables_for_head(target.migration_head)
+    if include_excluded and "analytics_events" not in tables:
+        tables = (*tables, "analytics_events")
     query = " UNION ALL ".join(
         f"SELECT '{table}', count(*)::text FROM \"{table}\""  # noqa: S608 - fixed table allowlist
         for table in tables
@@ -1858,11 +1863,17 @@ def parity_command(target: ApplicationTarget, snapshot_id: str) -> list[str]:
 
 
 def source_row_counts(
-    target: ApplicationTarget, snapshot_id: str, *, reader: Callable | None = None
+    target: ApplicationTarget,
+    snapshot_id: str,
+    *,
+    reader: Callable | None = None,
+    include_excluded: bool = False,
 ) -> dict[str, int]:
     tables = parity_tables_for_head(target.migration_head)
+    if include_excluded and "analytics_events" not in tables:
+        tables = (*tables, "analytics_events")
     result = (reader or run_checked)(
-        parity_command(target, snapshot_id),
+        parity_command(target, snapshot_id, include_excluded=include_excluded),
         target=target,
         timeout_seconds=PG_RESTORE_LIST_TIMEOUT_SECONDS,
     ).stdout.splitlines()
@@ -2050,10 +2061,14 @@ def capture_dump(
                 )
         snapshot_holder.assert_alive()
         row_counts = (
-            source_row_counts(target, snapshot_holder.snapshot_id, reader=capture_io.read)
+            source_row_counts(
+                target, snapshot_holder.snapshot_id, reader=capture_io.read, include_excluded=True
+            )
             if capture_io
-            else source_row_counts(target, snapshot_holder.snapshot_id)
+            else source_row_counts(target, snapshot_holder.snapshot_id, include_excluded=True)
         )
+        # Inventory the source honestly; restored analytics data is intentionally empty.
+        excluded_table_data = {"analytics_events": row_counts.pop("analytics_events")}
         snapshot_holder.close()
         snapshot_holder = None
         completed_time = utc_now()
@@ -2080,6 +2095,7 @@ def capture_dump(
             "dump_bytes": bytes_written,
             "dump_sha256": digest,
             "row_counts": row_counts,
+            "excluded_table_data": excluded_table_data,
         }
         # Old immutable application controllers accept only the legacy keys.
         # Every reviewed post-0018 schema requires its own exact version identity.

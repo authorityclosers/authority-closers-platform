@@ -20,7 +20,7 @@ for (on by default, any person or workspace can turn it off) is ``sales_xray_con
   finds the call in the caller's workspace. The cost export can make the same reference, so
   "cost per useful report" joins without either side holding a call id.
 - Events are disposable analytics (``analytics_events``): never progress, payment, access or
-  score state (AGENTS.md). Kept 180 days; at most 2,000 per person in any 24 hours.
+  score state (AGENTS.md). Kept 180 days; at most 20,000 per person in any 24 hours.
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ from ac_platform.usage_people.pseudonyms import ensure_key
 
 RETENTION_DAYS = 180
 RETENTION_POLICY_ID = "sx-product-analytics-v1"
-PERSON_DAILY_CAP = 2000
+PERSON_DAILY_CAP = 20_000
 PROVENANCE_SOURCE = "authenticated_sales_xray_api"
 PROVENANCE_VERSION = "sales-xray-product-telemetry-v1"
 

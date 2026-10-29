@@ -1689,6 +1689,15 @@ def _validate_backup_metadata(
         payload = json.loads(metadata_bytes.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise DrillError("backup metadata is not valid UTF-8 JSON") from error
+    if isinstance(payload, dict) and "excluded_table_data" in payload:
+        excluded = payload.pop("excluded_table_data")
+        if (
+            not isinstance(excluded, dict)
+            or set(excluded) != {"analytics_events"}
+            or type(excluded["analytics_events"]) is not int
+            or excluded["analytics_events"] < 0
+        ):
+            raise DrillError("backup excluded-table inventory is malformed")
     expected_keys = {
         "artifact_type",
         "restic_tag",
@@ -2711,6 +2720,18 @@ def _schema_and_migration(
     }
 
 
+def _verify_excluded_table_data(target: DisposableTarget, metadata_path: Path) -> None:
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    if "excluded_table_data" not in metadata:
+        return
+    # Metadata was strictly validated before the disposable target was created.
+    count = _query(
+        target, "SELECT count(*) FROM public.analytics_events", "verify excluded analytics data"
+    ).strip()
+    if count != "0":
+        raise DrillError("restored excluded analytics data must be empty")
+
+
 def _row_counts(target: DisposableTarget, expected_head: str) -> dict[str, int]:
     tables = parity_tables_for_head(expected_head)
     query = " UNION ALL ".join(
@@ -3725,6 +3746,7 @@ def _execute_migration_rehearsal(
     _validate_migration_rehearsal_pair(source_head, config.expected_migration_head)
 
     _restore_dump(target)
+    _verify_excluded_table_data(target, config.backup_metadata)
     source_schema = _schema_and_migration(
         target,
         source_head,
@@ -3897,6 +3919,7 @@ def _execute(config: DrillConfig) -> tuple[dict[str, Any], Path]:
                 _execute_migration_rehearsal(target, config, evidence)
             else:
                 _restore_dump(target)
+                _verify_excluded_table_data(target, config.backup_metadata)
                 evidence["schema"] = _schema_and_migration(
                     target,
                     config.expected_migration_head,

@@ -1797,6 +1797,15 @@ def _validate_metadata(
         raise
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise RestoreProofError("logical backup metadata is not valid UTF-8 JSON") from error
+    if isinstance(payload, dict) and "excluded_table_data" in payload:
+        excluded = payload.pop("excluded_table_data")
+        if (
+            not isinstance(excluded, dict)
+            or set(excluded) != {"analytics_events"}
+            or type(excluded["analytics_events"]) is not int
+            or excluded["analytics_events"] < 0
+        ):
+            raise RestoreProofError("backup excluded-table inventory is malformed")
     expected_keys = {
         "artifact_type",
         "restic_tag",
