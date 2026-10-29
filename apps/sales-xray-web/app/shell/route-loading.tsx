@@ -11,31 +11,85 @@
  * on arrival is the content filling in. Pages outside the app frame (sign
  * in, policies) get a quiet blank page instead of the app's frame.
  *
- * Only light skeleton modules are imported here: this screen is part of
- * every page's code. A page whose outline lives inside its own big module
- * (Insights, Invites, Review) gets the shared outline in its place in the
- * frame.
+ * Only the shared outline and Leads' are part of every page's code; each
+ * other page's outline loads on demand (the shared one holds its place).
+ * A page whose outline lives inside its own big module (Insights, Invites,
+ * Review) gets the shared outline in its place in the frame.
  */
+import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 
-import AccountLoading from "../account/loading";
 import { AcquisitionShell } from "../acquisition-shell";
 import { callIdFromPath } from "../analysis-routes";
-import { NewAnalysisSkeleton } from "../analysis/new/new-analysis-skeleton";
 import { isShellRoute } from "../app-session";
-import CallLoading from "../analysis/calls/[callId]/loading";
-import CallsLoading from "../calls/loading";
-import { ChatsSkeleton } from "../chats/chats-skeleton";
-import CoachingLoading from "../coaching/loading";
-import DashboardLoading from "../dashboard/loading";
 import { LeadsSkeleton } from "../leads/leads-skeleton";
-import OrganisationLoading from "../organisation/loading";
-import PersonLoading from "../organisation/people/[personId]/loading";
-import ProspectDetailLoading from "../prospects/[prospectId]/loading";
-import ProspectsLoading from "../prospects/loading";
-import { SettingsSkeleton } from "../settings/settings-skeleton";
 import { useWorkspaceAccess } from "../workspace-access";
 import { PageSkeleton, type SkeletonVariant } from "./page-skeleton";
+
+// Each page's own outline loads with that page's code, not with every page
+// (its styles were in front of every first paint: Leads cold load, owner
+// bug #67). Until it arrives, the shared outline holds its place.
+const AccountLoading = dynamic(() => import("../account/loading"), {
+  loading: () => <OutlineLoading />,
+});
+const NewAnalysisSkeleton = dynamic(
+  () =>
+    import("../analysis/new/new-analysis-skeleton").then(
+      (module) => module.NewAnalysisSkeleton,
+    ),
+  {
+    loading: () => <OutlineLoading />,
+  },
+);
+const CallLoading = dynamic(
+  () => import("../analysis/calls/[callId]/loading"),
+  {
+    loading: () => <OutlineLoading variant="report" />,
+  },
+);
+const CallsLoading = dynamic(() => import("../calls/loading"), {
+  loading: () => <OutlineLoading />,
+});
+const ChatsSkeleton = dynamic(
+  () =>
+    import("../chats/chats-skeleton").then((module) => module.ChatsSkeleton),
+  {
+    loading: () => <OutlineLoading />,
+  },
+);
+const CoachingLoading = dynamic(() => import("../coaching/loading"), {
+  loading: () => <OutlineLoading />,
+});
+const DashboardLoading = dynamic(() => import("../dashboard/loading"), {
+  loading: () => <OutlineLoading variant="dashboard" />,
+});
+const OrganisationLoading = dynamic(() => import("../organisation/loading"), {
+  loading: () => <OutlineLoading />,
+});
+const PersonLoading = dynamic(
+  () => import("../organisation/people/[personId]/loading"),
+  {
+    loading: () => <OutlineLoading />,
+  },
+);
+const ProspectDetailLoading = dynamic(
+  () => import("../prospects/[prospectId]/loading"),
+  {
+    loading: () => <OutlineLoading />,
+  },
+);
+const ProspectsLoading = dynamic(() => import("../prospects/loading"), {
+  loading: () => <OutlineLoading />,
+});
+const SettingsSkeleton = dynamic(
+  () =>
+    import("../settings/settings-skeleton").then(
+      (module) => module.SettingsSkeleton,
+    ),
+  {
+    loading: () => <OutlineLoading />,
+  },
+);
 
 export type RouteLoadingKind =
   | "plain"
