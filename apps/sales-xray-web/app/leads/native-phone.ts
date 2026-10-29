@@ -650,16 +650,38 @@ export async function callLogStatus(): Promise<CallLogStatus | null> {
   }
 }
 
+/**
+ * Turning call logging on or off: the phone's new state, or why it gave none.
+ * organisation_required: the workspace is Personal, so the phone refused
+ * before asking Android for anything (Play's Enterprise CRM exception).
+ */
+export type CallLogOutcome =
+  | { status: CallLogStatus }
+  | { error: "organisation_required" | "failed" };
+
 /** Turns call logging on or off for a work SIM; the phone asks for call-history access once. */
+export async function turnCallLog(
+  on: boolean,
+  sim: string,
+): Promise<CallLogOutcome> {
+  try {
+    const status = parseCallLog(
+      await ask("callLogSetup", { on, sim }, 120_000),
+    );
+    return status ? { status } : { error: "failed" };
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "";
+    return { error: code === "organisation_required" ? code : "failed" };
+  }
+}
+
+/** turnCallLog's new state alone; null when the phone refused or didn't answer. */
 export async function callLogSetup(
   on: boolean,
   sim: string,
 ): Promise<CallLogStatus | null> {
-  try {
-    return parseCallLog(await ask("callLogSetup", { on, sim }, 120_000));
-  } catch {
-    return null;
-  }
+  const outcome = await turnCallLog(on, sim);
+  return "status" in outcome ? outcome.status : null;
 }
 
 /** Looks at the call history now (the app also does when it opens and every 15 minutes). */
@@ -726,6 +748,8 @@ export type RecorderProfile = {
   folders: { path: string; state: string; recordings: number }[];
   /** Another installed Phone app that saves recordings to a folder, if any. */
   switchTo: string | null;
+  /** Newest readable recording file timestamp; unknown on older apps. */
+  newestMs?: number | null;
 };
 
 export function parseRecorder(raw: unknown): RecorderProfile | null {
@@ -761,6 +785,11 @@ export function parseRecorder(raw: unknown): RecorderProfile | null {
     recording: text(value.recording) || "unknown",
     folders,
     switchTo: maker ? text(maker.label) || null : null,
+    ...(typeof value.newestMs === "number" &&
+    Number.isFinite(value.newestMs) &&
+    value.newestMs > 0
+      ? { newestMs: value.newestMs }
+      : {}),
   };
 }
 

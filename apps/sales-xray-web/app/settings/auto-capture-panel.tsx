@@ -8,8 +8,10 @@ import {
   pickRecordingsFolder,
   askNotifications,
   type AutoCaptureStatus,
+  onPhoneSignal,
 } from "../leads/native-phone";
 
+import { CaptureHealth } from "../capture-guard/capture-health";
 import styles from "./auto-capture-panel.module.css";
 
 /** Seller: choose a folder and enable upload after the native disclosure. */
@@ -17,15 +19,21 @@ export function AutoCapturePanel({ consentOn }: { consentOn: boolean }) {
   const [status, setStatus] = useState<AutoCaptureStatus | null>(null);
   const [busy, setBusy] = useState(false);
   useEffect(() => {
-    void autoCaptureStatus()
-      .then(async (next) => {
-        if (next?.on && !consentOn)
-          setStatus(await autoCaptureSetup(false, next.wifiOnly));
-        else setStatus(next);
-      })
-      .catch(() => undefined);
+    const refresh = () =>
+      void autoCaptureStatus()
+        .then(async (next) => {
+          if (next?.on && !consentOn)
+            setStatus(await autoCaptureSetup(false, next.wifiOnly));
+          else setStatus(next);
+        })
+        .catch(() => undefined);
+    refresh();
+    return onPhoneSignal((signal) => {
+      if (signal === "resume" || signal === "recordings") refresh();
+    });
   }, [consentOn]);
-  if (!status?.supported) return null;
+  if (!status?.supported)
+    return <CaptureHealth status={status} consentOn={consentOn} />;
   const save = async (on: boolean, wifi: boolean) => {
     setBusy(true);
     try {
@@ -44,6 +52,8 @@ export function AutoCapturePanel({ consentOn }: { consentOn: boolean }) {
   };
   return (
     <div className={styles.capture}>
+      <CaptureHealth status={status} consentOn={consentOn} />
+      <div id="automatic-call-uploads" />
       <p>
         <strong>Automatic call uploads</strong>
       </p>
