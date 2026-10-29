@@ -14,6 +14,7 @@ import { Contact } from "lucide-react";
 import { useSyncExternalStore } from "react";
 
 import { useUnreadChats } from "../chats/chats-badge";
+import { onWorkspaceChange, workspaceGeneration } from "../workspace-change";
 import { readBadge, type Badge } from "./badge-client";
 import styles from "./leads-badge.module.css";
 
@@ -25,8 +26,7 @@ let readAt = 0;
 let timer: number | null = null;
 let reading = false;
 // "Off" where Leads doesn't apply (a 403 outside an organisation): no more
-// reads until the app comes back to the front or the page reloads, which a
-// workspace switch does.
+// reads until the app comes back to the front or the workspace changes.
 let off = false;
 const listeners = new Set<() => void>();
 
@@ -48,17 +48,29 @@ function read(force = false) {
   if (!force && Date.now() - readAt < AGAIN_MS) return;
   reading = true;
   readAt = Date.now();
+  // Counts for a workspace the page has left are dropped (owner bug #17).
+  const asked = workspaceGeneration();
   void readBadge()
     .then((next) => {
+      if (asked !== workspaceGeneration()) return;
       if (next === "off") {
         off = true;
         emit(null);
       } else emit(next);
     })
     .finally(() => {
-      reading = false;
+      if (asked === workspaceGeneration()) reading = false;
     });
 }
+
+// The workspace changed in place: these counts were the old workspace's.
+onWorkspaceChange((reread) => {
+  reading = false;
+  readAt = 0;
+  off = false;
+  emit(null);
+  if (reread && listeners.size) read(true);
+});
 
 const onVisible = () => {
   off = false;

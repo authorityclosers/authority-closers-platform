@@ -11,16 +11,28 @@ import { updateShellState } from "./shell-store";
 export const PROFILE_UPDATED_EVENT = "sales-xray:profile-updated";
 let owner: string | null = null;
 let pending: Promise<AccountProfileRecord> | null = null;
+// Your last profile, by person: a workspace switch keeps your own face and
+// name in the frame while the new workspace's read is on its way (owner bugs
+// #17 and #50: no blank circle before, during or after a switch).
+let face: { personId: string; profile: AccountProfileRecord } | null = null;
 
-export function invalidateShellProfile() {
+/** Forget the read, for another workspace's or account's to come. */
+function forgetRead() {
   owner = null;
   pending = null;
   updateShellState({ profileName: null });
 }
 
+/** Signed out, or the profile changed: forget it all, your face too. */
+export function invalidateShellProfile() {
+  forgetRead();
+  face = null;
+}
+
 /** A document-local, account/session/workspace-bound read survives component unmounts. */
 export function readShellProfile(key: string): Promise<AccountProfileRecord> {
-  if (owner !== key) invalidateShellProfile();
+  // Another workspace: a new read, while your face stays on screen.
+  if (owner !== key) forgetRead();
   owner = key;
   if (pending) return pending;
   const request = readAccountProfile()
@@ -37,9 +49,18 @@ export function readShellProfile(key: string): Promise<AccountProfileRecord> {
   return request;
 }
 
-export function useShellProfile(authenticated: boolean, enabled = true) {
+/**
+ * `keepFace`: until this workspace's read answers, the frame's avatar and
+ * name show the same person's last profile instead of nothing.
+ */
+export function useShellProfile(
+  authenticated: boolean,
+  enabled = true,
+  keepFace = false,
+) {
   const access = useWorkspaceAccess();
   const context = access?.context;
+  const personId = context?.personId ?? null;
   const key = context
     ? JSON.stringify([context.personId, context.sessionId, context.tenantId])
     : "document";
@@ -61,6 +82,7 @@ export function useShellProfile(authenticated: boolean, enabled = true) {
       const current = ++generation;
       void readShellProfile(key)
         .then((profile) => {
+          if (personId && owner === key) face = { personId, profile };
           if (active && current === generation) setValue({ key, profile });
         })
         .catch(() => {
@@ -73,6 +95,10 @@ export function useShellProfile(authenticated: boolean, enabled = true) {
       active = false;
       window.removeEventListener(PROFILE_UPDATED_EVENT, refresh);
     };
-  }, [signedIn, signedOut, enabled, key]);
-  return signedIn && value?.key === key ? value.profile : null;
+  }, [signedIn, signedOut, enabled, key, personId]);
+  if (!signedIn) return null;
+  if (value?.key === key) return value.profile;
+  return keepFace && personId && face?.personId === personId
+    ? face.profile
+    : null;
 }

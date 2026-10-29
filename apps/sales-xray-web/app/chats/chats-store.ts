@@ -16,6 +16,7 @@
 import { useEffect, useSyncExternalStore } from "react";
 
 import { LeadsError } from "../leads/leads-client";
+import { onWorkspaceChange, workspaceGeneration } from "../workspace-change";
 import { readChats, type ChatList } from "./chats-client";
 
 export const PAGE_EVERY_MS = 15 * 1000;
@@ -35,8 +36,8 @@ let readAt = 0;
 let timer: number | null = null;
 let screens = 0;
 // A 403 (Leads works only inside an organisation): the timer stops reading
-// until the app comes back to the front or the page reloads, which a
-// workspace switch does (Lead OS, 27 Oct 2026).
+// until the app comes back to the front or the workspace changes (Lead OS,
+// 27 Oct 2026).
 let forbidden = false;
 const listeners = new Set<() => void>();
 
@@ -49,11 +50,15 @@ export function refreshChats({ force = false } = {}): Promise<void> {
   if (inflight) return inflight;
   if (!force && Date.now() - readAt < MIN_GAP_MS) return Promise.resolve();
   readAt = Date.now();
-  inflight = readChats()
+  // An answer for a workspace the page has left is dropped (owner bug #17).
+  const asked = workspaceGeneration();
+  const request = readChats()
     .then((list) => {
+      if (asked !== workspaceGeneration()) return;
       state = { list, error: null, version: state.version + 1 };
     })
     .catch((reason: unknown) => {
+      if (asked !== workspaceGeneration()) return;
       if (reason instanceof LeadsError && reason.status === 403)
         forbidden = true;
       state = {
@@ -66,12 +71,24 @@ export function refreshChats({ force = false } = {}): Promise<void> {
       };
     })
     .finally(() => {
-      inflight = null;
+      if (inflight === request) inflight = null;
+      if (asked !== workspaceGeneration()) return;
       readAt = Date.now();
       emit();
     });
-  return inflight;
+  inflight = request;
+  return request;
 }
+
+// The workspace changed in place: the list was the old workspace's.
+onWorkspaceChange((reread) => {
+  state = { list: null, error: null, version: state.version + 1 };
+  inflight = null;
+  readAt = 0;
+  forbidden = false;
+  emit();
+  if (reread && listeners.size) void refreshChats({ force: true });
+});
 
 function schedule() {
   if (timer !== null) window.clearTimeout(timer);

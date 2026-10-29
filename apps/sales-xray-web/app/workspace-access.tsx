@@ -27,6 +27,12 @@ export type WorkspaceAccessValue = Readonly<{
     tenantId: string;
   }> | null;
   retry: () => void;
+  /**
+   * The server has selected this workspace (its POST /v1/context answered
+   * with it): show it in place, without reloading the page (owner bug #17).
+   * Absent where the page must reload instead.
+   */
+  switched?: (tenantId: string) => void;
   /** Open account access while keeping selected browser File objects. */
   requestAccountSignIn?: () => void;
   /** Return true only when this click may continue to the existing upload checks. */

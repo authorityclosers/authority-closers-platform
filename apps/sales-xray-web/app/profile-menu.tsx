@@ -110,7 +110,8 @@ export function ProfileMenu({
   useBackClose(open, () => setOpen(false));
   const [signingOut, setSigningOut] = useState(false);
   const [error, setError] = useState("");
-  const profile = useShellProfile(authenticated);
+  // Your face stays through a workspace switch (owner bugs #17, #50).
+  const profile = useShellProfile(authenticated, true, true);
   const profileName = profile?.name?.trim() || null;
   const profileEmail = profile?.email?.trim() || null;
   const menu = useRef<HTMLDivElement>(null);

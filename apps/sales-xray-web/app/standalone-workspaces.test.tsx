@@ -1,4 +1,4 @@
-import { act } from "react";
+import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { StandaloneStudio } from "./standalone-studio";
@@ -226,4 +226,59 @@ it("switches both ways and clears the previous workspace's cached Recents", asyn
     await remount();
     expect(button(`Current workspace: ${name}`)).not.toBeNull();
   }
+});
+
+// Owner bug #17 (29 Oct 2026): a confirmed switch lands in place. The page
+// and everything it held start again for the new workspace; nothing reloads.
+function WorkspaceDraftProbe() {
+  const access = useWorkspaceAccess();
+  const [draft, setDraft] = useState("");
+  return (
+    <div data-scope={access?.context?.tenantId}>
+      <button data-draft onClick={() => setDraft("Draft in the old workspace")}>
+        Edit draft
+      </button>
+      <button
+        data-switch
+        onClick={() => access?.switched?.(organisation.tenant_id)}
+      >
+        Switched
+      </button>
+      <span data-value>{draft}</span>
+    </div>
+  );
+}
+
+it("starts every screen again for the workspace the server switched to, without a reload", async () => {
+  await act(async () =>
+    root.render(
+      <StandaloneStudio>
+        <WorkspaceDraftProbe />
+      </StandaloneStudio>,
+    ),
+  );
+  await act(async () => {
+    for (let i = 0; i < 8; i += 1) await Promise.resolve();
+  });
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("[data-draft]")!.click(),
+  );
+  expect(host.querySelector("[data-value]")?.textContent).toBe(
+    "Draft in the old workspace",
+  );
+  const directoryReads = () =>
+    fetcher.mock.calls.filter(
+      ([path]) => path === "/v1/me/sales-xray-workspaces",
+    ).length;
+  const before = directoryReads();
+  await act(async () =>
+    host.querySelector<HTMLButtonElement>("[data-switch]")!.click(),
+  );
+  expect(host.querySelector("[data-scope]")?.getAttribute("data-scope")).toBe(
+    organisation.tenant_id,
+  );
+  // A new frame: the old workspace's draft is gone.
+  expect(host.querySelector("[data-value]")?.textContent).toBe("");
+  // The server's answer to the switch is enough: no second round trip.
+  expect(directoryReads()).toBe(before);
 });

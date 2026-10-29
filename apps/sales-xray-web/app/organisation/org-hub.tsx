@@ -13,13 +13,12 @@
  */
 
 import { roleLabel } from "./roles";
-import { Building2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import { useBranding } from "../shell/branding-store";
-import { OrgLogo } from "../shell/org-logo";
+import { WorkspaceTile } from "../shell/workspace-picker";
 import { AcquisitionShell } from "../acquisition-shell";
 import { SettingsSectionView } from "../settings/sections";
 import type { SettingsSectionId } from "../settings/settings-sections";
@@ -143,18 +142,30 @@ function Parts({
   );
 }
 
-type HubWorkspace = { name: string; role: string | null };
+type HubWorkspace = {
+  tenant_id: string;
+  name: string;
+  role: string | null;
+  logo_url?: string | null;
+};
 
 /** The organisation's name and your role, at the top of the hub and of Insights. */
 function OrgHeader({ workspace }: { workspace: HubWorkspace }) {
-  // Its own logo where it has one, as the workspace switcher shows it
-  // (owner, 26 Oct 2026); the building icon only without one.
+  // Its own logo where it has one, else its initials on its own colour, the
+  // same tile as the workspace switcher and the top bar (owner bug #50).
   const logo = useBranding()?.logoUrl ?? null;
   return (
     <header className={styles.header}>
-      <span className={styles.tile} aria-hidden="true">
-        <OrgLogo src={logo} fallback={<Building2 size={20} />} />
-      </span>
+      <WorkspaceTile
+        workspace={{
+          tenant_id: workspace.tenant_id,
+          kind: "organisation",
+          name: workspace.name,
+          logo_url: workspace.logo_url,
+        }}
+        logoUrl={logo}
+        size="xl"
+      />
       <div>
         <h1>{workspace.name}</h1>
         <p>
