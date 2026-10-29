@@ -9,12 +9,14 @@ x-service-security: &service-security
     - ALL
   tmpfs:
     - /tmp:rw,noexec,nosuid,nodev,size=64m
+  # journald keeps a service's lines after a release replaces its container;
+  # the local driver deleted them with it (the API's lines for the 28 Oct
+  # 13:15Z stall were gone after the 23:05Z release). The host's journald
+  # bounds them (1 GB, 30 days); `docker logs` still reads them.
   logging:
-    driver: local
+    driver: journald
     options:
-      max-size: "10m"
-      max-file: "3"
-      compress: "true"
+      tag: "{{.Name}}"
 
 x-application-environment: &application-environment
   AC_ENVIRONMENT: ${AC_ENVIRONMENT:?AC_ENVIRONMENT must be staging or production}
