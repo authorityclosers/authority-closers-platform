@@ -118,10 +118,18 @@ def unseal(cfg: WhatsAppConfig, box: Mapping[str, Any], *, phone_number_id: str,
         raise WhatsAppError("Connect this WhatsApp number again.") from None
 
 
-def dialog_url(cfg: WhatsAppConfig, *, redirect_uri: str, state: str) -> str:
-    """Meta's Embedded Signup as a page the browser goes to (no SDK on our pages)."""
+def dialog_url(
+    cfg: WhatsAppConfig, *, redirect_uri: str, state: str, business_app: bool = False
+) -> str:
+    """Meta's Embedded Signup as a page the browser goes to (no SDK on our pages).
+    ``business_app`` offers the number already on the WhatsApp Business app: it joins the
+    Cloud API and stays on the phone ("coexistence"), with no new registration."""
+    import json as _json
     from urllib.parse import urlencode
 
+    extras: dict[str, Any] = {"setup": {}}
+    if business_app:
+        extras |= {"featureType": "whatsapp_business_app_onboarding", "sessionInfoVersion": "3"}
     query = urlencode(
         {
             "client_id": cfg.app_id,
@@ -130,7 +138,7 @@ def dialog_url(cfg: WhatsAppConfig, *, redirect_uri: str, state: str) -> str:
             "config_id": cfg.config_id,
             "response_type": "code",
             "override_default_response_type": "true",
-            "extras": '{"setup":{}}',
+            "extras": _json.dumps(extras, separators=(",", ":")),
         }
     )
     return f"https://www.facebook.com/{cfg.graph_version}/dialog/oauth?{query}"
@@ -235,6 +243,9 @@ class TemplateUpdate:
 @dataclass(slots=True)
 class Delivery:
     inbound: list[Inbound] = field(default_factory=list)
+    # Sent by the business from the WhatsApp Business app on the same number; ``wa_id`` is
+    # the person it went to.
+    echoes: list[Inbound] = field(default_factory=list)
     statuses: list[Status] = field(default_factory=list)
     templates: list[TemplateUpdate] = field(default_factory=list)
     quality: list[tuple[str, str]] = field(default_factory=list)  # (display number, rating)
@@ -335,6 +346,27 @@ def parse(payload: Mapping[str, Any]) -> Delivery:
                             _time(status.get("timestamp")),
                             str(first.get("code"))[:32] if first.get("code") else None,
                             str(first.get("title") or first.get("message") or "")[:200] or None,
+                        )
+                    )
+            elif name == "smb_message_echoes":
+                meta_info = value.get("metadata")
+                metadata = meta_info if isinstance(meta_info, Mapping) else {}
+                number = str(metadata.get("phone_number_id") or "")
+                if not META_ID.fullmatch(number):
+                    continue
+                for echo in value.get("message_echoes") or []:
+                    if not isinstance(echo, Mapping):
+                        continue
+                    to = str(echo.get("to") or "")
+                    wamid = str(echo.get("id") or "")[:200]
+                    if not WA_ID.fullmatch(to) or not wamid:
+                        continue
+                    raw_kind = str(echo.get("type") or "")
+                    kind = raw_kind if raw_kind in KINDS else "unsupported"
+                    body, media = _body(echo, kind)
+                    out.echoes.append(
+                        Inbound(
+                            number, to, wamid, kind, body, media, _time(echo.get("timestamp")), None
                         )
                     )
             elif name == "message_template_status_update":
@@ -448,12 +480,15 @@ class Cloud:
             "GET",
             phone_number_id,
             token=token,
-            fields="display_phone_number,verified_name,quality_rating",
+            fields="display_phone_number,verified_name,quality_rating,is_on_biz_app",
         )
         return {
             "display_number": str(body.get("display_phone_number") or phone_number_id)[:32],
             "verified_name": str(body.get("verified_name") or "")[:200],
             "quality": str(body.get("quality_rating") or "")[:16],
+            # Also on the WhatsApp Business app: never register it again (that would take
+            # it off the phone).
+            "on_app": "yes" if body.get("is_on_biz_app") is True else "",
         }
 
     async def subscribe(self, waba_id: str, token: str) -> None:

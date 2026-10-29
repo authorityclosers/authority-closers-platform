@@ -468,6 +468,7 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
         reply: str | None = Query(default=None, alias="format"),
         return_to: str | None = Query(default=None),
         card: str | None = Query(default=None),
+        business_app: bool = Query(default=False),
     ) -> Response:
         """Connect WhatsApp: off to Meta's Embedded Signup, back to the callback. From
         the Sales Xray app, with ``app_challenge``, it finishes in the app (app_return);
@@ -488,7 +489,9 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                 app_challenge=app_challenge,
                 card=settings_card,
             )
-        url = cloud.dialog_url(cfg, redirect_uri=callback_url(), state=state)
+        url = cloud.dialog_url(
+            cfg, redirect_uri=callback_url(), state=state, business_app=business_app
+        )
         if reply == "json":
             return JSONResponse({"url": url}, headers=PRIVATE)
         return RedirectResponse(url, status_code=303, headers=PRIVATE)

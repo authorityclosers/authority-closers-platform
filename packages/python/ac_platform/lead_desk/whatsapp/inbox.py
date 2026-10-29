@@ -135,7 +135,8 @@ async def connect_number(
 ) -> LeadWhatsAppNumber:
     """Keep one number with its sealed token and a PIN we set; subscribe and register it.
     ``register=False`` keeps a number Meta registered already (its dashboard test number,
-    dev only), with no PIN of ours."""
+    dev only), with no PIN of ours. A number that is also on the WhatsApp Business app is
+    never registered: it is already, and registering again would take it off the phone."""
     elsewhere = await desk.db.scalar(
         select(LeadWhatsAppNumber.tenant_id).where(
             LeadWhatsAppNumber.phone_number_id == phone_number_id,
@@ -146,6 +147,8 @@ async def connect_number(
     if elsewhere is not None:
         raise DeskError(409, "This WhatsApp number is connected to another organisation.")
     facts = await api.number(phone_number_id, business_token)
+    if facts.get("on_app") == "yes":
+        register = False
     await api.subscribe(waba_id, business_token)
     pin = cloud.new_pin() if register else None
     if pin is not None:
@@ -234,6 +237,7 @@ def save_auto_replies(
 @dataclass(slots=True)
 class Received:
     messages: int = 0
+    echoes: int = 0
     leads_created: int = 0
     statuses: int = 0
     templates: int = 0
@@ -284,6 +288,44 @@ async def receive(db: AsyncSession, delivery: cloud.Delivery, *, now: datetime) 
         if inserted.first() is not None:
             out.messages += 1
             out.leads_created += created
+            if lead is not None:
+                lead.updated_at = now
+    for echo in delivery.echoes:
+        # Sent from the WhatsApp Business app on the phone: kept in the chat, never a new
+        # lead (the business wrote it, the person didn't).
+        row = await find(echo.phone_number_id)
+        if row is None:
+            continue
+        lead = await db.scalar(
+            select(Lead).where(
+                Lead.tenant_id == row.tenant_id, Lead.phone == cloud.e164(echo.wa_id)
+            )
+        )
+        inserted = await db.execute(
+            insert(LeadWhatsAppMessage)
+            .values(
+                id=uuid4(),
+                tenant_id=row.tenant_id,
+                number_id=row.id,
+                lead_id=lead.id if lead else None,
+                wa_id=echo.wa_id,
+                direction="out",
+                wamid=echo.wamid,
+                kind=echo.kind,
+                body=echo.body,
+                media=echo.media,
+                status="sent",
+                meta_time=echo.at,
+                status_at=echo.at,
+                created_at=now,
+            )
+            .on_conflict_do_nothing(
+                index_elements=["wamid"], index_where=LeadWhatsAppMessage.wamid.is_not(None)
+            )
+            .returning(LeadWhatsAppMessage.id)
+        )
+        if inserted.first() is not None:
+            out.echoes += 1
             if lead is not None:
                 lead.updated_at = now
     for status in delivery.statuses:
