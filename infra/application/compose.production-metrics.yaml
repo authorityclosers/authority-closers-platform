@@ -1,7 +1,19 @@
 # Release-owned capability: only compose_for(production) selects this file.
-# Its absence in an older rollback target means metrics remain unconfigured.
+# Its absence in an older rollback target means metrics remain unconfigured
+# and production keeps Docker's default priorities.
+#
+# Production keeps priority over dev and agent work on the shared host
+# (28 Oct 2026 13:20Z: four uncapped agent jobs used up memory and swap, and
+# the API's reads waited up to 60 s). The API and PostgreSQL are reclaimed
+# last (mem_reservation is the cgroup's memory.low), win CPU contention
+# (cpu_shares, cpu.weight 400 against 100) and are the OOM killer's last
+# choice. The API never swaps: its memory peaked at 355 MB of 768 MB.
 services:
   api:
+    mem_reservation: 512m
+    memswap_limit: 768m
+    cpu_shares: 4096
+    oom_score_adj: -500
     environment:
       AC_METRICS_STORE_ROOT: /srv/authority-closers/metrics
     volumes:
@@ -11,3 +23,7 @@ services:
         read_only: true
         bind:
           create_host_path: false
+  postgres:
+    mem_reservation: 1g
+    cpu_shares: 4096
+    oom_score_adj: -900

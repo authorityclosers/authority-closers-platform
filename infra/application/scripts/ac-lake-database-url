@@ -1,0 +1,65 @@
+#!/usr/bin/python3 -I
+"""Write the database address for a host-side lake export into a private runtime file.
+
+Production's PostgreSQL is reachable only on its Docker data network, and its connection
+string lives in the production API container's environment, not on the host. This takes
+that string, swaps the `postgres` host name for PostgreSQL's address on the data network,
+and writes it to the given file (mode 0600, under the export's RuntimeDirectory, removed
+when the export ends). The value is never printed. The export itself only reads, in a
+REPEATABLE READ, READ ONLY transaction (lake_cli.py). Owner approval: 29 Oct 2026.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import sys
+import urllib.parse
+
+DOCKER = "/usr/bin/docker"
+TARGETS = {
+    "production": (
+        "ac-application-production-api-1",
+        "ac-application-production-postgres-1",
+        "ac-application-production_data",
+    ),
+}
+
+
+def inspect(name: str) -> dict:
+    result = subprocess.run(  # noqa: S603 - fixed argv
+        [DOCKER, "inspect", name], capture_output=True, text=True, check=True, timeout=30
+    )
+    return json.loads(result.stdout)[0]
+
+
+def rewrite(url: str, address: str) -> str:
+    parts = urllib.parse.urlsplit(url)
+    if parts.hostname != "postgres" or not address:
+        raise ValueError("unexpected database host")
+    userinfo, _, _ = parts.netloc.rpartition("@")
+    host = address + (f":{parts.port}" if parts.port else "")
+    return parts._replace(netloc=f"{userinfo}@{host}" if userinfo else host).geturl()
+
+
+def main(argv: list[str]) -> int:
+    if len(argv) != 2 or argv[0] not in TARGETS:
+        print("usage: ac-lake-database-url production <output file>", file=sys.stderr)
+        return 2
+    api, postgres, network = TARGETS[argv[0]]
+    try:
+        env = dict(item.split("=", 1) for item in inspect(api)["Config"]["Env"] if "=" in item)
+        address = inspect(postgres)["NetworkSettings"]["Networks"][network]["IPAddress"]
+        value = rewrite(env["AC_DATABASE_URL"], address)
+        descriptor = os.open(argv[1], os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            handle.write(value)
+    except Exception:
+        print("lake database address unavailable; nothing written", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main(sys.argv[1:]))

@@ -8,6 +8,7 @@ import {
   preloadFirstLeads,
 } from "./list-cache";
 import { readLeads, type LeadPage } from "./leads-client";
+import { forgetLeadData } from "./list-cache-slot";
 vi.mock("./leads-client", () => ({ readLeads: vi.fn() }));
 const identity = JSON.stringify([
   "fictional-person",
@@ -22,6 +23,7 @@ const page: LeadPage = {
   stage_counts: { new: 2000 },
 };
 afterEach(() => {
+  localStorage.clear();
   sessionStorage.clear();
   vi.restoreAllMocks();
   vi.mocked(readLeads).mockReset();
@@ -53,16 +55,31 @@ it("shares the warm-up with the list even when it finishes before the desk", asy
   await readFirstLeads(identity, ask);
   expect(readLeads).toHaveBeenCalledTimes(2); // A later refresh revalidates.
 });
-it("expires after ten minutes and bounds storage to six answers", () => {
+it("keeps a day on this device and bounds storage to six answers", () => {
   vi.spyOn(Date, "now").mockReturnValue(1000);
   for (let n = 0; n < 8; n++) rememberLeadData(identity, `question-${n}`, n);
   expect(cachedLeadData(identity, "question-0")).toBeNull();
   expect(cachedLeadData(identity, "question-7")).toBe(7);
-  vi.mocked(Date.now).mockReturnValue(601001);
+  // A new tab or the next launch of the phone app (fresh tab storage).
+  sessionStorage.clear();
+  vi.mocked(Date.now).mockReturnValue(1000 + 23 * 60 * 60_000);
+  expect(cachedLeadData(identity, "question-7")).toBe(7);
+  vi.mocked(Date.now).mockReturnValue(1001 + 24 * 60 * 60_000);
   expect(cachedLeadData(identity, "question-7")).toBeNull();
 });
+it("keeps one identity's leads only, and forgets them on sign-out", () => {
+  rememberLeadData(identity, "question", "cedar's");
+  const other = JSON.stringify(["another-person", "another-session", "maple"]);
+  rememberLeadData(other, "question", "maple's");
+  expect(cachedLeadData(identity, "question")).toBeNull();
+  expect(localStorage.getItem("sx:leads-cache:v1")).not.toContain("cedar's");
+  expect(cachedLeadData(other, "question")).toBe("maple's");
+  forgetLeadData();
+  expect(cachedLeadData(other, "question")).toBeNull();
+  expect(localStorage.getItem("sx:leads-cache:v1")).toBeNull();
+});
 it("ignores malformed or refused storage and still reads the network", async () => {
-  sessionStorage.setItem("sx:leads-cache:v1", "not-json");
+  localStorage.setItem("sx:leads-cache:v1", "not-json");
   expect(cachedLeadData(identity, "anything")).toBeNull();
   vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => {
     throw new Error("blocked");

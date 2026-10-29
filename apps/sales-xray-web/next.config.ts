@@ -56,6 +56,11 @@ const config: NextConfig = {
   env: { NEXT_PUBLIC_AC_RELEASE_ID: process.env.AC_RELEASE_ID ?? "" },
   experimental: {
     staleTimes: { dynamic: 30 },
+    // Each route downloads close to only the CSS it imports. The default merge
+    // put every page's styles (Calls, Coaching, reports, sign-in…) in front of
+    // the first paint of Leads: 1.18 MB of CSS on a phone's cold start (owner
+    // bug #67, 29 Oct 2026).
+    cssChunking: "graph",
   },
   devIndicators: false,
   poweredByHeader: false,

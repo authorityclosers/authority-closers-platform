@@ -23,6 +23,7 @@ afterEach(() => {
   forgetCalls();
   delete (window as Window & { __sxEarly?: unknown }).__sxEarly;
   window.sessionStorage.clear();
+  window.localStorage.clear();
   vi.unstubAllGlobals();
 });
 
@@ -44,7 +45,7 @@ it("paints a return to Leads from this identity's last desk, per pipeline", () =
 });
 
 it("takes the desk read the Leads tab press started instead of asking again", async () => {
-  window.sessionStorage.setItem(EARLY_CONVERSATION_KEY, "1");
+  window.localStorage.setItem(EARLY_CONVERSATION_KEY, "1");
   const network = vi.fn<typeof fetch>(
     async () =>
       new Response(JSON.stringify(desk), {

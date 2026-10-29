@@ -23,10 +23,12 @@
 export const EARLY_READ_TTL_MS = 10_000;
 
 /**
- * Conversation reads start early only after this tab has seen the selected
- * workspace with Sales Xray on (sessionStorage). A first visit, a switch to
- * another workspace, signing out, or a workspace without Sales Xray: only
- * the session reads start early, and the page asks for the rest itself.
+ * Conversation reads start early only after this device has seen the
+ * selected workspace with Sales Xray on (localStorage, so the phone app's
+ * next launch starts them too: owner bug #67, 29 Oct 2026). A first visit, a
+ * switch to another workspace, signing out, or a workspace without Sales
+ * Xray: only the session reads start early, and the page asks for the rest
+ * itself.
  */
 export const EARLY_CONVERSATION_KEY = "sx.early.conversation";
 
@@ -35,8 +37,8 @@ const EARLY_SESSION_ONLY = (url: string) => url.startsWith("/v1/me/");
 /** Remember (or forget) that conversation reads may start early here. */
 export function allowEarlyConversationReads(allowed: boolean) {
   try {
-    if (allowed) window.sessionStorage.setItem(EARLY_CONVERSATION_KEY, "1");
-    else window.sessionStorage.removeItem(EARLY_CONVERSATION_KEY);
+    if (allowed) window.localStorage.setItem(EARLY_CONVERSATION_KEY, "1");
+    else window.localStorage.removeItem(EARLY_CONVERSATION_KEY);
   } catch {
     // Storage refused: the page simply reads as before.
   }
@@ -76,6 +78,21 @@ export const EARLY_READS: Readonly<Record<string, readonly string[]>> = {
   // To call's desk (leads-client.ts readDesk, all pipelines).
   "/leads": [...SESSION, "/v1/lead-desk"],
 };
+
+const DIRECTORY = SESSION[1];
+const LEAD_DESK = "/v1/lead-desk";
+const LEAD_MANAGERS = ["owner", "admin", "manager"];
+
+/**
+ * All leads' first page as the list asks for it on a plain /leads entry
+ * (leads-client.ts readLeads): the team's for owners, admins and managers, a
+ * seller's own otherwise. The inline script starts it as soon as the
+ * directory names the role, not after the app has started (owner bug #67).
+ */
+export const earlyLeadsList = (role: string | null | undefined) =>
+  `/v1/lead-desk/leads?scope=${
+    role && LEAD_MANAGERS.includes(role) ? "team" : "mine"
+  }&stage=open`;
 
 /** A saved call: the session, the studio's entry and allowance, the call. */
 const CALL_PAGE = /^\/analysis\/calls\/([0-9a-f-]{36})$/i;
@@ -155,7 +172,14 @@ export function earlyReadsScript(): string {
   const personReadsJson = JSON.stringify(PERSON_READS);
   const acquisition = JSON.stringify(ACQUISITION);
   const key = JSON.stringify(EARLY_CONVERSATION_KEY);
-  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),p,l=m?${callReadsJson}.concat(["","/transcript","/report"].map(function(x){return ${acquisition}+"/submissions/"+m[1].toLowerCase()+x})):(p=new RegExp(${person},"i").exec(r))?${personReadsJson}.concat(["/v1/organisation/members/"+p[1].toLowerCase()+"/activity?weeks=12"]):t[r];if(!l||!l.length)return;var ok=false;try{ok=sessionStorage.getItem(${key})==="1"}catch(e){}if(!ok)l=l.filter(function(u){return u.indexOf("/v1/me/")===0});var s=window.__sxEarly={},a=Date.now();l.forEach(function(u){if(s[u])return;s[u]={at:a,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).then(function(r){return r.text().then(function(b){var h=[];r.headers.forEach(function(v,k){h.push([k,v])});return{status:r.status,statusText:r.statusText,headers:h,body:b}})}).catch(function(){return null})}})}catch(e){}})();`;
+  const directory = JSON.stringify(DIRECTORY);
+  const managers = JSON.stringify(LEAD_MANAGERS);
+  const desk = JSON.stringify(LEAD_DESK);
+  // Leads, even on this device's first visit: once the directory says Sales
+  // Xray is on for the selected workspace, the desk and, on a plain entry (no
+  // filter but All leads' own), All leads' first page (earlyLeadsList), unless
+  // the early reads were dropped meanwhile (a workspace change, a sign-out).
+  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),p,l=m?${callReadsJson}.concat(["","/transcript","/report"].map(function(x){return ${acquisition}+"/submissions/"+m[1].toLowerCase()+x})):(p=new RegExp(${person},"i").exec(r))?${personReadsJson}.concat(["/v1/organisation/members/"+p[1].toLowerCase()+"/activity?weeks=12"]):t[r];if(!l||!l.length)return;var ok=false;try{ok=localStorage.getItem(${key})==="1"}catch(e){}if(!ok)l=l.filter(function(u){return u.indexOf("/v1/me/")===0});var s=window.__sxEarly={},a=Date.now(),g=function(u,at){s[u]={at:at,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).then(function(r){return r.text().then(function(b){var h=[];r.headers.forEach(function(v,k){h.push([k,v])});return{status:r.status,statusText:r.statusText,headers:h,body:b}})}).catch(function(){return null})}};l.forEach(function(u){if(!s[u])g(u,a)});var q=true,d=s[${directory}];new URLSearchParams(location.search).forEach(function(v,k){if(k!=="theme"&&!(k==="tab"&&v==="all")&&!(k==="stage"&&v==="open"))q=false});if(r==="/leads"&&d)d.p.then(function(x){var j=x&&x.status===200?JSON.parse(x.body):null,w=j&&j.workspaces&&j.workspaces.filter(function(i){return i.tenant_id===j.selected_tenant_id})[0],u;if(!w||w.sales_xray_enabled!==true||s[${directory}]!==d)return;if(!s[${desk}])g(${desk},Date.now());u="/v1/lead-desk/leads?scope="+(${managers}.indexOf(w.role)<0?"mine":"team")+"&stage=open";if(q&&!s[u])g(u,Date.now())}).catch(function(){})}catch(e){}})();`;
 }
 
 function store(): EarlyStore | null {
@@ -175,7 +199,7 @@ export function startEarlyReads(pathname: string) {
   if (typeof window === "undefined" || typeof fetch !== "function") return;
   let allowed = false;
   try {
-    allowed = window.sessionStorage.getItem(EARLY_CONVERSATION_KEY) === "1";
+    allowed = window.localStorage.getItem(EARLY_CONVERSATION_KEY) === "1";
   } catch {
     // Storage refused: the page reads for itself.
   }

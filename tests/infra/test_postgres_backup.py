@@ -559,6 +559,9 @@ def test_dump_command_is_custom_format_ac_backup_and_does_not_contain_a_password
     assert "-U ac_backup" in command
     assert "--format=custom" in command
     assert "--create" in command
+    assert "--exclude-table-data=public.analytics_events" in command
+    assert command.count("--exclude-table-data=") == 1
+    assert "--schema-only" not in command
     assert f"--snapshot={snapshot_id}" in command
     assert 'PGPASSWORD="$AC_DB_BACKUP_PASSWORD"' in command
     assert "staging-runtime-password" not in command
@@ -660,7 +663,7 @@ def test_exported_snapshot_holder_rolls_back_and_fails_closed_on_timeout(
             self.stdout = type(
                 "FakeStdout",
                 (),
-                {"readline": lambda _self: b"00000003-0000001B-1\n"},
+                {"readline": lambda _self, limit: b"00000003-0000001B-1\n"[:limit]},
             )()
             self.returncode: int | None = None
             self.timeout = timeout
@@ -1565,6 +1568,7 @@ class TestResticCacheAndRetention:
             "volumes/media-safety-signatures",
             "volumes/media-video/*/tmp",
             "sales-xray/*/scratch",
+            "application/intake-spool",
         ):
             assert f"--exclude=/srv/authority-closers/{suffix}" in write
         assert not any(
@@ -1622,3 +1626,31 @@ class TestResticCacheAndRetention:
         items = {row.get("item") for row in map(json.loads, dry.stdout.splitlines())}
         assert all(str(source / relative) in items for relative in kept)
         assert all(str(source / relative) not in items for relative in excluded)
+
+
+def test_excluded_analytics_source_count_uses_the_same_snapshot(tmp_path: Path) -> None:
+    target = backup.ApplicationTarget(
+        environment="staging",
+        current_link=tmp_path / "current-staging",
+        release_dir=tmp_path / ("a" * 40),
+        profile_file=tmp_path / "staging.env",
+        images_file=tmp_path / "release-images.env",
+        state_root=tmp_path / "state",
+        compose_project="ac-application-staging",
+        secret_environment="staging",  # noqa: S106
+        migration_head="20260904_0018",
+    )
+    snapshot = "00000003-0000001B-1"
+
+    def read(command, **kwargs):
+        assert f"SET TRANSACTION SNAPSHOT '{snapshot}'" in command[-1]
+        assert 'FROM "analytics_events"' in command[-1]
+        return SimpleNamespace(
+            stdout="__migration_head__|20260904_0018\n"
+            + "\n".join(f"{table}|7" for table in (*backup.PARITY_TABLES, "analytics_events"))
+        )
+
+    counts = backup.source_row_counts(target, snapshot, reader=read, include_excluded=True)
+    excluded = {"analytics_events": counts.pop("analytics_events")}
+    assert excluded == {"analytics_events": 7}
+    assert counts == dict.fromkeys(backup.PARITY_TABLES, 7)
