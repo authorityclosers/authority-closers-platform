@@ -729,3 +729,87 @@ def test_a_whatsapp_business_app_number_joins_without_registering_and_its_echoes
             await setup.engine.dispose()
 
     run(exercise())
+
+
+def test_every_new_lead_gets_the_first_reply_once_a_manager_confirms_people_agreed(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    for name, value in ENV.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(cloud, "Cloud", FakeCloud)
+    FakeCloud.sent = []
+    FakeCloud.templates_at_meta = [WELCOME]
+    cfg = cloud.config()
+    assert cfg is not None
+
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            settings = setup.settings.model_copy(update={"public_learner_tenant_id": uuid4()})
+            install_whatsapp_http(
+                setup.app, RouteContext(settings, setup.require_actor, setup.sessions)
+            )
+            tenant = setup.state.tenant_id
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                connected = await client.post(
+                    f"{BASE}/whatsapp/connect",
+                    json={"code": "signup-code", "wabaId": WABA_ID, "phoneNumberId": NUMBER_ID},
+                    headers=WRITE,
+                )
+                number_id = connected.json()["numbers"][0]["id"]
+                url = f"{BASE}/whatsapp/numbers/{number_id}/auto-replies"
+                every = {"on": True, "template": "welcome_lead", "language": "en"}
+                unconfirmed = await client.put(
+                    url, json={"firstReply": {**every, "who": "every_lead"}}, headers=WRITE
+                )
+                assert unconfirmed.status_code == 422
+                assert "agreed" in unconfirmed.text
+                saved = await client.put(
+                    url,
+                    json={"firstReply": {**every, "who": "every_lead", "agreed": True}},
+                    headers=WRITE,
+                )
+                assert saved.status_code == 200, saved.text
+                rule = saved.json()["numbers"][0]["autoReplies"]["firstReply"]
+                assert rule["who"] == "every_lead" and rule["agreed"] is True
+                assert rule["agreedAt"]
+
+            # A lead added by hand and a website lead are greeted; a file import is not.
+            async with setup.sessions() as db, db.begin():
+                desk = LeadDesk(
+                    db,
+                    Viewer(
+                        person_id=setup.state.person_id, tenant_id=tenant, role="system", name="S"
+                    ),
+                )
+                for name, phone, source in (
+                    ("Meera Shah", "+919811100022", "manual"),
+                    ("Kiran Rao", "+919811100033", "webhook"),
+                    ("Old Contact", "+919811100044", "csv"),
+                ):
+                    await desk.ingest(
+                        {"name": name, "phone": phone},
+                        source=source,
+                        source_ref=f"every-{phone}",
+                        actor=None,
+                    )
+            async with setup.sessions() as db, db.begin():
+                assert (
+                    await inbox.first_replies(db, cfg, FakeCloud(cfg), now=datetime.now(UTC)) == 2
+                )
+            assert sorted(item["to"] for item in FakeCloud.sent) == [
+                "919811100022",
+                "919811100033",
+            ]
+            async with setup.sessions() as db, db.begin():
+                assert (
+                    await inbox.first_replies(db, cfg, FakeCloud(cfg), now=datetime.now(UTC)) == 0
+                )
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())

@@ -79,6 +79,11 @@ class FirstReply(_Command):
     template: str | None = Field(default=None, max_length=512)
     language: str | None = Field(default=None, max_length=16)
     consent_question: str | None = Field(default=None, alias="consentQuestion", max_length=200)
+    # "form_yes": ad leads whose form said yes; "every_lead": every new lead, once a
+    # manager confirms (``agreed``) that people agreed to WhatsApp. ``agreedAt`` is read only.
+    who: Literal["form_yes", "every_lead"] = "form_yes"
+    agreed: bool = False
+    agreed_at: datetime | None = Field(default=None, alias="agreedAt")
 
 
 class OutOfHours(_Command):
@@ -414,6 +419,9 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                     template=rules["first_reply"]["template"],
                     language=rules["first_reply"]["language"],
                     consent_question=rules["first_reply"]["consent_question"],
+                    who=rules["first_reply"].get("who") or "form_yes",
+                    agreed=bool(rules["first_reply"].get("agreed_at")),
+                    agreed_at=rules["first_reply"].get("agreed_at"),
                 ),
                 out_of_hours=OutOfHours(
                     on=rules["out_of_hours"]["on"], text=rules["out_of_hours"]["text"]
@@ -656,6 +664,8 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                     "out_of_hours": command.out_of_hours.model_dump(),
                 },
                 approved,
+                by=desk.viewer.person_id,
+                now=desk.now,
             )
             row.updated_at = desk.now
             await desk.db.flush()
