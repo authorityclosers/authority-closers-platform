@@ -145,7 +145,9 @@ class IntakeCounters:
         try:
             await self.app(scope, receive, counted)
         finally:
-            if telemetry or traffic:
+            # Health probes keep zero-valued buckets alive on quiet production,
+            # so a missing stream alarm means missing instrumentation, not idle users.
+            if telemetry or traffic or path in {"/health/live", "/health/ready"}:
                 values["errors"] = int(telemetry and status >= 500)
                 if telemetry and status == 202:
                     try:

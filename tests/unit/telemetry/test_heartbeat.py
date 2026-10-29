@@ -80,3 +80,24 @@ def test_alarm_publishes_status_and_updates_single_marker(tmp_path, monkeypatch)
         assert result["active"] is True
     assert [call["marker"] for call in calls] == ["orch:telemetry-heartbeat"] * 2
     assert json.loads((tmp_path / "status.json").read_text())["numbers"]["traffic"] == 10
+
+
+def test_health_probe_keeps_idle_counter_stream_alive_without_app_traffic(tmp_path, monkeypatch):
+    import json
+
+    from fastapi import FastAPI
+    from fastapi.testclient import TestClient
+
+    from ac_platform.telemetry.heartbeat import IntakeCounters
+
+    monkeypatch.setenv("AC_TELEMETRY_SPOOL_ROOT", str(tmp_path))
+    app = FastAPI()
+
+    @app.get("/health/ready")
+    async def ready():
+        return {"status": "ready"}
+
+    app.add_middleware(IntakeCounters, environment="test", app_url="https://app.test")
+    assert TestClient(app).get("/health/ready").status_code == 200
+    path = next((tmp_path / "test" / "counters").glob("*.json"))
+    assert all(value == 0 for value in json.loads(path.read_text()).values())
