@@ -7,6 +7,7 @@
  * lead at a time, and the next one appears only after this one is saved.
  */
 
+import { AutoCaptureState } from "./auto-capture-state";
 import {
   ArrowRightLeft,
   ArrowUp,
@@ -122,6 +123,7 @@ import {
 } from "./message-sheet";
 import {
   askCallAccess,
+  autoCaptureStatus,
   buzz,
   checkWarning,
   forgetCall,
@@ -1037,6 +1039,13 @@ export function eventText(event: LeadEvent): {
           };
     }
     case "call":
+      if (event.via === "dialler_recording")
+        return {
+          title: `${who} had a sales call${event.duration_seconds ? ` · ${minutesLabel(event.duration_seconds)}` : ""}`,
+          detail: event.recording
+            ? "From the phone dialler · recorded"
+            : "From the phone dialler",
+        };
       if (event.via === "phone") {
         // Its recording joined this call (owner, 22 Oct 2026): one row, with the Report link.
         const text = phoneCallText(event, who);
@@ -1490,6 +1499,9 @@ export function History({
                     <span className={pipe.badge}>via {event.app_label}</span>
                   ) : null}
                 </span>
+                {event.kind === "call" ? (
+                  <AutoCaptureState eventId={event.event_id} />
+                ) : null}
                 {text.detail ? (
                   <span className={styles.historyDetail}>
                     {event.private
@@ -1770,6 +1782,7 @@ function RecordingUpload({
   // standing consent the recording found for this call starts with no tap;
   // without a choice yet, the sheet asks once.
   const [automatic, setAutomatic] = useState(false);
+  const [nativeCapture, setNativeCapture] = useState(false);
   const [asking, setAsking] = useState(false);
   const askedFor = useRef<string | null>(null);
   const turnedOn = useRef(false);
@@ -1888,6 +1901,11 @@ function RecordingUpload({
   // The found recording, uploaded and started under the standing consent.
   const startOnItsOwn = async () => {
     if (!found) return;
+    // The native queue owns Undo, network policy and retry identity for dialler files.
+    if (!readFound && (await autoCaptureStatus())?.on) {
+      setNativeCapture(true);
+      return;
+    }
     setError(null);
     setState("reading");
     let chosen: File;
@@ -1934,6 +1952,19 @@ function RecordingUpload({
     );
     return () => controller.abort();
   }, [found, silent, warning]);
+
+  if (nativeCapture)
+    return (
+      <section className={styles.panel} aria-label="Call recording">
+        <h3>Automatic upload on</h3>
+        <p>
+          Recordings with a lead's number and matching time upload in the
+          background. Use Undo in the upload notification to keep this call on
+          your phone.
+        </p>
+        <AutoCaptureState eventId={callEventId} />
+      </section>
+    );
 
   const picker = (label: string, sub: string) => (
     <label className={styles.recordPick}>
