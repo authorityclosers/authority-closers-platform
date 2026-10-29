@@ -1,0 +1,55 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "2c53059d3d857b067f5ece68370c9bb884c544fc",
+  "full": false,
+  "checks": [
+    "matrix",
+    "visual"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/leads/auto-capture-state.tsx",
+    "apps/sales-xray-web/app/leads/lead-sheet.tsx",
+    "apps/sales-xray-web/app/leads/leads-client.ts",
+    "apps/sales-xray-web/app/leads/native-phone.ts",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/page.tsx",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/preview.module.css",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/preview.tsx",
+    "apps/sales-xray-web/app/settings/auto-analysis-panel.tsx",
+    "apps/sales-xray-web/app/settings/auto-capture-panel.module.css",
+    "apps/sales-xray-web/app/settings/auto-capture-panel.tsx",
+    "packages/python/ac_platform/http/conversation_submissions.py",
+    "packages/python/ac_platform/lead_desk/contracts.py",
+    "packages/python/ac_platform/lead_desk/http.py",
+    "packages/python/ac_platform/lead_desk/store.py",
+    "tests/database/test_recording_capture_postgresql.py",
+    "tests/unit/lead_desk/test_recording_capture_contract.py"
+  ],
+  "routes": [
+    "/review-fixture/auto-capture?state=on",
+    "/review-fixture/auto-capture?state=on",
+    "/review-fixture/auto-capture?state=off",
+    "/review-fixture/auto-capture?state=loading",
+    "/review-fixture/auto-capture?state=no-consent"
+  ],
+  "py_tests": [],
+  "include_paths": [
+    "packages/python/ac_platform/lead_desk/contracts.py",
+    "packages/python/ac_platform/lead_desk/store.py",
+    "packages/python/ac_platform/lead_desk/http.py",
+    "packages/python/ac_platform/http/conversation_submissions.py",
+    "tests/unit/lead_desk/test_recording_capture_contract.py",
+    "tests/database/test_recording_capture_postgresql.py",
+    "apps/sales-xray-web/app/leads/native-phone.ts",
+    "apps/sales-xray-web/app/leads/leads-client.ts",
+    "apps/sales-xray-web/app/leads/auto-capture-state.tsx",
+    "apps/sales-xray-web/app/leads/lead-sheet.tsx",
+    "apps/sales-xray-web/app/settings/auto-capture-panel.tsx",
+    "apps/sales-xray-web/app/settings/auto-capture-panel.module.css",
+    "apps/sales-xray-web/app/settings/auto-analysis-panel.tsx",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/page.tsx",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/preview.tsx",
+    "apps/sales-xray-web/app/review-fixture/auto-capture/preview.module.css"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}
