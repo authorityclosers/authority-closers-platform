@@ -21,7 +21,7 @@ numpy==2.2.6
 onnxruntime==1.23.2
 packaging==26.3
 protobuf==7.36.2
-pyarrow==20.0.0
+pyarrow==23.0.1
 pycparser==3.12
 PyYAML==6.0.3
 RapidFuzz==3.14.6
