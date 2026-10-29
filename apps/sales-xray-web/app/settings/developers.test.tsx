@@ -320,10 +320,18 @@ it("puts the docs first, and hands a new key to Try it without saving it", async
   ).toContain("Try the API");
   // The AI assistant first, before keys and Try it.
   const words = host.textContent!;
-  expect(words.indexOf("Connect your AI assistant")).toBeGreaterThan(-1);
-  expect(words.indexOf("Connect your AI assistant")).toBeLessThan(
+  expect(words.indexOf("AI assistant")).toBeGreaterThan(-1);
+  expect(words.indexOf("AI assistant")).toBeLessThan(
     words.indexOf("Try the API"),
   );
+  // The console card names both addresses, each with its own Copy
+  // (owner bugs #103-#105).
+  expect(
+    host.querySelector('[aria-label="Copy the MCP address"]'),
+  ).not.toBeNull();
+  expect(
+    host.querySelector('[aria-label="Copy the API address"]'),
+  ).not.toBeNull();
   expect(host.textContent).not.toContain("Using the key you just made");
   await act(async () => seen.options!.onKeyMade("sxk_test_fresh"));
   expect(host.textContent).toContain("Using the key you just made");

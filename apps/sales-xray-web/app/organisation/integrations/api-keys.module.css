@@ -1,0 +1,255 @@
+/* Developers → API keys as key cards (owner bug #104, 29 Oct 2026: "API keys
+   have no personality"). Tokens only. */
+
+.keys {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0 12px 14px;
+  list-style: none;
+}
+
+.key {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+/* The key's bow: brass while it works, grey once it doesn't. */
+.keyMark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--lx-focus-soft);
+  color: var(--lx-focus-ink);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--lx-focus) 22%, transparent);
+}
+
+.key:not([data-state="active"]) {
+  background: var(--sx-fill-soft);
+}
+
+.key:not([data-state="active"]) .keyMark {
+  background: var(--sx-fill);
+  color: var(--sx-muted);
+  box-shadow: none;
+}
+
+.keyBody {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.keyTop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 24px;
+}
+
+.keyTop strong {
+  overflow: hidden;
+  min-width: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The state as a dot and a word, never colour alone. */
+.keyState {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  margin-left: auto;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.keyState::before {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  content: "";
+}
+
+.keyState[data-state="active"] {
+  color: var(--lx-teal);
+}
+
+.keyState[data-state="expired"] {
+  color: var(--lx-focus-ink);
+}
+
+/* The key itself, as it starts, then masked. */
+.keyToken {
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--sx-sunken);
+  color: var(--sx-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+  letter-spacing: 0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.keyToken > span {
+  margin-left: 2px;
+  color: var(--sx-muted);
+  letter-spacing: 0.12em;
+}
+
+.key:not([data-state="active"]) .keyToken {
+  color: var(--sx-muted);
+  text-decoration: line-through;
+}
+
+.scopes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.scope {
+  padding: 2px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-focus-soft);
+  color: var(--lx-focus-ink);
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.key:not([data-state="active"]) .scope {
+  background: var(--sx-fill);
+  color: var(--sx-muted);
+}
+
+.keyMeta {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Revoke: quiet, under the bow, away from the key's words. */
+.revoke {
+  position: relative;
+  grid-column: 2;
+  justify-self: end;
+  min-height: 32px;
+  margin-top: 2px;
+  padding: 0 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-surface);
+  color: var(--lx-danger);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.revoke::after {
+  position: absolute;
+  inset: -6px 0;
+  content: "";
+}
+
+.revoke:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* No keys yet: an empty key slot with one button. */
+.keySlot {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  margin: 0 12px 14px;
+  padding: 20px 16px 18px;
+  border: 1.5px dashed color-mix(in oklab, var(--lx-focus) 35%, var(--sx-line));
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--lx-focus-soft) 45%, var(--sx-surface));
+  text-align: center;
+}
+
+.keySlotMark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  margin-bottom: 4px;
+  border-radius: 50%;
+  background: var(--lx-focus-soft);
+  color: var(--lx-focus-ink);
+}
+
+.keySlot strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+}
+
+.keySlot p {
+  max-width: 30ch;
+  margin: 0 0 8px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}
+
+/* Connected apps: registering your own app, as the card's quiet last row. */
+.registerRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 16px;
+  border: 0;
+  border-top: 1px solid var(--sx-hairline);
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-align: start;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.registerRow > svg:first-child {
+  color: var(--sx-accent);
+}
+
+.registerRow > span {
+  flex: 1 1 auto;
+}
+
+.registerRow > svg:last-child {
+  color: var(--sx-muted);
+}
+
+.registerRow:focus-visible {
+  outline: none;
+  box-shadow: inset var(--sx-focus-ring);
+}

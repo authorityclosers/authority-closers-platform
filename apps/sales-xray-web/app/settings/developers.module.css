@@ -5,90 +5,203 @@
   gap: 16px;
 }
 
-/* One quiet line: the docs are a reference, not the screen's main action. */
-.docs {
-  position: relative;
+/* The console card (owner bugs #103-#105, 29 Oct 2026: "its own
+   personality"): a dark film surface in both themes, a faint grid and a mint
+   glow, the two addresses in monospace with Copy, and the docs. */
+.console {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  padding: 16px 14px 6px;
+  border-radius: var(--sx-radius-lg);
+  background:
+    radial-gradient(
+      120% 90% at 100% 0%,
+      color-mix(in oklab, var(--lx-strength-on-film) 20%, transparent),
+      transparent 62%
+    ),
+    linear-gradient(var(--lx-film-grid) 1px, transparent 1px) 0 0 / 18px 18px,
+    linear-gradient(90deg, var(--lx-film-grid) 1px, transparent 1px) 0 0 / 18px
+      18px,
+    var(--lx-film);
+  box-shadow: var(--sx-shadow-1);
+  color: var(--lx-film-text);
+}
+
+.consoleHead {
   display: flex;
   align-items: center;
   gap: 12px;
   min-width: 0;
-  min-height: 60px;
-  box-sizing: border-box;
-  padding: 10px 12px 10px 14px;
-  border-radius: var(--sx-radius-lg);
-  background: var(--sx-surface);
 }
 
-.docsIcon {
+.consoleMark {
   display: grid;
   flex: none;
+  width: 42px;
+  height: 42px;
   place-items: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 11px;
-  background: var(--sx-accent-soft);
-  color: var(--sx-accent);
+  border: 1px solid var(--lx-film-line);
+  border-radius: 12px;
+  background: var(--lx-film-2);
+  color: var(--lx-strength-on-film);
 }
 
-.docsText {
+.consoleText {
   display: grid;
-  flex: 1 1 auto;
-  gap: 1px;
+  gap: 2px;
   min-width: 0;
-  color: var(--sx-muted);
+}
+
+.consoleText strong {
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.consoleText span {
+  color: var(--lx-film-text-2);
   font-size: var(--sx-text-xs);
 }
 
-.docsText > * {
+.addresses {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--lx-film-line);
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--lx-film-2) 75%, transparent);
+  list-style: none;
+}
+
+.addresses li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  min-height: 48px;
+  padding: 2px 4px 2px 12px;
+}
+
+.addresses li + li {
+  border-top: 1px solid var(--lx-film-line);
+}
+
+.tag {
+  flex: none;
+  width: 34px;
+  color: var(--lx-strength-on-film);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
+
+/* The host gives way first; the path, which says what it is, always shows. */
+.address {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+
+.host {
   overflow: hidden;
+  min-width: 0;
+  color: var(--lx-film-text-3);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.docsText strong {
-  color: var(--sx-ink);
-  font-size: var(--sx-text-sm);
-  font-weight: 650;
+.path {
+  flex: none;
+  color: var(--lx-film-text);
+  font-weight: 600;
 }
 
-/* The whole row opens the docs; the words at its end say where it goes. */
-.docsLink {
-  display: inline-flex;
+.consoleCopy {
+  position: relative;
+  display: grid;
   flex: none;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--lx-film-text-2);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    color var(--sx-dur-fast) var(--sx-ease-out),
+    transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.consoleCopy::after {
+  position: absolute;
+  inset: -2px;
+  content: "";
+}
+
+.consoleCopy:active {
+  transform: scale(var(--sx-press-scale));
+}
+
+.consoleCopy[data-copied] {
+  background: color-mix(in oklab, var(--lx-strength-on-film) 18%, transparent);
+  color: var(--lx-strength-on-film);
+}
+
+/* The docs: the card's last row, the whole width to tap. */
+.consoleDocs {
+  display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 8px;
   min-height: 44px;
-  padding: 0 2px 0 8px;
-  color: var(--sx-accent);
+  margin: 0 -4px;
+  padding: 0 4px;
+  border-radius: var(--sx-radius-sm);
+  color: var(--lx-film-text);
   font-size: var(--sx-text-sm);
   font-weight: 650;
   text-decoration: none;
 }
 
-.docsLink::after {
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  content: "";
+.consoleDocs > svg:first-child {
+  color: var(--lx-strength-on-film);
 }
 
-@media (max-width: 420px) {
-  .docsLink {
-    font-size: 0;
-  }
-
-  .docsLink svg {
-    color: var(--sx-muted);
-  }
+.consoleDocs > span {
+  flex: 1 1 auto;
 }
 
-.docsLink:focus-visible,
+.consoleDocs > svg:last-child {
+  color: var(--lx-film-text-3);
+}
+
+.consoleCopy:focus-visible,
+.consoleDocs:focus-visible,
 .download:focus-visible {
-  outline: 2px solid var(--sx-accent);
+  outline: 2px solid var(--lx-strength-on-film);
   outline-offset: 2px;
 }
 
+@media (hover: hover) and (pointer: fine) {
+  .consoleCopy:hover {
+    background: var(--lx-film-2);
+    color: var(--lx-film-text);
+  }
+}
+
 /* ---------- Try the API ---------- */
+
+.tryBody {
+  display: grid;
+  min-width: 0;
+}
 
 .tryForm {
   display: grid;
@@ -483,13 +596,6 @@
   box-shadow: 0 0 0 1.5px var(--sx-surface);
 }
 
-/* Where to paste it: one short line above the code. */
-.where {
-  color: var(--sx-ink-2);
-  font-size: var(--sx-text-sm);
-  line-height: 1.5;
-}
-
 .assistant:focus-visible {
   outline: 2px solid var(--sx-accent);
   outline-offset: 2px;
@@ -506,14 +612,33 @@
   }
 }
 
-/* A panel's title stays on one line on a phone; its note gives way first
-   (owner, 29 Oct 2026: "Try the / API" broke over two lines). */
-.fit h2 {
-  flex: 1 1 auto;
-  white-space: nowrap;
+/* Step 3: the things to ask, as the chat bubbles they become. */
+.asks {
+  display: grid;
+  justify-items: end;
+  justify-self: stretch;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.fit h2 > small {
-  flex: 1 1 0;
-  min-width: 0;
+.asks li {
+  max-width: 88%;
+  padding: 8px 12px;
+  border-radius: 16px 16px 4px 16px;
+  background: var(--lx-missed-soft);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  line-height: 1.4;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .consoleCopy {
+    transition: none;
+  }
+
+  .consoleCopy:active {
+    transform: none;
+  }
 }
