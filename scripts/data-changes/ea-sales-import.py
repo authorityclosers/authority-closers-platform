@@ -3,6 +3,8 @@
 Run with deployed settings, --data-dir pointing to the private export and an
 explicit existing --owner-email. Dry-run by default; --apply commits the single
 transaction; --read is read-only. Recording upload/consent is a separate app step.
+--tenant-id imports into an organisation that already exists (production has one
+since 29 Oct 2026); the operator must be its active owner or admin, and none is created.
 Never prints personal fields, source rows, filenames or credentials.
 """
 
@@ -158,6 +160,7 @@ async def run(
     mode: str,
     digest: str,
     now: datetime,
+    tenant_id: UUID | None = None,
 ) -> dict[str, Any]:
     settings = get_settings()
     if mode == "read":
@@ -168,21 +171,37 @@ async def run(
     if owner is None or owner.status != "active":
         raise ValueError("Owner must be an existing active account")
     prior = await db.scalar(select(Organisation).where(Organisation.creation_command_id == COMMAND))
-    before = await counts(db, prior.tenant_id if prior else None)
+    before = await counts(db, tenant_id or (prior.tenant_id if prior else None))
     if mode == "read":
         return {"mode": mode, "source_sha256": digest, "after": before}
     if settings.operations_tenant_id is None or settings.public_learner_tenant_id is None:
         raise ValueError("Deployment tenant boundaries are required")
-    if prior is None and await db.scalar(select(Tenant.id).where(Tenant.name == NAME)):
-        raise ValueError("Organisation name already exists outside this command; reconcile first")
-    org = await OrganisationService(
-        db,
-        operations_tenant_id=settings.operations_tenant_id,
-        public_learner_tenant_id=settings.public_learner_tenant_id,
-    ).create(NAME, owner.id, COMMAND, APPROVER, reason=WORK_ITEM)
-    member = await db.get(Membership, (org.tenant_id, owner.id))
-    if member is None or member.status != "active" or member.role != "owner" or member.ended_at:
-        raise ValueError("Owner membership is no longer active")
+    if tenant_id is not None:
+        found = await db.get(Organisation, tenant_id)
+        if found is None:
+            raise ValueError("No organisation for that tenant")
+        org = found
+        member = await db.get(Membership, (org.tenant_id, owner.id))
+        if (
+            member is None
+            or member.status != "active"
+            or member.role not in ("owner", "admin")
+            or member.ended_at
+        ):
+            raise ValueError("Operator must be an active owner or admin of that organisation")
+    else:
+        if prior is None and await db.scalar(select(Tenant.id).where(Tenant.name == NAME)):
+            raise ValueError(
+                "Organisation name already exists outside this command; reconcile first"
+            )
+        org = await OrganisationService(
+            db,
+            operations_tenant_id=settings.operations_tenant_id,
+            public_learner_tenant_id=settings.public_learner_tenant_id,
+        ).create(NAME, owner.id, COMMAND, APPROVER, reason=WORK_ITEM)
+        member = await db.get(Membership, (org.tenant_id, owner.id))
+        if member is None or member.status != "active" or member.role != "owner" or member.ended_at:
+            raise ValueError("Owner membership is no longer active")
     result = await importer().import_unassigned_history(
         db, spec, tenant_id=org.tenant_id, actor_id=owner.id, now=now
     )
@@ -208,7 +227,9 @@ async def run(
         if capture is None:
             raise ValueError("Call lead was not imported")
         call_time = datetime.fromisoformat(str(moment(call["started_at"])))
-        desk = LeadDesk(db, Viewer(owner.id, org.tenant_id, "owner", "Data import"), now=call_time)
+        desk = LeadDesk(
+            db, Viewer(owner.id, org.tenant_id, member.role, "Data import"), now=call_time
+        )
         await desk.record_call(
             capture.lead_id,
             command_id=command,
@@ -291,6 +312,7 @@ async def main(args: argparse.Namespace) -> int:
                     mode=mode,
                     digest=digest,
                     now=datetime.now(UTC),
+                    tenant_id=args.tenant_id,
                 )
                 if args.apply:
                     await db.commit()
@@ -309,6 +331,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--data-dir", type=Path, required=True)
     parser.add_argument("--owner-email", required=True)
+    parser.add_argument("--tenant-id", type=UUID, help="import into this existing organisation")
     parser.add_argument(
         "--environment", choices=("development", "production", "test"), required=True
     )

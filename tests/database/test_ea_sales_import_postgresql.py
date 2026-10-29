@@ -147,3 +147,69 @@ def test_atomic_import_replay_and_changed_source(
             assert (await execute("read"))["after"] == applied["after"]
 
     run(exercise())
+
+
+def test_imports_into_an_existing_organisation_without_creating_one(
+    postgres_harness: Any, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            settings = here.setup.settings.model_copy(
+                update={"operations_tenant_id": uuid4(), "public_learner_tenant_id": uuid4()}
+            )
+            monkeypatch.setattr(tool, "get_settings", lambda: settings)
+            monkeypatch.setattr(tool, "COMMAND", uuid4())
+            monkeypatch.setattr(tool, "NAME", "Fictional Existing Organisation")
+            async with here.setup.sessions() as db:
+                email = await db.scalar(
+                    select(Person.email).where(Person.id == here.setup.state.person_id)
+                )
+            assert email
+            spec = tool.prepare([row(lead_id="fictional:3", phone_e164="+919876073003")])
+            calls = [
+                {
+                    "call_id": "fictional-existing-call",
+                    "lead_id": "fictional:3",
+                    "duration_sec": "30",
+                    "started_at": "2026-07-12T12:00:00+05:30",
+                    "agent": "Fictional Seller",
+                    "direction": "",
+                }
+            ]
+
+            async def execute(mode: str, tenant: Any) -> Any:
+                async with here.setup.sessions() as db:
+                    try:
+                        result = await tool.run(
+                            db,
+                            spec,
+                            calls,
+                            owner_email=email,
+                            mode=mode,
+                            digest="fictional-digest",
+                            now=datetime.now(UTC),
+                            tenant_id=tenant,
+                        )
+                        if mode == "apply":
+                            await db.commit()
+                        else:
+                            await db.rollback()
+                        return result
+                    except BaseException:
+                        await db.rollback()
+                        raise
+
+            # The world's person is an admin of the existing organisation, not its creator.
+            applied = await execute("apply", here.tenant_id)
+            assert applied["tenant_id"] == str(here.tenant_id)
+            assert applied["after"]["calls"] - applied["before"]["calls"] == 1
+            assert applied["after"]["leads"] - applied["before"]["leads"] == 1
+            async with here.setup.sessions() as db:
+                assert await db.scalar(select(Tenant.id).where(Tenant.name == tool.NAME)) is None
+            replay = await execute("apply", here.tenant_id)
+            assert replay["rows"] == {"done_before": 1} and replay["new_calls"] == 0
+            assert (await execute("read", here.tenant_id))["after"] == applied["after"]
+            with pytest.raises(ValueError, match="No organisation"):
+                await execute("apply", uuid4())
+
+    run(exercise())
