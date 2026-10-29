@@ -1,0 +1,40 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "04e579d274ebbf620b958788dcebb27d77741b13",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "docs/data/decisions-v0.md",
+    "docs/product/company-calls-go-live.md",
+    "packages/python/ac_platform/decisions/__init__.py",
+    "packages/python/ac_platform/decisions/__main__.py",
+    "packages/python/ac_platform/decisions/core.py",
+    "packages/python/ac_platform/decisions/router.py",
+    "packages/python/ac_platform/http/conversation_acquisition_runtime.py",
+    "packages/python/ac_platform/lead_desk/telephony/http.py",
+    "packages/python/ac_platform/lead_desk/telephony/ledger.py",
+    "packages/python/ac_platform/lead_desk/telephony/notifications.py",
+    "packages/python/ac_platform/lead_desk/telephony/pipeline.py",
+    "packages/python/ac_platform/lead_desk/telephony/providers.py",
+    "packages/python/ac_platform/lead_desk/telephony/service.py",
+    "tests/database/test_company_call_pipeline_postgresql.py",
+    "tests/unit/decisions/test_decisions.py",
+    "tests/unit/lead_desk_telephony/test_recording_pipeline.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/unit/decisions"
+  ],
+  "include_paths": [
+    "packages/python/ac_platform/decisions/__init__.py",
+    "packages/python/ac_platform/decisions/core.py",
+    "packages/python/ac_platform/decisions/__main__.py",
+    "packages/python/ac_platform/decisions/router.py",
+    "tests/unit/decisions/test_decisions.py",
+    "docs/data/decisions-v0.md"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}
