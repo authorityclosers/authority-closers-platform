@@ -4,13 +4,17 @@ Meta learns from every stage by name: a business's own stage names go to its dat
 as they are ("Site visit booked"), so Meta's conversion leads optimisation can pick
 the stage that matters. The first stage goes as "Lead". Couldn't reach is not sent.
 
-Only leads from a Meta lead form go. What Meta matches on, and nothing else:
+Leads from a Meta lead form go, and website leads (lead_desk/websites.py) whose visit a
+Meta ad or Meta's pixel saw (``fbc`` or ``fbp`` in their attribution); a website lead has no
+Meta lead id, so its events carry the other keys only. What Meta matches on, and nothing
+else:
 
-- Meta's lead id, unhashed, as Meta asks;
+- Meta's lead id, unhashed, as Meta asks (lead-form leads);
 - the email and phone, SHA-256 after Meta's normalising;
 - the lead's own Sales Xray id (``external_id``) and its country from the phone's
   dialling code, both SHA-256;
-- Meta's own click and browser ids (``fbc``, ``fbp``) when the lead's form kept them.
+- Meta's own click and browser ids (``fbc``, ``fbp``) when the lead's form or the website
+  line kept them.
 
 No names, notes, cities, amounts or call details. More of these keys lifts Meta's
 event match quality (Events Manager), which helps its ads find similar people.
@@ -47,7 +51,10 @@ SPEC: Final[Spec] = Spec(
     brand="meta",
     naming="stage",
     learns="Meta's ads learn which leads become customers and find more people like them.",
-    reaches="Leads from your Facebook and Instagram lead forms.",
+    reaches=(
+        "Leads from your Facebook and Instagram lead forms, and website leads that came from a "
+        "Meta ad."
+    ),
     destination="dataset",
     sends="all",
 )
@@ -116,12 +123,26 @@ def country_of(phone: str | None) -> str | None:
     return None
 
 
+def _meta_ids(payload: Mapping[str, Any]) -> tuple[str | None, str | None]:
+    """Meta's click and browser ids, from the record's top level or the website line's
+    attribution part."""
+    places = [payload]
+    if isinstance(payload.get("attribution"), Mapping):
+        places.append(payload["attribution"])
+    fbc = next((str(p[k]) for p in places for k in ("fbc", "_fbc") if p.get(k)), None)
+    fbp = next((str(p[k]) for p in places for k in ("fbp", "_fbp") if p.get(k)), None)
+    return fbc, fbp
+
+
 def identity(lead: Lead) -> dict[str, Any] | None:
     ref = str(lead.source_ref or "")
-    if lead.source != "meta" or not meta_capi.META_LEAD_ID.fullmatch(ref):
+    payload = lead.payload if isinstance(lead.payload, Mapping) else {}
+    lead_form = lead.source == "meta" and meta_capi.META_LEAD_ID.fullmatch(ref) is not None
+    website = not lead_form and isinstance(payload.get("website"), Mapping)
+    if not lead_form and not website:
         return None
     who: dict[str, Any] = {
-        "lead_ref": ref,
+        "lead_ref": ref if lead_form else str(lead.id),
         "email": lead.email,
         "phone": lead.phone,
         "external_id": sha256(str(lead.id)),
@@ -129,23 +150,27 @@ def identity(lead: Lead) -> dict[str, Any] | None:
     country = country_of(lead.phone)
     if country:
         who["country"] = sha256(country)
-    payload = lead.payload if isinstance(lead.payload, Mapping) else {}
-    fbc = next((str(payload[k]) for k in ("fbc", "_fbc") if payload.get(k)), None)
+    fbc, fbp = _meta_ids(payload)
     if fbc is None and "fbclid" in click_ids(payload) and lead.created_at:
         fbc = f"fb.1.{int(lead.created_at.timestamp() * 1000)}.{click_ids(payload)['fbclid']}"
     if fbc and _FBC.fullmatch(fbc):
         who["fbc"] = fbc
-    fbp = next((str(payload[k]) for k in ("fbp", "_fbp") if payload.get(k)), None)
     if fbp and _FBP.fullmatch(fbp):
         who["fbp"] = fbp
+    if website:
+        # Only a visit a Meta ad or Meta's pixel saw; Meta has nothing to learn from others.
+        if "fbc" not in who and "fbp" not in who:
+            return None
+        who["website"] = True
     return who
 
 
 def body(
     who: Mapping[str, Any], *, event_name: str, at: datetime, settings: Any = None
 ) -> dict[str, Any]:
-    """One Conversions API for CRM event: Meta's lead id and hashed identifiers only."""
-    user: dict[str, Any] = {"lead_id": int(str(who["lead_ref"]))}
+    """One Conversions API for CRM event: Meta's lead id (a lead-form lead) and hashed
+    identifiers only."""
+    user: dict[str, Any] = {} if who.get("website") else {"lead_id": int(str(who["lead_ref"]))}
     em, ph = hashed_email(who.get("email")), hashed_phone(who.get("phone"))
     if em:
         user["em"] = [em]

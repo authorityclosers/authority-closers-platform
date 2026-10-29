@@ -1414,3 +1414,66 @@ class SheetRow(Base):
     spreadsheet_id: Mapped[str] = mapped_column(String(128))
     lead_id: Mapped[UUID] = mapped_column(Uuid)
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadSite(Base):
+    """A website or landing page the organisation's one line of script is on (migration
+    0145, lead_desk/websites.py). Added by a person, or by the site's first hello. A
+    removed site keeps its row (status ``removed``), so it can't add itself back."""
+
+    __tablename__ = "lead_desk_sites"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_site_tenant"),
+        UniqueConstraint("tenant_id", "host", name="uq_lead_desk_site_host"),
+        CheckConstraint("status IN ('active', 'paused', 'removed')", name="lead_desk_site_status"),
+        CheckConstraint("added IN ('person', 'seen')", name="lead_desk_site_added"),
+        CheckConstraint("leads >= 0", name="lead_desk_site_leads"),
+        CheckConstraint("length(trim(host)) > 0", name="lead_desk_site_host"),
+        Index("ix_lead_desk_site_tenant", "tenant_id", "status"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    host: Mapped[str] = mapped_column(String(253))
+    label: Mapped[str] = mapped_column(String(120))
+    status: Mapped[str] = mapped_column(String(16))
+    platform: Mapped[str | None] = mapped_column(String(24), nullable=True)
+    added: Mapped[str] = mapped_column(String(8))
+    first_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_page: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    leads: Mapped[int] = mapped_column(Integer)
+    last_lead_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_by_person_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class LeadSitePage(Base):
+    """One page's counters for one day (UTC): views, the most lead forms seen on it, form
+    fills, new leads and bot fills turned away. Counts only: no visitor, no address."""
+
+    __tablename__ = "lead_desk_site_pages"
+    __table_args__ = (
+        ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_lead_desk_site_page_tenant"),
+        ForeignKeyConstraint(
+            ["site_id"], ["lead_desk_sites.id"], name="fk_lead_desk_site_page_site"
+        ),
+        CheckConstraint(
+            "views >= 0 AND forms >= 0 AND fills >= 0 AND leads >= 0 AND blocked >= 0",
+            name="lead_desk_site_page_counts",
+        ),
+        Index("ix_lead_desk_site_page_tenant", "tenant_id", "day"),
+    )
+
+    site_id: Mapped[UUID] = mapped_column(Uuid, primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+    path: Mapped[str] = mapped_column(String(300), primary_key=True)
+    tenant_id: Mapped[UUID] = mapped_column(Uuid)
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    views: Mapped[int] = mapped_column(Integer)
+    forms: Mapped[int] = mapped_column(Integer)
+    fills: Mapped[int] = mapped_column(Integer)
+    leads: Mapped[int] = mapped_column(Integer)
+    blocked: Mapped[int] = mapped_column(Integer)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))

@@ -491,10 +491,14 @@ class Intake:
                 .order_by(LeadSource.created_at)
             )
         ).all()
-        # Accounts connected with Continue with Google have their own card (connectors/http.py).
+        # Accounts connected with Continue with Google have their own card (connectors/http.py),
+        # and so has the website line (websites.py).
         return Sources(
             sources=tuple(
-                self._view(row) for row in rows if (row.config or {}).get("connector") is None
+                self._view(row)
+                for row in rows
+                if (row.config or {}).get("connector") is None
+                and not (row.config or {}).get("website")
             ),
             meta="ready" if meta_ready else "not_configured",
         )
@@ -549,6 +553,8 @@ class Intake:
             raise DeskError(
                 422, "This account's key is managed by Sales Xray. Reconnect it instead."
             )
+        if (source.config or {}).get("website"):
+            raise DeskError(422, "The website line's key changes under Websites.")
         token = secrets.token_urlsafe(32)
         source.token_sha256 = token_hash(token)
         source.updated_at = self.desk.now
@@ -683,6 +689,9 @@ class Intake:
             or not source.active
             or source.token_sha256 is None
             or not secrets.compare_digest(source.token_sha256, digest)
+            # The website line's key is public (it sits in the site's page): its leads come
+            # only through /site/lead, with the page's Origin and the bot checks.
+            or (source.config or {}).get("website")
         ):
             raise DeskError(401, "Unknown source or key.")
         desk = LeadDesk(
