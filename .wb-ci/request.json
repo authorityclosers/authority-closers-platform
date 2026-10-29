@@ -1,0 +1,45 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "127b73ac4f1e3d2cfe23235f9d140fc3a5408292",
+  "full": false,
+  "checks": [
+    "py",
+    "web"
+  ],
+  "changed_files": [
+    "docs/product/company-calls-go-live.md",
+    "infra/application/scripts/ac-staging-app-after-release",
+    "infra/application/systemd/ac-staging-app-after-release.service",
+    "infra/application/systemd/ac-staging-app-after-release.timer",
+    "packages/python/ac_platform/http/conversation_acquisition_runtime.py",
+    "packages/python/ac_platform/lead_desk/telephony/http.py",
+    "packages/python/ac_platform/lead_desk/telephony/ledger.py",
+    "packages/python/ac_platform/lead_desk/telephony/notifications.py",
+    "packages/python/ac_platform/lead_desk/telephony/pipeline.py",
+    "packages/python/ac_platform/lead_desk/telephony/providers.py",
+    "packages/python/ac_platform/lead_desk/telephony/service.py",
+    "tests/database/test_company_call_pipeline_postgresql.py",
+    "tests/unit/lead_desk_telephony/test_recording_pipeline.py",
+    "tests/unit/test_staging_app_release_hook.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/unit/lead_desk_telephony",
+    "tests/database/test_company_call_pipeline_postgresql.py",
+    "tests/database/test_lead_desk_telephony_postgresql.py"
+  ],
+  "include_paths": [
+    "packages/python/ac_platform/lead_desk/telephony/http.py",
+    "packages/python/ac_platform/lead_desk/telephony/ledger.py",
+    "packages/python/ac_platform/lead_desk/telephony/providers.py",
+    "packages/python/ac_platform/lead_desk/telephony/service.py",
+    "packages/python/ac_platform/lead_desk/telephony/pipeline.py",
+    "packages/python/ac_platform/lead_desk/telephony/notifications.py",
+    "packages/python/ac_platform/http/conversation_acquisition_runtime.py",
+    "tests/unit/lead_desk_telephony/test_recording_pipeline.py",
+    "tests/database/test_company_call_pipeline_postgresql.py",
+    "docs/product/company-calls-go-live.md"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}

@@ -16,10 +16,13 @@ stores nothing (``ledger``). Errors carry words a person can be shown.
 
 from __future__ import annotations
 
+import asyncio
+import io
 import math
 import os
 import re
 import time
+import wave
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any, Final, Protocol
@@ -90,6 +93,7 @@ class CallReport:
     leg_seconds: tuple[int, ...] = ()
     price_paise: int | None = None
     recording_url: str | None = None
+    hung_up_by: str | None = None
 
     @property
     def final(self) -> bool:
@@ -256,6 +260,7 @@ def exotel_report(call: Mapping[str, Any]) -> CallReport:
         leg_seconds=leg_seconds,
         price_paise=_paise(call.get("Price")),
         recording_url=url,
+        hung_up_by=str(call.get("DisconnectedBy") or "").strip()[:40] or None,
     )
 
 
@@ -346,25 +351,64 @@ class ExotelProvider:
         return exotel_report(call if isinstance(call, Mapping) else {})
 
     async def fetch_recording(self, url: str) -> Recording:
-        host = (urlparse(url).hostname or "").lower()
-        if urlparse(url).scheme != "https" or not host.endswith((".exotel.com", ".exotel.in")):
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower()
+        if (
+            parsed.scheme != "https"
+            or not host.endswith((".exotel.com", ".exotel.in"))
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port not in (None, 443)
+        ):
             raise TelephonyError("That recording isn't from the calling service.", status=404)
-        client = self._client or httpx.AsyncClient(timeout=60)
+        client = self._client or httpx.AsyncClient(timeout=60, follow_redirects=False)
         try:
-            response = await client.get(url, auth=(self.cfg.api_key, self.cfg.api_token))
-        except httpx.HTTPError:
-            raise TelephonyError("The recording didn't download. Try again in a minute.") from None
+            for attempt in range(3):
+                try:
+                    async with client.stream(
+                        "GET",
+                        url,
+                        auth=(self.cfg.api_key, self.cfg.api_token),
+                        follow_redirects=False,
+                    ) as response:
+                        if (
+                            response.status_code in {404, 408, 429, 500, 502, 503, 504}
+                            and attempt < 2
+                        ):
+                            await asyncio.sleep(0.1 * (2**attempt))
+                            continue
+                        if response.status_code != 200:
+                            raise TelephonyError(
+                                "The recording isn't ready yet. Try again in a minute.", status=409
+                            )
+                        length = response.headers.get("content-length")
+                        if length and (not length.isdigit() or int(length) > MAX_RECORDING):
+                            raise TelephonyError("That recording is too large.", status=413)
+                        content = bytearray()
+                        async for chunk in response.aiter_bytes(64 * 1024):
+                            if len(content) + len(chunk) > MAX_RECORDING:
+                                raise TelephonyError("That recording is too large.", status=413)
+                            content.extend(chunk)
+                        if not content or (length and len(content) != int(length)):
+                            raise TelephonyError(
+                                "The complete recording was not received.", status=422
+                            )
+                        kind = (
+                            response.headers.get("content-type", "audio/mpeg").split(";")[0].strip()
+                        )
+                        if not kind.startswith("audio/"):
+                            raise TelephonyError("That file isn't an audio recording.", status=422)
+                        return Recording(bytes(content), kind)
+                except httpx.HTTPError:
+                    if attempt == 2:
+                        raise TelephonyError(
+                            "The recording didn't download. Try again in a minute."
+                        ) from None
+                    await asyncio.sleep(0.1 * (2**attempt))
         finally:
             if self._client is None:
                 await client.aclose()
-        if response.status_code >= 400:
-            raise TelephonyError(
-                "The recording isn't ready yet. Try again in a minute.", status=409
-            )
-        if len(response.content) > MAX_RECORDING:
-            raise TelephonyError("That recording is too large.", status=413)
-        kind = response.headers.get("content-type", "audio/mpeg").split(";")[0].strip()
-        return Recording(response.content, kind if kind.startswith("audio/") else "audio/mpeg")
+        raise TelephonyError("The recording didn't download. Try again in a minute.")
 
 
 # ----- Plivo (second; the same shape) --------------------------------------------------
@@ -436,10 +480,21 @@ class FakeProvider:
             talk_seconds=self.TALK,
             total_seconds=self.ENDS,
             leg_seconds=(self.ENDS, self.TALK),
+            recording_url=f"fake://recordings/{sid}.wav",
+            hung_up_by="lead",
         )
 
     async def fetch_recording(self, url: str) -> Recording:
-        raise TelephonyError("Test calls have no recording.", status=404)
+        if not re.fullmatch(r"fake://recordings/fake-[0-9]+-1\.wav", url):
+            raise TelephonyError("Unknown test recording.", status=404)
+        # Fictional silence, generated locally: no customer audio or network access.
+        target = io.BytesIO()
+        with wave.open(target, "wb") as audio:
+            audio.setnchannels(1)
+            audio.setsampwidth(2)
+            audio.setframerate(8000)
+            audio.writeframes(b"\0\0" * 8000 * self.TALK)
+        return Recording(target.getvalue(), "audio/wav")
 
 
 def provider_from_env(
