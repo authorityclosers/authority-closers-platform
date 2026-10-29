@@ -84,6 +84,7 @@ import {
 import { can, ROLE_HINT, ROLE_LABEL, rolesToGive } from "./roles";
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
+import { SeatsPanel, SeatUsePanel, type SeatUse } from "./seats-panel";
 import { TeamPatternsSection } from "./team-patterns-section";
 import {
   IntegrationsPanel,
@@ -390,6 +391,21 @@ export function OrganisationView({
     access?.retry();
   }, [refreshOrganisation, access]);
   const showPersonal = useCallback(() => setMissing(true), []);
+  // Owners, admins and Finance see seats; a member change reads them again.
+  const seesSeats = live && (canManage || can(myRole, "billing.view"));
+  const [seatsVersion, setSeatsVersion] = useState(0);
+  const seatUse = useMemo(
+    () =>
+      activity.status === "ready"
+        ? new Map<string, SeatUse>(
+            activity.value.members.map((member) => [
+              member.personId,
+              { calls: member.calls, minutes: member.minutes },
+            ]),
+          )
+        : null,
+    [activity],
+  );
   const personal =
     base.status === "ready" &&
     (!isOrganisation ||
@@ -539,6 +555,12 @@ export function OrganisationView({
               />
             )}
 
+            {shows("members") && seesSeats && (
+              <SectionBoundary name="Seats">
+                <SeatsPanel version={seatsVersion} />
+              </SectionBoundary>
+            )}
+
             {shows("members") && (
               <SectionBoundary name="Members">
                 <MembersPanel
@@ -546,6 +568,7 @@ export function OrganisationView({
                   reload={() => {
                     reloadMembers();
                     reloadOrg();
+                    setSeatsVersion((value) => value + 1);
                   }}
                   canManage={canManage}
                   seesTeam={seesTeam}
@@ -553,6 +576,21 @@ export function OrganisationView({
                   orgName={name}
                   yourPersonId={access?.context?.personId ?? null}
                   onMissing={() => setMissing(true)}
+                />
+              </SectionBoundary>
+            )}
+
+            {shows("members") && seesSeats && seesTeam && (
+              <SectionBoundary name="Seat use">
+                <SeatUsePanel
+                  people={
+                    members.status === "ready"
+                      ? members.value.filter(
+                          (member) => member.status === "active",
+                        )
+                      : null
+                  }
+                  usage={seatUse}
                 />
               </SectionBoundary>
             )}
@@ -1851,13 +1889,13 @@ function MembersPanel({
                           setConfirming(
                             member.status === "invited"
                               ? {
-                                  message: `Revoke the invite for ${name}?`,
+                                  message: `Revoke the invite for ${name}? Its seat becomes free for someone else.`,
                                   verb: "Revoke invite",
                                   danger: true,
                                   action: () => revokeInvite(member.inviteId),
                                 }
                               : {
-                                  message: `Remove ${name} from the organisation?`,
+                                  message: `Remove ${name} from the organisation? Their seat becomes free for someone else, and their calls stay with the organisation.`,
                                   verb: "Remove",
                                   danger: true,
                                   action: () => removeMember(member.personId),

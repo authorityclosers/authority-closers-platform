@@ -1379,3 +1379,41 @@ it("uses the shared measured display name in People rows without rewriting ident
   expect(link.querySelectorAll("span")).toHaveLength(3);
   expect(writes()).toHaveLength(0);
 });
+
+it("shows seats above People and reads them again after a removal frees one", async () => {
+  routes["/v1/organisation/seats"] = {
+    paid_seats: 0,
+    complimentary_seats: 4,
+    total_seats: 4,
+    active_members: 2,
+    pending_invites: 1,
+    seats_available: 1,
+    can_buy: true,
+  };
+  await render();
+  await click("Members");
+  await vi.waitFor(() =>
+    expect(host.textContent).toContain("3 of 4 seats taken"),
+  );
+  expect(host.textContent).toContain("4 free seats from Authority Closers");
+  const seatReads = () =>
+    fetchMock.mock.calls.filter(([url]) => url === "/v1/organisation/seats")
+      .length;
+  const before = seatReads();
+  await click("Remove Dipak");
+  expect(
+    host.querySelector('dialog[open], [role="dialog"]')?.textContent,
+  ).toContain("Their seat becomes free for someone else");
+  await confirm();
+  await vi.waitFor(() => expect(seatReads()).toBeGreaterThan(before));
+});
+
+it("keeps seats from people who neither invite nor pay", async () => {
+  org().role = "member";
+  routes["/v1/organisation/seats"] = { detail: "Only owners" };
+  await render();
+  await click("Members");
+  expect(
+    fetchMock.mock.calls.some(([url]) => url === "/v1/organisation/seats"),
+  ).toBe(false);
+});

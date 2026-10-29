@@ -31,11 +31,16 @@ import {
   Unavailable,
   kitStyles,
 } from "../../ui/kit";
+import { OrganisationSeatsPanel } from "./organisation-seats";
 import styles from "./organisations.module.css";
 import { istStamp } from "../../lib/time";
 import { sellerPath } from "../../sellers/seller-data";
 
 const date = (value: string | null) => istStamp(value);
+type DirectoryRow = PlatformOrganisations["organisations"][number];
+/** "3 of 4": members and pending invites against paid plus free seats. */
+export const seatsTaken = (row: DirectoryRow) =>
+  `${row.member_count + row.pending_invites} of ${row.paid_seats + row.complimentary_seats}`;
 
 export function OrganisationsConsole() {
   const [identity, setIdentity] = useState<PlatformIdentity | null>(null);
@@ -105,7 +110,7 @@ export function OrganisationsConsole() {
     <Page>
       <PageHeader
         title="Organisations"
-        context={["Members, invitations and organisation access"]}
+        context={["Seats, members, invitations and organisation access"]}
         actions={
           <Button disabled={pending || writing} onClick={() => refresh()}>
             <RefreshCw size={14} aria-hidden="true" />
@@ -147,8 +152,21 @@ export function OrganisationsConsole() {
               <thead>
                 <tr>
                   <th scope="col">Name</th>
+                  <th scope="col">Plan</th>
+                  <th scope="col" data-num="">
+                    Seats taken
+                  </th>
+                  <th scope="col" data-num="">
+                    Free seats
+                  </th>
                   <th scope="col" data-num="">
                     Members
+                  </th>
+                  <th scope="col" data-num="">
+                    Calls · 30 days
+                  </th>
+                  <th scope="col" data-num="">
+                    Minutes · 30 days
                   </th>
                   <th scope="col">Created</th>
                 </tr>
@@ -173,7 +191,12 @@ export function OrganisationsConsole() {
                         {row.name}
                       </button>
                     </td>
+                    <td>{row.plan_name ?? "No paid plan"}</td>
+                    <td data-num="">{seatsTaken(row)}</td>
+                    <td data-num="">{row.complimentary_seats}</td>
                     <td data-num="">{row.member_count}</td>
+                    <td data-num="">{row.calls_30d}</td>
+                    <td data-num="">{row.minutes_30d}</td>
                     <td>{date(row.created_at)}</td>
                   </tr>
                 ))}
@@ -181,6 +204,17 @@ export function OrganisationsConsole() {
             </Table>
           )}
         </Panel>
+      ) : null}
+      {organisation ? (
+        <OrganisationSeatsPanel
+          key={`${organisation.tenant_id}:${revision}`}
+          organisation={organisation}
+          canManage={!!canManage}
+          onChanged={() => {
+            setNotice("Seats saved.");
+            refresh();
+          }}
+        />
       ) : null}
       {organisation && members ? (
         <Panel

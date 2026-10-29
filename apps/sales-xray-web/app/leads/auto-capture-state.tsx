@@ -1,7 +1,11 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { autoCaptureStates, onPhoneSignal } from "./native-phone";
+import {
+  autoCaptureStates,
+  onPhoneSignal,
+  type AutoCaptureItem,
+} from "./native-phone";
 import { readCaptureGuard, type CaptureCall } from "./capture-guard-client";
 import styles from "../capture-guard/capture-guard.module.css";
 
@@ -90,50 +94,231 @@ export function CaptureStateLabel({
     </span>
   );
 }
-export function AutoCaptureState({ eventId }: { eventId?: string | null }) {
-  const [state, setState] = useState<string | null>(null);
-  const [hold, setHold] = useState<string | null>(null);
-  const [readId, setReadId] = useState<string | null>(null);
-  const [call, setCall] = useState<CaptureCall | null>(null);
+/** Every call's way to its Report (owner, 30 Oct 2026: "I need each single call getting tracked"). */
+export const TRACK_STEPS = [
+  "Dialled",
+  "Recorded",
+  "Matched",
+  "Waiting",
+  "Uploaded",
+  "Analysing",
+  "Report ready",
+] as const;
+export type Track = {
+  /** The last step done (0 = dialled); the next one is where the call is, or is stuck. */
+  done: number;
+  label: string;
+  stuck: boolean;
+  fix?: { label: string; href: string };
+};
+const setupFix = {
+  label: "Fix recording",
+  href: "/settings/privacy#calls-setup",
+};
+/**
+ * The phone's queue (app builds with autoCaptureHealth add a hold reason) and the capture guard's
+ * receipts. A hold says why a call waits, so it leads; then server receipts, which outrank a stale
+ * native queue; missing stays visible after the deadline.
+ */
+export function trackFor(
+  native: AutoCaptureItem | null,
+  server: CaptureCall | null,
+  unavailable = false,
+): Track | null {
+  if (server?.state === "report_ready")
+    return { done: 6, label: "Report ready", stuck: false };
+  if (server?.attention)
+    return {
+      done: 4,
+      label: "Analysis stopped · the AC team sees it in Health",
+      stuck: true,
+    };
+  if (server?.state === "analysing")
+    return { done: 4, label: "Analysing", stuck: false };
+  if (server?.state === "uploaded")
+    return { done: 4, label: "Uploaded", stuck: false };
+  if (native?.state === "held") {
+    const held = native.hold ? holds[native.hold] : undefined;
+    return {
+      done: 2,
+      label: held?.label ?? labels.held,
+      stuck: true,
+      fix: held
+        ? {
+            label: native.hold === "profile" ? "Open Profile" : "Fix uploads",
+            href: held.href,
+          }
+        : setupFix,
+    };
+  }
+  if (native?.state === "cancelled")
+    return {
+      done: 2,
+      label: "Upload cancelled · the recording stays on the phone",
+      stuck: true,
+      fix: setupFix,
+    };
+  if (server?.state === "missing")
+    return { done: 0, label: labels.missing, stuck: true, fix: setupFix };
+  if (native?.state === "report_ready")
+    return { done: 6, label: "Report ready", stuck: false };
+  if (native?.state === "analysing")
+    return { done: 4, label: "Uploaded", stuck: false };
+  if (native?.state === "uploading")
+    return { done: 3, label: "Uploading", stuck: false };
+  if (native?.state === "waiting")
+    return { done: 2, label: "Waiting to upload", stuck: false };
+  if (server?.state === "waiting")
+    return { done: 0, label: labels.waiting, stuck: false };
+  if (unavailable) return { done: -1, label: labels.unavailable, stuck: false };
+  return null;
+}
+
+/** Dots for the seven steps, where the call is, and its one fix. links: false inside a row that is a link. */
+export function CallTrack({
+  track,
+  links = true,
+}: {
+  track: Track;
+  links?: boolean;
+}) {
+  const at = TRACK_STEPS[Math.min(track.done + 1, TRACK_STEPS.length - 1)];
+  return (
+    <span
+      className={styles.track}
+      data-stuck={track.stuck || undefined}
+      data-missing={track.stuck && track.done === 0 ? "true" : undefined}
+    >
+      {track.done >= 0 ? (
+        <span
+          className={styles.steps}
+          role="img"
+          aria-label={
+            track.done >= TRACK_STEPS.length - 1
+              ? "All 7 steps done"
+              : `${track.stuck ? "Stuck at" : "Now at"} ${at}, step ${track.done + 2} of 7`
+          }
+        >
+          {TRACK_STEPS.map((step, index) => (
+            <i
+              key={step}
+              data-done={index <= track.done || undefined}
+              data-now={index === track.done + 1 || undefined}
+            />
+          ))}
+        </span>
+      ) : null}
+      <small role="status">
+        {track.stuck ? "Stuck · " : ""}
+        {track.label}
+      </small>
+      {links && track.fix ? (
+        <Link href={track.fix.href}>{track.fix.label}</Link>
+      ) : null}
+    </span>
+  );
+}
+
+type Evidence = {
+  native: AutoCaptureItem | null;
+  server: CaptureCall | null;
+  unavailable: boolean;
+};
+// One read for every call on screen, every 30 s and on the phone's signals, not one per row.
+const watchers = new Map<string, Set<(evidence: Evidence) => void>>();
+let reading: Promise<void> | null = null;
+let again = false;
+let timer: ReturnType<typeof setInterval> | null = null;
+let stopSignal: (() => void) | null = null;
+async function readAll(): Promise<void> {
+  const ids = [...watchers.keys()];
+  if (!ids.length) return;
+  const [items, recent] = await Promise.all([
+    autoCaptureStates(),
+    readCaptureGuard(),
+  ]);
+  // An older call than the guard's week is read on its own.
+  const older = recent
+    ? ids.filter((id) => !recent.calls.some((call) => call.event_id === id))
+    : [];
+  const extra = await Promise.all(older.map((id) => readCaptureGuard(id)));
+  const calls = [
+    ...(recent?.calls ?? []),
+    ...extra.flatMap((read) => read?.calls ?? []),
+  ];
+  for (const id of ids) {
+    const evidence: Evidence = {
+      native: items.find((item) => item.eventId === id) ?? null,
+      server: calls.find((call) => call.event_id === id) ?? null,
+      unavailable: recent === null,
+    };
+    watchers.get(id)?.forEach((tell) => tell(evidence));
+  }
+}
+function look(): void {
+  if (reading) {
+    again = true;
+    return;
+  }
+  reading = readAll()
+    .catch(() => undefined)
+    .finally(() => {
+      reading = null;
+      if (again) {
+        again = false;
+        look();
+      }
+    });
+}
+export function watchCapture(
+  eventId: string,
+  tell: (evidence: Evidence) => void,
+): () => void {
+  const set = watchers.get(eventId) ?? new Set();
+  set.add(tell);
+  watchers.set(eventId, set);
+  if (!timer) {
+    timer = setInterval(look, 30_000);
+    stopSignal = onPhoneSignal((signal) => {
+      if (signal === "recordings" || signal === "resume") look();
+    });
+  }
+  look();
+  return () => {
+    set.delete(tell);
+    if (!set.size) watchers.delete(eventId);
+    if (!watchers.size && timer) {
+      clearInterval(timer);
+      timer = null;
+      stopSignal?.();
+      stopSignal = null;
+    }
+  };
+}
+
+/** A lead call's state line. links: false in a row that is itself a link (Calls, Home). */
+export function AutoCaptureState({
+  eventId,
+  links = true,
+}: {
+  eventId?: string | null;
+  links?: boolean;
+}) {
+  const [shown, setShown] = useState<{
+    id: string;
+    track: Track | null;
+  } | null>(null);
   useEffect(() => {
     if (!eventId) return;
-    let active = true;
-    const read = async () => {
-      const [items, recent] = await Promise.all([
-        autoCaptureStates(),
-        readCaptureGuard(),
-      ]);
-      const server =
-        recent && !recent.calls.some((item) => item.event_id === eventId)
-          ? await readCaptureGuard(eventId)
-          : recent;
-      if (!active) return;
-      const found =
-        server?.calls.find((item) => item.event_id === eventId) ?? null;
-      const item = items.find((entry) => entry.eventId === eventId);
-      const native = item?.state ?? null;
-      // Server receipts outrank a stale native queue; missing stays visible after the deadline.
-      const shown =
-        found && (found.state !== "waiting" || !native)
-          ? found.state
-          : (native ?? (server === null ? "unavailable" : null));
-      setState(shown);
-      setHold(shown === native ? (item?.hold ?? null) : null);
-      setCall(found);
-      setReadId(eventId);
-    };
-    void read();
-    const stop = onPhoneSignal((signal) => {
-      if (signal === "recordings" || signal === "resume") void read();
-    });
-    const timer = setInterval(() => void read(), 30_000);
-    return () => {
-      active = false;
-      stop();
-      clearInterval(timer);
-    };
+    return watchCapture(eventId, (evidence) =>
+      setShown({
+        id: eventId,
+        track: trackFor(evidence.native, evidence.server, evidence.unavailable),
+      }),
+    );
   }, [eventId]);
-  return readId === eventId && state && labels[state] ? (
-    <CaptureStateLabel state={state} attention={call?.attention} hold={hold} />
-  ) : null;
+  const track = shown && eventId && shown.id === eventId ? shown.track : null;
+  // In a list, a call with no evidence says nothing (an older app, or no capture here).
+  if (!track || (!links && track.done < 0)) return null;
+  return <CallTrack track={track} links={links} />;
 }

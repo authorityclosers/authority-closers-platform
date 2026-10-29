@@ -1,0 +1,10 @@
+[Unit]
+Description=Measure agent work per product nightly (after the bug radar, before India's morning)
+
+[Timer]
+OnCalendar=*-*-* 23:40:00 UTC
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

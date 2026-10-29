@@ -1,0 +1,14 @@
+# New company costs found in AC's mailboxes, filed in AC Pulse for confirmation (owner,
+# 30 Oct 2026). Gmail is only read; nothing runs until the service-account key is installed.
+[Unit]
+Description=Find new costs in AC's mailboxes and file them in AC Pulse for confirmation
+ConditionPathExists=/etc/ac-cost-detect/service-account.json
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/ac-cost-detect/env
+ExecStart=/usr/local/sbin/ac-cost-detect
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=25%
+TimeoutStartSec=10min

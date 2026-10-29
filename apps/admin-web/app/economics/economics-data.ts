@@ -63,9 +63,74 @@ export type FixedItem = {
   source: string;
 };
 
+/** One cost in the register, as the API reads it back with its month (owner, 30 Oct 2026). */
+export type CostItem = {
+  key: string;
+  vendor: string;
+  label: string;
+  category: string;
+  centre: string;
+  cadence: string;
+  rupees: number;
+  currency: string;
+  original: number | null;
+  started: string | null;
+  ended: string | null;
+  lifeMonths: number | null;
+  allocation: Record<string, unknown>;
+  source: string;
+  evidence: string;
+  note: string;
+  monthly: number;
+  active: boolean;
+  monthsLeft: number | null;
+  basis: string;
+  split: Record<string, number>;
+};
+
+export type ProductLine = {
+  key: string;
+  label: string;
+  moneyIn: number;
+  costs: number;
+  profit: number;
+  margin: number | null;
+  breakEvenPersonal: number | null;
+  breakEvenSeats: number | null;
+};
+
+/** AC's real month from the cost register: by category, cost centre and product. */
+export type RealCosts = {
+  month: string;
+  total: number;
+  byCategory: { key: string; label: string; rupees: number }[];
+  byCentre: { key: string; label: string; rupees: number }[];
+  items: CostItem[];
+  products: ProductLine[];
+  overall: {
+    moneyIn: number;
+    costs: number;
+    profit: number;
+    breakEvenPersonal: number | null;
+    breakEvenSeats: number | null;
+  };
+  platformWork: string;
+  keys: {
+    generatedAt: string | null;
+    windowDays: number | null;
+    tools: Record<string, Record<string, number>>;
+    cpu: Record<string, number> | null;
+  };
+  aiCalls: { customerMonth: number; testMonth: number };
+};
+
 export type Economics = {
   environment: string;
   days: number;
+  /** The cost register's month; null until the first cost is entered. */
+  costs: RealCosts | null;
+  /** Live-mode recurring revenue a month, less GST and the payment fee. */
+  moneyIn: { netMonth: number; payingAccounts: number } | null;
   routes: EconRoute[];
   offers: Offer[];
   topUps: TopUpRow[];
@@ -119,6 +184,147 @@ const configOf = (raw: unknown) =>
     ? (raw as Record<string, unknown>)
     : null;
 
+const optionalString = (raw: unknown) =>
+  typeof raw === "string" && raw ? raw : null;
+
+const named = (raw: unknown) =>
+  read.array(raw).map((item) => {
+    const row = read.object(item);
+    return {
+      key: read.string(row.key),
+      label: read.string(row.label, read.string(row.key)),
+      rupees: read.number(row.rupees),
+    };
+  });
+
+export function normalizeCosts(raw: unknown): RealCosts | null {
+  const body = configOf(raw);
+  if (!body) return null;
+  const overall = read.object(body.overall);
+  const keys = read.object(body.keys);
+  const calls = read.object(body.ai_calls);
+  const cpu = configOf(keys.cpu);
+  return {
+    month: read.string(body.month),
+    total: read.number(body.total),
+    byCategory: named(body.by_category),
+    byCentre: named(body.by_centre),
+    items: read.array(body.items).map((item) => {
+      const row = read.object(item);
+      return {
+        key: read.string(row.key),
+        vendor: read.string(row.vendor),
+        label: read.string(row.label),
+        category: read.string(row.category, "other"),
+        centre: read.string(row.centre, "company"),
+        cadence: read.string(row.cadence, "monthly"),
+        rupees: read.number(row.rupees),
+        currency: read.string(row.currency, "INR"),
+        original: read.optionalNumber(row.original),
+        started: optionalString(row.started),
+        ended: optionalString(row.ended),
+        lifeMonths: read.optionalNumber(row.life_months),
+        allocation: configOf(row.allocation) ?? { rule: "direct" },
+        source: read.string(row.source, "estimate"),
+        evidence: read.string(row.evidence),
+        note: read.string(row.note),
+        monthly: read.number(row.monthly),
+        active: read.boolean(row.active),
+        monthsLeft: read.optionalNumber(row.months_left),
+        basis: read.string(row.basis),
+        split: recordOf(row.split, (value) => read.number(value)),
+      };
+    }),
+    products: read.array(body.products).map((item) => {
+      const row = read.object(item);
+      return {
+        key: read.string(row.key),
+        label: read.string(row.label, read.string(row.key)),
+        moneyIn: read.number(row.money_in),
+        costs: read.number(row.costs),
+        profit: read.number(row.profit),
+        margin: read.optionalNumber(row.margin),
+        breakEvenPersonal: read.optionalNumber(row.break_even_personal),
+        breakEvenSeats: read.optionalNumber(row.break_even_seats),
+      };
+    }),
+    overall: {
+      moneyIn: read.number(overall.money_in),
+      costs: read.number(overall.costs),
+      profit: read.number(overall.profit),
+      breakEvenPersonal: read.optionalNumber(overall.break_even_personal),
+      breakEvenSeats: read.optionalNumber(overall.break_even_seats),
+    },
+    platformWork: read.string(body.platform_work, "pro_rata"),
+    keys: {
+      generatedAt: optionalString(keys.generated_at),
+      windowDays: read.optionalNumber(keys.window_days),
+      tools: recordOf(keys.tools, (value) =>
+        recordOf(value, (share) => read.number(share)),
+      ),
+      cpu: cpu ? recordOf(cpu, (value) => read.number(value)) : null,
+    },
+    aiCalls: {
+      customerMonth: read.number(calls.customer_month),
+      testMonth: read.number(calls.test_month),
+    },
+  };
+}
+
+/** Words for the register's codes (costs.py). */
+export const CATEGORY_WORDS: Record<string, string> = {
+  servers: "Servers and cloud",
+  ai_subscriptions: "AI subscriptions for the agents",
+  ai_product: "AI for the product",
+  ai_other: "Other AI APIs",
+  tools: "Software and tools",
+  workspace: "Workspace, email and domains",
+  store_fees: "Store and platform fees",
+  devices: "Devices and studio",
+  marketing: "Marketing",
+  people: "People (one monthly total)",
+  professional: "Professional fees",
+  financing: "Debt and interest (one total)",
+  other: "Other",
+};
+export const CENTRE_WORDS: Record<string, string> = {
+  sales_xray: "Sales X-Ray",
+  company: "AC company-wide",
+  agents: "Agents and AI tooling",
+  people: "People",
+};
+export const PRODUCT_WORDS: Record<string, string> = {
+  sales_xray: "Sales X-Ray",
+  learner: "Learner app",
+  other_companies: "Other companies",
+  company: "AC company",
+};
+export const CADENCE_WORDS: Record<string, string> = {
+  monthly: "Monthly",
+  quarterly: "Quarterly",
+  yearly: "Yearly",
+  one_time: "One-time",
+  usage: "Usage (a month)",
+};
+export const RULE_WORDS: Record<string, string> = {
+  direct: "All to one product",
+  token_burn: "By agent work",
+  cpu_share: "By server time",
+  revenue_share: "By money in",
+  fixed: "Stated shares",
+};
+
+/** "Monthly", "Yearly ₹1,200", "One-time ₹24,000 over 24 months". */
+export function cadenceLine(item: CostItem): string {
+  const charged =
+    item.currency !== "INR" && item.original !== null
+      ? `${item.currency} ${item.original.toLocaleString("en-IN")} (${rupees(item.rupees)})`
+      : rupees(item.rupees);
+  if (item.cadence === "one_time")
+    return `One-time ${charged} over ${item.lifeMonths ?? 24} months`;
+  return `${CADENCE_WORDS[item.cadence] ?? item.cadence} ${charged}`;
+}
+
 export function normalizeEconomics(raw: unknown): Economics {
   const body = read.object(raw);
   const fixed = read.object(body.fixed);
@@ -128,9 +334,17 @@ export function normalizeEconomics(raw: unknown): Economics {
     typeof measured.uncharged === "object" && measured.uncharged !== null
       ? read.object(measured.uncharged)
       : null;
+  const moneyIn = configOf(body.money_in);
   return {
     environment: read.string(body.environment, "production"),
     days: read.number(body.days, 30),
+    costs: normalizeCosts(body.costs),
+    moneyIn: moneyIn
+      ? {
+          netMonth: read.number(moneyIn.net_month),
+          payingAccounts: read.number(moneyIn.paying_accounts),
+        }
+      : null,
     routes: read.array(body.routes).map((item) => {
       const row = read.object(item);
       return {

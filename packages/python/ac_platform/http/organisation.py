@@ -32,7 +32,7 @@ from ac_platform.tenancy.models import (
     OrganisationInvite,
     Tenant,
 )
-from ac_platform.tenancy.roles import ORG_ROLES, AssignableRoleName, OrgRoleName
+from ac_platform.tenancy.roles import ORG_ROLES, AssignableRoleName, OrgRoleName, can
 
 
 class OrganisationResponse(BaseModel):
@@ -134,9 +134,18 @@ class OrganisationUsageResponse(MembersResponse):
 class OrganisationBillingResponse(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
     paid_seats: int
+    complimentary_seats: int
+    total_seats: int
     active_members: int
     pending_invites: int
     seats_available: int
+
+
+class OrganisationSeatsResponse(OrganisationBillingResponse):
+    """Seats for the Team tab and whether you may buy more. A complimentary grant's end date
+    stays in Admin (Sales X-Ray shows no "valid until" times)."""
+
+    can_buy: bool
 
 
 class MemberActivityResponse(BaseModel):
@@ -603,6 +612,21 @@ def install_organisation_http(
         assert auth.resolved.actor.tenant_id is not None
         return OrganisationBillingResponse(
             **await organisation_seats(auth.database, auth.resolved.actor.tenant_id)
+        )
+
+    @router.get("/seats", response_model=OrganisationSeatsResponse)
+    async def seats(
+        auth: AuthenticatedTransaction = selected_dependency,
+    ) -> OrganisationSeatsResponse:
+        """Who holds the organisation's seats, for the people who invite or pay."""
+        role = auth.resolved.membership_role
+        if not (can(role, "members.manage") or can(role, "billing.view")):
+            raise AuthorizationDenied("Only owners, admins and finance see seats.")
+        tenant_id = auth.resolved.actor.tenant_id
+        assert tenant_id is not None
+        return OrganisationSeatsResponse(
+            **await organisation_seats(auth.database, tenant_id),
+            can_buy=can(role, "billing.pay"),
         )
 
     def service(auth: AuthenticatedTransaction) -> OrganisationService:

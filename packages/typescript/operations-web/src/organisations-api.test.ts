@@ -9,6 +9,9 @@ import {
   organisationOwnerTransferSchema,
   loadOrganisationMembers,
   changePlatformOrganisation,
+  grantOrganisationSeats,
+  loadOrganisationSeats,
+  organisationSeatsSchema,
   type OrganisationCommand,
 } from "./organisations-api";
 
@@ -17,6 +20,12 @@ const organisation = {
   name: "Fictional Example Organisation",
   member_count: 0,
   created_at: "2026-10-02T00:00:00Z",
+  plan_name: null,
+  paid_seats: 0,
+  complimentary_seats: 4,
+  pending_invites: 1,
+  minutes_30d: 12.5,
+  calls_30d: 3,
 };
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status });
@@ -55,6 +64,9 @@ it.each([
     { member_count: "1" },
     { name: "" },
     { created_at: "" },
+    { complimentary_seats: -1 },
+    { paid_seats: 1.5 },
+    { plan_name: "" },
   ].map((invalid) => ({ organisations: [{ ...organisation, ...invalid }] })),
 ])("rejects malformed directory payloads: %j", async (payload) => {
   const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(payload));
@@ -334,4 +346,105 @@ it("rejects malformed mutation responses and unknown member envelopes", async ()
   await expect(
     loadOrganisationMembers(organisation.tenant_id, { fetcher }),
   ).rejects.toBeInstanceOf(z.ZodError);
+});
+
+const seatView = {
+  seats: {
+    paid_seats: 0,
+    complimentary_seats: 4,
+    total_seats: 4,
+    active_members: 2,
+    pending_invites: 1,
+    seats_available: 1,
+  },
+  plan: null,
+  grants: [
+    {
+      id: "22222222-2222-4222-8222-222222222222",
+      kind: "grant",
+      seats: 4,
+      until: "2027-01-31",
+      supersedes_grant_id: null,
+      reason: "Fictional founding client",
+      granted_by: "owner@example.test",
+      created_at: "2026-10-30T01:30:00.123456+00:00",
+      live: true,
+    },
+  ],
+  can_grant: true,
+  earliest_until: "2026-10-30",
+  latest_until: "2029-11-03",
+};
+
+it("reads one organisation's seats and grants", async () => {
+  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(json(seatView));
+  await expect(
+    loadOrganisationSeats(organisation.tenant_id, { fetcher }),
+  ).resolves.toEqual(seatView);
+  expect(fetcher.mock.calls[0][0]).toBe(
+    `/v1/platform/organisations/${organisation.tenant_id}/seats`,
+  );
+  for (const invalid of [
+    { ...seatView, extra: true },
+    { ...seatView, seats: { ...seatView.seats, total_seats: -1 } },
+    { ...seatView, grants: [{ ...seatView.grants[0], kind: "refund" }] },
+  ])
+    expect(organisationSeatsSchema.safeParse(invalid).success).toBe(false);
+});
+
+it("sends a grant with its key, and an end without a date", async () => {
+  const fetcher = vi
+    .fn<typeof fetch>()
+    .mockImplementation(async () => json(seatView));
+  await grantOrganisationSeats(
+    organisation.tenant_id,
+    {
+      seats: 4,
+      until: "2027-01-31",
+      reason: " Fictional founding client ",
+      supersedes_grant_id: null,
+    },
+    { fetcher, key: "33333333-3333-4333-8333-333333333333" },
+  );
+  const [url, init] = fetcher.mock.calls[0];
+  expect(url).toBe(
+    `/v1/platform/organisations/${organisation.tenant_id}/seat-grants`,
+  );
+  expect(init?.method).toBe("POST");
+  expect(new Headers(init?.headers).get("Idempotency-Key")).toBe(
+    "33333333-3333-4333-8333-333333333333",
+  );
+  expect(JSON.parse(String(init?.body))).toEqual({
+    seats: 4,
+    until: "2027-01-31",
+    reason: "Fictional founding client",
+  });
+  await grantOrganisationSeats(
+    organisation.tenant_id,
+    {
+      seats: 0,
+      until: null,
+      reason: "Fictional move to paid",
+      supersedes_grant_id: seatView.grants[0].id,
+    },
+    { fetcher },
+  );
+  expect(JSON.parse(String(fetcher.mock.calls[1][1]?.body))).toEqual({
+    seats: 0,
+    reason: "Fictional move to paid",
+    supersedes_grant_id: seatView.grants[0].id,
+  });
+  await expect(
+    grantOrganisationSeats(
+      organisation.tenant_id,
+      {
+        seats: 4,
+        until: "31/01/2027",
+        reason: "Fictional",
+        supersedes_grant_id: null,
+      },
+      { fetcher },
+    ),
+  ).rejects.toBeInstanceOf(z.ZodError);
+  expect(fetcher).toHaveBeenCalledTimes(2);
 });

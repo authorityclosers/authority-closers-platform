@@ -98,7 +98,7 @@ class OrganisationDomainConflict(OrganisationCommandError):
 
 
 class OrganisationSeatsFull(OrganisationCommandError):
-    """An addition would exceed seats from the organisation's verified paid period."""
+    """An addition would exceed the paid period's seats plus live complimentary seats."""
 
     code = "seats_full"
     status = 409
@@ -510,10 +510,12 @@ class OrganisationService:
             return
         # Every addition holds the registry lock, so competing commands cannot
         # both consume the last seat. Accepting an invite replaces its seat.
+        # Seats are paid ones plus the owner's live complimentary grants.
         seats = await organisation_seats(self.session, tenant_id)
-        if seats["active_members"] + seats["pending_invites"] + extra > seats["paid_seats"]:
+        if seats["active_members"] + seats["pending_invites"] + extra > seats["total_seats"]:
             raise OrganisationSeatsFull(
-                "All paid seats are occupied by members or pending invites."
+                "Every seat is taken by a member or a pending invite. Remove someone or "
+                "revoke an invite to free a seat, or add seats."
             )
 
     async def _actor(

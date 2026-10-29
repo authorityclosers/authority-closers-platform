@@ -11,6 +11,13 @@ the metrics store, each projected route from the analysis engine registry, and t
   are shown apart: their AI is spent and nobody pays for it.
 - **AI on test calls:** production's canary, QA and synthetic calls plus every staging and
   development call, over the window, scaled to a month. It is a running cost.
+- **The cost register** (owner, 30 Oct 2026), once it has an item, replaces the fixed list:
+  each cost a month (one-time items spread over their life) feeds break-even, and the
+  real picture (``costs.analysis``) adds categories, cost centres, the split by product
+  and each product's profit or loss. The AI bills in the register already hold the test
+  calls' AI, so the measured line is added only when no AI-for-the-product cost is there.
+- **Money in:** live-mode monthly recurring revenue from the issued invoices, without GST,
+  less the payment fee.
 """
 
 from __future__ import annotations
@@ -24,9 +31,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.conversation_intelligence.analysis_engine import registry
 from ac_platform.conversation_intelligence.cost_metrics import TEST_KINDS, Export, Step
-from ac_platform.economics import policy
+from ac_platform.economics import costs, policy
 from ac_platform.economics.model import Fees, PlanTerms, Route, TopUp, economics
 from ac_platform.plans.models import Plan
+from ac_platform.staff_billing.revenue import billing_revenue
 
 MONTH_DAYS = 30
 TEST_AI_KEY = "ai_test_calls"
@@ -53,6 +61,48 @@ async def active_plans(db: AsyncSession) -> list[PlanTerms]:
         )
         for row in rows
     ]
+
+
+async def money_in(db: AsyncSession, *, now: datetime) -> dict[str, Any]:
+    """Live-mode recurring revenue a month without GST, and how many accounts pay."""
+    revenue = await billing_revenue(db, mode="live", now=now)
+    return {
+        "mode": revenue.mode,
+        "recurring_taxable": round(revenue.monthly_recurring_taxable_minor / 100, 2),
+        "paying_accounts": revenue.paying_accounts,
+        "active_subscriptions": revenue.active_subscriptions,
+    }
+
+
+def net_of_fee(revenue: dict[str, Any] | None, fees: Fees) -> float:
+    """Recurring revenue less the payment fee (Razorpay's rate on the GST-inclusive charge)."""
+    if not revenue or revenue["recurring_taxable"] <= 0:
+        return 0.0
+    taxable = float(revenue["recurring_taxable"])
+    _, fee, _ = fees.charge(taxable * (1 + fees.gst_rate), "web")
+    return round(taxable - fee, 2)
+
+
+def register_lines(
+    register: Sequence[dict[str, Any]], *, now: datetime, test_ai: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    """The register as the fixed lines break-even uses: each active cost a month, the
+    agents' costs as building, everything else running."""
+    month = now.date()
+    lines = [
+        {
+            "key": item["key"],
+            "label": f"{item['vendor']} · {item['label']}",
+            "rupees": round(costs.monthly(item, month), 2),
+            "kind": "building" if item["centre"] == "agents" else "running",
+            "source": item["source"],
+        }
+        for item in register
+    ]
+    lines = [line for line in lines if line["rupees"] > 0]
+    if test_ai is not None and not any(item["category"] == "ai_product" for item in register):
+        lines.insert(0, test_ai)
+    return lines
 
 
 def measure(
@@ -162,20 +212,25 @@ def build(
     environment: str,
     now: datetime,
     days: int,
+    burn: dict[str, Any] | None = None,
+    revenue: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """The economics page (pure: the caller reads the plans, the store and the settings)."""
+    """The economics page (pure: the caller reads the plans, the store, the settings, the
+    measured allocation keys and the money in)."""
     measured = measure(exports, environment=environment, now=now, days=days)
-    fixed = [
-        {
-            "key": TEST_AI_KEY,
-            "label": f"AI on test, staging and development calls (measured, last {days} days,"
-            " scaled to a month)",
-            "rupees": measured["test_ai_month"],
-            "kind": "running",
-            "source": "measured",
-        },
-        *config["fixed"],
-    ]
+    test_ai = {
+        "key": TEST_AI_KEY,
+        "label": f"AI on test, staging and development calls (measured, last {days} days,"
+        " scaled to a month)",
+        "rupees": measured["test_ai_month"],
+        "kind": "running",
+        "source": "measured",
+    }
+    register = config["costs"]
+    if register:
+        fixed = register_lines(register, now=now, test_ai=test_ai)
+    else:
+        fixed = [test_ai, *config["fixed"]]
     fees = Fees(**config["fees"])
     body = economics(
         plans,
@@ -190,6 +245,7 @@ def build(
         target_margin=config["target_margin"],
         price_floor_per_minute=config["price_floor_per_minute"],
     )
+    net = net_of_fee(revenue, fees)
     return {
         **body,
         "environment": environment,
@@ -197,4 +253,68 @@ def build(
         "measured": measured,
         "fees": config["fees"],
         "registry": {"version": registry.VERSION, "digest": registry.digest()},
+        "money_in": None if revenue is None else {**revenue, "net_month": net},
+        "costs": None
+        if not register
+        else real_costs(
+            register, body, config, now=now, burn=burn, net=net, measured=measured, days=days
+        ),
+    }
+
+
+def _contribution(body: dict[str, Any], offer_id: str) -> float | None:
+    offer = next((row for row in body["offers"] if row["id"] == offer_id), None)
+    if offer is None or not offer["break_even"]:
+        return None
+    return float(offer["break_even"]["0.5"]["contribution"])
+
+
+def real_costs(
+    register: Sequence[dict[str, Any]],
+    body: dict[str, Any],
+    config: dict[str, Any],
+    *,
+    now: datetime,
+    burn: dict[str, Any] | None,
+    net: float,
+    measured: dict[str, Any],
+    days: int,
+) -> dict[str, Any]:
+    """The register's month: categories, cost centres, the split by product, profit or loss
+    per product and for AC, with the keys it used."""
+    platform_work = config["cost_rules"]["platform_work"]
+    keys = costs.Keys(
+        tokens=(burn or {}).get("tokens") or {},
+        cpu=(burn or {}).get("cpu"),
+        revenue={"sales_xray": net} if net > 0 else {},
+    )
+    picture = costs.analysis(
+        register,
+        month=now.date(),
+        keys=keys,
+        platform_work=platform_work,
+        contribution={
+            "personal": _contribution(body, "personal.monthly.web"),
+            "seat": _contribution(body, "organisation.monthly.web"),
+        },
+    )
+    return {
+        **picture,
+        "keys": {
+            "generated_at": None if burn is None else burn["generated_at"],
+            "window_days": None if burn is None else burn["window_days"],
+            "sources": {} if burn is None else burn["sources"],
+            "tools": {
+                tool: costs.token_shares(keys, tool, platform_work)
+                for tool in ("claude", "codex")
+                if tool in keys.tokens
+            },
+            "cpu": keys.cpu,
+        },
+        # Of the AI bills, what the measured calls spent a month: real calls in this
+        # environment, and every test, staging and development call.
+        "ai_calls": {
+            "customer_month": round(measured["rupees"] * MONTH_DAYS / days, 2),
+            "test_month": measured["test_ai_month"],
+        },
     }

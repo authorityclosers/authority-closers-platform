@@ -40,6 +40,7 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         "organisations",
         "organisation_domain_settings",
         "organisation_invites",
+        "organisation_seat_grants",
         "billing_accounts",
         "billing_ledger_entries",
         "billing_credit_entries",
@@ -199,6 +200,9 @@ def test_g1_model_registry_contains_every_migrated_table() -> None:
         # Google Sheets and Drive (migration 0141).
         "lead_desk_google_connections",
         "lead_desk_sheet_rows",
+        # Websites and their pages (migration 0145).
+        "lead_desk_sites",
+        "lead_desk_site_pages",
         "person_photos",
         "person_profile_details",
         "ai_spend_settings",
