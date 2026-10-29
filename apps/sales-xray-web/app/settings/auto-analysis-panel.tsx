@@ -90,7 +90,10 @@ export function AutoAnalysisPanel() {
           <Button onClick={() => setAsking(true)}>Turn on</Button>
         </div>
       )}
-      <AutoCapturePanel consentOn={view.can_start} />
+      <AutoCapturePanel
+        consentOn={view.can_start}
+        consentGiven={view.state === "on"}
+      />
       <AutoAnalysisSheet
         open={asking}
         onClose={() => setAsking(false)}

@@ -748,6 +748,8 @@ export type RecorderProfile = {
   folders: { path: string; state: string; recordings: number }[];
   /** Another installed Phone app that saves recordings to a folder, if any. */
   switchTo: string | null;
+  /** Newest readable recording file timestamp; unknown on older apps. */
+  newestMs?: number | null;
 };
 
 export function parseRecorder(raw: unknown): RecorderProfile | null {
@@ -783,6 +785,11 @@ export function parseRecorder(raw: unknown): RecorderProfile | null {
     recording: text(value.recording) || "unknown",
     folders,
     switchTo: maker ? text(maker.label) || null : null,
+    ...(typeof value.newestMs === "number" &&
+    Number.isFinite(value.newestMs) &&
+    value.newestMs > 0
+      ? { newestMs: value.newestMs }
+      : {}),
   };
 }
 
