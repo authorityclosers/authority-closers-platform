@@ -2,6 +2,8 @@
   display: grid;
   gap: 12px;
   min-width: 0;
+  padding: 16px;
+  border-top: 1px solid var(--sx-line);
 }
 
 .capture p {
