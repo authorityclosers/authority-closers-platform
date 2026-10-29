@@ -1,0 +1,24 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "09c547908c159d53f41e675fe504943e8353de0d",
+  "full": false,
+  "checks": [
+    "web"
+  ],
+  "changed_files": [
+    "apps/admin-web/app/(console)/economics/page.tsx",
+    "apps/admin-web/app/economics/plan-prices-data.ts",
+    "apps/admin-web/app/economics/plan-prices.test.tsx",
+    "apps/admin-web/app/economics/plan-prices.tsx",
+    "apps/sales-xray-web/app/capture-guard/capture-guard.test.tsx",
+    "apps/sales-xray-web/app/capture-guard/capture-health.tsx"
+  ],
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [
+    "apps/sales-xray-web/app/capture-guard/capture-health.tsx",
+    "apps/sales-xray-web/app/capture-guard/capture-guard.test.tsx"
+  ],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}

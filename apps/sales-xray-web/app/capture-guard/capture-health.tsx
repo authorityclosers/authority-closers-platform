@@ -24,10 +24,13 @@ export function CaptureHealthView({
   onRecorder,
   onFolder,
   onRefresh,
+  checkedAt = null,
 }: {
   setup: SetupStatus | null;
   status: HealthEvidence | null;
   consentOn: boolean;
+  /** When this phone last answered the check; the age is counted from it, never read in render. */
+  checkedAt?: number | null;
   onRecorder: () => void;
   onFolder: () => void;
   onRefresh: () => void;
@@ -38,8 +41,8 @@ export function CaptureHealthView({
     ? null
     : (setup?.recorder?.newestMs ?? status?.lastRecordingSeenMs);
   const ago =
-    lastSeen && lastSeen <= Date.now()
-      ? Math.max(0, Math.floor((Date.now() - lastSeen) / 60_000))
+    lastSeen && checkedAt !== null && lastSeen <= checkedAt
+      ? Math.max(0, Math.floor((checkedAt - lastSeen) / 60_000))
       : null;
   return (
     <section id="calls-setup" aria-label="Calls setup check">
@@ -127,9 +130,14 @@ export function CaptureHealth({
   consentOn: boolean;
 }) {
   const [setup, setSetup] = useState<SetupStatus | null>(null);
-  const refresh = useCallback(() => {
-    void setupStatus().then(setSetup);
+  const [checkedAt, setCheckedAt] = useState<number | null>(null);
+  const answered = useCallback((next: SetupStatus | null) => {
+    setSetup(next);
+    setCheckedAt(Date.now());
   }, []);
+  const refresh = useCallback(() => {
+    void setupStatus().then(answered);
+  }, [answered]);
   useEffect(() => {
     refresh();
     return onPhoneSignal((signal) => {
@@ -149,6 +157,7 @@ export function CaptureHealth({
       setup={setup}
       status={status}
       consentOn={consentOn}
+      checkedAt={checkedAt}
       onRefresh={refresh}
       onRecorder={() => {
         void recorderOpen("settings").then((opened) => {
@@ -157,7 +166,7 @@ export function CaptureHealth({
       }}
       onFolder={() => {
         void pickRecordingsFolder().then((next) => {
-          if (next) setSetup(next);
+          if (next) answered(next);
           else explain();
         });
       }}
