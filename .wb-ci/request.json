@@ -1,0 +1,38 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "04e579d274ebbf620b958788dcebb27d77741b13",
+  "full": false,
+  "checks": [
+    "py"
+  ],
+  "changed_files": [
+    "docs/data/decisions-v0.md",
+    "packages/python/ac_platform/decisions/__init__.py",
+    "packages/python/ac_platform/decisions/__main__.py",
+    "packages/python/ac_platform/decisions/core.py",
+    "packages/python/ac_platform/decisions/features.py",
+    "packages/python/ac_platform/decisions/inventory.py",
+    "packages/python/ac_platform/decisions/prepare.py",
+    "packages/python/ac_platform/decisions/router.py",
+    "packages/python/ac_platform/decisions/suggest.py",
+    "tests/unit/decisions/test_decisions.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/unit/decisions"
+  ],
+  "include_paths": [
+    "packages/python/ac_platform/decisions/__init__.py",
+    "packages/python/ac_platform/decisions/core.py",
+    "packages/python/ac_platform/decisions/__main__.py",
+    "packages/python/ac_platform/decisions/router.py",
+    "packages/python/ac_platform/decisions/suggest.py",
+    "packages/python/ac_platform/decisions/features.py",
+    "packages/python/ac_platform/decisions/prepare.py",
+    "packages/python/ac_platform/decisions/inventory.py",
+    "tests/unit/decisions/test_decisions.py",
+    "docs/data/decisions-v0.md"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}
