@@ -36,6 +36,7 @@ Prints counts, row numbers and masked emails only; never a lead's name, number o
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import re
 import sys
@@ -52,7 +53,7 @@ from ac_platform.application.settings import get_settings
 from ac_platform.audit.service import append_audit_event
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk.capture import extract
-from ac_platform.lead_desk.models import Lead, LeadPipeline, LeadRep
+from ac_platform.lead_desk.models import Lead, LeadEvent, LeadPipeline, LeadRep
 from ac_platform.lead_desk.store import LeadDesk, Viewer, content_ref
 from ac_platform.tenancy.models import Membership
 
@@ -211,6 +212,97 @@ async def _readback(db: AsyncSession, tenant_id: UUID, labels: list[str]) -> dic
     return out
 
 
+async def import_unassigned_history(
+    db: AsyncSession, spec: dict[str, Any], *, tenant_id: UUID, actor_id: UUID, now: datetime
+) -> dict[str, int]:
+    """Import explicit CRM facts through intake, without assigning absent CRM users.
+
+    Callers own the transaction and audit. Source ids and command ids are stable across
+    reordered CSVs. Existing source content is immutable; changed exports need a new
+    reviewed command. No date in the source replaces the ingestion created_at.
+    """
+    command = UUID(spec["command_id"])
+    desk = LeadDesk(
+        db,
+        Viewer(person_id=actor_id, tenant_id=tenant_id, role="owner", name="Data import"),
+        now=now,
+    )
+    counts: Counter[str] = Counter()
+    for item in spec["history_rows"]:
+        source_ref = "crm:" + str(item["id"])
+        step = uuid5(command, source_ref)
+        fingerprint = hashlib.sha256(json.dumps(item, sort_keys=True).encode()).hexdigest()
+        existing = await db.scalar(
+            select(LeadEvent).where(LeadEvent.tenant_id == tenant_id, LeadEvent.command_id == step)
+        )
+        if existing is not None:
+            if existing.data.get("crm_sha256") != fingerprint:
+                raise ValueError("Imported source changed; refusing to overwrite history")
+            counts["done_before"] += 1
+            continue
+        lead, outcome = await desk.ingest(
+            item["record"],
+            source="csv",
+            source_label=item["label"],
+            source_ref=source_ref,
+            mapping=spec["mapping"],
+            actor=actor_id,
+            command_id=step,
+            reps=[],
+            received_at=datetime.fromisoformat(item["received_at"]),
+        )
+        if outcome not in {"created", "repeat"} or lead is None:
+            raise ValueError("CRM source collided with an existing import; transaction refused")
+        event = await db.scalar(
+            select(LeadEvent).where(LeadEvent.tenant_id == tenant_id, LeadEvent.command_id == step)
+        )
+        if event is None:
+            raise ValueError("CRM intake did not record its command")
+        if outcome == "repeat":
+            imported = await db.scalar(
+                select(LeadEvent.id)
+                .where(
+                    LeadEvent.tenant_id == tenant_id,
+                    LeadEvent.lead_id == lead.id,
+                    LeadEvent.data["crm_sha256"].as_string().is_not(None),
+                )
+                .limit(1)
+            )
+            if imported is None:
+                raise ValueError("CRM row collided with a lead outside this import")
+        event.data = {**event.data, "crm_sha256": fingerprint, "payload": item["record"]}
+        # Each observation stays in its event; the newest is the visible lead record.
+        lead.payload = item["record"]
+        lead.source_label = item["label"]
+        previous_stage = lead.stage
+        stage = str(item["stage"])
+        if stage not in {"new", "not_connected", "follow_up", "interested", "won", "lost"}:
+            raise ValueError("Unsupported explicit CRM stage")
+        lead.stage = stage
+        lead.stage_at = datetime.fromisoformat(item["stage_at"]) if item["stage_at"] else None
+        lead.first_contact_at = (
+            datetime.fromisoformat(item["first_contact_at"]) if item["first_contact_at"] else None
+        )
+        lead.next_action_at = (
+            datetime.fromisoformat(item["next_action_at"]) if item["next_action_at"] else None
+        )
+        desk._event(
+            lead,
+            "stage",
+            {
+                "previous_stage": previous_stage,
+                "stage": stage,
+                "imported": True,
+                "note": "CRM status imported; original status and dates kept in lead fields",
+            },
+            actor=actor_id,
+            command_id=uuid5(step, "stage"),
+        )
+        counts[outcome] += 1
+    await db.flush()
+    return dict(counts)
+
+
 async def run(
     db: AsyncSession, spec: dict[str, Any], *, mode: Mode, now: datetime
 ) -> dict[str, Any]:
@@ -248,7 +340,7 @@ async def run(
     pipelines: list[str] = []
     for batch in batches:
         wanted = str(batch.get("pipeline") or "main")
-        found = (
+        pipeline_found = (
             await db.execute(
                 select(LeadPipeline.key, LeadPipeline.name).where(
                     LeadPipeline.tenant_id == tenant_id,
@@ -257,10 +349,10 @@ async def run(
                 )
             )
         ).first()
-        if found is None and wanted != "main":
+        if pipeline_found is None and wanted != "main":
             raise SystemExit(json.dumps({"refused": "pipeline_not_found", "pipeline": wanted}))
         # The first pipeline is "main" even before it has a row of its own.
-        pipelines.append(found.key if found is not None else "main")
+        pipelines.append(pipeline_found.key if pipeline_found is not None else "main")
     desk = LeadDesk(
         db,
         Viewer(person_id=approver.id, tenant_id=tenant_id, role="owner", name="Data change"),
