@@ -5,6 +5,10 @@ import {
   economicsQuery,
   normalizeEconomics,
 } from "@/app/economics/economics-data";
+import {
+  PlanPricesPanel,
+  normalizePlanPrices,
+} from "@/app/economics/plan-prices";
 import { adminRead } from "@/app/lib/server-api";
 import { Page, PageHeader, QueryTabs, Unavailable } from "@/app/ui/kit";
 
@@ -13,7 +17,8 @@ export const dynamic = "force-dynamic";
 /**
  * Admin → Economics (owner, 23 Oct 2026): what each plan earns after GST and fees, what its
  * minutes cost on each analysis route, margins, break-even against the fixed costs, top-ups
- * and the free trial. Read only; Admin only.
+ * and the free trial. Read only; Admin only. Plan prices (owner, 29 Oct 2026): this
+ * environment's prices, which only the owner changes.
  */
 export default async function EconomicsPage({
   searchParams,
@@ -22,7 +27,10 @@ export default async function EconomicsPage({
 }) {
   const { env, days } = await searchParams;
   const query = economicsQuery(env, days);
-  const result = await adminRead(query.path, normalizeEconomics);
+  const [result, prices] = await Promise.all([
+    adminRead(query.path, normalizeEconomics),
+    adminRead("/v1/admin/plan-prices", normalizePlanPrices),
+  ]);
   return (
     <Page wide>
       <PageHeader
@@ -31,6 +39,11 @@ export default async function EconomicsPage({
           "What each plan earns after GST and the payment fee, what its minutes cost, and how many plans cover the fixed costs. List-price estimates for Admin only.",
         ]}
       />
+      {prices.ok ? (
+        <PlanPricesPanel prices={prices.data} />
+      ) : (
+        <Unavailable title="Plan prices" reason={prices.error} />
+      )}
       <QueryTabs
         base="/economics"
         param="env"

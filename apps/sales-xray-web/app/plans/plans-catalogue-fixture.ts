@@ -62,9 +62,10 @@ export const PLANS_CATALOGUE_FIXTURE: Plan[] = [
     name: "Organisation",
     audience: "For sales teams",
     status: "active",
+    // ₹1,999 a seat a month (owner, 29 Oct 2026; the owner sets it in Admin), plus GST.
     prices: {
-      monthlyPaise: 1000000,
-      yearlyPaise: 10800000,
+      monthlyPaise: 199900,
+      yearlyPaise: 1999000,
       monthlyCents: null,
       yearlyCents: null,
     },

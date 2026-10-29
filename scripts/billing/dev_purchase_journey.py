@@ -5,7 +5,8 @@ buyers (``sx-buyer-<run>-<n>@example.test``, verified without mail, passwords ra
 memory only), then drives the same calls the Sales Xray web app makes:
   - Personal monthly, then a Personal top-up, an unused top-up refund (credit note) and a cancel;
   - Personal yearly;
-  - Organisation monthly (2 seats) with an Organisation top-up, and Organisation yearly (3 seats);
+  - Organisation monthly (2 seats) with an Organisation top-up, and Organisation yearly (3 seats),
+    each charged the public catalogue's per-seat price before GST;
   - refusals: 1 or 50 Organisation seats, Enterprise ("talk to us"), a top-up without a plan;
   - the trial a new buyer starts with (v2: 100 minutes, 14 days).
 Every payment goes through the hosted fake checkout page (GET, then POST "pay" with its Origin),
@@ -323,6 +324,22 @@ def personal_journey(client: Client, interval: str) -> None:
         )
 
 
+def seat_price(client: Client, order: dict[str, Any], interval: str, seats: int) -> None:
+    """Checkout charged each seat the public catalogue's price, before GST (owner, 29 Oct)."""
+    status, _, catalogue = client.call("GET", "/v1/plans")
+    plans = catalogue.get("plans", []) if isinstance(catalogue, dict) else []
+    listed = next((plan for plan in plans if plan["key"] == "organisation"), {})
+    prices = listed.get("prices") or {}
+    price = prices.get("monthly_paise" if interval == "month" else "yearly_paise")
+    taxable = int((order.get("tax") or {}).get("taxable_minor", -1))
+    check(
+        f"organisation {interval}: checkout charges the catalogue seat price",
+        status == 200 and price is not None and taxable == price * seats,
+        f"₹{taxable / seats / 100:,.2f} per seat a {interval} + GST "
+        f"(catalogue ₹{(price or 0) / 100:,.2f}, revision {listed.get('revision')})",
+    )
+
+
 def organisation_journey(client: Client, name: str, interval: str, seats: int) -> None:
     status, _, org = client.call("POST", "/v1/organisation", {"name": name}, idempotent=True)
     if status != 201:
@@ -362,6 +379,7 @@ def organisation_journey(client: Client, name: str, interval: str, seats: int) -
     )
     if order is None:
         return
+    seat_price(client, order, interval, seats)
     check(f"organisation {interval}: minutes after", True, minutes(client, "organisation"))
     status, _, usage = client.call("GET", "/v1/organisation/billing")
     check(

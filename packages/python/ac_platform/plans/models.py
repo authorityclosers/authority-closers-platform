@@ -21,10 +21,12 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     DateTime,
+    ForeignKey,
     Integer,
     String,
     UniqueConstraint,
     Uuid,
+    event,
     false,
     func,
 )
@@ -196,12 +198,67 @@ class Plan(Base):
         return validate_top_up_packs(value)
 
 
+class PlanPriceHistoryError(RuntimeError):
+    """A saved price change was edited or deleted; change the price again instead."""
+
+
+class PlanPriceChange(Base):
+    """One plan price change made in Admin (owner, 29 Oct 2026; migration 20261029_0143).
+
+    The ``plans`` row carries the current price under a new revision; this row keeps the
+    price before and after, who changed it and why. Append-only: the schema gate allows no
+    triggers, so the ORM refuses updates and deletes (as for economics settings)."""
+
+    __tablename__ = "plan_price_changes"
+    __table_args__ = (
+        UniqueConstraint("plan_id", "plan_revision", name="uq_plan_price_changes_plan_revision"),
+        CheckConstraint("plan_revision >= 1", name="plan_revision_positive"),
+        CheckConstraint(
+            "monthly_price_paise IS NULL OR monthly_price_paise >= 0",
+            name="monthly_price_paise_not_negative",
+        ),
+        CheckConstraint(
+            "yearly_price_paise IS NULL OR yearly_price_paise >= 0",
+            name="yearly_price_paise_not_negative",
+        ),
+        CheckConstraint("length(trim(reason)) > 0", name="reason_present"),
+    )
+
+    id: Mapped[UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid4)
+    plan_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("plans.id", name="fk_plan_price_change_plan")
+    )
+    plan_key: Mapped[str] = mapped_column(String(40))
+    plan_revision: Mapped[int] = mapped_column(Integer)
+    monthly_price_paise: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    yearly_price_paise: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    previous_monthly_price_paise: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    previous_yearly_price_paise: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    reason: Mapped[str] = mapped_column(String(300))
+    changed_by_person_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True), ForeignKey("persons.id", name="fk_plan_price_change_person")
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+@event.listens_for(PlanPriceChange, "before_update")
+def _refuse_price_update(_mapper: object, _connection: object, _target: object) -> None:
+    raise PlanPriceHistoryError("Plan price history is append-only: change the price again.")
+
+
+@event.listens_for(PlanPriceChange, "before_delete")
+def _refuse_price_delete(_mapper: object, _connection: object, _target: object) -> None:
+    raise PlanPriceHistoryError("Plan price history is append-only: change the price again.")
+
+
 __all__ = [
     "PLAN_KEY_PATTERN",
     "PLAN_STATUSES",
     "TOP_UP_PACK_FIELDS",
     "TOP_UP_VALIDITY_RULE",
     "Plan",
+    "PlanPriceChange",
+    "PlanPriceHistoryError",
     "PlanValidationError",
     "validate_feature_keys",
     "validate_plan_key",
