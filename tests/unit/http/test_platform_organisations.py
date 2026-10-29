@@ -229,7 +229,23 @@ async def test_lists_registered_organisations_newest_first(operator):
     # The operations and public tenants are never listed.
     assert [(row["name"], row["member_count"]) for row in rows] == [("Inactive", 0), ("Alpha", 3)]
     assert rows[1]["tenant_id"] == str(state.tenant)
-    assert set(rows[0]) == {"tenant_id", "name", "member_count", "created_at"}
+    assert set(rows[0]) == {
+        "tenant_id",
+        "name",
+        "member_count",
+        "created_at",
+        "plan_name",
+        "paid_seats",
+        "complimentary_seats",
+        "pending_invites",
+        "minutes_30d",
+        "calls_30d",
+    }
+    # No organisation here has a paid period, a grant, an invite or a call.
+    assert {
+        (row["plan_name"], row["paid_seats"], row["complimentary_seats"], row["calls_30d"])
+        for row in rows
+    } == {(None, 0, 0, 0)}
     assert datetime.fromisoformat(rows[0]["created_at"]) > datetime.fromisoformat(
         rows[1]["created_at"]
     )

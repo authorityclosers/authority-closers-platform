@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""Measure what the agents' subscriptions and the ac server are spent on (owner, 30 Oct 2026:
+"correlate AI token spend to the work it went to").
+
+Nightly, as root on the ac host. It writes <store>/agent-burn.json, which Admin -> Economics
+reads to split the agents' subscriptions and the server by product:
+
+- **Agent work:** each Claude and Codex session log changed in the window (default 30 days)
+  is weighed at list-price ratios (Claude: input 1, cache write 1.25, cache read 0.1, output
+  5; Codex: input 1, cached input 0.1, output 8) and placed by the files it touched: Sales
+  X-Ray (its apps and modules), the learner app, platform and ops (infra, scripts, CI,
+  migrations), or other companies (Pulse, EA, Naya) by its working folder. A session
+  touching several areas is split by how often it named each.
+- **Laptop summaries:** a laptop may drop the same counts for its own logs into
+  <store>/agent-burn.d/<name>.json (``--summary`` prints one); counts younger than 8 days
+  are added.
+- **Server time:** CPU used since the last run, from cgroup v2: the apps (system.slice: every
+  environment's containers and services), the agents (ac.slice, where the strikes run, and
+  user.slice, where the agents' own sessions run) and the rest.
+
+The document holds counts only: no prompt, file name, path, person or session id.
+
+Usage: ac-agent-burn [--days N] [--store DIR] [--summary --source NAME --tool claude ROOT...]
+"""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+import os
+import re
+import sys
+import tempfile
+import time
+from collections import Counter
+from collections.abc import Iterable
+from datetime import UTC, datetime
+from pathlib import Path
+
+STORE = Path(os.environ.get("AC_METRICS_STORE", "/srv/authority-closers/metrics"))
+STATE = Path(os.environ.get("AC_AGENT_BURN_STATE", "/var/lib/ac-agent-burn/cpu.json"))
+CGROUP = Path(os.environ.get("AC_AGENT_BURN_CGROUP", "/sys/fs/cgroup"))
+ROOTS = {
+    "claude": ["/home/acdev/.claude/projects"],
+    "codex": [
+        "/home/acdev/.codex/sessions",
+        # The board agents' Codex sessions, one folder per Paperclip company.
+        "/home/acdev/.paperclip/instances/default/companies/*/codex-home/sessions",
+    ],
+}
+SUMMARY_MAX_AGE_DAYS = 8
+
+AREAS = (
+    (
+        "sales_xray",
+        re.compile(
+            r"apps/(sales-xray-web|admin-web|website|marketing-web)|sales-xray-apps"
+            r"|ac_platform/(lead_desk|conversation_intelligence|call_ai|call_data|one_pass"
+            r"|billing|staff_billing|plans|payments|organisations|economics|usage|usage_people"
+            r"|integrations|pulse|bug_reports|telemetry|offer_studio|intelligence|decisions"
+            r"|native_devices|provider_hub|providers|app_updates)"
+        ),
+    ),
+    (
+        "learner",
+        re.compile(
+            r"apps/(learner|academy|reflex)[\w-]*|ac_platform/(learning|coaching|enrollment"
+            r"|practice|community|knowledge|certificates)"
+        ),
+    ),
+    ("ops", re.compile(r"(^|/)(infra|scripts|\.github|db/migrations|docs/ops|tests/infra)/")),
+)
+PATH = re.compile(
+    r"(?:apps|packages|infra|scripts|db|docs|tests|\.github|services)/[\w./()\[\]-]{3,200}"
+)
+FOLDER_AREAS = (("pulse", "pulse_ea"), ("estate", "pulse_ea"), ("naya", "naya"))
+MARKERS = ('"usage"', "token_count", "session_meta", "turn_context", '"cwd"', "file_path", "/")
+
+
+def folder_area(cwd: str | None) -> str | None:
+    lowered = (cwd or "").lower()
+    for needle, area in FOLDER_AREAS:
+        if needle in lowered:
+            return area
+    return None
+
+
+def classify(paths: Iterable[str], cwd: str | None) -> dict[str, float]:
+    """A session's share per area: its folder decides for other companies; else the files
+    it named, in proportion; else unattributed."""
+    by_folder = folder_area(cwd)
+    if by_folder:
+        return {by_folder: 1.0}
+    hits: Counter[str] = Counter()
+    for path in paths:
+        for area, pattern in AREAS:
+            if pattern.search(path):
+                hits[area] += 1
+                break
+    total = sum(hits.values())
+    if not total:
+        return {"unattributed": 1.0}
+    return {area: count / total for area, count in hits.items()}
+
+
+def claude_weight(usage: dict) -> float:
+    return (
+        usage.get("input_tokens", 0)
+        + 1.25 * usage.get("cache_creation_input_tokens", 0)
+        + 0.1 * usage.get("cache_read_input_tokens", 0)
+        + 5 * usage.get("output_tokens", 0)
+    )
+
+
+def codex_weight(total: dict) -> float:
+    cached = total.get("cached_input_tokens", 0)
+    return (
+        max(0, total.get("input_tokens", 0) - cached)
+        + 0.1 * cached
+        + 8 * total.get("output_tokens", 0)
+    )
+
+
+def session(path: Path, tool: str) -> tuple[float, dict[str, float]]:
+    """(weight, share per area) of one session log."""
+    cwd: str | None = None
+    paths: list[str] = []
+    weight = 0.0
+    codex_total: dict | None = None
+    with path.open(encoding="utf-8", errors="replace") as handle:
+        for line in handle:
+            if not any(marker in line for marker in MARKERS):
+                continue
+            paths.extend(PATH.findall(line)[:20])
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(row, dict):
+                continue
+            payload = row.get("payload") if isinstance(row.get("payload"), dict) else {}
+            if cwd is None:
+                cwd = row.get("cwd") or payload.get("cwd")
+            if tool == "claude":
+                message = row.get("message")
+                if row.get("type") == "assistant" and isinstance(message, dict):
+                    usage = message.get("usage")
+                    if isinstance(usage, dict):
+                        weight += claude_weight(usage)
+            elif payload.get("type") == "token_count":
+                info = payload.get("info") or {}
+                if isinstance(info.get("total_token_usage"), dict):
+                    codex_total = info["total_token_usage"]
+    if codex_total:
+        weight += codex_weight(codex_total)
+    return weight, classify(paths, cwd)
+
+
+def scan(roots: Iterable[str], tool: str, *, days: int, now: float) -> dict[str, float]:
+    """Weighted work per area over the window for one tool's session logs."""
+    cutoff = now - days * 86_400
+    areas: Counter[str] = Counter()
+    for pattern in roots:
+        for root in sorted(glob.glob(pattern)) if "*" in pattern else [pattern]:
+            for folder, _dirs, files in os.walk(root):
+                for name in files:
+                    if not name.endswith(".jsonl"):
+                        continue
+                    path = Path(folder) / name
+                    try:
+                        if path.stat().st_mtime < cutoff:
+                            continue
+                        weight, shares = session(path, tool)
+                    except OSError:
+                        continue
+                    for area, share in shares.items():
+                        areas[area] += weight * share
+    return {area: round(value, 1) for area, value in areas.items() if value > 0}
+
+
+def cpu_now(cgroup: Path) -> dict[str, int]:
+    def usage(relative: str) -> int:
+        try:
+            for line in (cgroup / relative / "cpu.stat").read_text().splitlines():
+                if line.startswith("usage_usec "):
+                    return int(line.split()[1])
+        except (OSError, ValueError):
+            pass
+        return 0
+
+    return {
+        "total": usage("."),
+        "apps": usage("system.slice"),
+        "agents": usage("ac.slice") + usage("user.slice"),
+    }
+
+
+def cpu_shares(before: dict | None, now: dict[str, int]) -> dict[str, float] | None:
+    """Shares of the CPU used since ``before`` (since boot if there is none or it reset)."""
+    base = before if before and all(now[key] >= before.get(key, 0) for key in now) else {}
+    used = {key: now[key] - int(base.get(key, 0)) for key in now}
+    apps, agents = used["apps"], used["agents"]
+    # The root's counter can read a little under its slices' sum: never share above 100%.
+    total = max(used["total"], apps + agents)
+    if total <= 0:
+        return None
+    other = total - apps - agents
+    return {
+        "apps": round(apps / total, 4),
+        "agents": round(agents / total, 4),
+        "other": round(other / total, 4),
+    }
+
+
+def summaries(folder: Path, *, now: float) -> list[dict]:
+    """Laptop summaries younger than the cut-off."""
+    found = []
+    for path in sorted(folder.glob("*.json")) if folder.is_dir() else []:
+        try:
+            if path.stat().st_mtime < now - SUMMARY_MAX_AGE_DAYS * 86_400:
+                continue
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        if (
+            isinstance(data, dict)
+            and data.get("tool") in ROOTS
+            and isinstance(data.get("areas"), dict)
+            and isinstance(data.get("source"), str)
+        ):
+            found.append(data)
+    return found
+
+
+def document(
+    tools: dict[str, dict[str, float]],
+    sources: dict[str, dict[str, str]],
+    cpu: dict[str, float] | None,
+    *,
+    days: int,
+    generated: str,
+) -> dict:
+    return {
+        "version": 1,
+        "generated_at": generated,
+        "window_days": days,
+        "tools": {
+            tool: {"areas": areas, "sources": sources.get(tool, {})}
+            for tool, areas in tools.items()
+            if areas
+        },
+        "cpu": cpu,
+    }
+
+
+def write_atomic(path: Path, data: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle, temporary = tempfile.mkstemp(dir=path.parent, prefix=".agent-burn.")
+    with os.fdopen(handle, "w", encoding="utf-8") as out:
+        json.dump(data, out, separators=(",", ":"), sort_keys=True)
+    os.chmod(temporary, 0o644)
+    os.replace(temporary, path)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser.add_argument("--days", type=int, default=30)
+    parser.add_argument("--store", type=Path, default=STORE)
+    parser.add_argument("--summary", action="store_true", help="print one tool's counts")
+    parser.add_argument("--source", default="laptop")
+    parser.add_argument("--tool", choices=sorted(ROOTS), default="claude")
+    parser.add_argument("roots", nargs="*")
+    args = parser.parse_args(argv)
+    now = time.time()
+    generated = datetime.fromtimestamp(now, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if not 1 <= args.days <= 90:
+        parser.error("--days is 1 to 90")
+    if args.summary:
+        areas = scan(args.roots or ROOTS[args.tool], args.tool, days=args.days, now=now)
+        json.dump(
+            {
+                "tool": args.tool,
+                "source": args.source[:40],
+                "generated_at": generated,
+                "areas": areas,
+            },
+            sys.stdout,
+        )
+        return 0
+    tools: dict[str, Counter[str]] = {}
+    sources: dict[str, dict[str, str]] = {}
+    for tool, roots in ROOTS.items():
+        tools[tool] = Counter(scan(roots, tool, days=args.days, now=now))
+        sources[tool] = {"ac": generated}
+    for extra in summaries(args.store / "agent-burn.d", now=now):
+        tool = extra["tool"]
+        for area, value in extra["areas"].items():
+            if isinstance(value, int | float) and value > 0 and isinstance(area, str):
+                tools[tool][area[:40]] += float(value)
+        sources[tool][extra["source"][:40]] = str(extra.get("generated_at", ""))[:40]
+    before = None
+    try:
+        before = json.loads(STATE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        pass
+    current = cpu_now(CGROUP)
+    cpu = cpu_shares(before, current)
+    data = document(
+        {tool: dict(areas) for tool, areas in tools.items()},
+        sources,
+        cpu,
+        days=args.days,
+        generated=generated,
+    )
+    write_atomic(args.store / "agent-burn.json", data)
+    write_atomic(STATE, current)
+    print(json.dumps({"tools": {t: len(a) for t, a in tools.items()}, "cpu": cpu}))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

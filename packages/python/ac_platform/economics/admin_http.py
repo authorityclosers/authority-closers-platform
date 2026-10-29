@@ -3,8 +3,13 @@
 - GET /v1/admin/economics?env=production&days=30   what each plan earns and costs: revenue
                                                     after GST and fees, cost per plan minute
                                                     by route, margins, break-even, fixed costs
-- PUT /v1/admin/economics/settings                 fixed costs, fee rates and the model's
-                                                    choices: a new revision, audited
+- PUT /v1/admin/economics/settings                 fixed costs (or the cost register), fee
+                                                    rates and the model's choices: a new
+                                                    revision, audited
+
+The cost register's picture (owner, 30 Oct 2026) adds AC's real monthly cost by category
+and cost centre, the split by product from the measured keys (``burn``: the metrics store's
+agent-burn.json) and each product's money in (live invoices) and profit or loss.
 
 Same admission and audit as AI spend: settings are append-only revisions (migration
 20261023_0126) and every save is audited with old and new. Until the first save the code's
@@ -28,7 +33,7 @@ from ac_platform.conversation_intelligence.application import (
 )
 from ac_platform.conversation_intelligence.cost_metrics import read_store
 from ac_platform.conversation_intelligence.provider_admin import ConversationProviderAdmin
-from ac_platform.economics import policy, service, store
+from ac_platform.economics import burn, policy, service, store
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
     require_admin_surface,
@@ -77,13 +82,22 @@ def install_economics_admin_http(application: FastAPI, ctx: RouteContext) -> Non
         db = auth.database
         config, revision = await store.read(db)
         plans = await service.active_plans(db)
+        revenue = await service.money_in(db, now=datetime.now(UTC))
 
         def build() -> dict[str, Any]:
             exports, problems = read_store(settings.metrics_store_root)
+            keys = burn.read(settings.metrics_store_root)
             now = datetime.now(UTC)
             return {
                 **service.build(
-                    plans, exports, config, environment=environment, now=now, days=days
+                    plans,
+                    exports,
+                    config,
+                    environment=environment,
+                    now=now,
+                    days=days,
+                    burn=keys,
+                    revenue=revenue,
                 ),
                 "problems": [row for row in problems if row["environment"] in (environment, "all")],
             }

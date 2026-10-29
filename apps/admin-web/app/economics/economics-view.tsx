@@ -16,7 +16,9 @@ import {
   type Offer,
 } from "./economics-data";
 import styles from "./economics.module.css";
+import { CostRegisterEditor } from "./cost-register-editor";
 import { FixedCostsEditor } from "./fixed-costs-editor";
+import { RealCostsView } from "./real-costs";
 
 const ENVIRONMENT_WORDS: Record<string, string> = {
   production: "production",
@@ -317,6 +319,9 @@ export function EconomicsView({ economics }: { economics: Economics }) {
     offer?.breakEven["1.0"] ?? offer?.breakEven["1"];
   const uncharged = economics.measured.uncharged;
   const offerLabel = (id: string) => find(id)?.label ?? id;
+  const real = economics.costs;
+  const centre = (key: string) =>
+    real?.byCentre.find((row) => row.key === key)?.rupees ?? 0;
   return (
     <>
       {economics.warnings.length ? (
@@ -340,16 +345,37 @@ export function EconomicsView({ economics }: { economics: Economics }) {
           value={rate(base?.perPlanMinute ?? null)}
           note={base ? base.label : "No route"}
         />
-        <Kpi
-          label="Fixed costs a month"
-          value={rupees(economics.fixed.total)}
-          note={`${rupees(economics.fixed.running)} running · ${rupees(economics.fixed.building)} agents`}
-        />
-        <Kpi
-          label="Break-even at full use"
-          value={`${whole(personal)?.total ?? "–"} Personal`}
-          note={`or ${whole(seat)?.total ?? "–"} Organisation seats, agents included`}
-        />
+        {real ? (
+          <Kpi
+            label="Real cost a month"
+            value={rupees(real.total)}
+            note={`${rupees(centre("sales_xray"))} Sales X-Ray · ${rupees(centre("agents"))} agents · ${rupees(centre("company") + centre("people"))} company`}
+          />
+        ) : (
+          <Kpi
+            label="Fixed costs a month"
+            value={rupees(economics.fixed.total)}
+            note={`${rupees(economics.fixed.running)} running · ${rupees(economics.fixed.building)} agents`}
+          />
+        )}
+        {real ? (
+          <Kpi
+            label="AC profit a month"
+            value={
+              real.overall.profit < 0
+                ? `−${rupees(-real.overall.profit)}`
+                : rupees(real.overall.profit)
+            }
+            tone={real.overall.profit < 0 ? "bad" : "good"}
+            note={`${rupees(real.overall.moneyIn)} in · break-even ${real.overall.breakEvenPersonal ?? "–"} Personal at 50% use`}
+          />
+        ) : (
+          <Kpi
+            label="Break-even at full use"
+            value={`${whole(personal)?.total ?? "–"} Personal`}
+            note={`or ${whole(seat)?.total ?? "–"} Organisation seats, agents included`}
+          />
+        )}
         <Kpi
           label="AI on calls never charged"
           value={rupees(uncharged?.month ?? null)}
@@ -361,6 +387,7 @@ export function EconomicsView({ economics }: { economics: Economics }) {
           }
         />
       </Tiles>
+      {real ? <RealCostsView costs={real} /> : null}
       <Panel
         title="Margin a month per plan"
         sub={`After GST and the payment fee, at 25%, 50% and 100% of the plan's minutes on ${routeName(economics.breakEvenRoute).toLowerCase()}'s route · never below ${rate(economics.priceFloor)} a minute sold`}
@@ -388,26 +415,60 @@ export function EconomicsView({ economics }: { economics: Economics }) {
         <BreakEvenTable economics={economics} />
       </Panel>
       <div className={styles.columns}>
-        <Panel
-          title="Fixed costs a month"
-          sub={
-            economics.settingsRevision === null
-              ? "Estimates until invoices are entered"
-              : `Saved revision ${economics.settingsRevision}`
-          }
-        >
-          <FixedList economics={economics} />
-          {economics.settingsConfig ? (
-            <details className={styles.edit}>
-              <summary>Edit fixed costs</summary>
-              <FixedCostsEditor
-                revision={economics.settingsRevision}
-                config={economics.settingsConfig}
-                items={economics.fixed.items}
-              />
-            </details>
-          ) : null}
-        </Panel>
+        {real ? (
+          <Panel
+            title="Cost register"
+            sub={`${real.items.length} costs · saved revision ${economics.settingsRevision ?? "–"} · until Pulse finance can be read`}
+          >
+            {economics.settingsConfig ? (
+              <details className={styles.edit}>
+                <summary>Edit the cost register</summary>
+                <CostRegisterEditor
+                  revision={economics.settingsRevision}
+                  config={economics.settingsConfig}
+                  items={real.items}
+                  fixed={economics.fixed.items}
+                  platformWork={real.platformWork}
+                />
+              </details>
+            ) : null}
+          </Panel>
+        ) : (
+          <Panel
+            title="Fixed costs a month"
+            sub={
+              economics.settingsRevision === null
+                ? "Estimates until invoices are entered"
+                : `Saved revision ${economics.settingsRevision}`
+            }
+          >
+            <FixedList economics={economics} />
+            {economics.settingsConfig ? (
+              <>
+                <details className={styles.edit}>
+                  <summary>Edit fixed costs</summary>
+                  <FixedCostsEditor
+                    revision={economics.settingsRevision}
+                    config={economics.settingsConfig}
+                    items={economics.fixed.items}
+                  />
+                </details>
+                <details className={styles.edit}>
+                  <summary>
+                    Start the cost register (real costs by category and product)
+                  </summary>
+                  <CostRegisterEditor
+                    revision={economics.settingsRevision}
+                    config={economics.settingsConfig}
+                    items={[]}
+                    fixed={economics.fixed.items}
+                    platformWork="pro_rata"
+                  />
+                </details>
+              </>
+            ) : null}
+          </Panel>
+        )}
         <Panel title="Top-ups and the free trial">
           <ul className={styles.fixed}>
             {economics.topUps.map((pack) => (

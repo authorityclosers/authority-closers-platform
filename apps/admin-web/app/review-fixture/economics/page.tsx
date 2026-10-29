@@ -4,6 +4,7 @@ import { normalizeEconomics } from "../../economics/economics-data";
 import { EconomicsView } from "../../economics/economics-view";
 import { Page, PageHeader } from "../../ui/kit";
 import { economicsFixture } from "./economics-fixture";
+import { realCostsFixture } from "./real-costs-fixture";
 
 /**
  * Local review of the economics page with illustrative numbers (no API, no account). Never
@@ -17,7 +18,12 @@ export default function EconomicsFixturePage() {
         title="Economics"
         context={["Fixture: illustrative numbers"]}
       />
-      <EconomicsView economics={normalizeEconomics(economicsFixture())} />
+      <EconomicsView
+        economics={normalizeEconomics({
+          ...economicsFixture(),
+          ...realCostsFixture(),
+        })}
+      />
     </Page>
   );
 }

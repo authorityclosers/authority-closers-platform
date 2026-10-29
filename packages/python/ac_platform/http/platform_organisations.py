@@ -1,8 +1,8 @@
 """Platform-operator member management for any registered organisation."""
 
 import json
-from datetime import UTC, datetime
-from typing import Annotated
+from datetime import UTC, date, datetime, timedelta
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, FastAPI, Header, Request
@@ -10,8 +10,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
 from ac_platform.application.settings import Settings
+from ac_platform.audit.models import AuditEvent
+from ac_platform.audit.service import append_audit_event
 from ac_platform.authorization.platform import platform_projection
 from ac_platform.authorization.policy import CapabilityDenied
+from ac_platform.billing.models import BillingAccount
 from ac_platform.conversation_intelligence.models import ConversationRecording
 from ac_platform.http.auth import (
     AuthenticatedTransaction,
@@ -19,16 +22,46 @@ from ac_platform.http.auth import (
     require_admin_surface,
     require_safe_origin,
 )
-from ac_platform.http.organisation import MemberResponse, MembersResponse, OwnerTransferResponse
-from ac_platform.kernel.errors import DomainError, ResourceNotFound
+from ac_platform.http.organisation import (
+    MemberResponse,
+    MembersResponse,
+    OrganisationBillingResponse,
+    OwnerTransferResponse,
+)
+from ac_platform.kernel.errors import (
+    AuthorizationDenied,
+    DomainError,
+    ResourceConflict,
+    ResourceNotFound,
+)
+from ac_platform.organisations.invitations import active_pending_invites
+from ac_platform.organisations.seat_grants import (
+    GRANT_ACTION,
+    MAX_GRANT_DAYS,
+    MAX_GRANT_SEATS,
+    GrantCommand,
+    SeatGrantRefused,
+    complimentary_seats_by_tenant,
+    grant_history,
+    is_seat_owner,
+    last_day,
+    record_grant,
+    seat_day,
+)
 from ac_platform.organisations.service import OrganisationService
-from ac_platform.organisations.usage import member_rows
+from ac_platform.organisations.usage import (
+    current_plan,
+    member_rows,
+    organisation_seats,
+    organisation_usage,
+    paid_seats,
+)
 from ac_platform.organisations.workspace_kinds import (
     WorkspaceKind,
     classify_workspaces,
     ordered,
 )
-from ac_platform.tenancy.models import Membership, Organisation, Tenant
+from ac_platform.tenancy.models import Membership, Organisation, OrganisationInvite, Tenant
 from ac_platform.tenancy.roles import AssignableRoleName
 
 READ_CAPABILITY = "platform_tenants_read"
@@ -46,6 +79,13 @@ class PlatformOrganisationResponse(_Strict):
     name: str
     member_count: int
     created_at: datetime
+    # Seats: the paid period's, the owner's live complimentary grants, and pending invites.
+    plan_name: str | None
+    paid_seats: int
+    complimentary_seats: int
+    pending_invites: int
+    minutes_30d: float
+    calls_30d: int
 
 
 class PlatformOrganisationsResponse(_Strict):
@@ -71,6 +111,45 @@ class ReasonRequest(_Strict):
     reason: Reason
 
 
+class PlanResponse(_Strict):
+    name: str
+    interval: str
+    seats: int
+    period_end: datetime = Field(strict=False)
+
+
+class SeatGrantResponse(_Strict):
+    id: UUID = Field(strict=False)
+    kind: str
+    seats: int
+    until: date | None = Field(strict=False)
+    supersedes_grant_id: UUID | None = Field(strict=False)
+    reason: str
+    granted_by: str | None
+    created_at: datetime = Field(strict=False)
+    live: bool
+
+
+class PlatformSeatsResponse(_Strict):
+    """One organisation's seats for Admin: counts, plan, every grant and who may grant."""
+
+    seats: OrganisationBillingResponse
+    plan: PlanResponse | None
+    grants: list[SeatGrantResponse]
+    can_grant: bool
+    # The first and last day (IST) a new grant may run until.
+    earliest_until: date = Field(strict=False)
+    latest_until: date = Field(strict=False)
+
+
+class SeatGrantRequest(_Strict):
+    seats: int = Field(ge=0, le=MAX_GRANT_SEATS)
+    # The last day (IST) the seats count; omitted when ending a grant (seats 0).
+    until: date | None = Field(default=None, strict=False)
+    reason: str = Field(min_length=3, max_length=300)
+    supersedes_grant_id: UUID | None = Field(default=None, strict=False)
+
+
 class OperatorAddMemberRequest(ReasonRequest):
     email: str
     role: AssignableRoleName
@@ -83,6 +162,15 @@ class OperatorChangeRoleRequest(ReasonRequest):
 class OperatorTransferOwnerRequest(ReasonRequest):
     # A JSON body carries the identifier as a string.
     person_id: UUID = Field(strict=False)
+
+
+def _refusal(error: SeatGrantRefused) -> DomainError:
+    """The grant's refusal as the problem the HTTP layer renders, with its status."""
+    if error.status == 404:
+        return ResourceNotFound(str(error))
+    if error.status == 409:
+        return ResourceConflict(str(error))
+    return DomainError(str(error))
 
 
 def _command_id(value: Annotated[str, Header(alias="Idempotency-Key")]) -> UUID:
@@ -156,12 +244,45 @@ def install_platform_organisations_http(
             .correlate(Organisation)
             .scalar_subquery()
         )
-        rows = await auth.database.execute(
-            select(Organisation.tenant_id, Tenant.name, member_count, Organisation.created_at)
-            .join(Tenant, Tenant.id == Organisation.tenant_id)
-            .where(Organisation.tenant_id.not_in([item for item in protected if item is not None]))
-            .order_by(Organisation.created_at.desc(), Organisation.tenant_id)
+        rows = (
+            await auth.database.execute(
+                select(Organisation.tenant_id, Tenant.name, member_count, Organisation.created_at)
+                .join(Tenant, Tenant.id == Organisation.tenant_id)
+                .where(
+                    Organisation.tenant_id.not_in([item for item in protected if item is not None])
+                )
+                .order_by(Organisation.created_at.desc(), Organisation.tenant_id)
+            )
+        ).all()
+        database, now = auth.database, datetime.now(UTC)
+        listed = {tenant_id for tenant_id, *_ in rows}
+        # Plans and pending invites are read only for the organisations that have them.
+        billed = (
+            set(
+                await database.scalars(
+                    select(BillingAccount.tenant_id).where(BillingAccount.kind == "organisation")
+                )
+            )
+            & listed
         )
+        inviting = (
+            set(
+                await database.scalars(
+                    select(OrganisationInvite.tenant_id)
+                    .where(OrganisationInvite.status == "pending")
+                    .distinct()
+                )
+            )
+            & listed
+        )
+        plans = {tenant: await current_plan(database, tenant, now) for tenant in billed}
+        paid = {tenant: await paid_seats(database, tenant, now) for tenant in billed}
+        pending = {
+            tenant: len(await active_pending_invites(database, tenant_id=tenant))
+            for tenant in inviting
+        }
+        complimentary = await complimentary_seats_by_tenant(database, now)
+        usage = await organisation_usage(database, now - timedelta(days=30))
         return PlatformOrganisationsResponse(
             organisations=[
                 PlatformOrganisationResponse(
@@ -171,10 +292,106 @@ def install_platform_organisations_http(
                     created_at=created
                     if created.tzinfo is not None
                     else created.replace(tzinfo=UTC),
+                    plan_name=(plans.get(tenant_id) or {}).get("name"),
+                    paid_seats=paid.get(tenant_id, 0),
+                    complimentary_seats=complimentary.get(tenant_id, (0, None))[0],
+                    pending_invites=pending.get(tenant_id, 0),
+                    minutes_30d=round(usage.get(tenant_id, (0, 0))[0] / 60, 1),
+                    calls_30d=usage.get(tenant_id, (0, 0))[1],
                 )
                 for tenant_id, name, count, created in rows
             ]
         )
+
+    async def seat_view(auth: AuthenticatedTransaction, tenant_id: UUID) -> PlatformSeatsResponse:
+        database, now = auth.database, datetime.now(UTC)
+        today = seat_day(now)
+        body: dict[str, Any] = {
+            "seats": await organisation_seats(database, tenant_id),
+            "plan": await current_plan(database, tenant_id, now),
+            "grants": await grant_history(database, tenant_id),
+            "can_grant": await is_seat_owner(database, auth.resolved.actor.person_id),
+            "earliest_until": today.isoformat(),
+            "latest_until": (today + timedelta(days=MAX_GRANT_DAYS)).isoformat(),
+        }
+        return PlatformSeatsResponse.model_validate_json(json.dumps(body))
+
+    @router.get("/{tenant_id}/seats", response_model=PlatformSeatsResponse)
+    async def seats(
+        tenant_id: UUID, auth: AuthenticatedTransaction = actor_dependency
+    ) -> PlatformSeatsResponse:
+        await require_organisation(auth, tenant_id, READ_CAPABILITY)
+        return await seat_view(auth, tenant_id)
+
+    @router.post("/{tenant_id}/seat-grants", response_model=PlatformSeatsResponse)
+    async def grant_seats(
+        request: Request,
+        tenant_id: UUID,
+        body: SeatGrantRequest,
+        auth: AuthenticatedTransaction = actor_dependency,
+        key: UUID = command_dependency,
+    ) -> PlatformSeatsResponse:
+        """The owner gives, changes or ends complimentary seats (no payment, no billing row)."""
+        require_safe_origin(request, settings)
+        await require_organisation(auth, tenant_id, MANAGE_CAPABILITY)
+        database, actor = auth.database, auth.resolved.actor
+        if not await is_seat_owner(database, actor.person_id):
+            raise AuthorizationDenied("Only the owner (Suyash) can give complimentary seats.")
+        command = GrantCommand(
+            seats=body.seats,
+            until=body.until,
+            reason=body.reason,
+            supersedes_grant_id=body.supersedes_grant_id,
+        )
+        prior = await database.scalar(
+            select(AuditEvent).where(AuditEvent.request_id == str(key)).limit(1)
+        )
+        if prior is not None:
+            # A retried request answers with the seats as they are; another reuse is refused.
+            if (
+                prior.action != GRANT_ACTION
+                or prior.tenant_id != tenant_id
+                or prior.payload.get("intent") != command.intent()
+            ):
+                raise ResourceConflict("Idempotency-Key already records a different request.")
+            return await seat_view(auth, tenant_id)
+        before = await organisation_seats(database, tenant_id)
+        try:
+            grant, replaced = await record_grant(
+                database,
+                tenant_id=tenant_id,
+                command=command,
+                person_id=actor.person_id,
+                now=datetime.now(UTC),
+            )
+        except SeatGrantRefused as error:
+            raise _refusal(error) from None
+        after = await organisation_seats(database, tenant_id)
+        counted = ("complimentary_seats", "total_seats")
+        await append_audit_event(
+            database,
+            tenant_id=tenant_id,
+            actor_person_id=actor.person_id,
+            actor_type="person",
+            action=GRANT_ACTION,
+            resource_type="organisation_seat_grant",
+            resource_id=grant.id,
+            payload={
+                "intent": command.intent(),
+                "replaced": None
+                if replaced is None
+                else {
+                    "id": str(replaced.id),
+                    "seats": replaced.seats,
+                    "until": last_day(replaced.valid_until).isoformat(),
+                },
+                "before": {name: before[name] for name in counted},
+                "after": {name: after[name] for name in counted},
+            },
+            reason=command.reason.strip(),
+            request_id=str(key),
+        )
+        return await seat_view(auth, tenant_id)
 
     @router.get("/{tenant_id}/members", response_model=MembersResponse)
     async def members(

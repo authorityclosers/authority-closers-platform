@@ -5,6 +5,9 @@ these defaults apply. Each fixed cost says whether it is an estimate or from an 
 whether it is a running cost (servers, tools, test AI) or a building cost (the agents'
 subscriptions). The AI spent on test, staging and development calls is measured from the
 metrics store on every read and is never typed in.
+
+The cost register (owner, 30 Oct 2026) replaces the fixed-cost list once it has an item:
+each cost with its cadence, category, cost centre and allocation rule (``costs.py``).
 """
 
 from __future__ import annotations
@@ -13,17 +16,40 @@ import copy
 import math
 import re
 from collections.abc import Mapping
+from datetime import date
 from typing import Any
 
 from ac_platform.conversation_intelligence.analysis_engine import registry
+from ac_platform.economics import costs
 from ac_platform.integrations import tier_policy
 
 MEASURED_ROUTE = "measured"
 KINDS = ("running", "building")
 SOURCES = ("estimate", "invoice")
+COST_SOURCES = ("estimate", "invoice", "pulse")
 MAX_ITEMS = 40
+MAX_COSTS = 80
 MAX_RUPEES = 10_000_000
 _KEY = re.compile(r"^[a-z][a-z0-9_]{1,39}$")
+_CURRENCY = re.compile(r"^[A-Z]{3}$")
+COST_FIELDS = {
+    "key",
+    "vendor",
+    "label",
+    "category",
+    "centre",
+    "cadence",
+    "rupees",
+    "currency",
+    "original",
+    "started",
+    "ended",
+    "life_months",
+    "allocation",
+    "source",
+    "evidence",
+    "note",
+}
 
 DEFAULTS: dict[str, Any] = {
     "fixed": [
@@ -122,6 +148,12 @@ DEFAULTS: dict[str, Any] = {
     # What each plan lets apps do: the API, MCP, ChatGPT and Claude, the CLI
     # (integrations/tier_policy.py; owner, 27 Oct 2026).
     "developer_platform": copy.deepcopy(tier_policy.DEFAULTS),
+    # The cost register (owner, 30 Oct 2026): empty until the first cost is entered, so the
+    # fixed list above applies until then.
+    "costs": [],
+    # Shared platform and ops work: spread over the products by their own work, or kept
+    # as a company cost.
+    "cost_rules": {"platform_work": "pro_rata"},
 }
 
 
@@ -233,7 +265,122 @@ def validate(config: Mapping[str, Any]) -> dict[str, Any]:
             merged["price_floor_per_minute"], "price_floor_per_minute", 0, 100
         ),
         "developer_platform": _developer_platform(merged["developer_platform"]),
+        "costs": _costs(merged["costs"]),
+        "cost_rules": _cost_rules(merged["cost_rules"]),
     }
+
+
+def _date(value: Any, code: str) -> str:
+    if not isinstance(value, str):
+        raise SettingsError(code)
+    try:
+        day = date.fromisoformat(value)
+    except ValueError:
+        raise SettingsError(code) from None
+    if not date(2020, 1, 1) <= day <= date(2100, 1, 1) or day.isoformat() != value:
+        raise SettingsError(code)
+    return value
+
+
+def _allocation(rule: Any) -> dict[str, Any]:
+    if not isinstance(rule, Mapping) or rule.get("rule") not in costs.RULES:
+        raise SettingsError("cost_allocation")
+    kind = rule["rule"]
+    allowed = {"direct": {"product"}, "token_burn": {"tool"}, "fixed": {"shares"}}.get(kind, set())
+    if set(rule) - {"rule"} - allowed:
+        raise SettingsError("cost_allocation")
+    if kind == "direct":
+        if rule.get("product") not in costs.PRODUCTS:
+            raise SettingsError("cost_allocation")
+        return {"rule": kind, "product": rule["product"]}
+    if kind == "token_burn":
+        tool = rule.get("tool", "all")
+        if tool not in costs.TOOLS:
+            raise SettingsError("cost_allocation")
+        return {"rule": kind, "tool": tool}
+    if kind == "fixed":
+        shares = rule.get("shares")
+        if not isinstance(shares, Mapping) or not shares or set(shares) - set(costs.PRODUCTS):
+            raise SettingsError("cost_shares")
+        checked = {
+            product: _number(value, "cost_shares", 0, 100) for product, value in shares.items()
+        }
+        if abs(sum(checked.values()) - 100) > 0.01:
+            raise SettingsError("cost_shares")
+        return {"rule": kind, "shares": checked}
+    return {"rule": kind}
+
+
+def _costs(items: Any) -> list[dict[str, Any]]:
+    """The register, checked. People and debt are one total each, never one per person."""
+    if not isinstance(items, list) or len(items) > MAX_COSTS:
+        raise SettingsError("costs")
+    checked, seen, single = [], set(), set()
+    for item in items:
+        if not isinstance(item, Mapping) or set(item) - COST_FIELDS:
+            raise SettingsError("cost_item")
+        key = item.get("key")
+        if not isinstance(key, str) or not _KEY.fullmatch(key) or key in seen:
+            raise SettingsError("cost_key")
+        seen.add(key)
+        category, centre, cadence = item.get("category"), item.get("centre"), item.get("cadence")
+        if category not in costs.CATEGORIES:
+            raise SettingsError("cost_category")
+        if category in costs.SINGLE:
+            if category in single:
+                raise SettingsError("cost_single")
+            single.add(category)
+        if centre not in costs.CENTRES:
+            raise SettingsError("cost_centre")
+        if cadence not in costs.CADENCES:
+            raise SettingsError("cost_cadence")
+        if item.get("source", "estimate") not in COST_SOURCES:
+            raise SettingsError("cost_source")
+        currency = item.get("currency", "INR")
+        if not isinstance(currency, str) or not _CURRENCY.fullmatch(currency):
+            raise SettingsError("cost_currency")
+        row: dict[str, Any] = {
+            "key": key,
+            "vendor": _text(item.get("vendor"), "cost_vendor", 80),
+            "label": _text(item.get("label"), "cost_label", 120),
+            "category": category,
+            "centre": centre,
+            "cadence": cadence,
+            "rupees": round(_number(item.get("rupees"), "cost_rupees", 0, MAX_RUPEES), 2),
+            "currency": currency,
+            "allocation": _allocation(item.get("allocation")),
+            "source": item.get("source", "estimate"),
+        }
+        if item.get("original") is not None:
+            row["original"] = round(_number(item["original"], "cost_original", 0, MAX_RUPEES), 2)
+        if item.get("started"):
+            row["started"] = _date(item["started"], "cost_started")
+        if item.get("ended"):
+            row["ended"] = _date(item["ended"], "cost_ended")
+            if row.get("started") and row["ended"] < row["started"]:
+                raise SettingsError("cost_ended")
+        if cadence == "one_time":
+            if "started" not in row:
+                raise SettingsError("cost_started")
+            life = item.get("life_months", costs.DEFAULT_LIFE_MONTHS)
+            row["life_months"] = int(_number(life, "cost_life", 1, 120))
+        elif item.get("life_months") is not None:
+            raise SettingsError("cost_life")
+        for name, limit in (("evidence", 200), ("note", 200)):
+            if item.get(name):
+                row[name] = _text(item[name], f"cost_{name}", limit)
+        checked.append(row)
+    return checked
+
+
+def _cost_rules(rules: Any) -> dict[str, Any]:
+    if (
+        not isinstance(rules, Mapping)
+        or set(rules) != {"platform_work"}
+        or rules["platform_work"] not in costs.PLATFORM_WORK
+    ):
+        raise SettingsError("cost_rules")
+    return {"platform_work": rules["platform_work"]}
 
 
 def _developer_platform(section: Any) -> dict[str, Any]:

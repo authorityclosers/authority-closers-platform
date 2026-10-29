@@ -22,6 +22,17 @@ describe("analysis health data", () => {
         unfinished_runs: [
           { run_id: "u1", recording_id: null, state: "running" },
         ],
+        calls: [
+          {
+            event_id: "e1",
+            tenant_id: "t1",
+            workspace: "Example Sales",
+            seller: "Alex Example",
+            at: "2026-10-30T01:00:00Z",
+            seconds: 45,
+            reason: "no_recording",
+          },
+        ],
       },
       failed: [
         {
@@ -53,7 +64,20 @@ describe("analysis health data", () => {
       },
     ]);
     expect(health.retried).toBe(3);
-    expect(health.stuck.map((item) => item.kind)).toEqual(["plan", "run"]);
+    expect(health.stuck.map((item) => item.kind)).toEqual([
+      "plan",
+      "run",
+      "call",
+    ]);
+    // A lead call with no recording 30 minutes after it ended (owner order, 30 Oct 2026).
+    expect(health.stuck[2]).toMatchObject({
+      id: "e1",
+      state: "no recording",
+      since: "2026-10-30T01:00:00Z",
+      workspace: "Example Sales",
+      seller: "Alex Example",
+      seconds: 45,
+    });
     expect(health.failed[0]).toMatchObject({
       jobId: "j1",
       retryable: true,

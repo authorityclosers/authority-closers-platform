@@ -1,0 +1,13 @@
+# What the agents' subscriptions and the ac server are spent on (owner, 30 Oct 2026).
+# Counts only, into the metrics store's agent-burn.json, read by Admin -> Economics.
+[Unit]
+Description=Measure agent work per product and the server's CPU shares (counts only)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-agent-burn
+Nice=19
+IOSchedulingClass=idle
+CPUQuota=25%
+MemoryMax=512M
+TimeoutStartSec=20min

@@ -27,9 +27,43 @@ const directory = {
       name: "Example Sales Team",
       member_count: 2,
       created_at: "2026-10-01T00:00:00Z",
+      plan_name: null,
+      paid_seats: 0,
+      complimentary_seats: 4,
+      pending_invites: 1,
+      minutes_30d: 12.5,
+      calls_30d: 3,
     },
   ],
 };
+const grantId = "55555555-5555-4555-8555-555555555555";
+const seatView = (grants: unknown[] = [], can_grant = false) => ({
+  seats: {
+    paid_seats: 0,
+    complimentary_seats: grants.length ? 4 : 0,
+    total_seats: grants.length ? 4 : 0,
+    active_members: 2,
+    pending_invites: 1,
+    seats_available: grants.length ? 1 : 0,
+  },
+  plan: null,
+  grants,
+  can_grant,
+  earliest_until: "2026-10-30",
+  latest_until: "2029-11-03",
+});
+const liveGrant = {
+  id: grantId,
+  kind: "grant",
+  seats: 4,
+  until: "2027-01-31",
+  supersedes_grant_id: null,
+  reason: "Fictional founding client",
+  granted_by: "owner@example.test",
+  created_at: "2026-10-30T01:30:00+00:00",
+  live: true,
+};
+let seats = seatView();
 const member = {
   person_id: person,
   invite_id: null,
@@ -72,12 +106,17 @@ beforeEach(() => {
   disposed = false;
   vi.spyOn(platform, "loadPlatformIdentity").mockResolvedValue(identity);
   mutate = vi.fn().mockResolvedValue(Response.json(member));
+  seats = seatView();
   vi.stubGlobal(
     "fetch",
     vi.fn<typeof fetch>().mockImplementation(async (path, init) => {
       if (init?.method === "GET")
         return Response.json(
-          path === "/v1/platform/organisations" ? directory : members,
+          path === "/v1/platform/organisations"
+            ? directory
+            : String(path).endsWith("/seats")
+              ? seats
+              : members,
         );
       return mutate(path, init);
     }),
@@ -353,4 +392,127 @@ it("opens a member's days from their name; an invitation has none", async () => 
     [`/sellers/${ownerId}`, "Robin Example"],
     [`/sellers/${person}`, "Avery Example"],
   ]);
+});
+
+it("lists each organisation's plan, seats taken, free seats and use", async () => {
+  await mount();
+  const row = container.querySelector("tbody tr")!;
+  const cells = [...row.querySelectorAll("td")].map((cell) => cell.textContent);
+  expect(cells).toEqual([
+    "Example Sales Team",
+    "No paid plan",
+    "3 of 4",
+    "4",
+    "2",
+    "3",
+    "12.5",
+    expect.stringContaining("2026"),
+  ]);
+});
+
+it("shows seats to every reader but only the owner may give them", async () => {
+  seats = seatView([liveGrant], false);
+  await openMembers();
+  expect(container.textContent).toContain("Owner gives free seats");
+  expect(container.textContent).toContain("Fictional founding client");
+  expect(container.textContent).toContain("31 Jan 2027");
+  expect(container.textContent).toContain(
+    "Only the owner gives, changes or ends free seats.",
+  );
+  expect(
+    [...container.querySelectorAll("button")].some((item) =>
+      ["Give free seats", "Change", "End"].includes(
+        item.textContent?.trim() ?? "",
+      ),
+    ),
+  ).toBe(false);
+});
+
+it("the owner reviews seats before and after, then gives them with one key", async () => {
+  seats = seatView([], true);
+  const saved = seatView([liveGrant], true);
+  mutate.mockImplementation(async () => Response.json(saved));
+  await openMembers();
+  await act(async () => button("Give free seats").click());
+  const input = (label: string) =>
+    container.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)!;
+  await fill(input("Free seats"), "4");
+  await fill(input("Last day they count"), "2027-01-31");
+  expect(button("Review").disabled).toBe(true);
+  await fill(input("Reason for the free seats"), "Fictional founding client");
+  await act(async () => button("Review").click());
+  const confirm = container.querySelector(
+    '[aria-label="Confirm the free seats"]',
+  )!;
+  expect(confirm.textContent).toContain("Seats now: 0 seats (0 paid, 0 free)");
+  expect(confirm.textContent).toContain(
+    "Seats after: 4 seats (0 paid, 4 free)",
+  );
+  // Two members and an invite against four seats: nobody waits.
+  expect(confirm.textContent).not.toContain("No one is removed");
+  expect(mutate).not.toHaveBeenCalled();
+  await act(async () => button("Give 4 seats until 31 Jan 2027").click());
+  expect(mutate).toHaveBeenCalledOnce();
+  const [url, init] = mutate.mock.calls[0];
+  expect(url).toBe(base + "/seat-grants");
+  expect(init!.method).toBe("POST");
+  expect(JSON.parse(init!.body as string)).toEqual({
+    seats: 4,
+    until: "2027-01-31",
+    reason: "Fictional founding client",
+  });
+  expect(new Headers(init!.headers).get("Idempotency-Key")).toMatch(
+    /^[a-f0-9-]{36}$/,
+  );
+  expect(container.textContent).toContain("Seats saved.");
+});
+
+it("the owner ends a live grant without a date and is warned nobody is removed", async () => {
+  seats = {
+    ...seatView([liveGrant], true),
+  };
+  mutate.mockImplementation(async () => Response.json(seatView([], true)));
+  await openMembers();
+  await act(async () => button("End").click());
+  await fill(
+    container.querySelector<HTMLInputElement>(
+      'input[aria-label="Reason for the free seats"]',
+    )!,
+    "Fictional move to paid",
+  );
+  await act(async () => button("Review").click());
+  expect(container.textContent).toContain("No one is removed");
+  await act(async () => button("End 4 seats").click());
+  expect(JSON.parse(mutate.mock.calls[0][1]!.body as string)).toEqual({
+    seats: 0,
+    reason: "Fictional move to paid",
+    supersedes_grant_id: grantId,
+  });
+});
+
+it("keeps the owner's entry and shows the server's refusal", async () => {
+  seats = seatView([], true);
+  mutate.mockImplementation(async () =>
+    Response.json(
+      { detail: "Only the owner (Suyash) can give complimentary seats." },
+      { status: 403 },
+    ),
+  );
+  await openMembers();
+  await act(async () => button("Give free seats").click());
+  await fill(
+    container.querySelector<HTMLInputElement>(
+      'input[aria-label="Reason for the free seats"]',
+    )!,
+    "Fictional founding client",
+  );
+  await act(async () => button("Review").click());
+  await act(async () =>
+    [...container.querySelectorAll("button")]
+      .find((item) => item.textContent?.startsWith("Give 4 seats"))!
+      .click(),
+  );
+  expect(container.querySelector('[role="alert"]')?.textContent).toBe(
+    "Only the owner (Suyash) can give complimentary seats.",
+  );
 });

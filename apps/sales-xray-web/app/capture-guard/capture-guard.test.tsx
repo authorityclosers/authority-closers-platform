@@ -5,8 +5,11 @@ import { CaptureAttention, CaptureHealthView } from "./capture-health";
 import { CaptureRatesView } from "./capture-rates";
 import {
   AutoCaptureState,
+  CallTrack,
   CaptureStateLabel,
+  trackFor,
 } from "../leads/auto-capture-state";
+import type { CaptureCall } from "../leads/capture-guard-client";
 import { parseSetup, parseRecorder } from "../leads/native-phone";
 import { readCaptureGuard } from "../leads/capture-guard-client";
 import {
@@ -299,6 +302,93 @@ it("turning uploads on with an incomplete profile says so and links Profile", as
   expect(autoCaptureSetup).toHaveBeenCalledWith(true, true);
   expect(host.textContent).toContain("Complete your profile first");
   expect(host.querySelector('a[href="/settings/profile"]')).not.toBeNull();
+});
+
+const serverCall = (extra: Partial<CaptureCall>): CaptureCall => ({
+  event_id: "event",
+  lead_id: "lead",
+  person_id: "person",
+  at: "2026-10-30",
+  state: "waiting",
+  submission_id: null,
+  attention: false,
+  ...extra,
+});
+// Owner, 30 Oct 2026: "I need each single call getting tracked".
+it("tracks each call from dialled to its report, or where it is stuck", () => {
+  const held = { eventId: "event", state: "held", hold: "allowance" };
+  expect(trackFor(held, null)).toMatchObject({
+    done: 2,
+    stuck: true,
+    label: "Waiting for call minutes",
+    fix: { label: "Fix uploads" },
+  });
+  // The hold says why, even after the server's 30-minute deadline.
+  expect(trackFor(held, serverCall({ state: "missing" }))?.label).toBe(
+    "Waiting for call minutes",
+  );
+  expect(trackFor(null, serverCall({ state: "missing" }))).toMatchObject({
+    done: 0,
+    stuck: true,
+    fix: { href: "/settings/privacy#calls-setup" },
+  });
+  expect(trackFor({ eventId: "event", state: "waiting" }, null)).toMatchObject({
+    done: 2,
+    stuck: false,
+  });
+  expect(trackFor({ eventId: "event", state: "uploading" }, null)?.done).toBe(
+    3,
+  );
+  // Server receipts outrank a stale phone queue.
+  expect(
+    trackFor(
+      { eventId: "event", state: "waiting" },
+      serverCall({ state: "analysing" }),
+    ),
+  ).toMatchObject({ done: 4, label: "Analysing" });
+  expect(trackFor(null, serverCall({ state: "report_ready" }))?.done).toBe(6);
+  expect(
+    trackFor(null, serverCall({ state: "uploaded", attention: true })),
+  ).toMatchObject({ done: 4, stuck: true });
+  expect(trackFor(null, null, true)?.done).toBe(-1);
+  expect(trackFor(null, null)).toBeNull();
+});
+it("shows the seven steps, the stuck one and its fix", async () => {
+  await render(
+    <CallTrack
+      track={{
+        done: 2,
+        stuck: true,
+        label: "Waiting for call minutes",
+        fix: { label: "Fix uploads", href: "/settings/privacy#calls-setup" },
+      }}
+    />,
+  );
+  expect(host.querySelectorAll("i")).toHaveLength(7);
+  expect(host.querySelectorAll("i[data-done]")).toHaveLength(3);
+  expect(host.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(
+    "Stuck at Waiting, step 4 of 7",
+  );
+  expect(host.textContent).toContain("Stuck · Waiting for call minutes");
+  expect(host.querySelector("a")?.textContent).toBe("Fix uploads");
+  await act(async () => root?.unmount());
+  host.remove();
+  // Inside a row that is a link: no second link.
+  await render(
+    <CallTrack
+      track={{ done: 4, stuck: false, label: "Analysing" }}
+      links={false}
+    />,
+  );
+  expect(host.querySelector("a")).toBeNull();
+  expect(host.textContent).toContain("Analysing");
+});
+it("a list row with no capture evidence says nothing", async () => {
+  vi.mocked(autoCaptureStates).mockResolvedValue([]);
+  vi.mocked(readCaptureGuard).mockResolvedValue(null);
+  await render(<AutoCaptureState eventId="event" links={false} />);
+  await act(async () => {});
+  expect(host.textContent).toBe("");
 });
 
 it("retains measured recording time and ignores invalid timestamps", () => {

@@ -259,6 +259,57 @@ export function parseMembers(value: unknown): OrgMember[] {
   });
 }
 
+/**
+ * The organisation's seats (30 Oct 2026): paid ones plus free ones from
+ * Authority Closers, and who holds them. A pending invite holds a seat.
+ */
+export type OrgSeats = {
+  paidSeats: number;
+  complimentarySeats: number;
+  totalSeats: number;
+  activeMembers: number;
+  pendingInvites: number;
+  seatsAvailable: number;
+  /** The owner and Finance buy seats; admins see them. */
+  canBuy: boolean;
+};
+
+const SEAT_COUNTS = [
+  "paid_seats",
+  "complimentary_seats",
+  "total_seats",
+  "active_members",
+  "pending_invites",
+  "seats_available",
+] as const;
+
+export function parseSeats(value: unknown): OrgSeats {
+  const data = obj(value);
+  if (
+    !exact(value, [...SEAT_COUNTS, "can_buy"]) ||
+    !SEAT_COUNTS.every(
+      (key) => count(data[key]) && Number.isInteger(data[key]),
+    ) ||
+    typeof data.can_buy !== "boolean" ||
+    (data.paid_seats as number) + (data.complimentary_seats as number) !==
+      data.total_seats
+  )
+    throw new Error("Invalid organisation seats response.");
+  return {
+    paidSeats: data.paid_seats as number,
+    complimentarySeats: data.complimentary_seats as number,
+    totalSeats: data.total_seats as number,
+    activeMembers: data.active_members as number,
+    pendingInvites: data.pending_invites as number,
+    seatsAvailable: data.seats_available as number,
+    canBuy: data.can_buy,
+  };
+}
+
+export async function readSeats(signal?: AbortSignal): Promise<OrgSeats> {
+  return parseSeats(await call("/seats", { signal }));
+}
+
 export async function readOrganisation(
   signal?: AbortSignal,
 ): Promise<Organisation> {

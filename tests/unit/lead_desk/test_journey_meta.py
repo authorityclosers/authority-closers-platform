@@ -62,6 +62,34 @@ def test_only_meta_form_leads_go() -> None:
     assert meta.identity(lead(source_ref="abc")) is None
 
 
+def test_website_leads_go_when_a_meta_ad_or_pixel_saw_the_visit() -> None:
+    fbc = "fb.1.1729411200000.IwAR0Fictional123"
+    seen = lead(
+        source="webhook",
+        source_ref="web:0123456789abcdef",
+        payload={
+            "website": {"host": "fictionalclinic.example.com"},
+            "attribution": {"fbc": fbc, "fbp": "fb.1.1729411200000.1234567890"},
+        },
+    )
+    who = meta.identity(seen)
+    assert who is not None and who["website"] is True and who["lead_ref"] == str(LEAD)
+    body = meta.body(who, event_name="Lead", at=CREATED)
+    assert body["user_data"] == {
+        "em": [sha256("asha@example.test")],
+        "ph": [sha256("919876543210")],
+        "external_id": [sha256(str(LEAD))],
+        "country": [sha256("in")],
+        "fbc": fbc,
+        "fbp": "fb.1.1729411200000.1234567890",
+    }
+    assert "lead_id" not in body["user_data"]
+    assert body["event_id"] == meta_capi.event_id(str(LEAD), "Lead")
+    # A website visit no Meta ad or pixel saw: Meta has nothing to learn from it.
+    unseen = lead(source="webhook", payload={"website": {}, "attribution": {"gclid": "abcdefgh"}})
+    assert meta.identity(unseen) is None
+
+
 def test_the_country_comes_from_the_dialling_code() -> None:
     assert meta.country_of("+971501234567") == "ae"
     assert meta.country_of("+919876543210") == "in"

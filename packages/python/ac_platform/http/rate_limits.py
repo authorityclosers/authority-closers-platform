@@ -237,6 +237,22 @@ DEFAULT_RATE_LIMIT_RULES = (
         capacity=120,
         refill_seconds=60,
     ),
+    # A website's one line (lead_desk/websites.py): one visitor opens a few pages a
+    # minute and sends a form or two; a script that posts more is turned away.
+    RateLimitRule(
+        name="website-hello",
+        method="POST",
+        path=re.compile(r"^/v1/lead-desk/site/hello$"),
+        capacity=60,
+        refill_seconds=60,
+    ),
+    RateLimitRule(
+        name="website-lead",
+        method="POST",
+        path=re.compile(r"^/v1/lead-desk/site/lead$"),
+        capacity=8,
+        refill_seconds=600,
+    ),
 )
 
 

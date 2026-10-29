@@ -46,6 +46,7 @@ import styles from "./leads.module.css";
 import formStyles from "./meta-forms.module.css";
 import { SpendSummary } from "./ad-spend";
 import { JourneyStrip } from "./journey/journey-strip";
+import { WebsitesCard } from "./websites/websites-card";
 
 /* ---------- Meta connector API (lead_desk/connectors) ---------- */
 
@@ -1345,6 +1346,7 @@ export function SourcesView({
         className={styles.sourceCards}
         aria-label="Connect where your leads come from"
       >
+        <WebsitesCard />
         <MetaTile />
         <GoogleTile />
         <SourceRow

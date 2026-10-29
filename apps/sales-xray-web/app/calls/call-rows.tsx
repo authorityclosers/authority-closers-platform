@@ -23,6 +23,7 @@ import { Fragment, useCallback, useEffect, useState } from "react";
 import { callHref, type LibrarySubmission } from "../acquisition-client";
 import { callTitle } from "../call-label";
 import { displayName } from "../display-name";
+import { AutoCaptureState } from "../leads/auto-capture-state";
 import { handOverLead } from "../leads/lead-handoff";
 import {
   LeadsError,
@@ -108,6 +109,8 @@ export type CallRow = {
   /** The saved call whose Report a tap opens, or null. */
   report: string | null;
   leadId: string | null;
+  /** A connected phone call with a lead: it shows its way to a Report (dialled → report ready). */
+  talked?: boolean;
 };
 
 export function rowFromActivity(item: ActivityItem): CallRow {
@@ -125,6 +128,10 @@ export function rowFromActivity(item: ActivityItem): CallRow {
           : "outgoing",
     report: item.event.submission_id ?? null,
     leadId: item.lead_id,
+    talked:
+      Boolean(item.event.duration_seconds) &&
+      !item.event.simulated &&
+      (direction === "outgoing" || direction === "incoming" || !direction),
   };
 }
 
@@ -271,6 +278,9 @@ export function CallRows({
                     <Icon size={14} aria-hidden="true" />
                     {row.line}
                   </span>
+                  {row.talked && !row.report ? (
+                    <AutoCaptureState eventId={row.key} links={false} />
+                  ) : null}
                 </span>
                 <span className={styles.end}>
                   <time dateTime={row.at}>

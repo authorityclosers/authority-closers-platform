@@ -81,7 +81,11 @@ export type Health = {
     recordingId: string | null;
     state: string;
     since: string | null;
-    kind: "plan" | "run";
+    kind: "plan" | "run" | "call";
+    /** A lead call with no recording: whose and how long (never the lead's name or number). */
+    workspace?: string;
+    seller?: string;
+    seconds?: number;
   }[];
   stuckTruncated: boolean;
   runs: Duration;
@@ -178,6 +182,19 @@ export function normalizeHealth(raw: unknown): Health {
           state: read.string(row.state, "running"),
           since: null,
           kind: "run" as const,
+        };
+      }),
+      ...read.array(stuck.calls).map((item) => {
+        const row = read.object(item);
+        return {
+          id: read.string(row.event_id),
+          recordingId: null,
+          state: "no recording",
+          since: read.optionalString(row.at),
+          kind: "call" as const,
+          workspace: read.string(row.workspace, "Workspace"),
+          seller: read.string(row.seller, "Seller"),
+          seconds: read.number(row.seconds),
         };
       }),
     ],

@@ -141,7 +141,7 @@ async def _join(
                 tenant_id, policy=internal_tester_policy, environment=settings.environment
             ):
                 seats = await organisation_seats(database, tenant_id)
-                if seats["active_members"] + seats["pending_invites"] + 1 > seats["paid_seats"]:
+                if seats["active_members"] + seats["pending_invites"] + 1 > seats["total_seats"]:
                     _LOGGER.info("organisation_domain_auto_join_seats_full")
                     continue
         if member is not None and member.role == "owner":

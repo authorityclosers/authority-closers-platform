@@ -80,17 +80,22 @@ export function AutoCapturePreview() {
   useState(install);
   const mounted = useSyncExternalStore(noSubscription, browser, () => false);
   if (!mounted) return null;
-  const state = new URLSearchParams(window.location.search).get("state");
+  const params = new URLSearchParams(window.location.search);
+  const state = params.get("state");
+  // &view=calls: only the calls, so a phone-size shot shows each call's state line.
+  const callsOnly = params.get("view") === "calls";
   return (
     <main className={styles.page}>
       <h1>Privacy</h1>
-      <Panel title="Calls">
-        {state === "loading" ? (
-          <Skeleton height={300} />
-        ) : (
-          <AutoCapturePanel consentOn={state !== "no-consent"} />
-        )}
-      </Panel>
+      {callsOnly ? null : (
+        <Panel title="Calls">
+          {state === "loading" ? (
+            <Skeleton height={300} />
+          ) : (
+            <AutoCapturePanel consentOn={state !== "no-consent"} />
+          )}
+        </Panel>
+      )}
       {state === "on" || (state !== null && state in holds) ? (
         <Panel title="Alex Example’s calls">
           <ul className={styles.calls}>

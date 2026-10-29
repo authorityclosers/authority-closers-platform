@@ -40,6 +40,31 @@ After each export, `ac-budget-alerts --apply` reads the store (production only u
 
 State lives in `/var/lib/ac-budget-alerts/state.json` and the log in `/var/log/ac-budget-alerts.log`.
 
+## Agent work and server time (30 Oct 2026)
+
+`ac-agent-burn` is a root timer. It runs nightly at 23:40 UTC, at nice 19 and with at most 25% of a CPU, and writes `/srv/authority-closers/metrics/agent-burn.json`. Admin → Economics uses that file to split the agents' subscriptions and the ac server by product (`ac_platform/economics/burn.py` and `costs.py`).
+
+- **Agent work.** It reads the Claude and Codex session logs changed in the last 30 days and weighs them at list-price ratios. It places each session by the files it touched: Sales X-Ray, the learner app, or platform and ops. Pulse, EA and Naya work is placed by the session's working folder. Anything else is unattributed.
+- **A laptop's own logs.** `ac-agent-burn --summary --source laptop --tool claude <folder>` prints the same counts for a laptop's logs. Save the output as `/srv/authority-closers/metrics/agent-burn.d/laptop.json`. Counts younger than 8 days are added.
+- **Server time.** It reads CPU use since the last run from cgroup v2:
+  - apps: `system.slice` (every environment's containers and services);
+  - agents: `ac.slice` and `user.slice`.
+
+  The previous reading is kept in `/var/lib/ac-agent-burn/cpu.json`.
+- **Counts only.** The file holds no prompt, path, file name, person or session id.
+
+## New costs found in email (30 Oct 2026)
+
+`ac-cost-detect` runs as a root timer daily at 02:30 UTC. It searches AC's mailboxes, read only, for receipts, invoices, renewals and payment notices from the last 3 days.
+
+- **Proposal.** Each charge it finds gets a proposed vendor, amount (rupees and the original currency), cadence, category, cost centre and split. The proposal comes from the sender's domain and the text, and carries a confidence.
+- **Filing.** It files one AC Pulse task per charge under "AC costs: confirm new costs from email" through `ac-pulse-tasks ensure`, with the marker `cost:<hash>`, so each email is filed once. Finance confirms the task into Pulse finance and the Admin cost register.
+- **What a task holds.** The vendor, amount, date, subject and Gmail id. Never the email's body.
+- **Gmail access.** A Google service account with domain-wide delegation for `gmail.readonly` only. Its key is `/etc/ac-cost-detect/service-account.json` (root 600, from Infisical), and the mailboxes are listed in `/etc/ac-cost-detect/env` as `AC_COST_DETECT_MAILBOXES`.
+- **Before the key exists.** The unit does nothing (`ConditionPathExists`).
+- **One-off back-scan.** `ac-cost-detect --days 60` (add `--dry-run` to print instead of filing).
+- **State.** `/var/lib/ac-cost-detect/seen.json` holds message hashes only.
+
 ## Install (dev, done 19 Oct 2026)
 
 ```bash

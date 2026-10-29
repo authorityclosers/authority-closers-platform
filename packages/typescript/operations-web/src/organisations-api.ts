@@ -10,6 +10,13 @@ export const platformOrganisationsSchema = z
           name: z.string().min(1),
           member_count: z.number().int().nonnegative(),
           created_at: z.string().min(1),
+          // Seats (30 Oct 2026): the paid period's, the owner's free grants, invites.
+          plan_name: z.string().min(1).nullable(),
+          paid_seats: z.number().int().nonnegative(),
+          complimentary_seats: z.number().int().nonnegative(),
+          pending_invites: z.number().int().nonnegative(),
+          minutes_30d: z.number().nonnegative(),
+          calls_30d: z.number().int().nonnegative(),
         })
         .strict(),
     ),
@@ -24,7 +31,8 @@ export const organisationMemberSchema = z
     invite_id: z.uuid().nullable(),
     name: z.string().nullable(),
     email: z.string().nullable(),
-    role: z.enum(["owner", "admin", "member"]),
+    // Roles B (migration 0136): Sales manager, Viewer and Finance as well.
+    role: z.enum(["owner", "admin", "manager", "member", "viewer", "finance"]),
     status: z.enum(["active", "invited"]),
     joined_at: z.iso.datetime({ offset: true }).nullable(),
     last_active_at: z.iso.datetime({ offset: true }).nullable(),
@@ -204,4 +212,107 @@ export async function loadPlatformOrganisations({
     });
   }
   return platformOrganisationsSchema.parse(payload);
+}
+
+const seatCount = z.number().int().nonnegative();
+export const organisationSeatsSchema = z
+  .object({
+    seats: z
+      .object({
+        paid_seats: seatCount,
+        complimentary_seats: seatCount,
+        total_seats: seatCount,
+        active_members: seatCount,
+        pending_invites: seatCount,
+        seats_available: seatCount,
+      })
+      .strict(),
+    plan: z
+      .object({
+        name: z.string().min(1),
+        interval: z.string().min(1),
+        seats: seatCount,
+        period_end: z.iso.datetime({ offset: true }),
+      })
+      .strict()
+      .nullable(),
+    grants: z.array(
+      z
+        .object({
+          id: z.uuid(),
+          kind: z.enum(["grant", "change", "end"]),
+          seats: seatCount,
+          until: z.iso.date().nullable(),
+          supersedes_grant_id: z.uuid().nullable(),
+          reason: z.string().min(1),
+          granted_by: z.string().nullable(),
+          created_at: z.iso.datetime({ offset: true }),
+          live: z.boolean(),
+        })
+        .strict(),
+    ),
+    can_grant: z.boolean(),
+    earliest_until: z.iso.date(),
+    latest_until: z.iso.date(),
+  })
+  .strict();
+export type OrganisationSeats = z.infer<typeof organisationSeatsSchema>;
+export type SeatGrant = OrganisationSeats["grants"][number];
+/** A new grant, a change to a live one, or its end (seats 0, no date). */
+export type SeatGrantCommand = {
+  seats: number;
+  until: string | null;
+  reason: string;
+  supersedes_grant_id: string | null;
+};
+
+export async function loadOrganisationSeats(
+  tenantId: string,
+  { fetcher = fetch, signal }: RequestOptions = {},
+) {
+  return organisationSeatsSchema.parse(
+    await memberRequest(
+      organisationPath(tenantId) + "/seats",
+      { method: "GET", headers: { accept: "application/json" }, signal },
+      fetcher,
+    ),
+  );
+}
+
+/** The owner gives, changes or ends complimentary seats; the server audits it. */
+export async function grantOrganisationSeats(
+  tenantId: string,
+  command: SeatGrantCommand,
+  {
+    fetcher = fetch,
+    signal,
+    key = crypto.randomUUID(),
+  }: RequestOptions & { key?: string } = {},
+) {
+  const body = {
+    seats: z.number().int().min(0).max(500).parse(command.seats),
+    reason: z.string().trim().min(3).max(300).parse(command.reason),
+    ...(command.until === null
+      ? {}
+      : { until: z.iso.date().parse(command.until) }),
+    ...(command.supersedes_grant_id === null
+      ? {}
+      : { supersedes_grant_id: z.uuid().parse(command.supersedes_grant_id) }),
+  };
+  return organisationSeatsSchema.parse(
+    await memberRequest(
+      organisationPath(tenantId) + "/seat-grants",
+      {
+        method: "POST",
+        signal,
+        body: JSON.stringify(body),
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+          "Idempotency-Key": key,
+        },
+      },
+      fetcher,
+    ),
+  );
 }

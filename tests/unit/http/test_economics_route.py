@@ -87,6 +87,14 @@ def _admitted(monkeypatch: pytest.MonkeyPatch) -> None:
     async def active_plans(_db: Any) -> list[PlanTerms]:
         return [PERSONAL]
 
+    async def money_in(_db: Any, *, now: Any) -> dict[str, Any]:
+        return {
+            "mode": "live",
+            "recurring_taxable": 0.0,
+            "paying_accounts": 0,
+            "active_subscriptions": 0,
+        }
+
     async def read(_db: Any) -> tuple[dict[str, Any], int | None]:
         if not SAVED:
             return policy.validate({}), None
@@ -101,6 +109,7 @@ def _admitted(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(ConversationProviderAdmin, "admit", admit)
     monkeypatch.setattr(service, "active_plans", active_plans)
+    monkeypatch.setattr(service, "money_in", money_in)
     monkeypatch.setattr(store, "read", read)
     monkeypatch.setattr(store, "save", save)
     monkeypatch.setattr(AuditRepository, "__init__", lambda self, _db: None)

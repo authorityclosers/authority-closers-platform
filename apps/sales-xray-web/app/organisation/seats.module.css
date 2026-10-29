@@ -1,0 +1,239 @@
+/* Seats on the Team tab: the same surface, line and type as the People list. */
+
+.section {
+  display: grid;
+  align-content: start;
+  min-width: 0;
+  gap: 8px;
+}
+
+.head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 2px 12px;
+  min-height: 24px;
+}
+
+.title {
+  margin: 0;
+  color: var(--lx-ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.summary {
+  color: var(--lx-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.card {
+  display: grid;
+  min-width: 0;
+  gap: 10px;
+  padding: 14px;
+  overflow: hidden;
+  border: 1px solid var(--lx-line);
+  border-radius: var(--lx-radius-md);
+  background: var(--lx-surface);
+  box-shadow: var(--lx-shadow-1);
+}
+
+.card[data-list] {
+  gap: 0;
+  padding: 0;
+}
+
+/* Members, then invites, on the free part of the bar. */
+.meter {
+  display: flex;
+  height: 10px;
+  overflow: hidden;
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-sunken);
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  min-width: 0;
+}
+
+.meter i[data-part="members"] {
+  background: var(--lx-teal);
+}
+
+.meter i[data-part="invites"] {
+  background: var(--lx-info);
+  opacity: 0.55;
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--lx-ink-3);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.legend li::before {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--lx-sunken);
+  box-shadow: inset 0 0 0 1px var(--lx-line-strong);
+  content: "";
+}
+
+.legend li[data-part="members"]::before {
+  background: var(--lx-teal);
+  box-shadow: none;
+}
+
+.legend li[data-part="invites"]::before {
+  background: var(--lx-info);
+  box-shadow: none;
+  opacity: 0.55;
+}
+
+.foot,
+.empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+}
+
+.note,
+.empty p {
+  flex: 1 1 220px;
+  min-width: 0;
+  margin: 0;
+  color: var(--lx-muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.empty p b {
+  color: var(--lx-ink);
+}
+
+/* A compact secondary chip: the Team tab's one filled action stays Invite. */
+.chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  box-sizing: border-box;
+  padding: 0 12px;
+  border: 1px solid var(--lx-line-strong);
+  border-radius: var(--lx-radius-pill);
+  background: var(--lx-surface);
+  color: var(--lx-ink);
+  cursor: pointer;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.chip:hover {
+  background: var(--lx-paper-2);
+}
+
+.chip:focus-visible {
+  box-shadow: var(--lx-ring-focus);
+  outline: none;
+}
+
+.listTitle {
+  margin: 0;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--lx-line-soft);
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.holders {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.holder {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 9px 14px;
+}
+
+.holder + .holder {
+  border-top: 1px solid var(--lx-line-soft);
+}
+
+.holderName {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.holderName b {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--lx-ink);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.holder small {
+  color: var(--lx-muted);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.quiet {
+  flex: none;
+  padding: 0 6px;
+  border-radius: var(--lx-radius-xs);
+  background: var(--lx-sunken);
+  color: var(--lx-ink-3);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 18px;
+}
+
+.skeletonLine {
+  display: block;
+  width: 60%;
+  height: 14px;
+  border-radius: var(--lx-radius-xs);
+  background: var(--lx-sunken);
+}
+
+.skeletonLine[data-short] {
+  width: 35%;
+}
+
+@media (max-width: 720px) {
+  .chip {
+    height: 44px;
+    min-width: 44px;
+  }
+}
