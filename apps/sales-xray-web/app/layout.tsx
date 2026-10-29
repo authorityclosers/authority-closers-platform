@@ -19,6 +19,10 @@ import {
 } from "./ui/look";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { LiveDataBanner } from "./live-data-banner";
+import {
+  AppCompatibilityProvider,
+  FeatureGate,
+} from "./app-compatibility-provider";
 import { AppSession } from "./app-session";
 import { InitialSessionProvider } from "./initial-session";
 import { DisplayDatesProvider } from "./display-clock";
@@ -111,31 +115,35 @@ export default async function Layout({
         <ThemeProvider controlEnabled={themeControl}>
           {/* The root layout persists across client navigation, so a live
               upload is owned here rather than by the page that started it. */}
-          <UploadSessionProvider>
-            <InitialSessionProvider value={initialSession}>
-              <DisplayDatesProvider value={displayDates}>
-                <AppSession>
-                  {liveDataMode ? (
-                    <LiveDataBanner>{children}</LiveDataBanner>
-                  ) : (
-                    children
-                  )}
-                </AppSession>
-              </DisplayDatesProvider>
-            </InitialSessionProvider>
-            <UploadIndicator />
-            <NoticeCenter />
-            {/* Releases: one fetch layer waits them out behind a calm banner. */}
-            <ReleaseHoldBanner />
-            {/* Usage and performance telemetry, sent only for people it is on for. */}
-            <TelemetryAuto />
-            {/* Microsoft Clarity: only for a signed-in person it is on for, in production. */}
-            <ClarityGate />
-            <PressFeedback />
-            {/* Inside the phone app: this page is up, so a new live web
+          <AppCompatibilityProvider>
+            <UploadSessionProvider>
+              <InitialSessionProvider value={initialSession}>
+                <DisplayDatesProvider value={displayDates}>
+                  <AppSession>
+                    {liveDataMode ? (
+                      <LiveDataBanner>{children}</LiveDataBanner>
+                    ) : (
+                      children
+                    )}
+                  </AppSession>
+                </DisplayDatesProvider>
+              </InitialSessionProvider>
+              <UploadIndicator />
+              <NoticeCenter />
+              {/* Releases: one fetch layer waits them out behind a calm banner. */}
+              <ReleaseHoldBanner />
+              {/* Usage and performance telemetry, sent only for people it is on for. */}
+              <TelemetryAuto />
+              {/* Microsoft Clarity: only for a signed-in person it is on for, in production. */}
+              <ClarityGate />
+              <FeatureGate feature="press_feedback">
+                <PressFeedback />
+              </FeatureGate>
+              {/* Inside the phone app: this page is up, so a new live web
                 update is kept rather than rolled back (web-ready.tsx). */}
-            <WebReady />
-          </UploadSessionProvider>
+              <WebReady />
+            </UploadSessionProvider>
+          </AppCompatibilityProvider>
         </ThemeProvider>
       </body>
     </html>

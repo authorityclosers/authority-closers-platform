@@ -1,0 +1,48 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "8e6bc5dcd3e340ae953d1b0893b7115ed6d9bd4b",
+  "full": false,
+  "checks": [
+    "py",
+    "web"
+  ],
+  "changed_files": [
+    "apps/sales-xray-web/app/app-compatibility-provider.test.tsx",
+    "apps/sales-xray-web/app/app-compatibility-provider.tsx",
+    "apps/sales-xray-web/app/app-compatibility.module.css",
+    "apps/sales-xray-web/app/app-compatibility.test.ts",
+    "apps/sales-xray-web/app/app-compatibility.ts",
+    "apps/sales-xray-web/app/layout.tsx",
+    "docs/data/lake-queries.md",
+    "docs/ops/app-compatibility.md",
+    "infra/application/scripts/ac-lake-database-url",
+    "infra/application/systemd/ac-lake-export@production.service.d/50-database-url.conf",
+    "packages/python/ac_platform/application/settings.py",
+    "packages/python/ac_platform/http/app_config.py",
+    "packages/python/ac_platform/http/routes/app_config.py",
+    "tests/infra/test_lake_database_url.py",
+    "tests/unit/http/test_app_config.py",
+    "tests/unit/http/test_route_registry.py"
+  ],
+  "routes": [],
+  "py_tests": [
+    "tests/unit/http/test_app_config.py",
+    "tests/unit/http/test_route_registry.py"
+  ],
+  "include_paths": [
+    "packages/python/ac_platform/application/settings.py",
+    "packages/python/ac_platform/http/app_config.py",
+    "packages/python/ac_platform/http/routes/app_config.py",
+    "tests/unit/http/test_app_config.py",
+    "tests/unit/http/test_route_registry.py",
+    "apps/sales-xray-web/app/app-compatibility.ts",
+    "apps/sales-xray-web/app/app-compatibility-provider.tsx",
+    "apps/sales-xray-web/app/app-compatibility.module.css",
+    "apps/sales-xray-web/app/app-compatibility.test.ts",
+    "apps/sales-xray-web/app/app-compatibility-provider.test.tsx",
+    "apps/sales-xray-web/app/layout.tsx",
+    "docs/ops/app-compatibility.md"
+  ],
+  "py_shards": 17,
+  "requested_by": "acdev@ac-kvm4-prod"
+}
