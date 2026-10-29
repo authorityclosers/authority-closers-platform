@@ -644,9 +644,9 @@ export function MetaSetup({
           }
         >
           <p>
-            Every lead Meta still keeps, from the last 90 days and every form,
-            paused ones too. Anyone already in your leads is linked, not added
-            again.
+            Every lead Meta still keeps from the last 90 days: every Page that
+            is on, every form, paused ones too. Anyone already in your leads is
+            linked, not added again.
           </p>
           {on.map((page) =>
             runWords(page.backfill) ? (
@@ -666,9 +666,9 @@ export function MetaSetup({
                 onClick={() => void bringAllOlder()}
               >
                 <RefreshCw size={15} aria-hidden="true" />
-                {working === "older"
-                  ? "Starting…"
-                  : `Bring in older leads${on.length > 1 ? " from every Page" : ""}`}
+                {/* Short enough for one line on a 360 px phone; the step
+                    says it covers every Page that is on (owner bug #100). */}
+                {working === "older" ? "Starting…" : "Bring in older leads"}
               </Button>
             </div>
           ) : null}
