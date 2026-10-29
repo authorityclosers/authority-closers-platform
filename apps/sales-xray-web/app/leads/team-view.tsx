@@ -39,6 +39,7 @@ import {
   type CallAiSettings,
 } from "../call-ai/call-ai-client";
 import { notify } from "../notice-center";
+import { CaptureRates } from "../capture-guard/capture-rates";
 import { CallsReport } from "./calls-report";
 import { AdSpendPanel } from "./ad-spend";
 import { SlaPanel } from "./sla-panel";
@@ -589,6 +590,7 @@ export function TeamView({
 
       {rulesOnly ? null : (
         <>
+          <CaptureRates />
           <CallsReport />
 
           <SlaPanel onOpen={onOpen} readOnly={!canEdit} />

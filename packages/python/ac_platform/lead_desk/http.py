@@ -33,6 +33,7 @@ from ac_platform.identity.models import Person
 from ac_platform.integrations.ai_writes import IN_APP, AiWrites, AiWritesSettings
 from ac_platform.kernel.errors import DomainError
 from ac_platform.lead_desk import (
+    capture_guard,
     choices,
     digest_push,
     due_soon,
@@ -648,6 +649,17 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.message(lead_id, command)
+
+    @router.get("/capture-guard", response_model=capture_guard.CaptureGuard)
+    async def capture_guard_read(
+        request: Request,
+        response: Response,
+        days: int = Query(default=7, ge=1, le=31),
+        event_id: UUID | None = None,
+    ) -> capture_guard.CaptureGuard:
+        no_query(request, frozenset({"days", "event_id"}))
+        async with desk_for(request, response) as lead_desk:
+            return await capture_guard.read(lead_desk, days=days, event_id=event_id)
 
     @router.get("/badge", response_model=Badge, response_model_by_alias=True)
     async def badge(request: Request, response: Response) -> Badge:

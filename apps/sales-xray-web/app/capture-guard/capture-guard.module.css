@@ -1,0 +1,9 @@
+.state { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.state[data-missing="true"], .rate[data-missing="true"] { color: var(--sx-bad); }
+.state a { min-height: 44px; display: inline-flex; align-items: center; text-decoration: underline; }
+.rows { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.rate { display: grid; gap: 4px; border-bottom: 1px solid var(--sx-line); padding-block: 10px; overflow-wrap: anywhere; }
+.check { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 10px; border-bottom: 1px solid var(--sx-line); }
+.check span { min-width: 0; }
+.check strong, .check small { display: block; }
+.check a { display: inline-flex; align-items: center; min-height: 44px; }

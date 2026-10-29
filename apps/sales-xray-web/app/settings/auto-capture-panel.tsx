@@ -10,6 +10,7 @@ import {
   type AutoCaptureStatus,
 } from "../leads/native-phone";
 
+import { CaptureHealth } from "../capture-guard/capture-health";
 import styles from "./auto-capture-panel.module.css";
 
 /** Seller: choose a folder and enable upload after the native disclosure. */
@@ -25,7 +26,7 @@ export function AutoCapturePanel({ consentOn }: { consentOn: boolean }) {
       })
       .catch(() => undefined);
   }, [consentOn]);
-  if (!status?.supported) return null;
+  if (!status?.supported) return <CaptureHealth status={status} consentOn={consentOn} />;
   const save = async (on: boolean, wifi: boolean) => {
     setBusy(true);
     try {
@@ -44,6 +45,8 @@ export function AutoCapturePanel({ consentOn }: { consentOn: boolean }) {
   };
   return (
     <div className={styles.capture}>
+      <CaptureHealth status={status} consentOn={consentOn} />
+      <div id="automatic-call-uploads" />
       <p>
         <strong>Automatic call uploads</strong>
       </p>
