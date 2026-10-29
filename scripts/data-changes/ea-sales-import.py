@@ -5,6 +5,9 @@ explicit existing --owner-email. Dry-run by default; --apply commits the single
 transaction; --read is read-only. Recording upload/consent is a separate app step.
 --tenant-id imports into an organisation that already exists (production has one
 since 29 Oct 2026); the operator must be its active owner or admin, and none is created.
+--calls-only (with --tenant-id) adds only the call history, each call on the one existing lead
+with exactly its phone number: production's leads arrived by CSV on 28 Oct, so no lead is
+created or changed. Calls without exactly one such lead are counted, never guessed.
 Never prints personal fields, source rows, filenames or credentials.
 """
 
@@ -161,6 +164,7 @@ async def run(
     digest: str,
     now: datetime,
     tenant_id: UUID | None = None,
+    calls_only: bool = False,
 ) -> dict[str, Any]:
     settings = get_settings()
     if mode == "read":
@@ -176,6 +180,8 @@ async def run(
         return {"mode": mode, "source_sha256": digest, "after": before}
     if settings.operations_tenant_id is None or settings.public_learner_tenant_id is None:
         raise ValueError("Deployment tenant boundaries are required")
+    if calls_only and tenant_id is None:
+        raise ValueError("Calls only needs an existing organisation")
     if tenant_id is not None:
         found = await db.get(Organisation, tenant_id)
         if found is None:
@@ -202,10 +208,15 @@ async def run(
         member = await db.get(Membership, (org.tenant_id, owner.id))
         if member is None or member.status != "active" or member.role != "owner" or member.ended_at:
             raise ValueError("Owner membership is no longer active")
-    result = await importer().import_unassigned_history(
-        db, spec, tenant_id=org.tenant_id, actor_id=owner.id, now=now
+    result = (
+        {"calls_only": True}
+        if calls_only
+        else await importer().import_unassigned_history(
+            db, spec, tenant_id=org.tenant_id, actor_id=owner.id, now=now
+        )
     )
     changed_calls = 0
+    unmatched_calls = 0
     for call in calls:
         command = uuid5(COMMAND, "call:" + call["call_id"])
         existing = await db.scalar(
@@ -218,20 +229,34 @@ async def run(
             if existing.data.get("source_sha256") != fingerprint:
                 raise ValueError("Call source changed; refusing to overwrite history")
             continue
-        capture = await db.scalar(
-            select(LeadEvent).where(
-                LeadEvent.tenant_id == org.tenant_id,
-                LeadEvent.command_id == uuid5(COMMAND, "crm:" + call["lead_id"]),
+        if calls_only:
+            matches = list(
+                await db.scalars(
+                    select(Lead.id).where(
+                        Lead.tenant_id == org.tenant_id, Lead.phone == call["phone_e164"]
+                    )
+                )
             )
-        )
-        if capture is None:
-            raise ValueError("Call lead was not imported")
+            if not call["phone_e164"] or len(matches) != 1:
+                unmatched_calls += 1
+                continue
+            lead_id = matches[0]
+        else:
+            capture = await db.scalar(
+                select(LeadEvent).where(
+                    LeadEvent.tenant_id == org.tenant_id,
+                    LeadEvent.command_id == uuid5(COMMAND, "crm:" + call["lead_id"]),
+                )
+            )
+            if capture is None:
+                raise ValueError("Call lead was not imported")
+            lead_id = capture.lead_id
         call_time = datetime.fromisoformat(str(moment(call["started_at"])))
         desk = LeadDesk(
             db, Viewer(owner.id, org.tenant_id, member.role, "Data import"), now=call_time
         )
         await desk.record_call(
-            capture.lead_id,
+            lead_id,
             command_id=command,
             submission_id=None,
             simulated=False,
@@ -253,7 +278,7 @@ async def run(
             "direction": call["direction"] or "unknown",
             "recording_pending_consent": True,
         }
-        lead = await db.get(Lead, capture.lead_id)
+        lead = await db.get(Lead, lead_id)
         assert lead is not None
         lead.updated_at = now
         changed_calls += 1
@@ -288,6 +313,7 @@ async def run(
         "after": after,
         "rows": result,
         "new_calls": changed_calls,
+        "unmatched_calls": unmatched_calls,
         "analysis_started": 0,
         "recordings_uploaded": 0,
         "committed": mode == "apply",
@@ -313,6 +339,7 @@ async def main(args: argparse.Namespace) -> int:
                     digest=digest,
                     now=datetime.now(UTC),
                     tenant_id=args.tenant_id,
+                    calls_only=args.calls_only,
                 )
                 if args.apply:
                     await db.commit()
@@ -332,6 +359,9 @@ if __name__ == "__main__":
     parser.add_argument("--data-dir", type=Path, required=True)
     parser.add_argument("--owner-email", required=True)
     parser.add_argument("--tenant-id", type=UUID, help="import into this existing organisation")
+    parser.add_argument(
+        "--calls-only", action="store_true", help="only call history, on existing leads by phone"
+    )
     parser.add_argument(
         "--environment", choices=("development", "production", "test"), required=True
     )
