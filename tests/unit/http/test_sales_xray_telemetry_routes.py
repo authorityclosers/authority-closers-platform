@@ -348,8 +348,9 @@ def test_one_person_stores_at_most_the_daily_cap(harness: _Harness) -> None:
         json={"events": [harness.event(), harness.event()]},
         headers=_ORIGIN,
     )
-    assert second.status_code == 503
-    assert second.json()["code"] == "telemetry_backpressure"
+    assert second.status_code == 202
+    assert second.json()["hot_store_full"] is True
+    assert second.json()["spool_receipt"]
     assert len(harness.stored()) == 2
 
 
@@ -555,7 +556,7 @@ def test_clarity_goes_only_to_a_recorded_person_where_the_environment_has_a_proj
     assert harness.composed().get("/v1/telemetry/taxonomy").json()["session_replay"] is None
 
 
-def test_real_daily_cap_accepts_20000_and_refuses_next_event(
+def test_real_daily_cap_accepts_20000_and_spools_next_event(
     harness: _Harness, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from ac_platform.http import telemetry as intake
@@ -572,6 +573,7 @@ def test_real_daily_cap_accepts_20000_and_refuses_next_event(
     refused = client.post(
         "/v1/telemetry/events", json={"events": [harness.event()]}, headers=_ORIGIN
     )
-    assert refused.status_code == 503
-    assert refused.json()["code"] == "telemetry_backpressure"
+    assert refused.status_code == 202
+    assert refused.json()["hot_store_full"] is True
+    assert refused.json()["spool_receipt"]
     assert len(harness.stored()) == 1

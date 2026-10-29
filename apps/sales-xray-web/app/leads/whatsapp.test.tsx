@@ -347,3 +347,26 @@ it("shows managers who is waiting past the target now and opens that lead", asyn
   await act(async () => button("Kiran Rao").click());
   expect(opened).toEqual(["l9"]);
 });
+
+it("greets every new lead only once the manager confirms people agreed to WhatsApp", async () => {
+  await act(async () => root.render(<WhatsAppSettings />));
+  const greet = Array.from(
+    host.querySelectorAll<HTMLInputElement>('input[role="switch"]'),
+  ).find((input) =>
+    input.closest("label")?.textContent?.includes("Greet new leads at once"),
+  ) as HTMLInputElement;
+  await act(async () => greet.click());
+  expect(host.textContent).toContain("The WhatsApp question on your form");
+  const who = Array.from(host.querySelectorAll("select")).find((select) =>
+    Array.from(select.options).some((option) => option.value === "every_lead"),
+  ) as HTMLSelectElement;
+  await act(async () => {
+    who.value = "every_lead";
+    who.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+  expect(host.textContent).not.toContain("The WhatsApp question on your form");
+  expect(host.textContent).toContain(
+    "People who reach us agreed to hear from us on WhatsApp",
+  );
+  expect(host.textContent).toContain("Never file imports.");
+});

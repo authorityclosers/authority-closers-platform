@@ -1,0 +1,19 @@
+# Reviewed activation overlay. Orchestrator adds it to the release's compose inputs
+# after creating the private writable journal and read-only Admin status directory.
+services:
+  api:
+    environment:
+      AC_TELEMETRY_SPOOL_ROOT: /var/lib/ac-telemetry
+    volumes:
+      - type: bind
+        source: /srv/authority-closers/application/intake-spool/${AC_ENVIRONMENT:?AC_ENVIRONMENT must isolate telemetry}/telemetry/${AC_ENVIRONMENT:?AC_ENVIRONMENT must isolate telemetry}
+        target: /var/lib/ac-telemetry/${AC_ENVIRONMENT:?AC_ENVIRONMENT must isolate telemetry}
+        read_only: false
+        bind:
+          create_host_path: false
+      - type: bind
+        source: /var/lib/ac-telemetry-heartbeat
+        target: /var/lib/ac-telemetry-heartbeat
+        read_only: true
+        bind:
+          create_host_path: false

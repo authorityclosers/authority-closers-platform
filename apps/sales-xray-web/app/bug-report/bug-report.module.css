@@ -54,6 +54,49 @@
   font-weight: 600;
 }
 
+.fieldHead {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0 12px;
+  min-width: 0;
+  min-height: 20px;
+}
+
+/* An old draft came back: say so, with Clear beside it (bug 106, 30 Oct 2026). */
+.restored {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: -6px 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+/* Cancel with words written asks before they go (as Add lead does). */
+.discardAsk {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.discardAsk > span {
+  margin-right: auto;
+  color: var(--sx-ink);
+  font-weight: 600;
+}
+
+/* Phones: the question on its own line, both answers together under it. */
+@media (max-width: 479.98px) {
+  .discardAsk > span {
+    flex-basis: 100%;
+  }
+}
+
 .words {
   width: 100%;
   min-height: 112px;

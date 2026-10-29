@@ -55,6 +55,7 @@ from ac_platform.conversation_intelligence.provider_admin import ConversationPro
 from ac_platform.http.auth import AuthenticatedTransaction, require_admin_surface
 from ac_platform.http.routes import RouteContext
 from ac_platform.telemetry import admin_view, daily_export, friction, improvement, speed_view
+from ac_platform.telemetry.heartbeat import read_status
 from ac_platform.usage_people.pseudonyms import ensure_key
 
 PRIVATE = {"Cache-Control": "private, no-store"}
@@ -101,7 +102,7 @@ def install_admin_telemetry_http(application: FastAPI, ctx: RouteContext) -> Non
             return rows, admin_view.read_consent(connection)
 
         rows, consent = await auth.database.run_sync(read)
-        return admin_view.overview(
+        result = admin_view.overview(
             rows,
             now=now,
             window=window,
@@ -109,6 +110,8 @@ def install_admin_telemetry_http(application: FastAPI, ctx: RouteContext) -> Non
             consent=consent,
             environment=settings.environment,
         )
+        result["heartbeat"] = await run_sync(read_status, settings.environment)
+        return result
 
     async def read_window(
         auth: AuthenticatedTransaction, since: datetime, now: datetime
@@ -128,9 +131,11 @@ def install_admin_telemetry_http(application: FastAPI, ctx: RouteContext) -> Non
         await admit(request, response, auth)
         now = datetime.now(UTC)
         rows = await read_window(auth, now - admin_view.WINDOWS[window], now)
-        return speed_view.speed(
+        result = speed_view.speed(
             rows, now=now, window=window, app=app, environment=settings.environment
         )
+        result["heartbeat"] = await run_sync(read_status, settings.environment)
+        return result
 
     def release_name(value: str | None, field: str) -> str | None:
         if value is not None and not (0 < len(value) <= 64):

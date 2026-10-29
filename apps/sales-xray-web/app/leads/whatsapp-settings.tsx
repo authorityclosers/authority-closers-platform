@@ -92,6 +92,7 @@ function AutoRepliesForm({
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
   const first = rules.firstReply;
+  const every = first.who === "every_lead";
   const late = rules.outOfHours;
   const dirty = JSON.stringify(rules) !== JSON.stringify(number.autoReplies);
   const change = (next: AutoReplies) => {
@@ -118,12 +119,41 @@ function AutoRepliesForm({
   return (
     <Group title="Automatic replies">
       <SwitchRow
-        label="Greet new ad leads at once"
-        hint="Only people whose lead form said yes to WhatsApp get it."
+        label="Greet new leads at once"
+        hint={
+          every
+            ? "Every new lead from your forms, ads, website or added by hand. Never file imports."
+            : "Only people whose lead form said yes to WhatsApp get it."
+        }
         checked={first.on}
         onChange={(on) => change({ ...rules, firstReply: { ...first, on } })}
       >
         <div className={cardStyles.fields}>
+          <label className={cardStyles.field}>
+            <span className={cardStyles.fieldLabel}>
+              <strong>Who gets it</strong>
+            </span>
+            <select
+              value={every ? "every_lead" : "form_yes"}
+              onChange={(event) =>
+                change({
+                  ...rules,
+                  firstReply: {
+                    ...first,
+                    who:
+                      event.target.value === "every_lead"
+                        ? "every_lead"
+                        : "form_yes",
+                  },
+                })
+              }
+            >
+              <option value="form_yes">
+                Ad leads who said yes on the form
+              </option>
+              <option value="every_lead">Every new lead</option>
+            </select>
+          </label>
           <label className={cardStyles.field}>
             <span className={cardStyles.fieldLabel}>
               <strong>Template</strong>
@@ -152,23 +182,50 @@ function AutoRepliesForm({
               ))}
             </select>
           </label>
-          <label className={cardStyles.field}>
-            <span className={cardStyles.fieldLabel}>
-              <strong>The WhatsApp question on your form</strong>
-              <small>Exactly as it is on your lead form.</small>
-            </span>
-            <input
-              value={first.consentQuestion ?? ""}
-              maxLength={200}
-              placeholder="e.g. Can we message you on WhatsApp?"
-              onChange={(event) =>
-                change({
-                  ...rules,
-                  firstReply: { ...first, consentQuestion: event.target.value },
-                })
-              }
-            />
-          </label>
+          {every ? (
+            <label className={cardStyles.field}>
+              <span className={cardStyles.fieldLabel}>
+                <input
+                  type="checkbox"
+                  checked={Boolean(first.agreed)}
+                  onChange={(event) =>
+                    change({
+                      ...rules,
+                      firstReply: { ...first, agreed: event.target.checked },
+                    })
+                  }
+                />{" "}
+                <strong>
+                  People who reach us agreed to hear from us on WhatsApp
+                </strong>
+                <small>
+                  WhatsApp allows a first message only then. Anyone who says no
+                  never gets one.
+                </small>
+              </span>
+            </label>
+          ) : (
+            <label className={cardStyles.field}>
+              <span className={cardStyles.fieldLabel}>
+                <strong>The WhatsApp question on your form</strong>
+                <small>Exactly as it is on your lead form.</small>
+              </span>
+              <input
+                value={first.consentQuestion ?? ""}
+                maxLength={200}
+                placeholder="e.g. Can we message you on WhatsApp?"
+                onChange={(event) =>
+                  change({
+                    ...rules,
+                    firstReply: {
+                      ...first,
+                      consentQuestion: event.target.value,
+                    },
+                  })
+                }
+              />
+            </label>
+          )}
         </div>
       </SwitchRow>
       <SwitchRow

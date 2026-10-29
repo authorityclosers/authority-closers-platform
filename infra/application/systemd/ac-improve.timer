@@ -1,0 +1,13 @@
+[Unit]
+Description=Weekly improvement review (install disabled; orchestrator enables after review)
+
+[Timer]
+OnCalendar=Mon *-*-* 04:00:00 UTC
+RandomizedDelaySec=30m
+Persistent=true
+Unit=ac-improve.service
+
+# Deliberately no Install section: no enablement by builders.
+
+[Install]
+WantedBy=timers.target

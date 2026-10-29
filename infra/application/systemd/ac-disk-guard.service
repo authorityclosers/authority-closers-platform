@@ -1,0 +1,11 @@
+[Unit]
+Description=Reclaim approved caches and backups until the disk free-space target is met
+After=local-fs.target docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/ac-disk-guard
+Nice=19
+IOSchedulingClass=idle
+TimeoutStartSec=30min
+UMask=0077

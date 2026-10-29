@@ -8,6 +8,8 @@
  * `?view=sheet` (default): the reporter, with the picture it took of this screen.
  * `?view=you`: the You menu with its Report a problem row.
  * `?view=typed`: the same with words typed and "This stops my work" on.
+ * `?view=discard`: typed, then Cancel: "Discard this report?".
+ * `?view=restored`: typed, closed with X and opened again: "Draft restored · Clear".
  * `?view=card`: an error corner card with its Report button.
  * `?view=private`: opened on a call's Report: no picture is taken.
  * `?view=sent`: after Send report: "We'll tell you when it's fixed".
@@ -133,7 +135,7 @@ function Preview() {
         press("Your reports");
         return;
       }
-      if (view !== "typed" && view !== "sent") return;
+      if (!["typed", "sent", "discard", "restored"].includes(view)) return;
       await pause(300);
       if (stopped) return;
       const area =
@@ -149,6 +151,20 @@ function Preview() {
         area.dispatchEvent(new Event("input", { bubbles: true }));
       }
       press("This stops my work");
+      if (view === "discard") {
+        await pause(300);
+        press("Cancel");
+        return;
+      }
+      if (view === "restored") {
+        await pause(300);
+        document
+          .querySelector<HTMLButtonElement>('dialog button[aria-label="Close"]')
+          ?.click();
+        await pause(700);
+        if (!stopped) openBugReport();
+        return;
+      }
       if (view !== "sent") return;
       await pause(400);
       document.querySelector<HTMLFormElement>("dialog form")?.requestSubmit();

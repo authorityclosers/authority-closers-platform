@@ -56,6 +56,31 @@
 .content > p {
   margin-top: 0;
 }
-.check > :last-child {
+.check > :last-child,
+.attention > :last-child {
   flex-shrink: 0;
+}
+/* Why calls wait: leads the setup check (30 Oct 2026). */
+.attention {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--sx-bad) 35%, var(--sx-line));
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sx-bad) 6%, var(--sx-paper));
+  overflow-wrap: anywhere;
+}
+.attention span {
+  min-width: 0;
+}
+.attention strong,
+.attention small {
+  display: block;
+}
+.attention a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
 }
