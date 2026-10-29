@@ -182,6 +182,18 @@ builder. After green checks, the operator installs the tested revision:
 5. Keep staging/production config absent (or `AC_LAKE_EXPORT_ENABLED=0`).
    **Production enablement belongs to the orchestrator after review.** Disabling
    the timer/flag stops future writes and does not delete archived objects.
+6. Production (owner approval 29 Oct 2026: pseudonymised analytics and Lead Desk event
+   metadata in the private Sydney archive, kept under 180 days). Production's PostgreSQL is
+   reachable only on its Docker data network, so `ac-lake-database-url` (root-owned at
+   `/usr/local/sbin/`) builds the address at start from the production API's own setting into
+   `/run/ac-lake-export-production/database-url` (0600, removed when the export ends). Install
+   the drop-in `ac-lake-export@production.service.d/50-database-url.conf` into
+   `/etc/systemd/system/`, create root-only `/etc/authority-closers/lake/production.env` with
+   `AC_LAKE_EXPORT_ENABLED=1` and
+   `AC_LAKE_DATABASE_URL_FILE=/run/ac-lake-export-production/database-url`, run
+   `ac-lake-export@production.service` once, verify both manifests, then enable
+   `ac-lake-export@production.timer`. The notice's purpose is product speed and ease of use;
+   training models on this data needs that purpose added to the notice first.
 
 The `-I` script uses fixed root-owned executables, a minimal child environment,
 private temporary files and low CPU/I/O priority. Provider errors and source
