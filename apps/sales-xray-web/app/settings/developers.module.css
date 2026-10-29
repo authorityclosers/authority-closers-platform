@@ -5,7 +5,7 @@
   gap: 16px;
 }
 
-/* The console card (owner bugs #103-#105, 29 Oct 2026: "its own
+/* The console card (owner bugs 103-105, 29 Oct 2026: "its own
    personality"): a dark film surface in both themes, a faint grid and a mint
    glow, the two addresses in monospace with Copy, and the docs. */
 .console {

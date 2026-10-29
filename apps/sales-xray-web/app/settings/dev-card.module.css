@@ -1,4 +1,4 @@
-/* Developers' section card (owner bugs #103-#105, 29 Oct 2026). Tokens only. */
+/* Developers' section card (owner bugs 103-105, 29 Oct 2026). Tokens only. */
 
 .card {
   --tone: var(--sx-accent);

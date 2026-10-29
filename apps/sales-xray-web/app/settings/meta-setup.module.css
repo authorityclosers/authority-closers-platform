@@ -2,7 +2,7 @@
 
 /* Every level is a one-column grid that may shrink: a long button or name
    wraps inside the sheet instead of widening it, so the sheet never scrolls
-   sideways (owner bugs #100 and #101, 29 Oct 2026, a 363 px phone). */
+   sideways (owner bugs 100 and 101, 29 Oct 2026, a 363 px phone). */
 .setup {
   display: grid;
   grid-template-columns: minmax(0, 1fr);

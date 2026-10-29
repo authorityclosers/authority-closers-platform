@@ -82,7 +82,7 @@
 }
 
 /* Where it answers: three equal tiles, mark over name, a tick in the corner
-   when on (owner bug #102, 29 Oct 2026). Equal columns, so no tile is ever
+   when on (owner bug 102, 29 Oct 2026). Equal columns, so no tile is ever
    squeezed by its neighbour; below ~300 px they go two to a row. */
 .channels {
   display: grid;
