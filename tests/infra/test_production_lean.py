@@ -27,6 +27,10 @@ def render(*files: Path) -> dict:
             environment[name] = "fictional.invalid"
         if name.endswith("_URL"):
             environment[name] = "https://fictional.invalid"
+        if name.endswith("_CPU_SHARES"):
+            environment[name] = "1024"
+        if name.endswith("_MEM_RESERVATION"):
+            environment[name] = "0"
     environment.update(
         AC_COMPOSE_PROJECT="ac-lean-fictional-render",
         AC_ENVIRONMENT="production",
