@@ -23,6 +23,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import UUID
 
+from anyio.to_thread import run_sync
 from sqlalchemy import exists, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased, undefer
@@ -195,9 +196,10 @@ async def read_photo(
     )
     if own is not None:
         # The file first (v0.93), else the bytes column (photos saved before).
+        key, digest = own.storage_key, own.sha256
         data = (
-            (files or PhotoFiles.default()).read(own.storage_key, sha256=own.sha256)
-            if own.storage_key
+            await run_sync(lambda: (files or PhotoFiles.default()).read(key, sha256=digest))
+            if key
             else None
         )
         if data is None and own.photo is not None:
@@ -259,7 +261,7 @@ async def save_upload(
         person_id=person_id,
         session_id=session_id,
         tenant_id=tenant_id,
-        picture=resized(data),
+        picture=await run_sync(resized, data),
         files=files,
         reason="Self-service profile photo.",
     )
@@ -276,7 +278,7 @@ async def save_character(
 ) -> str:
     """One of the characters as the person's photo (owner #32, 26 Oct 2026), its file byte
     for byte, so the photo's sha256 says which character it is (characters.py)."""
-    chosen = characters.by_key(key)
+    chosen = await run_sync(characters.by_key, key)
     if chosen is None:
         raise characters.CharacterRejected("Choose one of the characters.")
     return await _keep(
@@ -315,7 +317,9 @@ async def _keep(
     earlier = row.storage_key
     row.revision = (row.revision or 0) + 1
     if store.available:
-        row.storage_key = store.write(store.key_for(person_id, row.revision), picture)
+        row.storage_key = await run_sync(
+            store.write, store.key_for(person_id, row.revision), picture
+        )
         row.photo = None
     else:
         row.storage_key, row.photo = None, picture
@@ -323,7 +327,7 @@ async def _keep(
     row.byte_size, row.sha256, row.updated_at = len(picture), sha, now
     await session.flush()
     if earlier and earlier != row.storage_key:
-        store.remove(earlier)
+        await run_sync(store.remove, earlier)
     await AuditRepository(session).append(
         tenant_id=tenant_id,
         actor_person_id=person_id,
@@ -355,7 +359,7 @@ async def remove_upload(
     key = row.storage_key
     await session.delete(row)
     await session.flush()
-    PhotoFiles.default().remove(key)
+    await run_sync(PhotoFiles.default().remove, key)
     await AuditRepository(session).append(
         tenant_id=tenant_id,
         actor_person_id=person_id,
@@ -378,7 +382,7 @@ async def erase_photo(session: AsyncSession, person_id: UUID) -> bool:
     key = row.storage_key
     await session.delete(row)
     await session.flush()
-    PhotoFiles.default().remove(key)
+    await run_sync(PhotoFiles.default().remove, key)
     return True
 
 

@@ -20,7 +20,10 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Sequence
 from datetime import datetime, timedelta
+from functools import partial
 from typing import Any
+
+from anyio.to_thread import run_sync
 
 from ac_platform.conversation_intelligence.admin_pricing import FX_USD_TO_INR
 from ac_platform.conversation_intelligence.analysis_engine import registry
@@ -228,9 +231,13 @@ async def read_engine(
         raise ConversationError("Choose production, staging or development.")
     if not 1 <= days <= MAX_DAYS:
         raise ConversationError(f"Choose 1 to {MAX_DAYS} days.")
-    exports, problems = read_store(service.store_root)
+    exports, problems = await run_sync(read_store, service.store_root)
     now = utc(service.application.clock())
     return {
-        **engine_view(exports, environment=environment, now=now, days=days),
+        **(
+            await run_sync(
+                partial(engine_view, exports, environment=environment, now=now, days=days)
+            )
+        ),
         "problems": [row for row in problems if row["environment"] in (environment, "all")],
     }

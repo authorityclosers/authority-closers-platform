@@ -10,9 +10,11 @@ import hashlib
 import json
 import logging
 from dataclasses import dataclass, field, replace
+from functools import partial
 from typing import TYPE_CHECKING, Any, Literal
 from uuid import UUID, uuid4
 
+from anyio.to_thread import run_sync
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
 
@@ -555,10 +557,12 @@ class ReportingPipeline:
         assert native_transcript is not None and signal_row.payload is not None
         if native_transcript.get("revision") != transcript_receipt.get("response_sha256"):
             raise ConversationConflict("The transcript differs from its native receipt.")
-        transcript = project_transcript_for_playback(
-            native_transcript, duration_ms=source.duration_ms
+        transcript = await run_sync(
+            partial(
+                project_transcript_for_playback, native_transcript, duration_ms=source.duration_ms
+            )
         )
-        aligned = build_alignment(signal_row.payload, transcript)
+        aligned = await run_sync(build_alignment, signal_row.payload, transcript)
         binding = binding_for(recording)
         alignment = build_checkpoint(
             binding,
@@ -572,15 +576,18 @@ class ReportingPipeline:
         parents: tuple[Checkpoint, ...] = (transcript_checkpoint, alignment)
         if request.stage == "C4":
             one_pass = request.fact_prompt_revision in ONE_PASS_PROMPT_REVISIONS
-            inputs = prepare_fact_inputs(
-                transcript,
-                provider=request.provider,
-                model=request.model,
-                max_input_chars=request.max_input_chars,
-                max_completion_tokens=request.max_completion_tokens,
-                prompt_revision=request.fact_prompt_revision,
-                # The one-pass request resolves relative days ("next Friday") to it.
-                call_date=one_pass_call_date(recording.created_at) if one_pass else None,
+            inputs = await run_sync(
+                partial(
+                    prepare_fact_inputs,
+                    transcript,
+                    provider=request.provider,
+                    model=request.model,
+                    max_input_chars=request.max_input_chars,
+                    max_completion_tokens=request.max_completion_tokens,
+                    prompt_revision=request.fact_prompt_revision,
+                    # The one-pass request resolves relative days ("next Friday") to it.
+                    call_date=one_pass_call_date(recording.created_at) if one_pass else None,
+                )
             )
             if len(inputs) > 64 or request.chunk_index > len(inputs):
                 raise ConversationConflict("The selected fact chunk is unavailable.")
@@ -645,7 +652,9 @@ class ReportingPipeline:
             packet = FactPacket.model_validate(row.payload)
             packets.append((packet, checkpoint, row.id))
         packets.sort(key=lambda item: item[0].chunk_index)
-        merged = merge_fact_packets([packet for packet, _, _ in packets], transcript)
+        merged = await run_sync(
+            merge_fact_packets, [packet for packet, _, _ in packets], transcript
+        )
         aggregate_payload = {
             "schema": "ac.sales-xray.complete-facts/1",
             "facts": merged.model_dump(mode="json"),
@@ -663,11 +672,13 @@ class ReportingPipeline:
             content_hash(aggregate_payload),
         )
         await self.save(recording, aggregate, aggregate_payload)
-        profile = load_report_profile() if request.profile is None else request.profile
+        profile = (
+            await run_sync(load_report_profile) if request.profile is None else request.profile
+        )
         roles = request.speaker_roles
         if roles is not None:
             try:
-                roles = validate_speaker_roles(roles, transcript)
+                roles = await run_sync(validate_speaker_roles, roles, transcript)
             except ValueError:
                 # Attribution cannot hold a report. Keep fallback deterministic
                 # when the exact task intent is rebuilt on poll and dispatch.
@@ -697,7 +708,7 @@ class ReportingPipeline:
             )
 
         try:
-            prepared = prepare(roles)
+            prepared = await run_sync(prepare, roles)
         except InferenceTaskError as error:
             if roles is None or str(error) != "report_prompt_budget_exceeded":
                 raise
@@ -705,9 +716,9 @@ class ReportingPipeline:
             # Store the exact fallback request; no provider or repair retry.
             request = request.model_copy(update={"speaker_roles": None})
             _LOGGER.warning("speaker_roles_prompt_budget_exceeded")
-            prepared = prepare(None)
+            prepared = await run_sync(prepare, None)
         if request.repair is not None:
-            prepared = repair_coaching_input(prepared, request.repair)
+            prepared = await run_sync(repair_coaching_input, prepared, request.repair)
         c5_config: dict[str, Any] = {
             "input_sha256": prepared.input_sha256,
             "provider": prepared.provider,

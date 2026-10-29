@@ -18,6 +18,8 @@ from datetime import UTC, datetime, timedelta
 from typing import cast
 from uuid import UUID, uuid4
 
+from anyio import CapacityLimiter
+from anyio.to_thread import run_sync
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
@@ -106,6 +108,19 @@ def validate_password(value: str) -> str:
     if any(ord(char) < 32 for char in value):
         raise PasswordPolicyError("password contains an unsupported control character")
     return value
+
+
+# scrypt uses about 32 MiB per invocation. Keep requests responsive without
+# allowing the default thread pool to multiply that memory by forty.
+_PASSWORD_WORKERS = CapacityLimiter(2)
+
+
+async def _hash_password(password: str) -> str:
+    return await run_sync(hash_password, password, limiter=_PASSWORD_WORKERS)
+
+
+async def _verify_password(password: str, encoded: str) -> bool:
+    return await run_sync(verify_password, password, encoded, limiter=_PASSWORD_WORKERS)
 
 
 def hash_password(password: str) -> str:
@@ -238,7 +253,7 @@ class PasswordIdentityService:
             # Registration intentionally has no account-existence signal.
             # Match the expensive scrypt path taken by a new registration so
             # response timing does not become the signal instead.
-            hash_password(password)
+            await _hash_password(password)
             return PasswordRegistration(person_id=None, challenge=None, created=False)
         try:
             async with self.session.begin_nested():
@@ -263,7 +278,7 @@ class PasswordIdentityService:
                 self.session.add(
                     PasswordCredential(
                         person_id=person.id,
-                        password_hash=hash_password(password),
+                        password_hash=await _hash_password(password),
                     )
                 )
                 await self.session.flush()
@@ -298,10 +313,10 @@ class PasswordIdentityService:
             ).one_or_none(),
         )
         if row is None:
-            verify_password(password, _DUMMY_PASSWORD_HASH)
+            await _verify_password(password, _DUMMY_PASSWORD_HASH)
             raise InvalidPasswordCredentials("email or password is not valid")
         person, credential = row
-        password_matches = verify_password(password, credential.password_hash)
+        password_matches = await _verify_password(password, credential.password_hash)
         if not password_matches or person is None or person.status != PersonStatus.ACTIVE.value:
             raise InvalidPasswordCredentials("email or password is not valid")
         if person.email_verified_at is None:
@@ -413,11 +428,11 @@ class PasswordIdentityService:
             self.session.add(
                 PasswordCredential(
                     person_id=person.id,
-                    password_hash=hash_password(new_password),
+                    password_hash=await _hash_password(new_password),
                 )
             )
         else:
-            credential.password_hash = hash_password(new_password)
+            credential.password_hash = await _hash_password(new_password)
             credential.revision += 1
         await self._consume_outstanding_challenges(
             person.id,

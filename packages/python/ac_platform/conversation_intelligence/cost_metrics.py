@@ -26,16 +26,18 @@ import hashlib
 import json
 import os
 import re
-from collections import Counter, defaultdict
+from collections import Counter, OrderedDict, defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from statistics import median
+from threading import RLock
 from typing import Any
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
+from anyio.to_thread import run_sync
 from sqlalchemy import select
 
 from ac_platform.conversation_intelligence.admin_pricing import (
@@ -432,7 +434,7 @@ def parse_export(environment: str, document: Mapping[str, Any]) -> Export:
     return export
 
 
-def read_store(root: str | None) -> tuple[list[Export], list[dict[str, str]]]:
+def _read_store(root: str | None) -> tuple[list[Export], list[dict[str, str]]]:
     """Every environment export under ``root``; a missing or broken file is reported, not raised."""
 
     exports: list[Export] = []
@@ -460,6 +462,73 @@ def read_store(root: str | None) -> tuple[list[Export], list[dict[str, str]]]:
         except ValueError as error:
             problems.append({"environment": environment, "problem": str(error)})
     return dedupe(exports), problems
+
+
+# Bounded per-process snapshots. A collector uses atomic replacement; inode, size,
+# mtime and ctime also detect in-place writes and remove/recreate. Never cache live
+# DB names. Call/Step are frozen, so reuse them without allocating a new graph.
+_STORE_LOCK = RLock()
+_STORE_CACHE: OrderedDict[str | None, tuple[Any, list[Export], list[dict[str, str]]]] = (
+    OrderedDict()
+)
+
+
+def _store_stamp(root: str | None) -> tuple[Any, ...]:
+    if not root:
+        return ()
+    stamps: list[tuple[Any, ...]] = []
+    for environment in ENVIRONMENTS:
+        try:
+            info = os.stat(os.path.join(root, environment, "usage.json"))
+            stamps.append(
+                (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+            )
+        except OSError as error:
+            stamps.append((type(error).__name__, error.errno))
+    return tuple(stamps)
+
+
+def clear_store_cache() -> None:
+    """Explicit invalidation for operations/tests; normal reads invalidate by source stat."""
+    with _STORE_LOCK:
+        _STORE_CACHE.clear()
+
+
+def read_store(root: str | None) -> tuple[list[Export], list[dict[str, str]]]:
+    """Read a source-versioned snapshot; invoke off the loop from async callers.
+
+    Return independent mutable containers, sharing only frozen Call/Step values.
+    In particular an admin's DB name hydration must never enter the cached snapshot.
+    """
+    with _STORE_LOCK:
+        stamp = _store_stamp(root)
+        cached = _STORE_CACHE.get(root)
+        if cached is None or cached[0] != stamp:
+            exports, problems = _read_store(root)
+            # Do not retain a mixed snapshot if the collector changed during the read.
+            if _store_stamp(root) == stamp:
+                _STORE_CACHE[root] = (stamp, exports, problems)
+                _STORE_CACHE.move_to_end(root)
+                while len(_STORE_CACHE) > 4:
+                    _STORE_CACHE.popitem(last=False)
+        else:
+            _, exports, problems = cached
+            _STORE_CACHE.move_to_end(root)
+        return [
+            replace(
+                item,
+                calls=list(item.calls),
+                steps=list(item.steps),
+                holds=[dict(row) for row in item.holds],
+                budgets=[dict(row) for row in item.budgets],
+                payments=[dict(row) for row in item.payments],
+                subscriptions=[dict(row) for row in item.subscriptions],
+                companies={key: dict(row) for key, row in item.companies.items()},
+                people=dict(item.people),
+                synthetic=dict(item.synthetic),
+            )
+            for item in exports
+        ], [dict(row) for row in problems]
 
 
 def dedupe(exports: Sequence[Export]) -> list[Export]:
@@ -1613,15 +1682,18 @@ class AdminCostMetrics:
             raise ConversationError("Choose a person from the list.")
         if fx not in FX_MODES:
             raise ConversationError("Choose daily or planning rates.")
-        exports, problems = read_store(self.store_root)
+        exports, problems = await run_sync(read_store, self.store_root)
         now = utc(self.application.clock())
         await self._name_here(exports, now)
         fx_view = dict(FX)
         if fx == "daily":
             rates = await REFRESHER.rates(self.application.database, now)
-            exports, fx_view = at_daily_rates(exports, rates, now - timedelta(days=days))
+            exports, fx_view = await run_sync(
+                at_daily_rates, exports, rates, now - timedelta(days=days)
+            )
             fx_view["problem"] = REFRESHER.problem
-        result = build_metrics(
+        result = await run_sync(
+            build_metrics,
             exports,
             Scope(
                 now=now,

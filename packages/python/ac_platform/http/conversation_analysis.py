@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import Any, Literal
 from uuid import UUID
 
+from anyio.to_thread import run_sync
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import select
@@ -117,11 +118,11 @@ class AnalysisSelection(BaseModel):
             or output_profile != "detailed"
         ):
             raise HTTPException(403, "OpenAI requires the approved detailed coaching prompt.")
-        profile = load_report_profile()
+        profile = await run_sync(load_report_profile)
         if approval.profile_sha256 != content_hash(profile):
             raise HTTPException(403, "The current coaching profile is not approved for this route.")
         qualitative_pack_sha256 = (
-            load_qualitative_pack_for_revision(prompt_revision).sha256
+            (await run_sync(load_qualitative_pack_for_revision, prompt_revision)).sha256
             if prompt_revision in {COACHING_PROMPT_V4, COACHING_PROMPT_V5}
             else None
         )

@@ -42,6 +42,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from typing import Any, Literal
 
+from anyio.to_thread import run_sync
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import PlainTextResponse
 
@@ -297,19 +298,25 @@ def install_admin_telemetry_http(application: FastAPI, ctx: RouteContext) -> Non
             return rows, ensure_key(connection, now)
 
         rows, pads = await auth.database.run_sync(read)
-        exports, _problems = read_store(settings.metrics_store_root)
-        export = next((item for item in exports if item.environment == settings.environment), None)
-        return {
-            **daily_export.daily_export(
-                day=wanted,
-                rows=rows.rows,
-                export=export,
-                pads=pads,
-                environment=settings.environment,
-                now=now,
-            ),
-            "truncated": rows.truncated,
-        }
+
+        def build() -> dict[str, Any]:
+            exports, _problems = read_store(settings.metrics_store_root)
+            export = next(
+                (item for item in exports if item.environment == settings.environment), None
+            )
+            return {
+                **daily_export.daily_export(
+                    day=wanted,
+                    rows=rows.rows,
+                    export=export,
+                    pads=pads,
+                    environment=settings.environment,
+                    now=now,
+                ),
+                "truncated": rows.truncated,
+            }
+
+        return await run_sync(build)
 
     application.include_router(router)
 
