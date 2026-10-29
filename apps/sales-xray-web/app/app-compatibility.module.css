@@ -1,4 +1,5 @@
 .screen {
+  box-sizing: border-box;
   min-height: 100dvh;
   display: grid;
   align-content: center;
@@ -16,12 +17,24 @@
   border-radius: var(--sx-radius-lg);
   background: var(--sx-surface);
   display: grid;
-  gap: 20px;
-  overflow-wrap: anywhere;
+  gap: 16px;
+  overflow-wrap: break-word;
+  text-align: center;
+}
+/* The app's mark over the title, the size of a home-screen icon. */
+.icon {
+  --brand-mark-size: 56px;
+  display: flex;
+  justify-self: center;
+  margin-bottom: 4px;
 }
 .card h1 {
   margin: 0;
   font: var(--sx-text-title);
+}
+/* "Sales X-Ray" stays whole: no line break at its hyphen. */
+.name {
+  white-space: nowrap;
 }
 .card p {
   margin: 0;

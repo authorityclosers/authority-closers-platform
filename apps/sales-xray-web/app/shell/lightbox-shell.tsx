@@ -46,6 +46,7 @@ import {
   type CSSProperties,
   type MouseEvent,
   type ReactNode,
+  type RefObject,
 } from "react";
 
 import { useBranding } from "./branding-store";
@@ -112,9 +113,10 @@ import {
 } from "./shell-store";
 import { ThemeToggle } from "./theme-toggle";
 import { GuestSwitcher, WorkspaceSwitcher } from "./workspace-switcher";
-import { WorkspacePicker } from "./workspace-picker";
+import { WorkspacePicker, WorkspaceTile } from "./workspace-picker";
 import { Sheet } from "../ui/sheet";
 import { allowEarlyConversationReads, dropEarlyReads } from "../early-reads";
+import { announceWorkspaceChange, justArrived } from "../workspace-change";
 import { dropInvite, refreshInvites, useInvites } from "./invites-store";
 import {
   acceptInvite,
@@ -250,6 +252,11 @@ const subscribeNothing = () => () => {};
 // the visible label floats above every layer on hover or focus (rail-tip.tsx).
 /** The organisation hub's Team tab: members, invites and roles. */
 const TEAM_HREF = "/organisation?tab=team";
+// A tapped workspace (owner bug #17): its tick shows before the list closes,
+// and the new workspace lands once the list has slid away (or later, when the
+// server takes longer), never in the middle of the motion.
+const SWITCH_TICK_MS = 140;
+const SWITCH_LAND_MS = 320;
 /** Where each organisation setting lives in the hub (org-hub.tsx). */
 const HUB = {
   rules: "/organisation?tab=leads&part=rules",
@@ -365,6 +372,8 @@ function LightboxShellFrame({
   // holds it between a tap and the next render, so two quick taps switch once).
   const [switchingTo, setSwitchingTo] = useState<string | null>(null);
   const switching = useRef<string | null>(null);
+  // This frame mounted as a switch landed: its page settles in gently.
+  const [arrived] = useState(() => justArrived());
   // The confirmed server context owns selection across mounts and sessions.
   const effectiveTenantId = access?.context?.tenantId ?? null;
   const salesXrayEnabled =
@@ -402,6 +411,7 @@ function LightboxShellFrame({
   const router = useAppRouter();
   const accountAnchorRef = useRef<HTMLElement | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
   const updates = useShellUpdates(
     authenticated,
     process.env.NODE_ENV !== "test",
@@ -445,6 +455,7 @@ function LightboxShellFrame({
   const profile = useShellProfile(
     authenticated,
     process.env.NODE_ENV !== "test",
+    true,
   );
   // Your own name with capitals too (owner, 22 Oct).
   const profileName = profile?.name?.trim() ? withCapitals(profile.name) : null;
@@ -774,14 +785,15 @@ function LightboxShellFrame({
     // One switch at a time; the second tap waits for the first.
     if (switching.current) return false;
     switching.current = tenantId;
-    // The tap answers at once (owner, 25 Oct 2026, Admin #17: switching
-    // "feels slow"): a haptic, the switcher closes, and the header names the
-    // new workspace over the page's outline while the context changes and
-    // the page reloads into it.
+    // The tap answers at once (owner bug #17: switching "very very fast",
+    // with haptic feedback): a haptic, the tick moves to the tapped
+    // workspace, the header names it over the page's outline, and the list
+    // closes; the workspace then replaces the page in place (no reload).
+    const tappedAt = Date.now();
     tick();
     markSwitchStart(tenantId);
-    setSwitcherOpen(false);
     setSwitchingTo(tenantId);
+    window.setTimeout(() => setSwitcherOpen(false), SWITCH_TICK_MS);
     requestAnimationFrame(() =>
       requestAnimationFrame(() => markSwitchFeedback()),
     );
@@ -789,6 +801,7 @@ function LightboxShellFrame({
     // and the next page reads conversations only once Sales Xray is known on.
     dropEarlyReads();
     allowEarlyConversationReads(false);
+    announceWorkspaceChange("leaving");
     try {
       const res = await fetch("/v1/context", {
         method: "POST",
@@ -807,9 +820,6 @@ function LightboxShellFrame({
           selected.tenant_id !== tenantId
         )
           throw new Error("workspace_not_selected");
-        // The next document reads the new context. Do not start reads here
-        // between the successful context change and its reload.
-        setWorkspaceReloadPending(true);
         setSwitcherOpen(false);
         setRecentCalls([]);
         setRecentCallsContextKey(null);
@@ -819,14 +829,33 @@ function LightboxShellFrame({
           recentCalls: [],
           recentCallsContextKey: null,
           recentFetchedAt: null,
+          counts: null,
         });
-        // Every list on the page belongs to the workspace: reload into it.
-        if (next) window.location.assign(next);
-        else window.location.reload();
+        const inPlace = next ? undefined : access?.switched;
+        if (!inPlace) {
+          // A page to open in the new workspace (or no in-place switch
+          // here): the next document reads the new context, so no reads
+          // start between the change and the load.
+          setWorkspaceReloadPending(true);
+          if (next) window.location.assign(next);
+          else window.location.reload();
+          return true;
+        }
+        const wait = SWITCH_LAND_MS - (Date.now() - tappedAt);
+        if (wait > 0)
+          await new Promise((resolve) => window.setTimeout(resolve, wait));
+        // In place: every store forgets the old workspace's answers, then a
+        // new round of the app frame shows this one, each screen reading
+        // for it afresh.
+        announceWorkspaceChange("arrived");
+        switching.current = null;
+        setSwitchingTo(null);
+        inPlace(tenantId);
         return true;
       }
     } catch {}
     // Nothing changed: the old workspace comes back, and the corner says so.
+    announceWorkspaceChange("stayed");
     switching.current = null;
     setSwitchingTo(null);
     cancelSwitch();
@@ -1259,6 +1288,21 @@ function LightboxShellFrame({
       ? "Personal"
       : shownWorkspace.name
     : null;
+  // The organisation's own tile beside its name in the top bars (owner bug
+  // #50): its logo, else its initials on its colour, the tapped one at once.
+  // Personal needs none: your own face is already on the left.
+  const workspaceMark =
+    shownWorkspace?.kind === "organisation" && !chromePending ? (
+      <WorkspaceTile
+        workspace={shownWorkspace}
+        logoUrl={
+          branding?.tenantId === shownWorkspace.tenant_id
+            ? branding.logoUrl
+            : null
+        }
+        size="xs"
+      />
+    ) : null;
   // Phones: the bar's workspace name opens the Workspace sheet when there
   // is another workspace, an invitation or Create to offer.
   const switchable = workspaces.filter(
@@ -1467,16 +1511,21 @@ function LightboxShellFrame({
         {/* The panel: the current area's pages */}
         <div
           id="sales-xray-sidebar-panel"
+          ref={panelRef}
           className={styles.panel}
           inert={collapsed}
         >
+          <Suspense fallback={null}>
+            <PanelGlide panel={panelRef} />
+          </Suspense>
           <div className={styles.panelHeader}>
             {guest ? (
               <GuestSwitcher href={accountHref} onSignIn={openAccount} />
             ) : (
               <WorkspaceSwitcher
                 workspaces={workspaces}
-                currentId={switchingTo ?? effectiveTenantId}
+                currentId={effectiveTenantId}
+                picked={switchingTo}
                 personName={profileName}
                 personPhotoUrl={profile?.photo_url}
                 personEmail={profile?.email}
@@ -1501,32 +1550,35 @@ function LightboxShellFrame({
             )}
           </div>
 
-          {/* One search (owner, dev #8): the pill opens the command bar,
-              which finds places, leads and calls. Signed out there is
-              nothing to search. */}
-          {!guest && (
-            <button
-              type="button"
-              className={styles.searchPill}
-              onClick={() => setCommandOpen(true)}
-              aria-haspopup="dialog"
-              aria-expanded={commandOpen}
-              aria-keyshortcuts="Control+K Meta+K"
-            >
-              <Search size={15} aria-hidden="true" />
-              Search
-              <kbd aria-hidden="true">{shortcut}</kbd>
-            </button>
-          )}
+          {/* A quiet row like the others (owner bug #26), its + in teal. */}
           <ScreenLink
             className={styles.panelNew}
             href={newAnalysisHref}
             aria-label="New analysis"
             aria-current={place === "analyse" ? "page" : undefined}
           >
+            <span className={styles.placePill} aria-hidden="true" />
             <Plus size={16} strokeWidth={2} aria-hidden="true" />
             New analysis
           </ScreenLink>
+          {/* One search (owner, dev #8), a quiet row too (owner bug #26:
+              the filled pill was clutter): it opens the command bar, which
+              finds places, leads and calls. Signed out there is nothing to
+              search. */}
+          {!guest && (
+            <button
+              type="button"
+              className={styles.panelSearch}
+              onClick={() => setCommandOpen(true)}
+              aria-haspopup="dialog"
+              aria-expanded={commandOpen}
+              aria-keyshortcuts="Control+K Meta+K"
+            >
+              <Search size={16} aria-hidden="true" />
+              Search
+              <kbd aria-hidden="true">{shortcut}</kbd>
+            </button>
+          )}
 
           {/* The area's title, then its pages; sub-places sit under their
               page as text, lined up with its name. A new area's rows slide
@@ -1557,6 +1609,7 @@ function LightboxShellFrame({
                     aria-current={here ? "page" : undefined}
                     style={{ "--i": index } as CSSProperties}
                   >
+                    <span className={styles.placePill} aria-hidden="true" />
                     <Icon size={16} strokeWidth={1.75} aria-hidden="true" />
                     <span>{page.label}</span>
                   </ScreenLink>
@@ -1586,8 +1639,9 @@ function LightboxShellFrame({
             </div>
           ) : null}
 
-          {/* Recents Section */}
-          {salesXrayEnabled && !guest && (
+          {/* Recent calls where calls belong; the organisation's own pages
+              (Team) keep a calm panel (owner bug #26). */}
+          {salesXrayEnabled && !guest && shownArea.key !== "team" && (
             <div className={styles.recentsSection}>
               <div className={styles.recentsHeader}>
                 <button
@@ -1684,7 +1738,11 @@ function LightboxShellFrame({
           <div className={styles.panelSpacer} />
         </div>
       </aside>
-      <div className={styles.content} data-shell-content="">
+      <div
+        className={styles.content}
+        data-shell-content=""
+        data-arrived={arrived ? "" : undefined}
+      >
         <header className={styles.mobileBar}>
           {/* r17: the lens, then where you are: workspace over page title. */}
           {workspaceLabel || pageTitle ? (
@@ -1732,14 +1790,17 @@ function LightboxShellFrame({
                   aria-label={`Workspace: ${workspaceLabel}. Switch workspace`}
                   title={`Workspace: ${workspaceLabel}`}
                 >
-                  <small className={styles.mobileContext}>
-                    {workspaceLabel}
-                    <ChevronDown
-                      size={12}
-                      strokeWidth={2.5}
-                      aria-hidden="true"
-                    />
-                  </small>
+                  <span className={styles.contextRow}>
+                    {workspaceMark}
+                    <small className={styles.mobileContext}>
+                      {workspaceLabel}
+                      <ChevronDown
+                        size={12}
+                        strokeWidth={2.5}
+                        aria-hidden="true"
+                      />
+                    </small>
+                  </span>
                   <b>{barTitle ?? workspaceLabel}</b>
                 </button>
               ) : (
@@ -1750,11 +1811,14 @@ function LightboxShellFrame({
                 >
                   {/* Two lines from the first paint: the workspace line is a
                       placeholder while it loads, so the title never drops. */}
-                  <small className={styles.mobileContext}>
-                    {pageTitle
-                      ? (workspaceLabel ?? "Sales X-Ray")
-                      : "Workspace"}
-                  </small>
+                  <span className={styles.contextRow}>
+                    {pageTitle && workspaceLabel ? workspaceMark : null}
+                    <small className={styles.mobileContext}>
+                      {pageTitle
+                        ? (workspaceLabel ?? "Sales X-Ray")
+                        : "Workspace"}
+                    </small>
+                  </span>
                   <b>{barTitle ?? workspaceLabel}</b>
                 </span>
               )}
@@ -1802,15 +1866,18 @@ function LightboxShellFrame({
             {pageTitle && (
               <div className={styles.titleWrap}>
                 <div className={styles.topBarTitle}>
-                  <span
-                    className={styles.titleContext}
-                    title={
-                      workspaceLabel
-                        ? `Workspace: ${workspaceLabel}`
-                        : undefined
-                    }
-                  >
-                    {workspaceLabel ?? "Sales X-Ray"}
+                  <span className={styles.contextRow}>
+                    {workspaceLabel ? workspaceMark : null}
+                    <span
+                      className={styles.titleContext}
+                      title={
+                        workspaceLabel
+                          ? `Workspace: ${workspaceLabel}`
+                          : undefined
+                      }
+                    >
+                      {workspaceLabel ?? "Sales X-Ray"}
+                    </span>
                   </span>
                   {heading ? (
                     <h1 key={heading.title} className={styles.titleText}>
@@ -2039,13 +2106,18 @@ function LightboxShellFrame({
           <WorkspacePicker
             workspaces={switchable}
             currentId={effectiveTenantId}
+            picked={switchingTo}
             branding={branding}
             personName={profileName}
             personPhotoUrl={profile?.photo_url}
             personEmail={profile?.email}
             onSelect={(tenantId) => {
-              setWorkspaceSheetOpen(false);
+              // The tick moves to the tapped workspace, then the sheet goes.
               void handleSelectWorkspace(tenantId);
+              window.setTimeout(
+                () => setWorkspaceSheetOpen(false),
+                SWITCH_TICK_MS,
+              );
             }}
             onKeep={() => setWorkspaceSheetOpen(false)}
             invites={invites.invites}
@@ -2238,6 +2310,22 @@ type SubPlaceProps = {
   path: string;
   tab: string;
 };
+
+/**
+ * The lit row's fill glides to the row you pick, on the spring, as the
+ * ribbon's capsule does (owner bug #26: Pulse's feel). The hub's sections
+ * share one address, so their ?tab= counts too (read under Suspense).
+ */
+function PanelGlide({ panel }: { panel: RefObject<HTMLElement | null> }) {
+  const pathname = usePathname();
+  const tab = useSearchParams()?.get("tab") ?? "";
+  useGlide(
+    panel,
+    `[aria-current="page"] > .${styles.placePill}`,
+    `${pathname}?${tab}`,
+  );
+  return null;
+}
 
 /** A hub section's row, lit by the ?tab= the hub shows (read under Suspense,
  *  as useSearchParams asks of a static page). */

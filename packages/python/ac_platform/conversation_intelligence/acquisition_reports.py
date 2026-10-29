@@ -355,7 +355,7 @@ class AcquisitionReports:
         )
         if run is None:
             raise ConversationConflict("The stored report needs review.")
-        report, _ = self.reports._validated(draft, recording)
+        report, _ = await self.reports.validated(draft, recording)
         await self.reports._canonical_draft(draft, recording)
         envelope = project_bound_report(
             report,
@@ -462,7 +462,7 @@ class AcquisitionReports:
             draft = await self._draft(recording)
             if draft is None:
                 raise ConversationNotFound("The transcript will appear with your sales report.")
-            _, transcript = self.reports._validated(draft, recording)
+            _, transcript = await self.reports.validated(draft, recording)
             await self.reports._canonical_draft(draft, recording)
         return await self._withheld(
             recording,
@@ -579,7 +579,7 @@ class AcquisitionReports:
         draft = await self._draft(recording)
         if draft is not None:
             try:
-                self.reports._validated(draft, recording)
+                await self.reports.validated(draft, recording)
                 await self.reports._canonical_draft(draft, recording)
                 has_report = True
                 if recovered is None:

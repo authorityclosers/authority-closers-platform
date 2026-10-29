@@ -11,10 +11,16 @@
  *   ?invite=1          types a fictional address into "Invite people by email"
  *                      and presses Invite, so the question shows
  *   ?switcher=open     opens the workspace switcher
+ *   ?logos=1           Fictional Homes has its own logo (owner bug #50);
+ *                      Sample Realty keeps its initials
+ *
+ * A workspace switch is answered here and lands in place, as in the app
+ * (owner bug #17): the page starts again under the chosen workspace (its
+ * pages still show Fictional Homes' answers: this is a look, not data).
  */
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 
 import { WorkspaceAccessContext } from "../../workspace-access";
 
@@ -23,6 +29,13 @@ const TENANT = "00000000-0000-4000-8000-000000000004";
 const SESSION = "00000000-0000-4000-8000-000000000005";
 const OTHER_ORG = "00000000-0000-4000-8000-000000000040";
 const PERSONAL = "00000000-0000-4000-8000-000000000041";
+
+// A fictional logo, drawn here (no file, no request).
+const FICTIONAL_LOGO = `data:image/svg+xml,${encodeURIComponent(
+  "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'>" +
+    "<rect width='64' height='64' rx='14' fill='teal'/>" +
+    "<path d='M14 33 32 16l18 17v17H38V39H26v11H14z' fill='white'/></svg>",
+)}`;
 
 const WORKSPACES = [
   {
@@ -112,6 +125,10 @@ const MEMBERS = [
   ),
 ];
 
+const LOGO_WORKSPACES = WORKSPACES.map((item) =>
+  item.tenant_id === TENANT ? { ...item, logo_url: FICTIONAL_LOGO } : item,
+);
+
 function install() {
   if (typeof window === "undefined") return true;
   let domains = ["fictionalhomes.in"];
@@ -170,6 +187,8 @@ function install() {
             },
           }),
         }),
+    // The directory's own logos are API addresses; the drawn one goes to
+    // the frame through the context below.
     "/v1/me/sales-xray-workspaces": () => ({
       selected_tenant_id: TENANT,
       workspaces: WORKSPACES,
@@ -289,6 +308,12 @@ function install() {
       autoJoin = body.auto_join ?? autoJoin;
       return json(organisation());
     }
+    if (path === "/v1/context" && method === "POST") {
+      const body = JSON.parse(String(init?.body ?? "{}")) as {
+        tenant_id?: string;
+      };
+      return json({ tenant_id: body.tenant_id });
+    }
     // An invitation or a role change: accepted, nothing stored.
     if (path.startsWith("/v1/organisation/members") && method !== "GET")
       return json(null, 204);
@@ -355,17 +380,26 @@ function Actions() {
  */
 export function OrganisationFixture({ children }: { children: ReactNode }) {
   useState(install);
+  const workspaces =
+    useSearchParams().get("logos") === "1" ? LOGO_WORKSPACES : WORKSPACES;
+  const [selected, setSelected] = useState({ tenantId: TENANT, round: 0 });
   return (
     <WorkspaceAccessContext.Provider
       value={{
         status: "ready",
         authenticated: true,
-        context: { personId: OWNER, sessionId: SESSION, tenantId: TENANT },
-        workspaces: WORKSPACES,
+        context: {
+          personId: OWNER,
+          sessionId: SESSION,
+          tenantId: selected.tenantId,
+        },
+        workspaces,
         retry: () => {},
+        switched: (tenantId) =>
+          setSelected((now) => ({ tenantId, round: now.round + 1 })),
       }}
     >
-      {children}
+      <Fragment key={selected.round}>{children}</Fragment>
       <Actions />
     </WorkspaceAccessContext.Provider>
   );

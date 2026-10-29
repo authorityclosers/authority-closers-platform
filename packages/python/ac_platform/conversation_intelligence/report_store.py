@@ -9,9 +9,11 @@ from __future__ import annotations
 import hashlib
 import json
 from dataclasses import replace
-from typing import Any, Literal
+from types import SimpleNamespace
+from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
+from anyio.to_thread import run_sync
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
@@ -196,6 +198,52 @@ class ConversationReports:
             raise ConversationConflict("The stored report needs review.") from None
         return report, transcript
 
+    async def validated(
+        self, draft: ConversationReportDraft, recording: ConversationRecording
+    ) -> tuple[ReportDraft, dict[str, Any]]:
+        """Keep all proof checks; hash/parse off-loop without sharing ORM sessions.
+
+        Only already-loaded scalar/JSON values cross the boundary. Validation is
+        read-only; no lazy relationship or database operation runs in the worker.
+        """
+        draft_values = SimpleNamespace(
+            **{
+                key: getattr(draft, key)
+                for key in (
+                    "recording_id",
+                    "tenant_id",
+                    "person_id",
+                    "source_revision",
+                    "source_sha256",
+                    "erased_at",
+                    "payload",
+                    "transcript",
+                    "evidence_receipt",
+                    "report_sha256",
+                    "transcript_sha256",
+                    "evidence_receipt_sha256",
+                    "profile_sha256",
+                )
+            }
+        )
+        recording_values = SimpleNamespace(
+            **{
+                key: getattr(recording, key)
+                for key in (
+                    "id",
+                    "tenant_id",
+                    "person_id",
+                    "source_revision",
+                    "source_sha256",
+                )
+            }
+        )
+        return await run_sync(
+            self._validated,
+            cast(ConversationReportDraft, draft_values),
+            cast(ConversationRecording, recording_values),
+        )
+
     async def _canonical_draft(
         self, draft: ConversationReportDraft, recording: ConversationRecording
     ) -> None:
@@ -331,7 +379,7 @@ class ConversationReports:
                 )
                 if draft is not None:
                     try:
-                        self._validated(draft, recording)
+                        await self.validated(draft, recording)
                         await self._canonical_draft(draft, recording)
                         has_report = True
                     except (ConversationConflict, ValueError, TypeError, KeyError):
@@ -437,7 +485,7 @@ class ConversationReports:
             transcript = project_transcript_for_playback(transcript, duration_ms=source.duration_ms)
             extract_style_independent_facts(transcript)
         else:
-            _, transcript = self._validated(draft, recording)
+            _, transcript = await self.validated(draft, recording)
             await self._canonical_draft(draft, recording)
         return await self._withheld(
             recording,
@@ -467,7 +515,7 @@ class ConversationReports:
     ) -> dict[str, Any]:
         if draft.run_id != UUID(run["id"]):
             raise ConversationConflict("The report belongs to another analysis.")
-        report, _ = self._validated(draft, recording)
+        report, _ = await self.validated(draft, recording)
         await self._canonical_draft(draft, recording)
         return await self._withheld(
             recording,

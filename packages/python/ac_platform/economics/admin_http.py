@@ -17,6 +17,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any, Literal
 
+from anyio.to_thread import run_sync
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -76,12 +77,21 @@ def install_economics_admin_http(application: FastAPI, ctx: RouteContext) -> Non
         db = auth.database
         config, revision = await store.read(db)
         plans = await service.active_plans(db)
-        exports, problems = read_store(settings.metrics_store_root)
-        now = datetime.now(UTC)
+
+        def build() -> dict[str, Any]:
+            exports, problems = read_store(settings.metrics_store_root)
+            now = datetime.now(UTC)
+            return {
+                **service.build(
+                    plans, exports, config, environment=environment, now=now, days=days
+                ),
+                "problems": [row for row in problems if row["environment"] in (environment, "all")],
+            }
+
+        result = await run_sync(build)
         return {
-            **service.build(plans, exports, config, environment=environment, now=now, days=days),
+            **result,
             "settings": {"revision": revision, "config": config},
-            "problems": [row for row in problems if row["environment"] in (environment, "all")],
         }
 
     @router.get("/v1/admin/economics")

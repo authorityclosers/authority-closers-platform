@@ -137,3 +137,33 @@ it("uses the same initials as the header if the private profile photo fails", as
   });
   expect(row("Personal").querySelector("[data-kind]")?.textContent).toBe("ME");
 });
+
+// Owner bug #17 (29 Oct 2026): a tap answers where it lands. The tapped
+// workspace takes the tick in its own row and the list keeps its order while
+// the switch is on its way.
+it("ticks a tapped workspace where it is, without reordering the list", async () => {
+  await act(async () =>
+    root.render(
+      <WorkspacePicker
+        workspaces={[personal, org(2, "Cedar Studio"), org(3, "Maple Works")]}
+        currentId={id(2)}
+        picked={id(3)}
+        onSelect={() => {}}
+      />,
+    ),
+  );
+  const names = Array.from(
+    host.querySelectorAll("button"),
+    (button) => button.querySelector("b")?.textContent,
+  );
+  expect(names.slice(0, 3)).toEqual([
+    "Cedar Studio",
+    "Personal",
+    "Maple Works",
+  ]);
+  expect(
+    row("Cedar Studio").querySelector('[aria-label="Current"]'),
+  ).toBeNull();
+  expect(row("Maple Works").hasAttribute("data-picked")).toBe(true);
+  expect(row("Maple Works").querySelector("svg")).toBeTruthy();
+});

@@ -13,6 +13,7 @@ from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from ac_platform import __version__
 from ac_platform.application.loop_watchdog import DUMP_AFTER, LoopWatchdog, settle_startup_heap
+from ac_platform.application.request_warmup import warmup
 from ac_platform.application.settings import Settings, get_settings
 from ac_platform.billing.compose import compose_billing
 from ac_platform.conversation_intelligence.hosted_runtime import compose_hosted_intake
@@ -137,13 +138,14 @@ def _extra_sign_in_providers(settings: Settings) -> dict[str, OAuthIdentityProvi
 
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+async def lifespan(application: FastAPI) -> AsyncIterator[None]:
     logger.info(
         "application_started", release_id=settings.release_id, environment=settings.environment
     )
     # Say what blocks the event loop, and where (24 Oct 2026). The servers also freeze
     # their startup objects out of full collections and dump the stacks of a stall of
     # 3 s or more (26 Oct 2026: a 3.7 s stall that nothing could name).
+    await warmup(application, settings.metrics_store_root)
     server = settings.environment in _LONG_RUNNING_ENVIRONMENTS
     if server:
         logger.info("startup_heap_frozen", objects=settle_startup_heap())

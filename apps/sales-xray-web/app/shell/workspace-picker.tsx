@@ -82,7 +82,8 @@ export function WorkspaceTile({
 }: {
   workspace: PickerWorkspace;
   logoUrl?: string | null;
-  size?: "sm" | "md" | "lg";
+  /** xs: beside a name in a top bar; xl: a page's own header. */
+  size?: "xs" | "sm" | "md" | "lg" | "xl";
   /** Personal shows your own initials, never the word "Personal". */
   personName?: string | null;
   personPhotoUrl?: string | null;
@@ -121,12 +122,18 @@ export function WorkspacePicker({
   onCreate,
   onKeep,
   menu = false,
+  picked = null,
   personName = null,
   personPhotoUrl = null,
   personEmail = null,
 }: {
   workspaces: readonly PickerWorkspace[];
   currentId: string | null;
+  /**
+   * A workspace just tapped (owner bug #17): its row takes the tick where it
+   * is, the list keeping its order, while the switch is on its way.
+   */
+  picked?: string | null;
   onSelect: (tenantId: string) => void;
   /** A tap on the current workspace: nothing to switch, so just close. */
   onKeep?: () => void;
@@ -177,7 +184,9 @@ export function WorkspacePicker({
             <b title={workspaceName(current)}>{workspaceName(current)}</b>
             <small>{workspaceLine(current)}</small>
           </span>
-          <Check size={16} className={styles.check} aria-label="Current" />
+          {picked && picked !== current.tenant_id ? null : (
+            <Check size={16} className={styles.check} aria-label="Current" />
+          )}
         </button>
       ) : null}
       {others.length ? (
@@ -188,8 +197,9 @@ export function WorkspacePicker({
               key={workspace.tenant_id}
               type="button"
               role={itemRole}
-              aria-checked={menu ? false : undefined}
+              aria-checked={menu ? workspace.tenant_id === picked : undefined}
               className={styles.item}
+              data-picked={workspace.tenant_id === picked ? "" : undefined}
               onClick={() => onSelect(workspace.tenant_id)}
             >
               <WorkspaceTile
@@ -205,6 +215,9 @@ export function WorkspacePicker({
                 </b>
                 <small>{workspaceLine(workspace)}</small>
               </span>
+              {workspace.tenant_id === picked ? (
+                <Check size={16} className={styles.check} aria-hidden="true" />
+              ) : null}
             </button>
           ))}
         </>

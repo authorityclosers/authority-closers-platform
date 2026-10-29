@@ -36,17 +36,20 @@ vi.mock("../notice-center", async (importOriginal) => ({
 import { AcquisitionShell } from "../acquisition-shell";
 import { SELECT_WORKSPACE_EVENT } from "../call-ownership";
 import { WorkspaceAccessProvider } from "../workspace-access";
+import { justArrived, workspaceGeneration } from "../workspace-change";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
 
 // Owner, 25 Oct 2026 (Admin #17): switching organisation "feels slow". The
-// tap answers at once; a switch that fails puts the old workspace back.
+// tap answers at once; a confirmed switch lands in place, without reloading
+// (29 Oct 2026); a switch that fails puts the old workspace back.
 
 let root: Root;
 let host: HTMLDivElement;
 let contextReply: (value: Response | Error) => void = () => undefined;
+const switched = vi.fn();
 
 beforeEach(() => {
   vi.stubGlobal(
@@ -72,6 +75,7 @@ afterEach(async () => {
   vi.unstubAllGlobals();
   felt.mockClear();
   notify.mockClear();
+  switched.mockClear();
   sessionStorage.clear();
 });
 
@@ -90,7 +94,7 @@ const render = () =>
             {
               tenant_id: "org-one",
               kind: "organisation",
-              name: "Authority Closers",
+              name: "Cedar Studio",
               role: "owner",
               sales_xray_enabled: true,
             },
@@ -100,9 +104,11 @@ const render = () =>
               name: "Fictional Traders",
               role: "owner",
               sales_xray_enabled: true,
+              logo_url: "/v1/me/sales-xray-workspaces/org-two/logo/1",
             },
           ],
           retry: () => {},
+          switched,
         }}
       >
         <AcquisitionShell authenticated active="calls">
@@ -121,7 +127,7 @@ const choose = (tenantId: string) =>
 
 it("answers a workspace tap at once: a haptic, the new name, the page's outline", async () => {
   await render();
-  expect(shown()).toBe("Authority Closers");
+  expect(shown()).toBe("Cedar Studio");
   await choose("org-two");
   // Before the server has answered.
   expect(felt).toHaveBeenCalledWith("tap");
@@ -137,7 +143,7 @@ it("puts the old workspace back when the switch fails, and says so", async () =>
   await render();
   await choose("org-two");
   await act(async () => contextReply(new Error("offline")));
-  expect(shown()).toBe("Authority Closers");
+  expect(shown()).toBe("Cedar Studio");
   expect(host.querySelector("[data-standing-in]")).toBeNull();
   expect(felt).toHaveBeenLastCalledWith("error");
   expect(notify).toHaveBeenCalledWith(
@@ -147,4 +153,48 @@ it("puts the old workspace back when the switch fails, and says so", async () =>
     }),
   );
   expect(sessionStorage.getItem("sx-switch-timing")).toBeNull();
+});
+
+it("lands in place once the server confirms: no reload, the new frame, the old answers dropped", async () => {
+  await render();
+  const before = workspaceGeneration();
+  await choose("org-two");
+  // The tap already let go of the old workspace's answers.
+  expect(workspaceGeneration()).toBe(before + 1);
+  expect(switched).not.toHaveBeenCalled();
+  await act(async () => {
+    contextReply(Response.json({ tenant_id: "org-two" }));
+    // The list slides away before the workspace lands.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  });
+  expect(switched).toHaveBeenCalledWith("org-two");
+  expect(workspaceGeneration()).toBe(before + 2);
+  expect(justArrived()).toBe(true);
+  expect(notify).not.toHaveBeenCalled();
+});
+
+it("never lands a workspace the server did not select", async () => {
+  await render();
+  await choose("org-two");
+  await act(async () => {
+    contextReply(Response.json({ tenant_id: "org-one" }));
+    await new Promise((resolve) => setTimeout(resolve, 400));
+  });
+  expect(switched).not.toHaveBeenCalled();
+  expect(shown()).toBe("Cedar Studio");
+  expect(notify).toHaveBeenCalledWith(
+    expect.objectContaining({ title: "Couldn’t switch workspace" }),
+  );
+});
+
+// Owner bug #50: the organisation's own tile sits beside its name in the top
+// bar, its initials until it has a logo, and the tapped one shows at once.
+it("shows the organisation's tile beside its name, the tapped one's logo at once", async () => {
+  await render();
+  const mark = () => host.querySelector("header [data-size='xs']");
+  expect(mark()?.textContent).toBe("CS");
+  await choose("org-two");
+  expect(mark()?.querySelector("img")?.getAttribute("src")).toBe(
+    "/v1/me/sales-xray-workspaces/org-two/logo/1",
+  );
 });

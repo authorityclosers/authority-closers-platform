@@ -14,6 +14,7 @@ import { usePathname } from "next/navigation";
 import { useSyncExternalStore, type CSSProperties } from "react";
 
 import { notify } from "../notice-center";
+import { onWorkspaceChange, workspaceGeneration } from "../workspace-change";
 import { readBadge, type Badge } from "./review-client";
 import styles from "./review.module.css";
 
@@ -118,14 +119,27 @@ function read(force = false) {
   if (!force && Date.now() - readAt < AGAIN_MS) return;
   reading = true;
   readAt = Date.now();
+  // A badge for a workspace the page has left is dropped (owner bug #17).
+  const asked = workspaceGeneration();
   void readBadge()
     .then((badge) => {
-      if (badge) emit(badge);
+      if (badge && asked === workspaceGeneration()) emit(badge);
     })
     .finally(() => {
-      reading = false;
+      if (asked === workspaceGeneration()) reading = false;
     });
 }
+
+// The workspace changed in place: the badge was the old workspace's.
+onWorkspaceChange((reread) => {
+  reading = false;
+  readAt = 0;
+  if (current !== null) {
+    current = null;
+    listeners.forEach((listener) => listener());
+  }
+  if (reread && listeners.size) read(true);
+});
 
 const onVisible = () => read();
 
