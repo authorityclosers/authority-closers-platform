@@ -532,9 +532,12 @@ def test_canonical_capture_uses_one_exported_snapshot_for_dump_and_counts(tmp_pa
         def read(self, command, **kwargs):
             assert "SET TRANSACTION SNAPSHOT '00000003-0000001B-1'" in command[-1]
             events.append(("counts", "00000003-0000001B-1"))
-            lines = ["__migration_head__|" + target.migration_head] + [
-                t + "|7" for t in module.parity_tables_for_head(target.migration_head)
-            ]
+            # The capture also counts analytics_events, whose rows the dump leaves out
+            # (66b9ead33), so the snapshot answers for it too.
+            tables = dict.fromkeys(
+                (*module.parity_tables_for_head(target.migration_head), "analytics_events")
+            )
+            lines = ["__migration_head__|" + target.migration_head] + [t + "|7" for t in tables]
             return SimpleNamespace(stdout="\n".join(lines))
 
         def remaining(self):
@@ -546,6 +549,8 @@ def test_canonical_capture_uses_one_exported_snapshot_for_dump_and_counts(tmp_pa
     assert metadata["dump_sha256"] == hashlib.sha256(dump.read_bytes()).hexdigest()
     assert metadata["dump_bytes"] == dump.stat().st_size
     assert set(metadata["row_counts"].values()) == {7}
+    assert "analytics_events" not in metadata["row_counts"]
+    assert metadata["excluded_table_data"] == {"analytics_events": 7}
     assert json.loads(metadata_path.read_text()) == metadata
     assert events == [("dump", "00000003-0000001B-1"), ("counts", "00000003-0000001B-1"), "closed"]
 
