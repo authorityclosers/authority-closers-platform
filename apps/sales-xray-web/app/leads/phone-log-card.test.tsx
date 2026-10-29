@@ -2,8 +2,12 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import {
+  announceWorkspaceChange,
+  resetWorkspaceChangeForTests,
+} from "../workspace-change";
 import type { LeadEvent } from "./leads-client";
-import { parseCallLog } from "./native-phone";
+import { callLogSetup, parseCallLog, turnCallLog } from "./native-phone";
 import { clockTime, phoneCallText } from "./phone-call-text";
 import { PhoneLogCard, phoneLogLine } from "./phone-log-card";
 
@@ -13,6 +17,11 @@ import { PhoneLogCard, phoneLogLine } from "./phone-log-card";
 
 type Listener = (event: { data: unknown }) => void;
 type Sent = { method: string; args: Record<string, unknown> };
+
+/** The phone app fails a call with this code, as PhoneBridge's fail() does. */
+class Refusal {
+  constructor(readonly code: string) {}
+}
 
 /** A stand-in for the phone app's SXPhone channel. */
 function fakePhone(answer: (message: Sent) => unknown) {
@@ -25,11 +34,13 @@ function fakePhone(answer: (message: Sent) => unknown) {
       const message = JSON.parse(data) as Sent & { id: string };
       sent.push({ method: message.method, args: message.args });
       const result = answer(message);
+      const reply =
+        result instanceof Refusal
+          ? { id: message.id, ok: false, error: result.code }
+          : { id: message.id, ok: true, result };
       queueMicrotask(() =>
         listeners.forEach((listener) =>
-          listener({
-            data: JSON.stringify({ id: message.id, ok: true, result }),
-          }),
+          listener({ data: JSON.stringify(reply) }),
         ),
       );
     },
@@ -158,6 +169,52 @@ describe("logging work calls on the phone", () => {
     expect(host.textContent).toContain("Log work calls by themselves");
   });
 
+  it("says plainly that a Personal workspace can't turn it on", async () => {
+    // Play's Enterprise CRM exception: the phone refuses outside an
+    // organisation before Android asks anything, so this isn't a fault.
+    const sent = fakePhone((message) =>
+      message.method === "callLogSetup"
+        ? new Refusal("organisation_required")
+        : status(),
+    );
+    await act(async () => root.render(<PhoneLogCard as="offer" />));
+    await act(async () => button("Turn on").click());
+    expect(host.textContent).toContain(
+      "Work-call logging is for your company's workspace. Switch to it to turn this on.",
+    );
+    expect(host.textContent).not.toMatch(/try again|didn't answer/i);
+    expect(host.querySelector('button[role="switch"]')).toBeNull();
+    expect(button("Turn on").disabled).toBe(false);
+    expect(sent.map((item) => item.method)).toEqual([
+      "callLogStatus",
+      "callLogSetup",
+    ]);
+  });
+
+  it("forgets that refusal once the workspace changes", async () => {
+    fakePhone((message) =>
+      message.method === "callLogSetup"
+        ? new Refusal("organisation_required")
+        : status(),
+    );
+    await act(async () => root.render(<PhoneLogCard />));
+    await act(async () => button("Turn on").click());
+    expect(host.textContent).toContain("for your company's workspace");
+    await act(async () => announceWorkspaceChange("arrived"));
+    resetWorkspaceChangeForTests();
+    expect(host.textContent).not.toContain("for your company's workspace");
+    expect(host.textContent).toContain("Other numbers stay on your phone.");
+  });
+
+  it("still asks to try again when the phone fails otherwise", async () => {
+    fakePhone((message) =>
+      message.method === "callLogSetup" ? new Refusal("phone_error") : status(),
+    );
+    await act(async () => root.render(<PhoneLogCard />));
+    await act(async () => button("Turn on").click());
+    expect(host.textContent).toContain("Your phone didn't answer. Try again.");
+  });
+
   it("stays hidden after Not now until it is on", async () => {
     localStorage.setItem("sx-leads-phone-log-card", "hidden");
     fakePhone(() => status());
@@ -181,6 +238,26 @@ describe("what the phone says", () => {
       lastLogged: 0,
       state: "never",
     });
+  });
+
+  it("tells a Personal workspace refusal apart from other failures", async () => {
+    fakePhone((message) =>
+      message.args.on
+        ? new Refusal("organisation_required")
+        : new Refusal("phone_timeout"),
+    );
+    expect(await turnCallLog(true, "")).toEqual({
+      error: "organisation_required",
+    });
+    expect(await turnCallLog(false, "")).toEqual({ error: "failed" });
+    // Callers that only want the state still get null for either.
+    expect(await callLogSetup(true, "")).toBeNull();
+    fakePhone(() => status({ on: true }));
+    expect(await turnCallLog(true, "")).toEqual({
+      status: parseCallLog(status({ on: true })),
+    });
+    fakePhone(() => ({ on: true, supported: false }));
+    expect(await turnCallLog(true, "")).toEqual({ error: "failed" });
   });
 
   it("puts the problem first in the slim row", () => {

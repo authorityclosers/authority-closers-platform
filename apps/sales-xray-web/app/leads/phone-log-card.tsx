@@ -14,6 +14,10 @@
  * matter say their state in words and ask before stopping): stopping asks
  * first, and when the phone can't log (no call history access, signed out)
  * the row says it isn't logging and why, though the switch is still on.
+ *
+ * Only a company's workspace can turn it on (Play's Enterprise CRM exception):
+ * in Personal the phone refuses before Android asks anything, and the card
+ * says so plainly rather than looking broken.
  */
 
 import { History, X } from "lucide-react";
@@ -21,6 +25,7 @@ import { useEffect, useState } from "react";
 
 import { Button } from "../ui/kit";
 import { StateSwitch } from "../ui/state-switch";
+import { onWorkspaceChange } from "../workspace-change";
 import { ago } from "./leads-client";
 import {
   buzz,
@@ -28,6 +33,7 @@ import {
   callLogStatus,
   inPhoneApp,
   onPhoneSignal,
+  turnCallLog,
   type CallLogStatus,
 } from "./native-phone";
 import styles from "./leads.module.css";
@@ -36,6 +42,10 @@ const HIDE_KEY = "sx-leads-phone-log-card";
 
 const NO_ACCESS =
   "Allow call history for Sales X-Ray in your phone's settings, then try again.";
+
+/** The phone refused: the workspace isn't an organisation (Personal). */
+const FOR_COMPANY =
+  "Work-call logging is for your company's workspace. Switch to it to turn this on.";
 
 /** The small line under "Logging work calls". */
 export function phoneLogLine(status: CallLogStatus, now = new Date()): string {
@@ -86,6 +96,9 @@ export function PhoneLogCard({
     };
   }, []);
 
+  // A refusal for the workspace just left doesn't hold for the next one.
+  useEffect(() => onWorkspaceChange(() => setProblem(null)), []);
+
   if (!status || (!status.on && hidden)) return null;
   if ((as === "chip" && !status.on) || (as === "offer" && status.on))
     return null;
@@ -93,12 +106,17 @@ export function PhoneLogCard({
   const turn = async (on: boolean) => {
     setBusy(true);
     setProblem(null);
-    const next = await callLogSetup(on, sim);
+    const outcome = await turnCallLog(on, sim);
     setBusy(false);
-    if (!next) {
-      setProblem("Your phone didn't answer. Try again.");
+    if ("error" in outcome) {
+      setProblem(
+        outcome.error === "organisation_required"
+          ? FOR_COMPANY
+          : "Your phone didn't answer. Try again.",
+      );
       return;
     }
+    const next = outcome.status;
     setStatus(next);
     setSim((current) => current || next.sim || next.sims[0]?.id || "");
     // With access given, a phone with two SIMs waits for the work SIM.
