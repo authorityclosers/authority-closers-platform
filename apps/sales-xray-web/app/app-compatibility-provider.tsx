@@ -15,6 +15,7 @@ import {
   updateState,
   validConfig,
 } from "./app-compatibility";
+import { BrandMark } from "./shell/brand-lockup";
 import { Button } from "./ui/kit";
 import styles from "./app-compatibility.module.css";
 
@@ -34,6 +35,21 @@ export function FeatureGate({
 export const PLAY_LISTING =
   "https://play.google.com/store/apps/details?id=com.authorityclosers.salesxray";
 const REMINDER_KEY = "sx-app-update-remind-after";
+const NAME = "Sales X-Ray";
+
+/** The product's name never splits at its hyphen (orchestrator, 29 Oct 2026). */
+function withName(text: string): ReactNode {
+  return text.split(NAME).flatMap((part, index) =>
+    index === 0
+      ? [part]
+      : [
+          <span key={index} className={styles.name}>
+            {NAME}
+          </span>,
+          part,
+        ],
+  );
+}
 
 export function UpdateCard({
   required,
@@ -47,12 +63,18 @@ export function UpdateCard({
   return (
     <main className={styles.screen}>
       <section className={styles.card} aria-labelledby="app-update-title">
-        <h1 id="app-update-title">Update Sales X-Ray</h1>
+        {/* The app's own mark, as its icon on the phone shows it. */}
+        <span className={styles.icon}>
+          <BrandMark markOnly />
+        </span>
+        <h1 id="app-update-title">{withName(`Update ${NAME}`)}</h1>
         <p>
-          {message ||
-            (required
-              ? "Update the app to keep using Sales X-Ray."
-              : "A newer version is ready. Update when you have a moment.")}
+          {withName(
+            message ||
+              (required
+                ? `Update the app to keep using ${NAME}.`
+                : "A newer version is ready. Update when you have a moment."),
+          )}
         </p>
         <a className={styles.update} href={PLAY_LISTING}>
           Open Google Play

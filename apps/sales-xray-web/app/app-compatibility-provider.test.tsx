@@ -68,6 +68,10 @@ it("blocks below minimum without dismiss, even with a held reminder", async () =
   );
   await mount();
   expect(host.querySelector("h1")?.textContent).toBe("Update Sales X-Ray");
+  // The name stays whole on narrow phones: one unbreakable piece, in the
+  // title and in the message (orchestrator, 29 Oct 2026).
+  expect(host.querySelector("h1 span")?.textContent).toBe("Sales X-Ray");
+  expect(host.querySelector("p span")?.textContent).toBe("Sales X-Ray");
   expect(host.textContent).not.toContain("Workspace");
   expect(host.textContent).not.toContain("Not now");
   expect(host.querySelector("a")?.getAttribute("href")).toBe(PLAY_LISTING);
