@@ -631,6 +631,11 @@ class AppNumberCloud(FakeCloud):
     async def register(self, phone_number_id: str, token: str, pin: str) -> None:
         raise AssertionError("a WhatsApp Business app number is never registered again")
 
+    synced: list[str] = []
+
+    async def sync_app_data(self, phone_number_id: str, token: str, kind: str) -> None:
+        AppNumberCloud.synced.append(kind)
+
 
 def _echo(wamid: str, text: str, at: datetime, to: str = CALLER) -> dict[str, Any]:
     return {
@@ -696,6 +701,7 @@ def test_a_whatsapp_business_app_number_joins_without_registering_and_its_echoes
                 async with setup.sessions() as db:
                     row = await db.scalar(select(LeadWhatsAppNumber))
                     assert row is not None and row.pin is None
+                assert AppNumberCloud.synced == ["smb_app_state_sync", "history"]
 
                 now = datetime.now(UTC)
                 for payload in (

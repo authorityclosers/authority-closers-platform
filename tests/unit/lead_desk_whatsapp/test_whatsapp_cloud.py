@@ -380,3 +380,15 @@ def test_embedded_signup_can_offer_the_whatsapp_business_app_number() -> None:
         "featureType": "whatsapp_business_app_onboarding",
         "sessionInfoVersion": "3",
     }
+
+
+def test_an_app_number_asks_meta_for_its_contacts_and_history() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"messaging_product": "whatsapp", "request_id": "r1"})
+
+    asyncio.run(_api(handler).sync_app_data("10001", TOKEN, "history"))
+    assert seen[0].url.path == "/v23.0/10001/smb_app_data"
+    assert json.loads(seen[0].content) == {"messaging_product": "whatsapp", "sync_type": "history"}

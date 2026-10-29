@@ -510,6 +510,17 @@ class Cloud:
             if error.code not in (133005, 133010, 133016):
                 raise
 
+    async def sync_app_data(self, phone_number_id: str, token: str, kind: str) -> None:
+        """A number on the WhatsApp Business app: ask Meta to send its contacts
+        (``smb_app_state_sync``) or its chat history (``history``) by webhook. Meta allows
+        each once, within 24 hours of joining; after that the number is taken off again."""
+        await self._call(
+            "POST",
+            f"{phone_number_id}/smb_app_data",
+            token=token,
+            json={"messaging_product": "whatsapp", "sync_type": kind},
+        )
+
     async def send_text(self, phone_number_id: str, token: str, *, to: str, body: str) -> str:
         reply = await self._call(
             "POST",

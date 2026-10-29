@@ -17,6 +17,7 @@ Message text is the customer's own data: it lives only in
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
@@ -38,6 +39,8 @@ from ac_platform.lead_desk.models import (
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, owner_names
 from ac_platform.lead_desk.whatsapp import cloud
 from ac_platform.partner_events.lead_events import consent_granted
+
+log = logging.getLogger(__name__)
 
 OPT_IN: Final[str] = "whatsapp_opt_in"  # the lead event marker (kind "edited")
 STATUS_ORDER: Final[dict[str, int]] = {"queued": 0, "sent": 1, "delivered": 2, "read": 3}
@@ -199,6 +202,14 @@ async def connect_number(
     row.quality = facts["quality"] or None
     row.updated_at = desk.now
     await desk.db.flush()
+    if facts.get("on_app") == "yes":
+        # Meta keeps a WhatsApp Business app number on the API only if its contacts and
+        # history are asked for within 24 hours of joining.
+        for kind in ("smb_app_state_sync", "history"):
+            try:
+                await api.sync_app_data(phone_number_id, business_token, kind)
+            except cloud.WhatsAppError as error:
+                log.warning("whatsapp %s sync not started for %s: %s", kind, row.id, error)
     return row
 
 
