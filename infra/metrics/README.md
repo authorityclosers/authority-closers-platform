@@ -40,6 +40,19 @@ After each export, `ac-budget-alerts --apply` reads the store (production only u
 
 State lives in `/var/lib/ac-budget-alerts/state.json` and the log in `/var/log/ac-budget-alerts.log`.
 
+## Agent work and server time (30 Oct 2026)
+
+`ac-agent-burn` is a root timer. It runs nightly at 23:40 UTC, at nice 19 and with at most 25% of a CPU, and writes `/srv/authority-closers/metrics/agent-burn.json`. Admin → Economics uses that file to split the agents' subscriptions and the ac server by product (`ac_platform/economics/burn.py` and `costs.py`).
+
+- **Agent work.** It reads the Claude and Codex session logs changed in the last 30 days and weighs them at list-price ratios. It places each session by the files it touched: Sales X-Ray, the learner app, or platform and ops. Pulse, EA and Naya work is placed by the session's working folder. Anything else is unattributed.
+- **A laptop's own logs.** `ac-agent-burn --summary --source laptop --tool claude <folder>` prints the same counts for a laptop's logs. Save the output as `/srv/authority-closers/metrics/agent-burn.d/laptop.json`. Counts younger than 8 days are added.
+- **Server time.** It reads CPU use since the last run from cgroup v2:
+  - apps: `system.slice` (every environment's containers and services);
+  - agents: `ac.slice` and `user.slice`.
+
+  The previous reading is kept in `/var/lib/ac-agent-burn/cpu.json`.
+- **Counts only.** The file holds no prompt, path, file name, person or session id.
+
 ## Install (dev, done 19 Oct 2026)
 
 ```bash
