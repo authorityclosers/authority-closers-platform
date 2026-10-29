@@ -145,7 +145,7 @@ export function GoogleFilesCard() {
       aria-labelledby={titleId}
     >
       <div className={styles.cardHead}>
-        <BrandTile brands={["googlesheets", "googledrive"]} size={44} />
+        <BrandTile brands={["googlesheets", "googledrive"]} size={40} />
         <div className={styles.cardTitle}>
           <h3 id={titleId}>Google Sheets and Drive</h3>
           <Badge

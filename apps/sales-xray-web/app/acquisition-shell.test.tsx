@@ -68,7 +68,7 @@ it("keeps navigation, one main landmark and help, without placeholder chrome", a
       ?.getAttribute("href"),
   ).toBe("/analysis/new");
   // Phones: the + sits in the top bar since the 28 Oct meeting and asks what
-  // to add; the tab bar's middle is Ask Deepak, so no tab is lit here.
+  // to add; the tab bar's middle is Ask Dipak, so no tab is lit here.
   expect(
     shell.querySelector(
       'nav[aria-label="Mobile Sales Xray navigation"] [aria-current="page"]',

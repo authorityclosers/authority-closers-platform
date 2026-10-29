@@ -204,84 +204,127 @@
   font-weight: 700;
 }
 
+/* Each group is one calm card of rows, split by hairlines, like a phone's
+   own settings (owner, 29 Oct 2026: "clean UI and icons", less clutter):
+   the app's mark, its name with a quiet status, one line of detail and at
+   most one compact action. The whole row opens it. */
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr);
+  overflow: hidden;
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
 }
 
-/* One shape for every app: the tile beside its name and status; the detail
-   and the one action under the name; the whole card opens it. */
 .card {
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-content: start;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
   box-sizing: border-box;
-  padding: 14px 12px 14px 14px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-lg);
-  background: var(--sx-surface);
-  transition:
-    border-color var(--sx-dur-fast) var(--sx-ease-out),
-    box-shadow var(--sx-dur-base) var(--sx-ease-out),
-    transform var(--sx-dur-fast) var(--sx-ease-out);
+  padding: 14px 14px 14px 16px;
+  background: transparent;
+  transition: background var(--sx-dur-fast) var(--sx-ease-out);
 }
 
-.card:hover {
-  border-color: var(--sx-line-strong);
+.card + .card {
+  border-top: 1px solid var(--lx-line-soft, var(--sx-line));
 }
 
-/* Press feedback: the card gives a little under the thumb. */
+/* Press feedback: the row darkens a little under the thumb. */
 .card:has(> .open:active) {
-  transform: scale(0.98);
+  background: var(--sx-fill-soft);
 }
 
-.card[data-state="problem"] {
-  border-color: color-mix(in oklab, var(--sx-warn) 45%, var(--sx-line));
+@media (hover: hover) and (pointer: fine) {
+  .card:hover {
+    background: color-mix(in oklab, var(--sx-fill-soft) 60%, transparent);
+  }
 }
 
-.card[data-state="not_set_up"] {
-  background: var(--sx-paper);
+.card[data-state="not_set_up"] .cardTitle h3 {
+  color: var(--sx-ink-2);
 }
 
-/* A test that passed: the card glows once. */
+/* A test that passed: the row glows once. */
 .card[data-passed] {
-  border-color: var(--sx-good);
   animation: glow 900ms var(--sx-ease-out);
 }
 
 @keyframes glow {
   30% {
-    box-shadow: 0 0 0 4px color-mix(in oklab, var(--sx-good) 24%, transparent);
+    background: color-mix(in oklab, var(--sx-good) 12%, transparent);
   }
 }
 
 .cardHead {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
   min-width: 0;
 }
 
+/* The name, and under it the status as a dot and a word, not a pill. */
 .cardTitle {
   display: grid;
   flex: 1;
   justify-items: start;
-  gap: 6px;
+  gap: 2px;
   min-width: 0;
-  padding-top: 2px;
 }
 
 .cardTitle h3 {
+  max-width: 100%;
   margin: 0;
+  overflow: hidden;
   color: var(--sx-ink);
-  font-size: var(--sx-text-md);
-  font-weight: 700;
-  line-height: 1.3;
-  overflow-wrap: anywhere;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardTitle > [data-tone] {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.cardTitle > [data-tone]::before {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--sx-muted);
+  content: "";
+}
+
+.cardTitle > [data-tone="good"]::before {
+  background: var(--sx-good);
+}
+
+.cardTitle > [data-tone="warn"] {
+  color: var(--sx-ink);
+}
+
+.cardTitle > [data-tone="warn"]::before {
+  background: var(--sx-warn);
+}
+
+.cardTitle > [data-tone="neutral"]::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--sx-muted);
 }
 
 .chevron {
@@ -290,21 +333,21 @@
   color: var(--sx-muted);
 }
 
-/* Under the name: past the 44 px tile and its 12 px gap. */
+/* Under the name: past the 40 px mark and its 12 px gap. */
 .words,
 .reviewLine,
 .actions {
-  margin-left: 56px;
+  margin-left: 52px;
 }
 
-/* Up to two lines, so the important part is never cut (bug #45). */
+/* One line of detail, two at most. */
 .words {
   display: -webkit-box;
   overflow: hidden;
   margin-top: 0;
   margin-bottom: 0;
   color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
+  font-size: var(--sx-text-xs);
   line-height: 1.45;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -317,7 +360,33 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 2px;
+  margin-top: 6px;
+}
+
+/* An app's action is a compact chip: 34 px to see, 44 px to tap. */
+.actions > button[data-variant],
+.actions > .linkButton {
+  position: relative;
+  gap: 6px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: var(--sx-radius-pill);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.actions > button[data-variant="ghost"] {
+  padding: 0 6px;
+  color: var(--sx-accent);
+}
+
+@media (pointer: coarse) {
+  .actions > button[data-variant]::after,
+  .actions > .linkButton::after {
+    position: absolute;
+    inset: -5px 0;
+    content: "";
+  }
 }
 
 /* The whole card is one tap target, under the card's own buttons. */
@@ -552,7 +621,6 @@
     transition: none;
   }
 
-  .card:has(> .open:active),
   .filter:active,
   .filter[aria-pressed="true"] .dot {
     transform: none;
@@ -763,10 +831,5 @@
 @media (max-width: 599px) {
   .card {
     min-height: 0;
-  }
-
-  /* Thumb-sized on a phone. */
-  .actions > * {
-    min-height: 44px;
   }
 }

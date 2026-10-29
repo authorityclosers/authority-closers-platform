@@ -41,12 +41,24 @@ it("reconciles nested counts and draws seven exact, directly labelled outcomes o
       .querySelector('[aria-label="Counted call funnel"] svg')
       ?.getAttribute("aria-label"),
   ).toContain("75 agreed a next step, including 10 won. 25 other endings");
-  const rows = host.querySelectorAll('[aria-label="Calls by outcome"] li');
+  const rows = host.querySelectorAll('[aria-label="Calls by outcome"] button');
   expect(rows).toHaveLength(7);
-  expect(rows[0].textContent).toBe("Follow-up set40 calls");
-  expect(rows[0].querySelector("i")?.style.width).toBe("40%");
+  // Owner bug #78: a storage-style strip and a legend, grouped by next step.
+  expect(rows[0].textContent).toBe("Follow-up set4040%");
+  expect(
+    host.querySelector<HTMLElement>('[role="img"] [data-outcome="follow_up"]')
+      ?.style.flexGrow,
+  ).toBe("40");
+  expect(
+    host.querySelector('[role="img"] [data-outcome="unclear"]'),
+  ).toBeNull();
+  expect(host.textContent).toContain(
+    "Follow-up set was the most common ending",
+  );
+  expect(host.textContent).toContain("Agreed a next step75");
+  expect(host.textContent).toContain("Other endings25");
   expect(host.textContent).toContain("3 pending");
-  expect(rows[6].textContent).toContain("0 calls");
+  expect(rows[6].textContent).toBe("No clear next step00%");
 });
 it("keeps missing fields as dashes rather than creating zero outcomes or a funnel", () => {
   act(() =>
@@ -62,7 +74,8 @@ it("keeps missing fields as dashes rather than creating zero outcomes or a funne
   );
   expect(host.textContent).toContain("Next-step share unavailable");
   expect(host.textContent).toContain("Funnel counts unavailable");
-  expect(host.textContent).toContain("Lost0 calls");
+  expect(host.textContent).toContain("Lost00%");
+  expect(host.textContent).toContain("How every call ended");
   expect(host.textContent).toContain("Won—");
 });
 it("opens the exact outcome, and treats a real zero as zero", () => {

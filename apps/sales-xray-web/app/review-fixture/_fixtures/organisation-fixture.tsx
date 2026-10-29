@@ -83,8 +83,8 @@ const MEMBERS = [
   }),
   member(
     "00000000-0000-4000-8000-000000000002",
-    "swamini fictional",
-    "swamini@fictionalhomes.in",
+    "meera fictional",
+    "meera@fictionalhomes.in",
     "admin",
     { joined: 90, active: 0, calls: 31 },
   ),

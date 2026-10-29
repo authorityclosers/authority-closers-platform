@@ -110,13 +110,13 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
   );
   expect(desktopNewAnalysis?.getAttribute("href")).toBe("/sales-xray?new=1");
   // Phones (28 Oct 2026 meeting): the + is in the top bar and asks what to
-  // add; the tab bar's middle slot is Ask Deepak.
+  // add; the tab bar's middle slot is Ask Dipak.
   const mobileAdd = host.querySelector(
     'header button[aria-label="Add a lead, a call or a task"]',
   );
   expect(mobileAdd?.getAttribute("aria-haspopup")).toBe("dialog");
-  const ask = mobileNav?.querySelector('button[aria-label="Ask Deepak"]');
-  expect(ask?.textContent?.trim()).toBe("Ask Deepak");
+  const ask = mobileNav?.querySelector('button[aria-label="Ask Dipak"]');
+  expect(ask?.textContent?.trim()).toBe("Ask Dipak");
   expect(ask?.getAttribute("aria-haspopup")).toBe("dialog");
   expect(
     desktopNav?.querySelector(
@@ -257,21 +257,21 @@ it("keeps the phone tab bar to its five tabs, plus a dev settings control", () =
       Array.from(nav.children, (item) => item.textContent?.trim()),
     ).toEqual(
       liveData
-        ? ["Home", "Leads", "Ask Deepak", "Chats", "Calls", "Settings"]
-        : ["Home", "Leads", "Ask Deepak", "Chats", "Calls"],
+        ? ["Home", "Leads", "Ask Dipak", "Chats", "Calls", "Settings"]
+        : ["Home", "Leads", "Ask Dipak", "Chats", "Calls"],
     );
     // Prospects and Coaching open from You, not from the tab bar.
     expect(nav.querySelector('a[href="/prospects"]')).toBeNull();
     expect(nav.querySelector('a[href="/coaching"]')).toBeNull();
     // Chats is its own tab now.
     expect(nav.querySelector('a[href="/chats"]')).not.toBeNull();
-    // Ask Deepak is the only tab that is a button: it opens his sheet (the
+    // Ask Dipak is the only tab that is a button: it opens his sheet (the
     // dev settings control is the other button, and only with live data).
     expect(
       Array.from(nav.querySelectorAll("button"), (button) =>
         button.textContent?.trim(),
       ),
-    ).toEqual(liveData ? ["Ask Deepak", "Settings"] : ["Ask Deepak"]);
+    ).toEqual(liveData ? ["Ask Dipak", "Settings"] : ["Ask Dipak"]);
     expect(
       nav.querySelector('[aria-current="page"]')?.getAttribute("href"),
     ).toBe("/dashboard");
@@ -295,7 +295,7 @@ it("keeps the five tabs for an unconfirmed session; signed out offers Home, New 
         <p>Dashboard</p>
       </AcquisitionShell>,
     ),
-  ).toEqual(["Home", "Leads", "Ask Deepak", "Chats", "Calls"]);
+  ).toEqual(["Home", "Leads", "Ask Dipak", "Chats", "Calls"]);
   // B22: Leads and Calls only lead to a sign-in prompt for a visitor.
   expect(
     tabs(

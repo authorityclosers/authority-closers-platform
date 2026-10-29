@@ -393,82 +393,82 @@ export function Funnel({
   );
 }
 
+/** A skill's observed share (strong included) and its parts. */
+function skillShare(skill: SkillTotal) {
+  const observed = skill.strong + skill.observed;
+  const whole = observed + skill.needsAttention + skill.unknown;
+  return { observed, whole, share: whole ? observed / whole : null };
+}
+
 /**
- * Each skill across the calls: observed (strong included), needs attention,
- * and not enough evidence, as one split bar with the observed share named.
+ * Each skill across the calls (owner bug #79, 29 Oct 2026: "far better UX
+ * for the presentation of all this data"). The answer first: the strongest
+ * skill and the one to coach next. Then all eight at once, best first, each a
+ * name, its observed share in large figures and one bar split into observed,
+ * needs attention and not enough evidence. No paging, no legend to decode:
+ * the parts are named under the list and in each row's label.
  */
 export function SkillSplit({ skills }: { skills: SkillTotal[] }) {
-  const [requestedOffset, setOffset] = useState(0);
-  const offset = Math.min(
-    requestedOffset,
-    Math.max(0, Math.floor((skills.length - 1) / 4) * 4),
-  );
+  const ranked = skills
+    .map((skill) => ({ skill, ...skillShare(skill) }))
+    .sort((a, b) => (b.share ?? -1) - (a.share ?? -1));
+  const read = ranked.filter((row) => row.share !== null);
+  const best = read[0];
+  const coach = [...read].sort(
+    (a, b) =>
+      b.skill.needsAttention - a.skill.needsAttention ||
+      (a.share ?? 0) - (b.share ?? 0),
+  )[0];
   return (
     <>
-      <p className={styles.legendRow} aria-hidden="true">
-        <span>
-          <i data-key="observed" /> Observed
-        </span>
-        <span>
-          <i data-key="attention" /> Needs attention
-        </span>
-        <span>
-          <i data-key="unknown" /> Not enough evidence
-        </span>
-      </p>
-      <ul className={styles.skillList} aria-label="Skills across the calls">
-        {skills.slice(offset, offset + 4).map((skill) => {
-          const observed = skill.strong + skill.observed;
-          const whole = observed + skill.needsAttention + skill.unknown;
-          const share = whole ? observed / whole : null;
-          return (
-            <li
-              key={skill.id}
-              aria-label={`${skill.label}: ${percent(share)} observed, ${count(skill.needsAttention)} calls need attention, ${count(skill.unknown)} without enough evidence`}
-            >
-              <span className={styles.skillName}>{skill.label}</span>
-              <span className={styles.split} aria-hidden="true">
-                <i data-key="observed" style={{ flexGrow: observed }} />
-                <i
-                  data-key="attention"
-                  style={{ flexGrow: skill.needsAttention }}
-                />
-                <i data-key="unknown" style={{ flexGrow: skill.unknown }} />
-              </span>
-              <span className={styles.skillValue}>
-                {percent(share)}
-                <small>
-                  {skill.needsAttention
-                    ? `${count(skill.needsAttention)} need work`
-                    : "—"}
-                </small>
-              </span>
-            </li>
-          );
-        })}
-      </ul>
-      {skills.length > 4 ? (
-        <div className={styles.chartPaging}>
-          <button
-            type="button"
-            disabled={offset === 0}
-            onClick={() => setOffset(Math.max(0, offset - 4))}
-          >
-            Previous skills
-          </button>
-          <span>
-            {offset + 1}–{Math.min(offset + 4, skills.length)} of{" "}
-            {skills.length}
-          </span>
-          <button
-            type="button"
-            disabled={offset + 4 >= skills.length}
-            onClick={() => setOffset(offset + 4)}
-          >
-            Next skills
-          </button>
+      {best && coach && best.skill.id !== coach.skill.id ? (
+        <div className={styles.skillAnswer}>
+          <p data-tone="good">
+            <small>Strongest</small>
+            <b>{best.skill.label}</b>
+            <span>{percent(best.share)} observed</span>
+          </p>
+          <p data-tone="warn">
+            <small>Coach next</small>
+            <b>{coach.skill.label}</b>
+            <span>
+              {coach.skill.needsAttention
+                ? `${plural(coach.skill.needsAttention, "call")} needed work`
+                : `${percent(coach.share)} observed`}
+            </span>
+          </p>
         </div>
       ) : null}
+      <ul className={styles.skillList} aria-label="Skills across the calls">
+        {ranked.map(({ skill, observed, share }) => (
+          <li
+            key={skill.id}
+            aria-label={`${skill.label}: ${percent(share)} observed, ${count(skill.needsAttention)} calls need attention, ${count(skill.unknown)} without enough evidence`}
+          >
+            <span className={styles.skillName}>{skill.label}</span>
+            <span className={styles.skillValue}>{percent(share)}</span>
+            <span className={styles.split} aria-hidden="true">
+              <i data-key="observed" style={{ flexGrow: observed }} />
+              <i
+                data-key="attention"
+                style={{ flexGrow: skill.needsAttention }}
+              />
+              <i data-key="unknown" style={{ flexGrow: skill.unknown }} />
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className={styles.legendRow}>
+        <span>
+          <i data-key="observed" aria-hidden="true" /> Observed
+        </span>
+        <span>
+          <i data-key="attention" aria-hidden="true" /> Needs work
+        </span>
+        <span>
+          <i data-key="unknown" aria-hidden="true" /> Not enough evidence
+        </span>
+      </p>
     </>
   );
 }
@@ -549,6 +549,92 @@ export function SkillHeatmap({
         </tbody>
       </table>
     </div>
+  );
+}
+
+/**
+ * Where each person needs coaching (owner bug #80, 29 Oct 2026: "so much
+ * text … far better cleaner and tidy design"): the answer to the heatmap in
+ * a few lines. Each skill that needed attention lists the people below full
+ * marks, lowest first, as chips that filter to that person; the skills with
+ * no gaps share one line. The full grid stays one tap away.
+ */
+export function SkillGaps({
+  groups,
+  onSelect,
+}: {
+  groups: Group[];
+  onSelect?: (key: string) => void;
+}) {
+  const rows = SKILLS.map((skill) => ({
+    skill,
+    people: groups
+      .map((group) => {
+        const cell = group.skills.find((item) => item.id === skill.id);
+        return { group, share: cell ? observedShare(cell) : null };
+      })
+      .filter(
+        (item): item is { group: Group; share: number } =>
+          item.share !== null && item.share < 1,
+      )
+      .sort((a, b) => a.share - b.share),
+  }));
+  const gaps = rows
+    .filter((row) => row.people.length)
+    .sort((a, b) => b.people.length - a.people.length);
+  const clear = rows.filter((row) => !row.people.length);
+  if (!gaps.length)
+    return (
+      <p className={styles.gapClear}>
+        Everyone showed every skill they were read on in these calls.
+      </p>
+    );
+  return (
+    <>
+      <ul className={styles.gaps} aria-label="Coaching gaps by skill">
+        {gaps.map(({ skill, people }) => (
+          <li key={skill.id}>
+            <span className={styles.gapSkill}>
+              {skill.short}
+              <small>
+                {people.length === 1
+                  ? "1 person"
+                  : `${count(people.length)} people`}
+              </small>
+            </span>
+            <span className={styles.gapPeople}>
+              {people.slice(0, 3).map(({ group, share }) =>
+                onSelect && group.key ? (
+                  <button
+                    key={group.key}
+                    type="button"
+                    onClick={() => onSelect(group.key ?? "")}
+                  >
+                    {group.name}
+                    <b>{percent(share)}</b>
+                  </button>
+                ) : (
+                  <span key={group.key ?? group.name}>
+                    {group.name}
+                    <b>{percent(share)}</b>
+                  </span>
+                ),
+              )}
+              {people.length > 3 ? (
+                <span className={styles.gapMore}>
+                  +{count(people.length - 3)} more
+                </span>
+              ) : null}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {clear.length ? (
+        <p className={styles.caption}>
+          No gaps in {clear.map((row) => row.skill.short).join(", ")}.
+        </p>
+      ) : null}
+    </>
   );
 }
 

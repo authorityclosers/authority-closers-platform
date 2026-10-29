@@ -818,13 +818,13 @@ function FirstCallGuideRow({ onStart }: { onStart?: () => void }) {
         role="switch"
         aria-label="First call guide"
         aria-checked={guide.on}
-        className={styles.secondary}
+        className={styles.switch}
         onClick={() => {
           guide.set(!guide.on);
           if (!guide.on) onStart?.();
         }}
       >
-        {guide.on ? "On" : "Off"}
+        <span className={styles.srOnly}>{guide.on ? "On" : "Off"}</span>
       </button>
     </Row>
   );

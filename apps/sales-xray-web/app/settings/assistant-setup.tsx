@@ -9,10 +9,11 @@
  * ChatGPT first (24 Oct 2026, the connector fixed in 6cecf226): it takes only
  * the remote server, so the download stays hidden for it.
  */
-import { useState } from "react";
-import { Download } from "lucide-react";
+import { useState, type ReactNode } from "react";
+import { Download, Terminal } from "lucide-react";
 
 import { BrandTile } from "../ui/brand-tile";
+import { ClaudeMark, CodeMark, CursorMark } from "./assistant-marks";
 import { Button, Panel } from "../ui/kit";
 import { CopyButton } from "./copy-button";
 import { useOrigin } from "./use-origin";
@@ -116,17 +117,34 @@ function Snippet({ code, label }: { code: string; label: string }) {
   );
 }
 
-// Each assistant's tile (owner bug #47, 27 Oct 2026): the official mark where
-// the brand library has one (ChatGPT), else its initials on a plain tile,
-// never a look-alike.
-const MARK: Partial<Record<Assistant, string>> = { chatgpt: "chatgpt" };
-const INITIALS: Record<Assistant, string> = {
-  chatgpt: "",
-  "claude-desktop": "Cl",
-  "claude-code": "CC",
-  cursor: "Cu",
-  vscode: "VS",
-};
+// Each assistant's mark (owner, 29 Oct 2026: "Claude and other apps not
+// having clean UI and icons"): ChatGPT's from the brand library, Claude's and
+// Cursor's drawn inline, VS Code a plain code icon; never initials.
+function AssistantMark({ assistant }: { assistant: Assistant }): ReactNode {
+  if (assistant === "chatgpt")
+    return <BrandTile brands={["chatgpt"]} size={28} />;
+  return (
+    <span
+      className={styles.mark}
+      data-brand={assistant === "vscode" ? undefined : assistant}
+      data-kind={assistant === "vscode" ? "icon" : "brand"}
+      aria-hidden="true"
+    >
+      {assistant === "vscode" ? (
+        <CodeMark />
+      ) : assistant === "cursor" ? (
+        <CursorMark />
+      ) : (
+        <ClaudeMark />
+      )}
+      {assistant === "claude-code" ? (
+        <span className={styles.markCorner}>
+          <Terminal size={9} strokeWidth={2.4} />
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 const STEPS = [
   "Add Sales X-Ray to your assistant",
@@ -157,18 +175,12 @@ export function AssistantSetup() {
             aria-pressed={item.key === assistant}
             onClick={() => setAssistant(item.key)}
           >
-            {MARK[item.key] ? (
-              <BrandTile brands={[MARK[item.key]!]} size={32} />
-            ) : (
-              <span className={styles.initials} aria-hidden="true">
-                {INITIALS[item.key]}
-              </span>
-            )}
-            {item.label}
+            <AssistantMark assistant={item.key} />
+            <span>{item.label}</span>
           </button>
         ))}
       </div>
-      <span>{REMOTE_WHERE[assistant]}</span>
+      <span className={styles.where}>{REMOTE_WHERE[assistant]}</span>
       <Snippet
         code={remoteSnippet(assistant, origin)}
         label={`${chosen.label} setup`}
@@ -188,6 +200,7 @@ export function AssistantSetup() {
   return (
     <Panel
       title="Connect your AI assistant"
+      className={styles.fit}
       tools={
         <span className={styles.stepCount}>
           Step {step + 1} of {STEPS.length}

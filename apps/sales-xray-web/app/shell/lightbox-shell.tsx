@@ -50,7 +50,7 @@ import {
 
 import { useBranding } from "./branding-store";
 import { AddSheet } from "./add-sheet";
-import { AskDeepakSheet } from "./ask-deepak";
+import { AskDipakSheet } from "./ask-deepak";
 import { useAppRouter } from "./app-router";
 import { useShellProfile } from "./profile-store";
 import { callHref, type Allowance } from "../acquisition-client";
@@ -396,7 +396,7 @@ function LightboxShellFrame({
   // quick form over the current screen (owner, 22 Oct). Each opening of the
   // form is a new round, so it always starts empty.
   const [addOpen, setAddOpen] = useState(false);
-  // Ask Deepak (28 Oct 2026 meeting): the tab bar's middle slot.
+  // Ask Dipak (28 Oct 2026 meeting): the tab bar's middle slot.
   const [askOpen, setAskOpen] = useState(false);
   const [leadForm, setLeadForm] = useState({ open: false, round: 0 });
   const router = useAppRouter();
@@ -1956,13 +1956,13 @@ function LightboxShellFrame({
               tick();
               setAskOpen(true);
             }}
-            aria-label="Ask Deepak"
+            aria-label="Ask Dipak"
             aria-haspopup="dialog"
             aria-expanded={askOpen}
           >
             <span className={styles.askFace} aria-hidden="true" />
             <span className={styles.tabPill} aria-hidden="true" />
-            <span>Ask Deepak</span>
+            <span>Ask Dipak</span>
           </button>
         )}
         {/* Chats has its own tab and its own unread count. */}
@@ -2098,7 +2098,7 @@ function LightboxShellFrame({
       {guest || !(quiet || reportWaiting) ? null : <BugReportHost />}
       {guest || !quiet ? null : <FeedbackHost />}
       {guest ? null : (
-        <AskDeepakSheet open={askOpen} onClose={() => setAskOpen(false)} />
+        <AskDipakSheet open={askOpen} onClose={() => setAskOpen(false)} />
       )}
       {guest ? null : (
         <AddSheet

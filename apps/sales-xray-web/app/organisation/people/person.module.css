@@ -756,9 +756,82 @@
   }
 }
 
+/* Reports and coaching: one grouped row that opens in place, its chevron
+   turning down (owner, 29 Oct 2026: no bare disclosure triangles). */
+.reports {
+  min-width: 0;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+.reports[open] {
+  display: grid;
+  gap: var(--sx-gap);
+  padding-bottom: 12px;
+  border-color: transparent;
+  background: transparent;
+}
 .reportToggle {
-  min-height: 44px;
-  padding: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 14px;
+  list-style: none;
   cursor: pointer;
-  color: var(--sx-ink-2);
+  color: var(--sx-ink);
+  font-weight: 600;
+  touch-action: manipulation;
+}
+.reportToggle::-webkit-details-marker {
+  display: none;
+}
+.reportToggle > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.reportToggle small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 400;
+}
+.reportToggle > svg {
+  flex: none;
+  color: var(--sx-muted);
+}
+.reports[open] > .reportToggle {
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+.reports[open] > .reportToggle > svg {
+  transform: rotate(90deg);
+}
+.reportToggle:focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .reportToggle > svg {
+    transition: transform 160ms ease;
+  }
+}
+.retryLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.retryChip {
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
 }

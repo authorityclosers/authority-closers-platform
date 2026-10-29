@@ -128,7 +128,11 @@ export function TryApi({
   }
 
   return (
-    <Panel title="Try the API" sub="Send a real request with one of your keys">
+    <Panel
+      title="Try the API"
+      sub="A real request with your key"
+      className={styles.fit}
+    >
       <form
         className={styles.tryForm}
         onSubmit={(event) => {

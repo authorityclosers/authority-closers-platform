@@ -215,7 +215,13 @@ it.each([0, 1, 50])(
         initialCalls={{ status: 200, body: fixture.calls }}
       />,
     );
-    expect(host.textContent).toContain(`Showing ${size} of ${size} people`);
+    // Owner bug #80: a short team has no search or count line to read.
+    if (size > 8)
+      expect(host.textContent).toContain(`Showing ${size} of ${size} people`);
+    else {
+      expect(host.textContent).not.toContain("Showing");
+      expect(host.querySelector('input[type="search"]')).toBeNull();
+    }
     expect(
       Array.from(host.querySelectorAll("button")).some(
         (button) =>
@@ -497,7 +503,7 @@ it("reads in the browser when the server could not, and links real calls", async
     expect.objectContaining({ credentials: "same-origin" }),
   );
   expect(host.textContent).not.toContain("Synthetic sandbox data");
-  expect(host.textContent).toContain("Skills most often needing work");
+  expect(host.textContent).toContain("Skills needing work");
   expect(host.querySelector('select[aria-label="Team"]')).toBeNull();
   // Real members open their profile from the people table.
   await choose("People");
@@ -652,10 +658,57 @@ it("keeps paged charts visible when a new range or filter returns fewer rows", a
     host.querySelectorAll('ul[aria-label="Fictional outcomes"] li'),
   ).toHaveLength(3);
 
-  await render(<SkillSplit skills={data.skills} />);
-  await act(async () => button("Next skills").click());
   await render(<SkillSplit skills={data.skills.slice(0, 2)} />);
   expect(
     host.querySelectorAll('ul[aria-label="Skills across the calls"] li'),
   ).toHaveLength(2);
+});
+
+// Owner bug #79: every skill at once, best first, with the answer on top.
+it("shows all eight skills ranked, the strongest one and the one to coach next", async () => {
+  const skill = (
+    id: string,
+    label: string,
+    observed: number,
+    attention: number,
+  ) => ({
+    id,
+    label,
+    strong: 0,
+    observed,
+    needsAttention: attention,
+    unknown: 10 - observed - attention,
+  });
+  const skills = [
+    skill("a", "Fictional rapport", 5, 1),
+    skill("b", "Fictional discovery", 9, 0),
+    skill("c", "Fictional closing", 3, 6),
+    skill("d", "Fictional tone", 7, 1),
+    skill("e", "Fictional impact", 6, 2),
+    skill("f", "Fictional fit", 8, 1),
+    skill("g", "Fictional pitch", 4, 3),
+    skill("h", "Fictional objections", 2, 2),
+  ];
+  await render(<SkillSplit skills={skills} />);
+  const names = Array.from(
+    host.querySelectorAll('ul[aria-label="Skills across the calls"] li'),
+    (row) => row.firstElementChild?.textContent,
+  );
+  expect(names).toEqual([
+    "Fictional discovery",
+    "Fictional fit",
+    "Fictional tone",
+    "Fictional impact",
+    "Fictional rapport",
+    "Fictional pitch",
+    "Fictional closing",
+    "Fictional objections",
+  ]);
+  expect(host.textContent).toContain(
+    "StrongestFictional discovery90% observed",
+  );
+  expect(host.textContent).toContain(
+    "Coach nextFictional closing6 calls needed work",
+  );
+  expect(button("Next skills")).toBeUndefined();
 });

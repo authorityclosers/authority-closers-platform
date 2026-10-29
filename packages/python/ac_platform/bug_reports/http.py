@@ -65,6 +65,7 @@ from ac_platform.http.auth import (
 )
 from ac_platform.http.rate_limits import InMemoryTokenBucketLimiter, RateLimitRule
 from ac_platform.http.routes import RouteContext
+from ac_platform.identity.application import has_platform_staff_membership
 from ac_platform.kernel.errors import DomainError
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
@@ -136,7 +137,7 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
     )
     pictures = ScreenshotStore(settings.sales_xray_storage_root)
     limiter = InMemoryTokenBucketLimiter()
-    per_person = RateLimitRule("bug-report", "POST", re.compile(".*"), 12, 3600)
+    per_person = RateLimitRule("bug-report", "POST", re.compile(".*"), 60, 3600)
 
     # ---------- Sales X-Ray: send a report ----------
 
@@ -175,13 +176,14 @@ def install_bug_reports_http(app: FastAPI, ctx: RouteContext) -> None:
         words = _words(command.words)
         if not words:
             raise HTTPException(422, "Say what went wrong.", headers=PRIVATE)
-        allowed, retry, _remaining = await limiter.consume(str(actor.person_id), per_person)
-        if not allowed:
-            raise HTTPException(
-                429,
-                "That's a lot of reports in an hour. Send again a little later.",
-                headers={**PRIVATE, "Retry-After": str(retry)},
-            )
+        if not await has_platform_staff_membership(auth.database, actor.person_id):
+            allowed, retry, _remaining = await limiter.consume(str(actor.person_id), per_person)
+            if not allowed:
+                raise HTTPException(
+                    429,
+                    "That's a lot of reports in an hour. Send again a little later.",
+                    headers={**PRIVATE, "Retry-After": str(retry)},
+                )
         route = scrub_route(command.route)
         context = clean_context(command.context)
         context["server"] = {

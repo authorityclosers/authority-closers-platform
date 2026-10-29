@@ -214,11 +214,13 @@ export function SellerSections({
           {rep ? (
             <p className={styles.workload}>
               <span>
-                <strong>{rep.open_leads}</strong>{" "}
-                {rep.max_open === null ? "Open leads, no limit" : "Open leads"}
+                <strong>{rep.open_leads}</strong>
+                {rep.open_leads === 1 ? "open lead" : "open leads"}
+                {rep.max_open === null ? <small>No limit</small> : null}
               </span>
               <span>
-                <strong>{rep.due_now}</strong> Due now
+                <strong>{rep.due_now}</strong>
+                due now
               </span>
             </p>
           ) : null}

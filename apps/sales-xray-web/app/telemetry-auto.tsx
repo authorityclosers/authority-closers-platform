@@ -19,8 +19,9 @@
  *   CPU test and, on Android, the phone's model (27 Oct 2026).
  * - Script errors: their class and a fingerprint of where they were thrown,
  *   never the message.
- * - API calls whose answer took over 1.5 s to start, or that failed, with every
- *   id taken out of the path; never one the page spent out of view.
+ * - Every API fetch/XHR timing (including failure and background), in bands;
+ *   legacy slow-call metrics also remain. Ordinary clicks carry only role/grid,
+ *   scroll reports depth quarters, and routes report time through paint frames.
  * - Rage taps (three in a second on one spot) and dead taps (a tap on
  *   something that looks tappable and changes nothing), with the screen zone
  *   and the element as the code names it (its data-sx-action or
@@ -41,6 +42,7 @@ import {
   setActionTimer,
   telemetry,
   track,
+  timingBand,
   type ErrorClass,
   type Screen,
   type TapTarget,
@@ -54,7 +56,6 @@ const QUIET_MS = 150;
 const MAX_ACTION_MS = 10_000;
 const NO_CHANGE_MS = 1_000;
 const SLOW_API_MS = 1_500;
-const MAX_ERRORS = 10;
 const MAX_SLOW_APIS = 30;
 
 const here = (): Screen =>
@@ -132,7 +133,9 @@ export function targetOf(target: Element): TapTarget {
   if (target.closest("svg")) return "icon";
   if (target.closest("img, picture")) return "image";
   if (target.closest("article, [data-card]")) return "card";
-  return target.textContent?.trim() ? "text" : "other";
+  return /^(P|SPAN|LABEL|H[1-6]|STRONG|EM)$/.test(target.tagName)
+    ? "text"
+    : "other";
 }
 
 /**
@@ -140,6 +143,21 @@ export function targetOf(target: Element): TapTarget {
  * "v1_leads_id_calls"): only plain lower-case words and the API version stay;
  * anything else (ids, numbers, emails, capitals) becomes "id".
  */
+// Fixed route vocabulary only: even a lowercase personal slug must become id.
+const ENDPOINT_WORDS = new Set(
+  `v1 leads calls people settings lead-rules analysis
+  organisations organisation prospects reports transcript coaching uploads upload
+  account auth sessions me memberships tenants invites notifications integrations
+  connectors status result stage stages board views preferences permissions profile
+  search events tasks meetings suggestions messages chats billing plans credits
+  provider phone recordings media sync home dashboard health capabilities devices
+  tokens config exports imports batches capture outcomes templates contact contacts
+  timeline note notes schedule assignment bulk handover customers service webhooks
+  google meta facebook whatsapp email api keys analytics product-analytics privacy
+  conversation-acquisition conversation acquisition submissions source library consent recording AI ai`
+    .toLowerCase()
+    .split(/\s+/),
+);
 export function endpointOf(path: string): string {
   const parts = path
     .split(/[?#]/)[0]
@@ -149,7 +167,7 @@ export function endpointOf(path: string): string {
     .map((part) =>
       /^v\d+$/.test(part)
         ? part
-        : /^[a-z][a-z_-]{0,23}$/.test(part)
+        : ENDPOINT_WORDS.has(part) && /^[a-z][a-z_-]{0,23}$/.test(part)
           ? part.replace(/-/g, "_")
           : "id",
     );
@@ -232,6 +250,203 @@ export function slowCall(
     ms: ms(entry.duration),
     wait_ms: ms(wait),
   };
+}
+
+/** Every API resource, including fast and background requests. Telemetry itself
+ * is excluded to prevent a feedback loop. Resource Timing also covers XHR. */
+export function apiTiming(
+  entry: ResourceTiming,
+  origin: string,
+  hidden: HiddenSpans,
+): TelemetryEvents["sx.api_timing"] | null {
+  if (!["fetch", "xmlhttprequest"].includes(entry.initiatorType)) return null;
+  let url: URL;
+  try {
+    url = new URL(entry.name);
+  } catch {
+    return null;
+  }
+  if (
+    url.origin !== origin ||
+    !url.pathname.startsWith("/v1/") ||
+    url.pathname.startsWith("/v1/telemetry/")
+  )
+    return null;
+  const code = entry.responseStatus ?? 0;
+  return {
+    endpoint: endpointOf(url.pathname),
+    status:
+      code >= 500
+        ? "5xx"
+        : code >= 400
+          ? "4xx"
+          : code >= 300
+            ? "3xx"
+            : code >= 200
+              ? "2xx"
+              : entry.responseEnd === 0
+                ? "network"
+                : "unknown",
+    band: timingBand(Math.max(0, entry.duration)),
+    background: overlapsHidden(
+      hidden,
+      entry.startTime,
+      entry.responseEnd || entry.startTime + entry.duration,
+    )
+      ? "yes"
+      : "no",
+  };
+}
+
+/** Observe completion and rejection of every fetch. Resource Timing supplies
+ * earlier buffered requests and XHR; fetch failures may have no resource entry. */
+function watchFetch(
+  hidden: HiddenSpans,
+  cleanups: Array<() => void>,
+): number | null {
+  if (typeof window.fetch !== "function") return null;
+  const original = window.fetch;
+  const installed = performance.now();
+  const wrapped: typeof fetch = (input, init) => {
+    const start = performance.now();
+    const screen = here();
+    const report = (code: number) => {
+      try {
+        if (!telemetry.active()) return;
+        const raw =
+          typeof input === "string"
+            ? input
+            : input instanceof URL
+              ? input.href
+              : input.url;
+        const end = performance.now();
+        const call = apiTiming(
+          {
+            name: new URL(raw, window.location.origin).href,
+            initiatorType: "fetch",
+            startTime: start,
+            duration: end - start,
+            responseStart: code ? end : 0,
+            responseEnd: code ? end : 0,
+            responseStatus: code,
+          },
+          window.location.origin,
+          hidden,
+        );
+        if (call) track("sx.api_timing", { ...call, screen });
+      } catch {
+        /* Measurement never changes a fetch outcome. */
+      }
+    };
+    try {
+      return original.call(window, input, init).then(
+        (response) => {
+          report(response.status);
+          return response;
+        },
+        (error: unknown) => {
+          report(0);
+          throw error;
+        },
+      );
+    } catch (error) {
+      report(0);
+      throw error;
+    }
+  };
+  window.fetch = wrapped;
+  cleanups.push(() => {
+    if (window.fetch === wrapped) window.fetch = original;
+  });
+  return installed;
+}
+
+/** XHR completion/error/abort, including browsers that omit failed resource entries. */
+function watchXhr(
+  hidden: HiddenSpans,
+  cleanups: Array<() => void>,
+): number | null {
+  if (typeof XMLHttpRequest === "undefined") return null;
+  const proto = XMLHttpRequest.prototype;
+  const open = proto.open;
+  const send = proto.send;
+  const urls = new WeakMap<XMLHttpRequest, string>();
+  const pending = new Set<() => void>();
+  const installed = performance.now();
+  const opened: typeof proto.open = function (
+    this: XMLHttpRequest,
+    method: string,
+    url: string | URL,
+    async: boolean = true,
+    user?: string | null,
+    password?: string | null,
+  ) {
+    urls.set(this, String(url));
+    return open.call(this, method, url, async, user, password);
+  };
+  const sent: typeof proto.send = function (this: XMLHttpRequest, body) {
+    const start = performance.now();
+    const screen = here();
+    const raw = urls.get(this);
+    const cleanup = () => {
+      this.removeEventListener("loadend", finished);
+      pending.delete(cleanup);
+    };
+    const finished = () => {
+      cleanup();
+      try {
+        if (!raw || !telemetry.active()) return;
+        const end = performance.now();
+        const call = apiTiming(
+          {
+            name: new URL(raw, window.location.origin).href,
+            initiatorType: "xmlhttprequest",
+            startTime: start,
+            duration: end - start,
+            responseStart: this.status ? end : 0,
+            responseEnd: this.status ? end : 0,
+            responseStatus: this.status,
+          },
+          window.location.origin,
+          hidden,
+        );
+        if (call) track("sx.api_timing", { ...call, screen });
+      } catch {
+        /* Never expose a body, status exception or request URL. */
+      }
+    };
+    pending.add(cleanup);
+    this.addEventListener("loadend", finished, { once: true });
+    try {
+      return send.call(this, body);
+    } catch (error) {
+      finished();
+      throw error;
+    }
+  };
+  proto.open = opened;
+  proto.send = sent;
+  cleanups.push(() => {
+    for (const cleanup of pending) cleanup();
+    if (proto.open === opened) proto.open = open;
+    if (proto.send === sent) proto.send = send;
+  });
+  return installed;
+}
+
+export function scrollDepth(
+  top: number,
+  height: number,
+  viewport: number,
+): 0 | 25 | 50 | 75 | 100 {
+  const range = height - viewport;
+  if (range <= 0) return 100;
+  return (Math.floor(Math.max(0, Math.min(1, top / range)) * 4) * 25) as
+    | 0
+    | 25
+    | 50
+    | 75
+    | 100;
 }
 
 /** Run `work` once the page is idle (at most 5 s on), or a second on where the browser can't say; the cancel. */
@@ -516,7 +731,12 @@ function watchVisibility(page: Page, cleanups: Array<() => void>) {
     if (!telemetry.active() || now - lastBackground < BACKGROUND_EVERY_MS)
       return;
     lastBackground = now;
-    track("sx.screen_hidden", { screen: screen.name, kind: "background" });
+    track("sx.screen_hidden", {
+      screen: screen.name,
+      kind: "background",
+      seen_ms: screen.seen,
+    });
+    void telemetry.flush(true);
   };
   // The page closing: the screen it ended on and how long that was seen.
   const onLeave = () => {
@@ -625,13 +845,10 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
     // No performance timeline: nothing to say about the start.
   }
 
-  // Script errors, at most ten a page, each place once.
-  const errorsSeen = new Set<string>();
+  // Every script error; class and fingerprint only, never the message.
   const reportError = (kind: "error" | "rejection", error: unknown) => {
-    if (!telemetry.active() || errorsSeen.size >= MAX_ERRORS) return;
+    if (!telemetry.active()) return;
     const facts = errorFacts(error, window.location.origin);
-    if (errorsSeen.has(facts.where)) return;
-    errorsSeen.add(facts.where);
     const chunk =
       facts.error === "chunkloaderror" ||
       (error instanceof Error && /loading chunk/i.test(error.message));
@@ -661,6 +878,8 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
   cleanups.push(() =>
     document.removeEventListener("visibilitychange", onHidden),
   );
+  const fetchSince = watchFetch(hidden, cleanups);
+  const xhrSince = watchXhr(hidden, cleanups);
   let slowApis = 0;
   const lastSlow = new Map<string, number>();
   if (typeof PerformanceObserver !== "undefined") {
@@ -668,6 +887,12 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
       const resources = new PerformanceObserver((list) => {
         if (!telemetry.active()) return;
         for (const entry of list.getEntries() as PerformanceResourceTiming[]) {
+          const since = entry.initiatorType === "fetch" ? fetchSince : xhrSince;
+          const all =
+            since !== null && entry.startTime >= since
+              ? null
+              : apiTiming(entry, window.location.origin, hidden);
+          if (all) track("sx.api_timing", { ...all, screen: here() });
           const call = slowCall(entry, window.location.origin, hidden);
           if (!call) continue;
           const at = performance.now();
@@ -824,6 +1049,14 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
   const onClick = (event: MouseEvent) => {
     if (!telemetry.active() || !(event.target instanceof Element)) return;
     const target = event.target;
+    const zone = zoneOf(
+      event.clientX,
+      event.clientY,
+      window.innerWidth,
+      window.innerHeight,
+    );
+    if (zone)
+      track("sx.tap", { target: targetOf(target), zone, screen: here() });
     const feature = target
       .closest("[data-sx-feature]")
       ?.getAttribute("data-sx-feature");
@@ -884,12 +1117,97 @@ function listenAll(page: Page, cleanups: Array<() => void>) {
     document.removeEventListener("click", onClick, { capture: true }),
   );
 
+  // Passive scroll listener also sees nested scroll panes. Coalesce browser events
+  // and record each newly reached quarter once per pane and route.
+  let depths = new WeakMap<Element, number>();
+  let scrollPath = window.location.pathname + window.location.search;
+  let scrollTimer: ReturnType<typeof setTimeout> | null = null;
+  let scrolled: Element | null = null;
+  const onScroll = (event: Event) => {
+    if (!telemetry.active() || !visible()) return;
+    scrolled =
+      event.target instanceof Element
+        ? event.target
+        : (document.scrollingElement ?? document.documentElement);
+    if (scrollTimer !== null) return;
+    scrollTimer = setTimeout(() => {
+      scrollTimer = null;
+      const element = scrolled;
+      if (!element || !telemetry.active() || !visible()) return;
+      const path = window.location.pathname + window.location.search;
+      if (path !== scrollPath) {
+        depths = new WeakMap();
+        scrollPath = path;
+      }
+      const depth = scrollDepth(
+        element.scrollTop,
+        element.scrollHeight,
+        element.clientHeight,
+      );
+      if (depth <= (depths.get(element) ?? -1)) return;
+      depths.set(element, depth);
+      track("sx.scroll_depth", { depth, screen: here() });
+    }, 250);
+  };
+  document.addEventListener("scroll", onScroll, {
+    capture: true,
+    passive: true,
+  });
+  cleanups.push(() => {
+    document.removeEventListener("scroll", onScroll, { capture: true });
+    if (scrollTimer !== null) clearTimeout(scrollTimer);
+  });
   cleanups.unshift(() => finish("settled"));
 }
 
 export function TelemetryAuto() {
   const pathname = usePathname();
   const page = useRef<PageState>({ screen: null, backed: false });
+  const routeStarted = useRef<number | null>(null);
+  const firstRoute = useRef(true);
+
+  // Start at the navigation input, finish after React commits and the browser
+  // has two paint opportunities. Never retain or send a link's href.
+  useEffect(() => {
+    const start = (event: Event) => {
+      if (
+        event.type === "popstate" ||
+        (event.target instanceof Element && event.target.closest("a[href]"))
+      )
+        routeStarted.current = performance.now();
+    };
+    document.addEventListener("click", start, { capture: true, passive: true });
+    window.addEventListener("popstate", start);
+    return () => {
+      document.removeEventListener("click", start, { capture: true });
+      window.removeEventListener("popstate", start);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!pathname) return;
+    const first = firstRoute.current;
+    firstRoute.current = false;
+    const begin = first ? 0 : (routeStarted.current ?? performance.now());
+    routeStarted.current = null;
+    const screen = screenOf(pathname, window.location.search);
+    const nav = first ? "first" : page.current.backed ? "back" : "push";
+    let second = 0;
+    const frame = requestAnimationFrame(() => {
+      second = requestAnimationFrame(() => {
+        if (telemetry.active() && visible())
+          track("sx.route_timing", {
+            screen,
+            nav,
+            band: timingBand(performance.now() - begin),
+          });
+      });
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(second);
+    };
+  }, [pathname]);
 
   useReportWebVitals((metric) => {
     try {

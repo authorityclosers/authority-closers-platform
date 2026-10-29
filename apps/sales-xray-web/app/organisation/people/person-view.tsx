@@ -1,7 +1,7 @@
 "use client";
 
 import { can, roleLabel } from "../roles";
-import { Building2, UserRound } from "lucide-react";
+import { Building2, ChevronRight, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -345,10 +345,16 @@ function PersonPage({
                 }
               />
               {activity.status === "ready" ? (
-                <details>
+                <details className={styles.reports}>
                   <summary className={styles.reportToggle}>
-                    Reports and coaching · {activity.value.data.reportsReady}{" "}
-                    ready
+                    <span>
+                      Reports and coaching
+                      <small>
+                        {activity.value.data.reportsReady} ready · charts,
+                        skills and calls
+                      </small>
+                    </span>
+                    <ChevronRight size={18} aria-hidden="true" />
                   </summary>
                   <PersonActivityView
                     summary={activity.value}
@@ -357,9 +363,13 @@ function PersonPage({
                   />
                 </details>
               ) : activity.status === "error" ? (
-                <p className={styles.quietLine}>
+                <p className={`${styles.quietLine} ${styles.retryLine}`}>
                   Reports are unavailable.{" "}
-                  <button type="button" onClick={retryActivity}>
+                  <button
+                    type="button"
+                    className={styles.retryChip}
+                    onClick={retryActivity}
+                  >
                     Try again
                   </button>
                 </p>

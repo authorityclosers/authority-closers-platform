@@ -186,6 +186,21 @@ export type TelemetryEvents = {
     source?: "app" | "vendor" | "extension" | "unknown";
     screen?: Screen;
   };
+  /** Every same-origin API request; no URL, only a masked endpoint and timing band. */
+  "sx.api_timing": {
+    endpoint: string;
+    status: "2xx" | "3xx" | "4xx" | "5xx" | "network" | "unknown";
+    band: TimingBand;
+    background: "yes" | "no";
+    screen?: Screen;
+  };
+  "sx.tap": { target: TapTarget; zone: TapZone; screen: Screen };
+  "sx.scroll_depth": { depth: 0 | 25 | 50 | 75 | 100; screen: Screen };
+  "sx.route_timing": {
+    band: TimingBand;
+    screen: Screen;
+    nav: "first" | "push" | "back";
+  };
   "sx.api_slow": {
     endpoint: string;
     status: "2xx" | "3xx" | "4xx" | "5xx" | "network" | "unknown";
@@ -501,6 +516,10 @@ export const TELEMETRY_EVENT_NAMES = [
   "sx.app_start",
   "sx.js_error",
   "sx.api_slow",
+  "sx.api_timing",
+  "sx.tap",
+  "sx.scroll_depth",
+  "sx.route_timing",
   "sx.tap_issue",
   "sx.feature_used",
   "sx.shake",
@@ -970,8 +989,28 @@ type Queued = {
   call_id?: string;
 };
 
-const BATCH = 20;
-const DELAY_MS = 2_000;
+export type TimingBand =
+  | "lt100"
+  | "100_300"
+  | "300_1000"
+  | "1000_3000"
+  | "3000_10000"
+  | "ge10000";
+export const timingBand = (milliseconds: number): TimingBand =>
+  milliseconds < 100
+    ? "lt100"
+    : milliseconds < 300
+      ? "100_300"
+      : milliseconds < 1000
+        ? "300_1000"
+        : milliseconds < 3000
+          ? "1000_3000"
+          : milliseconds < 10000
+            ? "3000_10000"
+            : "ge10000";
+
+const BATCH = 50;
+const DELAY_MS = 10_000;
 
 /** Where an event happened: the page's template, the device class and the app. */
 export type EventContext = Readonly<{
@@ -986,6 +1025,7 @@ export type EventContext = Readonly<{
 
 type Sender = Readonly<{
   fetch: typeof fetch;
+  beacon?: (url: string, data: Blob) => boolean;
   now: () => Date;
   id: () => string;
   /** Read at each event; absent under test (no route, device or app). */
@@ -1023,6 +1063,7 @@ export class TelemetryClient {
   private replay: string | null = null;
   private replayListeners = new Set<(project: string) => void>();
   private off = false;
+  private generation = 0;
   private timer: ReturnType<typeof setTimeout> | null = null;
   private seen = new Set<string>();
 
@@ -1034,6 +1075,11 @@ export class TelemetryClient {
   /** The signed-in AC session (events carry it; the server checks it). */
   setSession(sessionId: string | null) {
     if (sessionId !== this.session) {
+      this.generation += 1;
+      this.accepted = null;
+      this.known = undefined;
+      this.replay = null;
+      this.off = false;
       // Events from another session are never sent under this one.
       this.queue = this.queue.filter(
         (event) => event.session_id === null || event.session_id === sessionId,
@@ -1085,7 +1131,8 @@ export class TelemetryClient {
         ? { call_id: callId.toLowerCase() }
         : {}),
     });
-    if (this.queue.length > 200) this.queue.splice(0, this.queue.length - 200);
+    if (this.queue.length > 1000)
+      this.queue.splice(0, this.queue.length - 1000);
     this.schedule(this.queue.length >= BATCH ? 0 : DELAY_MS);
   }
 
@@ -1144,6 +1191,8 @@ export class TelemetryClient {
 
   /** Read the server's list again (after a switch in Settings, Privacy). */
   refresh() {
+    this.generation += 1;
+    this.queue = [];
     this.accepted = null;
     this.known = undefined;
     this.replay = null;
@@ -1162,7 +1211,11 @@ export class TelemetryClient {
   }
 
   private schedule(delay = DELAY_MS) {
-    if (this.timer !== null || !this.session) return;
+    if (!this.session) return;
+    if (this.timer !== null) {
+      if (delay !== 0) return;
+      clearTimeout(this.timer);
+    }
     this.timer = setTimeout(() => {
       this.timer = null;
       void this.flush();
@@ -1171,6 +1224,7 @@ export class TelemetryClient {
 
   /** The events the server takes, or null (none: telemetry stays off). */
   private taxonomy() {
+    const generation = this.generation;
     this.accepted ??= this.sender
       .fetch("/v1/telemetry/taxonomy", {
         credentials: "same-origin",
@@ -1185,7 +1239,8 @@ export class TelemetryClient {
           body && typeof body === "object" && "events" in body
             ? (body as { events: unknown }).events
             : null;
-        if (!Array.isArray(events)) return null;
+        if (!Array.isArray(events) || generation !== this.generation)
+          return null;
         const replay = (body as { session_replay?: unknown }).session_replay;
         this.replay =
           typeof replay === "string" && /^[a-z0-9]{6,32}$/.test(replay)
@@ -1203,6 +1258,7 @@ export class TelemetryClient {
       })
       .catch(() => null)
       .then((events) => {
+        if (generation !== this.generation) return null;
         this.known = events;
         return events;
       });
@@ -1215,7 +1271,11 @@ export class TelemetryClient {
     // Leaving the page starts no read (the browser would cancel it): events
     // go out on exit only once the server's list is known.
     if (keepalive && this.known === undefined) return;
+    if (this.timer !== null) clearTimeout(this.timer);
+    this.timer = null;
+    const generation = this.generation;
     const accepted = await this.taxonomy();
+    if (generation !== this.generation) return;
     if (!accepted) {
       this.off = true;
       this.queue = [];
@@ -1227,8 +1287,23 @@ export class TelemetryClient {
         (event) =>
           event.session_id === this.session && accepted.has(event.event_name),
       );
-    if (!batch.length) return;
+    if (!batch.length) {
+      if (this.queue.length) this.schedule(keepalive ? 0 : DELAY_MS);
+      return;
+    }
+    const body = JSON.stringify({ events: batch });
     try {
+      if (
+        keepalive &&
+        this.sender.beacon?.(
+          "/v1/telemetry/events",
+          new Blob([body], { type: "application/json" }),
+        )
+      ) {
+        // Drain another bounded batch on hide; never exceed the browser's beacon budget.
+        if (this.queue.length) void this.flush(true);
+        return;
+      }
       const response = await this.sender.fetch("/v1/telemetry/events", {
         method: "POST",
         credentials: "same-origin",
@@ -1239,7 +1314,7 @@ export class TelemetryClient {
           accept: "application/json",
           "content-type": "application/json",
         },
-        body: JSON.stringify({ events: batch }),
+        body,
       });
       // Refused (no consent or retention policy yet, not signed in, a schema
       // the server does not take): stop for this page, quietly.
@@ -1306,14 +1381,19 @@ export const telemetry = new TelemetryClient(
       typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : "00000000-0000-4000-8000-000000000000",
+    beacon: (url, data) => navigator.sendBeacon?.(url, data) ?? false,
     context: browserContext,
     signIn: () => takeSignIn(),
   },
   browser && process.env.NODE_ENV !== "test",
 );
 
-if (browser)
+if (browser) {
   window.addEventListener("pagehide", () => void telemetry.flush(true));
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") void telemetry.flush(true);
+  });
+}
 
 export const track = <N extends TelemetryEventName>(
   name: N,

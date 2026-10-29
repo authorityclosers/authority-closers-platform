@@ -109,6 +109,30 @@ it("lets an owner or admin choose the organisation's default", async () => {
   expect(host.textContent).toContain("Default: Data only");
 });
 
+it("lists the levels as one list of rows, the default checked", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>(async () => new Response(JSON.stringify(settings()))),
+  );
+  await act(async () => root.render(<CallAiSettingsSection />));
+  const rows = [
+    ...host.querySelectorAll<HTMLLabelElement>('[role="radiogroup"] label'),
+  ];
+  expect(rows).toHaveLength(4);
+  // Each row has its mark; only the default reads as chosen.
+  expect(rows.every((row) => row.querySelector("svg"))).toBe(true);
+  expect(
+    rows
+      .filter((row) => row.hasAttribute("data-checked"))
+      .map((row) => row.querySelector("strong")?.textContent),
+  ).toEqual(["Full"]);
+  // The way to a seller's own level is one row, not a sentence.
+  const way = host.querySelector<HTMLAnchorElement>(
+    'a[href="/leads?tab=team"]',
+  );
+  expect(way?.textContent).toContain("Set one seller's level");
+});
+
 it("shows a seller only what applies to their own calls", async () => {
   vi.stubGlobal(
     "fetch",
@@ -127,7 +151,7 @@ it("shows a seller only what applies to their own calls", async () => {
   await act(async () => root.render(<CallAiSettingsSection />));
   expect(host.querySelector('input[type="radio"]')).toBeNull();
   expect(host.textContent).toContain("Your calls: Data only");
-  expect(host.textContent).toContain("set for you by an owner or admin");
+  expect(host.textContent).toContain("Set for you by an owner or admin");
 });
 
 const stopped = (

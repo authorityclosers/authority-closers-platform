@@ -1924,6 +1924,18 @@ function CompanyPanel({
   const [state, setState] = useState<"idle" | "saving" | "saved" | "error">(
     "idle",
   );
+  // What is saved now; Save domains shows only when the choice differs from it.
+  const [saved, setSaved] = useState<{
+    domains: string[];
+    autoJoin: boolean;
+  } | null>(null);
+  const base = saved ?? {
+    domains: org?.verifiedDomains ?? [],
+    autoJoin: org?.autoJoin ?? false,
+  };
+  const changed =
+    autoJoin !== base.autoJoin ||
+    [...domains].sort().join(" ") !== [...base.domains].sort().join(" ");
 
   const addDomain = () => {
     const domain = draft.trim().toLowerCase().replace(/^@/, "");
@@ -1938,6 +1950,7 @@ function CompanyPanel({
     setState("saving");
     try {
       await saveDomains(domains, autoJoin);
+      setSaved({ domains, autoJoin });
       setState("saved");
       reload();
     } catch {
@@ -2027,7 +2040,7 @@ function CompanyPanel({
             </span>
           </label>
           <div className={styles.saveRow}>
-            {isOwner ? (
+            {isOwner && (changed || state === "saving") ? (
               <button
                 type="button"
                 className={styles.primary}

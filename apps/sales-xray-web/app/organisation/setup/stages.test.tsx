@@ -138,6 +138,14 @@ it("puts saved stage controls first and preserves meanings until an explicit sav
 });
 it("keeps the initial stage's order protected", async () => {
   await act(async () => root.render(<OrganisationStages />));
+  // The arrows wait behind Reorder, so the list reads as one calm list.
+  expect(host.querySelector('[aria-label="Move Enquiry later"]')).toBeNull();
+  await tap("Reorder");
+  expect(
+    [...host.querySelectorAll("button")]
+      .find((button) => button.textContent === "Done")
+      ?.getAttribute("aria-pressed"),
+  ).toBe("true");
   expect(
     host.querySelector<HTMLButtonElement>('[aria-label="Move Enquiry earlier"]')
       ?.disabled,

@@ -7,10 +7,13 @@
  * the corner card (notify), field mistakes stay next to the field.
  */
 import {
+  AppWindow,
   Check,
   Copy,
   KeyRound,
   Link2,
+  Pencil,
+  Power,
   RefreshCw,
   Send,
   Webhook as WebhookIcon,
@@ -21,13 +24,11 @@ import { notify } from "../../notice-center";
 import {
   Badge,
   Button,
-  Card,
   Dialog,
   Empty,
   Field,
   Panel,
   Skeleton,
-  Table,
   type Tone,
 } from "../../ui/kit";
 import {
@@ -58,6 +59,9 @@ import {
   type Webhook,
 } from "./integrations-client";
 import { AiRepliesSettings } from "../../leads/ai-replies";
+import { ClaudeMark, CursorMark } from "../../settings/assistant-marks";
+import { BrandTile } from "../../ui/brand-tile";
+import { PulseTile } from "../../ui/pulse-mark";
 import { SocialSettings } from "../../leads/social-settings";
 import { WhatsAppSettings } from "../../leads/whatsapp-settings";
 import styles from "./integrations.module.css";
@@ -84,6 +88,73 @@ const when = (iso: string | null) =>
         minute: "2-digit",
       })
     : "—";
+
+/** A day for a row's short line ("28 Oct"); the full time is not needed there. */
+const day = (iso: string | null) =>
+  iso
+    ? new Date(iso).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+      })
+    : "never";
+
+/**
+ * An app's own mark where we know it (Pulse, ChatGPT, Claude, Cursor), else a
+ * plain app icon; "tile" marks bring their own tile, "mark" ones sit on a
+ * quiet one.
+ */
+function appMark(name: string): { icon: ReactNode; kind?: "tile" | "mark" } {
+  const key = name.trim().toLowerCase();
+  if (key.startsWith("pulse"))
+    return { icon: <PulseTile size={36} />, kind: "tile" };
+  if (key.startsWith("chatgpt") || key.startsWith("openai"))
+    return { icon: <BrandTile brands={["chatgpt"]} size={36} />, kind: "tile" };
+  if (key.startsWith("claude"))
+    return { icon: <ClaudeMark size={18} />, kind: "mark" };
+  if (key.startsWith("cursor"))
+    return { icon: <CursorMark size={18} />, kind: "mark" };
+  return { icon: <AppWindow size={16} /> };
+}
+
+/** A signing secret's last characters, whatever prefix the hint came with. */
+const tail = (hint: string | null) => (hint ?? "").replace(/^whsec_…?/, "");
+
+/**
+ * One row in a panel's list (owner, 29 Oct 2026: "clean UI and icons", no
+ * tables or label walls on a phone): an icon tile, the name, one or two short
+ * lines, and the state and its one action at the end.
+ */
+function ListRow({
+  icon,
+  kind,
+  title,
+  lines,
+  end,
+  state,
+}: {
+  icon: ReactNode;
+  /** "tile": the icon brings its own tile; "mark": a brand mark, quiet tile. */
+  kind?: "tile" | "mark";
+  title: ReactNode;
+  lines: ReactNode[];
+  end?: ReactNode;
+  state?: string;
+}) {
+  return (
+    <li className={styles.row} data-state={state}>
+      <span className={styles.rowIcon} data-kind={kind} aria-hidden="true">
+        {icon}
+      </span>
+      <span className={styles.rowText}>
+        <strong>{title}</strong>
+        {lines.filter(Boolean).map((line, index) => (
+          <span key={index}>{line}</span>
+        ))}
+      </span>
+      {end ? <span className={styles.rowEnd}>{end}</span> : null}
+    </li>
+  );
+}
 
 function problem(error: unknown, title: string) {
   if (error instanceof DOMException && error.name === "AbortError") return;
@@ -298,9 +369,14 @@ function KeysSection({
   return (
     <Panel
       title="API keys"
-      sub="Let your other apps read calls and leads, or add leads"
+      sub="For your other apps"
+      className={styles.fit}
       tools={
-        <Button variant="primary" onClick={() => setCreating(true)}>
+        <Button
+          variant="primary"
+          className={styles.chip}
+          onClick={() => setCreating(true)}
+        >
           <KeyRound size={14} aria-hidden="true" /> New key
         </Button>
       }
@@ -316,58 +392,44 @@ function KeysSection({
         </p>
       ) : null}
       {data.keys.length ? (
-        <div className={styles.keysTable}>
-          <Table label="API keys">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Key</th>
-                <th scope="col">Permissions</th>
-                <th scope="col">Last used</th>
-                <th scope="col">Expires</th>
-                <th scope="col">State</th>
-                <th scope="col">
-                  <span className={styles.hidden}>Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.keys.map((key) => (
-                <tr key={key.id}>
-                  <th scope="row">{key.name}</th>
-                  <td data-label="Key">
-                    <code>{key.prefix}…</code>
-                  </td>
-                  <td data-label="Permissions">
-                    {key.scopes.map(label).join(", ")}
-                  </td>
-                  <td data-label="Last used">
-                    {key.lastUsedAt ? when(key.lastUsedAt) : "Never"}
-                  </td>
-                  <td data-label="Expires">
-                    {key.expiresAt ? when(key.expiresAt) : "Never"}
-                  </td>
-                  <td data-label="State">
-                    <Badge tone={STATE_TONE[key.state]}>
-                      {key.state === "active"
-                        ? "Active"
-                        : key.state === "expired"
-                          ? "Expired"
-                          : "Revoked"}
-                    </Badge>
-                  </td>
-                  <td>
-                    {key.state === "active" ? (
-                      <Button variant="ghost" onClick={() => setRevoking(key)}>
-                        Revoke
-                      </Button>
-                    ) : null}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
-        </div>
+        <ul className={styles.rows} aria-label="API keys">
+          {data.keys.map((key) => (
+            <ListRow
+              key={key.id}
+              state={key.state}
+              icon={<KeyRound size={16} />}
+              title={key.name}
+              lines={[
+                <>
+                  <code>{key.prefix}…</code> ·{" "}
+                  {key.scopes.map(label).join(", ")}
+                </>,
+                `Used ${day(key.lastUsedAt)} · Expires ${day(key.expiresAt)}`,
+              ]}
+              end={
+                <>
+                  <Badge tone={STATE_TONE[key.state]}>
+                    {key.state === "active"
+                      ? "Active"
+                      : key.state === "expired"
+                        ? "Expired"
+                        : "Revoked"}
+                  </Badge>
+                  {key.state === "active" ? (
+                    <Button
+                      variant="ghost"
+                      className={styles.chip}
+                      aria-label={`Revoke ${key.name}`}
+                      onClick={() => setRevoking(key)}
+                    >
+                      Revoke
+                    </Button>
+                  ) : null}
+                </>
+              }
+            />
+          ))}
+        </ul>
       ) : (
         <Empty
           icon={KeyRound}
@@ -452,7 +514,7 @@ function WebhookForm({
   const profileId = useId();
   return (
     <form
-      className={styles.form}
+      className={`${styles.form} ${styles.inset}`}
       onSubmit={(event) => {
         event.preventDefault();
         if (!/^https:\/\/\S+$/.test(url.trim()))
@@ -561,67 +623,41 @@ function Deliveries({ reloadKey }: { reloadKey: number }) {
       problem(error, "The event was not queued again"),
     );
   return (
-    <Table
-      label="Delivery log"
-      // On a phone each delivery is two lines, not a table to scroll (owner
-      // bug #47, 27 Oct 2026).
-      cards={items.map((item) => (
-        <Card key={item.id}>
-          <strong>
-            <code>{item.eventType}</code>
-          </strong>
-          <span>
-            {when(item.createdAt)} · {item.attempts}{" "}
-            {item.attempts === 1 ? "try" : "tries"} ·{" "}
-            <Badge tone={DELIVERY_TONE[item.status] ?? "neutral"}>
-              {DELIVERY_LABEL[item.status] ?? item.status}
-            </Badge>
-          </span>
-          {item.status === "dead_letter" ? (
-            <Button variant="ghost" onClick={() => void retry(item.id)}>
-              Send again
-            </Button>
-          ) : null}
-        </Card>
-      ))}
-    >
-      <thead>
-        <tr>
-          <th scope="col">When</th>
-          <th scope="col">Event</th>
-          <th scope="col">State</th>
-          <th scope="col">Tries</th>
-          <th scope="col">Last answer</th>
-          <th scope="col">
-            <span className={styles.hidden}>Actions</span>
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {items.map((item) => (
-          <tr key={item.id}>
-            <th scope="row">{when(item.createdAt)}</th>
-            <td>
-              <code>{item.eventType}</code>
-            </td>
-            <td>
+    <ul className={styles.rows} aria-label="Delivery log">
+      {items.map((item) => (
+        <ListRow
+          key={item.id}
+          state={item.status}
+          icon={<Send size={15} />}
+          title={<code>{item.eventType}</code>}
+          lines={[
+            [
+              when(item.createdAt),
+              `${item.attempts} ${item.attempts === 1 ? "try" : "tries"}`,
+              item.lastHttpStatus ?? item.lastErrorCode,
+            ]
+              .filter(Boolean)
+              .join(" · "),
+          ]}
+          end={
+            <>
               <Badge tone={DELIVERY_TONE[item.status] ?? "neutral"}>
                 {DELIVERY_LABEL[item.status] ?? item.status}
               </Badge>
-            </td>
-            <td>{item.attempts}</td>
-            <td>{item.lastHttpStatus ?? item.lastErrorCode ?? "—"}</td>
-            <td>
               {item.status === "dead_letter" ? (
-                <Button variant="ghost" onClick={() => void retry(item.id)}>
+                <Button
+                  variant="ghost"
+                  className={styles.chip}
+                  onClick={() => void retry(item.id)}
+                >
                   Send again
                 </Button>
               ) : null}
-            </td>
-          </tr>
-        ))}
-      </tbody>
-    </Table>
+            </>
+          }
+        />
+      ))}
+    </ul>
   );
 }
 
@@ -641,9 +677,24 @@ function WebhookSection({
   const hook = data.webhook;
   const eventLabel = (key: string) =>
     data.events.find((item) => item.key === key)?.label ?? key;
+  const test = () => {
+    setTesting(true);
+    setResult(null);
+    sendTest()
+      .then((answer) => {
+        setResult(testWords(answer));
+        setReloadKey((n) => n + 1);
+      })
+      .catch((error: unknown) => problem(error, "The test was not sent"))
+      .finally(() => setTesting(false));
+  };
   if (!data.webhooksReady)
     return (
-      <Panel title="Webhook" sub="Events sent to your app">
+      <Panel
+        title="Webhook"
+        sub="Events sent to your app"
+        className={styles.fit}
+      >
         <Empty
           icon={WebhookIcon}
           title="Not switched on here yet"
@@ -652,33 +703,7 @@ function WebhookSection({
       </Panel>
     );
   return (
-    <Panel
-      title="Webhook"
-      sub="Sales X-Ray tells your app when something happens"
-      tools={
-        hook && !editing ? (
-          <Button
-            variant="secondary"
-            disabled={testing}
-            onClick={() => {
-              setTesting(true);
-              setResult(null);
-              sendTest()
-                .then((answer) => {
-                  setResult(testWords(answer));
-                  setReloadKey((n) => n + 1);
-                })
-                .catch((error: unknown) =>
-                  problem(error, "The test was not sent"),
-                )
-                .finally(() => setTesting(false));
-            }}
-          >
-            <Send size={14} aria-hidden="true" /> Send test event
-          </Button>
-        ) : null
-      }
-    >
+    <Panel title="Webhook" sub="Events sent to your app" className={styles.fit}>
       {!hook || editing ? (
         <WebhookForm
           data={data}
@@ -691,7 +716,7 @@ function WebhookSection({
           }}
         />
       ) : (
-        <div className={styles.hook}>
+        <div className={`${styles.hook} ${styles.inset}`}>
           <dl className={styles.facts}>
             <div>
               <dt>Address</dt>
@@ -707,15 +732,17 @@ function WebhookSection({
               <dt>Signing secret</dt>
               <dd>
                 {hook.managedInApp ? (
-                  <code>whsec_…{hook.secretHint}</code>
+                  <code>whsec_…{tail(hook.secretHint)}</code>
                 ) : (
                   "Set up by AC. Save the webhook here to get your own secret."
                 )}
                 {hook.rotating ? (
                   <span className={styles.rotating}>
                     {" "}
-                    and the new <code>whsec_…{hook.nextSecretHint}</code> (both
-                    sign)
+                    and the new <code>
+                      whsec_…{tail(hook.nextSecretHint)}
+                    </code>{" "}
+                    (both sign)
                   </span>
                 ) : null}
               </dd>
@@ -732,10 +759,17 @@ function WebhookSection({
               {result}
             </p>
           ) : null}
-          <div className={styles.actions}>
-            <Button onClick={() => setEditing(true)}>Change</Button>
+          <div className={styles.chips}>
+            <Button className={styles.chip} disabled={testing} onClick={test}>
+              <Send size={14} aria-hidden="true" />
+              {testing ? "Sending…" : "Send test event"}
+            </Button>
+            <Button className={styles.chip} onClick={() => setEditing(true)}>
+              <Pencil size={14} aria-hidden="true" /> Change
+            </Button>
             {hook.managedInApp && !hook.rotating ? (
               <Button
+                className={styles.chip}
                 onClick={() =>
                   rotateSecret()
                     .then(({ webhook, secret: made }) => {
@@ -747,12 +781,13 @@ function WebhookSection({
                     )
                 }
               >
-                <RefreshCw size={14} aria-hidden="true" /> New signing secret
+                <RefreshCw size={14} aria-hidden="true" /> New secret
               </Button>
             ) : null}
             {hook.rotating ? (
               <Button
                 variant="primary"
+                className={styles.chip}
                 onClick={() =>
                   finishRotation()
                     .then(onChange)
@@ -764,8 +799,12 @@ function WebhookSection({
                 My app uses the new secret
               </Button>
             ) : null}
-            <Button variant="ghost" onClick={() => setConfirmOff(true)}>
-              Turn off
+            <Button
+              variant="ghost"
+              className={`${styles.chip} ${styles.off}`}
+              onClick={() => setConfirmOff(true)}
+            >
+              <Power size={14} aria-hidden="true" /> Turn off
             </Button>
           </div>
           <h3 className={styles.subhead}>Delivery log</h3>
@@ -876,10 +915,11 @@ function HandoverSection({
   return (
     <Panel
       title="Hand-over to your customer app"
-      sub="When a lead is won, Sales X-Ray sends the customer to your app"
+      sub="Won leads go to your app"
+      className={styles.fit}
     >
       {open ? (
-        <div className={styles.form}>
+        <div className={`${styles.form} ${styles.inset}`}>
           <Field
             label="Your app's address"
             hint={`Sales X-Ray calls ${menu.path} on it.`}
@@ -958,7 +998,7 @@ function HandoverSection({
           </div>
         </div>
       ) : current ? (
-        <div className={styles.hook}>
+        <div className={`${styles.hook} ${styles.inset}`}>
           <dl className={styles.facts}>
             <div>
               <dt>Address</dt>
@@ -991,10 +1031,16 @@ function HandoverSection({
               </dd>
             </div>
           </dl>
-          <div className={styles.actions}>
-            <Button onClick={() => setEditing(true)}>Change</Button>
-            <Button variant="ghost" onClick={() => setConfirmOff(true)}>
-              Turn off
+          <div className={styles.chips}>
+            <Button className={styles.chip} onClick={() => setEditing(true)}>
+              <Pencil size={14} aria-hidden="true" /> Change
+            </Button>
+            <Button
+              variant="ghost"
+              className={`${styles.chip} ${styles.off}`}
+              onClick={() => setConfirmOff(true)}
+            >
+              <Power size={14} aria-hidden="true" /> Turn off
             </Button>
           </div>
         </div>
@@ -1053,139 +1099,77 @@ function AppsSection({
   return (
     <Panel
       title="Connected apps"
-      sub="Apps your organisation allowed with “Connect to Sales X-Ray”"
+      className={styles.fit}
       tools={
-        <Button onClick={() => setRegistering(true)}>
-          <Link2 size={14} aria-hidden="true" /> Register your own app
+        <Button className={styles.chip} onClick={() => setRegistering(true)}>
+          <Link2 size={14} aria-hidden="true" /> Register app
         </Button>
       }
     >
       {connected.length ? (
-        <Table
-          label="Connected apps"
-          // Two lines each on a phone (owner bug #47).
-          cards={connected.map((item) => (
-            <Card key={item.id}>
-              <strong>{item.app}</strong>
-              <span>
-                {item.scopes.map(label).join(", ")} · connected{" "}
-                {when(item.createdAt)} · last used{" "}
-                {item.lastUsedAt ? when(item.lastUsedAt) : "never"}
-              </span>
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  disconnect(item.id).then(onConnections, (caught: unknown) =>
-                    problem(caught, "The app was not disconnected"),
-                  )
-                }
-              >
-                Disconnect
-              </Button>
-            </Card>
+        <ul className={styles.rows} aria-label="Connected apps">
+          {connected.map((item) => (
+            <ListRow
+              key={item.id}
+              {...appMark(item.app)}
+              title={item.app}
+              lines={[
+                item.scopes.map(label).join(", "),
+                `Since ${day(item.createdAt)} · used ${day(item.lastUsedAt)}`,
+              ]}
+              end={
+                <Button
+                  variant="ghost"
+                  className={styles.chip}
+                  aria-label={`Disconnect ${item.app}`}
+                  onClick={() =>
+                    disconnect(item.id).then(onConnections, (caught: unknown) =>
+                      problem(caught, "The app was not disconnected"),
+                    )
+                  }
+                >
+                  Disconnect
+                </Button>
+              }
+            />
           ))}
-        >
-          <thead>
-            <tr>
-              <th scope="col">App</th>
-              <th scope="col">Can</th>
-              <th scope="col">Connected</th>
-              <th scope="col">Last used</th>
-              <th scope="col">
-                <span className={styles.hidden}>Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {connected.map((item) => (
-              <tr key={item.id}>
-                <th scope="row">{item.app}</th>
-                <td>{item.scopes.map(label).join(", ")}</td>
-                <td>{when(item.createdAt)}</td>
-                <td>{item.lastUsedAt ? when(item.lastUsedAt) : "Never"}</td>
-                <td>
-                  <Button
-                    variant="ghost"
-                    onClick={() =>
-                      disconnect(item.id).then(
-                        onConnections,
-                        (caught: unknown) =>
-                          problem(caught, "The app was not disconnected"),
-                      )
-                    }
-                  >
-                    Disconnect
-                  </Button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </Table>
+        </ul>
       ) : (
-        <p className={styles.note}>
-          No apps connected. When an app asks to connect, you approve it on a
-          Sales X-Ray screen and it shows here.
+        <p className={`${styles.note} ${styles.inset}`}>
+          No apps connected yet. When an app asks to connect, you approve it and
+          it shows here.
         </p>
       )}
       {apps.length ? (
         <>
-          <h3 className={styles.subhead}>Your apps</h3>
-          <Table
-            label="Your apps"
-            cards={apps.map((app) => (
-              <Card key={app.id}>
-                <strong>{app.name}</strong>
-                <span>
-                  <code>{app.clientId}</code> · returns to{" "}
-                  {app.redirectUris.join(", ")}
-                </span>
-                <Button
-                  variant="ghost"
-                  onClick={() =>
-                    removeApp(app.id).then(onApps, (caught: unknown) =>
-                      problem(caught, "The app was not removed"),
-                    )
-                  }
-                >
-                  Remove
-                </Button>
-              </Card>
+          <h3 className={`${styles.subhead} ${styles.inset}`}>Your apps</h3>
+          <ul className={styles.rows} aria-label="Your apps">
+            {apps.map((app) => (
+              <ListRow
+                key={app.id}
+                icon={<AppWindow size={16} />}
+                title={app.name}
+                lines={[
+                  <code key="id">{app.clientId}</code>,
+                  `Returns to ${app.redirectUris.join(", ")}`,
+                ]}
+                end={
+                  <Button
+                    variant="ghost"
+                    className={styles.chip}
+                    aria-label={`Remove ${app.name}`}
+                    onClick={() =>
+                      removeApp(app.id).then(onApps, (caught: unknown) =>
+                        problem(caught, "The app was not removed"),
+                      )
+                    }
+                  >
+                    Remove
+                  </Button>
+                }
+              />
             ))}
-          >
-            <thead>
-              <tr>
-                <th scope="col">App</th>
-                <th scope="col">Client ID</th>
-                <th scope="col">Returns to</th>
-                <th scope="col">
-                  <span className={styles.hidden}>Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {apps.map((app) => (
-                <tr key={app.id}>
-                  <th scope="row">{app.name}</th>
-                  <td>
-                    <code>{app.clientId}</code>
-                  </td>
-                  <td>{app.redirectUris.join(", ")}</td>
-                  <td>
-                    <Button
-                      variant="ghost"
-                      onClick={() =>
-                        removeApp(app.id).then(onApps, (caught: unknown) =>
-                          problem(caught, "The app was not removed"),
-                        )
-                      }
-                    >
-                      Remove
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+          </ul>
         </>
       ) : null}
       <Dialog
@@ -1384,7 +1368,9 @@ export function IntegrationsPanel({
       ) : null}
       {shows("ai") ? (
         <>
-          <AiRepliesSettings />
+          <div className={styles.aiPart}>
+            <AiRepliesSettings />
+          </div>
           {extras?.ai}
         </>
       ) : null}
