@@ -148,3 +148,8 @@ def test_new_modules_are_discovered_and_ties_use_module_name(
     assert [
         path for _, path, _ in _route_table(app_module.create_app()) if path.startswith("/fixture/")
     ] == ["/fixture/alpha", "/fixture/beta", "/fixture/last"]
+
+
+def test_public_app_config_is_registered(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(app_module, "settings", Settings(environment="test"))
+    assert (("GET",), "/v1/app/config", "app_config") in _route_table(app_module.create_app())
