@@ -574,11 +574,11 @@ def install_telephony_http(application: FastAPI, ctx: RouteContext) -> None:
         )
 
     @router.get("/telephony/notice/{file_name}")
-    async def notice(file_name: str, request: Request) -> Response:
+    def notice(file_name: str, request: Request) -> Response:
         return notice_audio(file_name, request)
 
     @router.get("/meta/webhook/telephony/notice/{file_name}")
-    async def notice_dev(file_name: str, request: Request) -> Response:
+    def notice_dev(file_name: str, request: Request) -> Response:
         return notice_audio(file_name, request)
 
     application.include_router(router)

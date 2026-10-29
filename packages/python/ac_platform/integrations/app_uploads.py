@@ -35,11 +35,14 @@ import re
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager, suppress
 from datetime import UTC, datetime, timedelta
+from functools import partial as bind
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote
 from uuid import UUID, uuid4, uuid5
 
+import anyio
+from anyio.to_thread import run_sync
 from fastapi import APIRouter, FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
@@ -240,28 +243,28 @@ async def receive(
         decided_at=None,
     )
     target = _path(root, upload)
-    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    await run_sync(bind(target.parent.mkdir, parents=True, exist_ok=True, mode=0o700))
     partial = target.with_suffix(f".part-{uuid4().hex}")
     digest = hashlib.sha256()
     received = 0
     try:
-        with partial.open("xb") as handle:
+        async with await anyio.open_file(partial, "xb") as handle:
             async for chunk in request.stream():
                 if not chunk:
                     continue
                 received += len(chunk)
                 if received > size:
                     raise UploadRefused(413, "file", "The file is longer than its Content-Length.")
-                digest.update(chunk)
-                handle.write(chunk)
+                await run_sync(digest.update, chunk)
+                await handle.write(chunk)
         if received != size:
             raise UploadRefused(422, "file", "The complete recording was not received.")
         if digest.hexdigest() != sha:
             raise UploadRefused(422, "sha256", "The file's SHA-256 does not match X-Source-SHA256.")
-        os.replace(partial, target)
+        await run_sync(os.replace, partial, target)
     except BaseException:
-        with suppress(OSError):
-            partial.unlink()
+        with anyio.CancelScope(shield=True), suppress(OSError):
+            await run_sync(partial.unlink)
         raise
     try:
         async with session_factory() as database, database.begin():
@@ -471,7 +474,7 @@ def install_app_uploads_http(application: FastAPI, ctx: RouteContext) -> None:
                 payload={"app": row.app_label, "on_lead": on_lead},
                 now=now,
             )
-            _forget(root, row)
+            await run_sync(_forget, root, row)
             return {
                 "id": str(row.id),
                 "state": "added",
@@ -496,7 +499,7 @@ def install_app_uploads_http(application: FastAPI, ctx: RouteContext) -> None:
                     payload={"app": row.app_label},
                     now=now,
                 )
-            _forget(root, row)
+            await run_sync(_forget, root, row)
             return {"id": str(row.id), "state": "discarded" if row.state != "imported" else "added"}
 
     application.include_router(router)
@@ -529,7 +532,7 @@ async def expire(database: AsyncSession, root: Path | None, *, now: datetime) ->
     ).all()
     for row in rows:
         row.state, row.decided_at = "expired", now
-        _forget(root, row)
+        await run_sync(_forget, root, row)
     await database.flush()
     return len(rows)
 

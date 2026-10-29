@@ -388,6 +388,38 @@ def _verify_cancelled_chunk(
         response.dispose()
 
 
+def _workspace_selected(response: Any) -> bool:
+    """The server's answer that a workspace switch took effect."""
+    return (
+        urlsplit(response.url).path == "/v1/context"
+        and response.request.method == "POST"
+        and response.status == 200
+    )
+
+
+@contextmanager
+def _workspace_switch(page: Any, switches: list[dict[str, Any]]) -> Iterator[None]:
+    """A switch that lands in place (owner bug #17, 29 Oct 2026).
+
+    The page must not reload: a marker set on the window before the tap is
+    still there after it. The tap and the server's answer are recorded as
+    soft navigations: the old workspace's screens unmount and cancel the
+    reads they still had on their way, exactly as a route change does.
+    """
+    page.evaluate("window.__sxBeforeSwitch = true")
+    switches.append({"at": time.monotonic(), "path": urlsplit(page.url).path, "kind": "tap"})
+    with page.expect_response(_workspace_selected):
+        yield
+    switches.append({"at": time.monotonic(), "path": urlsplit(page.url).path, "kind": "selected"})
+    # The new workspace's frame replaces the old one: its page outline is gone.
+    expect(page.locator("[data-standing-in]")).to_have_count(0)
+    page.wait_for_load_state("networkidle")
+    switches.append({"at": time.monotonic(), "path": urlsplit(page.url).path, "kind": "landed"})
+    assert page.evaluate("window.__sxBeforeSwitch === true"), (
+        "The workspace switch reloaded the page."
+    )
+
+
 def _address(item: dict[str, Any]) -> str:
     return item["path"] + (f"?{item['query']}" if item["query"] else "")
 
@@ -435,6 +467,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
     failure_details: list[dict[str, Any]] = []
     navigation_windows: list[dict[str, Any]] = []
     navigations: list[dict[str, Any]] = []
+    workspace_switches: list[dict[str, Any]] = []
     checks: list[str] = []
     proof: dict[str, Any] = {
         "transport": "Chromium real TCP HTTP -> AC password cookie -> disposable PostgreSQL",
@@ -451,6 +484,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
         "request_failure_details": failure_details,
         "completed_navigation_windows": navigation_windows,
         "main_frame_navigations": navigations,
+        "workspace_switches_in_place": workspace_switches,
         "passed": False,
     }
     with sync_playwright() as playwright, ExitStack() as cleanup:
@@ -607,22 +641,21 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             )
 
             switcher.click()
-            with _navigation_window(page, navigation_windows):
-                # The header names the tapped workspace at once (Admin #17, 26 Oct
-                # 2026): wait for the reload into it before reading its data.
-                with page.expect_event("load"):
-                    workspace_menu.get_by_role(
-                        "menuitemradio",
-                        name=re.compile(r"Synthetic second Sales Xray workspace.*Organisation"),
-                    ).click()
-                expect(
-                    page.get_by_role(
-                        "button",
-                        name="Current workspace: Synthetic second Sales Xray workspace",
-                        exact=True,
-                    )
-                ).to_be_visible()
-                page.wait_for_load_state("networkidle")
+            # The header names the tapped workspace at once (Admin #17, 26 Oct
+            # 2026), and the switch lands in place once the server confirms it
+            # (owner bug #17, 29 Oct 2026): wait for that before reading data.
+            with _workspace_switch(page, workspace_switches):
+                workspace_menu.get_by_role(
+                    "menuitemradio",
+                    name=re.compile(r"Synthetic second Sales Xray workspace.*Organisation"),
+                ).click()
+            expect(
+                page.get_by_role(
+                    "button",
+                    name="Current workspace: Synthetic second Sales Xray workspace",
+                    exact=True,
+                )
+            ).to_be_visible()
             expect(
                 page.get_by_text("Sales Xray isn't on for this workspace yet", exact=True)
             ).to_have_count(0)
@@ -656,23 +689,34 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             assert organisation["personal_recording_status"] == 404
             expect(page.locator(".recording-history-item")).to_have_count(0)
             proof["organisation_workspace"] = organisation
+            # Nothing reloaded, so anything kept in memory for Personal would
+            # still be here: the organisation's own New analysis must not show
+            # Personal's saved call.
+            page.get_by_role("complementary", name="Sales Xray navigation", exact=True).get_by_role(
+                "link", name="New analysis", exact=True
+            ).click()
+            expect(page).to_have_url(f"{backend.origin}/analysis/new/")
+            expect(page.get_by_text("Start with your sales call", exact=True)).to_be_visible()
+            page.wait_for_load_state("networkidle")
+            expect(page.locator(".recording-history-item")).to_have_count(0)
+            checks.append(
+                "The switch lands in place (no reload) and the organisation's New "
+                "analysis shows none of Personal's saved calls."
+            )
             page.set_viewport_size({"width": 390, "height": 844})
             page.screenshot(path=str(evidence / "workspace-enabled-phone.png"), full_page=True)
             page.set_viewport_size({"width": 1365, "height": 1000})
             page.get_by_role(
                 "button", name="Current workspace: Synthetic second Sales Xray workspace"
             ).click()
-            with _navigation_window(page, navigation_windows):
-                # The switch reloads the page once the server confirms it. Wait
-                # for that reload, as for the organisation above: tapping New
-                # analysis while it runs lost the tap or cut off the reloading
-                # page's chunks (builder, 26 Oct 2026).
-                with page.expect_event("load"):
-                    workspace_menu.get_by_role(
-                        "menuitemradio", name=re.compile(r"Personal.*Just you")
-                    ).click()
-                expect(switcher).to_be_visible()
-                page.wait_for_load_state("networkidle")
+            # Back to Personal, in place as well: wait for it to land before
+            # tapping New analysis (builder, 26 Oct 2026: a tap during the
+            # switch was lost).
+            with _workspace_switch(page, workspace_switches):
+                workspace_menu.get_by_role(
+                    "menuitemradio", name=re.compile(r"Personal.*Just you")
+                ).click()
+            expect(switcher).to_be_visible()
             checks.append(
                 "Registered organisation is enabled; its empty history and 404 for the "
                 "Personal recording preserve workspace isolation."
@@ -1026,9 +1070,9 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 failure for failure in request_failures if failure in unmount_aborts
             ]
             # The page cancels its own API reads when it navigates: a document
-            # navigation (the workspace switch and logout reload the page) ends
-            # every read in flight, and a route change unmounts readers that abort
-            # theirs. Background reads such as the shell's idle warm-up of the
+            # navigation (logout reloads the page) ends every read in flight, and
+            # a route change or an in-place workspace switch unmounts readers that
+            # abort theirs. Background reads such as the shell's idle warm-up of the
             # Calls list, about 1.5 s after each load, can be in flight then
             # (wb-ci 39543483308, 21 Oct). A cancelled GET changed nothing: accept
             # it only next to a main-frame navigation and only where no answer
@@ -1050,7 +1094,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
                 cancelled = _navigation_cancelled_read(
                     failure,
                     origin=backend.origin,
-                    navigations=navigations,
+                    navigations=navigations + workspace_switches,
                     server_errors=server_errors,
                 )
                 if cancelled is not None:

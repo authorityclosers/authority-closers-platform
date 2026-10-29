@@ -22,7 +22,10 @@ from __future__ import annotations
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from datetime import datetime, time, timedelta
+from functools import partial
 from typing import Any
+
+from anyio.to_thread import run_sync
 
 from ac_platform.conversation_intelligence.application import ConversationError, utc
 from ac_platform.conversation_intelligence.cost_metrics import (
@@ -153,15 +156,15 @@ async def read_meter(
         raise ConversationError("Choose production, staging or development.")
     if fx not in FX_MODES:
         raise ConversationError("Choose daily or planning rates.")
-    exports, problems = read_store(service.store_root)
+    exports, problems = await run_sync(read_store, service.store_root)
     now = utc(service.application.clock())
     fx_view = dict(FX)
     if fx == "daily":
         rates = await REFRESHER.rates(service.application.database, now)
-        exports, fx_view = at_daily_rates(exports, rates, now - timedelta(days=7))
+        exports, fx_view = await run_sync(at_daily_rates, exports, rates, now - timedelta(days=7))
         fx_view["problem"] = REFRESHER.problem
     return {
-        **meter_view(exports, environment=environment, now=now),
+        **(await run_sync(partial(meter_view, exports, environment=environment, now=now))),
         "fx": fx_view,
         "problems": [row for row in problems if row["environment"] in (environment, "all")],
     }

@@ -533,6 +533,8 @@ export function SettingsMenu({
             currentId={currentWorkspaceId}
             onSelect={choose}
             personName={name}
+            personPhotoUrl={photoUrl}
+            personEmail={email}
             onCreate={
               onCreateOrganisation
                 ? () => {

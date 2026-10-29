@@ -13,6 +13,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any, Literal, cast
 from uuid import UUID, uuid4
 
+from anyio.to_thread import run_sync
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import Select, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -953,7 +954,7 @@ class ConversationProcessingPlans:
             raise ConversationDenied(
                 "This call needs an approved transcription, facts and coaching route."
             )
-        profile = load_report_profile()
+        profile = await run_sync(load_report_profile)
         # A one-pass configuration's facts route says so by its recipe (one_pass.stage).
         one_pass = approvals["C4"].recipe_revision in ONE_PASS_RECIPES
         fact_recipe = approvals["C4"].recipe_revision if one_pass else FACT_RECIPE
@@ -1014,7 +1015,7 @@ class ConversationProcessingPlans:
                 "qualitative engine."
             )
         qualitative_pack_sha256 = (
-            load_qualitative_pack_for_revision(coaching_prompt_revision).sha256
+            (await run_sync(load_qualitative_pack_for_revision, coaching_prompt_revision)).sha256
             if coaching_prompt_revision
             in {
                 COACHING_PROMPT_V4,

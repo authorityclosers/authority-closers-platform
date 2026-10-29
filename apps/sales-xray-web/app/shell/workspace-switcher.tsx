@@ -53,6 +53,7 @@ export function menuPlace(
 export function WorkspaceSwitcher({
   workspaces,
   currentId,
+  picked = null,
   personName,
   personPhotoUrl = null,
   personEmail = null,
@@ -69,6 +70,8 @@ export function WorkspaceSwitcher({
 }: {
   workspaces: readonly Workspace[];
   currentId: string | null;
+  /** A workspace just tapped: named at once, ticked in the list where it is. */
+  picked?: string | null;
   personName: string | null;
   personPhotoUrl?: string | null;
   personEmail?: string | null;
@@ -88,7 +91,9 @@ export function WorkspaceSwitcher({
   onCreate?: () => void;
 }) {
   const current =
-    workspaces.find((workspace) => workspace.tenant_id === currentId) ??
+    workspaces.find(
+      (workspace) => workspace.tenant_id === (picked ?? currentId),
+    ) ??
     workspaces[0] ??
     null;
   const you = personName || "Your account";
@@ -175,7 +180,8 @@ export function WorkspaceSwitcher({
           <WorkspacePicker
             menu
             workspaces={workspaces}
-            currentId={current?.tenant_id ?? null}
+            currentId={currentId ?? current?.tenant_id ?? null}
+            picked={picked}
             onSelect={onSelect}
             onKeep={() => setOpen(false)}
             branding={branding}

@@ -174,3 +174,27 @@ async def test_fixed_costs_are_saved_as_audited_revisions(tmp_path: Path) -> Non
         )
         assert foreign.status_code == 403
     assert len(SAVED) == 1
+
+
+async def test_file_reader_and_view_builder_run_off_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    import threading
+
+    from ac_platform.economics import admin_http
+
+    main = threading.get_ident()
+    threads = []
+    original_build = service.build
+
+    def read(_root: str | None) -> tuple[list[Any], list[Any]]:
+        threads.append(threading.get_ident())
+        return [], []
+
+    def build(*args: Any, **kwargs: Any) -> dict[str, Any]:
+        threads.append(threading.get_ident())
+        return original_build(*args, **kwargs)
+
+    monkeypatch.setattr(admin_http, "read_store", read)
+    monkeypatch.setattr(service, "build", build)
+    async with _client() as client:
+        assert (await client.get("/v1/admin/economics")).status_code == 200
+    assert len(threads) == 2 and all(thread != main for thread in threads)

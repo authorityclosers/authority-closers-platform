@@ -3,13 +3,19 @@
 import { useState, type CSSProperties, type ReactNode } from "react";
 
 import { ACCOUNT_PROFILE_PHOTO_PATH } from "./account-profile-client";
+import { characterFor, useCharacters } from "./people/characters";
 import { useShellProfile } from "./shell/profile-store";
 import { speakerIcon } from "./speaker-icons";
 import { initials, voiceStyle, type SpeakerProfile } from "./speaker-profiles";
 import { useWorkspaceAccess } from "./workspace-access";
 import styles from "./speaker.module.css";
 
-/** Uses the private first-party photo, keeping each avatar's existing fallback. */
+/**
+ * Your own face: your photo (or the character you chose), else your default
+ * character, the one everyone else sees for you (owner bug #50, 29 Oct 2026:
+ * the frame showed initials where the rest of the app shows your picture),
+ * else each avatar's existing fallback.
+ */
 export function AccountAvatarImage({
   photoUrl,
   children,
@@ -17,17 +23,24 @@ export function AccountAvatarImage({
   photoUrl: string | null | undefined;
   children: ReactNode;
 }) {
-  const [failed, setFailed] = useState(false);
-  if (photoUrl !== ACCOUNT_PROFILE_PHOTO_PATH || failed) return children;
+  const [failed, setFailed] = useState<string | null>(null);
+  const me = useWorkspaceAccess()?.context?.personId ?? null;
+  const own = photoUrl === ACCOUNT_PROFILE_PHOTO_PATH ? photoUrl : null;
+  // Pages under test count their reads: the characters are read live only.
+  const characters = useCharacters(
+    !own && me !== null && process.env.NODE_ENV !== "test",
+  );
+  const src = own ?? (me ? (characterFor(me, characters)?.url ?? null) : null);
+  if (!src || failed === src) return children;
   return (
     // eslint-disable-next-line @next/next/no-img-element -- The private photo must use the signed-in browser session directly.
     <img
       className="account-avatar-image"
-      src={photoUrl}
+      src={src}
       alt=""
       referrerPolicy="no-referrer"
       decoding="async"
-      onError={() => setFailed(true)}
+      onError={() => setFailed(src)}
     />
   );
 }

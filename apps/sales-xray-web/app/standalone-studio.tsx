@@ -373,6 +373,9 @@ function StandaloneStudioView({
     pathname === "/analysis" ||
     pathname === "/analysis/calls";
   const [attempt, setAttempt] = useState(0);
+  // Moves only when a workspace switch lands in place: the app frame's key
+  // (the first load keeps one frame from its outline to the page).
+  const [frameRound, setFrameRound] = useState(0);
   // Failed access checks in a row, for the corner notice's retry pace.
   const [failures, setFailures] = useState(0);
   // A server-read session (dev) starts the page ready; the browser's check
@@ -504,6 +507,26 @@ function StandaloneStudioView({
       setView({ kind: "loading" });
     setAttempt((value) => value + 1);
   };
+  // A switch the server confirmed (owner bug #17): a new round of the app
+  // frame, so every screen and what it held start again for the workspace,
+  // and a directory read still on its way can no longer answer.
+  const switched = (tenantId: string) => {
+    setFrameRound((round) => round + 1);
+    generation.current += 1;
+    activeController.current?.abort();
+    activeController.current = null;
+    setView((current) =>
+      current.kind === "ready" &&
+      current.choices.salesXrayWorkspaces?.some(
+        (item) => item.tenant_id === tenantId,
+      )
+        ? {
+            kind: "ready",
+            choices: { ...current.choices, selected_tenant_id: tenantId },
+          }
+        : current,
+    );
+  };
   const selected = pending?.selection ?? null;
   const accountChoices =
     view.kind === "ready" ||
@@ -577,10 +600,13 @@ function StandaloneStudioView({
     view.choices.salesXrayWorkspaces?.find(
       (item) => item.tenant_id === view.choices.selected_tenant_id,
     )?.sales_xray_enabled === true;
+  // Again after a switch in place, which turned early reads off on the tap.
+  const selectedTenantId =
+    view.kind === "ready" ? view.choices.selected_tenant_id : null;
   useEffect(() => {
     if (view.kind === "loading") return;
     allowEarlyConversationReads(earlyConversation);
-  }, [view.kind, earlyConversation]);
+  }, [view.kind, earlyConversation, selectedTenantId]);
   // Telemetry events carry the signed-in session; the server checks it.
   const telemetrySession =
     view.kind === "ready" && view.choices.selected_tenant_id
@@ -634,6 +660,7 @@ function StandaloneStudioView({
           ? false
           : null,
     retry,
+    ...(view.kind === "ready" ? { switched } : {}),
     workspaces: accountChoices?.salesXrayWorkspaces,
     ...(review.readOnly === false && !review.fixtureRequested
       ? { requestAccountSignIn, requestAnalysisAccess }
@@ -734,7 +761,7 @@ function StandaloneStudioView({
     );
     return (
       <WorkspaceAccessProvider value={accessValue}>
-        <AppFrame embedded={embedded}>
+        <AppFrame key={frameRound} embedded={embedded}>
           {embedded ? (
             <div style={{ ...shellStyle, minHeight: "auto" }}>{profile}</div>
           ) : (
@@ -749,7 +776,7 @@ function StandaloneStudioView({
   if (view.kind === "ready" || (!embedded && view.kind === "unauthenticated"))
     return (
       <WorkspaceAccessProvider value={accessValue}>
-        <AppFrame embedded={embedded}>
+        <AppFrame key={frameRound} embedded={embedded}>
           {view.kind === "ready" && !salesXrayEnabled ? (
             <AcquisitionShell
               authenticated
@@ -777,7 +804,7 @@ function StandaloneStudioView({
   )
     return (
       <WorkspaceAccessProvider value={accessValue}>
-        <AppFrame embedded={embedded}>
+        <AppFrame key={frameRound} embedded={embedded}>
           <AcquisitionShell
             authenticated={false}
             loading

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Annotated
 from uuid import UUID
 
+from anyio.to_thread import run_sync
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -429,7 +430,7 @@ def install_sales_xray_profile_http(
         actor = auth.resolved.actor
         await require_profile_surface(request, auth)
         require_safe_origin(request, settings)
-        if not characters.load():
+        if not await run_sync(characters.load):
             raise HTTPException(409, "Characters are not available yet.")
         try:
             await person_photos.save_character(
@@ -470,7 +471,7 @@ def install_sales_xray_profile_http(
         return {
             "characters": [
                 {"key": item.key, "label": item.label, "url": item.url}
-                for item in characters.load()
+                for item in await run_sync(characters.load)
             ]
         }
 
@@ -480,7 +481,7 @@ def install_sales_xray_profile_http(
         request: Request,
         auth: Annotated[AuthenticatedTransaction, read_actor_dependency] = read_actor_dependency,
     ) -> Response:
-        chosen = characters.by_key(key)
+        chosen = await run_sync(characters.by_key, key)
         if not on_app_host(request) or chosen is None or set(request.query_params) - {"v"}:
             raise HTTPException(404, "Character not found.", headers=photo_headers())
         etag = f'"{chosen.sha256}"'

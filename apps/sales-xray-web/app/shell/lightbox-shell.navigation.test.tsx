@@ -174,16 +174,16 @@ it("keeps same-shell navigation on the App Router client-link path", () => {
   expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
 });
 
-it("makes the sidebar's search the command bar's pill", () => {
+it("makes the sidebar's search a quiet row that opens the command bar", () => {
   const host = document.createElement("div");
   host.innerHTML = renderToStaticMarkup(
     <AcquisitionShell authenticated active="dashboard">
       <p>Dashboard</p>
     </AcquisitionShell>,
   );
-  // One search (owner, dev #8): the pill opens the command bar (Ctrl K),
-  // which finds places, leads and calls. The server cannot know the
-  // keyboard: it assumes Ctrl, not ⌘.
+  // One search (owner, dev #8), a quiet row since owner bug #26 (29 Oct
+  // 2026): it opens the command bar (Ctrl K), which finds places, leads and
+  // calls. The server cannot know the keyboard: it assumes Ctrl, not ⌘.
   expect(host.querySelector('aside form[role="search"]')).toBeNull();
   const pill = host.querySelector(
     'aside button[aria-keyshortcuts^="Control+K"]',
@@ -392,4 +392,25 @@ it("lists every hub section under Team, Insights and Plan & billing included", (
   expect(rows.filter((row) => row[2] === "page")).toEqual([
     ["Insights", "/organisation/insights", "page"],
   ]);
+});
+
+// Owner bug #26 (29 Oct 2026): the organisation's panel is calm, its pages
+// only, the lit one carrying the fill that glides; recent calls stay with
+// the areas calls belong to.
+it("keeps the Team panel to its pages, without recent calls", () => {
+  const host = document.createElement("div");
+  host.innerHTML = renderToStaticMarkup(
+    <WorkspaceAccessProvider value={ORG_OWNER}>
+      <AcquisitionShell authenticated active="organisation">
+        <p>Organisation</p>
+      </AcquisitionShell>
+    </WorkspaceAccessProvider>,
+  );
+  const aside = host.querySelector('aside[aria-label="Sales Xray navigation"]');
+  expect(panelPages(aside)[0]).toBe("Team");
+  expect(aside?.textContent).not.toContain("Recents");
+  const rows = aside?.querySelectorAll("[data-area-panel] a[data-place]");
+  expect(rows?.length).toBeGreaterThan(1);
+  for (const row of rows ?? [])
+    expect(row.firstElementChild?.getAttribute("aria-hidden")).toBe("true");
 });
