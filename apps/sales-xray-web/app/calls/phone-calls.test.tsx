@@ -174,6 +174,47 @@ it("lists this week's calls first and opens each one", async () => {
   });
 });
 
+it("each connected call shows its way to a Report; missed calls and reports don't", async () => {
+  const activity = answer.body;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: string) => {
+      const body = String(url).startsWith("/v1/lead-desk/capture-guard")
+        ? {
+            generated_at: "2026-10-27T10:00:00Z",
+            rates: [],
+            calls: [
+              {
+                event_id: "e1",
+                lead_id: "lead-e1",
+                person_id: null,
+                at: "2026-10-27T09:30:00Z",
+                state: "uploaded",
+                submission_id: null,
+                attention: false,
+              },
+            ],
+          }
+        : activity;
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }),
+  );
+  await act(async () => root.render(<PhoneCalls />));
+  await act(async () => {});
+  const rows = [
+    ...container.querySelectorAll<HTMLAnchorElement>("a[data-sx-action]"),
+  ];
+  expect(rows[0].textContent).toContain("Uploaded");
+  expect(rows[0].querySelectorAll("i[data-done]")).toHaveLength(5);
+  // A row is one link: the state line adds none.
+  expect(rows[0].querySelector("a")).toBeNull();
+  expect(rows[1].querySelector('[role="img"]')).toBeNull();
+  expect(rows[2].querySelector('[role="img"]')).toBeNull();
+});
+
 it("shows at most a few, with the way to all of them", async () => {
   answer.body = {
     items: Array.from({ length: SHOWN_CALLS + 2 }, (_, index) =>
