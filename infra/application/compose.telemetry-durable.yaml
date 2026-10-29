@@ -6,7 +6,7 @@ services:
       AC_TELEMETRY_SPOOL_ROOT: /var/lib/ac-telemetry
     volumes:
       - type: bind
-        source: /var/lib/ac-telemetry/${AC_ENVIRONMENT:?AC_ENVIRONMENT must isolate telemetry}
+        source: /srv/authority-closers/application/intake-spool/${AC_ENVIRONMENT:?AC_ENVIRONMENT must isolate telemetry}/telemetry/${AC_ENVIRONMENT:?AC_ENVIRONMENT must isolate telemetry}
         target: /var/lib/ac-telemetry/${AC_ENVIRONMENT:?AC_ENVIRONMENT must isolate telemetry}
         read_only: false
         bind:

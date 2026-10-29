@@ -12,5 +12,5 @@ TimeoutStartSec=25min
 NoNewPrivileges=true
 ProtectSystem=strict
 ProtectHome=read-only
-ReadWritePaths=-/var/lib/ac-telemetry -/srv/authority-closers/sales-xray/development-live/telemetry
+ReadWritePaths=-/srv/authority-closers/application/intake-spool -/srv/authority-closers/sales-xray/development-live/telemetry
 PrivateTmp=true

@@ -38,7 +38,10 @@ Schema/auth refusals stop collection for that page. Consent taxonomy failures re
 
 ## Journal and S3 shipping
 
-Default production/staging journal root: `/var/lib/ac-telemetry/<environment>`.
+Production/staging reuse the API's existing durable `AC_INTAKE_SPOOL_ROOT` bind:
+`$AC_INTAKE_SPOOL_ROOT/telemetry/<environment>` inside the API. On the host this is
+`/srv/authority-closers/application/intake-spool/<environment>/telemetry/<environment>`.
+Thus intake works before the optional dedicated mount overlay is activated.
 Dev uses `/srv/authority-closers/sales-xray/development-live/telemetry/dev`, inside
 the host API service's existing writable durable bind. `development` maps to `dev`. `AC_TELEMETRY_SPOOL_ROOT` overrides only the parent mount (tests use a
 per-test temporary mount). There is no ephemeral-directory fallback.
@@ -130,13 +133,16 @@ Use the deployment's existing production data-change controls for any production
 
 ## Orchestrator activation checklist (reviewed units; not installed by builder)
 
-1. Create private host journal directories for each target environment, writable by
+1. The API creates its telemetry subdirectory under the already writable durable
+   intake bind; no new mount is required to keep intake working. For explicit
+   provisioning, create private host journal directories for each target environment, writable by
    the API UID (10001 in containers), plus `/var/lib/ac-telemetry-heartbeat` (0755).
    Dev host service uses its own service UID. Never share an environment's journal.
 2. Include `infra/application/compose.telemetry-durable.yaml` in the reviewed release
    compose inputs. It binds the durable host journal read/write and heartbeat directory
-   read-only. For host dev, configure the same durable parent mount. Do this before
-   activating the intake code; an unwritable journal correctly returns 503.
+   read-only. Its source is the same existing durable intake subdirectory, isolated
+   by environment. For host dev, the existing durable storage bind is used. A truly
+   unwritable or full journal correctly returns 503.
 3. Install the reviewed current application package in the existing
    `/opt/ac-lake-export/.venv` used by the nightly exporter. Both CLI modules are in
    that package. The reviewed lake unit includes ReadWritePaths for the journal's reconciliation

@@ -247,13 +247,16 @@ step() {
 }
 # Raw analytics is durable pending data, never a cleanup candidate. Inventory
 # it even when free space already meets the target so growth stays visible.
-if spool_inventory=$("$PYTHON" - "${AC_DISK_TELEMETRY:-/var/lib/ac-telemetry}" <<'PYRAW'
+if spool_inventory=$("$PYTHON" - "${AC_DISK_TELEMETRY:-}" <<'PYRAW'
 import json
 import sys
 import time
 from pathlib import Path
-root = Path(sys.argv[1])
-files = [p for p in root.glob("*/*") if p.suffix in {".open", ".ndjson", ".gz"} and not p.is_symlink()]
+roots = [Path(sys.argv[1])] if sys.argv[1] else [
+    Path("/srv/authority-closers/application/intake-spool") / env / "telemetry"
+    for env in ("production", "staging")
+] + [Path("/srv/authority-closers/sales-xray/development-live/telemetry")]
+files = [p for root in roots for p in root.glob("*/*") if p.suffix in {".open", ".ndjson", ".gz"} and not p.is_symlink()]
 print(json.dumps({"bytes": sum(p.stat().st_size for p in files),
                   "oldest_seconds": int(max((time.time() - p.stat().st_mtime for p in files), default=0)),
                   "files": len(files)}))

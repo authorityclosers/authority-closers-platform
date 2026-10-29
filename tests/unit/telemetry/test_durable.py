@@ -100,3 +100,20 @@ def test_killed_writer_tail_does_not_poison_acknowledged_rows(tmp_path: Path) ->
         handle.write(b'{"partial":')
     durable.append(tmp_path, [event()])
     assert len([json.loads(line) for line in path.read_text().splitlines()]) == 2
+
+
+def test_existing_production_intake_mount_is_writable_default(tmp_path, monkeypatch):
+    monkeypatch.delenv("AC_TELEMETRY_SPOOL_ROOT", raising=False)
+    monkeypatch.setenv("AC_INTAKE_SPOOL_ROOT", str(tmp_path / "existing-bind"))
+    root = durable.root_for("production")
+    assert root == tmp_path / "existing-bind" / "telemetry" / "production"
+    assert durable.append(root, [event()])
+    assert list(root.glob("*.open"))
+
+
+def test_host_monitor_and_export_resolve_existing_production_bind(monkeypatch):
+    monkeypatch.delenv("AC_TELEMETRY_SPOOL_ROOT", raising=False)
+    monkeypatch.delenv("AC_INTAKE_SPOOL_ROOT", raising=False)
+    assert durable.root_for("production") == Path(
+        "/srv/authority-closers/application/intake-spool/production/telemetry/production"
+    )

@@ -101,3 +101,24 @@ def test_health_probe_keeps_idle_counter_stream_alive_without_app_traffic(tmp_pa
     assert TestClient(app).get("/health/ready").status_code == 200
     path = next((tmp_path / "test" / "counters").glob("*.json"))
     assert all(value == 0 for value in json.loads(path.read_text()).values())
+
+
+def test_reconciliation_status_projects_counts_without_personal_fields(tmp_path):
+    import json
+
+    (tmp_path / "reconciliation.json").write_text(
+        json.dumps(
+            {
+                "postgres_rows": 2,
+                "raw_rows": 3,
+                "lake_rows": 2,
+                "mismatch": True,
+                "name": "private person",
+                "email": "never@example.test",
+            }
+        )
+    )
+    value = snapshot(tmp_path)
+    assert value["reconciliation"]["raw_rows"] == 3
+    assert "private person" not in json.dumps(value)
+    assert "never@example.test" not in json.dumps(value)

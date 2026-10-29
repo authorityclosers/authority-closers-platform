@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -62,8 +62,19 @@ def snapshot(root: Path, now: float | None = None) -> dict[str, Any]:
     totals["reconciliation_mismatch"] = False
     if reconciliation.exists():
         state = json.loads(reconciliation.read_text())
-        totals["reconciliation"] = state
-        totals["reconciliation_mismatch"] = state.get("mismatch", True)
+        # Only fixed, typed aggregate fields may reach Admin, logs or HQ.
+        # Never echo arbitrary JSON from the API-writable spool directory.
+        report: dict[str, Any] = {
+            key: value if type(value) is int and value >= 0 else None
+            for key in ("postgres_rows", "raw_rows", "lake_rows")
+            for value in (state.get(key),)
+        }
+        if state.get("day"):
+            report["day"] = date.fromisoformat(state["day"]).isoformat()
+        report["verified"] = state.get("verified") is True
+        report["mismatch"] = state.get("mismatch") is not False
+        totals["reconciliation"] = report
+        totals["reconciliation_mismatch"] = report["mismatch"]
         if state.get("checked_at"):
             totals["reconciliation_stale"] = (
                 now - datetime.fromisoformat(state["checked_at"]).timestamp() > 36 * 3600

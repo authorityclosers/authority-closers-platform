@@ -140,6 +140,7 @@ def test_reconciliation_status_retains_counts_and_verification_time(tmp_path, mo
     module = runner()
     real_path = Path
     monkeypatch.setattr(module, "Path", lambda _: real_path(tmp_path))
+    (tmp_path / "production" / "telemetry" / "production").mkdir(parents=True)
     module.reconciliation_status(
         "production",
         {
@@ -150,6 +151,8 @@ def test_reconciliation_status_retains_counts_and_verification_time(tmp_path, mo
             "verified": True,
         },
     )
-    status = json.loads((tmp_path / "production" / "reconciliation.json").read_text())
+    status = json.loads(
+        (tmp_path / "production" / "telemetry" / "production" / "reconciliation.json").read_text()
+    )
     assert status["raw_rows"] == 8 and status["mismatch"]
     assert status["checked_at"] and status["verified"]

@@ -157,11 +157,13 @@ def reconciliation_status(environment: str, report: dict) -> None:
     root = (
         Path("/srv/authority-closers/sales-xray/development-live/telemetry")
         if environment == "dev"
-        else Path("/var/lib/ac-telemetry")
+        else Path("/srv/authority-closers/application/intake-spool") / environment / "telemetry"
     ) / environment
-    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    if not root.is_dir():
+        raise OSError("telemetry journal is not initialized")
     temporary = root / "reconciliation.tmp"
-    with temporary.open("w") as handle:
+    fd = os.open(temporary, os.O_CREAT | os.O_WRONLY | os.O_TRUNC | os.O_NOFOLLOW, 0o600)
+    with os.fdopen(fd, "w") as handle:
         json.dump({**report, "checked_at": datetime.now(UTC).isoformat()}, handle)
         handle.flush()
         os.fsync(handle.fileno())

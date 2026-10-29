@@ -105,3 +105,10 @@ def test_hour_rotation_recovers_only_an_unacknowledged_fragment(tmp_path, monkey
     module["ship"](tmp_path, "production", {}, now=datetime(2026, 10, 29, tzinfo=UTC))
     assert len(verified) == 1
     assert verified[0]["events"][0]["event_id"] == "fixed-event"
+
+
+def test_shipper_cannot_create_a_root_owned_journal_before_api_initializes_it(tmp_path):
+    module = runpy.run_path(str(SCRIPT))
+    missing = tmp_path / "not-initialized"
+    assert module["ship"](missing, "production", {}) == 0
+    assert not missing.exists()

@@ -57,14 +57,22 @@ def root_for(environment: str) -> Path:
         raise SpoolUnavailable("invalid telemetry environment")
     if environment in {"development", "development-live"}:
         environment = "dev"
-    # Dev already binds this durable host directory writable under ProtectSystem.
-    default = (
-        ROOT
-        if environment != "dev"
-        else Path("/srv/authority-closers/sales-xray/development-live/telemetry")
-    )
-    # Explicit mount/config override, no fallback to ephemeral /tmp in deployments.
-    return Path(os.environ.get("AC_TELEMETRY_SPOOL_ROOT", str(default))) / environment
+    explicit = os.environ.get("AC_TELEMETRY_SPOOL_ROOT")
+    if explicit:
+        return Path(explicit) / environment
+    if environment == "dev":
+        return Path("/srv/authority-closers/sales-xray/development-live/telemetry") / environment
+    if environment in {"production", "staging"}:
+        # Existing release compose already binds this durable, API-writable intake
+        # directory. Reuse it until/after the optional dedicated mount is selected.
+        intake = os.environ.get("AC_INTAKE_SPOOL_ROOT")
+        parent = (
+            Path(intake)
+            if intake
+            else Path("/srv/authority-closers/application/intake-spool") / environment
+        )
+        return parent / "telemetry" / environment
+    return ROOT / environment
 
 
 def sync_directory(root: Path) -> None:
