@@ -15,9 +15,14 @@ STATE=${AC_PLAY_STATE:-/var/lib/ac-play-after-release/last}
 CONF=${AC_PLAY_CONF:-/etc/ac-play-after-release.conf}
 NOTIFY=${AC_PLAY_NOTIFY:-/usr/local/sbin/ac-notify-owner}
 PAUSE=${AC_PLAY_PAUSE:-10}
+NOTES_DIR=${AC_PLAY_NOTES_DIR:-/etc/authority-closers/play-notes}
 REPO=authorityclosers/sales-xray-apps
 PLATFORM=authorityclosers/authority-closers-platform
 AUTO_APPROVE=0
+# Owner, 30 Oct 2026 ("ship and dev immediately for next 3 days"): while PLAY_PRIORITY_UNTIL (a UTC date) has not
+# passed, each build carries PLAY_UPDATE_PRIORITY, and 4-5 makes the app take the update as soon as it opens.
+PLAY_UPDATE_PRIORITY=0
+PLAY_PRIORITY_UNTIL=""
 # shellcheck source=/dev/null
 [ -f "$CONF" ] && . "$CONF"
 say() { echo "$(date -u +%FT%TZ) $*" >> "$LOG"; }
@@ -37,8 +42,12 @@ SHA=$(gh api "repos/$PLATFORM/commits/$SHORT" --jq .sha 2>/dev/null)
 # What's new for testers: the release title, inside Play's 500-character limit.
 NOTES=$(gh api "repos/$PLATFORM/commits/$SHA" --jq '.commit.message' 2>/dev/null | head -1 | sed -E 's/^Release [^ ]+ \((.*)\)$/\1/' | cut -c1-480)
 [ -n "$NOTES" ] || NOTES="Sales X-Ray $VER"
+# Owner, 30 Oct 2026: testers read real "What's new" copy, written for each version in $NOTES_DIR/<version>.txt.
+[ -s "$NOTES_DIR/$VER.txt" ] && NOTES=$(head -c 500 "$NOTES_DIR/$VER.txt")
+PRIORITY=$PLAY_UPDATE_PRIORITY
+[ -n "$PLAY_PRIORITY_UNTIL" ] && [[ "$(date -u +%F)" > "$PLAY_PRIORITY_UNTIL" ]] && PRIORITY=0
 BEFORE=$(gh run list -R "$REPO" --workflow play.yml --limit 1 --json databaseId --jq '.[0].databaseId' 2>/dev/null)
-gh workflow run play.yml -R "$REPO" --ref main -f web_ref="$SHA" -f track=alpha -f notes="$NOTES" >/dev/null 2>&1 \
+gh workflow run play.yml -R "$REPO" --ref main -f web_ref="$SHA" -f track=alpha -f notes="$NOTES" -f update_priority="$PRIORITY" >/dev/null 2>&1 \
   || { say "$VER: play.yml dispatch refused; will retry"; exit 1; }
 echo "$VER" > "$STATE"
 RUN=""
