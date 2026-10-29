@@ -13,7 +13,7 @@
  *   ready. Nothing shows while AI replies are paused.
  */
 
-import { ChevronDown, Plus, Sparkles, Trash2 } from "lucide-react";
+import { Check, ChevronDown, Plus, Sparkles, Trash2 } from "lucide-react";
 import { useEffect, useState, type ReactNode } from "react";
 
 import { notify } from "../notice-center";
@@ -232,9 +232,13 @@ export function AiRepliesSettings() {
       <Group title="Where it answers">
         <div className={aiStyles.channels} role="group" aria-label="Channels">
           {(Object.keys(CHANNEL_LABELS) as AiChannel[]).map((channel) => (
+            // One equal tile per channel: its mark, its name and a tick when
+            // on; the name never runs past the tile (owner bug #102, 29 Oct
+            // 2026: "messenger icon is also overflowing the text").
             <label key={channel} className={aiStyles.channel}>
               <input
                 type="checkbox"
+                className={aiStyles.channelInput}
                 checked={form.channels.includes(channel)}
                 onChange={(event) =>
                   set({
@@ -244,8 +248,13 @@ export function AiRepliesSettings() {
                   })
                 }
               />
-              <BrandTile brands={[channel]} size={22} />
-              {CHANNEL_LABELS[channel]}
+              <BrandTile brands={[channel]} size={30} />
+              <span className={aiStyles.channelName}>
+                {CHANNEL_LABELS[channel]}
+              </span>
+              <span className={aiStyles.channelTick} aria-hidden="true">
+                <Check size={11} strokeWidth={3.2} />
+              </span>
             </label>
           ))}
         </div>

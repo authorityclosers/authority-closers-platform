@@ -1,7 +1,11 @@
 /* Settings → Connected apps → lead ads: the guided setup (22 Oct 2026). Tokens only. */
 
+/* Every level is a one-column grid that may shrink: a long button or name
+   wraps inside the sheet instead of widening it, so the sheet never scrolls
+   sideways (owner bugs 100 and 101, 29 Oct 2026, a 363 px phone). */
 .setup {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   min-width: 0;
 }
@@ -80,7 +84,9 @@
 
 .steps {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -91,6 +97,7 @@
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr);
   gap: 12px;
+  min-width: 0;
   padding-bottom: 18px;
 }
 
@@ -174,6 +181,21 @@
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  min-width: 0;
+}
+
+/* Kit buttons keep their words on one line; here a long one ("Switch off
+   <a long Page name>?") wraps within the sheet instead. */
+.row > button,
+.pageActions > button {
+  min-width: 0;
+  max-width: 100%;
+  height: auto;
+  padding-block: 8px;
+  line-height: 1.3;
+  text-align: start;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .tinted {
@@ -243,6 +265,8 @@
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .picker {

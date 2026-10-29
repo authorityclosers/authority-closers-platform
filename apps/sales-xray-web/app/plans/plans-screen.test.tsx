@@ -277,9 +277,10 @@ it("prices two team seats yearly, accepts the server total and warns about renew
     seats: 2,
     buyer: { name: "Fictional Closers", gstin: "27ABCDE1234F1Z5" },
   });
-  expect(text()).toContain("₹2,16,000");
-  expect(text()).toContain("₹38,880");
-  expect(text()).toContain("₹2,54,880");
+  // ₹19,990 a seat a year (owner, 29 Oct 2026), plus 18% GST.
+  expect(text()).toContain("₹39,980");
+  expect(text()).toContain("₹7,196.40");
+  expect(text()).toContain("₹47,176.40");
   expect(text()).toContain("approve each renewal above ₹15,000");
   await fill("Organisation name", "Renamed Fictional Closers");
   expect(text()).not.toContain("Total confirmed");

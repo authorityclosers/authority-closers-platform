@@ -507,7 +507,7 @@ def attach(
     """Run the sender for the API's lifetime by wrapping the app's own lifespan."""
     if environment in {"local", "test"}:
         return
-    from ac_platform.lead_desk import duplicate_scan, review_push
+    from ac_platform.lead_desk import capture_guard_nudges, duplicate_scan, review_push
 
     inner = application.router.lifespan_context
 
@@ -516,6 +516,9 @@ def attach(
         async with inner(app) as state:
             stop = asyncio.Event()
             tasks = [
+                asyncio.create_task(
+                    capture_guard_nudges.run(sessions, stop), name="capture-guard-nudges"
+                ),
                 asyncio.create_task(
                     run_push_sender(sessions, stop, every=_ALERTS_TICK), name="lead-desk-alerts"
                 ),

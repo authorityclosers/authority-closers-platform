@@ -71,3 +71,40 @@ The public catalogue still hides inactive plan and pack prices. Tax calculation,
 checkout totals and invoices belong to AUT-878; activation belongs to AUT-882.
 Backup/restore parity adds the exact 0068 head with the same v40 inventory
 (121 tables). Evidence: `docs/evidence/20261003_INACTIVE_PLAN_VALUES.md`.
+
+## Admin price editor amendment (owner, 2026-10-29)
+
+The owner judged ₹10,000 per seat "too harsh" and asked for a price per
+salesperson based on our real costs, about ₹2k. He approved ₹1,999 per seat a
+month and ₹19,990 a year for Organisation; Personal stays at ₹2,499 and
+₹26,990. He chose to set prices himself in Admin ("Admin price editor") over a
+data migration, so no migration changes a price.
+
+- Admin → Economics → Plan prices shows each plan's current price and revision
+  for that Admin's own environment. Each environment keeps its own prices.
+- Only the owner can change a price. The allowlist is the AI budget ceiling's
+  (`CEILING_OWNER_EMAILS`, verified email). The change goes through
+  `PUT /v1/admin/plan-prices/{key}` with the revision read and a reason, after a
+  confirm step that shows old and new.
+- A change supersedes and never overwrites. The `plans` row takes the new
+  monthly and yearly paise under a new revision. Checkout, `/v1/plans` and
+  `/v1/me/plan` read it at once. Orders keep the price they copied, and
+  provider plans are keyed by revision and amount.
+- Each change also writes an append-only `plan_price_changes` row (migration
+  `20261029_0143`) and a `plans.price_changed` audit event, both holding old
+  and new prices, who and why. The ORM refuses updates and deletes.
+- Only plans on sale or coming soon take a new price. Top-up prices, seats and
+  GST are not edited here.
+- Backup parity is `ac-postgres-parity-v110` at 0143: 0142's tables plus
+  `plan_price_changes`.
+- The Sales Xray display catalogue, which /plans shows while nothing is on
+  sale, carries the approved Organisation price (₹1,999 / ₹19,990).
+- Production takes the new price only when the owner sets it in production
+  Admin after the release.
+
+Evidence: `tests/database/test_plan_prices_postgresql.py`,
+`tests/unit/http/test_plan_prices_route.py`,
+`tests/infra/test_plan_price_changes_backup_parity.py`,
+`apps/admin-web/app/economics/plan-prices.test.tsx`.
+`scripts/billing/dev_purchase_journey.py` checks on dev that checkout charges
+the catalogue's per-seat price.

@@ -10,7 +10,7 @@ import { useId, useState } from "react";
 import { Send } from "lucide-react";
 
 import { notify } from "../notice-center";
-import { Badge, Button, Panel, type Tone } from "../ui/kit";
+import { Badge, Button, type Tone } from "../ui/kit";
 import { CopyButton } from "./copy-button";
 import { useOrigin } from "./use-origin";
 import styles from "./developers.module.css";
@@ -128,11 +128,8 @@ export function TryApi({
   }
 
   return (
-    <Panel
-      title="Try the API"
-      sub="A real request with your key"
-      className={styles.fit}
-    >
+    // Its head is the fold's on Developers (owner bugs #103-#105).
+    <div className={styles.tryBody}>
       <form
         className={styles.tryForm}
         onSubmit={(event) => {
@@ -193,7 +190,8 @@ export function TryApi({
           </small>
         </label>
         <div className={styles.tryActions}>
-          <Button type="submit" variant="primary" disabled={!ready || busy}>
+          {/* Not filled: New key is the screen's one main action. */}
+          <Button type="submit" disabled={!ready || busy}>
             <Send size={14} aria-hidden="true" />
             {busy ? "Sending…" : "Send request"}
           </Button>
@@ -224,6 +222,6 @@ export function TryApi({
         </pre>
         <CopyButton text={curl} label="Copy the curl command" />
       </div>
-    </Panel>
+    </div>
   );
 }

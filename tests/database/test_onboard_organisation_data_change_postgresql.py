@@ -10,7 +10,9 @@
 - a spelling listed for two people is refused;
 - each person's Sales X-Ray profile has their name and phone from the input, so a first call
   goes to review without "A few details before we review your call"; a phone the person set
-  themselves is kept, and a rerun changes no profile.
+  themselves is kept, and a rerun changes no profile;
+- "tenant_id" adds people to an organisation that already exists, with no sheet and no paid
+  seat: audited once, never a second organisation, refused for another owner or no such one.
 Made-up people only."""
 
 from __future__ import annotations
@@ -261,5 +263,92 @@ def test_rehearse_apply_map_follow_ups_rerun_and_resync(
             ]
             with pytest.raises(SystemExit, match="a_spelling_names_two_people"):
                 await tool.execute(sessions, twice, mode="dry-run", **options)
+
+    run(exercise())
+
+
+def test_existing_organisation_gets_its_people_without_a_sheet(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            sessions = here.setup.sessions
+            async with sessions() as db:
+                approver = await db.scalar(
+                    select(Person.email).where(Person.id == here.setup.state.person_id)
+                )
+            options: dict[str, Any] = {"now": datetime.now(UTC), "boundaries": (uuid4(), uuid4())}
+            owner = {"name": "Mira Owner", "email": "mira.owner@example.com"}
+            # The owner's own organisation, as one made in the app has only its Owner.
+            made = await tool.execute(
+                sessions,
+                {
+                    "command_id": str(uuid4()),
+                    "organisation": "Fictional Founding Client",
+                    "approver_email": approver,
+                    "issue": "AUT-test",
+                    "owner": owner,
+                },
+                mode="apply",
+                **options,
+            )
+            tenant = made["after"]["tenant_id"]
+            assert made["members_added"] == 0 and made["counts"] == {}
+            spec: dict[str, Any] = {
+                "command_id": str(uuid4()),
+                "organisation": "Fictional Founding Client",
+                "approver_email": approver,
+                "issue": "AUT-test",
+                "tenant_id": tenant,
+                "owner": owner,
+                "sellers": [
+                    {"name": "Neel Sample", "email": "neel.s@example.com", "phone": "9876090011"},
+                    {"name": "Tara Demo", "email": "tara.d@example.com"},
+                ],
+            }
+
+            async def audits() -> int:
+                async with sessions() as db:
+                    return int(
+                        await db.scalar(
+                            select(func.count())
+                            .select_from(AuditEvent)
+                            .where(AuditEvent.action == tool.ACTION)
+                        )
+                        or 0
+                    )
+
+            before = await audits()
+            dry = await tool.execute(sessions, spec, mode="dry-run", **options)
+            assert dry["status"] == "rehearsed_and_rolled_back"
+            assert dry["organisation_is"] == "found" and dry["members_added"] == 2
+            done = await tool.execute(sessions, spec, mode="apply", **options)
+            assert done["after"]["tenant_id"] == tenant and done["members_added"] == 2
+            assert sorted(m["role"] for m in done["after"]["members"]) == [
+                "member",
+                "member",
+                "owner",
+            ]
+            assert done["counts"] == {} and done["audited"] is True
+            assert await audits() == before + 1
+            async with sessions() as db:
+                named = await db.scalar(
+                    select(func.count())
+                    .select_from(Tenant)
+                    .where(Tenant.name == "Fictional Founding Client")
+                )
+            assert named == 1
+            again = await tool.execute(sessions, spec, mode="apply", **options)
+            assert again["members_added"] == 0 and again["audited"] is False
+            assert await audits() == before + 1
+
+            stranger = {**spec, "owner": {"name": "Neel Sample", "email": "neel.s@example.com"}}
+            stranger["sellers"] = [{"name": "Mira Owner", "email": "mira.owner@example.com"}]
+            with pytest.raises(SystemExit, match="owner_is_not_this_organisations_owner"):
+                await tool.execute(sessions, stranger, mode="dry-run", **options)
+            with pytest.raises(SystemExit, match="organisation_not_found"):
+                await tool.execute(
+                    sessions, {**spec, "tenant_id": str(uuid4())}, mode="dry-run", **options
+                )
 
     run(exercise())

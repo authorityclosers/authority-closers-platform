@@ -1,0 +1,288 @@
+/* Developers' section card (owner bugs 103-105, 29 Oct 2026). Tokens only. */
+
+.card {
+  --tone: var(--sx-accent);
+  --tone-soft: var(--sx-accent-soft);
+  --tone-ink: var(--sx-accent);
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  box-shadow: var(--sx-shadow-1);
+}
+
+.card > * {
+  min-width: 0;
+}
+
+/* Each section has its own colour, so the screen reads as parts at a glance. */
+.card[data-tone="violet"] {
+  --tone: var(--lx-missed);
+  --tone-soft: var(--lx-missed-soft);
+  --tone-ink: var(--lx-missed-ink);
+}
+
+.card[data-tone="amber"] {
+  --tone: var(--lx-focus);
+  --tone-soft: var(--lx-focus-soft);
+  --tone-ink: var(--lx-focus-ink);
+}
+
+.card[data-tone="blue"] {
+  --tone: var(--lx-closing);
+  --tone-soft: var(--lx-closing-soft);
+  --tone-ink: var(--lx-closing-ink);
+}
+
+.card[data-tone="teal"] {
+  --tone: var(--lx-teal);
+  --tone-soft: var(--lx-teal-soft);
+  --tone-ink: var(--lx-teal);
+}
+
+.card[data-tone="slate"] {
+  --tone: var(--lx-info);
+  --tone-soft: var(--lx-info-soft);
+  --tone-ink: var(--lx-info);
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 60px;
+  box-sizing: border-box;
+  padding: 10px 12px 10px 14px;
+}
+
+.tile {
+  display: grid;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 10px;
+  background: var(--tone-soft);
+  color: var(--tone-ink);
+}
+
+.tile svg {
+  width: 18px;
+  height: 18px;
+}
+
+.title {
+  overflow: hidden;
+  min-width: 0;
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The (i): a 32 px circle with a 44 px touch area. */
+.infoButton {
+  position: relative;
+  display: grid;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  place-items: center;
+  margin-left: -4px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-muted);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    background var(--sx-dur-fast) var(--sx-ease-out),
+    color var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.infoButton::after {
+  position: absolute;
+  inset: -6px;
+  content: "";
+}
+
+.infoButton[aria-expanded="true"] {
+  background: var(--tone-soft);
+  color: var(--tone-ink);
+}
+
+.infoButton:focus-visible,
+.foldButton:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.tools {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+/* The explanation, under the head: a quiet bubble with the section's edge. */
+.tip,
+.foldTip {
+  margin: 0 14px 12px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--tone);
+  border-radius: 4px var(--sx-radius-md) var(--sx-radius-md) 4px;
+  background: color-mix(in oklab, var(--tone-soft) 60%, var(--sx-surface));
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-sm);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  animation: tip-in var(--sx-dur-base) var(--sx-ease-out);
+}
+
+.tip[hidden],
+.foldTip[hidden] {
+  display: none;
+}
+
+.tip p,
+.foldTip p {
+  margin: 0;
+}
+
+.tip p + p,
+.foldTip p + p {
+  margin-top: 6px;
+}
+
+.tip code,
+.foldTip code {
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86em;
+}
+
+@keyframes tip-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+}
+
+/* ---------- InfoFold: one folded line of help ---------- */
+
+.fold {
+  display: grid;
+  justify-items: start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.fold .foldTip {
+  margin: 0;
+  justify-self: stretch;
+}
+
+.foldButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 10px 0 8px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.foldButton > svg:first-child {
+  color: var(--tone-ink, var(--sx-accent));
+}
+
+.chev {
+  color: var(--sx-muted);
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.foldButton[aria-expanded="true"] .chev {
+  transform: rotate(180deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tip,
+  .foldTip {
+    animation: none;
+  }
+
+  .infoButton,
+  .chev {
+    transition: none;
+  }
+}
+
+/* ---------- DevFold: a section folded to its head ---------- */
+
+.foldCard {
+  display: block;
+}
+
+.foldCard > summary {
+  cursor: pointer;
+  list-style: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.foldCard > summary::-webkit-details-marker {
+  display: none;
+}
+
+.foldCard > summary:focus-visible {
+  outline: none;
+  box-shadow: inset var(--sx-focus-ring);
+}
+
+.summaryText {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-width: 0;
+}
+
+.summaryText small {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.foldCard > summary > .chev {
+  flex: none;
+  margin-right: 4px;
+}
+
+.foldCard[open] > summary > .chev {
+  transform: rotate(180deg);
+}
+
+.foldBody {
+  min-width: 0;
+  border-top: 1px solid var(--sx-hairline);
+}

@@ -255,3 +255,19 @@ def install_acquisition_runtime(
         runtime=runtime.intake,
         preflight=runtime.preflight,
     )
+
+    # Company-number recordings use the exact upload preflight, allowance and consent services.
+    from ac_platform.lead_desk.telephony import pipeline, providers
+
+    pipeline.attach(
+        application,
+        pipeline.Pipeline(
+            sessions=sessions,
+            runtime=runtime.intake,
+            preflight=runtime.preflight,
+            factory=factory,
+            environment=settings.environment,
+        ),
+        lambda: providers.provider_from_env(environment=settings.environment),
+        base_url=str(settings.sales_xray_app_url) if settings.sales_xray_app_url else None,
+    )

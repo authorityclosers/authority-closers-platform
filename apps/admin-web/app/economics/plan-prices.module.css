@@ -1,0 +1,56 @@
+/* Plan prices (owner, 29 Oct 2026): the owner's editor, its confirm step and the history.
+   Tokens only, as the budget settings. */
+.editor {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  gap: 12px;
+  align-items: start;
+  margin-top: 12px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  grid-column: 1 / -1;
+}
+
+.confirm {
+  display: grid;
+  grid-column: 1 / -1;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in oklab, var(--sx-accent) 35%, var(--sx-line));
+  border-radius: var(--sx-radius-sm);
+  background: color-mix(in oklab, var(--sx-accent) 6%, var(--sx-surface));
+}
+
+.confirm p {
+  margin: 0;
+}
+
+.confirm ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.note {
+  margin: 12px 0 0;
+}
+
+.history {
+  margin-top: 12px;
+}
+
+.history summary {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.history ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: var(--sx-text-xs);
+}
