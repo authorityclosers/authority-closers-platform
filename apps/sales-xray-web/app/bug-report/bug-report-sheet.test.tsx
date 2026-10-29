@@ -29,7 +29,11 @@ vi.mock("./outbox", () => ({
 
 import { useRegisteredCommands } from "../ui/command-registry";
 import { resetBackCloseForTests } from "../ui/back-close";
-import { BugReportHost, privateScreen } from "./bug-report-sheet";
+import {
+  BugReportHost,
+  forgetDraftForTests,
+  privateScreen,
+} from "./bug-report-sheet";
 import { openBugReport } from "./open";
 import { clearRecentErrors, recordError } from "./recent-errors";
 
@@ -73,6 +77,7 @@ beforeEach(async () => {
   askScreenshot.mockResolvedValue(null);
   captureScreen.mockReset();
   clearRecentErrors();
+  forgetDraftForTests();
   if (!URL.createObjectURL) {
     Object.assign(URL, {
       createObjectURL: () => "blob:preview",
@@ -400,6 +405,153 @@ it.each(["429", "network"] as const)(
     }
   },
 );
+
+// Bug 106 (29 Oct 2026): a cancelled demo came back unseen and new typing
+// landed mid-text ("TutoriTutorial demo, please ignoreal demo, please ignore").
+const DEMO = "Tutorial demo, please ignore";
+
+async function opened() {
+  await act(async () => openBugReport());
+  await pause(450);
+}
+
+async function closedWithX() {
+  await act(async () =>
+    document
+      .querySelector<HTMLButtonElement>('dialog button[aria-label="Close"]')!
+      .click(),
+  );
+  await pause(600);
+  expect(document.querySelector("dialog")?.open).toBe(false);
+}
+
+/** The app frame mounts again (a reload of the shell, not of the page). */
+async function remounted() {
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  await act(async () => root.render(<BugReportHost />));
+}
+
+function expectNoDraft() {
+  expect(document.querySelector("textarea")?.value).toBe("");
+  expect(document.querySelector("dialog")?.textContent).not.toContain(
+    "Draft restored",
+  );
+}
+
+it("Cancel asks before discarding what was written, and Discard forgets it for good", async () => {
+  captureScreen.mockResolvedValue(null);
+  await opened();
+  await act(async () => type(DEMO));
+  await act(async () => button("Cancel").click());
+  expect(document.querySelector("dialog")?.open).toBe(true);
+  expect(document.querySelector("dialog footer")?.textContent).toContain(
+    "Discard this report?",
+  );
+  await act(async () => button("Keep editing").click());
+  expect(document.querySelector("textarea")?.value).toBe(DEMO);
+  expect(button("Send report").disabled).toBe(false);
+
+  await act(async () => button("Cancel").click());
+  await act(async () => button("Discard").click());
+  await pause(600);
+  expect(document.querySelector("dialog")?.open).toBe(false);
+  await opened();
+  expectNoDraft();
+  await closedWithX();
+  await remounted();
+  await opened();
+  expectNoDraft();
+});
+
+it("Cancel with nothing written closes at once and forgets the chosen chip", async () => {
+  captureScreen.mockResolvedValue(null);
+  await opened();
+  await act(async () => button("This stops my work").click());
+  await act(async () => button("Cancel").click());
+  await pause(600);
+  expect(document.querySelector("dialog")?.open).toBe(false);
+  await opened();
+  expect(button("This stops my work").getAttribute("aria-pressed")).toBe(
+    "false",
+  );
+});
+
+it("a draft kept by closing comes back saying so, with the cursor at its end, and Clear empties it", async () => {
+  captureScreen.mockResolvedValue(null);
+  await opened();
+  await act(async () => type(DEMO));
+  await closedWithX();
+
+  await opened();
+  const area = document.querySelector("textarea")!;
+  expect(area.value).toBe(DEMO);
+  const restored = document.querySelector('dialog [role="status"]');
+  expect(restored?.textContent).toContain("Draft restored");
+  expect(document.activeElement).toBe(area);
+  expect([area.selectionStart, area.selectionEnd]).toEqual([
+    DEMO.length,
+    DEMO.length,
+  ]);
+  // The first tap lands mid-text: the cursor still goes to the end.
+  area.setSelectionRange(6, 6);
+  await act(async () => area.click());
+  expect([area.selectionStart, area.selectionEnd]).toEqual([
+    DEMO.length,
+    DEMO.length,
+  ]);
+  // After that, a tap puts the cursor where the person chose.
+  area.setSelectionRange(6, 6);
+  await act(async () => area.click());
+  expect(area.selectionStart).toBe(6);
+
+  await act(async () => button("Clear").click());
+  expectNoDraft();
+  expect(document.activeElement).toBe(document.querySelector("textarea"));
+  await closedWithX();
+  await opened();
+  expectNoDraft();
+});
+
+it("a draft comes back after the app frame mounts again, saying so", async () => {
+  captureScreen.mockResolvedValue(null);
+  await opened();
+  await act(async () => type(DEMO));
+  await closedWithX();
+  await remounted();
+  await opened();
+  expect(document.querySelector("textarea")?.value).toBe(DEMO);
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "Draft restored",
+  );
+});
+
+it("a sent report leaves no draft behind", async () => {
+  captureScreen.mockResolvedValue(null);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn<typeof fetch>().mockResolvedValue(
+      new Response(JSON.stringify({ bug_id: "b-2" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
+    ),
+  );
+  await opened();
+  await act(async () => type(DEMO));
+  await submit();
+  expect(document.querySelector("dialog")?.textContent).toContain(
+    "Sent. We'll tell you when it's fixed.",
+  );
+  await act(async () => button("Done").click());
+  await pause(600);
+  await opened();
+  expectNoDraft();
+  await closedWithX();
+  await remounted();
+  await opened();
+  expectNoDraft();
+});
 
 it("in the phone app, uses the phone's own picture of the screen, taken before the sheet opens", async () => {
   phone.app = true;
