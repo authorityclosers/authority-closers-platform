@@ -193,7 +193,9 @@ const config: NextConfig = {
             {
               // Content-hashed build files keep Next's immutable caching, so the
               // browser and Cloudflare serve them without asking the server
-              // again (AUT-1342). Pages, data and documents stay no-store.
+              // again (AUT-1342). Pages, data and documents stay no-store, and
+              // private: a page rendered on the server carries one person's
+              // data, so no edge or proxy may keep it (29 Oct 2026).
               source: "/:path((?!_next/static/).*)",
               headers: [
                 { key: "Referrer-Policy", value: "no-referrer" },
@@ -204,7 +206,7 @@ const config: NextConfig = {
                   // The bug reporter's voice note records here (owner, 23 Oct 2026).
                   value: "camera=(), microphone=(self), geolocation=()",
                 },
-                { key: "Cache-Control", value: "no-store" },
+                { key: "Cache-Control", value: "private, no-store" },
               ],
             },
           ];

@@ -5,6 +5,23 @@ afterEach(() => {
   vi.resetModules();
 });
 
+it("lets no cache keep a page: private, no-store on all but build files", async () => {
+  vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "0");
+  vi.resetModules();
+  const { default: config } = await import("./next.config");
+  const rules = (await config.headers?.()) ?? [];
+  const pages = rules.find(
+    (rule) => rule.source === "/:path((?!_next/static/).*)",
+  );
+  expect(pages?.headers).toContainEqual({
+    key: "Cache-Control",
+    value: "private, no-store",
+  });
+  expect(rules.every((rule) => !rule.source.startsWith("/_next/static"))).toBe(
+    true,
+  );
+});
+
 it("rewrites only the required canonical auth and profile endpoints", async () => {
   vi.stubEnv("AC_CONVERSATION_API_ORIGIN", "https://api.example.test");
   vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "0");

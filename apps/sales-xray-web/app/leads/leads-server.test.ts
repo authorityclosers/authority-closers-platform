@@ -5,6 +5,7 @@ import { serverLeads } from "./leads-server";
 import { firstPageFor, type ServerLeads } from "./leads-seed";
 
 vi.mock("../server-reads", () => ({
+  SERVER_READ_BUDGET_MS: 800,
   serverApiOrigin: vi.fn(() => "http://api.example.test"),
   serverReads: vi.fn(),
   SESSION_PATHS: ["/v1/me/workspaces", "/v1/me/sales-xray-workspaces"],
@@ -55,13 +56,24 @@ it("reads only the first page through the existing bounded private server reader
   expect(serverReads).toHaveBeenNthCalledWith(
     1,
     ["/v1/me/workspaces", "/v1/me/sales-xray-workspaces", "/v1/lead-desk"],
-    600,
+    800,
   );
-  expect(serverReads).toHaveBeenNthCalledWith(
-    2,
-    ["/v1/lead-desk/leads?scope=team&stage=open"],
-    600,
-  );
+  // The list gets what is left of the same 800 ms.
+  const left = vi.mocked(serverReads).mock.calls[1][1] as number;
+  expect(left).toBeGreaterThan(0);
+  expect(left).toBeLessThanOrEqual(800);
+});
+it("leaves the list to the browser once the budget is spent", async () => {
+  const now = vi.spyOn(Date, "now").mockReturnValue(1000);
+  vi.mocked(serverReads)
+    .mockReset()
+    .mockImplementationOnce(async () => {
+      now.mockReturnValue(1800);
+      return reads();
+    });
+  expect(await load()).toMatchObject({ identity, firstPage: null });
+  expect(serverReads).toHaveBeenCalledOnce();
+  now.mockRestore();
 });
 it("falls back before reading query parameters in a static build", async () => {
   vi.mocked(serverApiOrigin).mockReturnValue(null);

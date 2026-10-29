@@ -1,5 +1,10 @@
 import { withDisplayNames } from "../display-name";
-import { serverApiOrigin, serverReads, SESSION_PATHS } from "../server-reads";
+import {
+  SERVER_READ_BUDGET_MS,
+  serverApiOrigin,
+  serverReads,
+  SESSION_PATHS,
+} from "../server-reads";
 import type { Desk, LeadPage } from "./leads-client";
 import type { ServerLeads } from "./leads-seed";
 
@@ -26,7 +31,12 @@ export async function serverLeads(
     Object.keys(params).some((key) => !["tab", "stage", "theme"].includes(key))
   )
     return null;
-  const reads = await serverReads([...SESSION_PATHS, DESK], 600);
+  // Both reads share one budget: the page never waits longer for them.
+  const deadline = Date.now() + SERVER_READ_BUDGET_MS;
+  const reads = await serverReads(
+    [...SESSION_PATHS, DESK],
+    SERVER_READ_BUDGET_MS,
+  );
   if (
     SESSION_PATHS.some((path) => reads?.[path]?.status !== 200) ||
     reads?.[DESK]?.status !== 200
@@ -54,7 +64,9 @@ export async function serverLeads(
   ]);
   const scope = desk.me.can_manage ? "team" : "mine";
   const path = `/v1/lead-desk/leads?scope=${scope}&stage=open`;
-  const list = await serverReads([path], 600);
+  const left = deadline - Date.now();
+  // None left: the desk comes with the page and the browser reads the list.
+  const list = left > 0 ? await serverReads([path], left) : null;
   const answer = list?.[path];
   const page = answer?.body as LeadPage | null;
   return {

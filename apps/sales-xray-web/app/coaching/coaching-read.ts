@@ -292,6 +292,8 @@ export async function readCoaching(
   callId: string | null,
   init: RequestInit = {},
   origin = "",
+  // The server's own read passes serverFetch (coaching-server.ts).
+  fetcher: (url: string, init: RequestInit) => Promise<Response> = fetch,
 ): Promise<CoachingResult> {
   const person = sharedPerson(callId);
   if (callId?.startsWith("person:") && person !== callId.slice(7))
@@ -312,7 +314,7 @@ export async function readCoaching(
   try {
     const readHeaders = new Headers(init.headers);
     readHeaders.set("Accept", "application/json");
-    const response = await fetch(`${origin}${coachingPath(callId)}`, {
+    const response = await fetcher(`${origin}${coachingPath(callId)}`, {
       ...init,
       cache: "no-store",
       credentials: "same-origin",

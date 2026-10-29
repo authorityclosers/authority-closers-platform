@@ -5,7 +5,11 @@ ARG NODE_IMAGE=node@sha256:a9f5f7c91a432850b2a8a7797adf5eadb6c733ceed61167806cee
 FROM ${NODE_IMAGE} AS build
 
 ARG AC_RELEASE_ID
+# AC_SALES_XRAY_SERVER_READS: pages render for each request and read their
+# data on the server (server-reads.ts). The API origin is never baked in: each
+# environment's profile gives it at run time (compose.yaml).
 ENV AC_RELEASE_ID=${AC_RELEASE_ID} \
+    AC_SALES_XRAY_SERVER_READS=1 \
     NEXT_TELEMETRY_DISABLED=1 \
     PNPM_HOME=/pnpm
 ENV PATH="${PNPM_HOME}:${PATH}"
