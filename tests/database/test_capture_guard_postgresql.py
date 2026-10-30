@@ -73,8 +73,10 @@ def test_capture_guard_scope_missing_attachment_and_privacy(postgres_harness: An
                 calls[str(old)]["state"] == "missing"
             )  # A claimed attachment isn't a server receipt.
             assert calls[str(waiting)]["state"] == "waiting"
-            assert result.json()["rates"][0]["calls"] == 2
-            assert result.json()["rates"][0]["received"] == 0
+            # Rates are India days: near midnight the two calls fall on two of them.
+            rates = result.json()["rates"]
+            assert sum(rate["calls"] for rate in rates) == 2
+            assert sum(rate["received"] for rate in rates) == 0
             hidden = await here.client.get(f"{BASE}/capture-guard?event_id={other}")
             assert hidden.json()["calls"] == []
             assert (await here.client.get(f"{BASE}/capture-guard?days=32")).status_code == 422
