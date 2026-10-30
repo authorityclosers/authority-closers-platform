@@ -6,6 +6,7 @@ renames the first stage's Cold Leads name and removes a stage that holds a lead,
 where the lead goes: the lead moves with one history line, and the stage stays in history.
 """
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -145,6 +146,76 @@ def test_the_stage_editor_saves_its_settings_and_moves_a_removed_stages_leads(
                     "template",
                     "Meeting Done",
                     "Interested",
+                )
+        finally:
+            await setup.engine.dispose()
+
+    run(exercise())
+
+
+def test_open_leads_records_its_reason_on_the_move(postgres_harness: Any, tmp_path: Path) -> None:
+    async def exercise() -> None:
+        setup = await _setup(postgres_harness, tmp_path)
+        try:
+            await _organisation(setup)
+            async with httpx.AsyncClient(
+                transport=httpx.ASGITransport(app=setup.app), base_url=ORIGIN
+            ) as client:
+                client.cookies.set(setup.settings.session_cookie_name, setup.token)
+                used = await client.post(
+                    f"{BASE}/journey/template",
+                    json={"expectedVersion": 0, "template": "recommended"},
+                    headers=WRITE,
+                )
+                assert used.status_code == 200, used.text
+                added = await client.post(
+                    f"{BASE}/leads",
+                    json={
+                        "command_id": str(uuid4()),
+                        "name": "Fictional Caller",
+                        "phone": "98765 43211",
+                    },
+                    headers=WRITE,
+                )
+                assert added.status_code == 201, added.text
+                lead = added.json()["lead"]
+                later = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+                move = {
+                    "expectedRevision": lead["revision"],
+                    "step": "open_leads",
+                    "nextActionAt": later,
+                }
+                # Only a reason from Open Leads' own list.
+                refused = await client.post(
+                    f"{BASE}/leads/{lead['lead_id']}/stage",
+                    json={**move, "commandId": str(uuid4()), "reason": "half_discussion"},
+                    headers=WRITE,
+                )
+                assert refused.status_code == 422, refused.text
+                moved = await client.post(
+                    f"{BASE}/leads/{lead['lead_id']}/stage",
+                    json={**move, "commandId": str(uuid4()), "reason": "call_later"},
+                    headers=WRITE,
+                )
+                assert moved.status_code == 200, moved.text
+
+            async with setup.sessions() as db:
+                stored = await db.scalar(select(Lead).where(Lead.id == UUID(lead["lead_id"])))
+                assert stored is not None
+                assert (stored.stage, stored.step, stored.outcome_reason) == (
+                    "follow_up",
+                    "open_leads",
+                    None,
+                )
+                event = await db.scalar(
+                    select(LeadEvent).where(
+                        LeadEvent.lead_id == stored.id, LeadEvent.kind == "stage"
+                    )
+                )
+                assert event is not None
+                assert (event.data["stage_reason"], event.data["stage_reason_label"]) == (
+                    "call_later",
+                    "Call Later",
                 )
         finally:
             await setup.engine.dispose()

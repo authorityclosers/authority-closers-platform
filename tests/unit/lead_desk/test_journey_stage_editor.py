@@ -20,7 +20,7 @@ from ac_platform.lead_desk.journey.model import (
 )
 from ac_platform.lead_desk.journey.templates import template
 from ac_platform.lead_desk.journey.transitions import needs_of, reasons_of
-from ac_platform.lead_desk.vocabulary import JUNK_REASONS, LOST_REASONS
+from ac_platform.lead_desk.vocabulary import JUNK_REASONS, LOST_REASONS, OPEN_REASONS
 
 
 def recommended(version: int = 1) -> Journey:
@@ -190,3 +190,13 @@ def test_the_ten_colour_dots_are_kept() -> None:
     )
     by = {stage.key: stage for stage in stages}
     assert (by["meeting_done"].color, by["junk"].color) == ("indigo", "grey")
+
+
+def test_open_leads_offers_an_optional_reason_and_nothing_else_does() -> None:
+    by = recommended().by_key
+    assert reasons_of(by["open_leads"]) == OPEN_REASONS
+    needs, asks = needs_of(by["open_leads"])
+    assert "reason" not in needs and "reason" in asks
+    # Other open stages offer none; Lost and Junk keep theirs.
+    assert reasons_of(by["interested"]) == () and "reason" not in needs_of(by["interested"])[1]
+    assert reasons_of(by["lost"]) == LOST_REASONS

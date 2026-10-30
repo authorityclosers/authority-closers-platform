@@ -154,6 +154,12 @@ MESSAGE_TEMPLATES: Final[tuple[tuple[str, str, str], ...]] = (
 # note. The first five lost reasons are the sales team's own list; price, not now and
 # not a fit let a call's objection name a reason.
 OTHER_REASON: Final[str] = "other"
+# Why an open lead is still open (Dipak's handoff, 31 Oct 2026: Open Leads with a reason
+# such as Discussion Incomplete or Call Later; there is no Half Discussion stage).
+OPEN_REASONS: Final[tuple[tuple[str, str], ...]] = (
+    ("discussion_incomplete", "Discussion Incomplete"),
+    ("call_later", "Call Later"),
+)
 LOST_REASONS: Final[tuple[tuple[str, str], ...]] = (
     ("not_interested", "Not interested"),
     ("chose_other", "Chose another provider"),

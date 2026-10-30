@@ -2365,6 +2365,11 @@ class LeadDesk:
             "to_label": target.label,
             "outcome_reason": lead.outcome_reason,
             "outcome_reason_label": transitions.reason_label(move, lead.outcome_reason),
+            # An open stage's own reason (Open Leads: Discussion Incomplete or Call Later).
+            "stage_reason": None if target.kind in ("lost", "junk") else outcome_reason,
+            "stage_reason_label": None
+            if target.kind in ("lost", "junk")
+            else transitions.reason_label(move, outcome_reason),
             "reason_note": (reason_note or "").strip() or None,
             "source": source,
             "via": via,

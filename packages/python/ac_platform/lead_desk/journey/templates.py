@@ -212,6 +212,7 @@ TEMPLATES: Final[tuple[Template, ...]] = (
                 "contacted",
                 ("interested", "meeting_scheduled", "lost"),
                 ("next_action",),
+                reasons=vocabulary.OPEN_REASONS,
             ),
             TemplateStage(
                 "not_connected",
