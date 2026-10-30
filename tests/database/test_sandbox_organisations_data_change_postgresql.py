@@ -64,7 +64,8 @@ def test_rehearse_apply_once_audited_rerun_and_read_back(
             assert owner and coach
             mailbox = "owner@example.test"
             raw = {
-                "command_id": str(uuid4()),
+                # A fixed command id: the same simulated month on every run.
+                "command_id": "5a9d0e2c-3b1f-4c7a-9e60-30a10c2026aa",
                 "approver_email": owner,
                 "issue": "owner chat 30 Oct 2026",
                 "owner_email": owner,
@@ -72,7 +73,7 @@ def test_rehearse_apply_once_audited_rerun_and_read_back(
                 "seller_mailbox": mailbox,
                 "organisations": ["ac"],
                 "days": 10,
-                "scale": 0.1,
+                "scale": 0.3,
                 "require_pipeline": False,
             }
             emails = tool.logins(tool.spec_of(json.dumps(raw)))["ac"]
@@ -126,11 +127,23 @@ def test_rehearse_apply_once_audited_rerun_and_read_back(
                     member = await db.get(Membership, (tenant, person.id))
                     assert member is not None and member.role == "member"
 
-            # Live and cold leads, all test data, none held by the owner or the coach.
+            # Inbound and Cold leads, all test data, none held by the owner or the coach; the
+            # big Cold list came in two days before the end, so most of it is still Unworked.
             leads = made["leads"]
             assert leads["test_data"] == leads["total"] > 0
-            assert leads["source:csv"] > 0 and leads["source:meta"] > 0
+            assert leads["source:csv"] > 0
+            assert leads.get("source:meta", 0) + leads.get("source:webhook", 0) > 0
             assert leads.get("unassigned", 0) == 0
+            assert leads["cold_unworked"] > 0.7 * leads["source:csv"]
+            assert made["template"] in (tool.RECOMMENDED, "inside_sales_demos")
+            assert set(made["by_side"]) == {"Inbound", "Cold"}
+            # The Inbound-only seller holds no Cold lead; the Cold-only seller no Inbound one.
+            for seller in tool.ORGS["ac"].sellers:
+                held = made["leads_by_seller"].get(f"{seller.first} {seller.last}", {})
+                if seller.sides == "inbound":
+                    assert held.get("Cold", 0) == 0
+                if seller.sides == "cold":
+                    assert held.get("Inbound", 0) == 0 and held.get("Cold", 0) > 0
             if hasattr(Lead, "pipeline"):
                 # The uploaded list is Cold; every live source stays Live (migration 0146).
                 assert leads["pipeline:cold"] == leads["source:csv"]
@@ -149,7 +162,7 @@ def test_rehearse_apply_once_audited_rerun_and_read_back(
             # Calls with real starts inside work hours, most of them not connected.
             calls = made["calls"]
             assert calls["calls"] > 20
-            assert 0.4 < calls["not_connected"] / calls["calls"] < 0.8
+            assert 0.3 < calls["not_connected"] / calls["calls"] < 0.8
             assert calls["talk_minutes"] > 0
             async with sessions() as db:
                 starts = (

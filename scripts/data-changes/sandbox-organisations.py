@@ -9,20 +9,25 @@ For each organisation, in one transaction of its own, through the app's own code
      reaches it), verified, each with the scrypt verifier of a password given in the input
      (the password itself lives only in Infisical, never here);
   2. the organisation (``OrganisationService.create``), the owner as its Owner, the sales
-     coach as an Admin and the sellers as Members; the sales team's stages
-     (``journeys.start_organisation``); work hours Monday to Saturday, 10:30 to 19:00 with
-     lunch set as a break; flagged as a sandbox (``conversation_sandbox_organisations``):
-     the Call button simulates and dials nobody, and the nightly lake export and product
-     telemetry leave the organisation out (``telemetry.sales_xray_consent.read_standing``);
-  3. 30 days of work up to now, simulated minute by minute: live leads from Meta, the
-     website, Google, WhatsApp and Justdial (typed in by a seller), and one cold list
-     uploaded by the coach (``pipeline`` "cold", migration 0146), each given out by the
-     team's own rules; calls as the seller's phone logs them, with their real start and
-     seconds (about 60% not connected), each followed by the after-call answer; follow-ups
-     inside Interested with call-back tasks and reminders, some left overdue; meetings
-     booked, held, missed or cancelled; wins and losses with their reasons. Sellers work
-     10:30 to 19:00 with lunch; some have one or two unexplained gaps of one to two hours,
-     one joins the team on day 10, and everyone takes the odd day off;
+     coach as an Admin and the sellers as Members; the recommended nine stages (owner and
+     Dipak, final, 30 Oct 2026: New Lead / Unworked, Not Connected, Open Leads, Interested,
+     Meeting Scheduled, Meeting Done, Won, Closed / Lost, Junk Lead), or the sales team's
+     stages where that template is not in the app yet; work hours Monday to Saturday, 10:30
+     to 19:00 with lunch set as a break; flagged as a sandbox
+     (``conversation_sandbox_organisations``): the Call button simulates and dials nobody,
+     and the nightly lake export and product telemetry leave the organisation out
+     (``telemetry.sales_xray_consent.read_standing``);
+  3. 30 days of work up to now, simulated minute by minute. Inbound Leads: 3 to 10
+     enquiries a day from Meta, Google, the website and YouTube, given out by the team's own
+     rules. Cold Leads (``pipeline`` "cold", migration 0146): a past list of about 100
+     uploaded early and worked through the month, and a list of about 900 uploaded two days
+     before the end, nearly all still Unworked. Calls as the seller's phone logs them, with
+     their real start and seconds (about 60% not connected), each followed by the
+     after-call answer; Open Leads and Interested with follow-ups, call-back tasks and
+     reminders, some left overdue; meetings booked, held, missed or cancelled; wins, losses
+     and junk with their reasons. A few scripted leads on each side make sure every stage has
+     a lead. Sellers work 10:30 to 19:00 with lunch; some have one or two unexplained gaps of
+     one to two hours, one joins the team on day 10, and everyone takes the odd day off;
   4. one audit event naming the approver and the issue.
 Every lead is test data. Names are made up, every phone number is +91 00000 xxxxx (no such
 Indian number exists), every lead email is at example.com, and nothing is sent to anyone.
@@ -40,7 +45,8 @@ the input goes inline):
 input: {"command_id", "approver_email", "issue", "owner_email", "admin_email",
         "seller_mailbox", "organisations": ["ac", "cyber"], "password_hashes": {email: verifier},
         "end"?: "YYYY-MM-DD" (the last day, India time; default today), "days"?: 30,
-        "scale"?: 1.0, "test_data"?: true, "require_pipeline"?: true}
+        "scale"?: 1.0, "test_data"?: true, "require_pipeline"?: true,
+        "name_suffix"?: words after each organisation's name (a second build beside a first)}
 Prints counts, the organisations' names and the sellers' sign-in emails; never a lead's
 details, never a password or a verifier.
 """
@@ -77,6 +83,7 @@ from ac_platform.lead_desk import tasks as task_book
 from ac_platform.lead_desk.contracts import (
     Disposition,
     MeetingClosed,
+    MeetingCommand,
     MeetingDone,
     MeetingInput,
     PhoneLog,
@@ -88,6 +95,7 @@ from ac_platform.lead_desk.contracts import (
     WorkHoursCommand,
 )
 from ac_platform.lead_desk.journey import model as journeys
+from ac_platform.lead_desk.journey.templates import TEMPLATES
 from ac_platform.lead_desk.models import Lead, LeadEvent, LeadMeeting, LeadRep, LeadTask
 from ac_platform.lead_desk.store import LeadDesk, Viewer
 from ac_platform.organisations.service import OrganisationService
@@ -113,6 +121,44 @@ MEANINGS: Final = {
     "done": "appointment_done",
     "won": "won",
     "lost": "lost",
+}
+# In the nine stages only; without them an open talk is Interested and junk is Lost.
+OPTIONAL_MEANINGS: Final = {"open": "contacted", "junk": "disqualified"}
+RECOMMENDED: Final = "recommended"
+# Junk only for a contact confirmed invalid, fake or unusable; never for unanswered calls
+# (Dipak's handoff, 31 Oct 2026, section 10B).
+JUNK_REASONS: Final = (
+    ("invalid_number", 40),
+    ("fake", 25),
+    ("unusable_contact", 20),
+    ("someone_else", 15),
+)
+# Open Leads always says why it is open (no Half Discussion stage).
+OPEN_REASONS: Final = (("Call later", 55), ("Discussion incomplete", 45))
+# The handoff's stage order: New Lead / Unworked, Open Leads, Not Connected, Interested, the
+# meetings, Won, Closed / Lost, Junk Lead.
+ORDER: Final = (
+    "lead",
+    "contacted",
+    "unreachable",
+    "qualified",
+    "appointment_booked",
+    "appointment_done",
+    "won",
+    "lost",
+    "disqualified",
+)
+# Scripted leads, one per story on each side, so every stage holds a lead at the end. Each
+# call takes the next step; the last step repeats. "late": a meeting booked in the last five
+# days for a week later (so it is still ahead), a follow-up before that.
+STORIES: Final[dict[str, tuple[str, ...]]] = {
+    "won": ("meet", "won"),
+    "done": ("meet", "again"),
+    "meet_late": ("int", "late"),
+    "int": ("int", "again"),
+    "open": ("open", "again"),
+    "lost": ("lost",),
+    "junk": ("junk",),
 }
 NC_REASONS: Final = (
     ("did_not_pick", 50),
@@ -281,13 +327,26 @@ class Seller(NamedTuple):
     talk: float  # how long their conversations run (1.0 usual)
     joins: int  # the day they start (0: from the first day)
     connect: float  # how often their calls connect, relative
+    # Which leads they work: "both", "inbound" (no cold list) or "cold" (no new enquiries),
+    # so the Inbound | Cold selector shows for some sellers and hides for others.
+    sides: str = "both"
 
 
 class Source(NamedTuple):
     source: str  # the lead's source as the app stores it
     label: str
     weight: int
-    typed: bool = False  # typed in by a seller (Justdial)
+    typed: bool = False  # typed in by a seller (a walk-in or a call)
+
+
+class ColdList(NamedTuple):
+    """A bulk upload to Cold Leads: its file, its rows, the day it came in (from the first
+    day; negative: from the last) and what the people on it are."""
+
+    label: str
+    size: int
+    day: int
+    reason: str
 
 
 class OrgSpec(NamedTuple):
@@ -298,11 +357,8 @@ class OrgSpec(NamedTuple):
     interests: tuple[str, ...]
     details: tuple[tuple[str, tuple[str, ...]], ...]  # extra form answers
     cities: tuple[str, ...]
-    daily: int  # live enquiries on a usual weekday
-    cold_label: str
-    cold_size: int
-    cold_day: int
-    cold_reason: str
+    daily: tuple[int, int]  # Inbound enquiries a day, at least and at most
+    cold: tuple[ColdList, ...]
     deals: tuple[int, ...]
     meeting: tuple[str, str, str | None, str | None]  # mode, agenda, link, place
     phones: int  # the first fictional number
@@ -313,20 +369,35 @@ ORGS: Final[dict[str, OrgSpec]] = {
         key="ac",
         name="AC Sales Sandbox",
         sellers=(
-            Seller("Priya", "Deshmukh", "Pune", "ac.priya", 0, 6.0, 0.04, 0.02, 6, 1.0, 0, 1.15),
-            Seller("Rohan", "Patil", "Pune", "ac.rohan", 5, 7.0, 0.06, 0.05, 5, 0.9, 0, 1.0),
-            Seller("Sneha", "Iyer", "Mumbai", "ac.sneha", 10, 9.0, 0.08, 0.06, 3, 1.45, 0, 1.05),
-            Seller("Aditya", "Joshi", "Pune", "ac.aditya", 25, 8.0, 0.4, 0.25, 2, 0.85, 0, 0.9),
-            Seller("Farah", "Shaikh", "Mumbai", "ac.farah", 10, 8.0, 0.18, 0.12, 4, 1.0, 9, 0.85),
+            Seller("Priya", "Deshmukh", "Pune", "ac.priya", 0, 6.0, 0.04, 0.02, 2, 1.0, 0, 1.15),
+            Seller("Rohan", "Patil", "Pune", "ac.rohan", 5, 7.0, 0.06, 0.05, 2, 0.9, 0, 1.0),
+            Seller(
+                "Sneha",
+                "Iyer",
+                "Mumbai",
+                "ac.sneha",
+                10,
+                9.0,
+                0.08,
+                0.06,
+                0,
+                1.45,
+                0,
+                1.05,
+                "inbound",
+            ),
+            Seller(
+                "Aditya", "Joshi", "Pune", "ac.aditya", 25, 8.0, 0.4, 0.25, 10, 0.85, 0, 0.9, "cold"
+            ),
+            Seller("Farah", "Shaikh", "Mumbai", "ac.farah", 10, 8.0, 0.18, 0.12, 2, 1.0, 9, 0.85),
         ),
         sources=(
-            Source("meta", "Meta: Sales mastery webinar form", 26),
-            Source("meta", "Meta: Closer career form", 19),
-            Source("webhook", "Website: /programme", 10),
+            Source("meta", "Meta Ads: Sales mastery webinar form", 22),
+            Source("meta", "Meta Ads: Closer career form", 18),
+            Source("webhook", "Google Ads: Sales coaching lead form", 22),
+            Source("webhook", "Website: /programme", 12),
             Source("webhook", "Website: /free-masterclass", 8),
-            Source("webhook", "Google Ads: Sales coaching lead form", 15),
-            Source("webhook", "WhatsApp: click-to-chat ad", 12),
-            Source("manual", "Justdial", 10, typed=True),
+            Source("webhook", "YouTube: Closing skills video enquiry", 18),
         ),
         interests=(
             "12-week sales coaching programme",
@@ -363,11 +434,13 @@ ORGS: Final[dict[str, OrgSpec]] = {
             "Delhi",
             "Ahmedabad",
         ),
-        daily=24,
-        cold_label="File: Webinar registrations 2025.xlsx",
-        cold_size=400,
-        cold_day=8,
-        cold_reason="Sales webinar, 2025",
+        daily=(3, 10),
+        cold=(
+            ColdList("File: Past enquiries 2025.xlsx", 100, 2, "Enquired in 2025, never joined"),
+            ColdList(
+                "File: Business owners directory, Pune.xlsx", 900, -2, "Business owners, Pune"
+            ),
+        ),
         deals=(45000, 60000, 60000, 75000, 95000),
         meeting=(
             "google_meet",
@@ -381,20 +454,35 @@ ORGS: Final[dict[str, OrgSpec]] = {
         key="cyber",
         name="Fortline Cyber Institute (Sandbox)",
         sellers=(
-            Seller("Karan", "Mehta", "Mumbai", "cy.karan", 0, 5.5, 0.05, 0.03, 6, 1.0, 0, 1.1),
-            Seller("Neha", "Gupta", "Pune", "cy.neha", 5, 6.5, 0.06, 0.04, 6, 1.2, 0, 1.05),
-            Seller("Imran", "Qureshi", "Mumbai", "cy.imran", 15, 8.0, 0.35, 0.2, 3, 0.9, 0, 0.95),
-            Seller("Pooja", "Nair", "Pune", "cy.pooja", 5, 7.0, 0.1, 0.08, 5, 1.1, 0, 1.0),
-            Seller("Vikas", "Yadav", "Pune", "cy.vikas", 20, 8.5, 0.2, 0.15, 4, 0.85, 9, 0.85),
+            Seller("Karan", "Mehta", "Mumbai", "cy.karan", 0, 5.5, 0.05, 0.03, 2, 1.0, 0, 1.1),
+            Seller(
+                "Neha", "Gupta", "Pune", "cy.neha", 5, 6.5, 0.06, 0.04, 0, 1.2, 0, 1.05, "inbound"
+            ),
+            Seller(
+                "Imran",
+                "Qureshi",
+                "Mumbai",
+                "cy.imran",
+                15,
+                8.0,
+                0.35,
+                0.2,
+                10,
+                0.9,
+                0,
+                0.95,
+                "cold",
+            ),
+            Seller("Pooja", "Nair", "Pune", "cy.pooja", 5, 7.0, 0.1, 0.08, 2, 1.1, 0, 1.0),
+            Seller("Vikas", "Yadav", "Pune", "cy.vikas", 20, 8.5, 0.2, 0.15, 1, 0.85, 9, 0.85),
         ),
         sources=(
-            Source("meta", "Meta: Ethical hacking course form", 24),
-            Source("meta", "Meta: Free demo class form", 20),
-            Source("webhook", "Website: /courses/ethical-hacking", 9),
-            Source("webhook", "Website: /courses/soc-analyst", 7),
-            Source("webhook", "Google Ads: Cyber security course form", 16),
-            Source("webhook", "WhatsApp: click-to-chat ad", 14),
-            Source("manual", "Justdial", 10, typed=True),
+            Source("meta", "Meta Ads: Ethical hacking course form", 22),
+            Source("meta", "Meta Ads: Free demo class form", 18),
+            Source("webhook", "Google Ads: Cyber security course form", 22),
+            Source("webhook", "Website: /courses/ethical-hacking", 12),
+            Source("webhook", "Website: /courses/soc-analyst", 8),
+            Source("webhook", "YouTube: Ethical hacking demo video enquiry", 18),
         ),
         interests=(
             "Certified ethical hacker (CEH) prep",
@@ -421,11 +509,15 @@ ORGS: Final[dict[str, OrgSpec]] = {
             "Indore",
             "Surat",
         ),
-        daily=30,
-        cold_label="File: College seminar list Sept.xlsx",
-        cold_size=500,
-        cold_day=11,
-        cold_reason="College seminar, September",
+        daily=(3, 10),
+        cold=(
+            ColdList(
+                "File: Past demo-class sign-ups.xlsx", 100, 2, "Demo class 2025, not enrolled"
+            ),
+            ColdList(
+                "File: Engineering colleges final-year list.xlsx", 900, -2, "Final-year students"
+            ),
+        ),
         deals=(28000, 42000, 42000, 65000, 85000),
         meeting=(
             "in_person",
@@ -482,8 +574,13 @@ def spec_of(raw: str) -> dict[str, Any]:
     if any(not VERIFIER.match(value) for value in hashes.values()):
         raise _refuse("password_hash_not_a_verifier")
     end = date.fromisoformat(str(body["end"])) if body.get("end") else None
+    # Words after each name, so a second build sits beside an earlier one (dev).
+    suffix = " ".join(str(body.get("name_suffix") or "").split())
+    if len(suffix) > 24:
+        raise _refuse("name_suffix_too_long")
     return {
         **body,
+        "name_suffix": suffix,
         "organisations": organisations,
         "days": days,
         "scale": scale,
@@ -594,9 +691,9 @@ def day_shape(rng: random.Random, seller: Seller, day: date, index: int) -> Shap
 
 
 def arrivals(rng: random.Random, spec: OrgSpec, day: date, scale: float) -> list[datetime]:
-    """When the day's live enquiries come in (any hour; typed ones are picked later)."""
-    factor = {6: 0.6, 5: 0.85}.get(day.weekday(), 1.0)
-    count = max(0, round(spec.daily * factor * rng.uniform(0.75, 1.25) * scale))
+    """When the day's Inbound enquiries come in: a steady 3 to 10 a day, at any hour (ads run
+    every day), most in the evening."""
+    count = max(0, round(rng.randint(*spec.daily) * scale))
     times = []
     for _ in range(count):
         hour = rng.choices(range(24), HOURS)[0]
@@ -612,8 +709,10 @@ def talk_seconds(rng: random.Random, outcome: str, talk: float) -> int:
         "lost": (35, 160),
         "junk": (20, 90),
         "int": (150, 660),
+        "open": (120, 480),
         "again": (90, 420),
         "meet": (300, 900),
+        "meet_far": (300, 900),
         "won": (480, 1500),
         "later": (25, 80),
     }[outcome]
@@ -661,9 +760,12 @@ class Held:
         "skip_day",
         "parked",
         "meeting_end",
+        "script",
     )
 
-    def __init__(self, lead: Lead, owner: int, cold: bool) -> None:
+    def __init__(
+        self, lead: Lead, owner: int, cold: bool, script: tuple[str, ...] | None = None
+    ) -> None:
         self.lead = lead
         self.owner = owner
         self.cold = cold
@@ -674,6 +776,14 @@ class Held:
         self.skip_day: date | None = None
         self.parked = False
         self.meeting_end: datetime | None = None
+        # A scripted lead's remaining steps (STORIES); None: chance decides.
+        self.script = list(script) if script else None
+
+    def next_step(self) -> str | None:
+        """A scripted lead's next step: the last one repeats."""
+        if not self.script:
+            return None
+        return self.script.pop(0) if len(self.script) > 1 else self.script[0]
 
 
 class Run:
@@ -723,6 +833,16 @@ class Run:
         self.phone_count = 0
         self.queue: list[tuple[datetime, int, str, Any]] = []
         self.order = 0
+        # The stories still to hand out on each side (Inbound: the first enquiries; Cold: the
+        # first rows of the first list).
+        self.stories: dict[bool, list[str]] = {False: list(STORIES), True: list(STORIES)}
+
+    def story(self, *, cold: bool) -> tuple[str, ...] | None:
+        left = self.stories[cold]
+        return STORIES[left.pop(0)] if left else None
+
+    def cold_day(self, item: ColdList) -> int:
+        return item.day if item.day >= 0 else self.days + item.day
 
     # -- helpers ------------------------------------------------------------------------
 
@@ -758,7 +878,7 @@ class Run:
         self.phone_count += 1
         return fictional_phone(self.spec, self.phone_count)
 
-    def record(self, *, cold: bool) -> dict[str, Any]:
+    def record(self, *, cold: ColdList | None) -> dict[str, Any]:
         name = self.name()
         rng = self.names
         record: dict[str, Any] = {
@@ -768,7 +888,7 @@ class Run:
             "language": rng.choice(("Marathi", "Hindi", "English", "Hindi", "English")),
         }
         if cold:
-            record["registered_for"] = self.spec.cold_reason
+            record["list"] = cold.reason
             if rng.random() < 0.5:
                 record["interest"] = rng.choice(self.spec.interests)
         else:
@@ -791,8 +911,10 @@ class Run:
             )
         return self.shapes[found]
 
-    def keep(self, lead: Lead, owner: int, *, cold: bool) -> Held:
-        held = Held(lead, owner, cold)
+    def keep(
+        self, lead: Lead, owner: int, *, cold: bool, script: tuple[str, ...] | None = None
+    ) -> Held:
+        held = Held(lead, owner, cold, script)
         self.held.append(held)
         self.by_seller[owner].append(held)
         self.by_id[lead.id] = held
@@ -829,11 +951,13 @@ class Run:
                 who.person_id, RepRules(expected_revision=0, available=False, max_open=None)
             )
         for index, who in enumerate(self.sellers):
+            seller = self.spec.sellers[index]
             await desk.save_rep(
                 who.person_id,
                 RepRules(
                     expected_revision=0,
-                    available=self.spec.sellers[index].joins == 0,
+                    # A Cold-only seller takes no new enquiries.
+                    available=seller.joins == 0 and seller.sides != "cold",
                     max_open=None,
                 ),
             )
@@ -854,14 +978,55 @@ class Run:
             elif kind == "arrive":
                 await self.arrive(moment, *payload)
             elif kind == "cold":
-                await self.upload(moment)
+                await self.upload(moment, payload)
             elif kind == "join":
                 await self.join(moment, payload)
             elif kind == "seller":
                 await self.turn(moment, payload)
             elif kind == "meeting":
                 await self.meeting(moment, payload)
+        await self.cover()
         await self.db.flush()
+
+    async def cover(self) -> None:
+        """Each side ends with a meeting still to come: where none is booked, the seller of an
+        Interested or Open lead books one at the end of the day, as the Meeting button does."""
+        for cold in (False, True):
+            if any(h.cold == cold and h.phase == "meet" for h in self.held):
+                continue
+            chosen = next(
+                (h for h in self.held if h.cold == cold and h.phase in ("int", "open")), None
+            )
+            if chosen is None:
+                continue
+            # The last working evening up to the end (yesterday's, before today's ends).
+            day = self.until.astimezone(IST).date()
+            moment = at(day, time(18, 30))
+            if moment > self.until - timedelta(minutes=10):
+                moment = at(day - timedelta(days=1), time(18, 30))
+            moment = max(moment, chosen.lead.updated_at)
+            mode, agenda, link, place = self.spec.meeting
+            starts = next_slot(self.rng, moment, days=(2, 4))
+            lead = chosen.lead
+            await self.desk(
+                self.sellers[chosen.owner], moment
+            ).schedule_meeting(
+                lead.id,
+                MeetingCommand(
+                    command_id=self.key("cover-meeting", lead.id),
+                    expected_revision=lead.revision,
+                    meeting=MeetingInput(
+                        starts_at=starts,
+                        duration_minutes=45,
+                        mode=mode,  # type: ignore[arg-type]
+                        link=f"{link}/{lead.id.hex[:10]}" if link else None,
+                        location=place,
+                        agenda=agenda,
+                    ),
+                ),
+            )
+            chosen.phase = "meet"
+            self.counter["meetings_booked"] += 1
 
     def begin_day(self, offset: int) -> None:
         day = self.first + timedelta(days=offset)
@@ -881,8 +1046,9 @@ class Run:
                 self.push(moment, "arrive", (typed[0], rng.choice(working), False))
             else:
                 self.push(moment, "arrive", (source, None, rng.random() < 0.03))
-        if offset == self.spec.cold_day:
-            self.push(at(day, time(11, 20)), "cold")
+        for which, item in enumerate(self.spec.cold):
+            if offset == self.cold_day(item):
+                self.push(at(day, time(11, 20)), "cold", which)
         for index, seller in enumerate(self.spec.sellers):
             if seller.joins and offset == seller.joins:
                 self.push(at(day, time(10, 5)), "join", index)
@@ -902,7 +1068,7 @@ class Run:
                 "interest": earlier.lead.interest,
             }
         else:
-            record = self.record(cold=False)
+            record = self.record(cold=None)
         actor = self.sellers[typist] if typist is not None else self.people["owner"]
         desk = self.desk(actor, moment)
         self.counter["arrivals"] += 1
@@ -925,33 +1091,39 @@ class Run:
         if owner is None:
             self.counter["live_unassigned"] += 1
             return
-        self.keep(lead, owner, cold=False)
+        self.keep(lead, owner, cold=False, script=self.story(cold=False))
 
-    async def upload(self, moment: datetime) -> None:
-        """The coach uploads the old list: cold, given out evenly to the sellers in."""
+    async def upload(self, moment: datetime, which: int) -> None:
+        """The coach uploads a list to Cold Leads, given out evenly to the sellers in."""
+        item = self.spec.cold[which]
         coach = self.people["admin"]
         desk = self.desk(coach, moment)
-        team = [i for i, s in enumerate(self.spec.sellers) if s.joins <= self.spec.cold_day]
-        size = max(1, round(self.spec.cold_size * self.scale))
+        # Everyone in by then works the list, but an Inbound-only seller.
+        team = [
+            i
+            for i, s in enumerate(self.spec.sellers)
+            if s.joins <= self.cold_day(item) and s.sides != "inbound"
+        ]
+        size = max(1, round(item.size * self.scale))
         for row in range(size):
-            record = self.record(cold=True)
+            record = self.record(cold=item)
             owner = team[row % len(team)]
             lead, outcome = await desk.ingest(
                 record,
                 source="csv",
-                source_label=self.spec.cold_label,
-                source_ref=f"syn-{self.spec.key}-cold-{row}",
+                source_label=item.label,
+                source_ref=f"syn-{self.spec.key}-cold-{which}-{row}",
                 assign="person",
                 person_id=self.sellers[owner].person_id,
                 actor=coach.person_id,
                 test_data=self.test_data,
-                command_id=self.key("cold", row),
+                command_id=self.key("cold", which, row),
             )
             self.counter[f"cold_{outcome}"] += 1
             if outcome == "created" and lead is not None:
                 if self.cold_column:
                     lead.pipeline = "cold"
-                self.keep(lead, owner, cold=True)
+                self.keep(lead, owner, cold=True, script=self.story(cold=True))
 
     async def join(self, moment: datetime, index: int) -> None:
         """A new seller starts: they take new leads from today."""
@@ -992,9 +1164,13 @@ class Run:
         cold: list[Held] = []
         for held in self.by_seller[index]:
             lead = held.lead
-            if held.parked or held.phase in ("meet", "won", "lost") or lead.created_at > moment:
+            if (
+                held.parked
+                or held.phase in ("meet", "won", "lost", "junk")
+                or lead.created_at > moment
+            ):
                 continue
-            if held.phase in ("int", "done"):
+            if held.phase in ("open", "int", "done"):
                 if lead.next_action_at is not None and lead.next_action_at <= moment:
                     if held.skip_day == day:
                         continue
@@ -1089,26 +1265,52 @@ class Run:
         who = self.sellers[index]
         lead = held.lead
         phase = held.phase
-        chance = {
-            "new": 0.24 if held.cold else 0.41,
-            "nc": 0.18 if held.cold else 0.27,
-            "int": 0.6,
-            "done": 0.7,
-        }[phase]
-        connected = rng.random() < min(0.95, chance * seller.connect)
-        outcome = "nc"
-        if connected:
+        scripted = held.next_step()
+        if scripted is not None:
+            # A scripted lead answers when the story needs it (a follow-up may ring out, and
+            # the lead stays where it is), and the talk goes the story's way.
+            connected = scripted != "again" or rng.random() < 0.45
+            outcome = scripted if connected else "nc"
+            if outcome == "late":
+                # Booked in the last five days, six to eight days ahead: still to come.
+                outcome = "meet_far" if moment >= self.until - timedelta(days=5) else "again"
+            if outcome == "int" and phase in ("open", "int", "done"):
+                outcome = "again"
+            if phase == "done" and outcome not in ("won", "lost", "again"):
+                outcome = "again"  # after Meeting Done: Won, Lost or another follow-up
+        else:
+            chance = {
+                "new": 0.24 if held.cold else 0.38,
+                "nc": 0.18 if held.cold else 0.25,
+                "open": 0.4,
+                "int": 0.42,
+                "done": 0.5,
+            }[phase]
+            connected = rng.random() < min(0.95, chance * seller.connect)
+            outcome = "nc"
+        if connected and scripted is None:
             if phase in ("new", "nc"):
                 table = (
-                    (("int", 18), ("meet", 2), ("lost", 60), ("junk", 14), ("later", 6))
+                    (("int", 10), ("open", 12), ("meet", 2), ("lost", 56), ("junk", 14))
+                    + (("later", 6),)
                     if held.cold
-                    else (("int", 42), ("meet", 5), ("lost", 31), ("junk", 14), ("later", 8))
+                    else (("int", 30), ("open", 16), ("meet", 5), ("lost", 33), ("junk", 8))
+                    + (("later", 8),)
+                )
+            elif phase == "open":
+                # Open Leads: the talk goes on, turns into interest, or ends.
+                # Never Junk from here: it was a real conversation (handoff, section 10B).
+                table = (
+                    (("int", 33), ("again", 38), ("meet", 7), ("lost", 22))
+                    if held.talks < 4
+                    else (("int", 30), ("lost", 70))
                 )
             elif phase == "int":
+                # A confirmed purchase may go straight to Won.
                 table = (
-                    (("meet", 15), ("again", 47), ("lost", 28), ("later", 10))
+                    (("meet", 15), ("again", 45), ("lost", 27), ("later", 10), ("won", 3))
                     if held.talks < 4
-                    else (("meet", 15), ("lost", 85))
+                    else (("meet", 15), ("won", 5), ("lost", 80))
                 )
             else:
                 table = (
@@ -1117,6 +1319,10 @@ class Run:
                     else (("won", 12), ("lost", 88))
                 )
             outcome = pick(rng, table)
+        if outcome == "open" and "open" not in self.keys:
+            outcome = "int"  # a stage list without Open Leads: it is Interested
+        if outcome == "won" and phase != "done" and "junk" not in self.keys:
+            outcome = "meet"  # the older stage list wins only after a meeting
         seconds = talk_seconds(rng, outcome, seller.talk) if connected else 0
         ring = timedelta(seconds=rng.uniform(18, 40)) if not connected else timedelta(0)
         ended = moment + timedelta(seconds=seconds) + ring
@@ -1167,7 +1373,7 @@ class Run:
             ),
         )
         held.misses += 1
-        if held.phase in ("int", "done"):
+        if held.phase in ("open", "int", "done"):
             # Still interested, just not reached: the seller sets the call back again.
             if lead.next_action_at is not None and rng.random() < 0.7:
                 held.task = await self.task(index, held, now, "call_back", lead.next_action_at)
@@ -1176,7 +1382,22 @@ class Run:
             return
         held.phase = "nc"
         if reason in NO_RETRY:
-            held.parked = True
+            if "junk" in self.keys:
+                # The number is confirmed dead: Junk Lead, invalid contact (never for silence).
+                await desk.move(
+                    lead.id,
+                    StageMove(
+                        command_id=self.key("junk-number", lead.id),
+                        expected_revision=lead.revision,
+                        step=self.keys["junk"],
+                        outcome_reason="invalid_number",
+                        via="sheet",
+                    ),
+                )
+                held.phase = "junk"
+                self.counter["junk_invalid_number"] += 1
+            else:
+                held.parked = True
             return
         # A lead that never answers: most are closed as Lost (no response); the rest stay Not
         # connected, nobody calling them (the cold list moves on after two tries).
@@ -1208,7 +1429,24 @@ class Run:
         held.talks += 1
         command_id = self.key("dispose", lead.id, now.isoformat())
         held.task = None
+        if outcome == "junk" and "junk" in self.keys:
+            # Never a real lead: the Junk Lead stage, with why.
+            reason = pick(rng, JUNK_REASONS)
+            await desk.dispose(
+                lead.id,
+                Disposition(
+                    command_id=command_id,
+                    expected_revision=lead.revision,
+                    connected=True,
+                    step=self.keys["junk"],
+                    outcome_reason=reason,
+                ),
+            )
+            held.phase = "junk"
+            self.counter[f"junk_{reason}"] += 1
+            return
         if outcome in ("lost", "junk"):
+            # Without a Junk stage, a lead that was never real is Lost, "not a lead".
             reason = (
                 "not_a_lead"
                 if outcome == "junk"
@@ -1242,9 +1480,9 @@ class Run:
             held.phase = "won"
             self.counter["won"] += 1
             return
-        if outcome == "meet":
+        if outcome in ("meet", "meet_far"):
             mode, agenda, link, place = self.spec.meeting
-            starts = next_slot(rng, now, days=(1, 3))
+            starts = next_slot(rng, now, days=(6, 8) if outcome == "meet_far" else (1, 3))
             minutes = rng.choice((30, 45, 60))
             await desk.dispose(
                 lead.id,
@@ -1270,36 +1508,54 @@ class Run:
             self.counter["meetings_booked"] += 1
             self.push(held.meeting_end + timedelta(minutes=rng.uniform(5, 40)), "meeting", lead.id)
             return
-        # Interested: a follow-up inside Interested (or Meeting done), with a reminder.
+        # A follow-up with a reminder: inside Open Leads (the talk goes on), Interested, or
+        # Meeting Done; "again" keeps the lead where it is.
         if outcome == "later":
             follow = now + timedelta(hours=rng.choice((2, 3, 4)))
             if follow.astimezone(IST).time() >= time(18, 30):
                 follow = next_slot(rng, now, days=(1, 1))
         else:
             follow = next_slot(rng, now, days=(1, 3))
-        step = self.keys["done"] if held.phase == "done" else self.keys["int"]
+        if outcome == "again" and held.phase in ("open", "done"):
+            stays = held.phase
+        elif outcome == "open" or (
+            # "Call later" from a first talk is Open Leads; an Interested lead stays Interested.
+            outcome == "later" and held.phase in ("new", "nc") and "open" in self.keys
+        ):
+            stays = "open"
+        else:
+            stays = "int"
+        if stays == "open":
+            # Open Leads always carries its reason: Call later or Discussion incomplete.
+            why = "Call later" if outcome == "later" else pick(rng, OPEN_REASONS)
+            detail = rng.choice(
+                ("Busy at work, call after 6.", "Driving, asked to call tomorrow.")
+                if why == "Call later"
+                else ("Line dropped mid-talk.", "Wants details before deciding to talk.")
+            )
+            remark = f"{why}: {detail}"
+        else:
+            remark = rng.choice(
+                (
+                    "Wants to discuss with family first.",
+                    "Asked for the fee breakup.",
+                    "Call back after salary day.",
+                    "Comparing two options, keen.",
+                    "Wants the brochure on WhatsApp.",
+                )
+            )
         await desk.dispose(
             lead.id,
             Disposition(
                 command_id=command_id,
                 expected_revision=lead.revision,
                 connected=True,
-                step=step,
+                step=self.keys[stays],
                 follow_up_at=follow,
-                remark=rng.choice(
-                    (
-                        "Wants to discuss with family first.",
-                        "Asked for the fee breakup.",
-                        "Call back after salary day.",
-                        "Comparing two options, keen.",
-                        "Busy now, asked to call later.",
-                        "Wants the brochure on WhatsApp.",
-                    )
-                ),
+                remark=remark,
             ),
         )
-        if held.phase != "done":
-            held.phase = "int"
+        held.phase = stays
         if rng.random() < 0.88:
             held.task = await self.task(index, held, now, "call_back", follow)
         if outcome != "later" and rng.random() < 0.35:
@@ -1320,7 +1576,11 @@ class Run:
         who = self.sellers[held.owner]
         desk = self.desk(who, moment)
         lead = held.lead
-        what = pick(rng, (("done", 74), ("missed", 18), ("cancelled", 8)))
+        what = (
+            "done"
+            if held.script is not None
+            else pick(rng, (("done", 74), ("missed", 18), ("cancelled", 8)))
+        )
         follow = next_slot(rng, moment, days=(1, 2))
         if what == "done":
             await desk.meeting_done(
@@ -1342,18 +1602,23 @@ class Run:
             held.talks = 0
             self.counter["meetings_done"] += 1
         else:
+            # Missed: still Interested, call again. Cancelled: back to Open Leads, "call later"
+            # (a cancelled meeting needs its true new stage, handoff section 10B).
+            back = "open" if what == "cancelled" and "open" in self.keys else "int"
             await desk.meeting_not_held(
                 row.id,
                 MeetingClosed(
                     command_id=self.key("not-held", lead_id, moment.isoformat()),
                     expected_revision=lead.revision,
                     status=what,  # type: ignore[arg-type]
-                    step=self.keys["int"],
+                    step=self.keys[back],
                     next_action_at=follow,
-                    note="Didn't join (fictional)." if what == "missed" else "Asked to move it.",
+                    note="Didn't join (fictional)."
+                    if what == "missed"
+                    else "Call later: asked to move it to next month.",
                 ),
             )
-            held.phase = "int"
+            held.phase = back
             self.counter[f"meetings_{what}"] += 1
         if rng.random() < 0.85:
             held.task = await self.task(held.owner, held, moment, "call_back", follow)
@@ -1400,14 +1665,39 @@ async def _seller_account(
     return person_id, "made"
 
 
+async def _stages(db: AsyncSession, tenant_id: UUID, by: UUID, now: datetime) -> str:
+    """The recommended nine stages when the app has that template, else the stages a new
+    organisation gets. Which one, in a word."""
+    if not any(item.id == RECOMMENDED for item in TEMPLATES):
+        await journeys.start_organisation(db, tenant_id, by, now)
+        return journeys.NEW_ORGANISATION_TEMPLATE
+    before = await journeys.read(db, tenant_id, journeys.MAIN_PIPELINE)
+    stages = journeys.from_template(RECOMMENDED, before, {})
+    # In the handoff's order (Open Leads before Not Connected), whatever the template's.
+    rank = {milestone: place for place, milestone in enumerate(ORDER)}
+    await journeys.save(
+        db,
+        tenant_id,
+        stages=tuple(sorted(stages, key=lambda stage: rank.get(stage.milestone, len(ORDER)))),
+        industry=RECOMMENDED,
+        expected_version=before.version,
+        note="The recommended nine stages, for a sandbox organisation",
+        by=by,
+        now=now,
+        pipeline=journeys.MAIN_PIPELINE,
+    )
+    return RECOMMENDED
+
+
 async def _keys(db: AsyncSession, tenant_id: UUID) -> dict[str, str]:
     journey = await journeys.read(db, tenant_id, journeys.MAIN_PIPELINE)
     found: dict[str, str] = {}
-    for name, milestone in MEANINGS.items():
+    for name, milestone in (*MEANINGS.items(), *OPTIONAL_MEANINGS.items()):
         stage = next((s for s in journey.live if s.milestone == milestone), None)
-        if stage is None:
+        if stage is not None:
+            found[name] = stage.key
+        elif name in MEANINGS:
             raise _refuse("stage_list_lacks_a_meaning", meaning=milestone)
-        found[name] = stage.key
     return found
 
 
@@ -1426,11 +1716,16 @@ async def readback(db: AsyncSession, tenant_id: UUID, now: datetime) -> dict[str
     journey = await journeys.read(db, tenant_id, journeys.MAIN_PIPELINE)
     stages = await journeys.lead_counts(db, tenant_id, journey)
     leads = Counter[str]()
+    # Each side's leads by stage, as the seller's tabs show them (Inbound: "live" or empty).
+    sides: dict[str, Counter[str]] = {"Inbound": Counter(), "Cold": Counter()}
+    # Who holds which side's leads (an Inbound-only and a Cold-only seller show here).
+    holders = {person_id: name or _mask(email) for _, name, email, person_id in members}
+    held_by: dict[str, Counter[str]] = {}
     tagged = hasattr(Lead, "pipeline")
-    columns = [Lead.source, Lead.test_data, Lead.owner_person_id]
+    columns = [Lead.source, Lead.test_data, Lead.owner_person_id, Lead.stage, Lead.step]
     for row in (
         await db.execute(
-            select(*columns, *([Lead.pipeline] if tagged else [])).where(
+            select(*columns, Lead.attempts, *([Lead.pipeline] if tagged else [])).where(
                 Lead.tenant_id == tenant_id
             )
         )
@@ -1439,8 +1734,16 @@ async def readback(db: AsyncSession, tenant_id: UUID, now: datetime) -> dict[str
         leads[f"source:{row[0]}"] += 1
         leads["test_data"] += bool(row[1])
         leads["unassigned"] += row[2] is None
+        cold = (row[6] == "cold") if tagged else row[0] == "csv"
         if tagged:
-            leads[f"pipeline:{row[3] or 'live'}"] += 1
+            leads[f"pipeline:{row[6] or 'live'}"] += 1
+        found = journey.resolve(row[3], row[4])
+        sides["Cold" if cold else "Inbound"][found.label if found else row[3]] += 1
+        leads["cold_unworked"] += cold and row[3] == "new" and row[5] == 0
+        if row[2] is not None:
+            held_by.setdefault(holders.get(row[2], "other"), Counter())[
+                "Cold" if cold else "Inbound"
+            ] += 1
     calls = Counter[str]()
     by_seller: dict[str, Counter[str]] = {}
     names = {person_id: name or _mask(email) for _, name, email, person_id in members}
@@ -1511,7 +1814,13 @@ async def readback(db: AsyncSession, tenant_id: UUID, now: datetime) -> dict[str
             for role, name, email, _ in members
         ],
         "stages": {stage.label: stages.get(stage.key, 0) for stage in journey.live},
+        "template": journey.industry,
+        "by_side": {
+            side: {stage.label: tally.get(stage.label, 0) for stage in journey.live}
+            for side, tally in sides.items()
+        },
         "leads": dict(sorted(leads.items())),
+        "leads_by_seller": {name: dict(tally) for name, tally in sorted(held_by.items())},
         "follow_ups_late": int(late or 0),
         "calls": dict(calls),
         "calls_by_seller": {name: dict(tally) for name, tally in sorted(by_seller.items())},
@@ -1534,6 +1843,8 @@ async def run_one(
     """One organisation: the change, its rehearsal, or its read-back, in the caller's
     transaction."""
     org = ORGS[key]
+    if spec.get("name_suffix"):
+        org = org._replace(name=f"{org.name} {spec['name_suffix']}")
     base = UUID(str(spec["command_id"]))
     command_id = uuid5(base, f"organisation:{key}")
     report: dict[str, Any] = {"mode": mode, "organisation": org.name}
@@ -1609,7 +1920,7 @@ async def run_one(
     )
     created = await service.create(org.name, owner.id, command_id, reference, reason=why)
     tenant_id = created.tenant_id
-    await journeys.start_organisation(db, tenant_id, approver.id, now)
+    report["stage_list"] = await _stages(db, tenant_id, approver.id, now)
     await service.add_member(
         tenant_id,
         admin.id,

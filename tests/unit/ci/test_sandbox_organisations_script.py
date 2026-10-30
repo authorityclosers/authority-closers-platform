@@ -57,6 +57,8 @@ def test_a_full_input_is_accepted_with_its_defaults() -> None:
     assert got["days"] == 30 and got["scale"] == 1.0 and got["end"] is None
     assert got["test_data"] is True and got["require_pipeline"] is True
     assert change.spec_of(raw(end="2026-10-30"))["end"] == date(2026, 10, 30)
+    assert change.spec_of(raw())["name_suffix"] == ""
+    assert change.spec_of(raw(name_suffix=" (nine  stages) "))["name_suffix"] == "(nine stages)"
 
 
 @pytest.mark.parametrize(
@@ -67,6 +69,7 @@ def test_a_full_input_is_accepted_with_its_defaults() -> None:
         ({"seller_mailbox": "nobody"}, "seller_mailbox_not_an_email"),
         ({"days": 0}, "days_out_of_range"),
         ({"scale": 5}, "scale_out_of_range"),
+        ({"name_suffix": "x" * 25}, "name_suffix_too_long"),
         ({"password_hashes": {"a@example.test": "hunter2"}}, "password_hash_not_a_verifier"),
     ],
 )
@@ -98,14 +101,47 @@ def test_the_two_organisations_are_fictional_teams_in_pune_and_mumbai() -> None:
         assert len(org.sellers) == 5
         assert {seller.city for seller in org.sellers} == {"Pune", "Mumbai"}
         assert len({(s.first, s.last) for s in org.sellers}) == 5
+        # Inbound: Meta, Google, the website and YouTube (Dipak's final model, 30 Oct 2026).
         labels = " ".join(source.label for source in org.sources)
-        for word in ("Meta", "Website", "Google", "WhatsApp", "Justdial"):
+        for word in ("Meta", "Website", "Google", "YouTube"):
             assert word in labels
-        assert [s.label for s in org.sources if s.typed] == ["Justdial"]
-        assert org.cold_label.startswith("File: ")
+        assert {source.source for source in org.sources} == {"meta", "webhook"}
+        assert org.daily == (3, 10)
+        # Cold: about 1,000, the big list uploaded two days before the end.
+        assert sum(item.size for item in org.cold) == 1000
+        assert all(item.label.startswith("File: ") for item in org.cold)
+        past, recent = org.cold
+        assert past.day > 0 and recent.day == -2 and recent.size == 900
         assert org.meeting[2] is None or "example.com" in org.meeting[2]
         assert sum(1 for s in org.sellers if s.joins) == 1
+        # One Inbound-only and one Cold-only seller, so the adaptive selector can be tested.
+        sides = sorted(s.sides for s in org.sellers)
+        assert sides == ["both", "both", "both", "cold", "inbound"]
+        assert all(s.cold_cap == 0 for s in org.sellers if s.sides == "inbound")
+        assert all(s.cold_cap > 5 and not s.joins for s in org.sellers if s.sides == "cold")
     assert change.ORGS["ac"].name != change.ORGS["cyber"].name
+
+
+def test_junk_is_only_an_invalid_contact_and_the_stages_keep_the_handoff_order() -> None:
+    assert {key for key, _ in change.JUNK_REASONS} <= {
+        "invalid_number",
+        "fake",
+        "unusable_contact",
+        "someone_else",
+    }
+    assert {why for why, _ in change.OPEN_REASONS} == {"Call later", "Discussion incomplete"}
+    assert change.ORDER[:3] == ("lead", "contacted", "unreachable")
+    assert change.ORDER[-1] == "disqualified"
+
+
+def test_the_scripted_leads_reach_every_stage() -> None:
+    # Each side gets one lead per story; together they end in every stage past the first two.
+    ends = {story[-1] for story in change.STORIES.values()}
+    steps = {step for story in change.STORIES.values() for step in story}
+    assert {"won", "again", "lost", "junk"} <= ends
+    assert {"meet", "int", "open", "late"} <= steps
+    assert set(change.STORIES) == {"won", "done", "meet_late", "int", "open", "lost", "junk"}
+    assert {"open", "junk"} == set(change.OPTIONAL_MEANINGS)
 
 
 def test_no_lead_number_can_ring_anyone() -> None:
@@ -149,18 +185,14 @@ def test_a_sellers_day_runs_from_half_past_ten_to_seven_with_lunch() -> None:
     assert change.day_shape(change.rng_for(SEED), joiner, date(2026, 10, 5), 3) is None
 
 
-def test_enquiries_come_in_through_the_day_and_fewer_on_sunday() -> None:
+def test_a_steady_three_to_ten_enquiries_come_in_every_day() -> None:
     org = change.ORGS["cyber"]
-    weekday = [
-        len(change.arrivals(change.rng_for(SEED, n), org, date(2026, 10, 28), 1.0))
-        for n in range(40)
+    counts = [
+        len(change.arrivals(change.rng_for(SEED, n), org, date(2026, 10, 20 + n % 7), 1.0))
+        for n in range(70)
     ]
-    sunday = [
-        len(change.arrivals(change.rng_for(SEED, n), org, date(2026, 10, 25), 1.0))
-        for n in range(40)
-    ]
-    assert 0.75 * org.daily <= sum(weekday) / 40 <= 1.25 * org.daily
-    assert sum(sunday) < sum(weekday)
+    assert min(counts) >= 3 and max(counts) <= 10
+    assert len(set(counts)) > 3  # it varies from day to day
     times = change.arrivals(change.rng_for(SEED), org, date(2026, 10, 28), 1.0)
     assert times == sorted(times)
     assert all(moment.astimezone(IST).date() == date(2026, 10, 28) for moment in times)
