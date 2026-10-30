@@ -102,3 +102,32 @@ it("keeps permission-filtered rows absent and omits empty groups", async () => {
   ])
     expect(host.textContent).not.toContain(label);
 });
+
+it("keeps Notes, off the Leads strip, first in the menu, for a seller too", async () => {
+  // Owner and Dipak, 30 Oct 2026: no Now and no More on Leads.
+  const notes = {
+    key: "notes",
+    label: "Notes",
+    note: "Search",
+    onPick: vi.fn(),
+  };
+  await act(async () =>
+    root.render(
+      <LeadsMenu open onClose={() => {}} items={[...items(), notes]} />,
+    ),
+  );
+  expect(
+    Array.from(host.querySelectorAll("h3"), (el) => el.textContent),
+  ).toEqual(["Your work", "Set up leads", "Manage leads"]);
+  await act(async () =>
+    root.render(<LeadsMenu open onClose={() => {}} items={[notes]} />),
+  );
+  const only = Array.from(
+    host.querySelectorAll<HTMLButtonElement>("li > button"),
+  );
+  expect(only.map((button) => button.textContent)).toEqual([
+    expect.stringContaining("Notes"),
+  ]);
+  await act(async () => only[0].click());
+  expect(notes.onPick).toHaveBeenCalled();
+});

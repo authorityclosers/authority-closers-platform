@@ -1,4 +1,5 @@
 import type { Desk, LeadPage } from "./leads-client";
+import { OPENING_STAGE } from "./opening";
 
 /** The normal API's first answers for this document, bound to its identity. */
 export type ServerLeads = {
@@ -23,7 +24,7 @@ export function firstPageFor(
   return seed?.firstPage &&
     seed.identity === identity &&
     seed.firstPage?.scope === ask.scope &&
-    ask.stage === "open" &&
+    ask.stage === OPENING_STAGE &&
     !ask.query &&
     !ask.pipeline &&
     !ask.owner &&

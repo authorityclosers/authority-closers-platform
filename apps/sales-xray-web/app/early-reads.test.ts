@@ -313,27 +313,27 @@ it("starts the desk and All leads' first page once the directory says Sales X-Ra
     return lists();
   };
   directory = workspace("admin");
-  expect(await start("/leads")).toEqual([`${LIST}team&stage=open`]);
-  expect(await start("/leads/?tab=all&stage=open&theme=dark")).toEqual([
-    `${LIST}team&stage=open`,
+  expect(await start("/leads")).toEqual([`${LIST}team&stage=new`]);
+  expect(await start("/leads/?tab=all&stage=new&theme=dark")).toEqual([
+    `${LIST}team&stage=new`,
   ]);
   directory = workspace("member");
-  expect(await start("/leads?tab=all")).toEqual([`${LIST}mine&stage=open`]);
+  expect(await start("/leads?tab=all")).toEqual([`${LIST}mine&stage=new`]);
   // Another view, a filter, a workspace without Sales X-Ray, or a device
   // that has not seen Sales X-Ray on: the page asks for itself.
   for (const path of [
     "/leads?stage=won",
     "/leads?q=Fictional",
-    "/leads?tab=now",
+    "/leads?tab=all&stage=open",
   ])
     expect(await start(path)).toEqual([]);
   // This device's first visit: the desk and the page follow the directory.
-  expect(await start("/leads", false)).toEqual([`${LIST}mine&stage=open`]);
+  expect(await start("/leads", false)).toEqual([`${LIST}mine&stage=new`]);
   expect(network.mock.calls.map(([url]) => url)).toEqual([
     "/v1/me/workspaces",
     "/v1/me/sales-xray-workspaces",
     "/v1/lead-desk",
-    `${LIST}mine&stage=open`,
+    `${LIST}mine&stage=new`,
   ]);
   // Sales X-Ray off, or signed out: nothing past the session.
   directory = workspace("owner", false);
@@ -367,18 +367,18 @@ it("starts the desk and All leads' first page once the directory says Sales X-Ra
 
 it("names All leads' first page exactly as the list asks for it", async () => {
   expect(earlyLeadsList("owner")).toBe(
-    "/v1/lead-desk/leads?scope=team&stage=open",
+    "/v1/lead-desk/leads?scope=team&stage=new",
   );
   expect(earlyLeadsList("manager")).toBe(earlyLeadsList("admin"));
   expect(earlyLeadsList("member")).toBe(
-    "/v1/lead-desk/leads?scope=mine&stage=open",
+    "/v1/lead-desk/leads?scope=mine&stage=new",
   );
   expect(earlyLeadsList(null)).toBe(earlyLeadsList("member"));
   network.mockImplementation(async () =>
     Response.json({ leads: [], total: 0, next_offset: null, stage_counts: {} }),
   );
-  await readLeads({ scope: "team", stage: "open" });
-  await readLeads({ scope: "mine", stage: "open" });
+  await readLeads({ scope: "team", stage: "new" });
+  await readLeads({ scope: "mine", stage: "new" });
   expect(network.mock.calls.map(([url]) => url)).toEqual([
     earlyLeadsList("owner"),
     earlyLeadsList("member"),

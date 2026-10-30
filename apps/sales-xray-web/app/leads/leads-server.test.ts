@@ -37,7 +37,7 @@ const reads = () => ({
   },
   "/v1/lead-desk": { status: 200, body: desk },
 });
-const load = (query: Record<string, string> = { tab: "all", stage: "open" }) =>
+const load = (query: Record<string, string> = { tab: "all", stage: "new" }) =>
   serverLeads(Promise.resolve(query));
 beforeEach(() => {
   vi.mocked(serverApiOrigin).mockReturnValue("http://api.example.test");
@@ -45,7 +45,7 @@ beforeEach(() => {
     .mockReset()
     .mockResolvedValueOnce(reads())
     .mockResolvedValueOnce({
-      "/v1/lead-desk/leads?scope=team&stage=open": { status: 200, body: page },
+      "/v1/lead-desk/leads?scope=team&stage=new": { status: 200, body: page },
     });
 });
 it("reads only the first page through the existing bounded private server reader", async () => {
@@ -134,7 +134,7 @@ it("uses mine for a seller, leaving team permission to the ordinary API", async 
       },
     })
     .mockResolvedValueOnce({
-      "/v1/lead-desk/leads?scope=mine&stage=open": { status: 200, body: page },
+      "/v1/lead-desk/leads?scope=mine&stage=new": { status: 200, body: page },
     });
   expect(await load()).toMatchObject({ firstPage: { scope: "mine", page } });
 });
@@ -144,13 +144,15 @@ it("a server page never answers another identity, scope, pipeline or filter", ()
     desk,
     firstPage: { scope: "team", page },
   } as unknown as ServerLeads;
-  const ask = { scope: "team", stage: "open", query: "" };
+  const ask = { scope: "team", stage: "new", query: "" };
   expect(firstPageFor(seed, identity, ask)).toBe(page);
   expect(firstPageFor(null, undefined, ask)).toBeNull();
   expect(firstPageFor(seed, "other-identity", ask)).toBeNull();
   for (const change of [
     { scope: "mine" },
     { stage: "won" },
+    // All is a tab, not where Leads opens: the server read is the first stage's.
+    { stage: "open" },
     { query: "test" },
     { pipeline: "other" },
     { owner: "other" },

@@ -116,8 +116,11 @@ export function ListView({
   onPasteRows,
   more: refine = null,
   onSort,
+  onTopLead,
 }: {
   canManage: boolean;
+  /** The list's first lead, or null: Start calling opens it. */
+  onTopLead?: (leadId: string | null) => void;
   initial?: ServerLeads | null;
   cacheIdentity?: string | null;
   /** "open", a stage kind, or "test". */
@@ -338,6 +341,15 @@ export function ListView({
     if (left && top !== undefined && top < 0)
       panel.current?.scrollIntoView({ block: "start" });
   }, [moves, read, rows]);
+  // Start calling opens this tab's first lead (owner and Dipak, 30 Oct 2026).
+  const topLead = useRef(onTopLead);
+  useEffect(() => {
+    topLead.current = onTopLead;
+  });
+  const top = rows[0]?.lead_id ?? null;
+  useEffect(() => {
+    topLead.current?.(top);
+  }, [top]);
   // Paint the visible phone rows first. Building 50 gesture-enabled rows at
   // once monopolises a mid-range phone even when the data is already cached.
   const [revealed, setRevealed] = useState({ question: "", count: 8 });

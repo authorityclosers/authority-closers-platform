@@ -175,8 +175,8 @@ it("hydrates the server's first rows without replacing them with a loading outli
       initial={initial}
       cacheIdentity={cacheIdentity}
       canManage={false}
-      stage="open"
-      stageLabel="All leads"
+      stage="new"
+      stageLabel="New"
       scope="mine"
       query=""
       version={0}
@@ -248,5 +248,36 @@ it("a lead given another stage leaves this stage's list at once, the next lead o
     "Open Fictional prospect 1",
     "Open Fictional prospect 2",
   ]);
+  await act(async () => announceWorkspaceChange("arrived"));
+});
+
+it("names its first lead for Start calling, and the next one once that lead moves on", async () => {
+  // Owner and Dipak, 30 Oct 2026: Start calling opens the tab's first lead.
+  vi.mocked(readLeads).mockResolvedValue({
+    leads: rows.slice(0, 3),
+    total: 3,
+    next_offset: null,
+  });
+  const top = vi.fn();
+  await act(async () =>
+    root.render(
+      <ListView
+        canManage={false}
+        stage="new"
+        stageLabel="New"
+        scope="mine"
+        query=""
+        version={0}
+        onOpen={vi.fn()}
+        onTopLead={top}
+      />,
+    ),
+  );
+  await reveal();
+  expect(top).toHaveBeenLastCalledWith("fictional-0");
+  await act(async () =>
+    noteLeadMoved({ ...rows[0], stage: "interested", revision: 2 }),
+  );
+  expect(top).toHaveBeenLastCalledWith("fictional-1");
   await act(async () => announceWorkspaceChange("arrived"));
 });

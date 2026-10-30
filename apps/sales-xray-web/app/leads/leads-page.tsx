@@ -125,7 +125,8 @@ import { dueWords } from "./task-words";
 import { asScope, type ViewSpec } from "./saved-views";
 import { KIND_ORDER, StageTabs, stageTabs } from "./stage-tabs";
 import { TakingSwitch } from "./taking-switch";
-import { MoreViews, ViewSwitch, ViewTools } from "./view-switch";
+import { OPENING_STAGE } from "./opening";
+import { ViewTools } from "./view-switch";
 import { PipelinePicker } from "./pipeline-picker";
 import { several, usePipelines } from "./use-pipelines";
 
@@ -197,8 +198,6 @@ function viewHref(
   } = {},
 ): string {
   const path = window.location.pathname || LEADS_PATH;
-  // Leads opens on All (owner's meeting, 28 Oct 2026); Now has its own address.
-  if (view === "desk") return `${path}?tab=now`;
   if (
     view === "team" ||
     view === "sources" ||
@@ -488,7 +487,8 @@ export function LeadsRoute({
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Share out leads (owners and managers, Lead OS's distribute).
   const [sharing, setSharing] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
+  // The current tab's first lead: Start calling opens it.
+  const [topLead, setTopLead] = useState<string | null>(null);
   // A settings page opened from the menu is a step of its own: Leads goes back.
   const pushedSettings = useRef(false);
   // The view picked here, until the address catches up (the router follows
@@ -758,11 +758,11 @@ export function LeadsRoute({
     requested === TASKS ||
     (can && (requested === "team" || requested === "sources"))
       ? requested
-      : requested === "now"
-        ? "desk"
-        : requestedStage && stageKeys.has(requestedStage)
-          ? requestedStage
-          : "open";
+      : requestedStage && stageKeys.has(requestedStage)
+        ? requestedStage
+        : // Leads opens on the first stage; an old Now link lands there too
+          // (owner and Dipak, 30 Oct 2026: no Now, no More).
+          OPENING_STAGE;
   const view = picked && picked.at === addressKey ? picked.view : fromAddress;
   const manage: Manage | null =
     view === "team" ||
@@ -1194,11 +1194,11 @@ export function LeadsRoute({
     } else window.history.replaceState(null, "", href);
   };
   const leaveSettings = () => {
-    setPicked({ view: "desk", at: addressKey });
+    setPicked({ view: OPENING_STAGE, at: addressKey });
     if (pushedSettings.current) {
       pushedSettings.current = false;
       window.history.back();
-    } else window.history.replaceState(null, "", viewHref("desk"));
+    } else window.history.replaceState(null, "", viewHref(OPENING_STAGE));
   };
   // An empty list's "Clear filters": everyone's (or your own) leads, no search.
   const filtersOn =
@@ -1308,6 +1308,18 @@ export function LeadsRoute({
   };
 
   const menuItems: LeadsMenuItem[] = [
+    // Off the Leads strip (owner and Dipak, 30 Oct 2026): every note on your
+    // leads, to search.
+    {
+      key: "notes",
+      label: "Notes",
+      note: "Search every note on your leads",
+      onPick: () => {
+        setSettingsOpen(false);
+        leavingOverlay();
+        router.push(viewHref(NOTES));
+      },
+    },
     ...(can
       ? [
           {
@@ -1400,9 +1412,6 @@ export function LeadsRoute({
           ref={area}
           className={styles.root}
           data-tab={manage ?? (stageView ? "all" : "desk")}
-          data-call-bar={
-            (view === "desk" || view === "open") && toCall > 0 ? "" : undefined
-          }
         >
           <PullMark mark={spinner} />
           {inApp ? <PhoneSetupBar /> : null}
@@ -1477,40 +1486,41 @@ export function LeadsRoute({
                   computer they sit in the page header's row). */}
               <div className={styles.viewHeader}>
                 {stageView ? (
+                  // The stages, then All for search (owner and Dipak, 30 Oct
+                  // 2026: no Now, no More; My work and Tasks are on Home).
                   <StageTabs
-                    tabs={[
-                      stageStrip[0],
-                      { key: "desk", label: "Now", count: toCall },
-                      ...stageStrip.slice(1),
-                    ]}
+                    tabs={[...stageStrip.slice(1), stageStrip[0]]}
                     current={view}
                     onChange={(next) => go(next)}
                   />
                 ) : (
-                  <ViewSwitch
-                    section={section}
-                    nowCount={toCall}
-                    moreLabel={moreView?.label ?? "More"}
-                    onNow={() => go("desk")}
-                    onAll={() => go(stageView ? view : "open")}
-                    onMore={() => setMoreOpen(true)}
-                  />
+                  <button
+                    type="button"
+                    className={styles.backChip}
+                    onClick={() => go(OPENING_STAGE)}
+                  >
+                    <ArrowLeft size={16} aria-hidden="true" />
+                    Leads
+                  </button>
                 )}
                 <div className={styles.toolbar} data-head="">
                   {/* Taking new leads is on Home's Today line (owner, #69:
                       a crowded header); the views and the gear stay here. */}
                   <PhoneLogCard as="chip" />
-                  {view === "desk" || view === "open" ? (
-                    <span className={styles.desktopCall}>
-                      <Button
-                        variant="primary"
-                        onClick={() => begin("calling", setCalling)}
-                        disabled={desk.counts.open === 0}
-                      >
-                        <PhoneCall size={16} aria-hidden="true" />
-                        Start calling
-                      </Button>
-                    </span>
+                  {stageView ? (
+                    // Start calling sits in the header, on a phone too, and
+                    // opens the tab's first lead (owner and Dipak, 30 Oct
+                    // 2026: no Now; the rep calls from the lead).
+                    <Button
+                      variant="primary"
+                      onClick={() => {
+                        if (topLead) open(topLead);
+                      }}
+                      disabled={!topLead}
+                    >
+                      <PhoneCall size={16} aria-hidden="true" />
+                      Start calling
+                    </Button>
                   ) : null}
                   <span className={styles.toolbarEnd}>
                     <button
@@ -1525,12 +1535,6 @@ export function LeadsRoute({
                   </span>
                 </div>
               </div>
-              <MoreViews
-                open={moreOpen}
-                onClose={() => setMoreOpen(false)}
-                views={moreViews}
-                onPick={go}
-              />
               {section === "now" && several(pipes) ? (
                 <ViewTools>
                   <PipelinePicker
@@ -1596,7 +1600,7 @@ export function LeadsRoute({
           ) : work ? (
             <MyWork
               onOpen={(leadId, at) => open(leadId, null, at)}
-              onStart={() => go("desk")}
+              onStart={() => go(OPENING_STAGE)}
             />
           ) : board ? (
             <PipelineBoard
@@ -1612,6 +1616,7 @@ export function LeadsRoute({
             />
           ) : stageView ? (
             <ListView
+              onTopLead={setTopLead}
               canManage={can}
               initial={desk === serverSeed?.desk ? serverSeed : null}
               cacheIdentity={identity}
@@ -1691,24 +1696,6 @@ export function LeadsRoute({
               }
             />
           )}
-          {/* Phones: the one primary action, in the thumb's reach above the
-              tab bar (owner, 22 Oct: no big green card). Nobody due: no bar,
-              the desk says "All caught up" (Redmi, 22 Oct). */}
-          {(view === "desk" || view === "open") && toCall > 0 ? (
-            <div className={styles.callBar}>
-              <button
-                type="button"
-                className={styles.callBarButton}
-                onClick={() => begin("calling", setCalling)}
-              >
-                <PhoneCall size={18} aria-hidden="true" />
-                Start calling
-                {toCall ? (
-                  <span className={styles.callBarCount}>{`${toCall} due`}</span>
-                ) : null}
-              </button>
-            </div>
-          ) : null}
         </div>
         {filtering ? (
           <FilterSheet

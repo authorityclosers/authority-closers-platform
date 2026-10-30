@@ -20,6 +20,8 @@
  * read as usual.
  */
 
+import { OPENING_STAGE } from "./leads/opening";
+
 export const EARLY_READ_TTL_MS = 10_000;
 
 /**
@@ -84,7 +86,7 @@ const LEAD_DESK = "/v1/lead-desk";
 const LEAD_MANAGERS = ["owner", "admin", "manager"];
 
 /**
- * All leads' first page as the list asks for it on a plain /leads entry
+ * The opening stage's first page as the list asks for it on a plain /leads entry
  * (leads-client.ts readLeads): the team's for owners, admins and managers, a
  * seller's own otherwise. The inline script starts it as soon as the
  * directory names the role, not after the app has started (owner bug #67).
@@ -92,7 +94,7 @@ const LEAD_MANAGERS = ["owner", "admin", "manager"];
 export const earlyLeadsList = (role: string | null | undefined) =>
   `/v1/lead-desk/leads?scope=${
     role && LEAD_MANAGERS.includes(role) ? "team" : "mine"
-  }&stage=open`;
+  }&stage=${OPENING_STAGE}`;
 
 /** A saved call: the session, the studio's entry and allowance, the call. */
 const CALL_PAGE = /^\/analysis\/calls\/([0-9a-f-]{36})$/i;
@@ -179,7 +181,7 @@ export function earlyReadsScript(): string {
   // Xray is on for the selected workspace, the desk and, on a plain entry (no
   // filter but All leads' own), All leads' first page (earlyLeadsList), unless
   // the early reads were dropped meanwhile (a workspace change, a sign-out).
-  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),p,l=m?${callReadsJson}.concat(["","/transcript","/report"].map(function(x){return ${acquisition}+"/submissions/"+m[1].toLowerCase()+x})):(p=new RegExp(${person},"i").exec(r))?${personReadsJson}.concat(["/v1/organisation/members/"+p[1].toLowerCase()+"/activity?weeks=12"]):t[r];if(!l||!l.length)return;var ok=false;try{ok=localStorage.getItem(${key})==="1"}catch(e){}if(!ok)l=l.filter(function(u){return u.indexOf("/v1/me/")===0});var s=window.__sxEarly={},a=Date.now(),g=function(u,at){s[u]={at:at,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).then(function(r){return r.text().then(function(b){var h=[];r.headers.forEach(function(v,k){h.push([k,v])});return{status:r.status,statusText:r.statusText,headers:h,body:b}})}).catch(function(){return null})}};l.forEach(function(u){if(!s[u])g(u,a)});var q=true,d=s[${directory}];new URLSearchParams(location.search).forEach(function(v,k){if(k!=="theme"&&!(k==="tab"&&v==="all")&&!(k==="stage"&&v==="open"))q=false});if(r==="/leads"&&d)d.p.then(function(x){var j=x&&x.status===200?JSON.parse(x.body):null,w=j&&j.workspaces&&j.workspaces.filter(function(i){return i.tenant_id===j.selected_tenant_id})[0],u;if(!w||w.sales_xray_enabled!==true||s[${directory}]!==d)return;if(!s[${desk}])g(${desk},Date.now());u="/v1/lead-desk/leads?scope="+(${managers}.indexOf(w.role)<0?"mine":"team")+"&stage=open";if(q&&!s[u])g(u,Date.now())}).catch(function(){})}catch(e){}})();`;
+  return `(function(){try{if(typeof fetch!=="function")return;var t=${table},r=location.pathname.replace(/\\/$/,"")||"/",m=new RegExp(${call},"i").exec(r),p,l=m?${callReadsJson}.concat(["","/transcript","/report"].map(function(x){return ${acquisition}+"/submissions/"+m[1].toLowerCase()+x})):(p=new RegExp(${person},"i").exec(r))?${personReadsJson}.concat(["/v1/organisation/members/"+p[1].toLowerCase()+"/activity?weeks=12"]):t[r];if(!l||!l.length)return;var ok=false;try{ok=localStorage.getItem(${key})==="1"}catch(e){}if(!ok)l=l.filter(function(u){return u.indexOf("/v1/me/")===0});var s=window.__sxEarly={},a=Date.now(),g=function(u,at){s[u]={at:at,p:fetch(u,{method:"GET",credentials:"same-origin",cache:"no-store",redirect:"error",headers:{accept:"application/json"}}).then(function(r){return r.text().then(function(b){var h=[];r.headers.forEach(function(v,k){h.push([k,v])});return{status:r.status,statusText:r.statusText,headers:h,body:b}})}).catch(function(){return null})}};l.forEach(function(u){if(!s[u])g(u,a)});var q=true,d=s[${directory}];new URLSearchParams(location.search).forEach(function(v,k){if(k!=="theme"&&!(k==="tab"&&v==="all")&&!(k==="stage"&&v===${JSON.stringify(OPENING_STAGE)}))q=false});if(r==="/leads"&&d)d.p.then(function(x){var j=x&&x.status===200?JSON.parse(x.body):null,w=j&&j.workspaces&&j.workspaces.filter(function(i){return i.tenant_id===j.selected_tenant_id})[0],u;if(!w||w.sales_xray_enabled!==true||s[${directory}]!==d)return;if(!s[${desk}])g(${desk},Date.now());u="/v1/lead-desk/leads?scope="+(${managers}.indexOf(w.role)<0?"mine":"team")+"&stage=${OPENING_STAGE}";if(q&&!s[u])g(u,Date.now())}).catch(function(){})}catch(e){}})();`;
 }
 
 function store(): EarlyStore | null {
