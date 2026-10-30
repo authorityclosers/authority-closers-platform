@@ -225,14 +225,12 @@ def test_whatsapp_conversations_from_connect_to_sla(
                 forged = await client.get(
                     f"{BASE}/whatsapp/callback", params={"code": "signup-code", "state": "x.y"}
                 )
-                assert forged.headers["location"].endswith("whatsapp=failed")
+                assert forged.headers["location"].endswith("/settings/apps?connect_error=failed")
                 back = await client.get(
                     f"{BASE}/whatsapp/callback", params={"code": "signup-code", "state": state}
                 )
                 assert back.status_code == 303, back.text
-                assert back.headers["location"].endswith(
-                    "/organisation?tab=integrations&whatsapp=connected"
-                )
+                assert back.headers["location"].endswith("/settings/apps?connected=whatsapp")
                 # The page-side path (Embedded Signup's own code) lands on the same number.
                 connected = await client.post(
                     f"{BASE}/whatsapp/connect",
@@ -697,7 +695,7 @@ def test_a_whatsapp_business_app_number_joins_without_registering_and_its_echoes
                     f"{BASE}/whatsapp/callback",
                     params={"code": "signup-code", "state": query["state"][0]},
                 )
-                assert back.headers["location"].endswith("whatsapp=connected"), back.text
+                assert back.headers["location"].endswith("connected=whatsapp"), back.text
                 async with setup.sessions() as db:
                     row = await db.scalar(select(LeadWhatsAppNumber))
                     assert row is not None and row.pin is None

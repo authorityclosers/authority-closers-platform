@@ -381,10 +381,7 @@ def test_whatsapp_connect_in_the_app_finishes_through_the_phones_browser(
                         params={"code": "signup-code", "state": state},
                     )
                 )
-                assert (back["provider"], back["path"]) == (
-                    "whatsapp",
-                    "/organisation?tab=integrations",
-                )
+                assert (back["provider"], back["path"]) == ("whatsapp", "/settings/apps")
                 async with setup.sessions() as db:
                     assert await db.scalar(select(LeadWhatsAppNumber)) is None
 
@@ -417,8 +414,8 @@ def test_whatsapp_connect_in_the_app_finishes_through_the_phones_browser(
                 )
                 plain = await app.get(f"{BASE}/whatsapp/callback", params={"error": "denied"})
                 assert plain.headers["location"].endswith(
-                    "/organisation?tab=integrations&whatsapp=cancelled"
-                )  # from anywhere else, as before
+                    "/settings/apps?connect_error=cancelled"
+                )  # from anywhere else: Connected apps too, never Developers
         finally:
             await setup.engine.dispose()
 
