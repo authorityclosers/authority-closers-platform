@@ -2362,3 +2362,55 @@ def test_backup_exclusion_requires_empty_restored_analytics_and_preserves_audit_
     monkeypatch.setattr(restore_drill, "_query", lambda *args: "1")
     with pytest.raises(restore_drill.DrillError, match="must be empty"):
         restore_drill._verify_excluded_table_data(None, metadata)
+
+
+def test_staging_synthetic_sandbox_exclusion_requires_its_rows_to_restore_empty(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    excluded = {"analytics_events": 12278, "conversation_synthetic_records": 832160}
+
+    def write(environment: str, *, synthetic_rows: int = 0) -> tuple[Path, Path]:
+        directory = tmp_path / f"{environment}-{synthetic_rows}"
+        directory.mkdir()
+        backup, metadata, _ = _write_backup_pair(directory, environment=environment)
+        payload = json.loads(metadata.read_text())
+        payload["excluded_table_data"] = excluded
+        payload["row_counts"]["conversation_synthetic_records"] = synthetic_rows
+        metadata.write_text(json.dumps(payload))
+        return backup, metadata
+
+    def validate(backup: Path, metadata: Path, environment: str) -> None:
+        restore_drill._validate_backup_metadata(
+            str(metadata),
+            backup=backup,
+            environment=environment,
+            workspace_root=restore_drill._workspace_root(),
+        )
+
+    backup, metadata = write("staging")
+    validate(backup, metadata, "staging")
+    with pytest.raises(restore_drill.DrillError, match="excluded-table inventory"):
+        validate(*write("production"), "production")
+    with pytest.raises(restore_drill.DrillError, match="must restore empty"):
+        validate(*write("staging", synthetic_rows=4), "staging")
+
+    queries = []
+
+    def query(*args):
+        queries.append(args[1])
+        return "0"
+
+    monkeypatch.setattr(restore_drill, "_query", query)
+    restore_drill._verify_excluded_table_data(None, metadata)
+    assert queries == [
+        "SELECT count(*) FROM public.analytics_events",
+        "SELECT count(*) FROM public.conversation_synthetic_records",
+    ]
+    monkeypatch.setattr(
+        restore_drill, "_query", lambda *args: "0" if "analytics" in args[1] else "5"
+    )
+    with pytest.raises(
+        restore_drill.DrillError, match="conversation_synthetic_records data must be empty"
+    ):
+        restore_drill._verify_excluded_table_data(None, metadata)

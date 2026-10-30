@@ -1833,8 +1833,32 @@ def run_r2_guard(projected_bytes: int) -> None:
         raise BackupError("R2 usage or projected logical-dump storage is not safe.") from exc
 
 
-def dump_command(target: ApplicationTarget, snapshot_id: str) -> list[str]:
+# Disposable analytics rows stay out of every logical dump (docs/ops/TELEMETRY-CAPACITY.md).
+EXCLUDED_TABLE_DATA = ("analytics_events",)
+# Staging's synthetic sandbox (3,360 fictional calls loaded 11 Oct 2026; owner, 17 Oct: "it's
+# test data") compresses to about 85 MB, over the fixed 64 MiB R2 dump bound by itself. Only the
+# bounded R2 dump of staging leaves its rows out; production and Drive captures keep them.
+R2_STAGING_EXCLUDED_TABLE_DATA = (*EXCLUDED_TABLE_DATA, "conversation_synthetic_records")
+
+
+def r2_excluded_table_data(target: ApplicationTarget) -> tuple[str, ...]:
+    if target.environment == "staging" and "conversation_synthetic_records" in (
+        parity_tables_for_head(target.migration_head)
+    ):
+        return R2_STAGING_EXCLUDED_TABLE_DATA
+    return EXCLUDED_TABLE_DATA
+
+
+def dump_command(
+    target: ApplicationTarget,
+    snapshot_id: str,
+    *,
+    excluded_table_data: tuple[str, ...] = EXCLUDED_TABLE_DATA,
+) -> list[str]:
     snapshot_id = validate_exported_snapshot_id(snapshot_id)
+    if excluded_table_data not in (EXCLUDED_TABLE_DATA, R2_STAGING_EXCLUDED_TABLE_DATA):
+        raise BackupError("The excluded table data is not a reviewed backup policy.")
+    exclusions = " ".join(f"--exclude-table-data=public.{table}" for table in excluded_table_data)
     return [
         "timeout",
         "--foreground",
@@ -1850,7 +1874,7 @@ def dump_command(target: ApplicationTarget, snapshot_id: str) -> list[str]:
             'umask 077; export PGPASSWORD="$AC_DB_BACKUP_PASSWORD"; '
             "exec pg_dump --no-password -h 127.0.0.1 "
             '-U ac_backup -d "$POSTGRES_DB" --format=custom --create '
-            f"--exclude-table-data=public.analytics_events --snapshot={snapshot_id}",
+            f"{exclusions} --snapshot={snapshot_id}",
         ),
     ]
 
@@ -2035,6 +2059,8 @@ def capture_dump(
     snapshot_holder: ExportedSnapshotHolder | None = None
     process: subprocess.Popen[bytes] | None = None
     bytes_written = 0
+    # A Drive capture dumps through its own CaptureIO with the default exclusions.
+    excluded_tables = EXCLUDED_TABLE_DATA if capture_io else r2_excluded_table_data(target)
     try:
         snapshot_holder = (
             capture_io.holder(target) if capture_io else start_exported_snapshot_holder(target)
@@ -2046,7 +2072,9 @@ def capture_dump(
                 raise BackupError("The bounded capture exceeded its fixed size bound.")
         else:
             process = subprocess.Popen(  # noqa: S603 - fixed exact compose release and timeout
-                dump_command(target, snapshot_holder.snapshot_id),
+                dump_command(
+                    target, snapshot_holder.snapshot_id, excluded_table_data=excluded_tables
+                ),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.DEVNULL,
                 env=compose_environment(target),
@@ -2097,6 +2125,10 @@ def capture_dump(
         )
         # Inventory the source honestly; restored analytics data is intentionally empty.
         excluded_table_data = {"analytics_events": row_counts.pop("analytics_events")}
+        for table in excluded_tables:
+            if table in row_counts:
+                # A parity table whose rows stay out restores empty; its source count stays here.
+                excluded_table_data[table], row_counts[table] = row_counts[table], 0
         snapshot_holder.close()
         snapshot_holder = None
         completed_time = utc_now()

@@ -32,8 +32,9 @@ still read yesterday's events, and lake recipes still filter the 180-day
 
 The canonical `ac-postgres-backup.py` writer uses
 `--exclude-table-data=public.analytics_events`: schema, indexes and constraints
-remain in the dump, but disposable analytics rows do not. No other table data
-is excluded. Metadata includes `excluded_table_data: {"analytics_events": N}`,
+remain in the dump, but disposable analytics rows do not. The only other
+exclusion is staging's synthetic sandbox, described below. Metadata includes
+`excluded_table_data: {"analytics_events": N}`,
 where N is the actual source snapshot count. The drill explicitly queries the
 restored analytics table and requires it to be empty.
 The existing canonical `row_counts` inventory remains unchanged.
@@ -47,6 +48,20 @@ size limit remain unchanged. Analytics row growth contributes **zero data
 bytes** to these logical dumps; schema overhead remains. Other product growth
 can still trigger the refusal. Full deployment snapshots and other backup
 writers are unchanged and may still include analytics.
+
+### Staging's synthetic sandbox
+
+Staging holds the full fictional sandbox load of 11 Oct 2026 (3,360 calls;
+832,160 `conversation_synthetic_records` rows). Those rows alone compress to
+about 85 MB, so every bounded staging dump was refused from then on (owner,
+17 Oct: "leave staging failing, it's test data"). Staging's bounded R2 dump now
+also uses `--exclude-table-data=public.conversation_synthetic_records`, and the
+whole staging dump measured 34.4 MB on 30 Oct. Its metadata records the source count in
+`excluded_table_data.conversation_synthetic_records` and sets that table's
+`row_counts` entry to 0, which is what the dump restores. Restore validation
+accepts this pair only for staging, requires the 0, and the drill requires the
+restored table to be empty. Production dumps and Drive captures keep every
+synthetic row, and the 64 MiB bound is unchanged.
 
 Install matching writer and restore helpers together through the operator's
 normal release route before relying on this policy. Older strict metadata

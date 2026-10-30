@@ -1803,6 +1803,13 @@ def _write_proof_record(
     return target
 
 
+def _excluded_table_sets(environment: str) -> tuple[set[str], ...]:
+    # Mirrors ac-postgres-backup.py: only staging's R2 dump also leaves out its synthetic sandbox.
+    if environment == "staging":
+        return ({"analytics_events"}, {"analytics_events", "conversation_synthetic_records"})
+    return ({"analytics_events"},)
+
+
 def _validate_metadata(
     metadata_path: Path,
     dump_path: Path,
@@ -1825,13 +1832,13 @@ def _validate_metadata(
         raise
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
         raise RestoreProofError("logical backup metadata is not valid UTF-8 JSON") from error
+    excluded: dict = {}
     if isinstance(payload, dict) and "excluded_table_data" in payload:
         excluded = payload.pop("excluded_table_data")
         if (
             not isinstance(excluded, dict)
-            or set(excluded) != {"analytics_events"}
-            or type(excluded["analytics_events"]) is not int
-            or excluded["analytics_events"] < 0
+            or set(excluded) not in _excluded_table_sets(environment)
+            or any(type(value) is not int or value < 0 for value in excluded.values())
         ):
             raise RestoreProofError("backup excluded-table inventory is malformed")
     expected_keys = {
@@ -1902,6 +1909,10 @@ def _validate_metadata(
         )
     ):
         raise RestoreProofError("logical backup metadata size or digest does not match")
+    if any(
+        table != "analytics_events" and payload["row_counts"].get(table) != 0 for table in excluded
+    ):
+        raise RestoreProofError("excluded parity table data must restore empty")
     started_at = _parse_timestamp(payload.get("capture_started_at"), label="capture start")
     completed_at = _parse_timestamp(payload.get("capture_completed_at"), label="capture completion")
     captured_at = _parse_timestamp(payload.get("captured_at"), label="capture")

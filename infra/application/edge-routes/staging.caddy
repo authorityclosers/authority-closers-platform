@@ -152,6 +152,17 @@
 		header X-Authority-Closers-Route "sales-xray-staging"
 		reverse_proxy ac-staging-sales-xray-web:3016
 	}
+	# The website line runs on customers' own sites on every page view. The app lets browsers and
+	# Cloudflare keep it a few minutes (next.config.ts); it holds no key (30 Oct 2026).
+	@staging_sales_xray_script {
+		host salesxray-staging.authorityclosers.com
+		path /sx.js
+	}
+	handle @staging_sales_xray_script {
+		import base_security_headers
+		header X-Authority-Closers-Route "sales-xray-staging"
+		reverse_proxy ac-staging-sales-xray-web:3016
+	}
 	@staging_sales_xray host salesxray-staging.authorityclosers.com
 	handle @staging_sales_xray {
 		# base_security_headers, but this site may use the microphone itself (voice notes, #11,

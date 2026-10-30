@@ -721,3 +721,41 @@ def test_excluded_data_inventory_is_exact(tmp_path: Path, excluded: dict) -> Non
             proof._validate_metadata(
                 metadata, dump, "staging", expected_migration_head=MIGRATION_HEAD_FIXTURE
             )
+
+
+def _sandbox_exclusion_pair(
+    directory: Path, environment: str, *, restored_synthetic_rows: int = 0
+) -> tuple[Path, Path, dict]:
+    head = proof.SYNTHETIC_SANDBOX_PARITY_MIGRATION_HEAD
+    dump, metadata = _write_pair(directory, environment)
+    payload = json.loads(metadata.read_text())
+    payload["parity_contract"] = proof.parity_contract_for_head(head)
+    payload["migration_head"] = head
+    payload["row_counts"] = dict.fromkeys(proof.parity_tables_for_head(head), 3)
+    payload["row_counts"]["conversation_synthetic_records"] = restored_synthetic_rows
+    payload["excluded_table_data"] = {
+        "analytics_events": 12278,
+        "conversation_synthetic_records": 832160,
+    }
+    metadata.write_text(json.dumps(payload))
+    return dump, metadata, payload
+
+
+def test_only_staging_may_leave_synthetic_sandbox_rows_out_and_they_restore_empty(
+    tmp_path: Path,
+) -> None:
+    head = proof.SYNTHETIC_SANDBOX_PARITY_MIGRATION_HEAD
+    dump, metadata, payload = _sandbox_exclusion_pair(tmp_path / "staging", "staging")
+    _, _, counts = proof._validate_metadata(metadata, dump, "staging", expected_migration_head=head)
+    assert counts == payload["row_counts"]
+    assert counts["conversation_synthetic_records"] == 0
+
+    dump, metadata, _ = _sandbox_exclusion_pair(tmp_path / "production", "production")
+    with pytest.raises(proof.RestoreProofError, match="excluded-table inventory"):
+        proof._validate_metadata(metadata, dump, "production", expected_migration_head=head)
+
+    dump, metadata, _ = _sandbox_exclusion_pair(
+        tmp_path / "rows", "staging", restored_synthetic_rows=832160
+    )
+    with pytest.raises(proof.RestoreProofError, match="must restore empty"):
+        proof._validate_metadata(metadata, dump, "staging", expected_migration_head=head)
