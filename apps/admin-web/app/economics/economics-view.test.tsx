@@ -142,3 +142,16 @@ it("offers the fixed costs for editing, the measured line left out", () => {
   const bare = { ...economicsFixture(), settings: { revision: null } };
   expect(render(bare)).not.toContain("Edit fixed costs");
 });
+
+it("models a coming-soon plan and says it is not on sale yet", () => {
+  const raw = economicsFixture();
+  const offers = (raw.offers as Record<string, unknown>[]).map(
+    (offer, index) => (index === 0 ? { ...offer, on_sale: false } : offer),
+  );
+  const economics = normalizeEconomics({ ...raw, offers });
+  expect(economics.offers[0]?.onSale).toBe(false);
+  expect(economics.offers[1]?.onSale).toBe(true);
+  const text = render({ ...raw, offers });
+  expect(text).toContain("Personal, monthly, web · not on sale yet");
+  expect(render(raw)).not.toContain("not on sale yet");
+});

@@ -41,6 +41,8 @@ class PlanTerms:
     yearly_paise: int | None
     minutes: int | None
     top_ups: tuple[TopUp, ...] = ()
+    # False for a plan priced but not on sale yet (coming soon): modelled all the same.
+    on_sale: bool = True
 
 
 @dataclass(frozen=True)
@@ -108,6 +110,7 @@ def offers(plans: Sequence[PlanTerms], play_plans: Sequence[str]) -> list[dict[s
                         "price_paise_per_month": round(per_month),
                         "prices_include_gst": plan.prices_include_gst,
                         "minutes": plan.minutes,
+                        "on_sale": plan.on_sale,
                     }
                 )
     return rows

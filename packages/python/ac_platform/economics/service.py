@@ -40,10 +40,13 @@ MONTH_DAYS = 30
 TEST_AI_KEY = "ai_test_calls"
 
 
-async def active_plans(db: AsyncSession) -> list[PlanTerms]:
-    rows = (
-        await db.scalars(select(Plan).where(Plan.status == "active").order_by(Plan.sort_order))
-    ).all()
+# Plans on sale, and plans priced but not on sale yet (owner, 30 Oct 2026: production's plans
+# are all coming soon, and Economics must still show their margins and break-even).
+MODELLED_STATUSES = ("active", "coming_soon")
+
+
+def plan_terms(rows: Sequence[Any]) -> list[PlanTerms]:
+    """Plans rows as Economics models them; a coming-soon plan is marked not on sale."""
     return [
         PlanTerms(
             key=row.key,
@@ -58,9 +61,20 @@ async def active_plans(db: AsyncSession) -> list[PlanTerms]:
                 for pack in row.top_up_packs or ()
                 if pack.get("price_paise") and pack.get("minutes")
             ),
+            on_sale=row.status == "active",
         )
         for row in rows
     ]
+
+
+async def active_plans(db: AsyncSession) -> list[PlanTerms]:
+    """The active and coming-soon plans, in their sort order (draft and retired are left out)."""
+    rows = (
+        await db.scalars(
+            select(Plan).where(Plan.status.in_(MODELLED_STATUSES)).order_by(Plan.sort_order)
+        )
+    ).all()
+    return plan_terms(rows)
 
 
 async def money_in(db: AsyncSession, *, now: datetime) -> dict[str, Any]:
