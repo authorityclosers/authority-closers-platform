@@ -141,7 +141,8 @@ def test_each_message_is_filed_once() -> None:
         ["admin@example.test"], lambda _mailbox: FakeGmail(inbox), filed.append, [], days=3
     )
     assert [item["vendor"] for item in proposals] == ["ElevenLabs"] and len(filed) == 1
-    assert len(seen) == 2  # the newsletter is remembered too, never read again
+    # Both messages are remembered (the newsletter is never read again), and the charge.
+    assert len(seen) == 3
     again, seen_again = job.run(
         ["admin@example.test"], lambda _mailbox: FakeGmail(inbox), filed.append, seen, days=3
     )
@@ -175,3 +176,36 @@ def test_without_a_key_nothing_is_read(tmp_path: Path, monkeypatch: pytest.Monke
     job = runner()
     monkeypatch.setattr(job, "KEY", tmp_path / "missing.json")
     assert job.main([]) == 0
+
+
+def test_notices_that_are_not_charges_are_skipped_and_a_charge_is_filed_once() -> None:
+    # The first real run (30 Oct 2026) proposed these beside the one real receipt.
+    job = runner()
+    for sender, subject in (
+        ("AWS <no-reply@signup.aws>", "Welcome to AWS - Your Account with Free Plan is Ready"),
+        ("Anthropic <invoice@mail.anthropic.com>", "Credit note from Anthropic, PBC for invoice"),
+        ("Google Cloud <billing-noreply@google.com>", "100% of budget reached"),
+        ("Anthropic <billing@mail.anthropic.com>", "Action required: payment failed"),
+    ):
+        notice = _message("n", sender, subject, _part("text/plain", "Total ₹20,338.14"))
+        assert job.propose("admin@example.test", notice) is None, subject
+    inbox = {
+        "r1": _message(
+            "r1",
+            "Anthropic <invoice@mail.anthropic.com>",
+            "Your receipt from Anthropic",
+            _part("text/plain", "Total ₹20,338.14"),
+        ),
+        "r2": _message(
+            "r2",
+            "Anthropic <invoice@mail.anthropic.com>",
+            "Your invoice from Anthropic",
+            _part("text/plain", "Amount paid ₹20,338.14"),
+        ),
+    }
+    filed: list[dict[str, Any]] = []
+    proposals, seen = job.run(
+        ["admin@example.test"], lambda _mailbox: FakeGmail(inbox), filed.append, [], days=3
+    )
+    assert len(proposals) == 1 and len(filed) == 1
+    assert len(seen) == 3  # two messages and the one charge

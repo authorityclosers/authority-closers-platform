@@ -18,7 +18,8 @@ Daily as root on the ac host; Gmail is only ever read:
   Admin cost register. A task holds the vendor, amount, date, subject and Gmail id, never the
   email's body.
 
-Usage: ac-cost-detect [--days N] [--dry-run]
+Usage: ac-cost-detect [--days N] [--dry-run] [--mark-seen]
+  --mark-seen remembers those days' mail without filing (once, for costs already entered).
 """
 
 from __future__ import annotations
@@ -226,6 +227,13 @@ _MONEY = re.compile(
     re.IGNORECASE,
 )
 _TOTAL = re.compile(r"total|amount (?:paid|charged|due)|you paid|charged|grand", re.IGNORECASE)
+# Mail about money that is not a charge (first run, 30 Oct 2026: a welcome mail with free
+# credits, a credit note and a budget alert were proposed beside the one real receipt).
+_NOT_A_CHARGE = re.compile(
+    r"\b(welcome|free (?:plan|tier|trial)|trial|credit note|refund|budget|alert"
+    r"|payment (?:failed|declined|unsuccessful)|action required|reminder|upcoming|will renew)\b",
+    re.IGNORECASE,
+)
 _CODES = {
     "₹": "INR",
     "inr": "INR",
@@ -287,6 +295,8 @@ def propose(mailbox: str, message: dict) -> dict | None:
     """One proposed cost from a Gmail message (format=full), or None when it holds no charge."""
     headers = {h["name"].lower(): h["value"] for h in message["payload"].get("headers", [])}
     subject = headers.get("subject", "")[:200]
+    if _NOT_A_CHARGE.search(subject):
+        return None
     text = " ".join([subject, message.get("snippet", ""), body_text(message["payload"])])
     charge = pick(amounts(text))
     if charge is None or charge[1] <= 0:
@@ -464,7 +474,8 @@ def run(
     *,
     days: int,
 ) -> tuple[list[dict], list[str]]:
-    """(the proposals filed, the seen hashes after the run)."""
+    """(the proposals filed, the seen hashes after the run). One charge described by several
+    emails (a receipt and an invoice, two mailboxes) is filed once: vendor, amount and day."""
     known = set(seen)
     filed: list[dict] = []
     for mailbox in mailboxes:
@@ -475,8 +486,18 @@ def run(
                 continue
             proposal = propose(mailbox, gmail.message(message_id))
             if proposal is not None:
-                file(task(proposal))
-                filed.append(proposal)
+                charge = (
+                    "c:"
+                    + hashlib.sha256(
+                        f"{proposal['vendor']}\0{proposal['currency']}\0{proposal['amount']}"
+                        f"\0{proposal['date']}".encode()
+                    ).hexdigest()[:22]
+                )
+                if charge not in known:
+                    file(task(proposal))
+                    filed.append(proposal)
+                    known.add(charge)
+                    seen.append(charge)
             known.add(digest)
             seen.append(digest)
     return filed, seen[-SEEN_LIMIT:]
@@ -486,6 +507,11 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--days", type=int, default=3)
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--mark-seen",
+        action="store_true",
+        help="remember these days' mail without filing (costs already in the register)",
+    )
     args = parser.parse_args(argv)
     if not 1 <= args.days <= 60:
         parser.error("--days is 1 to 60")
@@ -497,19 +523,27 @@ def main(argv: list[str] | None = None) -> int:
         seen = json.loads(STATE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         seen = []
+    if args.mark_seen:
+        file: Callable[[dict], object] = lambda op: None  # noqa: E731
+    elif args.dry_run:
+        file = lambda op: print(json.dumps(op, ensure_ascii=False))  # noqa: E731
+    else:
+        file = lambda op: pulse(op, dry=False)  # noqa: E731
     filed, seen = run(
-        MAILBOXES,
-        lambda mailbox: Gmail(key, mailbox),
-        (lambda op: print(json.dumps(op, ensure_ascii=False)))
-        if args.dry_run
-        else (lambda op: pulse(op, dry=False)),
-        list(seen),
-        days=args.days,
+        MAILBOXES, lambda mailbox: Gmail(key, mailbox), file, list(seen), days=args.days
     )
     if not args.dry_run:
         STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text(json.dumps(seen), encoding="utf-8")
-    print(json.dumps({"filed": len(filed), "mailboxes": len(MAILBOXES)}))
+    print(
+        json.dumps(
+            {
+                "filed": 0 if args.mark_seen else len(filed),
+                "marked_seen": len(filed) if args.mark_seen else 0,
+                "mailboxes": len(MAILBOXES),
+            }
+        )
+    )
     return 0
 
 
