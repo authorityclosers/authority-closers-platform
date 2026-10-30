@@ -1,9 +1,9 @@
 """The API lists leads by the organisation's own stages (orchestrator, 26 Oct 2026).
 
-An organisation on the sales team's eight stages, with a second pipeline still on the
+A new organisation on the recommended nine stages, with a second pipeline still on the
 default list: every answer lists the stages, a stage key gives that stage's leads across
-the pipelines (Interested no longer takes in Meeting/Demo scheduled, which shares its
-kind), pages go on with offset, open and the desk's old kinds still work, and anything
+the pipelines (Interested no longer takes in Meeting Scheduled, which shares its kind),
+pages go on with offset, open and the desk's old kinds still work, and anything
 else is refused with the keys. Disposable loopback PostgreSQL, fictional rows only.
 """
 
@@ -23,6 +23,7 @@ from ac_platform.integrations.api_http import install_integrations_api
 from ac_platform.integrations.http import install_integrations_http
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey import pipelines
+from ac_platform.lead_desk.journey.templates import TEMPLATES
 from ac_platform.lead_desk.models import Lead
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
 from tests.database.test_conversation_postgresql import run
@@ -30,15 +31,9 @@ from tests.database.test_conversation_submission_http_postgresql import ORIGIN, 
 from tests.database.test_lead_desk_postgresql import _organisation
 
 WRITE = {"Origin": ORIGIN, "Content-Type": "application/json"}
-EIGHT = [
-    "new",
-    "not_connected",
-    "discussion_incomplete",
-    "interested",
-    "meeting_scheduled",
-    "demo_completed",
-    "won",
-    "lost",
+# The recommended nine, in the template's own order.
+NINE = [
+    stage.key for template in TEMPLATES if template.id == "recommended" for stage in template.stages
 ]
 
 
@@ -59,6 +54,8 @@ def test_leads_follow_the_organisations_own_stages(postgres_harness: Any, tmp_pa
             now = datetime.now(UTC)
             async with setup.sessions() as db, db.begin():
                 assert await journeys.start_organisation(db, tenant, person, now)
+                # Once only: an organisation with a list keeps it.
+                assert not await journeys.start_organisation(db, tenant, person, now)
                 partners = await pipelines.create(
                     db, tenant, name="Partners", sources=[], by=person, now=now
                 )
@@ -111,15 +108,15 @@ def test_leads_follow_the_organisations_own_stages(postgres_harness: Any, tmp_pa
                 every, page = await names("")
                 assert every == set(ids)
                 keys = [item["key"] for item in page["stages"]]
-                assert keys[:8] == EIGHT  # main's eight, then what Partners adds
-                assert {"follow_up", "junk"} <= set(keys[8:]) and len(keys) == len(set(keys))
+                assert keys[:9] == NINE  # main's nine, then what Partners adds
+                assert "follow_up" in keys[9:] and len(keys) == len(set(keys))
                 labels = {item["key"]: item["label"] for item in page["stages"]}
-                assert labels["meeting_scheduled"] == "Meeting/Demo scheduled"
+                assert labels["meeting_scheduled"] == "Meeting Scheduled"
 
                 booked, page = await names("?stage=meeting_scheduled")
                 assert booked == {"Bina", "Dev"} and page["total"] == 2
                 assert {row["step"] for row in page["leads"]} == {"meeting_scheduled"}
-                assert {row["stage_label"] for row in page["leads"]} == {"Meeting/Demo scheduled"}
+                assert {row["stage_label"] for row in page["leads"]} == {"Meeting Scheduled"}
                 assert page["stages"][0]["key"] == "new"
                 first, page = await names("?stage=meeting_scheduled&limit=1")
                 assert len(first) == 1 and page["next_offset"] == 1
@@ -138,7 +135,7 @@ def test_leads_follow_the_organisations_own_stages(postgres_harness: Any, tmp_pa
                 assert refused.status_code == 422
                 error = refused.json()["error"]
                 assert error["code"] == "stage_unknown"
-                assert error["message"].startswith("stage is one of open, new, not_connected")
+                assert error["message"].startswith(f"stage is one of open, {', '.join(NINE[:2])}")
                 assert "meeting_scheduled" in error["message"]
         finally:
             await setup.engine.dispose()

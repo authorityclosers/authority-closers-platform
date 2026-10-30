@@ -728,13 +728,14 @@ def funnel_rank(stage: Stage) -> int:
     return FUNNEL_ORDER.get(stage.milestone, 99)
 
 
-# A new organisation's first stage list: the sales team's eight stages (owner, 25 Oct 2026:
-# "make it the default for new organisations").
-NEW_ORGANISATION_TEMPLATE: Final[str] = "inside_sales_demos"
+# A new organisation's first stage list: Dipak's recommended nine (orchestrator for the
+# owner, 31 Oct 2026; before, the sales team's eight from 25 Oct). An organisation that
+# has saved a list keeps it: nothing existing is re-staged.
+NEW_ORGANISATION_TEMPLATE: Final[str] = "recommended"
 
 
 async def start_organisation(db: AsyncSession, tenant_id: UUID, by: UUID, now: datetime) -> bool:
-    """Give a new organisation the sales team's stages, once: one that has saved a list of
+    """Give a new organisation the recommended stages, once: one that has saved a list of
     its own keeps it. True when installed."""
     before = await read(db, tenant_id, MAIN_PIPELINE)
     if before.version > 0:
@@ -745,7 +746,7 @@ async def start_organisation(db: AsyncSession, tenant_id: UUID, by: UUID, now: d
         stages=from_template(NEW_ORGANISATION_TEMPLATE, before, {}),
         industry=NEW_ORGANISATION_TEMPLATE,
         expected_version=before.version,
-        note="The sales team's stages, for a new organisation",
+        note="The recommended stages, for a new organisation",
         by=by,
         now=now,
         pipeline=MAIN_PIPELINE,
