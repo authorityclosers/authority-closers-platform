@@ -10,13 +10,13 @@
     "review": "Orchestrator 28 Oct 2026 (v1.3.0 cut): producer run 40724365608 (workbench-checks.yml, push, success, wb-ci --full) on request 5a168c24, whose only parent is the v1.3.0 hold 77b745d3b and which changes only .wb-ci/request.json. Same identity 4db81fe7 (no lockfile change); artifact digest from the API. Replaces the 2e9f74de pin, which passed its 36-hour reuse window at 15:51Z and left e2e unable to admit a new bundle."
   },
   {
-    "artifact_id": 12860662070,
-    "digest": "e481ff33f3ae64a82daf3486451b247e78c5a5f66bc5c2f540c3905ffc87c700",
+    "artifact_id": 12975829203,
+    "digest": "233af02ab6fdcf7778817c8e17273f402d18dadd595cb1f0264a7e6c51f2102b",
     "identity": "8fed5c6dc9d51ab364d8a09a7d5f66c7d58d9ba10f20f36f5113d2bee337c733",
     "repository": "authorityclosers/authority-closers-platform",
-    "run_id": 40788687109,
-    "source_sha": "a5bb48f2564dfacf3c94e563b8863e52554041fd",
-    "reviewed_source_sha": "ef2da4c56562bb0c082be8d5a1ac67746f8c696f",
-    "review": "Orchestrator 29 Oct 2026 (lockfile change 64bc185bd, lake export deps): producer run 40788687109 (workbench-checks.yml, push, success, targeted py job) on request a5bb48f2, whose only parent is workbench ef2da4c56 and which changes only .wb-ci/request.json. New identity 8fed5c6d; artifact digest from the API. Two earlier bundles for this identity came from failed full runs and were deleted (not pinnable)."
+    "run_id": 41054854603,
+    "source_sha": "ce3b3f54ac7ff9e729e0f8ce989ce9650c4aff5a",
+    "reviewed_source_sha": "f7fce521d7b4e97d5cd13e5c9b1f3496c2e8d715",
+    "review": "Orchestrator 30 Oct 2026 (v1.16.0 re-cut): producer run 41054854603 (workbench-checks.yml, push, success, targeted py job) on request ce3b3f54, whose only parent is workbench f7fce521d and which changes only .wb-ci/request.json. Same identity 8fed5c6d; artifact digest from the API. Replaces the 12860662070 pin, which passed its 36-hour reuse window at 11:41Z and was deleted; the unpinnable 12973943610 from release PR run 41050026333 was deleted too."
   }
 ]
