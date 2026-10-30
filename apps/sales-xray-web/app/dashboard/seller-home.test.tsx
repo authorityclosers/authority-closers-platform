@@ -264,7 +264,9 @@ it("is Dipak's Home: the work in six blocks, each opening its exact place", asyn
   );
   expect(name?.textContent).toBe("Amit Sample");
   expect(host.textContent).toContain("Meta Ads · Assigned 4 min ago");
-  expect(host.textContent).toContain("18 left to call today");
+  expect(
+    host.querySelector("[data-countdown]")?.getAttribute("aria-label"),
+  ).toContain("18 left to call today");
   const call = Array.from(host.querySelectorAll("a")).find(
     (link) => link.textContent === "Call Amit now",
   );
@@ -313,7 +315,7 @@ it("switches to Cold at once, with no second read", async () => {
     "/leads?view=follow_ups&when=today&side=cold",
   );
   expect(host.textContent).toContain("Next cold call");
-  expect(host.textContent).not.toContain("left to call today");
+  expect(host.querySelector("[data-countdown]")).toBeNull();
   const start = Array.from(host.querySelectorAll("a")).find(
     (link) => link.textContent === "Start cold calling",
   );

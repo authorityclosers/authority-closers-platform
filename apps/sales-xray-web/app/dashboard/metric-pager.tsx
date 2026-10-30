@@ -12,6 +12,7 @@
 import Link from "next/link";
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -128,7 +129,7 @@ export function MoreFigures({ figures }: { figures: More[] }) {
           <>
             <span className={styles.figureLabel}>{figure.label}</span>
             <strong aria-busy={figure.value === null || undefined}>
-              {figure.value ?? " "}
+              {figure.value === null ? " " : <Count value={figure.value} />}
             </strong>
             {figure.note ? (
               <span className={styles.figureNote}>{figure.note}</span>
@@ -156,6 +157,53 @@ export function MoreFigures({ figures }: { figures: More[] }) {
       })}
     </ul>
   );
+}
+
+/**
+ * A number that counts up to its value (owner, 31 Oct 2026: "numbers count
+ * up"), from where it was or from 0, in 0.7 s; text that is not a number, and
+ * every number for someone who asks for less motion, shows at once. The span
+ * is written directly, so React never holds a stale text node.
+ */
+export function Count({ value }: { value: string }) {
+  const node = useRef<HTMLSpanElement>(null);
+  const last = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const element = node.current;
+    if (!element) return;
+    const match = /^(\d+)(.*)$/.exec(value);
+    const from = last.current;
+    const target = match ? Number(match[1]) : null;
+    last.current = target;
+    const still =
+      target === null ||
+      from === target ||
+      // Tests read the figure, not the motion.
+      process.env.NODE_ENV === "test" ||
+      typeof window.matchMedia !== "function" ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (still || !match) {
+      element.textContent = value;
+      return;
+    }
+    const start = from ?? 0;
+    const rest = match[2];
+    const began = performance.now();
+    let frame = 0;
+    const step = (now: number) => {
+      const t = Math.min(1, (now - began) / 700);
+      const eased = 1 - (1 - t) ** 3;
+      element.textContent = `${Math.round(start + (target - start) * eased)}${rest}`;
+      if (t < 1) frame = requestAnimationFrame(step);
+    };
+    element.textContent = `${start}${rest}`;
+    frame = requestAnimationFrame(step);
+    return () => {
+      cancelAnimationFrame(frame);
+      element.textContent = value;
+    };
+  }, [value]);
+  return <span ref={node} />;
 }
 
 export const share = (part: number, whole: number) =>

@@ -43,7 +43,8 @@ import {
   type Performance,
   type Period,
 } from "../leads/leads-client";
-import { ActionList, ActionRow, Segmented } from "../ui/kit";
+import { ActionList, ActionRow } from "../ui/kit";
+import { ModeSwitch } from "./mode-switch";
 import { OutcomeTiles, TILE_SETS } from "./outcome-tiles";
 import { TakingSwitch } from "../leads/taking-switch";
 import type { HomeDesk } from "./my-day-client";
@@ -381,17 +382,7 @@ export function SalesHome({
       {/* The month's revenue bar goes here, above both modes (capture-setup
           session, 31 Oct 2026). */}
       {manager && works ? (
-        <div className={styles.modeSwitch}>
-          <Segmented
-            label="Home for"
-            value={view}
-            onChange={chooseView}
-            items={[
-              { key: "team", label: "Team" },
-              { key: "mine", label: "Me" },
-            ]}
-          />
-        </div>
+        <ModeSwitch value={view} onChange={chooseView} />
       ) : null}
       <div key={shown} className={styles.mode} data-mode={shown}>
         {shown === "team" ? (

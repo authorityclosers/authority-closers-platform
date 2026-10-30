@@ -19,7 +19,13 @@
 
 import { ChevronRight, Phone, PhoneCall } from "lucide-react";
 import Link from "next/link";
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 
 import { displayName } from "../display-name";
 import { AddTaskSheet } from "../leads/add-task-sheet";
@@ -32,8 +38,14 @@ import {
 } from "../leads/leads-client";
 import { SideSelector, type Side } from "../ui/side-selector";
 import { breakLength } from "./home-today";
-import { MetricPager, MoreFigures, minutes, share } from "./metric-pager";
-import type { HomeDesk, HomeSide } from "./my-day-client";
+import {
+  Count,
+  MetricPager,
+  MoreFigures,
+  minutes,
+  share,
+} from "./metric-pager";
+import type { HomeBreak, HomeDesk, HomeSide } from "./my-day-client";
 import styles from "./seller-home.module.css";
 
 /** Which lead types this seller works: GET /sides (Leads session, 31 Oct). */
@@ -240,7 +252,7 @@ export function TodayCards({
         pages={[
           {
             key: "today",
-            label: "Today",
+            label: "Your work",
             content: (
               <ul className={styles.cards}>
                 {cards.map((card) => (
@@ -253,7 +265,11 @@ export function TodayCards({
                     >
                       <span className={styles.cardLabel}>{card.label}</span>
                       <strong aria-busy={card.value == null || undefined}>
-                        {card.value ?? " "}
+                        {card.value == null ? (
+                          " "
+                        ) : (
+                          <Count value={String(card.value)} />
+                        )}
                       </strong>
                     </Link>
                   </li>
@@ -263,7 +279,7 @@ export function TodayCards({
           },
           {
             key: "more",
-            label: "More numbers",
+            label: "Your calls",
             content: (
               <MoreFigures
                 figures={[
@@ -299,41 +315,127 @@ export function TodayCards({
 export function NextCall({ side, own }: { side: Side; own: HomeSide | null }) {
   const cold = side === "cold";
   const lead = own?.next_lead ?? null;
-  const left = cold ? 0 : (own?.to_call_today.left ?? 0);
   return (
     <section className={styles.next} aria-labelledby="next-title">
-      <p id="next-title" className={styles.kicker}>
-        {cold ? "Next cold call" : "Next inbound call"}
-        {left > 1 ? <span>{`${left} left to call today`}</span> : null}
-      </p>
-      {lead ? (
-        <>
-          <Link
-            className={styles.nextName}
-            href={`/leads?lead=${lead.lead_id}`}
-          >
-            {displayName(lead.name)}
-          </Link>
-          <p className={styles.nextWhy}>
-            {[lead.source_label, lead.why].filter(Boolean).join(" · ")}
-          </p>
-          <Link
-            className={styles.callNow}
-            href={cold ? "/leads?side=cold" : "/leads"}
-            onClick={() => handOverLead(lead.lead_id, true)}
-          >
-            <PhoneCall size={18} aria-hidden="true" />
-            {cold
-              ? "Start cold calling"
-              : `Call ${displayName(lead.name).split(" ")[0]} now`}
-          </Link>
-        </>
-      ) : (
-        <p className={styles.quiet}>
-          {cold
-            ? "No cold leads to call right now."
-            : "No new leads right now."}
+      <div className={styles.nextBody}>
+        <p id="next-title" className={styles.kicker}>
+          {cold ? "Next cold call" : "Next inbound call"}
         </p>
+        {lead ? (
+          <>
+            <Link
+              className={styles.nextName}
+              href={`/leads?lead=${lead.lead_id}`}
+            >
+              {displayName(lead.name)}
+            </Link>
+            <p className={styles.nextWhy}>
+              {[lead.source_label, lead.why].filter(Boolean).join(" · ")}
+            </p>
+            <Link
+              className={styles.callNow}
+              href={cold ? "/leads?side=cold" : "/leads"}
+              onClick={() => handOverLead(lead.lead_id, true)}
+            >
+              <PhoneCall size={18} aria-hidden="true" />
+              {cold
+                ? "Start cold calling"
+                : `Call ${displayName(lead.name).split(" ")[0]} now`}
+            </Link>
+          </>
+        ) : (
+          <p className={styles.quiet}>
+            {cold
+              ? "No cold leads to call right now."
+              : "No new leads right now."}
+          </p>
+        )}
+      </div>
+      {own && !cold ? (
+        <Countdown
+          left={own.to_call_today.left}
+          called={own.to_call_today.called}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+const RING = 2 * Math.PI * 26;
+
+/** Today's countdown (Dipak, item 12): the leads still to call today, the
+ *  ring filling as calls are made. */
+function Countdown({ left, called }: { left: number; called: number }) {
+  const whole = left + called;
+  const done = whole ? called / whole : 0;
+  return (
+    <div
+      className={styles.countdown}
+      role="img"
+      data-countdown=""
+      aria-label={`${left} left to call today, ${called} called`}
+    >
+      <svg viewBox="0 0 64 64" aria-hidden="true">
+        <circle className={styles.ringTrack} cx="32" cy="32" r="26" />
+        <circle
+          className={styles.ringDone}
+          cx="32"
+          cy="32"
+          r="26"
+          style={
+            {
+              "--ring": RING,
+              strokeDasharray: RING,
+              strokeDashoffset: RING * (1 - done),
+            } as CSSProperties
+          }
+        />
+      </svg>
+      <div className={styles.ringText} aria-hidden="true">
+        <strong>{left}</strong>
+        <span>left today</span>
+      </div>
+    </div>
+  );
+}
+
+const CLOCK_SHORT = new Intl.DateTimeFormat("en-IN", {
+  hour: "numeric",
+  minute: "2-digit",
+  timeZone: "Asia/Kolkata",
+});
+
+/** My three longest breaks today (Dipak, item 36): red when nobody set them. */
+export function LongestBreaks({
+  breaks,
+}: {
+  breaks: readonly HomeBreak[] | null | undefined;
+}) {
+  return (
+    <section className={styles.block} aria-labelledby="breaks-title">
+      <Head id="breaks-title" title="Your longest breaks">
+        <Link className={styles.seeAll} href="/performance">
+          See all
+          <ChevronRight size={16} aria-hidden="true" />
+        </Link>
+      </Head>
+      {breaks?.length ? (
+        <ul className={styles.breaks}>
+          {breaks.slice(0, 3).map((gap) => (
+            <li
+              key={gap.start}
+              data-red={!gap.planned || undefined}
+              title={gap.planned ? "Inside a set break" : "Not a set break"}
+            >
+              <span>
+                {`${CLOCK_SHORT.format(new Date(gap.start))} – ${CLOCK_SHORT.format(new Date(gap.end))}`}
+              </span>
+              <strong>{breakLength(gap.minutes)}</strong>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className={styles.quiet}>No breaks yet today.</p>
       )}
     </section>
   );
@@ -572,34 +674,49 @@ export function SellerBlocks({
     );
   };
   return (
-    <>
+    <div className={styles.me}>
       {access ? (
-        <SideBlock
-          side={shown}
-          access={access}
-          own={own}
-          inbound={desk.sides?.inbound ?? null}
-          onSide={onSide}
-        />
+        <div data-area="side">
+          <SideBlock
+            side={shown}
+            access={access}
+            own={own}
+            inbound={desk.sides?.inbound ?? null}
+            onSide={onSide}
+          />
+        </div>
       ) : null}
-      <TodayCards
-        side={shown}
-        own={own}
-        tasks={
-          tasks ? tasks.filter((task) => task.status !== "done").length : null
-        }
-        extras={headerExtras}
-      />
-      <NextCall side={shown} own={own} />
-      <TodayTasks
-        tasks={tasks}
-        failed={failed}
-        onDone={done}
-        onRetry={reload}
-        onAdded={reload}
-      />
-      <UpcomingFollowUps side={shown} own={own} />
-      <TodayPerformance side={shown} own={own} />
-    </>
+      <div data-area="cards">
+        <TodayCards
+          side={shown}
+          own={own}
+          tasks={
+            tasks ? tasks.filter((task) => task.status !== "done").length : null
+          }
+          extras={headerExtras}
+        />
+      </div>
+      <div data-area="next">
+        <NextCall side={shown} own={own} />
+      </div>
+      <div data-area="tasks">
+        <TodayTasks
+          tasks={tasks}
+          failed={failed}
+          onDone={done}
+          onRetry={reload}
+          onAdded={reload}
+        />
+      </div>
+      <div data-area="follow">
+        <UpcomingFollowUps side={shown} own={own} />
+      </div>
+      <div data-area="perf">
+        <TodayPerformance side={shown} own={own} />
+      </div>
+      <div data-area="breaks">
+        <LongestBreaks breaks={desk.breaks} />
+      </div>
+    </div>
   );
 }

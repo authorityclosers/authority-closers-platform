@@ -612,15 +612,6 @@
   min-width: 0;
 }
 
-/* Team | Me: a compact pill at the top left. */
-.modeSwitch {
-  justify-self: start;
-}
-
-.modeSwitch button {
-  min-width: 88px;
-}
-
 /* Team | Me: the whole screen slides in from its side (owner, 31 Oct 2026). */
 .mode {
   display: grid;

@@ -22,7 +22,7 @@
 
 import { ChevronRight } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 
 import { deskRequest, type LeadPage } from "../leads/leads-client";
 import {
@@ -34,6 +34,7 @@ import {
 import { SideSelector, type Side } from "../ui/side-selector";
 import { breakLength } from "./home-today";
 import {
+  Count,
   MetricPager,
   MoreFigures,
   minutes,
@@ -366,6 +367,122 @@ function Split({ effort }: { effort: Effort | null }) {
   );
 }
 
+const RING = 2 * Math.PI * 52;
+
+/** The clock, once a minute: the sellers' status rings follow it. */
+function useMinute(): number {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
+  return now;
+}
+
+type Pulse = "live" | "recent" | "idle" | "none";
+
+/** On a call in the last 10 minutes, 30 or more since the last, or no call yet. */
+function pulse(seller: SellerEffort, now: number): Pulse {
+  if (!seller.last_call_at) return "none";
+  const minutes = (now - Date.parse(seller.last_call_at)) / 60_000;
+  return minutes <= 10 ? "live" : minutes >= 30 ? "idle" : "recent";
+}
+
+const PULSE_WORDS: Record<Pulse, string> = {
+  live: "on calls now",
+  recent: "called in the last 30 minutes",
+  idle: "30+ minutes since a call",
+  none: "no call yet today",
+};
+
+const initials = (name: string) =>
+  name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() ?? "")
+    .join("");
+
+/** The floor at a glance: the day's ring and every seller's pulse. */
+function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
+  const now = useMinute();
+  const day = effort?.[side] ?? null;
+  const done = day && day.eligible ? day.leads_attempted / day.eligible : 0;
+  const sellers = effort?.sellers ?? [];
+  const live = sellers.filter((seller) => pulse(seller, now) === "live").length;
+  return (
+    <Link
+      className={styles.hero}
+      href="/performance"
+      aria-label={
+        day
+          ? `Today on ${side === "cold" ? "Cold" : "Inbound"}: ${day.attempted} calls tried, ${day.connected} connected, ${Math.round(done * 100)}% of the day's leads called; ${live} of ${sellers.length} sellers on calls now`
+          : "Today's calls"
+      }
+    >
+      <div className={styles.dayRing} aria-hidden="true">
+        <svg viewBox="0 0 120 120">
+          <circle className={styles.ringTrack} cx="60" cy="60" r="52" />
+          <circle
+            className={styles.ringDone}
+            cx="60"
+            cy="60"
+            r="52"
+            style={
+              {
+                "--ring": RING,
+                strokeDasharray: RING,
+                strokeDashoffset: RING * (1 - done),
+              } as CSSProperties
+            }
+          />
+        </svg>
+        <div className={styles.ringText}>
+          <strong>{day ? <Count value={String(day.attempted)} /> : " "}</strong>
+          <span>tried today</span>
+        </div>
+      </div>
+      <div className={styles.heroBody} aria-hidden="true">
+        <p className={styles.heroLine}>
+          <strong>{day ? <Count value={String(day.connected)} /> : "–"}</strong>{" "}
+          connected
+          {day && day.attempted ? (
+            <span>{` · ${share(day.connected, day.attempted)}`}</span>
+          ) : null}
+        </p>
+        <p className={styles.heroNote}>
+          {day
+            ? `${Math.round(done * 100)}% of today's leads called · ${minutes(day.talk_seconds)} talk`
+            : " "}
+        </p>
+        {sellers.length ? (
+          <div className={styles.avatars}>
+            <ul>
+              {sellers.slice(0, 7).map((seller) => {
+                const state = pulse(seller, now);
+                return (
+                  <li
+                    key={seller.person_id}
+                    data-pulse={state}
+                    title={`${seller.name}: ${PULSE_WORDS[state]}`}
+                  >
+                    {initials(seller.name)}
+                  </li>
+                );
+              })}
+            </ul>
+            <span>
+              {live
+                ? `${live} on calls now`
+                : `${sellers.length} ${sellers.length === 1 ? "seller" : "sellers"}`}
+            </span>
+          </div>
+        ) : null}
+      </div>
+    </Link>
+  );
+}
+
 export function TeamFloor({
   side,
   onSide,
@@ -399,6 +516,7 @@ export function TeamFloor({
             {controls}
           </div>
           <SideSelector value={side} onChange={onSide} />
+          <FloorHero effort={effort} side={side} />
           <MetricPager
             label="The team's numbers"
             pages={[
