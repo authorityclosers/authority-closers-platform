@@ -90,10 +90,34 @@
   font-weight: 600;
 }
 
+/* Enter or Ctrl+Enter asks "Send this report?" in the same row, with a tick
+   box to stop asking (owner, 31 Oct 2026). */
+.askAgain {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  cursor: pointer;
+}
+
+.askAgain > input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--lx-teal);
+  cursor: pointer;
+}
+
 /* Phones: the question on its own line, both answers together under it. */
 @media (max-width: 479.98px) {
   .discardAsk > span {
     flex-basis: 100%;
+  }
+
+  .askAgain {
+    margin-right: auto;
   }
 }
 

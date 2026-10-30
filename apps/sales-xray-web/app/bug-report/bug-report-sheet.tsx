@@ -14,7 +14,8 @@
  *   before it goes; none on screens with call details or messages) or one they
  *   choose, which they can mark up or blur, and an optional voice note. With
  *   it, quietly: the screen, app and device, and recent errors (scrubbed,
- *   never call content). Primary: "Send report".
+ *   never call content). Primary: "Send report". Ctrl+Enter (and Enter on a
+ *   computer) sends too, asking "Send this report?" until "Don't ask again".
  * - Mark up: draw or blur on the picture, a step inside the sheet.
  * - Sent: "We'll tell you when it's fixed", or, with no connection, "Saved on
  *   this phone, it goes when you're back online".
@@ -105,6 +106,33 @@ function keepDraft(words: string, blocksWork: boolean) {
 
 export function forgetDraftForTests() {
   keepDraft("", false);
+}
+
+// Owner, 31 Oct 2026: "ctrl + enter and enter to submit ... with only one time
+// asking confirmation ... once a tick box is ticked that never ask this again".
+// The choice is kept on this device (the app has no per-person preferences
+// store); where storage is off, it simply asks each time.
+export const KEY_SEND_STORE = "sx-bug-report-keys-send";
+
+function keySendAsks(): boolean {
+  try {
+    return window.localStorage.getItem(KEY_SEND_STORE) !== "without-asking";
+  } catch {
+    return true;
+  }
+}
+
+function stopAskingOnKeySend(): void {
+  try {
+    window.localStorage.setItem(KEY_SEND_STORE, "without-asking");
+  } catch {
+    // Storage is off: it asks again next time.
+  }
+}
+
+/** Enter sends on a computer; on a touch screen it stays a new line (as Chats). */
+function enterSends(): boolean {
+  return window.matchMedia?.("(pointer: fine)").matches !== false;
 }
 
 const TITLES: Record<Step, string> = {
@@ -208,6 +236,9 @@ export function BugReportSheet({
   const [restored, setRestored] = useState(false);
   const [tapToEnd, setTapToEnd] = useState(false);
   const [discarding, setDiscarding] = useState(false);
+  // Sending from the keyboard asks first, until "Don't ask again" is ticked.
+  const [asking, setAsking] = useState(false);
+  const [dontAsk, setDontAsk] = useState(false);
   const command = useRef(commandId());
   const fileInput = useRef<HTMLInputElement>(null);
   const form = useRef<HTMLFormElement>(null);
@@ -215,6 +246,7 @@ export function BugReportSheet({
   const opening = useRef(0);
   const wordsId = useId();
   const formId = useId();
+  const askSendId = useId();
 
   // Each opening notes the screen it opened on (state follows the open prop).
   if (open !== shownOpen) {
@@ -233,6 +265,7 @@ export function BugReportSheet({
       setRestored(kept);
       setTapToEnd(kept);
       setDiscarding(false);
+      setAsking(false);
     }
   }
 
@@ -275,6 +308,11 @@ export function BugReportSheet({
     };
   }, [open, sensitive, preset]);
 
+  // The question takes the focus, so Enter again (or Space) sends.
+  useEffect(() => {
+    if (asking) document.getElementById(askSendId)?.focus();
+  }, [asking, askSendId]);
+
   // A picture's address is released when it is replaced or the sheet closes.
   useEffect(() => {
     const url = picture.state === "ready" ? picture.url : null;
@@ -311,6 +349,7 @@ export function BugReportSheet({
     setRestored(false);
     setTapToEnd(false);
     setDiscarding(false);
+    setAsking(false);
     command.current = commandId();
   };
 
@@ -322,6 +361,30 @@ export function BugReportSheet({
     }
     cleared();
     onClose();
+  };
+
+  // Enter or Ctrl+Enter: the same send as the button, asking first unless the
+  // person said not to. Nothing written, nothing sent.
+  const sendFromKeys = () => {
+    if (!words.trim() || sending) return;
+    setDiscarding(false);
+    if (!keySendAsks()) {
+      setAsking(false);
+      form.current?.requestSubmit();
+      return;
+    }
+    if (asking) {
+      document.getElementById(askSendId)?.focus();
+      return;
+    }
+    setDontAsk(false);
+    setAsking(true);
+  };
+
+  const sendAsked = () => {
+    if (dontAsk) stopAskingOnKeySend();
+    setAsking(false);
+    form.current?.requestSubmit();
   };
 
   const send = async () => {
@@ -393,7 +456,35 @@ export function BugReportSheet({
 
   const ready = picture.state === "ready";
   const footer =
-    step === "write" && discarding ? (
+    step === "write" && asking ? (
+      <div className={styles.discardAsk} role="alert">
+        <span>Send this report?</span>
+        <label className={styles.askAgain}>
+          <input
+            type="checkbox"
+            checked={dontAsk}
+            onChange={(event) => setDontAsk(event.target.checked)}
+          />
+          Don&apos;t ask again
+        </label>
+        <Button
+          onClick={() => {
+            setAsking(false);
+            textArea.current?.focus();
+          }}
+        >
+          Keep editing
+        </Button>
+        <Button
+          id={askSendId}
+          variant="primary"
+          disabled={!words.trim() || sending}
+          onClick={sendAsked}
+        >
+          Send
+        </Button>
+      </div>
+    ) : step === "write" && discarding ? (
       <div className={styles.discardAsk} role="alert">
         <span>Discard this report?</span>
         <Button onClick={() => setDiscarding(false)}>Keep editing</Button>
@@ -548,7 +639,18 @@ export function BugReportSheet({
                 setWords(event.target.value);
                 setTapToEnd(false);
                 setDiscarding(false);
+                setAsking(false);
                 keepDraft(event.target.value, blocksWork);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter" || event.shiftKey || event.altKey)
+                  return;
+                // Enter that picks a word (Hindi, Marathi) is the keyboard's.
+                if (event.nativeEvent.isComposing || event.keyCode === 229)
+                  return;
+                if (!event.ctrlKey && !event.metaKey && !enterSends()) return;
+                event.preventDefault();
+                sendFromKeys();
               }}
             />
           </div>
