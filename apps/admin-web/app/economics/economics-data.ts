@@ -43,6 +43,8 @@ export type Offer = {
   breakEven: Record<string, BreakEven>;
   ceiling: number;
   netPerMinute: number;
+  /** False for a plan priced but not on sale yet (coming soon), modelled all the same. */
+  onSale: boolean;
 };
 
 export type TopUpRow = {
@@ -379,6 +381,7 @@ export function normalizeEconomics(raw: unknown): Economics {
         }),
         ceiling: read.number(row.ceiling_per_plan_minute),
         netPerMinute: read.number(row.net_per_minute),
+        onSale: row.on_sale !== false,
       };
     }),
     topUps: read.array(body.top_ups).map((item) => {

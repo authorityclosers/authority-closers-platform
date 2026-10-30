@@ -42,6 +42,18 @@ function Margin({
   );
 }
 
+/** An offer's name; a plan priced but not on sale yet (coming soon) says so. */
+function PlanName({ offer }: { offer: Offer }) {
+  return (
+    <strong>
+      {offer.label}
+      {offer.onSale ? null : (
+        <small className={styles.muted}> · not on sale yet</small>
+      )}
+    </strong>
+  );
+}
+
 function NetLine({ offer }: { offer: Offer }) {
   return (
     <small className={styles.muted}>
@@ -64,7 +76,7 @@ function OfferTable({ economics }: { economics: Economics }) {
       label="Margin a month per plan"
       cards={economics.offers.map((offer) => (
         <Card key={offer.id}>
-          <strong>{offer.label}</strong>
+          <PlanName offer={offer} />
           <span>
             {rupees(offer.net)} net a {offer.unit} · {offer.minutes} min
           </span>
@@ -111,7 +123,7 @@ function OfferTable({ economics }: { economics: Economics }) {
           <tr key={offer.id}>
             <th scope="row" className={styles.planCell}>
               <span className={styles.name}>
-                <strong>{offer.label}</strong>
+                <PlanName offer={offer} />
                 <NetLine offer={offer} />
               </span>
             </th>
@@ -221,7 +233,7 @@ function BreakEvenTable({ economics }: { economics: Economics }) {
       label="Plans needed to cover the fixed costs"
       cards={economics.offers.map((offer) => (
         <Card key={offer.id}>
-          <strong>{offer.label}</strong>
+          <PlanName offer={offer} />
           {["0.5", "1"].map((use) => {
             const row = offer.breakEven[use] ?? offer.breakEven[`${use}.0`];
             return row ? (
@@ -260,7 +272,9 @@ function BreakEvenTable({ economics }: { economics: Economics }) {
           const whole = offer.breakEven["1.0"] ?? offer.breakEven["1"];
           return (
             <tr key={offer.id}>
-              <th scope="row">{offer.label}</th>
+              <th scope="row">
+                <PlanName offer={offer} />
+              </th>
               <td data-num="">{rupees(half?.contribution ?? null)}</td>
               <td data-num="">{plans(half?.running ?? null)}</td>
               <td data-num="">{plans(half?.total ?? null)}</td>

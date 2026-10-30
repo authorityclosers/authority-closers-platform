@@ -263,3 +263,44 @@ def test_settings_defaults_and_refusals() -> None:
         with pytest.raises(policy.SettingsError) as raised:
             policy.validate(bad)
         assert raised.value.code == code
+
+
+def test_coming_soon_plans_are_modelled_and_marked_not_on_sale() -> None:
+    # Production's plans were all coming soon on 30 Oct 2026; Economics models them anyway.
+    from types import SimpleNamespace
+
+    def row(key: str, status: str) -> SimpleNamespace:
+        return SimpleNamespace(
+            key=key,
+            name=key.capitalize(),
+            per_seat=key == "organisation",
+            prices_include_gst=key == "personal",
+            monthly_price_paise=249_900,
+            yearly_price_paise=None,
+            included_minutes=800,
+            top_up_packs=[{"key": "topup_100", "minutes": 100, "price_paise": 29_900}],
+            status=status,
+        )
+
+    plans = service.plan_terms([row("personal", "coming_soon"), row("organisation", "active")])
+    assert [(plan.key, plan.on_sale) for plan in plans] == [
+        ("personal", False),
+        ("organisation", True),
+    ]
+    assert service.MODELLED_STATUSES == ("active", "coming_soon")
+    body = _run(fixed=FIXED)
+    assert all(offer["on_sale"] for offer in body["offers"])
+    soon = economics(
+        plans,
+        [STANDARD],
+        audio_per_billed=1.0,
+        fixed=FIXED,
+        fees=FEES,
+        play_plans=[],
+        break_even_route="today-brain4-read",
+        trial_minutes=60,
+        trial_conversion=0.1,
+        target_margin=0.5,
+    )
+    offer = _offer(soon, "personal.monthly.web")
+    assert offer["on_sale"] is False and offer["break_even"]["0.5"]["total"] is not None
