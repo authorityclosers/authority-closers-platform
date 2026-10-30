@@ -13,6 +13,7 @@ import {
 } from "../leads/native-phone";
 
 import { CaptureHealth } from "../capture-guard/capture-health";
+import { openCaptureSetup } from "../capture-setup/capture-setup-gate";
 import styles from "./auto-capture-panel.module.css";
 
 /** Seller: choose a folder and enable upload after the native disclosure. */
@@ -134,6 +135,15 @@ export function AutoCapturePanel({
       {!consentOn ? (
         <p>Uploads need standing consent and AI on calls enabled for you.</p>
       ) : null}
+      <p>
+        <Button
+          variant="ghost"
+          disabled={busy}
+          onClick={() => openCaptureSetup()}
+        >
+          Go through call capture setup
+        </Button>
+      </p>
       {needsProfile ? (
         <p role="status">
           Complete your profile first: uploads need your name and phone number.{" "}
