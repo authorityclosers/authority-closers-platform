@@ -68,13 +68,18 @@ class TeamPool(Model):
 
 
 class Numbers(Model):
-    """My day, counted from my own dispositions and calls since local midnight."""
+    """My calls between two moments, counted from the calls Recent Calls lists."""
 
+    # Attempted: every call out.
     calls: int
+    # Answered: talk time above 0.
     connected: int
     talk_seconds: int
+    # Calls out to a lead past New at the time.
     follow_ups_done: int
     new_assigned: int
+    # Attempted minus connected.
+    not_connected: int = 0
 
 
 class Counts(Model):

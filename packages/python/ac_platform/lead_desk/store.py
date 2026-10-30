@@ -223,6 +223,8 @@ CALL_BACK_DAYS = 3
 # A dialer call this close to a call the app already logged is that same call.
 IN_APP_BEFORE = timedelta(minutes=2)
 IN_APP_AFTER = timedelta(minutes=20)
+# Directions that are not a call out (Home's Attempted, owner 30 Oct 2026).
+NOT_OUT = frozenset({"incoming", "missed", "rejected", "blocked"})
 DEFAULT_SETTINGS: dict[str, Any] = {
     "auto_reassign": False,
     "reassign_minutes": 10,
@@ -938,32 +940,45 @@ class LeadDesk:
         )
 
     async def _numbers(self, start: datetime, end: datetime) -> Numbers:
-        """My numbers between two moments: my outcomes and the calls my phone logged (a
-        private call stays private), talk time, follow-ups done and leads given to me."""
+        """My numbers between two moments, read from the calls Recent Calls and My work
+        list (owner, 30 Oct 2026: Home said 0 beside a list of calls, because a call
+        placed in the app never counted). Counted on read from the stored calls, so a
+        past day counts the same way; nothing is rewritten.
+
+        Attempted: every call out: placed in the app (it has no direction), logged by
+        the phone or recorded. An outcome logged without a call is not on that list and
+        is not a call here. Connected: those answered (talk time above 0). Not
+        connected: the rest. Talk time: the connected calls' seconds. Follow-ups done:
+        calls out to a lead that was past New then. A call the seller made private
+        (a personal call) stays out, as it does from the lead's calls. A phone or
+        recorded call keeps its start (the event's time) and its seconds, so it ends at
+        start + seconds."""
+        from ac_platform.lead_desk.activity_summary import activity_window
+
         me = self.viewer.person_id
-        events = (
-            await self.db.scalars(
-                select(LeadEvent)
+        joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
+        found = (
+            await self.db.execute(
+                select(LeadEvent.id, LeadEvent.lead_id, LeadEvent.created_at, LeadEvent.data)
+                .join(Lead, joined)
                 .where(
-                    LeadEvent.tenant_id == self.tenant_id,
-                    LeadEvent.actor_person_id == me,
-                    LeadEvent.created_at >= start,
-                    LeadEvent.created_at < end,
-                    LeadEvent.kind.in_(("result", "call")),
+                    *activity_window(self, start, end, person=None, team=False),
+                    LeadEvent.kind == "call",
                 )
+                .order_by(LeadEvent.created_at.desc())
                 .limit(5000)
             )
         ).all()
         hidden = await self._private_calls(start)
-        events = [event for event in events if str(event.id) not in hidden]
-        results = [event for event in events if event.kind == "result"]
-        # Calls the phone logged by itself count too (UX study item 5).
-        dialled = [
-            event for event in events if event.kind == "call" and counted_phone_call(event.data)
-        ]
-        talk = sum(
-            int(event.data.get("duration_seconds") or 0) for event in events if event.kind == "call"
-        )
+        # (lead, when, seconds, answered) for each call out.
+        out: list[tuple[UUID, datetime, int, bool]] = []
+        for event_id, lead_id, at, raw in found:
+            data = raw if isinstance(raw, dict) else {}
+            if data.get("direction") in NOT_OUT or str(event_id) in hidden:
+                continue
+            seconds = max(0, int(data.get("duration_seconds") or 0))
+            out.append((lead_id, at, seconds, seconds > 0 or data.get("connected") is True))
+        stages = await self._stages_then([(lead_id, at) for lead_id, at, _, _ in out])
         new_assigned = int(
             await self.db.scalar(
                 select(func.count()).where(
@@ -975,13 +990,59 @@ class LeadDesk:
             )
             or 0
         )
+        connected = [row for row in out if row[3]]
         return Numbers(
-            calls=len(results) + len(dialled),
-            connected=sum(1 for event in [*results, *dialled] if event.data.get("connected")),
-            talk_seconds=talk,
-            follow_ups_done=sum(1 for event in results if event.data.get("was_due")),
+            calls=len(out),
+            connected=len(connected),
+            not_connected=len(out) - len(connected),
+            talk_seconds=sum(row[2] for row in connected),
+            follow_ups_done=sum(1 for stage in stages if stage not in (None, "new")),
             new_assigned=new_assigned,
         )
+
+    async def _stages_then(self, moments: Sequence[tuple[UUID, datetime]]) -> list[str | None]:
+        """Each lead's stage at each moment, from its append-only history: what the last
+        move before then set, else what the first move from then on left, else where the
+        lead stands now."""
+        leads = list({lead_id for lead_id, _ in moments})
+        if not leads:
+            return []
+        moves: dict[UUID, list[tuple[datetime, dict[str, Any]]]] = {}
+        for lead_id, at, data in (
+            await self.db.execute(
+                select(LeadEvent.lead_id, LeadEvent.created_at, LeadEvent.data)
+                .where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.lead_id.in_(leads),
+                    LeadEvent.kind.in_(("stage", "result")),
+                )
+                .order_by(LeadEvent.created_at, LeadEvent.id)
+            )
+        ).all():
+            if isinstance(data, dict) and isinstance(data.get("stage"), str):
+                moves.setdefault(lead_id, []).append((at, data))
+        now = {
+            lead_id: stage
+            for lead_id, stage in (
+                await self.db.execute(
+                    select(Lead.id, Lead.stage).where(
+                        Lead.tenant_id == self.tenant_id, Lead.id.in_(leads)
+                    )
+                )
+            ).all()
+        }
+        found: list[str | None] = []
+        for lead_id, at in moments:
+            history = moves.get(lead_id, [])
+            before = [data for when, data in history if when < at]
+            later = [data for when, data in history if when >= at]
+            if before:
+                found.append(before[-1]["stage"])
+            elif later:
+                found.append(later[0].get("from_stage") or later[0].get("previous_stage"))
+            else:
+                found.append(now.get(lead_id))
+        return found
 
     async def _call_back(self, in_pipeline: Any = None) -> tuple[LeadRow, ...]:
         """My leads who called in the last few days and weren't reached since, newest first."""

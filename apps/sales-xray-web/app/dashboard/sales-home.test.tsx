@@ -282,6 +282,8 @@ it("gives a seller their own four and one primary action", async () => {
   // My work: today's own numbers.
   const work = host.querySelector('[aria-labelledby="my-work-title"]');
   expect(work?.textContent).toContain("Attempted5");
+  // Attempted minus connected.
+  expect(work?.textContent).toContain("Not connected3");
   expect(work?.textContent).toContain("Talk time5m");
 });
 
