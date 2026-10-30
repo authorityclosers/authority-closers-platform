@@ -734,6 +734,8 @@ export type SetupStatus = {
     notifications: boolean;
     recordings: boolean;
     microphone: boolean;
+    /** App builds that ask for contacts (checks.contacts present). */
+    contacts?: boolean;
   };
 };
 
@@ -801,6 +803,7 @@ function parseBlocked(raw: unknown): SetupStatus["blocked"] {
     notifications: value.notifications === true,
     recordings: value.recordings === true,
     microphone: value.microphone === true,
+    ...(value.contacts === true ? { contacts: true } : {}),
   };
 }
 
@@ -900,6 +903,18 @@ export async function setupMark(
 export async function askNotifications(): Promise<SetupStatus | null> {
   try {
     return parseSetup(await ask("requestNotifications", {}, 120_000));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Asks Android for contacts (owner, 30 Oct 2026: the permissions checklist).
+ * Only builds that report checks.contacts have it; others answer null.
+ */
+export async function askContacts(): Promise<SetupStatus | null> {
+  try {
+    return parseSetup(await ask("requestContacts", {}, 120_000));
   } catch {
     return null;
   }
