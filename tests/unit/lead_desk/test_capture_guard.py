@@ -34,6 +34,23 @@ def test_receipt_and_report_are_required(run, report, expected):
     assert state_for(at=NOW, now=NOW, received=False, run_state=run, report=report) == "waiting"
 
 
+def test_short_call_hold_is_done_without_a_report():
+    assert state_for(at=NOW, now=NOW, received=True, short=True) == "short_call"
+    assert state_for(at=NOW, now=NOW, received=True, run_state="completed", short=True) == (
+        "short_call"
+    )
+    assert state_for(at=NOW, now=NOW, received=True, run_state="queued", short=True) == (
+        "analysing"
+    )
+    assert state_for(at=NOW, now=NOW, received=False, short=True) == "waiting"
+    seller = UUID(int=1)
+    call = CaptureCall(
+        event_id=UUID(int=3), lead_id=UUID(int=2), person_id=seller, at=NOW, state="short_call"
+    )
+    row = daily_rates([call], {})[0]
+    assert (row.received, row.analysed, row.needs_fix) == (1, 0, False)
+
+
 def test_rates_count_calls_once_and_use_india_days_and_strict_90_percent():
     seller = UUID(int=1)
     calls = [

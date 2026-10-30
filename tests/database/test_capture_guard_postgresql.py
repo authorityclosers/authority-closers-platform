@@ -11,6 +11,7 @@ from sqlalchemy import Engine, select, update
 
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.models import (
+    ConversationProcessingPlan,
     ConversationRecording,
     ConversationReportDraft,
     ConversationRun,
@@ -121,6 +122,36 @@ def test_capture_guard_scope_missing_attachment_and_privacy(postgres_harness: An
             assert (await here.client.get(f"{BASE}/capture-guard?event_id={old}")).json()["calls"][
                 0
             ]["state"] == "analysing"
+            # The short-call rule held the plan: done with its transcript, no report, not stuck.
+            # Relational fixture only, like the report below: no provider request or scoring.
+            async with here.setup.sessions() as db, db.begin():
+                held_recording = await db.get(ConversationRecording, recording_id)
+                assert held_recording is not None
+                db.add(
+                    ConversationProcessingPlan(
+                        id=uuid4(),
+                        tenant_id=here.tenant_id,
+                        person_id=held_recording.person_id,
+                        recording_id=recording_id,
+                        session_id=here.setup.state.session_id,
+                        generation=held_recording.generation,
+                        plan_sha256="a" * 64,
+                        state="held",
+                        progress={"failure_code": "ai_no_conversation"},
+                        next_check_at=now,
+                        created_at=now,
+                        expires_at=now + timedelta(hours=1),
+                    )
+                )
+                await db.execute(
+                    update(ConversationRun)
+                    .where(ConversationRun.recording_id == recording_id)
+                    .values(state="completed")
+                )
+            short = (await here.client.get(f"{BASE}/capture-guard?event_id={old}")).json()
+            assert short["calls"][0]["state"] == "short_call"
+            assert short["calls"][0]["attention"] is False
+            assert (short["rates"][0]["received"], short["rates"][0]["analysed"]) == (1, 0)
             # Relational fixture only: no provider request, scoring or certified report evidence.
             report_id = uuid4()
             async with here.setup.sessions() as db, db.begin():
