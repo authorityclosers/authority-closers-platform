@@ -16,7 +16,8 @@ install -m 0755 "$here/ac-agent-burn" /usr/local/sbin/ac-agent-burn
 install -m 0755 "$here/ac-cost-detect" /usr/local/sbin/ac-cost-detect
 install -m 0644 "$here/ac-metrics-collect.service" "$here/ac-metrics-collect.timer" \
   "$here/ac-agent-burn.service" "$here/ac-agent-burn.timer" \
-  "$here/ac-cost-detect.service" "$here/ac-cost-detect.timer" /etc/systemd/system/
+  "$here/ac-cost-detect.service" "$here/ac-cost-detect.timer" \
+  "$here/ac-cost-detect-billing.service" "$here/ac-cost-detect-billing.timer" /etc/systemd/system/
 if [ "${1:-}" = "--dev-api" ]; then
   install -d -m 0755 /etc/systemd/system/ac-dev-live-api.service.d \
     /srv/authority-closers/metrics/development /srv/authority-closers/metrics/staging
@@ -25,5 +26,6 @@ if [ "${1:-}" = "--dev-api" ]; then
 fi
 systemctl daemon-reload
 # ac-cost-detect does nothing until its service-account key exists (ConditionPathExists).
-systemctl enable --now ac-metrics-collect.timer ac-agent-burn.timer ac-cost-detect.timer
+systemctl enable --now ac-metrics-collect.timer ac-agent-burn.timer ac-cost-detect.timer \
+  ac-cost-detect-billing.timer
 systemctl start ac-metrics-collect.service

@@ -275,3 +275,63 @@ def test_a_google_ads_payment_is_ad_spend() -> None:
     proposal = job.propose("admin@example.test", ads)
     assert proposal["vendor"] == "Google Ads" and proposal["category"] == "marketing"
     assert proposal["rupees"] == 500 and proposal["confidence"] == "high"
+
+
+class BillingGmail(FakeGmail):
+    def __init__(self, messages: dict[str, dict[str, Any]], pdfs: list[bytes]) -> None:
+        super().__init__(messages)
+        self.queries: list[str] = []
+        self.attached = pdfs
+
+    def search(self, days: int, query: str = "") -> list[str]:
+        self.queries.append(query)
+        return list(self.messages)
+
+    def pdfs(self, message: dict[str, Any]) -> list[bytes]:
+        return self.attached
+
+
+def test_everything_sent_to_the_billing_inbox_is_filed(monkeypatch: pytest.MonkeyPatch) -> None:
+    job = runner()
+    inbox = {
+        # Our own forward of a vendor's invoice, the amount only in its PDF.
+        "b1": _message(
+            "b1",
+            "Teammate <dipak@example.test>",
+            "Fwd: Invoice October",
+            _part(
+                "text/plain",
+                "---------- Forwarded message ---------\nFrom: ElevenLabs <billing@elevenlabs.io>",
+            ),
+        ),
+        # A note with no amount anywhere: still filed, to check.
+        "b2": _message(
+            "b2", "Vendor <accounts@unknownsupplier.example>", "Statement", _part("text/plain", "")
+        ),
+    }
+    monkeypatch.setattr(job, "pdf_text", lambda blob: "Total due ₹1,936.00")
+    gmail = BillingGmail(inbox, [b"%PDF-1.4 fictional"])
+    filed: list[dict[str, Any]] = []
+    proposals, _seen = job.run(
+        ["admin@example.test"],
+        lambda _mailbox: gmail,
+        filed.append,
+        [],
+        days=2,
+        billing="billing@example.test",
+    )
+    assert gmail.queries == [
+        "(to:billing@example.test OR deliveredto:billing@example.test OR cc:billing@example.test)"
+    ]
+    by_vendor = {proposal["vendor"]: proposal for proposal in proposals}
+    assert by_vendor["ElevenLabs"]["rupees"] == 1936.0
+    assert by_vendor["ElevenLabs"]["category"] == "ai_product"
+    # The PDF text helps the first; the second has none either way.
+    monkeypatch.setattr(job, "pdf_text", lambda blob: "")
+    unknown = job.propose("admin@example.test", inbox["b2"], billing=True)
+    assert unknown["amount"] is None and unknown["rupees"] is None
+    op = job.task(unknown)
+    assert op["fields"]["title"].startswith("Cost to check: Unknownsupplier")
+    assert "amount to check" in op["fields"]["notes"]
+    # Outside the billing inbox the same mail is not a charge.
+    assert job.propose("admin@example.test", inbox["b1"]) is None

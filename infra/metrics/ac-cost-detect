@@ -18,14 +18,19 @@ Daily as root on the ac host; Gmail is only ever read:
   Admin cost register. A task holds the vendor, amount, date, subject and Gmail id, never the
   email's body.
 
-Usage: ac-cost-detect [--days N] [--dry-run] [--mark-seen]
+Usage: ac-cost-detect [--days N] [--dry-run] [--mark-seen] [--billing]
   --mark-seen remembers those days' mail without filing (once, for costs already entered).
+  --billing   only the mail that reached the billing inbox (AC_COST_DETECT_BILLING, an alias
+              delivering into the mailboxes): every message is filed, forwards included, the
+              vendor read from a forward's original sender, the amount from attached PDFs when
+              the body has none, else "amount to check". Runs every 15 minutes.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import fcntl
 import hashlib
 import html
 import json
@@ -33,6 +38,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 import urllib.parse
 import urllib.request
@@ -45,6 +51,11 @@ KEY = Path(os.environ.get("AC_COST_DETECT_KEY", "/etc/ac-cost-detect/service-acc
 STATE = Path(os.environ.get("AC_COST_DETECT_STATE", "/var/lib/ac-cost-detect/seen.json"))
 PULSE = os.environ.get("AC_COST_DETECT_PULSE", "/usr/local/bin/ac-pulse-tasks")
 MAILBOXES = os.environ.get("AC_COST_DETECT_MAILBOXES", "admin@authorityclosers.com").split()
+# The billing inbox (owner, 30 Oct 2026): whatever reaches it, sent or forwarded by anyone, is
+# filed (--billing, every 15 minutes). It delivers into the mailboxes above (an alias).
+BILLING = os.environ.get("AC_COST_DETECT_BILLING", "").strip().lower()
+PDF_LIMIT = 10 * 1024 * 1024
+PDFTOTEXT = os.environ.get("AC_COST_DETECT_PDFTOTEXT", "/usr/bin/pdftotext")
 PARENT = "AC costs: confirm new costs from email"
 SCOPE = "https://www.googleapis.com/auth/gmail.readonly"
 GMAIL = "https://gmail.googleapis.com/gmail/v1/users/me"
@@ -335,25 +346,44 @@ def vendor_for(sender: str, subject: str) -> tuple[tuple[str, str, str, str, dic
     ), "low"
 
 
-def propose(mailbox: str, message: dict) -> dict | None:
-    """One proposed cost from a Gmail message (format=full), or None when it holds no charge."""
+_FORWARD = re.compile(r"\s*(?:fwd?|fw):", re.IGNORECASE)
+# The original sender inside a forwarded message ("From: Vendor <billing@vendor.example>").
+_FORWARDED_FROM = re.compile(r"From:\s*[^<\n]*?<?([\w.+-]+@[\w-]+(?:\.[\w-]+)+)>?", re.IGNORECASE)
+
+
+def propose(
+    mailbox: str, message: dict, *, billing: bool = False, extra_text: str = ""
+) -> dict | None:
+    """One proposed cost from a Gmail message (format=full), or None when it holds no charge.
+
+    ``billing``: the message reached the billing inbox, so it is filed whatever it says (no
+    filter, our own forwards included), with "amount to check" when no amount is found.
+    ``extra_text``: the text of its PDF attachments."""
     headers = {h["name"].lower(): h["value"] for h in message["payload"].get("headers", [])}
     subject = headers.get("subject", "")[:200]
-    if _NOT_A_CHARGE.search(subject):
-        return None
-    # Our own mail (to a vendor's support, say) is no charge; a forwarded invoice is.
-    sender_domain = parseaddr(headers.get("from", ""))[1].rpartition("@")[2].lower()
-    own = sender_domain == mailbox.rpartition("@")[2].lower()
-    if own and not re.match(r"\s*(?:fwd?|fw):", subject, re.IGNORECASE):
-        return None
-    text = " ".join([subject, message.get("snippet", ""), body_text(message["payload"])])
+    forwarded = bool(_FORWARD.match(subject))
+    if not billing:
+        if _NOT_A_CHARGE.search(subject):
+            return None
+        # Our own mail (to a vendor's support, say) is no charge; a forwarded invoice is.
+        sender_domain = parseaddr(headers.get("from", ""))[1].rpartition("@")[2].lower()
+        own = sender_domain == mailbox.rpartition("@")[2].lower()
+        if own and not forwarded:
+            return None
+    body = body_text(message["payload"])
+    text = " ".join([subject, message.get("snippet", ""), body, extra_text])
     charge = pick(amounts(text))
-    if charge is None or charge[1] <= 0:
+    if charge is not None and charge[1] <= 0:
+        charge = None
+    if charge is None and not billing:
         return None
-    (vendor, item, category, centre, split, cadence), confidence = vendor_for(
-        headers.get("from", ""), subject
-    )
-    currency, value = charge
+    sender = headers.get("from", "")
+    if forwarded:
+        original = _FORWARDED_FROM.search(body)
+        if original:
+            sender = original.group(1)
+    (vendor, item, category, centre, split, cadence), confidence = vendor_for(sender, subject)
+    currency, value = charge if charge is not None else ("INR", None)
     try:
         day = parsedate_to_datetime(headers["date"]).date().isoformat()
     except (KeyError, TypeError, ValueError):
@@ -369,7 +399,7 @@ def propose(mailbox: str, message: dict) -> dict | None:
         "item": item,
         "currency": currency,
         "amount": value,
-        "rupees": round(value * RATES[currency], 2),
+        "rupees": None if value is None else round(value * RATES[currency], 2),
         "converted": currency != "INR",
         "cadence": cadence,
         "category": category,
@@ -406,16 +436,23 @@ def body_text(payload: dict, limit: int = 50_000) -> str:
 
 def task(proposal: dict) -> dict:
     """The ensure op for one proposal: title and notes, never the email's body."""
-    original = (
-        f"{proposal['currency']} {proposal['amount']:,.2f} (about ₹{proposal['rupees']:,.2f})"
-        if proposal["converted"]
-        else f"₹{proposal['amount']:,.2f}"
-    )
+    if proposal["amount"] is None:
+        original = "amount to check (see the email and its attachment)"
+    elif proposal["converted"]:
+        original = (
+            f"{proposal['currency']} {proposal['amount']:,.2f} (about ₹{proposal['rupees']:,.2f})"
+        )
+    else:
+        original = f"₹{proposal['amount']:,.2f}"
     split = proposal["split"]
     split_words = split["rule"] + (
         f" {split.get('product') or split.get('tool') or ''}".rstrip() if len(split) > 1 else ""
     )
-    title = f"Cost found: {proposal['vendor']} {original} ({proposal['date']})"[:200]
+    title = (
+        f"Cost to check: {proposal['vendor']} ({proposal['date']})"
+        if proposal["amount"] is None
+        else f"Cost found: {proposal['vendor']} {original} ({proposal['date']})"
+    )[:200]
     where = f"{proposal['mailbox']}, {proposal['date']}, “{proposal['subject']}”"
     notes = "\n".join(
         [
@@ -489,15 +526,55 @@ class Gmail:
         )
         self.token = token["access_token"]
 
-    def search(self, days: int) -> list[str]:
-        query = urllib.parse.urlencode({"q": f"newer_than:{days}d {QUERY}", "maxResults": 100})
-        found = self.http(f"{GMAIL}/messages?{query}", token=self.token)
+    def search(self, days: int, query: str = QUERY) -> list[str]:
+        q = urllib.parse.urlencode({"q": f"newer_than:{days}d {query}", "maxResults": 100})
+        found = self.http(f"{GMAIL}/messages?{q}", token=self.token)
         return [row["id"] for row in found.get("messages", [])]
 
     def message(self, message_id: str) -> dict:
         return self.http(
             f"{GMAIL}/messages/{urllib.parse.quote(message_id)}?format=full", token=self.token
         )
+
+    def pdfs(self, message: dict) -> list[bytes]:
+        """The message's PDF attachments (at most 3, each up to 10 MB)."""
+        found: list[bytes] = []
+
+        def walk(part: dict) -> None:
+            body = part.get("body") or {}
+            is_pdf = part.get("mimeType") == "application/pdf" or str(
+                part.get("filename", "")
+            ).lower().endswith(".pdf")
+            small = body.get("size", 0) <= PDF_LIMIT
+            if is_pdf and body.get("attachmentId") and small and len(found) < 3:
+                data = self.http(
+                    f"{GMAIL}/messages/{urllib.parse.quote(message['id'])}/attachments/"
+                    f"{urllib.parse.quote(body['attachmentId'])}",
+                    token=self.token,
+                )["data"]
+                found.append(base64.urlsafe_b64decode(data + "=" * (-len(data) % 4)))
+            for child in part.get("parts") or []:
+                walk(child)
+
+        walk(message["payload"])
+        return found
+
+
+def pdf_text(blob: bytes) -> str:
+    """A PDF's text through pdftotext (poppler-utils), first 3 pages; empty when it can't."""
+    with tempfile.TemporaryDirectory(prefix="ac-cost-detect-") as folder:
+        path = Path(folder) / "invoice.pdf"
+        path.write_bytes(blob)
+        try:
+            done = subprocess.run(  # noqa: S603 - fixed argv
+                [PDFTOTEXT, "-l", "3", "-layout", str(path), "-"],
+                capture_output=True,
+                timeout=30,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            return ""
+    return done.stdout.decode("utf-8", "replace")[:50_000] if done.returncode == 0 else ""
 
 
 def pulse(op: dict, *, dry: bool) -> dict:
@@ -522,25 +599,41 @@ def run(
     seen: list[str],
     *,
     days: int,
+    billing: str = "",
 ) -> tuple[list[dict], list[str]]:
     """(the proposals filed, the seen hashes after the run). One charge described by several
-    emails (a receipt and an invoice, two mailboxes) is filed once: vendor, amount and day."""
+    emails (a receipt and an invoice, two mailboxes) is filed once: vendor, amount and day.
+    ``billing``: only the mail that reached that inbox, every message filed (PDFs read when
+    the body names no amount)."""
     known = set(seen)
     filed: list[dict] = []
     for mailbox in mailboxes:
         gmail = open_mailbox(mailbox)
-        for message_id in gmail.search(days):
+        found = (
+            gmail.search(days, f"(to:{billing} OR deliveredto:{billing} OR cc:{billing})")
+            if billing
+            else gmail.search(days)
+        )
+        for message_id in found:
             digest = hashlib.sha256(f"{mailbox}\0{message_id}".encode()).hexdigest()[:24]
             if digest in known:
                 continue
-            proposal = propose(mailbox, gmail.message(message_id))
+            message = gmail.message(message_id)
+            proposal = propose(mailbox, message, billing=bool(billing))
+            if billing and proposal is not None and proposal["amount"] is None:
+                extra = " ".join(pdf_text(blob) for blob in gmail.pdfs(message))
+                if extra.strip():
+                    proposal = propose(mailbox, message, billing=True, extra_text=extra)
             if proposal is not None:
+                # A charge is its vendor, amount and day; one with no amount is its message.
                 charge = (
                     "c:"
                     + hashlib.sha256(
                         f"{proposal['vendor']}\0{proposal['currency']}\0{proposal['amount']}"
                         f"\0{proposal['date']}".encode()
                     ).hexdigest()[:22]
+                    if proposal["amount"] is not None
+                    else "c:" + digest
                 )
                 if charge not in known:
                     file(task(proposal))
@@ -561,13 +654,24 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="remember these days' mail without filing (costs already in the register)",
     )
+    parser.add_argument(
+        "--billing",
+        action="store_true",
+        help="only the mail that reached the billing inbox (AC_COST_DETECT_BILLING), all filed",
+    )
     args = parser.parse_args(argv)
     if not 1 <= args.days <= 60:
         parser.error("--days is 1 to 60")
+    if args.billing and not BILLING:
+        parser.error("--billing needs AC_COST_DETECT_BILLING")
     if not KEY.exists():
         print("ac-cost-detect: no service-account key yet; nothing read")
         return 0
     key = json.loads(KEY.read_text(encoding="utf-8"))
+    # The daily run and the 15-minute billing run share the state: one at a time.
+    STATE.parent.mkdir(parents=True, exist_ok=True)
+    lock = STATE.with_suffix(".lock").open("w")
+    fcntl.flock(lock, fcntl.LOCK_EX)
     try:
         seen = json.loads(STATE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
@@ -579,11 +683,16 @@ def main(argv: list[str] | None = None) -> int:
     else:
         file = lambda op: pulse(op, dry=False)  # noqa: E731
     filed, seen = run(
-        MAILBOXES, lambda mailbox: Gmail(key, mailbox), file, list(seen), days=args.days
+        MAILBOXES,
+        lambda mailbox: Gmail(key, mailbox),
+        file,
+        list(seen),
+        days=args.days,
+        billing=BILLING if args.billing else "",
     )
     if not args.dry_run:
-        STATE.parent.mkdir(parents=True, exist_ok=True)
         STATE.write_text(json.dumps(seen), encoding="utf-8")
+    lock.close()
     print(
         json.dumps(
             {
