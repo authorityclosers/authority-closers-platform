@@ -10,6 +10,9 @@
  * the consent step for someone who agreed before. `?step=web` is the web's
  * last step, `?step=update` an app too old, `?step=personal` a personal
  * workspace's first screen, and `?view=team` Team's Call capture list.
+ * `?view=permissions` is the permissions checklist after sign-in (two still to
+ * allow, one blocked, contacts waiting for an app update) and `?view=missing`
+ * the card for a call with no recording.
  */
 
 import { useState, useSyncExternalStore } from "react";
@@ -17,7 +20,14 @@ import { useState, useSyncExternalStore } from "react";
 import type { CaptureSetup } from "../../capture-setup/capture-setup-client";
 import { CaptureSetupFlow } from "../../capture-setup/capture-setup-flow";
 import type { CaptureStep } from "../../capture-setup/capture-setup-rules";
+import { PermissionsChecklist } from "../../capture-setup/permissions-gate";
+import type {
+  PermissionItem,
+  PermissionKey,
+} from "../../capture-setup/permissions-rules";
+import { RecordingCheckCard } from "../../capture-setup/recording-check";
 import { CaptureSetupPanel } from "../../organisation/capture-setup-panel";
+import onboarding from "../../leads/phone-onboarding.module.css";
 
 const SHA = "a".repeat(64);
 const DAY = 86_400_000;
@@ -216,6 +226,39 @@ const STARTS: Record<string, CaptureStep> = {
   update: "phone",
 };
 
+const PERMISSIONS: PermissionItem[] = [
+  {
+    key: "callLog",
+    label: "Call log",
+    why: "Logs your calls with leads on the lead. Other numbers stay on your phone.",
+    state: "granted",
+  },
+  {
+    key: "phone",
+    label: "Phone",
+    why: "Knows when a call starts and ends, so it is timed and its recording found.",
+    state: "needed",
+  },
+  {
+    key: "contacts",
+    label: "Contacts",
+    why: "Your organisation asks for it on every seller's phone.",
+    state: "update",
+  },
+  {
+    key: "notifications",
+    label: "Notifications",
+    why: "New leads, calls that are due, and Undo before a call uploads.",
+    state: "blocked",
+  },
+  {
+    key: "recordings",
+    label: "Recordings folder",
+    why: "Finds each call's recording in your Phone app's folder.",
+    state: "needed",
+  },
+];
+
 const unchanging = () => () => undefined;
 
 export function CaptureSetupPreview() {
@@ -227,6 +270,34 @@ export function CaptureSetupPreview() {
   );
   if (query === null) return null;
   const params = new URLSearchParams(query);
+  if (params.get("view") === "permissions")
+    return (
+      <main data-capture-setup-fixture="" style={{ minHeight: "100dvh" }}>
+        <div className={onboarding.page} style={{ position: "static" }}>
+          <div className={onboarding.body}>
+            <PermissionsChecklist
+              items={PERMISSIONS}
+              busy={null}
+              tried={new Set<PermissionKey>(["phone"])}
+              onAllow={() => undefined}
+              onSettings={() => undefined}
+            />
+          </div>
+        </div>
+      </main>
+    );
+  if (params.get("view") === "missing")
+    return (
+      <main data-capture-setup-fixture="" style={{ minHeight: "100dvh" }}>
+        <RecordingCheckCard
+          calls={2}
+          family={null}
+          inApp
+          onOpen={() => undefined}
+          onDone={() => undefined}
+        />
+      </main>
+    );
   if (params.get("view") === "team")
     return (
       <main style={{ padding: 16, maxWidth: 720, margin: "0 auto" }}>

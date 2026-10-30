@@ -11,6 +11,7 @@ import { useEffect, useState } from "react";
 
 import {
   readCaptureTeam,
+  type CaptureTeam,
   type CaptureTeamRow,
   type CaptureTeamState,
 } from "../capture-setup/capture-setup-client";
@@ -40,8 +41,17 @@ function day(at: string | null): string | null {
       });
 }
 
-/** The one line under a seller's name. */
+const calls = (count: number) => (count === 1 ? "1 call" : `${count} calls`);
+
+/** The one line under a seller's name, with today's calls that have no recording. */
 export function captureLine(row: CaptureTeamRow): string {
+  const line = stateLine(row);
+  return row.missing_today
+    ? `${calls(row.missing_today)} without a recording today · ${line}`
+    : line;
+}
+
+function stateLine(row: CaptureTeamRow): string {
   const on = day(row.at);
   switch (row.state) {
     case "set_up":
@@ -62,19 +72,22 @@ export function captureLine(row: CaptureTeamRow): string {
 }
 
 export function CaptureSetupPanel() {
-  const [rows, setRows] = useState<CaptureTeamRow[] | null>(null);
+  const [team, setTeam] = useState<CaptureTeam | null>(null);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const controller = new AbortController();
-    readCaptureTeam(controller.signal).then(setRows, () => {
+    readCaptureTeam(controller.signal).then(setTeam, () => {
       if (!controller.signal.aborted) setFailed(true);
     });
     return () => controller.abort();
   }, []);
 
+  const rows = team?.people ?? null;
   if (failed || (rows && !rows.length)) return null;
   const missing = rows?.filter((row) => row.state !== "set_up").length ?? 0;
+  // Owner, 30 Oct 2026 (fix 5): "calls without recordings today".
+  const unrecorded = team?.missingToday ?? 0;
   return (
     <section className={styles.section} aria-labelledby="org-capture-setup">
       <div className={styles.head}>
@@ -84,9 +97,16 @@ export function CaptureSetupPanel() {
         <span className={styles.summary}>
           {!rows
             ? "Checking…"
-            : missing
-              ? `${missing} of ${rows.length} not set up`
-              : "Everyone is set up"}
+            : [
+                missing
+                  ? `${missing} of ${rows.length} not set up`
+                  : "Everyone is set up",
+                unrecorded
+                  ? `${calls(unrecorded)} without a recording today`
+                  : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
         </span>
       </div>
       <div className={styles.card} data-list="">

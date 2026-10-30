@@ -6,7 +6,10 @@
                              A personal workspace answers ``required: false``.
 - POST /capture-setup        the caller's own finished phone, or their no at the disclosure
                              (any member, for themselves, with an Idempotency-Key).
-- GET  /capture-setup/team   each member's state, for owners, admins and managers (Team).
+- GET  /capture-setup/team   each member's state, for owners, admins and managers (Team),
+                             with today's calls that have no recording, each and in all.
+- GET  /capture-setup/missing  the caller's own connected lead calls today with no recording
+                             two minutes after they ended (``missing_recordings``).
 
 Agreeing is the standing consent (``auto_consent``, POST /auto-analysis): this API never
 records consent, and a finished phone is refused until the consent is on and the profile
@@ -25,7 +28,7 @@ from fastapi import APIRouter, FastAPI, Header, HTTPException, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
-from ac_platform.call_ai import auto_consent, capture_setup
+from ac_platform.call_ai import auto_consent, capture_setup, missing_recordings
 from ac_platform.conversation_intelligence.sales_xray_tenants import SALES_XRAY_MEMBER_ROLES
 from ac_platform.http.auth import require_safe_origin
 from ac_platform.http.routes import RouteContext
@@ -42,6 +45,7 @@ PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
 OUTSIDE = "Call capture is set up inside an organisation."
 SCHEMA = "sales-xray-capture-setup/1"
 TEAM_SCHEMA = "sales-xray-capture-setup-team/1"
+MISSING_SCHEMA = "sales-xray-missing-recordings/1"
 
 
 class PhoneFinished(BaseModel):
@@ -241,6 +245,9 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                 )
             ).all()
             found = await capture_setup.team(auth.database, tenant_id, [row[0].id for row in rows])
+            missing = await missing_recordings.missing_today(
+                auth.database, tenant_id=tenant_id, now=datetime.now(UTC)
+            )
             people: list[dict[str, Any]] = []
             for person, member_role in rows:
                 consent = await consent_of(request, auth, tenant_id, person.id)
@@ -263,10 +270,33 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                         "state": state,
                         "at": at.isoformat() if at else None,
                         "phone": (newest.model or None) if newest else None,
+                        "missing_today": missing.by_person.get(person.id, 0),
                     }
                 )
             # Who still needs to set it up first, then by name.
             people.sort(key=lambda row: (row["state"] == "set_up", row["name"].casefold()))
-            return {"schema": TEAM_SCHEMA, "people": people}
+            # Calls without a recording today, everyone's (owner, 30 Oct 2026, fix 5).
+            return {"schema": TEAM_SCHEMA, "people": people, "missing_today": missing.total}
+
+    @router.get("/missing")
+    async def read_missing(request: Request, response: Response) -> dict[str, Any]:
+        """The caller's own connected lead calls today with no recording after two minutes:
+        the banner that says how to turn the Phone app's call recording on."""
+        try:
+            async with member(request, response) as (auth, tenant_id, person_id, _):
+                found = await missing_recordings.missing_today(
+                    auth.database, tenant_id=tenant_id, now=datetime.now(UTC), person_id=person_id
+                )
+                latest = found.latest.get(person_id)
+                return {
+                    "schema": MISSING_SCHEMA,
+                    "calls": found.by_person.get(person_id, 0),
+                    "latest_at": latest.isoformat() if latest else None,
+                }
+        except HTTPException as error:
+            # A personal workspace: its calls are checked on the phone, not here.
+            if error.status_code == 403 and error.detail == OUTSIDE:
+                return {"schema": MISSING_SCHEMA, "calls": 0, "latest_at": None}
+            raise
 
     application.include_router(router)

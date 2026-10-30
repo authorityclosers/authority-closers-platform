@@ -88,6 +88,40 @@ yet") or their phone's model.
 - Tests: `apps/sales-xray-web/app/capture-setup/*.test.ts(x)`, `app/organisation/capture-setup-panel.test.tsx`,
   `tests/unit/call_ai/test_capture_setup.py`, `tests/database/test_capture_setup_postgresql.py`.
 
+## Fix 5: permissions after sign-in, the recording check, the owner's count
+
+Owner order, 30 Oct 2026 (14:35Z).
+
+**Permissions checklist** (`app/capture-setup/permissions-gate.tsx`, rules in `permissions-rules.ts`):
+- In the phone app, right after sign-in, one screen lists five items: call log, phone, contacts, notifications and the
+  recordings folder. Each has **Allow**. Once Android won't ask again, the button becomes **Open settings**.
+- It covers every page until everything this app build can grant is granted. There is no Not now. Agreeing to call
+  capture stays its own choice: its no is still recorded and asked again a day later.
+- **Nothing locks anyone out over what the build can't ask for:**
+  - Contacts are offered but never waited on until the owner states what they are for (orchestrator, 30 Oct 2026).
+    They need an app build that declares them (`checks.contacts`, apps PR #18, not merged); other builds say "Update
+    Sales X-Ray".
+  - Builds without the folder picker say the same for the recordings folder.
+  - The Google Play build has no call history until Google approves the declaration: "Comes in a later Google Play
+    version".
+  - Call logging works only in an organisation's workspace (the phone refuses it in Personal), so there it never
+    blocks.
+- **Order of screens:** the Terms card, then Home's first run, then this checklist, then call capture setup, then "Set
+  up this phone".
+
+**Recording check** (`app/capture-setup/recording-check.tsx`, server `call_ai/missing_recordings.py`):
+- A connected lead call (India time, today) with no recording two minutes after it ended counts as missing. Private
+  and sample calls are left out. The count never names the lead, its number or the audio.
+- `GET /v1/sales-xray/call-ai/capture-setup/missing` returns the seller's own count and newest time.
+- The card shows above the bottom bar with the phone's Phone-app steps: this phone's make when the app knows it,
+  else Xiaomi/HyperOS's first. In the app it adds **Open call recording settings**.
+- **Done** hides the card until another call is missing. It never shows over a setup screen.
+
+**Owner's count:** Team's Call capture shows "N calls without a recording today" for everyone and per seller (`GET
+.../team` adds `missing_today`). Home is left alone (another session owns Home's numbers).
+
+No migration and no change to lead or call data: all reads.
+
 ## Not in this change
 
 - Flow telemetry (`useFlow`): the server's flow names are a closed list; adding `capture_setup` is its own change.

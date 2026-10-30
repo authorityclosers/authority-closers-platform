@@ -49,6 +49,20 @@ export type CaptureTeamRow = Readonly<{
   state: CaptureTeamState;
   at: string | null;
   phone: string | null;
+  /** Their connected lead calls today with no recording (owner, fix 5). */
+  missing_today?: number;
+}>;
+
+export type CaptureTeam = Readonly<{
+  people: CaptureTeamRow[];
+  /** Everyone's connected lead calls today with no recording. */
+  missingToday: number;
+}>;
+
+/** The seller's own connected lead calls today with no recording after two minutes. */
+export type MissingRecordings = Readonly<{
+  calls: number;
+  latest_at: string | null;
 }>;
 
 export type CaptureFinishedPhone = Readonly<{
@@ -76,6 +90,8 @@ const TEAM_STATES = [
 const record = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 const moment = (value: unknown) => value === null || typeof value === "string";
+const count = (value: unknown) =>
+  typeof value === "number" && Number.isInteger(value) && value > 0 ? value : 0;
 
 export function parseCaptureSetup(body: unknown): CaptureSetup {
   if (
@@ -98,20 +114,32 @@ export function parseCaptureSetup(body: unknown): CaptureSetup {
   return { ...(body as CaptureSetup), phones };
 }
 
-export function parseCaptureTeam(body: unknown): CaptureTeamRow[] {
+export function parseCaptureTeam(body: unknown): CaptureTeam {
   if (
     !record(body) ||
     body.schema !== "sales-xray-capture-setup-team/1" ||
     !Array.isArray(body.people)
   )
     throw new Error("Call capture could not be read.");
-  return body.people.filter(
-    (row): row is CaptureTeamRow =>
-      record(row) &&
-      typeof row.person_id === "string" &&
-      typeof row.name === "string" &&
-      TEAM_STATES.includes(String(row.state)),
-  );
+  return {
+    people: body.people.filter(
+      (row): row is CaptureTeamRow =>
+        record(row) &&
+        typeof row.person_id === "string" &&
+        typeof row.name === "string" &&
+        TEAM_STATES.includes(String(row.state)),
+    ),
+    missingToday: count(body.missing_today),
+  };
+}
+
+export function parseMissing(body: unknown): MissingRecordings {
+  if (!record(body) || body.schema !== "sales-xray-missing-recordings/1")
+    throw new Error("Calls without recordings could not be read.");
+  return {
+    calls: count(body.calls),
+    latest_at: typeof body.latest_at === "string" ? body.latest_at : null,
+  };
 }
 
 async function answer<T>(
@@ -174,7 +202,7 @@ export async function recordCaptureSetup(
 /** Each seller's state, for owners, admins and managers (Team). */
 export async function readCaptureTeam(
   signal?: AbortSignal,
-): Promise<CaptureTeamRow[]> {
+): Promise<CaptureTeam> {
   return answer(
     await fetch(`${CAPTURE_SETUP_PATH}/team`, {
       credentials: "same-origin",
@@ -183,5 +211,20 @@ export async function readCaptureTeam(
       signal,
     }),
     parseCaptureTeam,
+  );
+}
+
+/** The seller's own calls today with no recording (the recording check banner). */
+export async function readMissingRecordings(
+  signal?: AbortSignal,
+): Promise<MissingRecordings> {
+  return answer(
+    await fetch(`${CAPTURE_SETUP_PATH}/missing`, {
+      credentials: "same-origin",
+      cache: "no-store",
+      headers: { accept: "application/json" },
+      signal,
+    }),
+    parseMissing,
   );
 }

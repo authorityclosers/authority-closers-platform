@@ -41,13 +41,21 @@ afterEach(async () => {
   vi.unstubAllGlobals();
 });
 
-async function mount(people: CaptureTeamRow[] | null, status = 200) {
+async function mount(
+  people: CaptureTeamRow[] | null,
+  status = 200,
+  missingToday = 0,
+) {
   vi.stubGlobal(
     "fetch",
     vi.fn(
       async () =>
         new Response(
-          JSON.stringify({ schema: "sales-xray-capture-setup-team/1", people }),
+          JSON.stringify({
+            schema: "sales-xray-capture-setup-team/1",
+            people,
+            missing_today: missingToday,
+          }),
           { status, headers: { "content-type": "application/json" } },
         ),
     ),
@@ -91,4 +99,23 @@ it("words every state plainly", () => {
   expect(captureLine(row("A", "consent_changed"))).toBe(
     "The terms changed: needs to agree again",
   );
+});
+
+it("counts today's calls without a recording, in all and per seller", async () => {
+  await mount(
+    [
+      row("Ravi Fictional", "set_up", { phone: "Redmi 13", missing_today: 2 }),
+      row("Karan Fictional", "set_up", { phone: "Galaxy A15" }),
+    ],
+    200,
+    2,
+  );
+  expect(host.textContent).toContain(
+    "Everyone is set up · 2 calls without a recording today",
+  );
+  const items = [...host.querySelectorAll("li")].map(
+    (item) => item.textContent,
+  );
+  expect(items[0]).toContain("2 calls without a recording today · Redmi 13");
+  expect(items[1]).not.toContain("without a recording");
 });

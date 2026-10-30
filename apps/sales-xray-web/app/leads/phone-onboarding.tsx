@@ -15,6 +15,7 @@ import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { CAPTURE_SETUP_ATTRIBUTE } from "../capture-setup/capture-setup-rules";
+import { PERMISSIONS_ATTRIBUTE } from "../capture-setup/permissions-rules";
 import { readConsent } from "../consent-renewal-client";
 import { FIRST_RUN_ATTRIBUTE } from "../welcome/setup-state";
 import { useWorkspaceAccess } from "../workspace-access";
@@ -87,14 +88,15 @@ export function PhoneOnboarding() {
   // Waits for the Terms card (it covers the page while consent isn't
   // current) and for Home's first-run check (where to work, or setup): one
   // flow, one screen at a time (owner, 25 Oct 2026).
-  // Call capture setup goes before it too (30 Oct 2026).
+  // The permissions checklist and call capture setup go before it too (30 Oct 2026).
   useEffect(() => {
     if (!signedIn || !inPhoneApp() || phoneOnboarded()) return;
     let stopped = false;
     const waiting = () =>
       document.documentElement.hasAttribute("data-sx-consent") ||
       document.documentElement.hasAttribute(FIRST_RUN_ATTRIBUTE) ||
-      document.documentElement.hasAttribute(CAPTURE_SETUP_ATTRIBUTE);
+      document.documentElement.hasAttribute(CAPTURE_SETUP_ATTRIBUTE) ||
+      document.documentElement.hasAttribute(PERMISSIONS_ATTRIBUTE);
     const start = async () => {
       if (stopped || phoneOnboarded() || waiting()) return;
       try {
@@ -121,6 +123,7 @@ export function PhoneOnboarding() {
         "data-sx-consent",
         FIRST_RUN_ATTRIBUTE,
         CAPTURE_SETUP_ATTRIBUTE,
+        PERMISSIONS_ATTRIBUTE,
       ],
     });
     return () => {

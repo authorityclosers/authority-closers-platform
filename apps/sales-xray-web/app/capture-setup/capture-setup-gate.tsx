@@ -33,6 +33,7 @@ import {
   phoneFacts,
   setupRequired,
 } from "./capture-setup-rules";
+import { PERMISSIONS_ATTRIBUTE } from "./permissions-rules";
 
 // The flow loads when it opens: most starts never show it.
 const CaptureSetupFlow = dynamic(
@@ -93,11 +94,12 @@ export function CaptureSetupGate() {
     const controller = new AbortController();
     const timer = window.setTimeout(() => controller.abort(), READ_TIMEOUT_MS);
     const html = document.documentElement;
-    // The Terms card and Home's first run go first.
+    // The Terms card, Home's first run and the permissions checklist go first.
     const waiting = () =>
       !manual &&
       (html.hasAttribute(CONSENT_ATTRIBUTE) ||
-        html.hasAttribute(FIRST_RUN_ATTRIBUTE));
+        html.hasAttribute(FIRST_RUN_ATTRIBUTE) ||
+        html.hasAttribute(PERMISSIONS_ATTRIBUTE));
     const start = async () => {
       if (stopped || started || waiting()) return;
       started = true;
@@ -135,7 +137,11 @@ export function CaptureSetupGate() {
     const watch = new MutationObserver(() => void start());
     watch.observe(html, {
       attributes: true,
-      attributeFilter: [CONSENT_ATTRIBUTE, FIRST_RUN_ATTRIBUTE],
+      attributeFilter: [
+        CONSENT_ATTRIBUTE,
+        FIRST_RUN_ATTRIBUTE,
+        PERMISSIONS_ATTRIBUTE,
+      ],
     });
     return () => {
       stopped = true;

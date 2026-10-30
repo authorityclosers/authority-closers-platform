@@ -185,6 +185,18 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                     "state",
                     "at",
                     "phone",
+                    "missing_today",
+                }
+                # No lead calls today: nothing without a recording, each or in all.
+                assert team.json()["missing_today"] == 0
+                assert rows[str(seller.person_id)]["missing_today"] == 0
+                as_(seller_token)
+                mine = await client.get(SETUP + "/missing")
+                assert mine.status_code == 200, mine.text
+                assert mine.json() == {
+                    "schema": "sales-xray-missing-recordings/1",
+                    "calls": 0,
+                    "latest_at": None,
                 }
         finally:
             await setup.engine.dispose()
