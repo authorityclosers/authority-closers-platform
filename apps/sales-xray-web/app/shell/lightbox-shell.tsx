@@ -260,7 +260,7 @@ const SWITCH_LAND_MS = 320;
 /** Where each organisation setting lives in the hub (org-hub.tsx). */
 const HUB = {
   rules: "/organisation?tab=leads&part=rules",
-  stages: "/organisation?tab=leads&part=stages",
+  stages: "/organisation/stages",
   apps: "/organisation?tab=connections&part=apps",
   callAi: "/organisation?tab=call-ai",
 };
@@ -1178,7 +1178,7 @@ function LightboxShellFrame({
               "Lead stages",
               HUB.stages,
               <Layers size={17} />,
-              "Stages and pipelines",
+              "What your sellers see",
             ),
             setting(
               "Connected apps",

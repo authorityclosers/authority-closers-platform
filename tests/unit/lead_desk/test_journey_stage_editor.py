@@ -19,6 +19,8 @@ from ac_platform.lead_desk.journey.model import (
     journey_of,
 )
 from ac_platform.lead_desk.journey.templates import template
+from ac_platform.lead_desk.journey.transitions import needs_of, reasons_of
+from ac_platform.lead_desk.vocabulary import JUNK_REASONS, LOST_REASONS
 
 
 def recommended(version: int = 1) -> Journey:
@@ -39,8 +41,8 @@ def test_the_recommended_nine_differ_between_inbound_and_cold_only_in_the_first_
     journey = recommended()
     assert [(s.label, s.kind, s.milestone) for s in journey.stages] == [
         ("New Lead", "new", "lead"),
-        ("Not Connected", "not_connected", "unreachable"),
         ("Open Leads", "follow_up", "contacted"),
+        ("Not Connected", "not_connected", "unreachable"),
         ("Interested", "interested", "qualified"),
         ("Meeting Scheduled", "interested", "appointment_booked"),
         ("Meeting Done", "interested", "appointment_done"),
@@ -156,3 +158,35 @@ def test_a_removed_stage_with_leads_goes_where_the_manager_picked() -> None:
     # An open stage's leads stay open; Won and Lost keep their kind.
     with pytest.raises(JourneyError):
         check_places(before, after, {"meeting_done": "won"})
+
+
+def test_the_recommended_nine_carry_dipaks_stage_change_rules() -> None:
+    journey = recommended()
+    by = journey.by_key
+    # A meeting needs its date and time; Closed / Lost a reason; Junk a confirmed bad contact.
+    assert needs_of(by["meeting_scheduled"])[0] == ("meeting",)
+    assert needs_of(by["lost"])[0] == ("reason",) and reasons_of(by["lost"]) == LOST_REASONS
+    assert needs_of(by["junk"])[0] == ("reason",) and reasons_of(by["junk"]) == JUNK_REASONS
+    assert needs_of(by["open_leads"])[0] == needs_of(by["interested"])[0] == ("next_action",)
+    # His transition table: an interrupted follow-up never takes Interested back to Open.
+    assert by["new"].moves == (
+        "open_leads",
+        "not_connected",
+        "interested",
+        "meeting_scheduled",
+        "lost",
+        "junk",
+    )
+    assert by["interested"].moves == ("meeting_scheduled", "won", "lost")
+    assert by["meeting_scheduled"].moves == ("meeting_done", "interested", "open_leads", "lost")
+    assert by["meeting_done"].moves == ("won", "lost")
+    assert journey.ruled
+
+
+def test_the_ten_colour_dots_are_kept() -> None:
+    before = recommended()
+    stages = build(
+        sent(before, meeting_done={"color": "indigo"}, junk={"color": "grey"}), before, {}
+    )
+    by = {stage.key: stage for stage in stages}
+    assert (by["meeting_done"].color, by["junk"].color) == ("indigo", "grey")

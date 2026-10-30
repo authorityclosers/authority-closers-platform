@@ -331,8 +331,12 @@ const TeamView = dynamic(
   () => import("./team-view").then((module) => module.TeamView),
   { ssr: false, loading: ViewLoading },
 );
-const JourneyTab = dynamic(
-  () => import("./journey/journey-view").then((module) => module.JourneyTab),
+// Every way to Lead stages shows the one stage editor (owner, 31 Oct 2026).
+const OrganisationStages = dynamic(
+  () =>
+    import("../organisation/setup/stages").then(
+      (module) => module.OrganisationStages,
+    ),
   { ssr: false, loading: ViewLoading },
 );
 const SourcesView = dynamic(
@@ -1375,7 +1379,7 @@ export function LeadsRoute({
       onPick: () => {
         setSettingsOpen(false);
         leavingOverlay();
-        router.push(settingsPath("stages"));
+        router.push("/organisation/stages");
       },
     },
     {
@@ -1582,7 +1586,7 @@ export function LeadsRoute({
           {manage === "team" ? (
             <TeamView onChanged={refresh} onOpen={(leadId) => open(leadId)} />
           ) : manage === "stages" ? (
-            <JourneyTab canManage={can} />
+            <OrganisationStages />
           ) : manage === "numbers" ? (
             <PipelineDashboard pipeline={pipeline} />
           ) : manage === "sources" ? (

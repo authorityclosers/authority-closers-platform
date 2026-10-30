@@ -71,9 +71,10 @@ CLOSED_KINDS: Final[frozenset[str]] = frozenset({"won", "lost", "junk"})
 MAX_REASONS: Final[int] = 20
 MAX_REASON_LABEL: Final[int] = 60
 MAX_ROT_HOURS: Final[int] = 24 * 90
-# The stage editor's colour dots, as tokens the web maps to its own colours.
+# The stage editor's colour dots, each its own hue, as tokens the web maps to its own
+# colours (stage-look.ts).
 COLORS: Final[frozenset[str]] = frozenset(
-    {"teal", "blue", "violet", "amber", "green", "red", "slate", "pink"}
+    {"blue", "teal", "green", "amber", "red", "pink", "violet", "indigo", "slate", "grey"}
 )
 
 

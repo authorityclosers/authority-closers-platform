@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from ac_platform.lead_desk.models import Lead, LeadEvent
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -46,8 +46,8 @@ def test_the_stage_editor_saves_its_settings_and_moves_a_removed_stages_leads(
                 view = used.json()
                 assert [stage["label"] for stage in view["stages"]] == [
                     "New Lead",
-                    "Not Connected",
                     "Open Leads",
+                    "Not Connected",
                     "Interested",
                     "Meeting Scheduled",
                     "Meeting Done",
@@ -73,16 +73,14 @@ def test_the_stage_editor_saves_its_settings_and_moves_a_removed_stages_leads(
                 )
                 assert added.status_code == 201, added.text
                 lead = added.json()["lead"]
-                met = await client.post(
-                    f"{BASE}/leads/{lead['lead_id']}/stage",
-                    json={
-                        "commandId": str(uuid4()),
-                        "expectedRevision": lead["revision"],
-                        "step": "meeting_done",
-                    },
-                    headers=WRITE,
-                )
-                assert met.status_code == 200, met.text
+                # The lead had its meeting (set here directly: the list's moves take a
+                # new lead there in steps, each asking its own questions).
+                async with setup.sessions() as db, db.begin():
+                    await db.execute(
+                        update(Lead)
+                        .where(Lead.id == UUID(lead["lead_id"]))
+                        .values(stage="interested", step="meeting_done")
+                    )
 
                 stages: list[dict[str, Any]] = [
                     {"key": stage["key"], "label": stage["label"]}
@@ -90,7 +88,7 @@ def test_the_stage_editor_saves_its_settings_and_moves_a_removed_stages_leads(
                     if stage["key"] != "meeting_done"
                 ]
                 stages[0]["coldLabel"] = "Fresh list"
-                stages[2]["visible"] = False
+                stages[1]["visible"] = False
                 stages[3]["color"] = "amber"
                 version = view["version"]
 
@@ -141,7 +139,7 @@ def test_the_stage_editor_saves_its_settings_and_moves_a_removed_stages_leads(
                         .order_by(LeadEvent.created_at)
                     )
                 ).all()
-                assert len(moves) == 2
+                assert len(moves) == 1
                 last = moves[-1].data
                 assert (last["source"], last["from_label"], last["to_label"]) == (
                     "template",

@@ -1,10 +1,8 @@
 "use client";
-import { Building2, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { notify } from "../../notice-center";
-import { Segmented, Skeleton } from "../../ui/kit";
-import { JourneyTab } from "../../leads/journey/journey-view";
-import { TemplateBuilder } from "../../leads/journey/builder";
+import { Skeleton } from "../../ui/kit";
 import { AdPlatforms } from "../../leads/journey/ad-platforms";
 import {
   readJourney,
@@ -15,11 +13,13 @@ import {
   type TemplateView,
 } from "../../leads/journey/journey-client";
 import { StageEditor } from "./stage-editor";
+import editorStyles from "./stage-editor.module.css";
 import styles from "./setup.module.css";
 
-/** Saved stages first. Help never stands between the owner and a stage's controls.
- *  Every change saves at once (the stage editor, owner + Dipak, 30 Oct 2026). */
-export function OrganisationStages() {
+/** Lead stages (owner + Dipak, 31 Oct 2026): the title, one line, the editor. Every
+ *  way here (Leads setup, More → Lead stages, Settings) shows this one screen; `bare`
+ *  leaves the title to a page that has its own (lead-stages-screen.tsx). */
+export function OrganisationStages({ bare = false }: { bare?: boolean }) {
   const [view, setView] = useState<JourneyView | null>(null);
   const [pipes, setPipes] = useState<PipelinesView | null>(null);
   const [templates, setTemplates] = useState<TemplateView[] | null>(null);
@@ -28,18 +28,9 @@ export function OrganisationStages() {
       ? "main"
       : (new URLSearchParams(window.location.search).get("pipeline") ?? "main"),
   );
-  const [part, setPart] = useState<"stages" | "ads">("stages");
-  const [advanced, setAdvanced] = useState(false);
-  const [business, setBusiness] = useState(false);
+  const [ads, setAds] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const [error, setError] = useState<string | null>(null);
-  const fail = (reason: unknown, title: string) =>
-    notify({
-      id: "org-stage",
-      tone: "error",
-      title,
-      message: reason instanceof Error ? reason.message : "Try again.",
-    });
   useEffect(() => {
     let live = true;
     readPipelines().then(
@@ -72,7 +63,12 @@ export function OrganisationStages() {
       (reason) => {
         if (live) {
           setError("Stages didn't load.");
-          fail(reason, "Stages didn't load");
+          notify({
+            id: "org-stage",
+            tone: "error",
+            title: "Stages didn't load",
+            message: reason instanceof Error ? reason.message : "Try again.",
+          });
         }
       },
     );
@@ -99,104 +95,67 @@ export function OrganisationStages() {
           </button>
         ) : (
           <div aria-busy="true" aria-label="Loading lead stages">
-            <Skeleton height={80} />
             <Skeleton height={240} />
+            <Skeleton height={432} />
           </div>
         )}
       </div>
     );
-  if (view.version === 0) return <JourneyTab canManage={view.canEdit} />;
-  if (business)
+  if (ads)
     return (
-      <TemplateBuilder
-        view={view}
-        templates={templates}
-        first={false}
-        iconFor={() => Building2}
-        onCancel={() => setBusiness(false)}
-        onSaved={(next) => {
-          setView(next);
-          setBusiness(false);
-        }}
-        onFailed={fail}
-      />
+      <div className={styles.stack}>
+        <button
+          type="button"
+          className={editorStyles.back}
+          onClick={() => setAds(false)}
+        >
+          <ChevronLeft size={18} aria-hidden="true" />
+          Lead stages
+        </button>
+        <AdPlatforms version={view.version} />
+      </div>
     );
-  const profile =
-    templates?.find((item) => item.id === view.industry)?.name ??
-    "Custom stages";
   return (
     <div className={styles.stack}>
-      <header className={styles.head}>
-        <div>
-          <h2>Lead stages</h2>
-          <p>Changes save at once. Undo is in the corner.</p>
-        </div>
-      </header>
-      <div className={styles.tools}>
-        {pipes && pipes.pipelines.length > 1 ? (
-          <label className={styles.copy}>
-            Pipeline
-            <select
-              className={styles.search}
-              value={pipeline}
-              onChange={(event) => choosePipeline(event.target.value)}
-            >
-              {pipes.pipelines.map((item) => (
-                <option key={item.key} value={item.key}>
-                  {item.name}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <button
-          className={styles.chip}
-          disabled={!view.canEdit}
-          onClick={() => setBusiness(true)}
-        >
-          <Building2 size={16} aria-hidden="true" />
-          {profile}
-          <ChevronRight size={16} aria-hidden="true" />
-        </button>
-      </div>
-      <Segmented
-        label="Stage setup"
-        value={part}
-        onChange={setPart}
-        items={[
-          { key: "stages", label: "Stages" },
-          { key: "ads", label: "Ad platforms" },
-        ]}
-      />
-      {part === "ads" ? (
-        pipeline === "main" ? (
-          <AdPlatforms version={view.version} />
-        ) : (
-          <p className={styles.help}>
-            Ad platforms use the main pipeline’s stages.
-          </p>
-        )
-      ) : (
-        <StageEditor
-          view={view}
-          pipeline={pipeline}
-          templates={templates}
-          onSaved={setView}
-        />
+      {bare ? null : (
+        <header className={styles.head}>
+          <div>
+            <h2>Lead stages</h2>
+            <p>What your sellers see</p>
+          </div>
+        </header>
       )}
-      <div className={styles.more}>
-        <details
-          className={styles.details}
-          onToggle={(event) => setAdvanced(event.currentTarget.open)}
+      {pipes && pipes.pipelines.length > 1 ? (
+        <select
+          className={styles.search}
+          aria-label="Stage list"
+          value={pipeline}
+          onChange={(event) => choosePipeline(event.target.value)}
         >
-          <summary>More stage options</summary>
-          {advanced ? (
-            <div>
-              <JourneyTab canManage={view.canEdit} />
-            </div>
-          ) : null}
-        </details>
-      </div>
+          {pipes.pipelines.map((item) => (
+            <option key={item.key} value={item.key}>
+              {item.name}
+            </option>
+          ))}
+        </select>
+      ) : null}
+      <StageEditor
+        key={pipeline}
+        view={view}
+        pipeline={pipeline}
+        templates={templates}
+        onSaved={setView}
+      />
+      {pipeline === "main" && view.canEdit ? (
+        <button
+          type="button"
+          className={editorStyles.linkRow}
+          onClick={() => setAds(true)}
+        >
+          Ad platforms
+          <ChevronRight size={18} aria-hidden="true" />
+        </button>
+      ) : null}
     </div>
   );
 }

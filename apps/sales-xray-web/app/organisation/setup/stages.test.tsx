@@ -13,9 +13,6 @@ import {
   type TemplatePreview,
 } from "../../leads/journey/journey-client";
 vi.mock("../../notice-center", () => ({ notify: vi.fn() }));
-vi.mock("../../leads/journey/journey-view", () => ({
-  JourneyTab: () => <div>Advanced setup</div>,
-}));
 vi.mock("../../leads/journey/ad-platforms", () => ({
   AdPlatforms: () => <div>Ad platform settings</div>,
 }));
@@ -64,14 +61,27 @@ const view = {
   meanings: {},
   stages: [
     stage("new", "Enquiry", "new", "lead", 1, { coldLabel: "Fresh list" }),
-    stage("nc", "No answer", "not_connected", "unreachable"),
     stage("talk", "Talking", "follow_up", "contacted", 2),
+    stage("nc", "No answer", "not_connected", "unreachable"),
     stage("visit", "Visit", "interested", "appointment_booked"),
     stage("won", "Won", "won", "won", 3),
     stage("lost", "Lost", "lost", "lost", 1),
   ],
 };
 const copy = () => JSON.parse(JSON.stringify(view));
+const recommended = (labels: string[]) => [
+  {
+    id: "recommended",
+    name: "Recommended",
+    blurb: "",
+    icon: "spark",
+    stages: labels.map((label) => ({
+      label,
+      kind: "new" as const,
+      milestone: "lead",
+    })),
+  },
+];
 beforeEach(() => {
   host = document.createElement("div");
   document.body.append(host);
@@ -82,15 +92,7 @@ beforeEach(() => {
     sources: {},
     canEdit: true,
   });
-  vi.mocked(readTemplates).mockResolvedValue([
-    {
-      id: "recommended",
-      name: "Recommended",
-      blurb: "",
-      icon: "spark",
-      stages: [{ label: "New Lead", kind: "new", milestone: "lead" }],
-    },
-  ]);
+  vi.mocked(readTemplates).mockResolvedValue(recommended(["New Lead"]));
   vi.mocked(saveStages).mockResolvedValue({ ...copy(), version: 4 });
 });
 afterEach(async () => {
@@ -113,11 +115,6 @@ async function tap(name: string, item = button(name)) {
   await act(async () => item!.click());
   await settle();
 }
-const starting = (words: string) =>
-  [...host.querySelectorAll("button")].find(
-    (item) =>
-      item.textContent?.startsWith(words) && !item.getAttribute("aria-label"),
-  );
 async function enter(input: HTMLInputElement, value: string) {
   await act(async () => {
     Object.getOwnPropertyDescriptor(
@@ -127,19 +124,49 @@ async function enter(input: HTMLInputElement, value: string) {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+async function leave(input: HTMLInputElement) {
+  await act(async () => {
+    input.focus();
+    input.blur();
+  });
+  await settle();
+}
 const sent = () => vi.mocked(saveStages).mock.calls.at(-1)!;
 const byKey = (key: string) => sent()[1].find((item) => item.key === key);
+const render = async () => {
+  await act(async () => root.render(<OrganisationStages />));
+  await settle();
+};
+
+it("keeps the screen to a title, one line, the preview and plain rows", async () => {
+  await render();
+  expect(host.querySelector("h2")?.textContent).toBe("Lead stages");
+  expect(host.textContent).toContain("What your sellers see");
+  for (const word of [
+    "journey",
+    "pipeline",
+    "meaning",
+    "kind",
+    "template",
+    "step",
+  ])
+    expect(host.textContent?.toLowerCase()).not.toContain(word);
+  // No counts, chips or help on the rows: the name, and the Cold name beside the first.
+  const rows = host.querySelectorAll('[aria-label="Your lead stages"] > li');
+  expect(rows).toHaveLength(6);
+  expect(button("Rename Enquiry")?.textContent).toBe("EnquiryFresh list");
+  expect(button("Rename Talking")?.textContent).toBe("Talking");
+  expect(host.textContent).not.toMatch(/\d+ leads?/);
+});
 
 it("saves a new name at once and offers Undo", async () => {
-  await act(async () => root.render(<OrganisationStages />));
-  expect(host.textContent).toContain("Enquiry");
-  expect(saveStages).not.toHaveBeenCalled();
+  await render();
   await tap("Rename Talking");
-  await enter(
-    host.querySelector<HTMLInputElement>('input[aria-label="Stage name"]')!,
-    "Visit booked",
-  );
-  await tap("Done");
+  const input = host.querySelector<HTMLInputElement>(
+    'input[aria-label="Stage name"]',
+  )!;
+  await enter(input, "Visit booked");
+  await leave(input);
   expect(saveStages).toHaveBeenCalledTimes(1);
   expect(sent()[0]).toBe(3);
   expect(sent()[2]).toBe("main");
@@ -152,7 +179,7 @@ it("saves a new name at once and offers Undo", async () => {
     .mocked(notify)
     .mock.calls.map(([notice]) => notice)
     .find((notice) => notice.action?.label === "Undo");
-  expect(saved?.title).toBe("Renamed Visit booked");
+  expect(saved?.title).toBe("Renamed");
   await act(async () => saved!.action!.run());
   await settle();
   expect(saveStages).toHaveBeenCalledTimes(2);
@@ -161,23 +188,27 @@ it("saves a new name at once and offers Undo", async () => {
   expect(byKey("talk")?.label).toBe("Talking");
 });
 
-it("names the first stage on both sides and previews either side", async () => {
-  await act(async () => root.render(<OrganisationStages />));
-  expect(host.textContent).toContain("Cold Leads: Fresh list");
+it("previews either side and names the first stage on Cold from More", async () => {
+  // A phone: the preview starts folded, so the stages come first; one tap opens it.
+  const phone = vi
+    .spyOn(window, "matchMedia")
+    .mockReturnValue({ matches: false } as MediaQueryList);
+  await render();
+  phone.mockRestore();
+  expect(host.querySelector('[aria-label^="What sellers see"]')).toBeNull();
+  await tap("Preview what sellers see");
   const preview = () =>
     host.querySelector('[aria-label^="What sellers see"]')!.textContent;
   expect(preview()).toContain("Enquiry");
-  await tap("Cold");
+  await tap("Cold Leads");
   expect(preview()).toContain("Fresh list");
   expect(preview()).not.toContain("Enquiry");
-  await tap("Rename Enquiry");
-  await enter(
-    host.querySelector<HTMLInputElement>(
-      'input[aria-label="Cold Leads name"]',
-    )!,
-    "Unworked",
-  );
-  await tap("Done");
+  await tap("More for Enquiry");
+  const cold = [...host.querySelectorAll("label")]
+    .find((item) => item.textContent?.startsWith("Name on Cold Leads"))!
+    .querySelector("input")!;
+  await enter(cold, "Unworked");
+  await leave(cold);
   expect(byKey("new")).toMatchObject({
     label: "Enquiry",
     coldLabel: "Unworked",
@@ -185,7 +216,7 @@ it("names the first stage on both sides and previews either side", async () => {
 });
 
 it("hides a stage from sellers, never the first one", async () => {
-  await act(async () => root.render(<OrganisationStages />));
+  await render();
   expect(button("Sellers see Enquiry")?.disabled).toBe(true);
   await tap("Sellers see Talking");
   expect(byKey("talk")?.visible).toBe(false);
@@ -193,7 +224,7 @@ it("hides a stage from sellers, never the first one", async () => {
 });
 
 it("moves a stage with the keyboard and keeps the first stage first", async () => {
-  await act(async () => root.render(<OrganisationStages />));
+  await render();
   expect(button("Enquiry stays first")?.disabled).toBe(true);
   const grip = button("Move Visit")!;
   await act(async () => {
@@ -204,48 +235,52 @@ it("moves a stage with the keyboard and keeps the first stage first", async () =
   await settle();
   expect(sent()[1].map((item) => item.key)).toEqual([
     "new",
-    "nc",
-    "visit",
     "talk",
+    "visit",
+    "nc",
     "won",
     "lost",
   ]);
 });
 
-it("asks where a removed stage's leads go and moves them there", async () => {
-  await act(async () => root.render(<OrganisationStages />));
+it("removing a stage with leads asks where they go and moves them there", async () => {
+  await render();
   await tap("More for Talking");
   await tap("Remove stage");
   expect(saveStages).not.toHaveBeenCalled();
-  expect(host.textContent).toContain("Where do the 2 leads go?");
+  expect(host.textContent).toContain("Move 2 leads to");
   // Never back into the first stage.
-  expect(button("Enquiry")).toBeUndefined();
-  await tap("Visit", starting("Visit"));
+  const choices = [...host.querySelectorAll("button")].filter(
+    (item) =>
+      !item.getAttribute("aria-label") &&
+      ["No answer", "Visit", "Enquiry"].includes(item.textContent ?? ""),
+  );
+  expect(choices.map((item) => item.textContent)).toEqual([
+    "No answer",
+    "Visit",
+  ]);
+  await tap("Visit", choices[1]);
   expect(byKey("talk")?.archived).toBe(true);
   expect(sent()[3]).toEqual({ talk: "visit" });
 });
 
-it("changes a stage's meaning and adds a ready stage before Won", async () => {
-  await act(async () => root.render(<OrganisationStages />));
-  await tap("Meaning of Visit: Meeting");
+it("changes what a stage counts as and adds a ready stage before Won", async () => {
+  await render();
+  await tap("More for Visit");
   await tap("Interested");
   expect(byKey("visit")).toMatchObject({
     kind: "interested",
     milestone: "qualified",
   });
-  await tap("Add stage");
-  await tap("Payment pending", starting("Payment pending"));
+  await tap("Payment pending");
   const order = sent()[1].map((item) => item.key ?? item.label);
   expect(order.indexOf("Payment pending")).toBe(order.indexOf("won") - 1);
   expect(
     sent()[1].find((item) => item.label === "Payment pending"),
-  ).toMatchObject({
-    kind: "interested",
-    milestone: "negotiation",
-  });
+  ).toMatchObject({ kind: "interested", milestone: "negotiation" });
 });
 
-it("uses the recommended stages, sending each stage's leads by meaning", async () => {
+it("offers the recommended stages only when the list differs, by matching stage", async () => {
   vi.mocked(previewTemplate).mockResolvedValue({
     template: "recommended",
     stages: [
@@ -270,7 +305,7 @@ it("uses the recommended stages, sending each stage's leads by meaning", async (
     ],
   } as TemplatePreview);
   vi.mocked(applyTemplate).mockResolvedValue({ ...copy(), version: 5 });
-  await act(async () => root.render(<OrganisationStages />));
+  await render();
   await tap("Use recommended");
   const confirm = [...host.querySelectorAll("button")].filter(
     (item) => item.textContent === "Use recommended",
@@ -279,4 +314,12 @@ it("uses the recommended stages, sending each stage's leads by meaning", async (
   expect(applyTemplate).toHaveBeenCalledWith(3, "recommended", "main", {
     talk: "open_leads",
   });
+});
+
+it("hides Use recommended when the list is the recommended one", async () => {
+  vi.mocked(readTemplates).mockResolvedValue(
+    recommended(view.stages.map((item) => item.label)),
+  );
+  await render();
+  expect(button("Use recommended")).toBeUndefined();
 });

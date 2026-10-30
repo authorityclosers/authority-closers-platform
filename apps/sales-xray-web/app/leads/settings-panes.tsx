@@ -12,7 +12,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { Empty, Skeleton } from "../ui/kit";
-import { JourneyTab } from "./journey/journey-view";
+import { OrganisationStages } from "../organisation/setup/stages";
 import {
   LEADS_PATH,
   LeadsError,
@@ -96,13 +96,13 @@ export function LeadRulesPane() {
   );
 }
 
-/** Settings → Lead stages: the stages and pipelines, and what the ad platforms learn. */
+/** Settings → Lead stages: the one stage editor (owner, 31 Oct 2026). */
 export function LeadStagesPane() {
   const { desk, error, retry } = useDesk();
   if (!desk) return <Waiting error={error} retry={retry} />;
   return (
     <div className={styles.pane}>
-      <JourneyTab canManage={desk.me.can_manage} />
+      <OrganisationStages />
     </div>
   );
 }

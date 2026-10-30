@@ -39,16 +39,18 @@ export type StageView = {
   coldLabel?: string | null;
 };
 
-/** The stage editor's colour dots; the server keeps exactly these. */
+/** The stage editor's colour dots, each its own hue; the server keeps exactly these. */
 export const STAGE_COLORS = [
-  "teal",
   "blue",
-  "violet",
-  "amber",
+  "teal",
   "green",
+  "amber",
   "red",
-  "slate",
   "pink",
+  "violet",
+  "indigo",
+  "slate",
+  "grey",
 ] as const;
 export type StageColor = (typeof STAGE_COLORS)[number];
 

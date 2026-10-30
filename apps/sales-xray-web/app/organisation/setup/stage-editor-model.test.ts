@@ -185,6 +185,21 @@ describe("the list", () => {
       keys(fresh).indexOf("won") - 1,
     );
   });
+
+  it("finds a meeting stage the business named its own way, by its meaning", () => {
+    const own = [
+      ...nine().filter((item) => !item.key?.startsWith("meeting_")),
+      stage(
+        "demo_completed",
+        "Meeting/Demo completed",
+        "interested",
+        "appointment_done",
+      ),
+    ];
+    expect(meetingStage(own, MEETING_STAGES[1])?.key).toBe("demo_completed");
+    expect(meetingOn(own, MEETING_STAGES[1])).toBe(own);
+    expect(meetingStage(own, MEETING_STAGES[0])).toBeUndefined();
+  });
 });
 
 describe("Use recommended", () => {

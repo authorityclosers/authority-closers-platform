@@ -1,6 +1,6 @@
 /**
  * How a stage looks wherever it is shown: the stage editor, its phone preview and the
- * seller's Leads tabs (owner + Dipak, 30 Oct 2026). Its colour dot as a palette token,
+ * seller's Leads tabs (owner + Dipak, 30-31 Oct 2026). Its colour dot as a palette token,
  * and its name on the Inbound Leads or Cold Leads side.
  */
 
@@ -8,29 +8,37 @@ import type { Kind, StageColor } from "./journey-client";
 
 export type Side = "inbound" | "cold";
 
+// Ten dots, each its own hue (owner, 31 Oct 2026: "every swatch distinct"). Indigo, violet
+// and grey are mixed from palette tokens, so light and dark follow the theme.
 const TOKENS: Record<StageColor, string> = {
-  teal: "var(--lx-teal)",
   blue: "var(--lx-closing)",
-  violet: "var(--lx-missed)",
+  teal: "var(--lx-teal)",
+  green: "var(--xr-green-mark)",
   amber: "var(--lx-warning)",
-  green: "var(--lx-success)",
   red: "var(--lx-danger)",
-  slate: "var(--lx-info)",
   pink: "var(--lx-objection)",
+  violet: "color-mix(in oklab, var(--lx-missed) 55%, var(--lx-objection))",
+  indigo: "var(--lx-missed)",
+  slate: "var(--lx-info)",
+  grey: "color-mix(in oklab, var(--lx-muted) 45%, var(--sx-surface))",
 };
 
 export const COLOR_WORDS: Record<StageColor, string> = {
-  teal: "Teal",
   blue: "Blue",
-  violet: "Violet",
-  amber: "Amber",
+  teal: "Teal",
   green: "Green",
+  amber: "Amber",
   red: "Red",
-  slate: "Grey",
   pink: "Pink",
+  violet: "Violet",
+  indigo: "Indigo",
+  slate: "Slate",
+  grey: "Grey",
 };
 
-// A stage with no dot of its own takes its meaning's colour.
+// A stage with no dot of its own takes its meaning's colour: Dipak's nine are all
+// different (New Lead blue, Open Leads teal, Not Connected slate, Interested amber,
+// Meeting Scheduled violet, Meeting Done indigo, Won green, Closed / Lost red, Junk grey).
 const BY_KIND: Record<Kind, StageColor> = {
   new: "blue",
   not_connected: "slate",
@@ -38,9 +46,8 @@ const BY_KIND: Record<Kind, StageColor> = {
   interested: "amber",
   won: "green",
   lost: "red",
-  junk: "slate",
+  junk: "grey",
 };
-const MEETINGS = new Set(["appointment_booked", "appointment_done"]);
 
 type Looks = {
   kind?: Kind;
@@ -51,8 +58,10 @@ type Looks = {
 /** The stage's colour: its own dot, else its meaning's. */
 export function stageColor(stage: Looks): StageColor {
   if (stage.color) return stage.color;
-  if (stage.kind === "interested" && MEETINGS.has(stage.milestone ?? ""))
+  if (stage.kind === "interested" && stage.milestone === "appointment_booked")
     return "violet";
+  if (stage.kind === "interested" && stage.milestone === "appointment_done")
+    return "indigo";
   return BY_KIND[stage.kind ?? "follow_up"];
 }
 

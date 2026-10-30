@@ -2,6 +2,7 @@
 import {
   Ban,
   CalendarCheck,
+  ChevronDown,
   CircleDashed,
   CircleX,
   Ellipsis,
@@ -9,10 +10,13 @@ import {
   EyeOff,
   GripVertical,
   MessagesSquare,
+  Phone,
   PhoneMissed,
   Plus,
+  Smartphone,
   Sparkles,
   Star,
+  Trash2,
   Trophy,
   type LucideIcon,
 } from "lucide-react";
@@ -26,7 +30,7 @@ import {
   type PointerEvent,
 } from "react";
 import { notify } from "../../notice-center";
-import { Button, Segmented } from "../../ui/kit";
+import { Button } from "../../ui/kit";
 import { Sheet } from "../../ui/sheet";
 import {
   STAGE_COLORS,
@@ -50,15 +54,12 @@ import {
 import {
   MAX_STAGES,
   MEANINGS,
-  MEETING_STAGES,
   addStage,
   destinations,
   live,
   meaningBlock,
   meaningLabel,
   meaningOf,
-  meetingOn,
-  meetingStage,
   moveTo,
   readyLeft,
   recommendedMap,
@@ -66,7 +67,6 @@ import {
   removed,
   withMeaning,
   type Meaning,
-  type MeetingStage,
 } from "./stage-editor-model";
 import styles from "./stage-editor.module.css";
 
@@ -81,7 +81,7 @@ const ICONS: Record<Meaning, LucideIcon> = {
   junk: Ban,
 };
 
-// What a custom stage may mean (New and Not reached are one each).
+// What a stage of your own may count as (the first stage and Not Connected are one each).
 const ADDABLE: Meaning[] = [
   "in_talks",
   "interested",
@@ -94,14 +94,25 @@ const ADDABLE: Meaning[] = [
 const tone = (value: string) => ({ "--stage": value }) as CSSProperties;
 const leadsWords = (count: number) =>
   `${count} ${count === 1 ? "lead" : "leads"}`;
+const same = (a: string, b: string) =>
+  a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
 
-type Tool = "color" | "meaning" | "more";
+type Open =
+  | { kind: "more"; id: string }
+  | { kind: "move"; id: string }
+  | { kind: "custom" }
+  | { kind: "recommend" }
+  | null;
 type Drag = { id: string; from: number; to: number; dy: number; step: number };
+type Swipe = { id: string; x: number; y: number; dx: number; on: boolean };
+
+// How far a row slides left before letting go removes it.
+const SWIPE_REMOVES = 88;
 
 /**
- * The stage editor (stages-views-sources.md §3, owner + Dipak, 30 Oct 2026): a live
- * preview of the seller's Leads screen, then one card per stage. Every change saves at
- * once and offers Undo; a stage's meaning, not its name, drives the numbers.
+ * Lead stages, as the owner and Dipak want them (31 Oct 2026): a small live preview of the
+ * seller's Leads screen, then one plain row per stage (drag, colour, name, sellers see it,
+ * more). Every change saves at once, with Undo in the corner.
  */
 export function StageEditor({
   view,
@@ -115,39 +126,48 @@ export function StageEditor({
   onSaved: (next: JourneyView) => void;
 }) {
   const saved = useMemo(() => drafts(view), [view]);
-  // The list as the manager last left it, until the server has every change.
+  // The list as the owner last left it, until the server has every change.
   const [pending, setPending] = useState<Draft[] | null>(null);
   const list = pending ?? saved;
   const order = live(list);
   const canEdit = view.canEdit;
   const [side, setSide] = useState<Side>("inbound");
-  const [open, setOpen] = useState<{ id: string; tool: Tool } | null>(null);
+  const [open, setOpen] = useState<Open>(null);
   const [renaming, setRenaming] = useState<{
     id: string;
     label: string;
-    cold: string;
   } | null>(null);
-  const [adding, setAdding] = useState<null | "pick" | "custom">(null);
   const [custom, setCustom] = useState<{ label: string; meaning: Meaning }>({
     label: "",
     meaning: "interested",
   });
-  const [removing, setRemoving] = useState<Draft | null>(null);
-  const [recommending, setRecommending] = useState(false);
   const [busy, setBusy] = useState(false);
   const [drag, setDrag] = useState<Drag | null>(null);
+  const [swipe, setSwipe] = useState<Swipe | null>(null);
   const version = useRef(view.version);
   const stages = useRef(view.stages);
   const queue = useRef<Promise<void>>(Promise.resolve());
   const ticket = useRef(0);
   const rows = useRef(new Map<string, HTMLLIElement>());
   const grabbed = useRef<{ y: number; centers: number[] } | null>(null);
+  // A swipe ends in a click on whatever was under the finger: that click is ignored.
+  const swiped = useRef(false);
   useEffect(() => {
     version.current = view.version;
     stages.current = view.stages;
   }, [view]);
 
   const recommended = templates?.find((item) => item.id === "recommended");
+  const differs =
+    !!recommended &&
+    (recommended.stages.length !== order.length ||
+      recommended.stages.some(
+        (item, index) => !same(item.label, order[index]?.label ?? ""),
+      ));
+  const sheetStage =
+    open && "id" in open
+      ? list.find((stage) => stage.id === open.id)
+      : undefined;
 
   /** Saves the whole list now, one save after another, then offers Undo. */
   function commit(
@@ -193,7 +213,7 @@ export function StageEditor({
         notify({
           id: "org-stage",
           tone: "error",
-          title: "That change wasn't saved",
+          title: "Not saved",
           message: reason instanceof Error ? reason.message : "Try again.",
         });
       }
@@ -209,40 +229,39 @@ export function StageEditor({
     const stage = editing && list.find((item) => item.id === editing.id);
     if (!editing || !stage) return;
     const label = editing.label.trim();
-    const cold = editing.cold.trim();
-    if (!label) return;
-    if (label === stage.label && cold === (stage.coldLabel ?? "")) return;
-    commit(
-      change(stage.id, {
-        label,
-        ...(stage.kind === "new" ? { coldLabel: cold || null } : {}),
-      }),
-      `Renamed ${label}`,
-      { undo: list },
-    );
+    if (!label || label === stage.label) return;
+    commit(change(stage.id, { label }), "Renamed", { undo: list });
   }
 
   function remove(stage: Draft) {
-    setOpen(null);
-    if (stage.leads > 0) {
-      setRemoving(stage);
+    if (removeBlock(list, stage)) {
+      notify({
+        id: "org-stage",
+        tone: "info",
+        title: removeBlock(list, stage) ?? "",
+      });
       return;
     }
+    if (stage.leads > 0) {
+      setOpen({ kind: "move", id: stage.id });
+      return;
+    }
+    setOpen(null);
     commit(removed(list, stage.id), `Removed ${stage.label}`, { undo: list });
   }
 
   function removeTo(stage: Draft, target: Draft) {
-    setRemoving(null);
+    setOpen(null);
     if (!stage.key || !target.key) return;
     commit(removed(list, stage.id), `Removed ${stage.label}`, {
       map: { [stage.key]: target.key },
-      message: `${leadsWords(stage.leads)} moved to ${target.label}, with their history.`,
+      message: `${leadsWords(stage.leads)} moved to ${target.label}.`,
     });
   }
 
   function add(stage: { label: string; meaning: Meaning; milestone?: string }) {
     const meaning = MEANINGS.find((item) => item.key === stage.meaning)!;
-    setAdding(null);
+    setOpen(null);
     setCustom({ label: "", meaning: "interested" });
     commit(
       addStage(list, {
@@ -253,13 +272,6 @@ export function StageEditor({
       `Added ${stage.label.trim()}`,
       { undo: list },
     );
-  }
-
-  function meeting(which: MeetingStage, on: boolean) {
-    const stage = meetingStage(list, which);
-    if (on)
-      commit(meetingOn(list, which), `${which.label} is on`, { undo: list });
-    else if (stage) remove(stage);
   }
 
   async function adoptRecommended() {
@@ -281,18 +293,13 @@ export function StageEditor({
       stages.current = fresh.stages;
       setPending(null);
       onSaved(fresh);
-      setRecommending(false);
-      notify({
-        id: "org-stage",
-        tone: "success",
-        title: "Recommended stages in use",
-        message: "Leads kept their meaning and their history.",
-      });
+      setOpen(null);
+      notify({ id: "org-stage", tone: "success", title: "Stages updated" });
     } catch (reason) {
       notify({
         id: "org-stage",
         tone: "error",
-        title: "Stages were not changed",
+        title: "Not changed",
         message: reason instanceof Error ? reason.message : "Try again.",
       });
     } finally {
@@ -309,6 +316,7 @@ export function StageEditor({
   ) {
     if (!canEdit || index === 0 || event.button !== 0) return;
     event.preventDefault();
+    event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     const boxes = order.map((item) =>
       rows.current.get(item.id)?.getBoundingClientRect(),
@@ -317,10 +325,14 @@ export function StageEditor({
       y: event.clientY,
       centers: boxes.map((box) => (box ? box.top + box.height / 2 : 0)),
     };
-    const height = boxes[index]?.height ?? 0;
-    setOpen(null);
     setRenaming(null);
-    setDrag({ id: stage.id, from: index, to: index, dy: 0, step: height + 8 });
+    setDrag({
+      id: stage.id,
+      from: index,
+      to: index,
+      dy: 0,
+      step: boxes[index]?.height ?? 48,
+    });
   }
 
   function drift(event: PointerEvent<HTMLButtonElement>) {
@@ -339,10 +351,7 @@ export function StageEditor({
     setDrag(null);
     grabbed.current = null;
     if (!done || done.to === done.from) return;
-    const stage = order[done.from];
-    commit(moveTo(list, done.id, done.to), `Moved ${stage.label}`, {
-      undo: list,
-    });
+    commit(moveTo(list, done.id, done.to), "Order saved", { undo: list });
   }
 
   function nudge(
@@ -354,7 +363,7 @@ export function StageEditor({
     if (!by) return;
     event.preventDefault();
     const next = moveTo(list, stage.id, index + by);
-    if (next !== list) commit(next, `Moved ${stage.label}`, { undo: list });
+    if (next !== list) commit(next, "Order saved", { undo: list });
   }
 
   function shift(index: number): number {
@@ -366,61 +375,75 @@ export function StageEditor({
     return 0;
   }
 
-  const customTaken = order.some(
-    (stage) =>
-      stage.label.trim().toLocaleLowerCase() ===
-      custom.label.trim().toLocaleLowerCase(),
-  );
+  /* ----- swipe left to remove (never from the screen's edge: that is Back) ----- */
+
+  function touch(event: PointerEvent<HTMLDivElement>, stage: Draft) {
+    const edge = 24;
+    if (
+      !canEdit ||
+      !stage.key ||
+      event.clientX < edge ||
+      event.clientX > window.innerWidth - edge
+    )
+      return;
+    setSwipe({
+      id: stage.id,
+      x: event.clientX,
+      y: event.clientY,
+      dx: 0,
+      on: false,
+    });
+  }
+
+  function slide(event: PointerEvent<HTMLDivElement>) {
+    if (!swipe) return;
+    const dx = event.clientX - swipe.x;
+    const dy = event.clientY - swipe.y;
+    if (!swipe.on) {
+      if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) {
+        setSwipe(null);
+        return;
+      }
+      if (dx > -10) return;
+      event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    setSwipe({
+      ...swipe,
+      on: true,
+      dx: Math.max(-SWIPE_REMOVES - 24, Math.min(0, dx)),
+    });
+  }
+
+  function release(stage: Draft) {
+    const done = swipe;
+    setSwipe(null);
+    if (!done?.on) return;
+    swiped.current = true;
+    window.setTimeout(() => {
+      swiped.current = false;
+    }, 0);
+    if (done.dx <= -SWIPE_REMOVES) remove(stage);
+  }
+
+  const customTaken = order.some((stage) => same(stage.label, custom.label));
   const hasJunk = order.some((stage) => stage.kind === "junk");
 
   return (
     <div className={styles.editor}>
       <section className={styles.previewPane} aria-label="Preview">
-        <Segmented
-          label="Preview side"
-          value={side}
-          onChange={setSide}
-          items={[
-            { key: "inbound", label: "Inbound" },
-            { key: "cold", label: "Cold" },
-          ]}
-        />
-        <Preview list={list} side={side} />
+        <Preview list={list} side={side} onSide={setSide} />
       </section>
 
       <section className={styles.listPane} aria-label="Stages">
-        <header className={styles.listHead}>
-          <h3>
-            {order.length} {order.length === 1 ? "stage" : "stages"}
-          </h3>
-          {canEdit && recommended ? (
-            <button
-              type="button"
-              className={styles.chip}
-              disabled={busy}
-              onClick={() => setRecommending(true)}
-            >
-              <Sparkles size={16} aria-hidden="true" />
-              Use recommended
-            </button>
-          ) : null}
-        </header>
-
-        <ol className={styles.cards} aria-label="Your lead stages">
+        <ol className={styles.rows} aria-label="Your lead stages">
           {order.map((stage, index) => {
-            const meaning = meaningOf(stage);
-            const Icon = ICONS[meaning];
             const first = index === 0;
-            const locked =
-              stage.kind === "new" || stage.kind === "not_connected";
             // A stage just added has no key until its save comes back: it waits.
             const editable = canEdit && !!stage.key;
-            const tool = open?.id === stage.id ? open.tool : null;
             const dragged = drag?.id === stage.id;
             const visible = stage.visible !== false;
-            const toggle = (next: Tool) =>
-              setOpen(tool === next ? null : { id: stage.id, tool: next });
-            const panel = `stage-${stage.id}-${tool ?? "none"}`;
+            const sliding = swipe?.id === stage.id && swipe.on ? swipe.dx : 0;
+            const moved = dragged && drag ? drag.dy : shift(index);
             return (
               <li
                 key={stage.id}
@@ -428,20 +451,41 @@ export function StageEditor({
                   if (node) rows.current.set(stage.id, node);
                   else rows.current.delete(stage.id);
                 }}
-                className={styles.card}
+                className={styles.row}
                 data-dragged={dragged || undefined}
                 data-hidden={!visible || undefined}
                 style={{
                   ...tone(stageTone(stage)),
-                  transform:
-                    dragged && drag
-                      ? `translateY(${drag.dy}px)`
-                      : shift(index)
-                        ? `translateY(${shift(index)}px)`
-                        : undefined,
+                  transform: moved ? `translateY(${moved}px)` : undefined,
                 }}
               >
-                <div className={styles.cardRow}>
+                <span
+                  className={styles.swipeBack}
+                  aria-hidden="true"
+                  data-ready={sliding <= -SWIPE_REMOVES || undefined}
+                >
+                  <Trash2 size={18} />
+                  Remove
+                </span>
+                <div
+                  className={styles.rowFront}
+                  data-sliding={sliding ? "" : undefined}
+                  style={
+                    sliding
+                      ? { transform: `translateX(${sliding}px)` }
+                      : undefined
+                  }
+                  onPointerDown={(event) => touch(event, stage)}
+                  onPointerMove={slide}
+                  onPointerUp={() => release(stage)}
+                  onPointerCancel={() => setSwipe(null)}
+                  onClickCapture={(event) => {
+                    if (swiped.current) {
+                      event.stopPropagation();
+                      event.preventDefault();
+                    }
+                  }}
+                >
                   {canEdit ? (
                     <button
                       type="button"
@@ -469,126 +513,51 @@ export function StageEditor({
                     type="button"
                     className={styles.dot}
                     aria-label={`Colour of ${stage.label}: ${COLOR_WORDS[stageColor(stage)]}`}
-                    aria-expanded={tool === "color"}
-                    aria-controls={tool === "color" ? panel : undefined}
                     disabled={!editable}
-                    onClick={() => toggle("color")}
+                    onClick={() => setOpen({ kind: "more", id: stage.id })}
                   />
-                  <div className={styles.words}>
-                    {renaming?.id === stage.id ? (
-                      <form
-                        className={styles.rename}
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          finishRename();
-                        }}
-                        onBlur={(event) => {
-                          if (
-                            !event.currentTarget.contains(
-                              event.relatedTarget as Node | null,
-                            )
-                          )
-                            finishRename();
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Escape") setRenaming(null);
-                        }}
-                      >
-                        <input
-                          className={styles.input}
-                          aria-label={
-                            first ? "Inbound Leads name" : "Stage name"
-                          }
-                          maxLength={40}
-                          autoFocus
-                          value={renaming.label}
-                          onChange={(event) =>
-                            setRenaming({
-                              ...renaming,
-                              label: event.target.value,
-                            })
-                          }
-                        />
-                        {first ? (
-                          <input
-                            className={styles.input}
-                            aria-label="Cold Leads name"
-                            placeholder="Cold Leads name"
-                            maxLength={40}
-                            value={renaming.cold}
-                            onChange={(event) =>
-                              setRenaming({
-                                ...renaming,
-                                cold: event.target.value,
-                              })
-                            }
-                          />
-                        ) : null}
-                        <button type="submit" className={styles.textButton}>
-                          Done
-                        </button>
-                      </form>
-                    ) : (
-                      <button
-                        type="button"
-                        className={styles.name}
-                        disabled={!editable}
-                        aria-label={`Rename ${stage.label}`}
-                        onClick={() => {
-                          setOpen(null);
-                          setRenaming({
-                            id: stage.id,
-                            label: stage.label,
-                            cold: stage.coldLabel ?? "",
-                          });
-                        }}
-                      >
-                        <strong>{stage.label}</strong>
-                        {first ? (
-                          <small>Cold Leads: {stageName(stage, "cold")}</small>
-                        ) : null}
-                      </button>
-                    )}
-                    <span className={styles.meta}>
-                      {locked || !editable ? (
-                        <span className={styles.meaningStill}>
-                          <Icon size={14} aria-hidden="true" />
-                          {meaningLabel(meaning)}
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          className={styles.meaning}
-                          aria-expanded={tool === "meaning"}
-                          aria-controls={tool === "meaning" ? panel : undefined}
-                          aria-label={`Meaning of ${stage.label}: ${meaningLabel(meaning)}`}
-                          onClick={() => toggle("meaning")}
-                        >
-                          <Icon size={14} aria-hidden="true" />
-                          {meaningLabel(meaning)}
-                        </button>
-                      )}
-                      <span>· {leadsWords(stage.leads)}</span>
-                      {visible ? null : <span>· Hidden from sellers</span>}
-                    </span>
-                  </div>
+                  {renaming?.id === stage.id ? (
+                    <input
+                      className={styles.nameInput}
+                      aria-label="Stage name"
+                      maxLength={40}
+                      autoFocus
+                      value={renaming.label}
+                      onChange={(event) =>
+                        setRenaming({ ...renaming, label: event.target.value })
+                      }
+                      onBlur={finishRename}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") event.currentTarget.blur();
+                        if (event.key === "Escape") setRenaming(null);
+                      }}
+                    />
+                  ) : (
+                    <button
+                      type="button"
+                      className={styles.name}
+                      disabled={!editable}
+                      aria-label={`Rename ${stage.label}`}
+                      onClick={() =>
+                        setRenaming({ id: stage.id, label: stage.label })
+                      }
+                    >
+                      <span>{stage.label}</span>
+                      {first && stage.coldLabel ? (
+                        <small>{stage.coldLabel}</small>
+                      ) : null}
+                    </button>
+                  )}
                   <button
                     type="button"
                     className={styles.iconButton}
                     aria-pressed={visible}
                     aria-label={`Sellers see ${stage.label}`}
-                    title={
-                      first
-                        ? "Sellers always see the first stage"
-                        : "Sellers see this"
-                    }
                     disabled={!editable || first}
                     onClick={() =>
                       commit(
                         change(stage.id, { visible: !visible }),
-                        visible
-                          ? `Sellers don't see ${stage.label}`
-                          : `Sellers see ${stage.label}`,
+                        visible ? "Hidden from sellers" : "Shown to sellers",
                         { undo: list },
                       )
                     }
@@ -604,128 +573,14 @@ export function StageEditor({
                       type="button"
                       className={styles.iconButton}
                       aria-label={`More for ${stage.label}`}
-                      aria-expanded={tool === "more"}
-                      aria-controls={tool === "more" ? panel : undefined}
+                      aria-haspopup="dialog"
                       disabled={!editable}
-                      onClick={() => toggle("more")}
+                      onClick={() => setOpen({ kind: "more", id: stage.id })}
                     >
                       <Ellipsis size={18} aria-hidden="true" />
                     </button>
                   ) : null}
                 </div>
-
-                {tool === "color" ? (
-                  <div
-                    className={styles.panel}
-                    id={panel}
-                    role="group"
-                    aria-label="Colour"
-                  >
-                    <div className={styles.swatches}>
-                      {STAGE_COLORS.map((color) => (
-                        <button
-                          key={color}
-                          type="button"
-                          className={styles.swatch}
-                          style={tone(colorTone(color))}
-                          aria-label={COLOR_WORDS[color]}
-                          aria-pressed={stage.color === color}
-                          onClick={() => {
-                            setOpen(null);
-                            if (stage.color !== color)
-                              commit(
-                                change(stage.id, { color }),
-                                `${stage.label} is ${COLOR_WORDS[color].toLowerCase()}`,
-                                { undo: list },
-                              );
-                          }}
-                        />
-                      ))}
-                      <button
-                        type="button"
-                        className={styles.textButton}
-                        aria-pressed={!stage.color}
-                        onClick={() => {
-                          setOpen(null);
-                          if (stage.color)
-                            commit(
-                              change(stage.id, { color: null }),
-                              `${stage.label} takes its meaning's colour`,
-                              { undo: list },
-                            );
-                        }}
-                      >
-                        By meaning
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-
-                {tool === "meaning" ? (
-                  <div
-                    className={styles.panel}
-                    id={panel}
-                    role="group"
-                    aria-label="Meaning"
-                  >
-                    <p className={styles.help}>
-                      {stage.leads > 0
-                        ? "It has leads, so only Interested and Meeting swap."
-                        : "Its meaning drives the numbers, whatever its name."}
-                    </p>
-                    <div className={styles.meanings}>
-                      {MEANINGS.map((item) => {
-                        const ItemIcon = ICONS[item.key];
-                        const block = meaningBlock(list, stage, item.key);
-                        return (
-                          <button
-                            key={item.key}
-                            type="button"
-                            className={styles.meaningChoice}
-                            aria-pressed={meaning === item.key}
-                            disabled={!!block}
-                            title={block ?? undefined}
-                            onClick={() => {
-                              setOpen(null);
-                              if (meaning !== item.key)
-                                commit(
-                                  list.map((each) =>
-                                    each.id === stage.id
-                                      ? withMeaning(each, item.key)
-                                      : each,
-                                  ),
-                                  `${stage.label} means ${item.label}`,
-                                  { undo: list },
-                                );
-                            }}
-                          >
-                            <ItemIcon size={18} aria-hidden="true" />
-                            {item.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-
-                {tool === "more" ? (
-                  <div className={styles.panel} id={panel}>
-                    <button
-                      type="button"
-                      className={styles.danger}
-                      disabled={!!removeBlock(list, stage)}
-                      onClick={() => remove(stage)}
-                    >
-                      Remove stage
-                    </button>
-                    <p className={styles.help}>
-                      {removeBlock(list, stage) ??
-                        (stage.leads
-                          ? "You pick where its leads go."
-                          : "History keeps it.")}
-                    </p>
-                  </div>
-                ) : null}
               </li>
             );
           })}
@@ -736,184 +591,177 @@ export function StageEditor({
           </p>
         ) : null}
 
-        {canEdit ? (
-          <>
-            <button
-              type="button"
-              className={styles.add}
-              disabled={order.length >= MAX_STAGES}
-              onClick={() => setAdding("pick")}
-            >
-              <Plus size={18} aria-hidden="true" />
-              Add stage
-            </button>
-            {order.length >= MAX_STAGES ? (
-              <p className={styles.help}>{MAX_STAGES} stages at most.</p>
-            ) : null}
-            <section className={styles.meetings} aria-label="Meetings">
-              <h3>Meetings</h3>
-              {MEETING_STAGES.map((which) => (
-                <label className={styles.switch} key={which.key}>
-                  <span>{meetingStage(list, which)?.label ?? which.label}</span>
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    checked={!!meetingStage(list, which)}
-                    onChange={(event) => meeting(which, event.target.checked)}
-                  />
-                </label>
+        {canEdit && order.length < MAX_STAGES ? (
+          <div className={styles.addStage} role="group" aria-label="Add stage">
+            <span className={styles.addLabel}>Add stage</span>
+            <div className={styles.chips}>
+              {readyLeft(list).map((item) => (
+                <button
+                  key={item.label}
+                  type="button"
+                  className={styles.chip}
+                  onClick={() =>
+                    add({
+                      label: item.label,
+                      meaning: meaningOf({
+                        kind: "interested",
+                        milestone: item.milestone,
+                      }),
+                      milestone: item.milestone,
+                    })
+                  }
+                >
+                  <Plus size={14} aria-hidden="true" />
+                  {item.label}
+                </button>
               ))}
-              <p className={styles.help}>
-                Turn off what your business doesn&apos;t do.
-              </p>
-            </section>
-          </>
+              <button
+                type="button"
+                className={styles.chip}
+                onClick={() => setOpen({ kind: "custom" })}
+              >
+                <Plus size={14} aria-hidden="true" />
+                Custom
+              </button>
+            </div>
+          </div>
+        ) : null}
+
+        {canEdit && differs ? (
+          <button
+            type="button"
+            className={styles.quiet}
+            disabled={busy}
+            onClick={() => setOpen({ kind: "recommend" })}
+          >
+            <Sparkles size={16} aria-hidden="true" />
+            Use recommended
+          </button>
         ) : null}
       </section>
 
+      {/* More: what the stage counts as, its colour, the Cold name, remove. */}
       <Sheet
-        open={adding !== null}
-        onClose={() => setAdding(null)}
-        title={adding === "custom" ? "Your own stage" : "Add a stage"}
-        footer={
-          adding === "custom" ? (
-            <Button
-              variant="primary"
-              disabled={
-                !custom.label.trim() ||
-                customTaken ||
-                (custom.meaning === "junk" && hasJunk)
-              }
-              onClick={() => add(custom)}
-            >
-              Add stage
-            </Button>
-          ) : undefined
+        open={open?.kind === "more" && !!sheetStage}
+        onClose={() => setOpen(null)}
+        title={sheetStage?.label ?? ""}
+      >
+        {open?.kind === "more" && sheetStage ? (
+          <MoreSheet
+            stage={sheetStage}
+            first={order[0]?.id === sheetStage.id}
+            list={list}
+            onCountsAs={(meaning) =>
+              commit(
+                list.map((each) =>
+                  each.id === sheetStage.id ? withMeaning(each, meaning) : each,
+                ),
+                "Saved",
+                { undo: list },
+              )
+            }
+            onColor={(color) =>
+              commit(change(sheetStage.id, { color }), "Colour saved", {
+                undo: list,
+              })
+            }
+            onColdName={(coldLabel) =>
+              commit(change(sheetStage.id, { coldLabel }), "Renamed", {
+                undo: list,
+              })
+            }
+            onRemove={() => remove(sheetStage)}
+          />
+        ) : null}
+      </Sheet>
+
+      <Sheet
+        open={open?.kind === "move" && !!sheetStage}
+        onClose={() => setOpen(null)}
+        title={
+          sheetStage
+            ? `Move ${leadsWords(sheetStage.leads)} to`
+            : "Move leads to"
         }
       >
-        {adding === "custom" ? (
-          <div className={styles.customForm}>
-            <label className={styles.field}>
-              Name
-              <input
-                className={styles.input}
-                maxLength={40}
-                autoFocus
-                value={custom.label}
-                onChange={(event) =>
-                  setCustom({ ...custom, label: event.target.value })
-                }
-              />
-            </label>
-            {customTaken ? (
-              <p className={styles.help}>There is a stage with this name.</p>
-            ) : null}
-            <div className={styles.meanings} role="group" aria-label="It means">
+        {open?.kind === "move" && sheetStage ? (
+          <div className={styles.sheetList}>
+            {destinations(list, sheetStage)
+              .filter((stage) => stage.key)
+              .map((stage) => (
+                <button
+                  key={stage.id}
+                  type="button"
+                  className={styles.sheetRow}
+                  style={tone(stageTone(stage))}
+                  onClick={() => removeTo(sheetStage, stage)}
+                >
+                  <span className={styles.dotStill} aria-hidden="true" />
+                  {stage.label}
+                </button>
+              ))}
+          </div>
+        ) : null}
+      </Sheet>
+
+      <Sheet
+        open={open?.kind === "custom"}
+        onClose={() => setOpen(null)}
+        title="New stage"
+        footer={
+          <Button
+            variant="primary"
+            disabled={
+              !custom.label.trim() ||
+              customTaken ||
+              (custom.meaning === "junk" && hasJunk)
+            }
+            onClick={() => add(custom)}
+          >
+            Add stage
+          </Button>
+        }
+      >
+        {open?.kind === "custom" ? (
+          <div className={styles.sheetBody}>
+            <input
+              className={styles.field}
+              aria-label="New stage name"
+              placeholder="Stage name"
+              maxLength={40}
+              autoFocus
+              value={custom.label}
+              onChange={(event) =>
+                setCustom({ ...custom, label: event.target.value })
+              }
+            />
+            <span className={styles.sheetLabel}>Counts as</span>
+            <div className={styles.choices}>
               {ADDABLE.map((key) => {
-                const ItemIcon = ICONS[key];
+                const Icon = ICONS[key];
                 return (
                   <button
                     key={key}
                     type="button"
-                    className={styles.meaningChoice}
+                    className={styles.choice}
                     aria-pressed={custom.meaning === key}
                     disabled={key === "junk" && hasJunk}
                     onClick={() => setCustom({ ...custom, meaning: key })}
                   >
-                    <ItemIcon size={18} aria-hidden="true" />
+                    <Icon size={18} aria-hidden="true" />
                     {meaningLabel(key)}
                   </button>
                 );
               })}
             </div>
           </div>
-        ) : (
-          <div className={styles.addList}>
-            {readyLeft(list).map((item) => {
-              const meaning = meaningOf({
-                kind: "interested",
-                milestone: item.milestone,
-              });
-              const ItemIcon = ICONS[meaning];
-              return (
-                <button
-                  key={item.label}
-                  type="button"
-                  className={styles.addRow}
-                  onClick={() =>
-                    add({
-                      label: item.label,
-                      meaning,
-                      milestone: item.milestone,
-                    })
-                  }
-                >
-                  <span className={styles.addIcon}>
-                    <ItemIcon size={20} aria-hidden="true" />
-                  </span>
-                  <span className={styles.addWords}>
-                    <strong>{item.label}</strong>
-                    <small>{meaningLabel(meaning)}</small>
-                  </span>
-                </button>
-              );
-            })}
-            <button
-              type="button"
-              className={styles.addRow}
-              onClick={() => setAdding("custom")}
-            >
-              <span className={styles.addIcon}>
-                <Plus size={20} aria-hidden="true" />
-              </span>
-              <span className={styles.addWords}>
-                <strong>Custom</strong>
-                <small>Your own name and meaning</small>
-              </span>
-            </button>
-          </div>
-        )}
-      </Sheet>
-
-      <Sheet
-        open={removing !== null}
-        onClose={() => setRemoving(null)}
-        title={
-          removing
-            ? `Where do the ${leadsWords(removing.leads)} go?`
-            : "Where do the leads go?"
-        }
-      >
-        {removing ? (
-          <div className={styles.addList}>
-            <p className={styles.help}>
-              They leave {removing.label} with their history.
-            </p>
-            {destinations(list, removing)
-              .filter((stage) => stage.key)
-              .map((stage) => (
-                <button
-                  key={stage.id}
-                  type="button"
-                  className={styles.addRow}
-                  style={tone(stageTone(stage))}
-                  onClick={() => removeTo(removing, stage)}
-                >
-                  <span className={styles.dotStill} aria-hidden="true" />
-                  <span className={styles.addWords}>
-                    <strong>{stage.label}</strong>
-                    <small>{meaningLabel(meaningOf(stage))}</small>
-                  </span>
-                </button>
-              ))}
-          </div>
         ) : null}
       </Sheet>
 
       <Sheet
-        open={recommending}
-        onClose={() => setRecommending(false)}
-        title="Use the recommended stages?"
+        open={open?.kind === "recommend"}
+        onClose={() => setOpen(null)}
+        title="Use recommended"
         footer={
           <Button
             variant="primary"
@@ -924,75 +772,239 @@ export function StageEditor({
           </Button>
         }
       >
-        <ol className={styles.recommended}>
-          {recommended?.stages.map((stage) => (
-            <li key={stage.label}>{stage.label}</li>
-          ))}
-        </ol>
-        <p className={styles.help}>
-          Leads move to the stage with the same meaning, with their history.
-        </p>
+        {open?.kind === "recommend" ? (
+          <div className={styles.sheetBody}>
+            <ol className={styles.recommended}>
+              {recommended?.stages.map((stage, index) => (
+                <li key={stage.label}>
+                  {stage.label}
+                  {index === 0 ? <small> · Unworked</small> : null}
+                </li>
+              ))}
+            </ol>
+            <p className={styles.help}>
+              Each lead moves to its matching stage.
+            </p>
+          </div>
+        ) : null}
       </Sheet>
     </div>
   );
 }
 
-/** What a seller sees on Leads, drawn from the list as it is now. */
-function Preview({ list, side }: { list: Draft[]; side: Side }) {
+/** A stage's other settings: what it counts as, its colour, the Cold name, remove. */
+function MoreSheet({
+  stage,
+  first,
+  list,
+  onCountsAs,
+  onColor,
+  onColdName,
+  onRemove,
+}: {
+  stage: Draft;
+  first: boolean;
+  list: Draft[];
+  onCountsAs: (meaning: Meaning) => void;
+  onColor: (color: Draft["color"]) => void;
+  onColdName: (name: string | null) => void;
+  onRemove: () => void;
+}) {
+  const meaning = meaningOf(stage);
+  const locked = stage.kind === "new" || stage.kind === "not_connected";
+  const [cold, setCold] = useState(stage.coldLabel ?? "");
+  const blocked = removeBlock(list, stage);
+  return (
+    <div className={styles.sheetBody}>
+      {first ? (
+        <label className={styles.sheetLabel}>
+          Name on Cold Leads
+          <input
+            className={styles.field}
+            maxLength={40}
+            placeholder={stage.label}
+            value={cold}
+            onChange={(event) => setCold(event.target.value)}
+            onBlur={() => {
+              const next = cold.trim() || null;
+              if (next !== (stage.coldLabel ?? null)) onColdName(next);
+            }}
+          />
+        </label>
+      ) : null}
+
+      <span className={styles.sheetLabel}>Counts as</span>
+      <div className={styles.choices}>
+        {MEANINGS.map((item) => {
+          const Icon = ICONS[item.key];
+          const block = locked
+            ? item.key === meaning
+              ? null
+              : "locked"
+            : meaningBlock(list, stage, item.key);
+          return (
+            <button
+              key={item.key}
+              type="button"
+              className={styles.choice}
+              aria-pressed={meaning === item.key}
+              disabled={!!block}
+              onClick={() => {
+                if (meaning !== item.key) onCountsAs(item.key);
+              }}
+            >
+              <Icon size={16} aria-hidden="true" />
+              {item.label}
+            </button>
+          );
+        })}
+      </div>
+      {stage.leads > 0 && !locked ? (
+        <p className={styles.help}>
+          It has leads: only Interested and Meeting swap.
+        </p>
+      ) : null}
+
+      <span className={styles.sheetLabel}>Colour</span>
+      <div className={styles.swatches}>
+        {STAGE_COLORS.map((color) => (
+          <button
+            key={color}
+            type="button"
+            className={styles.swatch}
+            style={tone(colorTone(color))}
+            aria-label={COLOR_WORDS[color]}
+            aria-pressed={stage.color === color}
+            onClick={() => {
+              if (stage.color !== color) onColor(color);
+            }}
+          />
+        ))}
+        <button
+          type="button"
+          className={styles.auto}
+          aria-pressed={!stage.color}
+          onClick={() => {
+            if (stage.color) onColor(null);
+          }}
+        >
+          Auto
+        </button>
+      </div>
+
+      <button
+        type="button"
+        className={styles.danger}
+        disabled={!!blocked}
+        onClick={onRemove}
+      >
+        <Trash2 size={16} aria-hidden="true" />
+        Remove stage
+      </button>
+      {blocked ? <p className={styles.help}>{blocked}</p> : null}
+    </div>
+  );
+}
+
+/** What a seller sees on Leads (Dipak's screen), drawn from the list as it is now. Folded
+ *  on a phone so the stages come first (owner, 31 Oct 2026); one tap opens it: the side
+ *  selector, the three work views, the stage picker and one lead row. */
+function Preview({
+  list,
+  side,
+  onSide,
+}: {
+  list: Draft[];
+  side: Side;
+  onSide: (next: Side) => void;
+}) {
+  // Open from the start where it sits beside the list (a computer).
+  const [open, setOpen] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(min-width: 900px)").matches,
+  );
   const shown = live(list).filter((stage) => stage.visible !== false);
   const first = shown[0];
-  const firstName = first ? stageName(first, side) : "";
-  const numbers =
-    side === "inbound"
-      ? [firstName, "To call", "Follow-ups"]
-      : ["Imported", firstName, "Attempted"];
   return (
-    <div
-      className={styles.phone}
-      data-side={side}
-      role="group"
-      aria-label={`What sellers see on ${side === "inbound" ? "Inbound" : "Cold"} Leads`}
-    >
-      <div className={styles.selector} aria-hidden="true">
-        <span data-on={side === "inbound" || undefined}>Inbound Leads</span>
-        <span data-on={side === "cold" || undefined}>Cold Leads</span>
-      </div>
-      <div className={styles.sideHead}>
-        <strong>{side === "inbound" ? "Inbound Leads" : "Cold Leads"}</strong>
-        <small>
-          {side === "inbound" ? "Fresh enquiries" : "Outbound work"}
-        </small>
-      </div>
-      <dl className={styles.numbers}>
-        {numbers.map((words) => (
-          <div key={words}>
-            <dt>{words}</dt>
-            <dd>–</dd>
-          </div>
-        ))}
-      </dl>
-      <div className={styles.tabs}>
-        {shown.map((stage, index) => (
-          <span
-            key={stage.id}
-            className={styles.tab}
-            data-on={index === 0 || undefined}
-            style={tone(stageTone(stage))}
+    <div className={styles.previewBox}>
+      <button
+        type="button"
+        className={styles.previewToggle}
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+      >
+        <Smartphone size={18} aria-hidden="true" />
+        <span>Preview what sellers see</span>
+        <ChevronDown
+          size={18}
+          aria-hidden="true"
+          className={styles.previewChevron}
+          data-open={open || undefined}
+        />
+      </button>
+      {open ? (
+        <div
+          className={styles.phone}
+          data-side={side}
+          role="group"
+          aria-label={`What sellers see on ${side === "inbound" ? "Inbound" : "Cold"} Leads`}
+        >
+          <div
+            className={styles.selector}
+            role="group"
+            aria-label="Preview side"
           >
-            {stageName(stage, side)}
-          </span>
-        ))}
-        <span className={styles.tab}>All</span>
-      </div>
-      <div className={styles.leadCard} aria-hidden="true">
-        <span className={styles.bar} />
-        {first ? (
-          <span className={styles.leadChip} style={tone(stageTone(first))}>
-            {firstName}
-          </span>
-        ) : null}
-        <span className={styles.barShort} />
-      </div>
+            <button
+              type="button"
+              aria-pressed={side === "inbound"}
+              onClick={() => onSide("inbound")}
+            >
+              Inbound Leads
+            </button>
+            <button
+              type="button"
+              aria-pressed={side === "cold"}
+              onClick={() => onSide("cold")}
+            >
+              Cold Leads
+            </button>
+          </div>
+          <div className={styles.views} aria-hidden="true">
+            <span data-on="">To Call</span>
+            <span>Follow-ups</span>
+            <span>All Leads</span>
+          </div>
+          <div className={styles.dropHead} aria-hidden="true">
+            <span>All stages</span>
+            <ChevronDown size={14} />
+          </div>
+          {/* A sample row as Dipak's mockup draws one (orchestrator, 31 Oct 2026): a
+              made-up person in the first stage sellers see. */}
+          <div className={styles.leadRow} aria-hidden="true">
+            <span className={styles.avatar}>NK</span>
+            <span className={styles.leadLines}>
+              <strong>Neha Kapoor</strong>
+              {first ? (
+                <small style={tone(stageTone(first))}>
+                  <i />
+                  <span>
+                    {stageName(first, side)} ·{" "}
+                    {side === "cold" ? "Bulk Import" : "Meta Ads"}
+                  </span>
+                </small>
+              ) : null}
+              <small>
+                <span>First call pending</span>
+              </small>
+            </span>
+            <span className={styles.call}>
+              <Phone size={16} />
+            </span>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

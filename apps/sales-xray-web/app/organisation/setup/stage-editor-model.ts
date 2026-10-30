@@ -232,7 +232,8 @@ export const MEETING_STAGES = [
 ] as const;
 export type MeetingStage = (typeof MEETING_STAGES)[number];
 
-/** The live stage a meeting switch stands for: by its key, else by its name. */
+/** The live stage a meeting switch stands for: by its key, else its name, else the
+ *  first stage that means it ("Meeting/Demo completed" is Meeting Done). */
 export function meetingStage(
   list: Draft[],
   which: MeetingStage,
@@ -240,7 +241,11 @@ export function meetingStage(
   const order = live(list);
   return (
     order.find((stage) => stage.key === which.key) ??
-    order.find((stage) => same(stage.label, which.label))
+    order.find((stage) => same(stage.label, which.label)) ??
+    order.find(
+      (stage) =>
+        stage.kind === "interested" && stage.milestone === which.milestone,
+    )
   );
 }
 
