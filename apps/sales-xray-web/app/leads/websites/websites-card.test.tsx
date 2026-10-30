@@ -132,7 +132,8 @@ const press = async (text: string) => {
 };
 
 it("starts with one action, and the sheet waits for the site to say hello", async () => {
-  vi.useFakeTimers({ shouldAdvanceTime: true });
+  // The fixture site said hello at NOW; the card counts hellos from a minute before the tap.
+  vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date(NOW) });
   await act(async () => root.render(<WebsitesCard />));
   await settle();
   expect(host.textContent).toContain("Not connected");
