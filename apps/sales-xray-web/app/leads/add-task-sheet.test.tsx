@@ -1,0 +1,214 @@
+// @vitest-environment happy-dom
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
+
+const calls = vi.hoisted(() => ({
+  search: vi.fn(),
+  add: vi.fn(),
+  notify: vi.fn(),
+}));
+
+vi.mock("../notice-center", () => ({ notify: calls.notify }));
+vi.mock("./leads-client", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./leads-client")>()),
+  searchDesk: calls.search,
+  addTask: calls.add,
+}));
+
+import { resetBackCloseForTests } from "../ui/back-close";
+import { WorkspaceAccessProvider } from "../workspace-access";
+import { AddTaskSheet, EARLY_MINUTES } from "./add-task-sheet";
+import { LeadsError } from "./leads-client";
+import { bucketFor } from "./task-words";
+
+(
+  globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
+).IS_REACT_ACT_ENVIRONMENT = true;
+
+// Owner order, 30 Oct 2026 (fix 4): the + sheet's Add task opened nothing.
+const NOW = new Date(2026, 9, 30, 11, 0);
+const TOMORROW_10 = new Date(2026, 9, 31, 10, 0);
+
+let host: HTMLDivElement;
+let root: Root;
+
+beforeEach(() => {
+  host = document.createElement("div");
+  document.body.append(host);
+  root = createRoot(host);
+  HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
+    this.open = true;
+  };
+  calls.search.mockResolvedValue({
+    leads: [
+      {
+        lead_id: "lead-1",
+        name: "asha fictional",
+        stage_label: "New",
+        phone_last4: "4321",
+      },
+    ],
+    notes: [],
+    tasks: [],
+  });
+  calls.add.mockResolvedValue({});
+});
+
+afterEach(async () => {
+  await act(async () => root.unmount());
+  host.remove();
+  resetBackCloseForTests();
+  vi.clearAllMocks();
+});
+
+async function open(me: string | null = null) {
+  const onAdded = vi.fn();
+  const sheet = (
+    <AddTaskSheet open onClose={() => {}} onAdded={onAdded} now={() => NOW} />
+  );
+  await act(async () =>
+    root.render(
+      me ? (
+        <WorkspaceAccessProvider
+          value={{
+            status: "ready",
+            authenticated: true,
+            context: { personId: me, sessionId: "s", tenantId: "t" },
+            retry: () => {},
+          }}
+        >
+          {sheet}
+        </WorkspaceAccessProvider>
+      ) : (
+        sheet
+      ),
+    ),
+  );
+  // Taps right after opening are the opening tap's echo; wait them out.
+  await new Promise((resolve) => setTimeout(resolve, 400));
+  return onAdded;
+}
+
+const button = (text: string) =>
+  [...host.querySelectorAll("button")].find(
+    (item) =>
+      item.textContent?.trim() === text ||
+      item.getAttribute("aria-label") === text,
+  );
+
+/** Sets a controlled input's value the way typing does. */
+function type(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(
+    HTMLInputElement.prototype,
+    "value",
+  )?.set?.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
+async function pickLead() {
+  await act(async () => {
+    type(host.querySelector<HTMLInputElement>('input[type="search"]')!, "asha");
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+  });
+  expect(calls.search).toHaveBeenCalledWith("asha", expect.anything());
+  const row = [...host.querySelectorAll("button")].find((item) =>
+    item.textContent?.includes("Asha Fictional"),
+  );
+  await act(async () => row!.click());
+}
+
+it("adds a task for the picked lead at the picked time, reminding early", async () => {
+  const onAdded = await open();
+  // Nothing to add until a lead is chosen.
+  expect(button("Add task")?.disabled).toBe(true);
+  await act(async () =>
+    type(
+      host.querySelector<HTMLInputElement>('input[type="text"]')!,
+      "Call about the site visit",
+    ),
+  );
+  await pickLead();
+  expect(host.textContent).toContain("Asha Fictional");
+  await act(async () => button("Tomorrow 10 AM")!.click());
+  await act(async () => button("Add task")!.click());
+  expect(calls.add).toHaveBeenCalledWith(
+    "lead-1",
+    {
+      kind: "call_back",
+      starts_at: TOMORROW_10.toISOString(),
+      title: "Call about the site visit",
+      remind_before_minutes: EARLY_MINUTES,
+    },
+    expect.any(String),
+  );
+  expect(onAdded).toHaveBeenCalledWith(TOMORROW_10);
+  expect(calls.notify.mock.calls.at(-1)?.[0].tone).toBe("success");
+});
+
+it("reminds at its time with early off, and a task kept on the phone counts as added", async () => {
+  calls.add.mockRejectedValue(new LeadsError("Kept on this phone.", 0, true));
+  const onAdded = await open();
+  await pickLead();
+  await act(async () => button("Meeting")!.click());
+  await act(async () => {
+    host.querySelector<HTMLInputElement>('input[role="switch"]')!.click();
+  });
+  await act(async () => button("Add task")!.click());
+  expect(calls.add.mock.calls[0][1]).toMatchObject({
+    kind: "meeting",
+    remind_before_minutes: 0,
+    title: null,
+  });
+  expect(onAdded).toHaveBeenCalledTimes(1);
+  expect(calls.notify.mock.calls.at(-1)?.[0].tone).toBe("info");
+});
+
+it("keeps the form open with a corner card when the task isn't added", async () => {
+  calls.add.mockRejectedValue(new LeadsError("No lead here.", 404));
+  const onAdded = await open();
+  await pickLead();
+  await act(async () => button("Add task")!.click());
+  expect(onAdded).not.toHaveBeenCalled();
+  expect(calls.notify.mock.calls.at(-1)?.[0]).toMatchObject({
+    tone: "error",
+    title: "The task wasn't added",
+    message: "No lead here.",
+  });
+});
+
+it("sorts a new task into Overdue, Today or Upcoming as the server does", () => {
+  expect(bucketFor(new Date(2026, 9, 30, 9, 0), NOW)).toBe("overdue");
+  expect(bucketFor(new Date(2026, 9, 30, 18, 0), NOW)).toBe("today");
+  expect(bucketFor(TOMORROW_10, NOW)).toBe("upcoming");
+});
+
+// A task is on the lead owner's list (lead_desk/tasks.py): on a teammate's
+// lead the form and the saved card say whose it is, so an owner doesn't look
+// for it in their own Tasks.
+it("says a task on a teammate's lead goes on their list", async () => {
+  calls.search.mockResolvedValue({
+    leads: [
+      {
+        lead_id: "lead-2",
+        name: "asha fictional",
+        stage_label: "New",
+        phone_last4: "4321",
+        owner_person_id: "seller-2",
+        owner_name: "ravi sample",
+      },
+    ],
+    notes: [],
+    tasks: [],
+  });
+  await open("me");
+  await pickLead();
+  expect(host.textContent).toContain(
+    "Ravi Sample's lead: the task goes on their list and reminds them.",
+  );
+  await act(async () => button("Add task")!.click());
+  expect(calls.notify.mock.calls.at(-1)?.[0].message).toBe(
+    "Asha Fictional · on Ravi Sample's list",
+  );
+});

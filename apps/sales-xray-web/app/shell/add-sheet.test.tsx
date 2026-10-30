@@ -29,6 +29,7 @@ let host: HTMLDivElement;
 
 async function mount(leadsHere: boolean) {
   const onAddLead = vi.fn();
+  const onAddTask = vi.fn();
   const onClose = vi.fn();
   host = document.createElement("div");
   document.body.append(host);
@@ -39,12 +40,18 @@ async function mount(leadsHere: boolean) {
         open
         onClose={onClose}
         onAddLead={onAddLead}
+        onAddTask={onAddTask}
         callHref="/analysis/new"
         leadsHere={leadsHere}
       />,
     ),
   );
-  return { onAddLead, onClose, dialog: host.querySelector("dialog")! };
+  return {
+    onAddLead,
+    onAddTask,
+    onClose,
+    dialog: host.querySelector("dialog")!,
+  };
 }
 
 afterEach(async () => {
@@ -54,29 +61,32 @@ afterEach(async () => {
 });
 
 // Owner, 22 Oct: the + asks for a lead or a call; the 28 Oct meeting added a
-// task (a reminder on a lead, so it opens Tasks).
-it("offers exactly Add lead, Add a call and Add task", async () => {
-  const { dialog, onAddLead } = await mount(true);
+// task, and Add task opens its form (owner order, 30 Oct 2026, fix 4: it used
+// to open nothing).
+it("offers exactly Add lead, Add a call and Add task, each opening its form", async () => {
+  const { dialog, onAddLead, onAddTask } = await mount(true);
   expect(dialog.open).toBe(true);
   const titles = Array.from(dialog.querySelectorAll("strong"), (strong) =>
     strong.textContent?.trim(),
   );
   expect(titles).toEqual(["Add lead", "Add a call", "Add task"]);
-  const addTask = Array.from(dialog.querySelectorAll("a")).find((link) =>
-    link.textContent?.includes("Add task"),
-  );
-  expect(addTask?.getAttribute("href")).toBe("/leads?tab=tasks");
   const addCall = Array.from(dialog.querySelectorAll("a")).find((link) =>
     link.textContent?.includes("Add a call"),
   );
   expect(addCall?.getAttribute("href")).toBe("/analysis/new");
-  const addLead = Array.from(dialog.querySelectorAll("button")).find((button) =>
+  const buttons = Array.from(dialog.querySelectorAll("button"));
+  const addLead = buttons.find((button) =>
     button.textContent?.includes("Add lead"),
+  )!;
+  const addTask = buttons.find((button) =>
+    button.textContent?.includes("Add task"),
   )!;
   // Taps right after opening are the opening tap's echo; wait them out.
   await new Promise((resolve) => setTimeout(resolve, 400));
   await act(async () => addLead.click());
   expect(onAddLead).toHaveBeenCalledTimes(1);
+  await act(async () => addTask.click());
+  expect(onAddTask).toHaveBeenCalledTimes(1);
 });
 
 it("sends Add lead to Leads outside an organisation", async () => {

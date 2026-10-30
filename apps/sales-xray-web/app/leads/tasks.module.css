@@ -22,6 +22,43 @@
   margin: 0;
 }
 
+/* The three lists, and + to add a task beside them (owner order, 30 Oct
+   2026, fix 4). */
+.head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.head > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.add {
+  display: grid;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink, var(--sx-surface));
+  cursor: pointer;
+  transition: transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.add:active {
+  transform: scale(0.94);
+}
+
+.add:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
 .list {
   display: grid;
   padding: 0;
