@@ -11,6 +11,9 @@ one ``task`` event on the lead, so the lead's history and My work show it.
 - The lead's next action is a projection: its earliest open task, so every reader and the
   phone alerts keep working. A follow-up set the old way (no task) is left alone.
 - A task follows its lead: reassigning the lead moves its open tasks to the new owner.
+- A task may have no lead (migration 0147; owner order, 30 Oct 2026: "optional linked
+  lead"): a task of your own, on your list. It keeps no lead history, so a retried or
+  older change is told by its revision and answers the task as it is.
 """
 
 from __future__ import annotations
@@ -21,7 +24,7 @@ from datetime import date, datetime, time, timedelta
 from typing import TYPE_CHECKING, Any, Final, Literal
 from uuid import UUID, uuid4
 
-from sqlalchemy import and_, func, select, update
+from sqlalchemy import and_, func, or_, select, update
 
 from ac_platform.identity import person_photos
 from ac_platform.lead_desk import hours as work_hours
@@ -48,6 +51,15 @@ OPEN: Final = "open"
 LATEST: Final = timedelta(days=366)
 EARLIEST: Final = timedelta(days=1)
 LIST_LIMIT: Final = 200
+# A task of your own without words of its own is named by its kind.
+OWN_TITLES: Final[Mapping[str, str]] = {
+    "call_back": "Call back",
+    "whatsapp": "WhatsApp",
+    "email": "Email",
+    "send_file": "Send a file",
+    "meeting": "Meeting",
+    "other": "To do",
+}
 
 Action = Literal[
     "created",
@@ -76,7 +88,7 @@ def bucket(task: LeadTask, now: datetime) -> TaskBucket | None:
 
 def view(
     task: LeadTask,
-    lead_name: str,
+    lead_name: str | None,
     now: datetime,
     photos: Mapping[UUID, str | None] | None = None,
 ) -> TaskView:
@@ -115,7 +127,12 @@ async def views(
     listed = list(tasks)
     photos = await person_photos.photo_urls(db, (task.created_by_person_id for task in listed))
     return tuple(
-        view(task, lead_name if lead_name is not None else names[task.id], now, photos)
+        view(
+            task,
+            lead_name if lead_name is not None else (names or {}).get(task.id),
+            now,
+            photos,
+        )
         for task in listed
     )
 
@@ -123,7 +140,8 @@ async def views(
 @dataclass(frozen=True, slots=True)
 class _Change:
     task: LeadTask
-    lead: Lead | None  # None: nothing to change (a replay, or superseded)
+    lead: Lead | None  # the task's lead, locked when the change goes ahead; else None
+    go: bool  # False: nothing to change (a replay, or superseded)
 
 
 class TaskBook:
@@ -145,8 +163,14 @@ class TaskBook:
         task = await self.db.scalar(query)
         if task is None:
             raise DeskError(404, "This task isn't on your desk.")
-        # The lead must be on the viewer's desk too.
-        await self.desk._lead(task.lead_id)
+        if task.lead_id is None:
+            # A task of your own: its owner's, and their managers'.
+            viewer = self.desk.viewer
+            if not (viewer.can_manage or task.owner_person_id == viewer.person_id):
+                raise DeskError(404, "This task isn't on your desk.")
+        else:
+            # The lead must be on the viewer's desk too.
+            await self.desk._lead(task.lead_id)
         return task
 
     async def open_for(self, lead_id: UUID) -> list[LeadTask]:
@@ -191,8 +215,11 @@ class TaskBook:
         rows = (
             await self.db.execute(
                 select(LeadTask, Lead.name)
-                .join(Lead, and_(Lead.id == LeadTask.lead_id, Lead.tenant_id == LeadTask.tenant_id))
-                .where(mine, windows[which], self.desk._visible())
+                .outerjoin(
+                    Lead, and_(Lead.id == LeadTask.lead_id, Lead.tenant_id == LeadTask.tenant_id)
+                )
+                # Tasks of your own (no lead) too.
+                .where(mine, windows[which], or_(LeadTask.lead_id.is_(None), self.desk._visible()))
                 .order_by(LeadTask.starts_at, LeadTask.id)
                 .limit(LIST_LIMIT)
             )
@@ -239,6 +266,11 @@ class TaskBook:
         if not (viewer.can_manage or lead.owner_person_id == viewer.person_id):
             raise DeskError(403, "Only the lead's owner or a manager can change its tasks.")
 
+    def _may_write_own(self, task: LeadTask) -> None:
+        viewer = self.desk.viewer
+        if not (viewer.can_manage or task.owner_person_id == viewer.person_id):
+            raise DeskError(403, "Only the task's owner or a manager can change it.")
+
     def _when(self, moment: datetime) -> datetime:
         if not self.now - EARLIEST <= moment <= self.now + LATEST:
             raise DeskError(422, "Pick a time in the next year.")
@@ -267,8 +299,13 @@ class TaskBook:
         lead.updated_at = self.now
 
     async def create(
-        self, lead_id: UUID, command: TaskCommand, *, by_app: Mapping[str, Any] | None = None
+        self,
+        lead_id: UUID | None,
+        command: TaskCommand,
+        *,
+        by_app: Mapping[str, Any] | None = None,
     ) -> TaskView:
+        """A task on a lead, or of your own with no lead (``lead_id`` None)."""
         same = await self.db.scalar(
             select(LeadTask).where(
                 LeadTask.tenant_id == self.tenant_id, LeadTask.command_id == command.command_id
@@ -277,8 +314,13 @@ class TaskBook:
         if same is not None:
             if same.lead_id != lead_id:
                 raise DeskError(409, "That request was already used for another lead.")
+            if lead_id is None:
+                await self._task(same.id)
+                return (await views(self.db, [same], None, self.now))[0]
             lead = await self.desk._lead(lead_id)
             return (await views(self.db, [same], lead.name, self.now))[0]
+        if lead_id is None:
+            return await self._create_own(command)
         lead = await self.desk._lead(lead_id, lock=True)
         self._may_write(lead)
         if command.kind not in TASK_KINDS:
@@ -326,16 +368,58 @@ class TaskBook:
         await self.db.flush()
         return (await views(self.db, [task], lead.name, self.now))[0]
 
+    async def _create_own(self, command: TaskCommand) -> TaskView:
+        """A task of your own (migration 0147): you own it, it is on your list and it
+        reminds you; no lead, so no lead history and no next action."""
+        me = self.desk.viewer.person_id
+        if command.kind not in TASK_KINDS:
+            raise DeskError(422, "Pick what kind of task this is.")
+        starts_at = self._when(command.starts_at)
+        if command.ends_at is not None and command.ends_at <= starts_at:
+            raise DeskError(422, "End the meeting after it starts.")
+        task = LeadTask(
+            id=uuid4(),
+            tenant_id=self.tenant_id,
+            lead_id=None,
+            owner_person_id=me,
+            created_by_person_id=me,
+            command_id=command.command_id,
+            revision=1,
+            kind=command.kind,
+            title=((command.title or "").strip() or OWN_TITLES[command.kind])[:200],
+            note=command.note,
+            starts_at=starts_at,
+            ends_at=command.ends_at,
+            location=command.location,
+            status=OPEN,
+            original_due_at=starts_at,
+            snoozes=0,
+            rollovers=0,
+            source=command.source,
+            source_event_id=command.source_event_id,
+            remind_before_minutes=command.remind_before_minutes,
+            client_at=command.client_at,
+            created_at=self.now,
+            updated_at=self.now,
+        )
+        self.db.add(task)
+        await self.db.flush()
+        return (await views(self.db, [task], None, self.now))[0]
+
     async def _changing(self, task_id: UUID, command: TaskAction, action: Action) -> _Change:
         """The task, locked, and its lead when the change goes ahead. A replayed command
         answers the task as it is; a change older than the last one is kept in the
-        history as superseded."""
+        history as superseded. A task of your own keeps no history: a retried or older
+        change (another revision) answers it as it is."""
         seen = await self.desk._command_seen(command.command_id)
         task = await self._task(task_id, lock=seen is None)
+        if task.lead_id is None:
+            self._may_write_own(task)
+            return _Change(task, None, command.expected_revision == task.revision)
         if seen is not None:
             if str(seen.data.get("task_id")) != str(task_id):
                 raise DeskError(409, "That request was already used for another task.")
-            return _Change(task, None)
+            return _Change(task, None, False)
         lead = await self.desk._lead(task.lead_id, lock=True)
         self._may_write(lead)
         stale = (
@@ -354,8 +438,8 @@ class TaskBook:
                 tried=action,
             )
             await self.db.flush()
-            return _Change(task, None)
-        return _Change(task, lead)
+            return _Change(task, None, False)
+        return _Change(task, lead, True)
 
     def _touch(self, task: LeadTask, client_at: datetime | None) -> None:
         task.revision += 1
@@ -363,55 +447,65 @@ class TaskBook:
         task.client_at = min(client_at, self.now) if client_at else self.now
 
     async def _answer(self, change: _Change) -> TaskView:
+        if change.task.lead_id is None:
+            return (await views(self.db, [change.task], None, self.now))[0]
         lead = change.lead or await self.desk._lead(change.task.lead_id)
         return (await views(self.db, [change.task], lead.name, self.now))[0]
 
+    def _log(self, change: _Change, action: Action, command: TaskAction, **extra: Any) -> None:
+        """The change's line in its lead's history; a task of your own keeps none."""
+        if change.lead is not None:
+            self._event(
+                change.lead, change.task, action, command.command_id, command.client_at, **extra
+            )
+
+    async def _settled(self, change: _Change, closed_due: datetime | None = None) -> None:
+        """Written; the lead's next action follows its tasks (a task of your own has none)."""
+        await self.db.flush()
+        if change.lead is not None:
+            await self.project(change.lead, closed_due=closed_due)
+            await self.db.flush()
+
     async def done(self, task_id: UUID, command: TaskAction) -> TaskView:
         change = await self._changing(task_id, command, "done")
-        task, lead = change.task, change.lead
-        if lead is not None and task.status != "done":
+        task = change.task
+        if change.go and task.status != "done":
             due = task.starts_at
             task.status = "done"
             task.done_at = self.now
             task.done_by_person_id = self.desk.viewer.person_id
             self._touch(task, command.client_at)
-            self._event(lead, task, "done", command.command_id, command.client_at)
-            await self.db.flush()
-            await self.project(lead, closed_due=due)
-            await self.db.flush()
+            self._log(change, "done", command)
+            await self._settled(change, closed_due=due)
         return await self._answer(change)
 
     async def undo(self, task_id: UUID, command: TaskAction) -> TaskView:
         change = await self._changing(task_id, command, "undone")
-        task, lead = change.task, change.lead
-        if lead is not None and task.status != OPEN:
+        task = change.task
+        if change.go and task.status != OPEN:
             task.status = OPEN
             task.done_at = None
             task.done_by_person_id = None
             self._touch(task, command.client_at)
-            self._event(lead, task, "undone", command.command_id, command.client_at)
-            await self.db.flush()
-            await self.project(lead)
-            await self.db.flush()
+            self._log(change, "undone", command)
+            await self._settled(change)
         return await self._answer(change)
 
     async def cancel(self, task_id: UUID, command: TaskAction) -> TaskView:
         change = await self._changing(task_id, command, "cancelled")
-        task, lead = change.task, change.lead
-        if lead is not None and task.status == OPEN:
+        task = change.task
+        if change.go and task.status == OPEN:
             due = task.starts_at
             task.status = "cancelled"
             self._touch(task, command.client_at)
-            self._event(lead, task, "cancelled", command.command_id, command.client_at)
-            await self.db.flush()
-            await self.project(lead, closed_due=due)
-            await self.db.flush()
+            self._log(change, "cancelled", command)
+            await self._settled(change, closed_due=due)
         return await self._answer(change)
 
     async def snooze(self, task_id: UUID, command: TaskSnooze) -> TaskView:
         change = await self._changing(task_id, command, "snoozed")
-        task, lead = change.task, change.lead
-        if lead is not None and task.status == OPEN:
+        task = change.task
+        if change.go and task.status == OPEN:
             before = task.starts_at
             facts = scheduler.TaskFacts(str(task.id), task.kind, task.starts_at)  # type: ignore[arg-type]
             task.starts_at = scheduler.snoozed(facts, command.choice, self.now, await self._hours())
@@ -419,24 +513,20 @@ class TaskBook:
                 task.ends_at = task.starts_at + (task.ends_at - before)
             task.snoozes += 1
             self._touch(task, command.client_at)
-            self._event(
-                lead,
-                task,
+            self._log(
+                change,
                 "snoozed",
-                command.command_id,
-                command.client_at,
+                command,
                 from_due_at=before.isoformat(),
                 choice=command.choice,
             )
-            await self.db.flush()
-            await self.project(lead)
-            await self.db.flush()
+            await self._settled(change)
         return await self._answer(change)
 
     async def change(self, task_id: UUID, command: TaskChange) -> TaskView:
         change = await self._changing(task_id, command, "changed")
-        task, lead = change.task, change.lead
-        if lead is not None and task.status == OPEN:
+        task = change.task
+        if change.go and task.status == OPEN:
             before = task.starts_at
             if command.starts_at is not None:
                 task.starts_at = self._when(command.starts_at)
@@ -449,17 +539,13 @@ class TaskBook:
                 if value is not None:
                     setattr(task, name, value)
             self._touch(task, command.client_at)
-            self._event(
-                lead,
-                task,
+            self._log(
+                change,
                 "changed",
-                command.command_id,
-                command.client_at,
+                command,
                 from_due_at=before.isoformat() if before != task.starts_at else None,
             )
-            await self.db.flush()
-            await self.project(lead)
-            await self.db.flush()
+            await self._settled(change)
         return await self._answer(change)
 
 

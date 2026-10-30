@@ -6,12 +6,12 @@
  * and whether to be reminded a little early. It opens from the + sheet and
  * from Tasks.
  *
- * A task always belongs to a lead (the work-memory engine keeps each on one),
- * so the lead is picked here by search. A task is on the lead owner's list
- * and reminds them (lead_desk/tasks.py): on a teammate's lead it is theirs,
- * and the form says so. The server reminds on the phone once, at the
- * reminder's time (lead_desk/task_push.py); early means 15 minutes before the
- * task, otherwise at its time.
+ * The lead is optional (owner's spec, 30 Oct 2026; migration 0147): with no
+ * lead the task is your own, on your list. A task on a lead is on the lead
+ * owner's list and reminds them (lead_desk/tasks.py): on a teammate's lead it
+ * is theirs, and the form says so. The server reminds on the phone once, at
+ * the reminder's time (lead_desk/task_push.py); early means 15 minutes before
+ * the task, otherwise at its time.
  */
 
 import { Check, Search } from "lucide-react";
@@ -23,6 +23,7 @@ import { Button } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
 import { useWorkspaceAccess } from "../workspace-access";
 import {
+  addOwnTask,
   addTask,
   commandId,
   LeadsError,
@@ -61,14 +62,6 @@ function theirs(lead: TaskLead, me: string | null): string | null {
   if (!me || !lead.owner_person_id || lead.owner_person_id === me) return null;
   return lead.owner_name ? displayName(lead.owner_name) : "the lead's owner";
 }
-
-/** What the server takes for a new task besides its kind and time
- *  (lead_desk/contracts.py TaskCommand): the seller's words, and how early the
- *  phone reminds (0: at its time). */
-type NewTaskInWords = NewTask & {
-  title: string | null;
-  remind_before_minutes: number;
-};
 
 function LeadPicker({
   lead,
@@ -212,25 +205,28 @@ export function AddTaskSheet({
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
-    if (!lead || busy) return;
+    if (busy) return;
     setBusy(true);
     const when = dueWords({ starts_at: at.toISOString() }, now());
-    const task: NewTaskInWords = {
+    const task: NewTask = {
       kind,
       starts_at: at.toISOString(),
       title: title.trim() || null,
       remind_before_minutes: early ? EARLY_MINUTES : 0,
     };
     try {
-      await addTask(lead.lead_id, task, command);
-      const owner = theirs(lead, me);
+      if (lead) await addTask(lead.lead_id, task, command);
+      else await addOwnTask(task, command);
+      const owner = lead ? theirs(lead, me) : null;
       notify({
         id: "task-added",
         tone: "success",
         title: `Task added for ${when}`,
-        message: owner
-          ? `${displayName(lead.name)} · on ${owner}'s list`
-          : displayName(lead.name),
+        message: !lead
+          ? "On your list"
+          : owner
+            ? `${displayName(lead.name)} · on ${owner}'s list`
+            : displayName(lead.name),
         ...(onOpenTasks
           ? { action: { label: "Open Tasks", run: onOpenTasks } }
           : {}),
@@ -275,7 +271,7 @@ export function AddTaskSheet({
         <Button
           variant="primary"
           className={styles.add}
-          disabled={!lead || busy}
+          disabled={busy}
           onClick={() => void save()}
         >
           {busy ? "Adding…" : "Add task"}
@@ -314,7 +310,7 @@ export function AddTaskSheet({
         </div>
 
         <div className={styles.field}>
-          <span>For which lead</span>
+          <span>For which lead (optional)</span>
           <LeadPicker lead={lead} me={me} onPick={setLead} />
         </div>
 

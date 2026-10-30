@@ -613,8 +613,9 @@ class TaskView(Model):
     """A task as it stands (work-memory engine, migration 0129)."""
 
     task_id: UUID
-    lead_id: UUID
-    lead_name: str
+    # Both empty for a task of your own, on no lead (migration 0147).
+    lead_id: UUID | None
+    lead_name: str | None
     kind: TaskKind
     title: str
     note: str | None

@@ -273,3 +273,54 @@ def test_a_task_s_time_and_kind_are_checked(postgres_harness: Any, tmp_path: Pat
             assert UUID(meeting["task_id"])
 
     run(exercise())
+
+
+def test_a_task_of_your_own_needs_no_lead_and_is_on_its_creators_list(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """The owner's spec (30 Oct 2026): "optional linked lead". With none, the task is
+    yours (migration 0147): on your list, named by its kind without words, and a retry or
+    an older change answers it as it is."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            body = {"command_id": str(uuid4()), "kind": "other", "starts_at": later(hours=3)}
+            first = await here.client.post(f"{BASE}/tasks", json=body, headers=WRITE)
+            again = await here.client.post(f"{BASE}/tasks", json=body, headers=WRITE)
+            assert first.status_code == again.status_code == 200, first.text
+            own = first.json()
+            assert own["task_id"] == again.json()["task_id"]
+            assert await tasks_in_db(here) == 1
+            assert own["lead_id"] is None and own["lead_name"] is None
+            assert own["title"] == "To do"
+            assert own["owner_person_id"] == own["created_by_person_id"] is not None
+
+            listed = await here.client.get(f"{BASE}/tasks", params={"view": own["bucket"]})
+            assert listed.status_code == 200, listed.text
+            assert own["task_id"] in [item["task_id"] for item in listed.json()["tasks"]]
+
+            snoozed = await act(here, own, "snooze", choice="1h")
+            assert snoozed["snoozes"] == 1
+            done = await act(here, snoozed, "done")
+            assert done["status"] == "done"
+            # Sent again on the revision it was sent on: nothing changes twice.
+            retried = await act(here, snoozed, "done")
+            assert retried["revision"] == done["revision"]
+            undone = await act(here, done, "undo")
+            assert undone["status"] == "open"
+
+            named = await here.client.post(
+                f"{BASE}/tasks",
+                json={
+                    "command_id": str(uuid4()),
+                    "kind": "call_back",
+                    "starts_at": later(hours=4),
+                    "title": "Renew the brochure print order",
+                    "remind_before_minutes": 15,
+                },
+                headers=WRITE,
+            )
+            assert named.status_code == 200, named.text
+            assert named.json()["title"] == "Renew the brochure print order"
+
+    run(exercise())

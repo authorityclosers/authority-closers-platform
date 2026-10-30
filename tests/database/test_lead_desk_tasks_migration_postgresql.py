@@ -34,9 +34,9 @@ def postgres_harness() -> Iterator[Engine]:
     yield from conversation_harness(ROOT)
 
 
-def migration() -> Any:
-    path = ROOT / "db/migrations/versions" / FILE
-    spec = importlib.util.spec_from_file_location("lead_desk_tasks_migration", path)
+def migration(file: str = FILE) -> Any:
+    path = ROOT / "db/migrations/versions" / file
+    spec = importlib.util.spec_from_file_location(f"migration_{file[:13]}", path)
     assert spec is not None and spec.loader is not None
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
@@ -66,6 +66,8 @@ def test_unused_migration_downgrades_reupgrades_and_matches_the_models(
             columns = {c["name"] for c in inspect(connection).get_columns("lead_desk_meetings")}
             assert "task_id" not in columns
             module.upgrade()
+            # 0147 lets a task have no lead: it changes this table again.
+            migration("20261030_0147_lead_desk_tasks_own.py").upgrade()
         assert compare_metadata(MigrationContext.configure(connection), model_metadata()) == []
 
 

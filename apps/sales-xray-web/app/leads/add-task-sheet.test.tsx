@@ -6,6 +6,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 const calls = vi.hoisted(() => ({
   search: vi.fn(),
   add: vi.fn(),
+  own: vi.fn(),
   notify: vi.fn(),
 }));
 
@@ -14,6 +15,7 @@ vi.mock("./leads-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./leads-client")>()),
   searchDesk: calls.search,
   addTask: calls.add,
+  addOwnTask: calls.own,
 }));
 
 import { resetBackCloseForTests } from "../ui/back-close";
@@ -121,8 +123,8 @@ async function pickLead() {
 
 it("adds a task for the picked lead at the picked time, reminding early", async () => {
   const onAdded = await open();
-  // Nothing to add until a lead is chosen.
-  expect(button("Add task")?.disabled).toBe(true);
+  // The lead is optional: Add is ready from the start.
+  expect(button("Add task")?.disabled).toBe(false);
   await act(async () =>
     type(
       host.querySelector<HTMLInputElement>('input[type="text"]')!,
@@ -211,4 +213,34 @@ it("says a task on a teammate's lead goes on their list", async () => {
   expect(calls.notify.mock.calls.at(-1)?.[0].message).toBe(
     "Asha Fictional · on Ravi Sample's list",
   );
+});
+
+// The owner's spec (30 Oct 2026): "optional linked lead". With none, the task
+// is your own and goes on your list (migration 0147).
+it("adds a task of your own when no lead is picked", async () => {
+  calls.own.mockResolvedValue({});
+  const onAdded = await open();
+  await act(async () =>
+    type(
+      host.querySelector<HTMLInputElement>('input[type="text"]')!,
+      "Renew the brochure print order",
+    ),
+  );
+  await act(async () => button("Other")!.click());
+  await act(async () => button("Add task")!.click());
+  expect(calls.add).not.toHaveBeenCalled();
+  expect(calls.own).toHaveBeenCalledWith(
+    {
+      kind: "other",
+      starts_at: new Date(2026, 9, 30, 12, 0).toISOString(),
+      title: "Renew the brochure print order",
+      remind_before_minutes: EARLY_MINUTES,
+    },
+    expect.any(String),
+  );
+  expect(onAdded).toHaveBeenCalledTimes(1);
+  expect(calls.notify.mock.calls.at(-1)?.[0]).toMatchObject({
+    tone: "success",
+    message: "On your list",
+  });
 });

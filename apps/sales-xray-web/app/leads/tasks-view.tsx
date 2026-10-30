@@ -5,7 +5,8 @@
  * three lists: Overdue, Today and Upcoming, earliest first. Done takes a task
  * off with an Undo; Later moves it by 15 minutes, an hour, to this evening or
  * tomorrow. A tap anywhere else opens the lead. + adds one (owner order, 30
- * Oct 2026, fix 4), and the list then shows the tab it landed in.
+ * Oct 2026, fix 4), and the list then shows the tab it landed in. A task of
+ * your own has no lead (migration 0147): its row says so and opens nothing.
  */
 
 import { Check, Clock, ListTodo, MapPin, Plus } from "lucide-react";
@@ -23,8 +24,8 @@ import {
   taskAction,
   type TaskBucket,
   type TaskList,
+  type ListedTask,
   type TaskSnoozeChoice,
-  type TaskView,
 } from "./leads-client";
 import {
   BUCKETS,
@@ -60,7 +61,7 @@ export function TasksView({
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   // Taken off this list while the change is on its way (or kept on the phone).
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
-  const [later, setLater] = useState<TaskView | null>(null);
+  const [later, setLater] = useState<ListedTask | null>(null);
   // A new form each time + opens it.
   const [adding, setAdding] = useState({ open: false, round: 0 });
 
@@ -85,7 +86,7 @@ export function TasksView({
   const shown = loaded && loaded.view === view ? loaded : null;
   const tasks = (shown?.tasks ?? []).filter((task) => !gone.has(task.task_id));
   const reload = () => setRound((value) => value + 1);
-  const hide = (task: TaskView, hidden: boolean) =>
+  const hide = (task: ListedTask, hidden: boolean) =>
     setGone((value) => {
       const next = new Set(value);
       if (hidden) next.add(task.task_id);
@@ -93,7 +94,7 @@ export function TasksView({
       return next;
     });
 
-  const undo = async (task: TaskView) => {
+  const undo = async (task: ListedTask) => {
     try {
       await taskAction(task, "undo");
       hide(task, false);
@@ -109,7 +110,7 @@ export function TasksView({
     }
   };
 
-  const done = async (task: TaskView) => {
+  const done = async (task: ListedTask) => {
     hide(task, true);
     try {
       const after = await taskAction(task, "done");
@@ -141,7 +142,7 @@ export function TasksView({
     }
   };
 
-  const snooze = async (task: TaskView, choice: TaskSnoozeChoice) => {
+  const snooze = async (task: ListedTask, choice: TaskSnoozeChoice) => {
     setLater(null);
     hide(task, true);
     try {
@@ -232,40 +233,53 @@ export function TasksView({
           {tasks.map((task) => {
             const kind = kindOf(task.kind);
             const Icon = kind.icon;
+            const leadId = task.lead_id;
+            const body = (
+              <>
+                <span
+                  className={styles.icon}
+                  data-kind={task.kind}
+                  aria-hidden="true"
+                >
+                  <Icon size={16} />
+                </span>
+                <span className={styles.text}>
+                  <strong>{task.title}</strong>
+                  <span>
+                    {kind.label} ·{" "}
+                    {task.lead_name ? displayName(task.lead_name) : "Your own"}
+                  </span>
+                  {task.location ? (
+                    <small>
+                      <MapPin size={12} aria-hidden="true" /> {task.location}
+                    </small>
+                  ) : null}
+                  {task.note ? <small>{task.note}</small> : null}
+                </span>
+                <time
+                  dateTime={task.starts_at}
+                  data-late={task.overdue ? "" : undefined}
+                >
+                  {dueWords(task, now())}
+                </time>
+              </>
+            );
             return (
               <li key={task.task_id} className={styles.item}>
-                <button
-                  type="button"
-                  className={styles.row}
-                  data-lead-row=""
-                  onClick={() => onOpen(task.lead_id)}
-                >
-                  <span
-                    className={styles.icon}
-                    data-kind={task.kind}
-                    aria-hidden="true"
+                {leadId ? (
+                  <button
+                    type="button"
+                    className={styles.row}
+                    data-lead-row=""
+                    onClick={() => onOpen(leadId)}
                   >
-                    <Icon size={16} />
+                    {body}
+                  </button>
+                ) : (
+                  <span className={styles.row} data-static="">
+                    {body}
                   </span>
-                  <span className={styles.text}>
-                    <strong>{task.title}</strong>
-                    <span>
-                      {kind.label} · {displayName(task.lead_name)}
-                    </span>
-                    {task.location ? (
-                      <small>
-                        <MapPin size={12} aria-hidden="true" /> {task.location}
-                      </small>
-                    ) : null}
-                    {task.note ? <small>{task.note}</small> : null}
-                  </span>
-                  <time
-                    dateTime={task.starts_at}
-                    data-late={task.overdue ? "" : undefined}
-                  >
-                    {dueWords(task, now())}
-                  </time>
-                </button>
+                )}
                 <span className={styles.acts}>
                   <button
                     type="button"

@@ -569,6 +569,13 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         async with desk_for(request, response, write=True) as lead_desk:
             return await task_book.TaskBook(lead_desk).create(lead_id, command)
 
+    @router.post("/tasks", response_model=TaskView, response_model_by_alias=True)
+    async def add_own_task(command: TaskCommand, request: Request, response: Response) -> TaskView:
+        """A task of your own, on no lead (owner order, 30 Oct 2026): on your list."""
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await task_book.TaskBook(lead_desk).create(None, command)
+
     @router.get("/tasks", response_model=TaskList, response_model_by_alias=True)
     async def list_tasks(
         request: Request,

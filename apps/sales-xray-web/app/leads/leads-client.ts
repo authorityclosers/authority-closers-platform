@@ -822,8 +822,15 @@ export type TaskView = {
   bucket: TaskBucket | null;
 };
 
+/** A task in Tasks: on a lead, or of your own with no lead (migration 0147,
+ *  owner order 30 Oct 2026: "optional linked lead"). */
+export type ListedTask = Omit<TaskView, "lead_id" | "lead_name"> & {
+  lead_id: string | null;
+  lead_name: string | null;
+};
+
 export type TaskList = {
-  tasks: TaskView[];
+  tasks: ListedTask[];
   counts: Partial<Record<TaskBucket, number>>;
 };
 
@@ -833,6 +840,10 @@ export type NewTask = {
   ends_at?: string | null;
   location?: string | null;
   note?: string | null;
+  /** In the seller's words; without them the server names it by its kind. */
+  title?: string | null;
+  /** How early the phone reminds; 0 is at its time (lead_desk/task_push.py). */
+  remind_before_minutes?: number | null;
 };
 
 /** A seller's open tasks in one bucket, earliest first, with every bucket's count. */
@@ -840,18 +851,27 @@ export function readTasks(view: TaskBucket, signal?: AbortSignal) {
   return request<TaskList>(`/tasks?view=${view}`, { signal });
 }
 
-export function addTask(leadId: string, task: NewTask, command = commandId()) {
+function newTask(task: NewTask, command: string) {
   const body = Object.fromEntries(
     Object.entries(task).filter(([, value]) => value !== "" && value != null),
   );
+  return json("POST", {
+    command_id: command,
+    client_at: new Date().toISOString(),
+    ...body,
+  });
+}
+
+export function addTask(leadId: string, task: NewTask, command = commandId()) {
   return request<TaskView>(
     `/leads/${encodeURIComponent(leadId)}/tasks`,
-    json("POST", {
-      command_id: command,
-      client_at: new Date().toISOString(),
-      ...body,
-    }),
+    newTask(task, command),
   );
+}
+
+/** A task of your own, on no lead: on your list, and it reminds you. */
+export function addOwnTask(task: NewTask, command = commandId()) {
+  return request<ListedTask>("/tasks", newTask(task, command));
 }
 
 /** Notes: what people wrote on your leads, newest first; with words, what says
