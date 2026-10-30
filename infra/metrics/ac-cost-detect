@@ -231,9 +231,26 @@ _TOTAL = re.compile(r"total|amount (?:paid|charged|due)|you paid|charged|grand",
 # credits, a credit note and a budget alert were proposed beside the one real receipt).
 _NOT_A_CHARGE = re.compile(
     r"\b(welcome|free (?:plan|tier|trial)|trial|credit note|refund|budget|alert"
-    r"|payment (?:failed|declined|unsuccessful)|action required|reminder|upcoming|will renew)\b",
+    r"|payment (?:failed|declined|unsuccessful)|action required|reminder|upcoming|will renew"
+    r"|updates? to your|upgraded|congrats|congratulations)\b"
+    # A reply in a thread, or a bracketed notification ("[org/repo] …", "[Task Update] …").
+    r"|^\s*(?:re:|\[)",
     re.IGNORECASE,
 )
+# Payment processors send a seller's receipt under their own address; the seller is in the
+# subject ("Your receipt from Eleven Labs Inc. #2274-0126-4953").
+PROCESSORS = ("stripe.com", "paddle.com", "paddle.net", "fastspring.com", "lemonsqueezy.com")
+_SELLER = re.compile(
+    r"(?:receipt|invoice) from ([A-Za-z0-9][A-Za-z0-9 .&'-]{1,40}?)(?:,|\s+#|\s+for\s|\s*$)",
+    re.IGNORECASE,
+)
+_SUFFIX = re.compile(r"[\s,]+(?:inc|llc|ltd|pbc|gmbh|limited|pvt)\.?$", re.IGNORECASE)
+
+
+def _plain(name: str) -> str:
+    return re.sub(r"[^a-z0-9]", "", name.lower())
+
+
 _CODES = {
     "₹": "INR",
     "inr": "INR",
@@ -277,6 +294,21 @@ def vendor_for(sender: str, subject: str) -> tuple[tuple[str, str, str, str, dic
             if word in lowered:
                 return row, "high"
         return GOOGLE[2][1], "low"
+    if any(domain == known or domain.endswith("." + known) for known in PROCESSORS):
+        seller = _SELLER.search(subject)
+        if seller:
+            name = _SUFFIX.sub("", seller.group(1).strip()).strip()
+            for row in VENDORS.values():
+                if _plain(row[0]) == _plain(name):
+                    return row, "high"
+            return (
+                name,
+                "Charge",
+                "other",
+                "company",
+                {"rule": "direct", "product": "company"},
+                "monthly",
+            ), "low"
     for known, row in VENDORS.items():
         if domain == known or domain.endswith("." + known):
             return row, "high"
@@ -296,6 +328,11 @@ def propose(mailbox: str, message: dict) -> dict | None:
     headers = {h["name"].lower(): h["value"] for h in message["payload"].get("headers", [])}
     subject = headers.get("subject", "")[:200]
     if _NOT_A_CHARGE.search(subject):
+        return None
+    # Our own mail (to a vendor's support, say) is no charge; a forwarded invoice is.
+    sender_domain = parseaddr(headers.get("from", ""))[1].rpartition("@")[2].lower()
+    own = sender_domain == mailbox.rpartition("@")[2].lower()
+    if own and not re.match(r"\s*(?:fwd?|fw):", subject, re.IGNORECASE):
         return None
     text = " ".join([subject, message.get("snippet", ""), body_text(message["payload"])])
     charge = pick(amounts(text))

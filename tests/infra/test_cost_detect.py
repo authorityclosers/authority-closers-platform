@@ -209,3 +209,56 @@ def test_notices_that_are_not_charges_are_skipped_and_a_charge_is_filed_once() -
     )
     assert len(proposals) == 1 and len(filed) == 1
     assert len(seen) == 3  # two messages and the one charge
+
+
+def test_threads_notifications_and_processor_receipts() -> None:
+    # Real subjects from the 60-day look at admin@ (30 Oct 2026); numbers are fictional.
+    job = runner()
+    for sender, subject in (
+        (
+            "GitHub <notifications@github.com>",
+            "Re: [org/repo] Add the offline corpus route (PR #4)",
+        ),
+        ("GitHub <notifications@github.com>", "[org/repo] Add the offline corpus route (PR #4)"),
+        ("ChatGPT <noreply@tm.openai.com>", "[Task Update] Hourly operations watch"),
+        ("OpenAI <noreply@tm.openai.com>", "Updates to your Pro plan"),
+        ("Google <payments-noreply@google.com>", "Congrats! Your account has been upgraded"),
+        ("Someone <a@example.test>", "Re: Re: Urgent: apply the annual credit"),
+    ):
+        mail = _message("n", sender, subject, _part("text/plain", "Total ₹1,000"))
+        assert job.propose("admin@example.test", mail) is None, subject
+    via_stripe = _message(
+        "s1",
+        "Eleven Labs Inc. <invoice+statements@stripe.com>",
+        "Your receipt from Eleven Labs Inc. #2274-0126-4953",
+        _part("text/plain", "Amount paid ₹1,936.00"),
+    )
+    proposal = job.propose("admin@example.test", via_stripe)
+    assert proposal["vendor"] == "ElevenLabs" and proposal["category"] == "ai_product"
+    assert proposal["confidence"] == "high"
+    unknown = _message(
+        "s2",
+        "Shop <receipts@stripe.com>",
+        "Your receipt from Fictional Tools Ltd #1",
+        _part("text/plain", "Total ₹500"),
+    )
+    other = job.propose("admin@example.test", unknown)
+    assert other["vendor"] == "Fictional Tools" and other["confidence"] == "low"
+
+
+def test_our_own_mail_is_no_charge_but_a_forwarded_invoice_is() -> None:
+    job = runner()
+    ours = _message(
+        "o1",
+        "Owner <admin@example.test>",
+        "Urgent: apply the annual credit to the new plan, invoice 0001",
+        _part("text/plain", "Total ₹20,338.14"),
+    )
+    assert job.propose("admin@example.test", ours) is None
+    forwarded = _message(
+        "o2",
+        "Teammate <dipak@example.test>",
+        "Fwd: Your receipt from Anthropic",
+        _part("text/plain", "Total ₹20,338.14"),
+    )
+    assert job.propose("admin@example.test", forwarded)["rupees"] == 20338.14
