@@ -1,52 +1,79 @@
 "use client";
 
 /**
- * Team controls (owner Home v3, 28 Oct 2026: "Team controls behind a gear";
- * the owner's #52: settings were buried in the Home scroll). One sheet from a
- * labelled gear in Home's header, for owners, admins and managers:
- * - each seller's target on a stepper, for any of the eight kinds (calls,
- *   connects, follow-ups or meetings; a day or a week), saved together;
- * - nudges on or off (on unless turned off, with the off confirmation), and
- *   who gets them as rows with faces and checks;
- * - the way to the lead rules.
- * The pickers are the app's own segmented controls, never a native select
- * (the owner's #62). Each seller's progress stays on their My day.
+ * Team controls (owner, 31 Oct 2026: "what settings would immediately matter
+ * to an owner?"): one sheet of five cards, each showing its value; one tap
+ * opens its detail. No tabs and no list of every seller: an exception to a
+ * team rule is picked inside its card ("Except…").
+ *
+ * 1. Working hours & breaks: they drive late, overdue and break detection.
+ * 2. First call on new enquiries: the first-response target (5-30 minutes).
+ * 3. Seller nudges: on for everyone, except the sellers picked.
+ * 4. Alert me when…: an enquiry waits past the first-call limit (live);
+ *    a seller idles an hour, a call has no recording (coming).
+ * 5. Daily summary at 7 PM (coming).
+ *
+ * Only what the server already does is a live switch; what is coming says
+ * so and changes nothing.
  */
 
-import { Minus, Plus, Settings2, SlidersHorizontal } from "lucide-react";
-import { useEffect, useState } from "react";
+import {
+  AlarmClock,
+  BellRing,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
+  FileBarChart,
+  PhoneIncoming,
+  Plus,
+  Settings2,
+  X,
+} from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
 
-import type { Metric } from "./my-day-client";
 import { displayName } from "../display-name";
 import { notify } from "../notice-center";
-import { commandId, readTeam, type Team } from "../leads/leads-client";
 import {
-  readTeamTargets,
-  saveTargets,
-  type SellerTargets,
-  type TargetLine,
-} from "../leads/team-engine-client";
-import { METRICS, Nudges, PERIODS } from "../leads/targets-panel";
-import { ActionList, ActionRow, Avatar, Segmented } from "../ui/kit";
+  readTeam,
+  saveWorkHours,
+  type Team,
+  type WorkHours,
+} from "../leads/leads-client";
+import { saveNudges, type NudgeSettings } from "../leads/team-engine-client";
+import { waCall, type Sla } from "../leads/whatsapp-client";
 import { Sheet } from "../ui/sheet";
 import styles from "./team-controls.module.css";
 
-type Period = (typeof PERIODS)[number];
-type Loaded = { team: Team; targets: Map<string, SellerTargets> };
+type Card = "hours" | "first_call" | "nudges" | "alerts" | "summary";
+type Loaded = { team: Team; sla: Sla | null };
 
-const PERIOD_WORDS: Record<Period, string> = { day: "A day", week: "A week" };
-/** Short, so four fit one segmented control at 360 px. */
-const METRIC_SHORT: Record<Metric, string> = {
-  calls: "Calls",
-  connects: "Connects",
-  follow_ups: "Follow-ups",
-  meetings: "Meetings",
+const TITLES: Record<Card, string> = {
+  hours: "Working hours & breaks",
+  first_call: "First call on new enquiries",
+  nudges: "Seller nudges",
+  alerts: "Alert me when…",
+  summary: "Daily summary",
 };
-const MOST = 99_999;
 
-const key = (metric: Metric, period: Period) => `${metric}:${period}`;
+/** First-call limits an owner picks from (the server takes 5 to 120). */
+const LIMITS = [5, 10, 15, 30] as const;
+const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+/** The owner's day when none is set yet: 10:30 to 7:00, lunch 1:30 to 2:15. */
+const USUAL = {
+  days: [0, 1, 2, 3, 4, 5],
+  start: "10:30",
+  end: "19:00",
+  pause_leads: false,
+  breaks: [{ start: "13:30", end: "14:15" }],
+};
 
-/** The team and its targets, read when the sheet opens (and after a save). */
+/** "19:00" as "7:00", the way the team says it. */
+const clock = (value: string) => {
+  const [hours, minutes] = value.split(":").map(Number);
+  return `${hours % 12 || 12}:${String(minutes).padStart(2, "0")}`;
+};
+
+/** The team and the first-call target, read when the sheet opens. */
 function useControls(open: boolean, round: number) {
   const [state, setState] = useState<Loaded | "error" | null>(null);
   useEffect(() => {
@@ -54,16 +81,9 @@ function useControls(open: boolean, round: number) {
     const controller = new AbortController();
     Promise.all([
       readTeam(controller.signal),
-      readTeamTargets(controller.signal),
+      waCall<Sla>("/sla", { signal: controller.signal }).catch(() => null),
     ])
-      .then(([team, targets]) =>
-        setState({
-          team,
-          targets: new Map(
-            targets.sellers.map((seller) => [seller.person_id, seller]),
-          ),
-        }),
-      )
+      .then(([team, sla]) => setState({ team, sla }))
       .catch(() => {
         if (!controller.signal.aborted) setState("error");
       });
@@ -72,147 +92,528 @@ function useControls(open: boolean, round: number) {
   return state;
 }
 
-const saved = (
-  seller: SellerTargets | undefined,
-  metric: Metric,
-  period: Period,
-) =>
-  seller?.targets.find(
-    (line) => line.metric === metric && line.period === period,
-  )?.value ?? 0;
-
-/** "18 calls today" or "62 this week": what the stepper's target is measured on. */
-function progressWords(
-  seller: SellerTargets | undefined,
-  metric: Metric,
-  period: Period,
-): string {
-  const line = seller?.progress.find(
-    (item) => item.metric === metric && item.period === period,
-  );
-  const done = line?.done ?? 0;
-  return `${done} ${period === "day" ? "today" : "this week"}`;
-}
-
-function Stepper({
+function Toggle({
   label,
-  value,
+  on,
   onChange,
+  disabled = false,
 }: {
   label: string;
-  value: number;
-  onChange: (next: number) => void;
+  on: boolean;
+  onChange: (next: boolean) => void;
+  disabled?: boolean;
 }) {
-  const [text, setText] = useState(String(value));
-  const [last, setLast] = useState(value);
-  if (value !== last) {
-    setLast(value);
-    setText(String(value));
-  }
-  const set = (next: number) =>
-    onChange(Math.min(MOST, Math.max(0, Math.round(next))));
   return (
-    <span className={styles.stepper} role="group" aria-label={label}>
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      aria-label={label}
+      disabled={disabled}
+      className={styles.toggle}
+      onClick={() => onChange(!on)}
+    >
+      <span aria-hidden="true" />
+    </button>
+  );
+}
+
+function Row({
+  label,
+  children,
+  soon = false,
+}: {
+  label: string;
+  children: ReactNode;
+  soon?: boolean;
+}) {
+  return (
+    <div className={styles.row} data-soon={soon || undefined}>
+      <span className={styles.rowLabel}>
+        {label}
+        {soon ? <span className={styles.soon}>Soon</span> : null}
+      </span>
+      {children}
+    </div>
+  );
+}
+
+const failed = (title: string) =>
+  notify({
+    id: "team-controls",
+    tone: "error",
+    title,
+    message: "Someone may have changed it just now. Try again.",
+  });
+
+function HoursDetail({
+  team,
+  onSaved,
+}: {
+  team: Team;
+  onSaved: (next: Team) => void;
+}) {
+  const set: WorkHours | null | undefined = team.settings.work_hours;
+  const [days, setDays] = useState<number[]>(set?.days ?? USUAL.days);
+  const [start, setStart] = useState(set?.start ?? USUAL.start);
+  const [end, setEnd] = useState(set?.end ?? USUAL.end);
+  const [breaks, setBreaks] = useState(set ? (set.breaks ?? []) : USUAL.breaks);
+  const [pause, setPause] = useState(set?.pause_leads ?? false);
+  const [busy, setBusy] = useState(false);
+  const valid =
+    days.length > 0 &&
+    start < end &&
+    breaks.every(
+      (gap) => gap.start < gap.end && gap.start >= start && gap.end <= end,
+    );
+  const save = async () => {
+    setBusy(true);
+    try {
+      onSaved(
+        await saveWorkHours(team.settings.revision, {
+          days,
+          start,
+          end,
+          pause_leads: pause,
+          breaks,
+        }),
+      );
+      notify({
+        id: "team-controls",
+        tone: "success",
+        title: "Working hours saved",
+        timeout: 4_000,
+      });
+    } catch {
+      failed("Working hours weren't saved");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className={styles.detail}>
+      <div className={styles.days} role="group" aria-label="Work days">
+        {DAYS.map((name, index) => (
+          <button
+            key={name}
+            type="button"
+            aria-pressed={days.includes(index)}
+            className={styles.day}
+            onClick={() =>
+              setDays((now) =>
+                now.includes(index)
+                  ? now.filter((day) => day !== index)
+                  : [...now, index].sort(),
+              )
+            }
+          >
+            {name}
+          </button>
+        ))}
+      </div>
+      <Row label="Starts">
+        <input
+          type="time"
+          className={styles.time}
+          value={start}
+          onChange={(event) => setStart(event.target.value)}
+          aria-label="Work starts"
+        />
+      </Row>
+      <Row label="Ends">
+        <input
+          type="time"
+          className={styles.time}
+          value={end}
+          onChange={(event) => setEnd(event.target.value)}
+          aria-label="Work ends"
+        />
+      </Row>
+      {breaks.map((gap, index) => (
+        <Row key={index} label={index === 0 ? "Lunch" : "Break"}>
+          <span className={styles.span}>
+            <input
+              type="time"
+              className={styles.time}
+              value={gap.start}
+              aria-label={`Break ${index + 1} starts`}
+              onChange={(event) =>
+                setBreaks((now) =>
+                  now.map((item, at) =>
+                    at === index
+                      ? { ...item, start: event.target.value }
+                      : item,
+                  ),
+                )
+              }
+            />
+            <span aria-hidden="true">–</span>
+            <input
+              type="time"
+              className={styles.time}
+              value={gap.end}
+              aria-label={`Break ${index + 1} ends`}
+              onChange={(event) =>
+                setBreaks((now) =>
+                  now.map((item, at) =>
+                    at === index ? { ...item, end: event.target.value } : item,
+                  ),
+                )
+              }
+            />
+            <button
+              type="button"
+              className={styles.remove}
+              aria-label={`Remove break ${index + 1}`}
+              onClick={() =>
+                setBreaks((now) => now.filter((_, at) => at !== index))
+              }
+            >
+              <X size={16} aria-hidden="true" />
+            </button>
+          </span>
+        </Row>
+      ))}
+      {breaks.length < 3 ? (
+        <button
+          type="button"
+          className={styles.add}
+          onClick={() =>
+            setBreaks((now) => [...now, { start: "16:00", end: "16:15" }])
+          }
+        >
+          <Plus size={16} aria-hidden="true" />
+          Add a break
+        </button>
+      ) : null}
+      <Row label="Hold new leads outside these hours">
+        <Toggle
+          label="Hold new leads outside these hours"
+          on={pause}
+          onChange={setPause}
+        />
+      </Row>
       <button
         type="button"
-        aria-label={`One less: ${label}`}
-        disabled={value <= 0}
-        onClick={() => set(value - 1)}
+        className={styles.save}
+        disabled={!valid || busy}
+        onClick={() => void save()}
       >
-        <Minus size={16} aria-hidden="true" />
+        {busy ? "Saving…" : set ? "Save hours" : "Use these hours"}
       </button>
-      <input
-        inputMode="numeric"
-        aria-label={label}
-        value={text}
-        onChange={(event) => {
-          const typed = event.target.value.replace(/\D/g, "").slice(0, 5);
-          setText(typed);
-          if (typed !== "") set(Number(typed));
-        }}
-        onBlur={() => setText(String(value))}
-      />
-      <button
-        type="button"
-        aria-label={`One more: ${label}`}
-        disabled={value >= MOST}
-        onClick={() => set(value + 1)}
+    </div>
+  );
+}
+
+function FirstCallDetail({
+  sla,
+  onSaved,
+}: {
+  sla: Sla;
+  onSaved: (next: Sla) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const save = async (next: Pick<Sla, "on" | "minutes" | "alertManagers">) => {
+    setBusy(true);
+    try {
+      onSaved(
+        await waCall<Sla>("/sla", {
+          method: "PUT",
+          body: JSON.stringify(next),
+        }),
+      );
+    } catch {
+      failed("The first-call limit wasn't saved");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className={styles.detail}>
+      <Row label="A limit for the first call">
+        <Toggle
+          label="A limit for the first call"
+          on={sla.on}
+          disabled={busy}
+          onChange={(on) =>
+            void save({
+              on,
+              minutes: sla.minutes,
+              alertManagers: sla.alertManagers,
+            })
+          }
+        />
+      </Row>
+      <div
+        className={styles.choices}
+        role="radiogroup"
+        aria-label="Call new enquiries within"
       >
-        <Plus size={16} aria-hidden="true" />
-      </button>
-    </span>
+        {LIMITS.map((minutes) => (
+          <button
+            key={minutes}
+            type="button"
+            role="radio"
+            aria-checked={sla.on && sla.minutes === minutes}
+            disabled={busy}
+            className={styles.choice}
+            onClick={() =>
+              void save({ on: true, minutes, alertManagers: sla.alertManagers })
+            }
+          >
+            {`${minutes} min`}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NudgesDetail({
+  team,
+  onSaved,
+}: {
+  team: Team;
+  onSaved: (next: Team) => void;
+}) {
+  const settings = team.settings as NudgeSettings;
+  const on = settings.nudges !== false;
+  const offFor = settings.nudges_off_for ?? [];
+  const [busy, setBusy] = useState(false);
+  const [picking, setPicking] = useState(false);
+  const save = async (enabled: boolean, off: string[]) => {
+    setBusy(true);
+    try {
+      onSaved(await saveNudges(settings.revision, enabled, off));
+    } catch {
+      failed("Nudges weren't changed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const except = team.reps.filter((rep) => offFor.includes(rep.person_id));
+  const others = team.reps.filter((rep) => !offFor.includes(rep.person_id));
+  return (
+    <div className={styles.detail}>
+      <Row label="Nudge sellers who fall behind">
+        <Toggle
+          label="Nudge sellers who fall behind"
+          on={on}
+          disabled={busy}
+          onChange={(next) => void save(next, offFor)}
+        />
+      </Row>
+      {on ? (
+        <div className={styles.except}>
+          <span className={styles.rowLabel}>Except…</span>
+          <ul className={styles.people}>
+            {except.map((rep) => (
+              <li key={rep.person_id}>
+                {displayName(rep.name)}
+                <button
+                  type="button"
+                  aria-label={`Nudge ${displayName(rep.name)} again`}
+                  disabled={busy}
+                  onClick={() =>
+                    void save(
+                      true,
+                      offFor.filter((id) => id !== rep.person_id),
+                    )
+                  }
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </li>
+            ))}
+            {others.length ? (
+              <li>
+                <button
+                  type="button"
+                  className={styles.add}
+                  aria-expanded={picking}
+                  onClick={() => setPicking((now) => !now)}
+                >
+                  <Plus size={16} aria-hidden="true" />
+                  Pick a seller
+                </button>
+              </li>
+            ) : null}
+          </ul>
+          {picking ? (
+            <ul className={styles.pick} aria-label="Sellers">
+              {others.map((rep) => (
+                <li key={rep.person_id}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => {
+                      setPicking(false);
+                      void save(true, [...offFor, rep.person_id]);
+                    }}
+                  >
+                    {displayName(rep.name)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AlertsDetail({
+  sla,
+  onSaved,
+}: {
+  sla: Sla | null;
+  onSaved: (next: Sla) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const live = !!sla?.on;
+  const alertMe = async (alertManagers: boolean) => {
+    if (!sla) return;
+    setBusy(true);
+    try {
+      onSaved(
+        await waCall<Sla>("/sla", {
+          method: "PUT",
+          body: JSON.stringify({
+            on: sla.on,
+            minutes: sla.minutes,
+            alertManagers,
+          }),
+        }),
+      );
+    } catch {
+      failed("The alert wasn't changed");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className={styles.detail}>
+      <Row label="An enquiry waits past the first-call limit">
+        <Toggle
+          label="An enquiry waits past the first-call limit"
+          on={live && !!sla?.alertManagers}
+          disabled={!sla || !live || busy}
+          onChange={(next) => void alertMe(next)}
+        />
+      </Row>
+      {sla && !live ? (
+        <p className={styles.hint}>Set a first-call limit to use this.</p>
+      ) : null}
+      <Row label="A seller is idle over an hour in work hours" soon>
+        <Toggle
+          label="A seller is idle over an hour in work hours"
+          on={false}
+          disabled
+          onChange={() => undefined}
+        />
+      </Row>
+      <Row label="A call has no recording" soon>
+        <Toggle
+          label="A call has no recording"
+          on={false}
+          disabled
+          onChange={() => undefined}
+        />
+      </Row>
+    </div>
+  );
+}
+
+function SummaryDetail() {
+  return (
+    <div className={styles.detail}>
+      <Row label="One message at 7:00 PM" soon>
+        <Toggle
+          label="One message at 7:00 PM"
+          on={false}
+          disabled
+          onChange={() => undefined}
+        />
+      </Row>
+      <ul className={styles.includes} aria-label="It brings">
+        <li>Calls and connects</li>
+        <li>Talk time</li>
+        <li>The longest breaks</li>
+        <li>Who fell behind</li>
+      </ul>
+    </div>
   );
 }
 
 export function TeamControls() {
   const [open, setOpen] = useState(false);
-  const [section, setSection] = useState<"alerts" | "targets">("alerts");
+  const [card, setCard] = useState<Card | null>(null);
   const [round, setRound] = useState(0);
   const state = useControls(open, round);
   const [team, setTeam] = useState<Team | null>(null);
-  const [metric, setMetric] = useState<Metric>("calls");
-  const [period, setPeriod] = useState<Period>("day");
-  // Unsaved targets: person -> "metric:period" -> value.
-  const [drafts, setDrafts] = useState<Record<string, Record<string, number>>>(
-    {},
-  );
-  const [ids, setIds] = useState<Record<string, string>>({});
-  const [busy, setBusy] = useState(false);
+  const [sla, setSla] = useState<Sla | null>(null);
   const loaded = state && state !== "error" ? state : null;
   const shownTeam = team ?? loaded?.team ?? null;
-  const valueOf = (person: string, which: Metric, when: Period) =>
-    drafts[person]?.[key(which, when)] ??
-    saved(loaded?.targets.get(person), which, when);
-  const changed = Object.keys(drafts).filter((person) =>
-    Object.entries(drafts[person]).some(([name, value]) => {
-      const [which, when] = name.split(":") as [Metric, Period];
-      return value !== saved(loaded?.targets.get(person), which, when);
-    }),
-  );
+  const shownSla = sla ?? loaded?.sla ?? null;
   const close = () => {
     setOpen(false);
-    setDrafts({});
+    setCard(null);
     setTeam(null);
+    setSla(null);
   };
-  const save = async () => {
-    if (!loaded || busy || !changed.length) return;
-    setBusy(true);
-    try {
-      for (const person of changed) {
-        // The whole set of eight, so the kinds not on screen keep their value.
-        const lines: TargetLine[] = METRICS.flatMap((which) =>
-          PERIODS.map((when) => ({
-            metric: which,
-            period: when,
-            value: valueOf(person, which, when),
-          })),
-        );
-        await saveTargets(person, lines, ids[person] ?? commandId());
-      }
-      notify({
-        id: "targets",
-        tone: "success",
-        title:
-          changed.length === 1
-            ? "Targets saved"
-            : `Targets saved for ${changed.length} sellers`,
-        message: "They count from today, on each seller's My day.",
-        timeout: 5_000,
-      });
-      setDrafts({});
-      setIds({});
-      setRound((value) => value + 1);
-    } catch {
-      notify({
-        id: "targets",
-        tone: "error",
-        title: "The targets weren't saved",
-        message: "Check your connection and try again.",
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
+  const hours = shownTeam?.settings.work_hours;
+  const settings = shownTeam?.settings as NudgeSettings | undefined;
+  const nudgesOn = settings ? settings.nudges !== false : false;
+  const except = settings?.nudges_off_for?.length ?? 0;
+  const alertsOn = shownSla?.on && shownSla.alertManagers ? 1 : 0;
+  const cards: {
+    key: Card;
+    icon: ReactNode;
+    value: string;
+    tone?: "off" | "soon";
+  }[] = [
+    {
+      key: "hours",
+      icon: <Clock3 size={20} />,
+      value: hours
+        ? `${clock(hours.start)}–${clock(hours.end)}${
+            hours.breaks?.[0]
+              ? ` · lunch ${clock(hours.breaks[0].start)}–${clock(hours.breaks[0].end)}`
+              : ""
+          }`
+        : "Not set",
+      tone: hours ? undefined : "off",
+    },
+    {
+      key: "first_call",
+      icon: <PhoneIncoming size={20} />,
+      value: shownSla?.on ? `Within ${shownSla.minutes} min` : "Off",
+      tone: shownSla?.on ? undefined : "off",
+    },
+    {
+      key: "nudges",
+      icon: <BellRing size={20} />,
+      value: nudgesOn
+        ? except
+          ? `On, except ${except}`
+          : "On for everyone"
+        : "Off",
+      tone: nudgesOn ? undefined : "off",
+    },
+    {
+      key: "alerts",
+      icon: <AlarmClock size={20} />,
+      value: `${alertsOn} of 3 on`,
+      tone: alertsOn ? undefined : "off",
+    },
+    {
+      key: "summary",
+      icon: <FileBarChart size={20} />,
+      value: "7:00 PM · Soon",
+      tone: "soon",
+    },
+  ];
   return (
     <>
       <button
@@ -230,23 +631,7 @@ export function TeamControls() {
       <Sheet
         open={open}
         onClose={close}
-        title="Team controls"
-        description="Alerts and targets for your team."
-        footer={
-          section === "targets" ? (
-            <div className={styles.footer}>
-              <button
-                type="button"
-                className={styles.save}
-                disabled={!changed.length || busy}
-                onClick={() => void save()}
-              >
-                {busy ? "Saving…" : "Save targets"}
-              </button>
-              <small>From today on. 0 means no target.</small>
-            </div>
-          ) : undefined
-        }
+        title={card ? TITLES[card] : "Team controls"}
       >
         {state === "error" ? (
           <p className={styles.quiet} role="status">
@@ -254,109 +639,59 @@ export function TeamControls() {
           </p>
         ) : !loaded || !shownTeam ? (
           <div className={styles.loading} aria-busy="true" />
-        ) : (
-          <div className={styles.body}>
-            <Segmented
-              label="Team controls"
-              value={section}
-              onChange={setSection}
-              items={[
-                { key: "alerts", label: "Alerts" },
-                { key: "targets", label: "Targets" },
-              ]}
-            />
-            {section === "alerts" ? (
-              <Nudges team={shownTeam} onSaved={setTeam} who="rows" />
-            ) : null}
-            <section
-              hidden={section !== "targets"}
-              aria-labelledby="controls-targets"
-            >
-              <h3 id="controls-targets" className={styles.title}>
-                Targets per seller
-              </h3>
-              <div className={styles.pickers}>
-                {/* Four kinds as compact chips that wrap (a four-way
-                    segmented control broke "Follow-ups" in two at 390 px). */}
-                <div
-                  className={styles.kinds}
-                  role="radiogroup"
-                  aria-label="Target"
+        ) : card === null ? (
+          <ul className={styles.cards}>
+            {cards.map((item, index) => (
+              <li key={item.key} style={{ animationDelay: `${index * 40}ms` }}>
+                <button
+                  type="button"
+                  className={styles.card}
+                  data-control={item.key}
+                  onClick={() => setCard(item.key)}
                 >
-                  {METRICS.map((which) => (
-                    <button
-                      key={which}
-                      type="button"
-                      role="radio"
-                      aria-checked={metric === which}
-                      className={styles.kind}
-                      onClick={() => setMetric(which)}
-                    >
-                      {METRIC_SHORT[which]}
-                    </button>
-                  ))}
-                </div>
-                <Segmented
-                  label="Each"
-                  value={period}
-                  onChange={setPeriod}
-                  items={PERIODS.map((when) => ({
-                    key: when,
-                    label: PERIOD_WORDS[when],
-                  }))}
-                />
-              </div>
-              {shownTeam.reps.length ? (
-                <ul className={styles.sellers}>
-                  {shownTeam.reps.map((rep) => {
-                    const seller = loaded.targets.get(rep.person_id);
-                    const name = displayName(rep.name);
-                    return (
-                      <li key={rep.person_id}>
-                        <Avatar name={rep.name} size={34} />
-                        <span className={styles.who}>
-                          <strong>{name}</strong>
-                          <small>{progressWords(seller, metric, period)}</small>
-                        </span>
-                        <Stepper
-                          label={`${name}: ${METRIC_SHORT[metric]}, ${PERIOD_WORDS[period].toLowerCase()}`}
-                          value={valueOf(rep.person_id, metric, period)}
-                          onChange={(next) => {
-                            setIds((now) =>
-                              now[rep.person_id]
-                                ? now
-                                : { ...now, [rep.person_id]: commandId() },
-                            );
-                            setDrafts((now) => ({
-                              ...now,
-                              [rep.person_id]: {
-                                ...now[rep.person_id],
-                                [key(metric, period)]: next,
-                              },
-                            }));
-                          }}
-                        />
-                      </li>
-                    );
-                  })}
-                </ul>
+                  <span className={styles.icon} aria-hidden="true">
+                    {item.icon}
+                  </span>
+                  <span className={styles.cardTitle}>{TITLES[item.key]}</span>
+                  <span className={styles.chip} data-tone={item.tone}>
+                    {item.value}
+                  </span>
+                  <ChevronRight
+                    className={styles.chevron}
+                    size={18}
+                    aria-hidden="true"
+                  />
+                </button>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className={styles.page}>
+            <button
+              type="button"
+              className={styles.back}
+              onClick={() => setCard(null)}
+            >
+              <ChevronLeft size={18} aria-hidden="true" />
+              Team controls
+            </button>
+            {card === "hours" ? (
+              <HoursDetail team={shownTeam} onSaved={setTeam} />
+            ) : card === "first_call" ? (
+              shownSla ? (
+                <FirstCallDetail sla={shownSla} onSaved={setSla} />
               ) : (
                 <p className={styles.quiet}>
-                  Add sellers to give them targets.
+                  The first-call limit didn&apos;t load. Try again in a moment.
                 </p>
-              )}
-            </section>
-            {section === "targets" ? (
-              <ActionList label="Rules">
-                <ActionRow
-                  icon={<SlidersHorizontal size={20} />}
-                  tone="neutral"
-                  title="Lead rules"
-                  note="Who gets which leads, and how fast"
-                  href="/settings/lead-rules"
-                />
-              </ActionList>
-            ) : null}
+              )
+            ) : card === "nudges" ? (
+              <NudgesDetail team={shownTeam} onSaved={setTeam} />
+            ) : card === "alerts" ? (
+              <AlertsDetail sla={shownSla} onSaved={setSla} />
+            ) : (
+              <SummaryDetail />
+            )}
           </div>
         )}
       </Sheet>

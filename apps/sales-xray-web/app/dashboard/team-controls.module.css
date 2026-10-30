@@ -1,215 +1,497 @@
-/* Team controls (owner Home v3, 28 Oct 2026): a labelled gear in Home's
-   header, and one sheet of targets, nudges and the lead rules. */
+/* Team controls (owner, 31 Oct 2026): five cards, each with its value; one
+   tap opens its detail. Soft glass like Home; tokens only. */
 .gear {
   display: inline-flex;
-  flex: none;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-height: 44px;
-  padding: 0 14px;
-  border: 1px solid var(--sx-line);
+  padding: 0 16px 0 14px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 8%, transparent);
   border-radius: var(--sx-radius-pill);
-  background: var(--sx-surface);
+  background: color-mix(in oklab, var(--sx-surface) 80%, transparent);
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
   font-weight: 650;
   cursor: pointer;
-  transition: transform 150ms var(--sx-ease-out);
-}
-
-.gear:active {
-  transform: scale(var(--sx-press-scale, 0.98));
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
 }
 
 .gear svg {
   color: var(--sx-accent);
 }
 
-.body {
-  display: grid;
-  gap: 22px;
-  min-width: 0;
+.gear:active {
+  transform: scale(0.97);
 }
 
-.title {
-  margin: 0 0 10px;
+.gear:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.quiet,
+.hint {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.loading {
+  min-height: 320px;
+  border-radius: 20px;
+  background: var(--sx-fill-soft);
+}
+
+/* The five cards. */
+.cards {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.cards > li {
+  animation: card-in var(--sx-dur-page) var(--sx-ease-out) both;
+}
+
+@keyframes card-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas:
+    "icon title chevron"
+    "icon chip chevron";
+  align-items: center;
+  gap: 4px 14px;
+  width: 100%;
+  min-height: 72px;
+  padding: 12px 14px 12px 16px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 7%, transparent);
+  border-radius: 20px;
+  background: color-mix(in oklab, var(--sx-surface) 78%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--sx-surface) 90%, transparent),
+    0 1px 2px color-mix(in oklab, var(--sx-ink) 5%, transparent),
+    0 12px 28px -18px color-mix(in oklab, var(--sx-ink) 28%, transparent);
   color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.card:active {
+  transform: scale(0.985);
+}
+
+.card:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+@media (hover: hover) {
+  .card:hover {
+    transform: translateY(-1px);
+  }
+}
+
+.icon {
+  display: grid;
+  grid-area: icon;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: color-mix(in oklab, var(--sx-accent) 12%, transparent);
+  color: var(--sx-accent);
+}
+
+.cardTitle {
+  grid-area: title;
+  min-width: 0;
   font-size: var(--sx-text-md);
   font-weight: 700;
 }
 
-.pickers {
-  display: grid;
-  gap: 8px;
-  margin-bottom: 6px;
+.chip {
+  grid-area: chip;
+  justify-self: start;
+  max-width: 100%;
+  overflow: hidden;
+  padding: 2px 10px;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--sx-accent) 12%, transparent);
+  color: var(--sx-accent);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.kinds {
+.chip[data-tone="off"] {
+  background: var(--sx-fill);
+  color: var(--sx-muted);
+}
+
+.chip[data-tone="soon"] {
+  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
+  color: color-mix(in oklab, var(--sx-warn) 70%, var(--sx-ink));
+}
+
+.chevron {
+  grid-area: chevron;
+  color: var(--sx-muted);
+}
+
+/* A card's detail: never wider than the sheet. */
+.page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  min-width: 0;
+  animation: page-in var(--sx-dur-page) var(--sx-ease-out) both;
+}
+
+@keyframes page-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px);
+  }
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 2px;
+  min-height: 44px;
+  padding: 0 10px 0 2px;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.back:focus-visible {
+  outline: none;
+  border-radius: 10px;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.detail {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+  min-width: 0;
+  padding: 4px 14px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 7%, transparent);
+  border-radius: 20px;
+  background: color-mix(in oklab, var(--sx-surface) 78%, transparent);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  min-width: 0;
+  min-height: 56px;
+  padding: 6px 0;
+  box-sizing: border-box;
+  border-bottom: 1px solid color-mix(in oklab, var(--sx-ink) 6%, transparent);
+}
+
+.row:last-child {
+  border-bottom: 0;
+}
+
+.row[data-soon] .rowLabel {
+  color: var(--sx-muted);
+}
+
+.rowLabel {
+  display: inline-flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.soon {
+  padding: 1px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
+  color: color-mix(in oklab, var(--sx-warn) 70%, var(--sx-ink));
+  font-size: 11px;
+  font-weight: 700;
+}
+
+/* A switch: the thumb springs across. */
+.toggle {
+  position: relative;
+  flex: none;
+  width: 52px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--sx-fill);
+  cursor: pointer;
+  transition: background-color var(--sx-dur-base) var(--sx-ease-out);
+}
+
+.toggle > span {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--sx-elevated);
+  box-shadow: 0 1px 3px color-mix(in oklab, var(--lx-film) 20%, transparent);
+  transition: transform var(--sx-dur-base) var(--sx-spring);
+}
+
+.toggle[aria-checked="true"] {
+  background: var(--sx-accent);
+}
+
+.toggle[aria-checked="true"] > span {
+  transform: translateX(20px);
+}
+
+.toggle:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.toggle:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* Days in one row of seven; limits and choices as chips. */
+.days {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 6px;
+  padding: 12px 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--sx-ink) 6%, transparent);
+}
+
+.choices {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.day,
+.choice {
+  min-width: 0;
+  min-height: 40px;
+  padding: 0;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 10%, transparent);
+  border-radius: var(--sx-radius-pill);
+  background: transparent;
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background-color var(--sx-dur-fast) var(--sx-ease-out),
+    color var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.day[aria-pressed="true"],
+.choice[aria-checked="true"] {
+  border-color: transparent;
+  background: var(--sx-accent);
+  color: var(--lx-on-teal);
+}
+
+.day:focus-visible,
+.choice:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.time {
+  width: 8.8em;
+  min-width: 0;
+  min-height: 40px;
+  box-sizing: border-box;
+  padding: 0 8px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 10%, transparent);
+  border-radius: 12px;
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.span {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+  min-width: 0;
+  margin-left: auto;
+}
+
+.remove {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.add {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.save {
+  min-height: 48px;
+  margin: 10px 0 12px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+  font: inherit;
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.save:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+/* Nudges' exceptions: the sellers picked, then a picker. */
+.except {
+  display: grid;
+  gap: 8px;
+  padding: 12px 0;
+}
+
+.people,
+.pick,
+.includes {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.kind {
-  position: relative;
+.people > li:not(:last-child),
+.includes > li {
   display: inline-flex;
   align-items: center;
+  gap: 4px;
   min-height: 36px;
+  padding: 0 4px 0 12px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.includes > li {
+  padding: 0 12px;
+  color: var(--sx-muted);
+}
+
+.people button:not(.add) {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: none;
+  color: var(--sx-muted);
+  cursor: pointer;
+}
+
+.pick button {
+  min-height: 40px;
   padding: 0 14px;
-  border: 1px solid var(--sx-line);
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 10%, transparent);
   border-radius: var(--sx-radius-pill);
   background: var(--sx-surface);
   color: var(--sx-ink);
   font: inherit;
   font-size: var(--sx-text-sm);
   font-weight: 600;
-  white-space: nowrap;
   cursor: pointer;
 }
 
-/* 36 px to the eye, 44 px to the thumb. */
-.kind::before {
-  position: absolute;
-  inset: -4px 0;
-  content: "";
-}
-
-.kind[aria-checked="true"] {
-  border-color: var(--sx-accent);
-  background: var(--sx-accent-soft);
-  color: var(--sx-accent);
-}
-
-.sellers {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.sellers li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  min-height: 56px;
-  border-bottom: 1px solid var(--sx-line);
-}
-
-.sellers li:last-child {
-  border-bottom: 0;
-}
-
-.who {
-  display: grid;
-  min-width: 0;
-}
-
-.who strong {
-  overflow: hidden;
-  color: var(--sx-ink);
-  font-size: var(--sx-text-sm);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.who small {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
-}
-
-/* − 40 +: 44 px targets, the number typeable. */
-.stepper {
-  display: inline-grid;
-  grid-template-columns: 44px 48px 44px;
-  align-items: center;
-}
-
-.stepper button {
-  display: grid;
-  width: 44px;
-  height: 44px;
-  place-items: center;
-  border: 0;
-  border-radius: 50%;
-  background: var(--sx-fill-soft);
-  color: var(--sx-ink);
-  cursor: pointer;
-  transition: transform 150ms var(--sx-ease-out);
-}
-
-.stepper button:active {
-  transform: scale(var(--sx-press-scale, 0.98));
-}
-
-.stepper button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-.stepper input {
-  width: 100%;
-  min-height: 44px;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: var(--sx-ink);
-  font: inherit;
-  font-size: var(--sx-text-md);
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  text-align: center;
-}
-
-.footer {
-  display: grid;
-  gap: 6px;
-  justify-items: center;
-}
-
-.footer small {
-  color: var(--sx-muted);
-  font-size: var(--sx-text-xs);
-}
-
-.save {
-  width: 100%;
-  min-height: 48px;
-  border: 0;
-  border-radius: var(--sx-radius-pill);
-  background: var(--sx-accent);
-  color: var(--sx-accent-ink);
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.save:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.loading {
-  min-height: 240px;
-  border-radius: var(--sx-radius-md);
-  background: var(--sx-fill-soft);
-}
-
-.quiet {
-  margin: 0;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
+.includes {
+  padding: 12px 0;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .cards > li,
+  .page {
+    animation: none;
+  }
+
+  .card,
   .gear,
-  .stepper button {
+  .toggle,
+  .toggle > span,
+  .day,
+  .choice {
     transition: none;
   }
 
-  .gear:active,
-  .stepper button:active {
+  .card:active,
+  .card:hover,
+  .gear:active {
     transform: none;
   }
 }
