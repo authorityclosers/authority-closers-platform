@@ -23,6 +23,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ac_platform.audit.service import AuditRepository
+from ac_platform.conversation_intelligence.synthetic_import_models import (
+    ConversationSandboxOrganisation,
+)
 from ac_platform.identity import person_photos
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk import (
@@ -2648,6 +2651,17 @@ class LeadDesk:
 
     # ----- the pipeline's numbers (Lead OS, spec section 9) --------------------------------
 
+    async def _sandbox_organisation(self) -> bool:
+        """An organisation marked as a sandbox holds only test data, so its own reports
+        count it (owner, 31 Oct 2026: every owner view fills in a sandbox organisation).
+        Every other organisation's reports leave test leads out, as before."""
+        found = await self.db.scalar(
+            select(ConversationSandboxOrganisation.tenant_id).where(
+                ConversationSandboxOrganisation.tenant_id == self.tenant_id
+            )
+        )
+        return found is not None
+
     async def pipeline_report(
         self,
         *,
@@ -2674,6 +2688,7 @@ class LeadDesk:
             owner=owner,
             source=source,
             reasons=reports.reason_words(journey),
+            test_data=await self._sandbox_organisation(),
         )
         names = await self._names(person for person in found.sellers if person)
 
@@ -5059,11 +5074,15 @@ class LeadDesk:
                     tally[stage].add(lead_id)
 
         arrivals_by_day: dict[date, int] = {}
+        # A sandbox organisation's leads are all test data: they count there.
+        counted: tuple[Any, ...] = (
+            () if await self._sandbox_organisation() else (Lead.test_data.is_(False),)
+        )
 
         async def arrived(since: datetime, until: datetime | None) -> tuple[int, int | None]:
             where = [
                 Lead.tenant_id == self.tenant_id,
-                Lead.test_data.is_(False),
+                *counted,
                 since <= ARRIVED,
             ]
             if until is not None:
