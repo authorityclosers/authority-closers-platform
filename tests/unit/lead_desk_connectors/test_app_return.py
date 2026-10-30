@@ -80,7 +80,9 @@ def test_the_return_page_carries_only_a_known_word_without_a_hand_off() -> None:
     cancelled = _target(app_return.return_page("google", result="cancelled"))
     assert cancelled.endswith("#provider=google&path=/leads%3Ftab%3Dsources&result=cancelled")
     odd = _target(app_return.return_page("whatsapp", result="<b>"))
-    assert odd.endswith("path=/organisation%3Ftab%3Dintegrations&result=failed")
+    assert odd.endswith("path=/settings/apps&result=failed")
+    # WhatsApp and Messenger finish on Connected apps, never on Developers.
+    assert app_return.RETURN_PATHS["messaging"] == app_return.SETTINGS_APPS
 
 
 def test_an_app_state_carries_its_challenge_and_peeks_for_anyone() -> None:

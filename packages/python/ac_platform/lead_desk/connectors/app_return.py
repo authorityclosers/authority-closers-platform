@@ -47,12 +47,14 @@ CHALLENGE: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]{43}$")
 VERIFIER: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]{43,128}$")
 HANDOFF: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]{20,8192}$")
 RESULT: Final[re.Pattern[str]] = re.compile(r"^[a-z_]{1,32}$")
-# Where the app opens the page that finishes each Connect.
+# Where the app opens the page that finishes each Connect. WhatsApp and Messenger
+# finish on Settings → Connected apps: the old /organisation?tab=integrations now
+# redirects to Developers, which can't finish one (30 Oct 2026).
 RETURN_PATHS: Final[dict[str, str]] = {
     "meta": "/leads?tab=sources",
     "google": "/leads?tab=sources",
-    "whatsapp": "/organisation?tab=integrations",
-    "messaging": "/organisation?tab=integrations",
+    "whatsapp": "/settings/apps",
+    "messaging": "/settings/apps",
 }
 
 

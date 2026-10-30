@@ -201,9 +201,7 @@ def test_messenger_and_instagram_conversations_and_comment_replies(
                     f"{BASE}/messaging/callback", params={"code": "login-code", "state": state}
                 )
                 assert back.status_code == 303, back.text
-                assert back.headers["location"].endswith(
-                    "/organisation?tab=integrations&messaging=connected"
-                )
+                assert back.headers["location"].endswith("/settings/apps?connected=messenger")
                 assert FakeGraph.subscribed == [PAGE]
                 # Started from Settings → Connected apps (the Instagram card): back to it.
                 card = await client.get(
