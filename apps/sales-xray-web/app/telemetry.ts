@@ -1035,16 +1035,66 @@ type Sender = Readonly<{
 }>;
 
 /** One step for a bug report's trail: the event's name, when, and the route template. */
-export type TrailStep = Readonly<{ event: string; at: string; route?: string }>;
+export type TrailStep = Readonly<{
+  event: string;
+  at: string;
+  route?: string;
+  /** The step's own words from its payload: which screen, what was tapped, which stage. */
+  detail?: Readonly<Record<string, string>>;
+}>;
 const TRAIL: TrailStep[] = [];
-const TRAIL_SIZE = 20;
+const TRAIL_SIZE = 50;
+// Payload fields a trail step keeps: names from fixed lists, never ids or text.
+const TRAIL_FIELDS = [
+  "screen",
+  "from",
+  "nav",
+  "target",
+  "feature",
+  "via",
+  "from_kind",
+  "to_kind",
+  "outcome",
+] as const;
+const TRAIL_WORD = /^[a-z][a-z0-9_]{0,47}$/;
+// Measurements, not steps: they would fill the trail within a minute.
+const TRAIL_QUIET = new Set<string>([
+  "sx.api_timing",
+  "sx.api_slow",
+  "sx.web_vital",
+  "sx.route_timing",
+  "sx.action_timing",
+  "sx.scroll_depth",
+  "sx.app_frames",
+  "sx.device_state",
+  "sx.device_profile",
+  "sx.network_state",
+  "sx.permission_snapshot",
+  "sx.writes_waiting",
+]);
 
-/** The last twenty app steps, oldest first, for a bug report (demo P0, 26 Oct 2026). */
+function trailDetail(
+  values: Record<string, string | number | boolean>,
+): Record<string, string> | null {
+  const detail: Record<string, string> = {};
+  for (const field of TRAIL_FIELDS) {
+    const value = values[field];
+    if (typeof value === "string" && TRAIL_WORD.test(value))
+      detail[field] = value;
+  }
+  return Object.keys(detail).length ? detail : null;
+}
+
+/**
+ * The last fifty app steps, oldest first, for a bug report (demo P0, 26 Oct
+ * 2026; fifty with their safe words for the advanced reporter, 31 Oct 2026).
+ */
 export function recentSteps(): readonly TrailStep[] {
   return [...TRAIL];
 }
 
 function keepStep(step: TrailStep) {
+  if (TRAIL_QUIET.has(step.event)) return;
   TRAIL.push(step);
   if (TRAIL.length > TRAIL_SIZE) TRAIL.splice(0, TRAIL.length - TRAIL_SIZE);
 }
@@ -1119,10 +1169,12 @@ export class TelemetryClient {
     }
     if (!safePayload(values)) return;
     const occurredAt = this.sender.now().toISOString();
+    const detail = trailDetail(values);
     keepStep({
       event: name,
       at: occurredAt,
       ...(context?.route ? { route: context.route } : {}),
+      ...(detail ? { detail } : {}),
     });
     this.queue.push({
       event_id: this.sender.id(),

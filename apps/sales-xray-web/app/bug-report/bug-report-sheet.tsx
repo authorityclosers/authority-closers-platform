@@ -30,11 +30,13 @@ import {
   CheckCircle2,
   CloudOff,
   ImagePlus,
+  Maximize2,
   PenLine,
   TriangleAlert,
   Vibrate,
   X,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 
 import { postFeedbackRequest } from "../feedback/feedback-client";
@@ -75,6 +77,15 @@ import { recentSteps } from "../telemetry";
 import { scrubRoute } from "./scrub";
 import { setShakeToReport, useShakeSetting, useShakeToReport } from "./shake";
 import { VoiceNoteRow, type VoiceNote } from "./voice-note";
+import { advancedAccess, type AdvancedAccess } from "./advanced-access";
+import { enterSends, keySendAsks, stopAskingOnKeySend } from "./key-send";
+import type { AdvancedSeed } from "./advanced-reporter";
+
+// The large editor loads only when someone opens it.
+const AdvancedReporter = dynamic(
+  () => import("./advanced-reporter").then((module) => module.AdvancedReporter),
+  { ssr: false },
+);
 
 /** Screens that can show call details or messages: no picture unless chosen. */
 const PRIVATE_SCREENS = [
@@ -108,32 +119,9 @@ export function forgetDraftForTests() {
   keepDraft("", false);
 }
 
-// Owner, 31 Oct 2026: "ctrl + enter and enter to submit ... with only one time
-// asking confirmation ... once a tick box is ticked that never ask this again".
-// The choice is kept on this device (the app has no per-person preferences
-// store); where storage is off, it simply asks each time.
-export const KEY_SEND_STORE = "sx-bug-report-keys-send";
-
-function keySendAsks(): boolean {
-  try {
-    return window.localStorage.getItem(KEY_SEND_STORE) !== "without-asking";
-  } catch {
-    return true;
-  }
-}
-
-function stopAskingOnKeySend(): void {
-  try {
-    window.localStorage.setItem(KEY_SEND_STORE, "without-asking");
-  } catch {
-    // Storage is off: it asks again next time.
-  }
-}
-
-/** Enter sends on a computer; on a touch screen it stays a new line (as Chats). */
-function enterSends(): boolean {
-  return window.matchMedia?.("(pointer: fine)").matches !== false;
-}
+// Sending from the keyboard asks once, until "Don't ask again" (key-send.ts,
+// shared with the advanced reporter).
+export { KEY_SEND_STORE } from "./key-send";
 
 const TITLES: Record<Step, string> = {
   write: "Report a problem",
@@ -208,12 +196,18 @@ export function BugReportSheet({
   about,
   preset = null,
   onClose,
+  advanced = "off",
+  onAdvanced,
 }: {
   open: boolean;
   about: ReportAbout | null;
   /** A picture the phone app took of the screen before the sheet opened. */
   preset?: Blob | null;
   onClose: () => void;
+  /** Whether this person may use the advanced reporter. */
+  advanced?: AdvancedAccess;
+  /** Opens the advanced reporter with what is written and taken so far. */
+  onAdvanced?: (seed: AdvancedSeed) => void;
 }) {
   const inApp = useInApp();
   const shakeOn = useShakeSetting();
@@ -764,6 +758,25 @@ export function BugReportSheet({
                 event.target.value = "";
               }}
             />
+            {advanced === "on" && onAdvanced ? (
+              <button
+                type="button"
+                className={styles.chip}
+                onClick={() =>
+                  onAdvanced({
+                    words,
+                    blocksWork,
+                    about,
+                    picture: ready && include ? picture.picture.blob : null,
+                    source: ready ? picture.picture.source : "auto",
+                    sensitive,
+                  })
+                }
+              >
+                <Maximize2 size={15} aria-hidden="true" />
+                Open advanced reporter
+              </button>
+            ) : null}
             {inApp ? (
               <button
                 type="button"
@@ -839,7 +852,37 @@ export function BugReportHost() {
   const [open, setOpen] = useState(false);
   const [about, setAbout] = useState<ReportAbout | null>(null);
   const [preset, setPreset] = useState<Blob | null>(null);
+  const [access, setAccess] = useState<AdvancedAccess>("off");
+  const [advanced, setAdvanced] = useState<AdvancedSeed | null>(null);
   useEffect(() => reporterMounted(), []);
+  useEffect(() => {
+    void advancedAccess().then(setAccess);
+  }, []);
+  // Ctrl Shift B (⌘⇧B) opens the advanced reporter straight away.
+  useEffect(() => {
+    if (access !== "on") return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (
+        !(event.ctrlKey || event.metaKey) ||
+        !event.shiftKey ||
+        event.altKey ||
+        event.key.toLowerCase() !== "b"
+      )
+        return;
+      event.preventDefault();
+      setOpen(false);
+      setAdvanced({
+        words: draft.words,
+        blocksWork: draft.blocksWork,
+        about: null,
+        picture: null,
+        source: "auto",
+        sensitive: privateScreen(window.location.pathname),
+      });
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, [access]);
   useEffect(() => {
     let latest = 0;
     const show = (event: Event) => {
@@ -889,7 +932,7 @@ export function BugReportHost() {
     openBugReport();
   }, []);
   // Over a menu or another sheet too (bug #5, 25 Oct 2026); not over the reporter.
-  useShakeToReport(inApp && !open, onShake);
+  useShakeToReport(inApp && !open && !advanced, onShake);
 
   useEffect(() => {
     const send = () => {
@@ -932,11 +975,26 @@ export function BugReportHost() {
   }, []);
 
   return (
-    <BugReportSheet
-      open={open}
-      about={about}
-      preset={preset}
-      onClose={() => setOpen(false)}
-    />
+    <>
+      <BugReportSheet
+        open={open}
+        about={about}
+        preset={preset}
+        onClose={() => setOpen(false)}
+        advanced={access}
+        onAdvanced={(seed) => {
+          setOpen(false);
+          setAdvanced(seed);
+        }}
+      />
+      {advanced ? (
+        <AdvancedReporter
+          open
+          seed={advanced}
+          onClose={() => setAdvanced(null)}
+          onSent={() => keepDraft("", false)}
+        />
+      ) : null}
+    </>
   );
 }
