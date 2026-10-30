@@ -139,6 +139,7 @@ from ac_platform.lead_desk.models import (
     LeadMeeting,
     LeadRep,
 )
+from ac_platform.lead_desk.sides import Side, is_cold, on_side
 from ac_platform.lead_desk.vocabulary import (
     CHANNEL_LABELS,
     CLOSED_STAGES,
@@ -161,6 +162,7 @@ from ac_platform.lead_desk.vocabulary import (
     stage_after_connected,
     stage_after_not_connected,
 )
+from ac_platform.lead_desk.work_views import FollowUpWhen, WorkView, in_step, in_view, in_when
 from ac_platform.tenancy.models import Membership
 from ac_platform.tenancy.roles import roles_with
 
@@ -772,7 +774,10 @@ class LeadDesk:
             last_result=lead.last_result,
             last_result_label=result_label,
             test_data=lead.test_data,
+            # A cold lead is never late for a seller: a 1,000-lead list would be all red
+            # (Dipak, 30 Oct 2026). Owners and admins still see it.
             overdue=lead.owner_person_id is not None
+            and (self.viewer.can_manage or not is_cold(lead))
             and is_overdue(lead.stage, lead.next_action_at, lead.created_at, self.now),
             stage_at=lead.stage_at,
             group=transitions.group(lead.stage),
@@ -1177,11 +1182,32 @@ class LeadDesk:
         contact: LeadSince | None = None,
         created: LeadMade | None = None,
         duplicates: bool = False,
+        side: Side | None = None,
+        view: WorkView | None = None,
+        step: str | None = None,
+        when: FollowUpWhen | None = None,
     ) -> LeadPage:
         limit = max(1, min(PAGE_SIZE, limit))
         if scope != "mine" and not self.viewer.can_see_team:
             raise DeskError(403, "Your role sees your own leads only.")
         where: list[Any] = [self._seen()]
+        if side is not None:
+            # Inbound Leads or Cold Leads (migration 0146): the stage tabs count one side.
+            where.append(on_side(side))
+        if view is not None:
+            # A work view (Dipak's mockup, 31 Oct 2026): what to call today, the follow-ups.
+            where.append(in_view(view, self._day_start() + timedelta(days=1)))
+        if when is not None:
+            # Follow-ups due today, overdue or upcoming.
+            where.append(in_when(when, self._day_start()))
+        if step is not None:
+            # One of the owner's stages; a lead with no step counts in its kind's stage.
+            journey_key = (
+                (await self._pipeline(pipeline)).key
+                if pipeline is not None
+                else journeys.MAIN_PIPELINE
+            )
+            where.append(in_step(await self._labels(journey_key), step))
         if pipeline is not None:
             # One pipeline's leads: its stage tabs, counts and calling queue.
             where.append(journeys.lead_in((await self._pipeline(pipeline)).key))
@@ -1243,7 +1269,7 @@ class LeadDesk:
         total = int(await self.db.scalar(select(func.count()).where(*where)) or 0)
         order: tuple[Any, ...] = (
             (func.coalesce(Lead.next_action_at, Lead.created_at), Lead.created_at)
-            if stage == "open" or stage in OPEN_STAGES
+            if stage == "open" or stage in OPEN_STAGES or view is not None
             else (Lead.updated_at.desc(),)
         )
         if sort is not None:

@@ -128,8 +128,10 @@ from ac_platform.lead_desk.contracts import (
     WorkHoursCommand,
 )
 from ac_platform.lead_desk.intake import MAX_FILE_BYTES, Intake
+from ac_platform.lead_desk.sides import Side, SideNumbers, side_numbers
 from ac_platform.lead_desk.store import DeskError, LeadDesk, Viewer, person_name
 from ac_platform.lead_desk.vocabulary import STAGES
+from ac_platform.lead_desk.work_views import FollowUpWhen, WorkView
 from ac_platform.tenancy.models import Membership, Organisation
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
@@ -273,6 +275,10 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         contact: LeadSince | None = None,
         created: LeadMade | None = None,
         duplicates: Literal["review"] | None = None,
+        side: Side | None = None,
+        view: WorkView | None = None,
+        step: str | None = Query(default=None, max_length=40),
+        when: FollowUpWhen | None = None,
     ) -> LeadPage:
         no_query(
             request,
@@ -292,6 +298,10 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                     "contact",
                     "created",
                     "duplicates",
+                    "side",
+                    "view",
+                    "step",
+                    "when",
                 }
             ),
         )
@@ -317,7 +327,23 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 contact=contact,
                 created=created,
                 duplicates=duplicates == "review",
+                side=side,
+                view=view,
+                step=step,
+                when=when,
             )
+
+    @router.get("/sides", response_model=SideNumbers, response_model_by_alias=True)
+    async def sides(
+        request: Request,
+        response: Response,
+        scope: Literal["mine", "team"] = "mine",
+    ) -> SideNumbers:
+        """Inbound Leads and Cold Leads: each side's three header numbers, for the same
+        people as the list (Dipak, 30 Oct 2026)."""
+        no_query(request, frozenset({"scope"}))
+        async with desk_for(request, response) as lead_desk:
+            return await side_numbers(lead_desk, scope=scope)
 
     @router.get("/activity", response_model=ActivityPage, response_model_by_alias=True)
     async def activity(
