@@ -72,6 +72,13 @@ export class OperationsWorkspaceError extends Error {
     this.name = "OperationsWorkspaceError";
   }
 }
+/** The workspace was selected, and it opens no Admin (or Studio) for this person. */
+export class WorkspaceAccessDenied extends OperationsWorkspaceError {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkspaceAccessDenied";
+  }
+}
 type Options = { fetcher?: typeof fetch; signal?: AbortSignal };
 
 export async function loadOperationsWorkspaces({
@@ -221,15 +228,20 @@ export async function selectOperationsWorkspace(
       selected.tenant_id !== tenantId
     )
       throw new OperationsWorkspaceError();
+    const denied = new WorkspaceAccessDenied(
+      surface === "coach"
+        ? "This workspace has no Academy Studio assignment for your account. Choose another workspace or contact its administrator."
+        : "This workspace has no Platform Admin access for your account. Choose another workspace or contact its administrator.",
+    );
+    // The server's own answer already says when the workspace opens no Admin;
+    // read nothing more and say so, rather than "could not be verified".
+    if (surface === "admin" && !selected.permissions.includes("admin_surface"))
+      throw denied;
     const session = await loadAdminSession((input, init) =>
       fetcher(input, { ...init, signal }),
     );
     if (!operationsSessionMatches(session, choices, tenantId, surface))
-      throw new OperationsWorkspaceError(
-        surface === "coach"
-          ? "This workspace has no Academy Studio assignment for your account. Choose another workspace or contact its administrator."
-          : "This workspace has no Platform Admin access for your account. Choose another workspace or contact its administrator.",
-      );
+      throw denied;
     return session;
   } catch (error) {
     if (error instanceof OperationsWorkspaceError) throw error;

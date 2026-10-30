@@ -399,26 +399,43 @@ it("opens the only workspace of a person without platform access", async () => {
   expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
 });
 
-it("says why the only workspace did not open and keeps another account in reach", async () => {
+it("says plainly when the only workspace opens no Admin, with nothing to pick", async () => {
   vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue({
     ...choices,
     workspaces: [choices.workspaces[0]],
   });
   vi.mocked(workspaces.selectOperationsWorkspace).mockRejectedValue(
-    new workspaces.OperationsWorkspaceError(
-      "This workspace has no Platform Admin access for your account.",
-    ),
+    new workspaces.WorkspaceAccessDenied("synthetic denial"),
+  );
+  await mount();
+  expect(navigate).not.toHaveBeenCalled();
+  expect(container.querySelector("h1")?.textContent).toBe(
+    "No Admin access yet.",
+  );
+  expect(container.textContent).toContain(
+    "Your account has no Platform Admin access.",
+  );
+  expect(container.querySelector("select")).toBeNull();
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(
+    [...container.querySelectorAll("button")].map((item) => item.textContent),
+  ).toEqual(["Use another account"]);
+});
+
+it("keeps the picker and a safe alert when the only workspace could not be checked", async () => {
+  vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue({
+    ...choices,
+    workspaces: [choices.workspaces[0]],
+  });
+  vi.mocked(workspaces.selectOperationsWorkspace).mockRejectedValue(
+    new workspaces.OperationsWorkspaceError(),
   );
   await mount();
   expect(navigate).not.toHaveBeenCalled();
   expect(container.querySelector('[role="alert"]')?.textContent).toContain(
-    "no Platform Admin access",
+    "could not be verified",
   );
-  expect(
-    [...container.querySelectorAll("button")].some(
-      (button) => button.textContent === "Use another account",
-    ),
-  ).toBe(true);
+  expect(container.querySelector("select")).not.toBeNull();
 });
 
 it("stops instead of looping when Admin sends a platform admin straight back", async () => {

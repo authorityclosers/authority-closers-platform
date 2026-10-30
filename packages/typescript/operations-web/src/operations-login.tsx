@@ -21,6 +21,7 @@ import {
   selectOperationsWorkspace,
   workspaceLabels,
   OperationsWorkspaceError,
+  WorkspaceAccessDenied,
   type AdminWorkspaces,
   type OperationsWorkspaces,
   type OperationsSurface,
@@ -148,6 +149,8 @@ type Arrival = {
   known: AdminWorkspaces | null;
   entered: boolean;
   failure: unknown;
+  /** The person's only workspace opens no Admin: nothing to choose either. */
+  onlyDenied: boolean;
 };
 
 /** After sign-in, or on a session that already exists: in, or the picker. */
@@ -175,6 +178,7 @@ async function arrive(
     known,
     entered: false,
     failure: null,
+    onlyDenied: false,
   };
   if (signal.aborted || (automatic && enteredRecently())) return arrival;
   try {
@@ -187,6 +191,8 @@ async function arrive(
     );
   } catch (failure) {
     arrival.failure = failure;
+    arrival.onlyDenied =
+      failure instanceof WorkspaceAccessDenied && next.workspaces.length === 1;
   }
   return arrival;
 }
@@ -219,6 +225,7 @@ function OperationsLoginForm({
   const [choices, setChoices] = useState<OperationsWorkspaces | null>(null);
   const [known, setKnown] = useState<AdminWorkspaces | null>(null);
   const [platformAvailable, setPlatformAvailable] = useState(false);
+  const [onlyDenied, setOnlyDenied] = useState(false);
   const [tenantId, setTenantId] = useState("");
   const inFlight = useRef(false);
   const current = useRef<AbortController | null>(null);
@@ -250,7 +257,9 @@ function OperationsLoginForm({
           }
           setChoices(next);
           setTenantId("");
-          if (arrival.failure) setError(safeError(arrival.failure));
+          setOnlyDenied(arrival.onlyDenied);
+          if (arrival.failure && !arrival.onlyDenied)
+            setError(safeError(arrival.failure));
         })
         .catch(() => {
           if (active())
@@ -351,7 +360,9 @@ function OperationsLoginForm({
       }
       setChoices(next);
       setTenantId("");
-      if (arrival.failure) setError(safeError(arrival.failure));
+      setOnlyDenied(arrival.onlyDenied);
+      if (arrival.failure && !arrival.onlyDenied)
+        setError(safeError(arrival.failure));
     } catch (failure) {
       if (active()) setError(safeError(failure));
     } finally {
@@ -408,6 +419,7 @@ function OperationsLoginForm({
       if (!response.ok) throw new Error();
       if (!controller.signal.aborted && current.current === controller) {
         setChoices(null);
+        setOnlyDenied(false);
         setKnown(null);
         setPlatformAvailable(false);
         setTenantId("");
@@ -424,6 +436,7 @@ function OperationsLoginForm({
   }
 
   const labels = choices ? workspaceLabels(choices, known) : null;
+  const offered = choices && !onlyDenied ? choices.workspaces : [];
 
   return (
     <main className="dev-admin-login-shell" id="admin-content">
@@ -439,7 +452,9 @@ function OperationsLoginForm({
         </p>
         <h1>
           {choices
-            ? "Choose your workspace."
+            ? onlyDenied
+              ? "No Admin access yet."
+              : "Choose your workspace."
             : surface === "coach"
               ? "Make room for better learning."
               : "Your platform, clearly in view."}
@@ -447,13 +462,15 @@ function OperationsLoginForm({
         {choices ? (
           <>
             <p>
-              {choices.workspaces.length
-                ? "Open a workspace assigned to your account. Your permissions are checked before you enter."
-                : platformAvailable
-                  ? "Your account has platform access. Open Admin to manage the platform."
-                  : "No active workspace is assigned to this account. Contact your administrator or use another account."}
+              {onlyDenied
+                ? "Your account has no Platform Admin access. Contact your administrator or use another account."
+                : offered.length
+                  ? "Open a workspace assigned to your account. Your permissions are checked before you enter."
+                  : platformAvailable
+                    ? "Your account has platform access. Open Admin to manage the platform."
+                    : "No active workspace is assigned to this account. Contact your administrator or use another account."}
             </p>
-            {choices.workspaces.length > 0 && (
+            {offered.length > 0 && (
               <div className="field">
                 <label htmlFor="operations-workspace">Workspace</label>
                 <select
@@ -528,7 +545,7 @@ function OperationsLoginForm({
             {error}
           </p>
         )}
-        {(!choices || choices.workspaces.length > 0) && (
+        {(!choices || offered.length > 0) && (
           <button
             className="dev-admin-login-submit"
             disabled={pending || !hydrated || (choices !== null && !tenantId)}

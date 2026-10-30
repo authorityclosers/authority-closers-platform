@@ -5,6 +5,7 @@ import {
   operationsSessionMatches,
   selectOperationsWorkspace,
   workspaceLabels,
+  WorkspaceAccessDenied,
   type AdminWorkspaces,
   type OperationsWorkspaces,
 } from "@ac/operations-web/workspaces";
@@ -168,6 +169,17 @@ describe("canonical operations workspace selection", () => {
       expect(fetcher).toHaveBeenCalledTimes(1);
     },
   );
+  it("says a workspace opens no Admin from the server's own answer, reading nothing more", async () => {
+    const fetcher = identityFetcher({
+      context: { membership_role: "learner", permissions: [] },
+    });
+    const denial = selectOperationsWorkspace(choices, tenant, "admin", {
+      fetcher,
+    });
+    await expect(denial).rejects.toBeInstanceOf(WorkspaceAccessDenied);
+    await expect(denial).rejects.toThrow("no Platform Admin access");
+    expect(fetcher).toHaveBeenCalledOnce();
+  });
   it("does not turn admin membership into a Coach capability", async () => {
     await expect(
       selectOperationsWorkspace(choices, tenant, "coach", {
