@@ -182,12 +182,12 @@ export function FourTiles({ tiles, label }: { tiles: Four[]; label: string }) {
             data-four={tile.key}
             data-red={tile.red || undefined}
             aria-busy={tile.value === null || undefined}
+            aria-description={tile.rule}
           >
+            {/* No rule line on the card (owner, 31 Oct 2026): red is the
+                number's colour and a small dot. */}
             <span className={styles.label}>{tile.label}</span>
             <strong className={styles.value}>{tile.value ?? " "}</strong>
-            <span className={styles.rule}>
-              {tile.value === null ? " " : tile.rule}
-            </span>
           </Link>
         </li>
       ))}

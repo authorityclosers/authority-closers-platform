@@ -245,6 +245,35 @@ class Effort(Model):
     missing_recordings: int = 0
 
 
+class SideCounts(Model):
+    """A side's three Home cards (handoff items 08-11), each the count of the Leads list
+    it opens: To Call in the first stage (New Lead or Unworked), the Open Leads stage, and
+    follow-ups due today."""
+
+    new: int
+    open_leads: int
+    follow_ups_today: int
+
+
+class SideDay(Model):
+    """One side of my day, Inbound or Cold (Dipak's Home, 31 Oct 2026)."""
+
+    counts: SideCounts
+    numbers: Numbers
+    numbers_week: Numbers
+    numbers_month: Numbers
+    to_call_today: ToCallToday
+    # The next lead to call on this side: a follow-up promised for today first, then
+    # fresh enquiries, then the older backlog (handoff p.12's priority rule).
+    next_lead: LeadRow | None = None
+    # The next two planned follow-ups from now.
+    upcoming: tuple[LeadRow, ...] = ()
+    # The owner's stage keys the cards open: the first stage, and Open Leads (or the
+    # follow-up kind's stage on a list not yet on the nine).
+    new_key: str | None = None
+    open_key: str | None = None
+
+
 class Desk(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     me: Me
@@ -270,6 +299,9 @@ class Desk(Model):
     # Today's work counting down, and my three longest breaks today, longest first.
     to_call_today: ToCallToday | None = None
     breaks: tuple[BreakView, ...] = ()
+    # Each side of my day ("inbound", "cold"), so Home's Inbound | Cold selector switches
+    # with no new read.
+    sides: dict[str, SideDay] | None = None
 
 
 class Badge(Model):

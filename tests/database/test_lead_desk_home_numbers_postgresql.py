@@ -12,10 +12,10 @@ from typing import Any
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import Engine
+from sqlalchemy import Engine, update
 
 from ac_platform.lead_desk.hours import IST
-from ac_platform.lead_desk.models import LeadEvent
+from ac_platform.lead_desk.models import Lead, LeadEvent
 from tests.database.conversation_harness import conversation_harness
 from tests.database.test_conversation_postgresql import run
 from tests.database.test_lead_os_acceptance_postgresql import BASE, ROOT, later, world
@@ -222,5 +222,57 @@ def test_today_counts_down_and_ends_with_the_longest_breaks(
             # 30 min ago for 2 min, 20 min ago for 1 min, 5 min ago: gaps of 8 and 14 min.
             assert [gap["minutes"] for gap in desk["breaks"]] == [14, 8]
             assert not any(gap["planned"] or gap["approximate"] for gap in desk["breaks"])
+
+    run(exercise())
+
+
+def test_the_desk_carries_inbound_and_cold_apart(postgres_harness: Any, tmp_path: Path) -> None:
+    """Dipak's Home + Leads handoff (31 Oct 2026): the desk carries each side of my day, so
+    Home's Inbound | Cold selector switches with no second read. A lead's side is its
+    pipeline (migration 0146: "cold" is Cold, the rest Inbound); each side's cards count
+    exactly the Leads lists they open."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            hot = await here.add("Fictional Side Inbound", "98760 67041")
+            cold = await here.add("Fictional Side Cold", "98760 67042")
+            await here.add("Fictional Side Cold Two", "98760 67043")
+            async with here.setup.sessions() as db, db.begin():
+                await db.execute(
+                    update(Lead)
+                    .where(Lead.name.like("Fictional Side Cold%"))
+                    .values(pipeline="cold")
+                )
+                stored = await here.stored(hot)
+                for lead_id, seconds in ((hot, 60), (cold, 0)):
+                    db.add(
+                        LeadEvent(
+                            id=uuid4(),
+                            tenant_id=here.tenant_id,
+                            lead_id=UUID(lead_id),
+                            kind="call",
+                            actor_person_id=here.seller.person_id,
+                            data={"duration_seconds": seconds, "simulated": False},
+                            created_at=stored.created_at,
+                        )
+                    )
+            desk = (await here.client.get(f"{BASE}")).json()
+            inbound, cool = desk["sides"]["inbound"], desk["sides"]["cold"]
+            # To Call in the first stage: the side's new leads never called.
+            assert (inbound["counts"]["new"], cool["counts"]["new"]) == (1, 2)
+            assert inbound["counts"]["open_leads"] == cool["counts"]["open_leads"] == 0
+            assert inbound["counts"]["follow_ups_today"] == 0
+            assert inbound["new_key"] == "new"
+            # Each side's calls only; the whole day's numbers keep both.
+            assert (inbound["numbers"]["calls"], inbound["numbers"]["connected"]) == (1, 1)
+            assert (cool["numbers"]["calls"], cool["numbers"]["connected"]) == (1, 0)
+            assert desk["numbers"]["calls"] == 2
+            # The next lead on each side; new Cold leads oldest first.
+            assert inbound["next_lead"]["lead_id"] == hot
+            assert cool["next_lead"]["lead_id"] == cold
+            assert inbound["upcoming"] == cool["upcoming"] == []
+            # The countdown: an untouched Cold list is never "to call today".
+            assert inbound["to_call_today"]["called"] == 1
+            assert cool["to_call_today"] == {"left": 0, "called": 1}
 
     run(exercise())

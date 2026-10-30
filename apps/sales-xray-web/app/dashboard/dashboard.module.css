@@ -27,6 +27,12 @@
     max-width: 960px;
     margin-inline: auto;
   }
+
+  /* An organisation's Home uses the whole width beside the sidebar (owner,
+     31 Oct 2026: "full screen, not boxed"). */
+  .page:has([data-home]) {
+    max-width: none;
+  }
 }
 
 .page h1,

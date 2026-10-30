@@ -44,6 +44,9 @@ const SHELL_ROUTES = new Set([
   "/settings",
   // Reports: every kind of report in one place (owner, 25 Oct 2026).
   "/reports",
+  // Performance: each seller's calls, talk time and breaks (Leads section 6;
+  // without it the page never got its workspace and stayed a skeleton).
+  "/performance",
 ]);
 
 export function isShellRoute(pathname: string | null) {

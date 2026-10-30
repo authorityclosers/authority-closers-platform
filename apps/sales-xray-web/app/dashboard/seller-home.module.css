@@ -1,0 +1,324 @@
+/* A seller's Home (Dipak's handoff, 31 Oct 2026): one calm column of blocks,
+   numbers read at a glance, each row one tap to its exact place. */
+.block,
+.next {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+}
+
+.head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+}
+
+.head h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.headEnd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sideWord {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 650;
+}
+
+.seeAll,
+.add,
+.retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.retry {
+  min-height: 0;
+}
+
+.seeAll:focus-visible,
+.add:focus-visible,
+.retry:focus-visible,
+.card:focus-visible,
+.alert:focus-visible,
+.callNow:focus-visible,
+.phone:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+/* On Cold: fresh enquiries waiting on Inbound, one tap to them. */
+.alert {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid color-mix(in oklab, var(--sx-accent) 40%, var(--sx-line));
+  border-radius: var(--sx-radius-md);
+  background: color-mix(in oklab, var(--sx-accent) 8%, var(--sx-surface));
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+  text-decoration: none;
+}
+
+/* The four cards: 2 x 2 on a phone, one row on a computer. */
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+@media (min-width: 900px) {
+  .cards {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* Soft glass, as the team's cards. */
+.card {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 96px;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 7%, transparent);
+  border-radius: 20px;
+  background: color-mix(in oklab, var(--sx-surface) 74%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--sx-surface) 90%, transparent),
+    0 1px 2px color-mix(in oklab, var(--sx-ink) 5%, transparent),
+    0 12px 28px -18px color-mix(in oklab, var(--sx-ink) 28%, transparent);
+  color: var(--sx-ink);
+  text-decoration: none;
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  transition: transform 180ms var(--sx-ease-out);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.card:active {
+  transform: scale(0.98);
+}
+
+.cardLabel {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 650;
+}
+
+.card strong {
+  font-size: 32px;
+  font-weight: 750;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.card strong[aria-busy] {
+  width: 40%;
+  border-radius: 6px;
+  background: var(--sx-fill-soft);
+}
+
+/* Next to call: one customer and one clear action. */
+.next {
+  padding: 16px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 7%, transparent);
+  border-radius: 20px;
+  background: color-mix(in oklab, var(--sx-surface) 74%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--sx-surface) 90%, transparent),
+    0 1px 2px color-mix(in oklab, var(--sx-ink) 5%, transparent),
+    0 12px 28px -18px color-mix(in oklab, var(--sx-ink) 28%, transparent);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+}
+
+.kicker {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 750;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.kicker span {
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.nextName {
+  justify-self: start;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-lg, 20px);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.nextWhy {
+  margin: -6px 0 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.callNow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 52px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--lx-gradient-primary);
+  color: var(--lx-on-teal);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+  text-decoration: none;
+  box-shadow: var(--sx-shadow-1);
+}
+
+/* Task and follow-up rows. */
+.rows {
+  display: grid;
+  margin: 0;
+  padding: 0 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+  list-style: none;
+}
+
+.taskRow,
+.followRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 60px;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.taskRow:last-child,
+.followRow:last-child {
+  border-bottom: 0;
+}
+
+.taskRow input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--sx-accent);
+}
+
+.rowText {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 2px;
+  min-width: 0;
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.rowText strong {
+  overflow: hidden;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rowText > span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.rowText a {
+  color: inherit;
+}
+
+.phone {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--sx-accent) 12%, transparent);
+  color: var(--sx-accent);
+}
+
+/* Today's performance: one compact row. */
+.figures {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+  padding: 12px 6px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 7%, transparent);
+  border-radius: 20px;
+  background: color-mix(in oklab, var(--sx-surface) 74%, transparent);
+  box-shadow:
+    inset 0 1px 0 color-mix(in oklab, var(--sx-surface) 90%, transparent),
+    0 1px 2px color-mix(in oklab, var(--sx-ink) 5%, transparent),
+    0 12px 28px -18px color-mix(in oklab, var(--sx-ink) 28%, transparent);
+  backdrop-filter: blur(18px) saturate(1.4);
+  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  list-style: none;
+}
+
+.figures a {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+  min-height: 44px;
+  color: var(--sx-ink);
+  text-decoration: none;
+}
+
+.figures strong {
+  font-size: 20px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.figures span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.quiet {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}

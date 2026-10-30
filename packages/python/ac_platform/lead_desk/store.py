@@ -18,7 +18,7 @@ from typing import Any, Literal, NamedTuple
 from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, case, delete, func, or_, select, true
+from sqlalchemy import and_, case, delete, false, func, or_, select, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -122,6 +122,8 @@ from ac_platform.lead_desk.contracts import (
     SellerOutcome,
     SettingsCommand,
     SettingsView,
+    SideCounts,
+    SideDay,
     SideEffort,
     StageChoice,
     StageCount,
@@ -395,13 +397,17 @@ def hours_view(hours: work_hours.WorkHours | None, now: datetime) -> WorkHoursVi
 
 
 class CallRow(NamedTuple):
-    """A call as Recent Calls lists it."""
+    """A call as Recent Calls lists it, and its lead's side."""
 
     event_id: UUID
     actor: UUID | None
     lead_id: UUID
     at: datetime
     data: dict[str, Any]
+    side: str = "inbound"
+
+
+SIDES: tuple[Side, Side] = ("inbound", "cold")
 
 
 def call_out(data: Mapping[str, Any]) -> bool:
@@ -966,16 +972,61 @@ class LeadDesk:
                 )
             )
         ).one()
-        # Today's calls once: the numbers, the countdown and the breaks read them.
-        today_calls = await self._call_rows(day_start, self.now + timedelta(seconds=1))
+        # The calls once, from the earliest window on: every window's numbers, each
+        # side's, the countdown and the breaks.
+        end = self.now + timedelta(seconds=1)
+        week_start = day_start - timedelta(days=6)
+        month_start = self._month_start()
+        calls = await self._call_rows(min(week_start, month_start), end)
+        numbers = await self._windows(
+            calls,
+            {
+                "today": (day_start, end),
+                "yesterday": (day_start - timedelta(days=1), day_start),
+                "week": (week_start, end),
+                "month": (month_start, end),
+            },
+        )
+        today_calls = [row for row in calls if row.at >= day_start]
+        to_call = await self._to_call_today(mine, day_end, today_calls)
+        journey = await self._labels(
+            (await self._pipeline(pipeline)).key if pipeline is not None else journeys.MAIN_PIPELINE
+        )
+        cards, new_key, open_key = await self._side_cards(mine, journey, day_start)
+        sides: dict[str, SideDay] = {}
+        for side in SIDES:
+            first = await self._next_on(mine, side, day_start)
+            next_up = (
+                await self.db.scalars(
+                    select(Lead)
+                    .where(
+                        mine,
+                        on_side(side),
+                        in_view("follow_ups", day_end),
+                        Lead.next_action_at >= self.now,
+                    )
+                    .order_by(Lead.next_action_at)
+                    .limit(2)
+                )
+            ).all()
+            sides[side] = SideDay(
+                counts=cards[side],
+                numbers=numbers[("today", side)],
+                numbers_week=numbers[("week", side)],
+                numbers_month=numbers[("month", side)],
+                to_call_today=to_call[side],
+                next_lead=(await self._rows([first]))[0] if first is not None else None,
+                upcoming=await self._rows(next_up),
+                new_key=new_key,
+                open_key=open_key,
+            )
         return Desk(
             me=who,
-            numbers=await self._numbers(day_start, self.now + timedelta(seconds=1), today_calls),
-            numbers_yesterday=await self._numbers(day_start - timedelta(days=1), day_start),
-            numbers_week=await self._numbers(
-                day_start - timedelta(days=6), self.now + timedelta(seconds=1)
-            ),
-            numbers_month=await self._numbers(self._month_start(), self.now + timedelta(seconds=1)),
+            numbers=numbers[("today", None)],
+            numbers_yesterday=numbers[("yesterday", None)],
+            numbers_week=numbers[("week", None)],
+            numbers_month=numbers[("month", None)],
+            sides=sides,
             team_pool=TeamPool(
                 open=int(pool[0]), unassigned=int(pool[1]), may_take=who.taking_leads
             ),
@@ -999,7 +1050,7 @@ class LeadDesk:
                 for key, label, text in MESSAGE_TEMPLATES
             ),
             call_back=call_back,
-            to_call_today=await self._to_call_today(mine, day_end, today_calls),
+            to_call_today=to_call[None],
             breaks=await self._breaks_today(today_calls),
         )
 
@@ -1019,36 +1070,9 @@ class LeadDesk:
         (a personal call) stays out, as it does from the lead's calls. A phone or
         recorded call keeps its start (the event's time) and its seconds, so it ends at
         start + seconds."""
-        me = self.viewer.person_id
         if rows is None:
             rows = await self._call_rows(start, end)
-        # (lead, when, seconds, answered) for each call out.
-        out = [
-            (row.lead_id, row.at, call_seconds(row.data), call_answered(row.data))
-            for row in rows
-            if call_out(row.data)
-        ]
-        stages = await self._stages_then([(lead_id, at) for lead_id, at, _, _ in out])
-        new_assigned = int(
-            await self.db.scalar(
-                select(func.count()).where(
-                    Lead.tenant_id == self.tenant_id,
-                    Lead.owner_person_id == me,
-                    Lead.assigned_at >= start,
-                    Lead.assigned_at < end,
-                )
-            )
-            or 0
-        )
-        connected = [row for row in out if row[3]]
-        return Numbers(
-            calls=len(out),
-            connected=len(connected),
-            not_connected=len(out) - len(connected),
-            talk_seconds=sum(row[2] for row in connected),
-            follow_ups_done=sum(1 for stage in stages if stage not in (None, "new")),
-            new_assigned=new_assigned,
-        )
+        return (await self._windows(rows, {"": (start, end)}))[("", None)]
 
     async def _call_rows(
         self, start: datetime, end: datetime, *, person: UUID | None = None, team: bool = False
@@ -1067,6 +1091,7 @@ class LeadDesk:
                     LeadEvent.lead_id,
                     LeadEvent.created_at,
                     LeadEvent.data,
+                    Lead.pipeline,
                 )
                 .join(Lead, joined)
                 .where(
@@ -1079,22 +1104,33 @@ class LeadDesk:
         ).all()
         hidden = await self._private_calls(start)
         return [
-            CallRow(event_id, actor, lead_id, at, data if isinstance(data, dict) else {})
-            for event_id, actor, lead_id, at, data in found
+            CallRow(
+                event_id,
+                actor,
+                lead_id,
+                at,
+                data if isinstance(data, dict) else {},
+                lead_side(pipeline),
+            )
+            for event_id, actor, lead_id, at, data, pipeline in found
             if str(event_id) not in hidden
         ]
 
     async def _to_call_today(
         self, mine: Any, day_end: datetime, today: Sequence[CallRow]
-    ) -> ToCallToday:
+    ) -> dict[str | None, ToCallToday]:
         """Today's work counting down (Leads redesign section 6, 20 → 19 → 18): my open
         leads due by tonight, or new and never given a time (an untouched Cold list
         aside: no daily cold-call targets), that I haven't called today; and the leads I
-        called today."""
-        called = {row.lead_id for row in today if call_out(row.data)}
+        called today. For the whole day (None) and for each side."""
+        called: dict[str | None, set[UUID]] = {None: set(), **{side: set() for side in SIDES}}
+        for row in today:
+            if call_out(row.data):
+                called[None].add(row.lead_id)
+                called[row.side].add(row.lead_id)
         due = (
-            await self.db.scalars(
-                select(Lead.id)
+            await self.db.execute(
+                select(Lead.id, Lead.pipeline)
                 .where(
                     mine,
                     or_(
@@ -1109,9 +1145,15 @@ class LeadDesk:
                 .limit(CALL_ROWS)
             )
         ).all()
-        return ToCallToday(
-            left=sum(1 for lead_id in due if lead_id not in called), called=len(called)
-        )
+        found: dict[str | None, ToCallToday] = {}
+        for side in (None, *SIDES):
+            left = sum(
+                1
+                for lead_id, pipeline in due
+                if (side is None or lead_side(pipeline) == side) and lead_id not in called[side]
+            )
+            found[side] = ToCallToday(left=left, called=len(called[side]))
+        return found
 
     async def _breaks_today(self, today: Sequence[CallRow]) -> tuple[BreakView, ...]:
         """My three longest breaks today: the gaps between my calls inside the working
@@ -1123,6 +1165,126 @@ class LeadDesk:
             break_view(gap)
             for gap in call_breaks.longest(call_breaks.day_gaps(day, spans, hours, self.now))
         )
+
+    async def _windows(
+        self, calls: Sequence[CallRow], windows: Mapping[str, tuple[datetime, datetime]]
+    ) -> dict[tuple[str, str | None], Numbers]:
+        """My numbers for each window, for the whole day's calls (None) and each side's,
+        from these calls, one read of their leads' stages and one of the leads given to
+        me. Attempted: every call out. Connected: talk time above 0. Talk time: the
+        connected calls' seconds. Follow-ups done: calls out to a lead past New then."""
+        me = self.viewer.person_id
+        out = [row for row in calls if call_out(row.data)]
+        moments = [(row.lead_id, row.at) for row in out]
+        stage_at = dict(zip(moments, await self._stages_then(moments), strict=True))
+        earliest = min((start for start, _ in windows.values()), default=self.now)
+        given = (
+            await self.db.execute(
+                select(Lead.assigned_at, Lead.pipeline)
+                .where(
+                    Lead.tenant_id == self.tenant_id,
+                    Lead.owner_person_id == me,
+                    Lead.assigned_at >= earliest,
+                )
+                .limit(CALL_ROWS)
+            )
+        ).all()
+        found: dict[tuple[str, str | None], Numbers] = {}
+        for name, (start, end) in windows.items():
+            for side in (None, *SIDES):
+                rows = [
+                    row
+                    for row in out
+                    if start <= row.at < end and (side is None or row.side == side)
+                ]
+                connected = [row for row in rows if call_answered(row.data)]
+                found[(name, side)] = Numbers(
+                    calls=len(rows),
+                    connected=len(connected),
+                    not_connected=len(rows) - len(connected),
+                    talk_seconds=sum(call_seconds(row.data) for row in connected),
+                    follow_ups_done=sum(
+                        1
+                        for row in rows
+                        if stage_at.get((row.lead_id, row.at)) not in (None, "new")
+                    ),
+                    new_assigned=sum(
+                        1
+                        for at, pipeline in given
+                        if start <= at < end and (side is None or lead_side(pipeline) == side)
+                    ),
+                )
+        return found
+
+    async def _next_on(self, mine: Any, side: Side, day_start: datetime) -> Lead | None:
+        """The next lead to call on one side (handoff p.12: a promised follow-up stays
+        visible when a new enquiry arrives; an older overdue backlog doesn't push fresh
+        enquiries down): due today first, then new ones never called (oldest first, as
+        Leads lists them), then the older backlog, then later today."""
+        day_end = day_start + timedelta(days=1)
+        steps: tuple[tuple[Any, tuple[Any, ...]], ...] = (
+            (
+                and_(Lead.next_action_at >= day_start, Lead.next_action_at <= self.now),
+                (Lead.next_action_at,),
+            ),
+            (and_(Lead.stage == "new", Lead.next_action_at.is_(None)), (Lead.created_at,)),
+            (Lead.next_action_at < day_start, (Lead.next_action_at, Lead.created_at)),
+            (
+                and_(Lead.next_action_at > self.now, Lead.next_action_at < day_end),
+                (Lead.next_action_at,),
+            ),
+        )
+        for where, order in steps:
+            found = await self.db.scalar(
+                select(Lead).where(mine, on_side(side), where).order_by(*order).limit(1)
+            )
+            if found is not None:
+                return found
+        return None
+
+    async def _side_cards(
+        self, mine: Any, journey: Any, day_start: datetime
+    ) -> tuple[dict[str, SideCounts], str | None, str | None]:
+        """Each side's three Home cards, counted exactly as the Leads lists they open
+        (work_views): To Call in the first stage, the Open Leads stage, and follow-ups due
+        today. Also the stage keys those lists filter by."""
+        day_end = day_start + timedelta(days=1)
+
+        def key_for(preferred: str, kind: str) -> str | None:
+            if preferred in journey.by_key:
+                return preferred
+            stage = journey.resolve(kind, None)
+            return stage.key if stage is not None else None
+
+        new_key = key_for("new", "new")
+        open_key = key_for("open_leads", "follow_up")
+        side_of = case((Lead.pipeline == "cold", "cold"), else_="inbound")
+        found: dict[str, SideCounts] = {
+            side: SideCounts(new=0, open_leads=0, follow_ups_today=0) for side in SIDES
+        }
+        for side, new, open_leads, today in (
+            await self.db.execute(
+                select(
+                    side_of,
+                    func.count().filter(
+                        and_(
+                            in_view("to_call", day_end),
+                            in_step(journey, new_key) if new_key else false(),
+                        )
+                    ),
+                    func.count().filter(in_step(journey, open_key) if open_key else false()),
+                    func.count().filter(
+                        and_(in_view("follow_ups", day_end), in_when("today", day_start))
+                    ),
+                )
+                .where(mine)
+                .group_by(side_of)
+            )
+        ).all():
+            found[str(side)] = SideCounts(
+                new=int(new), open_leads=int(open_leads), follow_ups_today=int(today)
+            )
+        return found, new_key, open_key
 
     async def _stages_then(self, moments: Sequence[tuple[UUID, datetime]]) -> list[str | None]:
         """Each lead's stage at each moment, from its append-only history: what the last
