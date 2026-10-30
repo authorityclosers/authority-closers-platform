@@ -56,6 +56,12 @@ export function daysFrom(at: Date, now: Date): number {
   );
 }
 
+/** The list a task due `at` lands in, as the server sorts them (overdue a minute past). */
+export function bucketFor(at: Date, now: Date = new Date()): TaskBucket {
+  if (at.getTime() < now.getTime() - 60_000) return "overdue";
+  return daysFrom(at, now) === 0 ? "today" : "upcoming";
+}
+
 /** When a task is due, the way the list says it: "5:30 PM", "Tomorrow, 10:00 AM". */
 export function dueWords(
   task: Pick<TaskView, "starts_at">,

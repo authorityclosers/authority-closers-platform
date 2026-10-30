@@ -4,7 +4,8 @@
  * + workspace is required, and every filter is part of the key. One identity,
  * a day, six answers; signing out forgets them (list-cache-slot.ts). Storage
  * being unavailable must never stop a network read. */
-import type { LeadPage } from "./leads-client";
+import { deskWithMoves, inStageList, onLeadMoved } from "./lead-moves";
+import type { Desk, LeadPage, LeadRow } from "./leads-client";
 import { readLeads } from "./leads-client";
 import { LEADS_CACHE_SLOT as SLOT } from "./list-cache-slot";
 
@@ -140,3 +141,49 @@ export function preloadFirstLeads(
     if (warming.get(key) === entry) warming.delete(key);
   });
 }
+
+/** A device-kept first page with one moved lead applied: it leaves a stage
+ * list it no longer fits; elsewhere it is the newer row. */
+function keptPage(key: string, page: LeadPage, row: LeadRow): LeadPage {
+  let list: unknown;
+  try {
+    list = (JSON.parse(key.slice("list:".length)) as unknown[])[2];
+  } catch {
+    return page;
+  }
+  const at = page.leads.findIndex((lead) => lead.lead_id === row.lead_id);
+  if (at < 0 || page.leads[at].revision >= row.revision) return page;
+  const leads =
+    typeof list !== "string" || inStageList(row, list)
+      ? page.leads.map((lead, index) => (index === at ? row : lead))
+      : page.leads.filter((_, index) => index !== at);
+  return { ...page, leads };
+}
+
+// The person moved a lead (lead-moves.ts): first reads already asked are
+// stale, and what this device keeps follows the move at once.
+onLeadMoved((row, moves) => {
+  warming.clear();
+  pending.clear();
+  if (typeof window === "undefined") return;
+  try {
+    const stored = JSON.parse(
+      localStorage.getItem(SLOT) ?? "null",
+    ) as Store | null;
+    if (!stored?.entries || typeof stored.entries !== "object") return;
+    let changed = false;
+    for (const [key, entry] of Object.entries(stored.entries)) {
+      const value = key.startsWith("list:")
+        ? keptPage(key, entry.value as LeadPage, row)
+        : key.startsWith("leads.desk:")
+          ? deskWithMoves(entry.value as Desk, moves)
+          : entry.value;
+      if (value === entry.value) continue;
+      stored.entries[key] = { ...entry, value };
+      changed = true;
+    }
+    if (changed) localStorage.setItem(SLOT, JSON.stringify(stored));
+  } catch {
+    /* The list still works without storage. */
+  }
+});

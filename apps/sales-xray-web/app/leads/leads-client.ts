@@ -9,6 +9,7 @@
 import { withDisplayNames } from "../display-name";
 import { sendWrite } from "../sync/write-queue";
 import { earlyFetch, forgetSharedReads } from "../early-reads";
+import { noteLeadMoved } from "./lead-moves";
 import type { MeetingView, MoveOption } from "./pipeline/pipeline-client";
 
 export const LEADS_PATH = "/leads";
@@ -1029,6 +1030,12 @@ export type Disposition = {
   deal_value?: string;
 };
 
+/** A move the lists and To call follow at once (lead-moves.ts). */
+function moved(detail: LeadDetail) {
+  if (detail?.lead) noteLeadMoved(detail.lead);
+  return detail;
+}
+
 export function dispose(
   lead: Pick<LeadRow, "lead_id" | "revision">,
   disposition: Disposition,
@@ -1046,7 +1053,7 @@ export function dispose(
       expected_revision: lead.revision,
       ...body,
     }),
-  );
+  ).then(moved);
 }
 
 /** Move a lead to one of the business's stages without a call (Lead stages). */
@@ -1063,7 +1070,7 @@ export async function moveToStage(
       step,
     }),
   );
-  return readLead(lead.lead_id);
+  return moved(await readLead(lead.lead_id));
 }
 
 /** Book the next call without a call (long-press on the list). */

@@ -30,6 +30,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { inStageList, useLeadMoves, withMoves } from "./lead-moves";
 import { cachedLeadPage, readFirstLeads } from "./list-cache";
 import { firstPageFor, type ServerLeads } from "./leads-seed";
 import { notify } from "../notice-center";
@@ -224,6 +225,8 @@ export function ListView({
     question: string;
     page: LeadPage;
     rows: LeadRow[];
+    /** When the rows were asked for. */
+    at?: number;
   } | null>(null);
   const [failed, setFailed] = useState<{ key: string; message: string } | null>(
     null,
@@ -305,8 +308,36 @@ export function ListView({
   });
   const page =
     loaded?.question === question ? loaded.page : (serverPage ?? remembered);
-  const rows =
-    loaded?.question === question ? loaded.rows : (page?.leads ?? []);
+  const read = useMemo(
+    () => (loaded?.question === question ? loaded.rows : (page?.leads ?? [])),
+    [loaded, question, page],
+  );
+  // The person's moves at once: a lead moved to another stage leaves this
+  // list, and joins the top of its new stage's (owner, 30 Oct 2026).
+  const moves = useLeadMoves();
+  const readAt = loaded?.question === question ? (loaded.at ?? 0) : 0;
+  const join = !filtered && !query.trim() && !owner && scope !== "unassigned";
+  const rows = useMemo(
+    () =>
+      withMoves(read, moves, {
+        belongs: stage === TEST ? null : (row) => inStageList(row, stage),
+        join,
+        readAt,
+      }),
+    [read, moves, stage, join, readAt],
+  );
+  // ...and the next lead is on top: no scrolling for the next call.
+  const panel = useRef<HTMLElement>(null);
+  const seenMoves = useRef(moves);
+  useEffect(() => {
+    if (seenMoves.current === moves) return;
+    seenMoves.current = moves;
+    const shown = new Set(rows.map((row) => row.lead_id));
+    const left = read.some((row) => !shown.has(row.lead_id));
+    const top = panel.current?.getBoundingClientRect().top;
+    if (left && top !== undefined && top < 0)
+      panel.current?.scrollIntoView({ block: "start" });
+  }, [moves, read, rows]);
   // Paint the visible phone rows first. Building 50 gesture-enabled rows at
   // once monopolises a mid-range phone even when the data is already cached.
   const [revealed, setRevealed] = useState({ question: "", count: 8 });
@@ -380,6 +411,7 @@ export function ListView({
   }, [question, rows.length]);
   useEffect(() => {
     const controller = new AbortController();
+    const asked = Date.now();
     const parameters = {
       scope,
       owner: owner ?? undefined,
@@ -411,7 +443,7 @@ export function ListView({
           if (controller.signal.aborted) return;
           fresh.push(...next.leads);
         }
-        setLoaded({ key, question, page: next, rows: fresh });
+        setLoaded({ key, question, page: next, rows: fresh, at: asked });
         if (first.stage_counts && stage !== TEST)
           counts.current?.(first.stage_counts);
         const owners = first.owner_counts;
@@ -460,6 +492,7 @@ export function ListView({
               question,
               page: next,
               rows: [...current.rows, ...next.leads],
+              at: current.at,
             }
           : current,
       );
@@ -525,8 +558,11 @@ export function ListView({
           last = await readLeads({ ...ask, offset: last.next_offset });
           all = [...all, ...last.leads];
         }
-        const read = { key, question, page: last, rows: all };
-        setLoaded((current) => (current?.key === key ? read : current));
+        setLoaded((current) =>
+          current?.key === key
+            ? { key, question, page: last, rows: all, at: current.at }
+            : current,
+        );
       } catch (reason) {
         notify({
           id: "lead-select",
@@ -572,7 +608,7 @@ export function ListView({
 
   return (
     <>
-      <section className={styles.listPanel} aria-label={stageLabel}>
+      <section ref={panel} className={styles.listPanel} aria-label={stageLabel}>
         <div className={styles.listHead}>
           <span className={styles.listTotal} aria-live="polite">
             {page

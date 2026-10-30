@@ -7,9 +7,9 @@
  * "the + pop-up has Add lead and Add a call (record or upload a call for
  * analysis)".
  *
- * The 28 Oct 2026 meeting moved the + to the top bar and added Add task:
- * tasks are reminders on a lead, so it opens Tasks, where each lead's Remind
- * sits.
+ * The 28 Oct 2026 meeting moved the + to the top bar and added Add task: a
+ * reminder on a lead. It opens the Add task form over the current screen
+ * (owner order, 30 Oct 2026, fix 4: it used to open nothing).
  *
  * Add lead opens the quick form over the current screen; Add a call goes to
  * the record-or-upload page. Outside an organisation there is no lead desk,
@@ -65,6 +65,7 @@ export function AddSheet({
   open,
   onClose,
   onAddLead,
+  onAddTask,
   callHref,
   leadsHere,
 }: {
@@ -72,6 +73,8 @@ export function AddSheet({
   onClose: () => void;
   /** Opens the quick Add lead form; only inside an organisation. */
   onAddLead: () => void;
+  /** Opens the Add task form; only inside an organisation. */
+  onAddTask: () => void;
   /** The record-or-upload page. */
   callHref: string;
   /** False outside an organisation: Add lead then opens Leads instead. */
@@ -112,8 +115,7 @@ export function AddSheet({
             tone="task"
             title="Add task"
             text="A reminder on a lead, on its day"
-            href="/leads?tab=tasks"
-            onClick={onClose}
+            onClick={onAddTask}
           />
         ) : null}
       </div>

@@ -1,0 +1,203 @@
+name: Release images arm64
+
+# Production moves to AWS Graviton (t4g.medium in Mumbai; owner, 29-30 Oct 2026) while staging
+# stays amd64 on ac. After a green "Application validation" run on main, this builds the same
+# commit once more for linux/arm64 on a native ARM runner and pushes each image to GHCR as
+# <image>:<sha>-linux-arm64. The amd64 release path (application.yml, the web and native
+# workflows, their tags and transport bundles) is unchanged, and no Actions artifact is uploaded:
+# repository artifact storage is already at its ceiling. A failure here never turns the amd64
+# release run red.
+#
+# workflow_dispatch builds an exact earlier commit, such as the live production release, for a
+# rehearsal or the cutover. Pushes to wb-ci slots that change this file build and prove the images
+# without publishing them.
+
+on:
+  workflow_run:
+    workflows: ["Application validation"]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      frozen_sha:
+        description: "Exact 40-character lowercase commit to build"
+        required: true
+        type: string
+  push:
+    branches: ["wb-ci/slot-*"]
+    paths: [".github/workflows/release-images-arm64.yml"]
+
+permissions:
+  contents: read
+
+env:
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
+
+jobs:
+  images:
+    # workflow_run fires for every completed run on main; only validated pushes are built.
+    if: >-
+      github.event_name != 'workflow_run'
+      || (github.event.workflow_run.conclusion == 'success'
+          && github.event.workflow_run.event == 'push')
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        image:
+          - name: api
+            repository: authority-closers-api
+            file: infra/application/Dockerfile.python
+            target: runtime
+          - name: learner
+            repository: authority-closers-learner-web
+            file: infra/application/Dockerfile.web
+            target: learner
+          - name: admin
+            repository: authority-closers-admin-web
+            file: infra/application/Dockerfile.web
+            target: admin
+          - name: coach
+            repository: authority-closers-coach-web
+            file: infra/application/Dockerfile.web
+            target: coach
+          - name: sales-xray
+            repository: ac-sales-xray-web
+            file: infra/sales-xray-web/Dockerfile
+            target: runtime
+          - name: native
+            repository: ac-sales-xray-native
+            file: infra/conversation-worker/Dockerfile
+            target: runtime
+    env:
+      SOURCE_SHA: ${{ inputs.frozen_sha || github.event.workflow_run.head_sha || github.sha }}
+      PUBLISH: ${{ github.event_name != 'push' }}
+      IMAGE_NAME: ${{ matrix.image.name }}
+    steps:
+      - name: Validate the source commit
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+            printf 'The source commit must be exactly 40 lowercase hexadecimal characters.\n' >&2
+            exit 2
+          }
+
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Prove the checked out source identity
+        run: |
+          set -euo pipefail
+          checked_out_sha="$(git rev-parse HEAD)"
+          [ "$checked_out_sha" = "$SOURCE_SHA" ] || {
+            printf 'Checkout SHA %s does not match requested SHA %s.\n' "$checked_out_sha" "$SOURCE_SHA" >&2
+            exit 1
+          }
+          printf 'IMAGE_TAG=ghcr.io/authorityclosers/%s:%s-linux-arm64\n' \
+            "${{ matrix.image.repository }}" "$SOURCE_SHA" >> "$GITHUB_ENV"
+          printf 'RELEASE_ID=%s\n' "$SOURCE_SHA" >> "$GITHUB_ENV"
+
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+
+      - name: Build the unchanged recipe for Linux arm64
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: ${{ matrix.image.file }}
+          target: ${{ matrix.image.target }}
+          platforms: linux/arm64
+          pull: true
+          load: true
+          tags: ${{ env.IMAGE_TAG }}
+          build-args: AC_RELEASE_ID=${{ env.RELEASE_ID }}
+
+      - name: Prove architecture, release marker and startup on ARM
+        run: |
+          set -euo pipefail
+          image="$IMAGE_TAG"
+          docker image inspect --format '{{.Architecture}}' "$image" | grep -Fx arm64
+          case "$IMAGE_NAME" in
+            native)
+              docker run --rm --network none --read-only "$image" doctor
+              ;;
+            api)
+              release_id="$(docker run --rm --network none --entrypoint /bin/sh "$image" -c 'cat /app/.ac-release-id')"
+              [ "$release_id" = "$RELEASE_ID" ] || {
+                printf 'API image release marker does not match the source commit.\n' >&2
+                exit 1
+              }
+              mapfile -t heads < <(
+                docker run --rm --network none --entrypoint alembic "$image" heads | awk '$2 == "(head)" { print $1 }'
+              )
+              if [ "${#heads[@]}" -ne 1 ] || ! [[ "${heads[0]}" =~ ^[0-9]{8}_[0-9]{4}$ ]]; then
+                printf 'API image must contain exactly one valid Alembic head.\n' >&2
+                exit 1
+              fi
+              printf 'migration head %s\n' "${heads[0]}"
+              docker run --rm --network none --entrypoint python "$image" \
+                -c 'import ac_platform.http; import psycopg; import cryptography; import pydantic_core'
+              ;;
+            *)
+              [ "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")" = "$RELEASE_ID" ]
+              container="$(docker run --detach --network none --read-only --tmpfs /tmp --env AC_ENVIRONMENT=staging "$image")"
+              trap 'docker rm --force "$container" >/dev/null' EXIT
+              # The same probe and URL each service's compose healthcheck uses.
+              case "$IMAGE_NAME" in
+                learner) probe=(http://127.0.0.1:3000/) ;;
+                admin) probe=(http://127.0.0.1:3001/healthz) ;;
+                coach) probe=(http://127.0.0.1:3002/healthz) ;;
+                sales-xray) probe=(http://127.0.0.1:3016/health sales-xray) ;;
+              esac
+              for attempt in $(seq 1 60); do
+                if docker exec --env AC_RELEASE_ID="$RELEASE_ID" "$container" /usr/local/bin/ac-http-healthcheck "${probe[@]}"; then
+                  exit 0
+                fi
+                sleep 1
+              done
+              docker logs "$container"
+              exit 1
+              ;;
+          esac
+
+      - uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9
+        if: env.PUBLISH == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish the immutable arm64 tag once
+        if: env.PUBLISH == 'true'
+        run: |
+          set -euo pipefail
+          image="$IMAGE_TAG"
+          if docker manifest inspect "$image" >/dev/null 2>&1; then
+            docker pull --platform linux/arm64 "$image"
+            published_arch="$(docker image inspect --format '{{.Architecture}}' "$image")"
+            published_revision="$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$image")"
+            # The native recipe carries no revision label; its tag is per commit and never overwritten.
+            if [ "$published_arch" != arm64 ] \
+              || { [ "$IMAGE_NAME" != native ] && [ "$published_revision" != "$RELEASE_ID" ]; }; then
+              printf 'Refusing to overwrite immutable tag %s (architecture %s, revision %s).\n' \
+                "$image" "$published_arch" "$published_revision" >&2
+              exit 1
+            fi
+            printf 'Reusing immutable tag %s\n' "$image"
+          else
+            docker push "$image"
+            docker pull --platform linux/arm64 "$image"
+          fi
+          {
+            printf '| image | registry digest | config id |\n|---|---|---|\n'
+            printf '| `%s` | `%s` | `%s` |\n' "$image" \
+              "$(docker image inspect --format '{{index .RepoDigests 0}}' "$image")" \
+              "$(docker image inspect --format '{{.Id}}' "$image")"
+          } >> "$GITHUB_STEP_SUMMARY"

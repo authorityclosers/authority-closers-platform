@@ -241,8 +241,8 @@ const talk = (seconds: number) => {
 
 /**
  * Analyse yourself (28 Oct 2026 meeting): you against yourself, for today,
- * this week or this month: calls attempted, connected, talk time and
- * follow-ups done.
+ * this week or this month: calls attempted, connected, not connected, talk
+ * time and follow-ups done, from the calls Recent calls lists.
  */
 export function MyWork({ desk }: { desk: HomeDesk | null }) {
   const [when, setWhen] = useState<"today" | "week" | "month">("today");
@@ -256,6 +256,11 @@ export function MyWork({ desk }: { desk: HomeDesk | null }) {
     ? [
         { label: "Attempted", value: String(numbers.calls) },
         { label: "Connected", value: String(numbers.connected) },
+        // Attempted minus connected (the server's not_connected).
+        {
+          label: "Not connected",
+          value: String(Math.max(0, numbers.calls - numbers.connected)),
+        },
         { label: "Talk time", value: talk(numbers.talk_seconds) },
         { label: "Follow-ups done", value: String(numbers.follow_ups_done) },
       ]
@@ -280,7 +285,7 @@ export function MyWork({ desk }: { desk: HomeDesk | null }) {
         ) : null}
       </div>
       <dl className={styles.figures}>
-        {(figures ?? Array.from({ length: 4 }, () => null)).map(
+        {(figures ?? Array.from({ length: 5 }, () => null)).map(
           (figure, index) => (
             <div key={figure?.label ?? index} aria-busy={!figure || undefined}>
               <dt>{figure?.label ?? " "}</dt>

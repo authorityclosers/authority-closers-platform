@@ -11,6 +11,32 @@ const calls = vi.hoisted(() => ({
 }));
 
 vi.mock("../notice-center", () => ({ notify: calls.notify }));
+// The Add task form loads on demand; here a stand-in saves a task due
+// tomorrow at 10 (owner order, 30 Oct 2026, fix 4).
+vi.mock("next/dynamic", async () => {
+  const { createElement } = await import("react");
+  return {
+    default: () =>
+      function AddTaskStandIn({
+        open,
+        onAdded,
+      }: {
+        open: boolean;
+        onAdded: (at: Date) => void;
+      }) {
+        return open
+          ? createElement(
+              "button",
+              {
+                type: "button",
+                onClick: () => onAdded(new Date(2026, 9, 25, 10, 0)),
+              },
+              "Save the new task",
+            )
+          : null;
+      },
+  };
+});
 vi.mock("./leads-client", async (importOriginal) => ({
   ...(await importOriginal<typeof import("./leads-client")>()),
   readTasks: calls.read,
@@ -110,6 +136,15 @@ it("lists today's tasks with what, for whom, where and when, and counts each lis
   expect(text).toContain("Asked for the 2 BHK brochure");
   expect(text).toContain("Baner office");
   expect(text).toContain("Meeting · Ravi Sample");
+});
+
+it("adds a task with + and then shows the list it landed in", async () => {
+  await show();
+  await act(async () => button("Add task")?.click());
+  await act(async () => button("Save the new task")?.click());
+  // Tomorrow at 10 from 24 Oct, 11 AM: Upcoming, read again.
+  expect(calls.read).toHaveBeenLastCalledWith("upcoming", expect.anything());
+  expect(button("Save the new task")).toBeUndefined();
 });
 
 it("opens the lead on a tap", async () => {

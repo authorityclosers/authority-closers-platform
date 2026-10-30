@@ -223,8 +223,10 @@ def test_a_sellers_day_on_the_desk(postgres_harness: Any, tmp_path: Path) -> Non
                     headers=WRITE,
                 )
                 assert stale_dispose.status_code == 409
+                # Outcomes logged without a call are not calls: Home counts the calls
+                # Recent Calls lists (owner, 30 Oct 2026).
                 numbers = (await client.get(BASE)).json()["numbers"]
-                assert numbers["calls"] == 2 and numbers["connected"] == 1
+                assert numbers["calls"] == 0 and numbers["connected"] == 0
 
                 # The other seller can't see or touch it.
                 as_(await _session(setup, other))
@@ -975,12 +977,15 @@ def test_calls_the_phone_logged_by_itself_reach_their_leads(
                 assert sum(1 for e in loose.json()["events"] if e.get("recording")) == 2
 
                 desk = (await client.get(BASE)).json()
-                # The dialer call counts in My day; the missed call does not. My day is
-                # India's today: just after midnight there, the call from 3 minutes ago is
+                # My day counts the calls Recent Calls lists (owner, 30 Oct 2026): the
+                # dialer call, the app's own call and the recording saved without a call
+                # (no seconds: not connected); not the missed call. My day is India's
+                # today: just after midnight there, the call from 3 minutes ago is
                 # yesterday's (wb-ci at 00:02 IST, 27 Oct 2026).
                 dialled = int(_india_day(now - timedelta(minutes=3)) == _india_day())
-                assert desk["numbers"]["calls"] == dialled
-                assert desk["numbers"]["connected"] == dialled
+                assert desk["numbers"]["calls"] == dialled + 2
+                assert desk["numbers"]["connected"] == dialled + 1
+                assert desk["numbers"]["not_connected"] == 1
                 assert desk["numbers"]["talk_seconds"] == 192 * dialled + 40
 
                 as_(setup.token)
