@@ -157,6 +157,94 @@ class MessageTemplate(Model):
     text: str
 
 
+class ToCallToday(Model):
+    """Today's work counting down (Leads redesign section 6, 30 Oct 2026: 20 → 19 → 18)."""
+
+    # My open leads due by tonight, or new and never given a time, not called today.
+    left: int
+    # The leads I called today.
+    called: int
+
+
+class BreakView(Model):
+    """A gap between a seller's calls inside the working day."""
+
+    start: datetime
+    end: datetime
+    minutes: int
+    # Inside a break the team set (lunch): not red.
+    planned: bool
+    # An edge is a call placed with the app's Call button, whose time is the seller's
+    # time away from the app: the gap is approximate.
+    approximate: bool
+
+
+class SideEffort(Model):
+    """Effort on Inbound or on Cold leads, measured apart (Dipak's table, 30 Oct 2026)."""
+
+    # Calls out, those answered, and their talk time.
+    attempted: int = 0
+    connected: int = 0
+    talk_seconds: int = 0
+    # Different leads called, and different leads spoken to.
+    leads_attempted: int = 0
+    reached: int = 0
+    # Different leads moved to Interested, given a meeting, won.
+    interested: int = 0
+    meetings: int = 0
+    won: int = 0
+    # Of the leads called, those moved to Interested or Won: whether the calling makes
+    # real chances (Dipak: "Cold Leads Worked -> Interested").
+    worked_interested: int = 0
+    # Open leads never called: untouched enquiries (Inbound), unworked imports (Cold).
+    backlog: int = 0
+    # Leads open now or called in the period: contact coverage is leads_attempted over this.
+    eligible: int = 0
+    # Inbound only: median minutes from a lead arriving to its first call.
+    first_call_minutes: int | None = None
+    # What was missed. Now: open leads more than an hour late (a follow-up past its
+    # time, or a new lead never called). In the period: calls in that nobody took,
+    # and of those leads, the ones nobody reached afterwards.
+    late: int = 0
+    missed_calls: int = 0
+    not_called_back: int = 0
+
+
+class SellerEffort(Model):
+    person_id: UUID
+    name: str
+    inbound: SideEffort
+    cold: SideEffort
+    # The three longest gaps between their calls in the period, longest first, and all
+    # the time between calls outside set breaks.
+    breaks: tuple[BreakView, ...] = ()
+    unplanned_break_minutes: int = 0
+    # Today: their first call's start and their last call's end.
+    first_call_at: datetime | None = None
+    last_call_at: datetime | None = None
+    # Open tasks more than an hour past their time, now.
+    tasks_late: int = 0
+    # Today's connected lead calls with no recording yet.
+    missing_recordings: int = 0
+
+
+class Effort(Model):
+    """The Performance engine (Leads redesign section 6; owner, 30 Oct 2026: "a great
+    API"): each seller's work done, what they missed and their breaks, Inbound and Cold
+    apart, over today, 7 or 30 days, India time."""
+
+    schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    days: int
+    start: datetime
+    end: datetime
+    # Every seller (owners and admins), or the viewer's own.
+    team: bool
+    sellers: tuple[SellerEffort, ...]
+    inbound: SideEffort
+    cold: SideEffort
+    missing_recordings: int = 0
+
+
 class Desk(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     me: Me
@@ -179,6 +267,9 @@ class Desk(Model):
     numbers_month: Numbers | None = None
     # The workspace's open leads beside mine, for a member with none assigned.
     team_pool: TeamPool | None = None
+    # Today's work counting down, and my three longest breaks today, longest first.
+    to_call_today: ToCallToday | None = None
+    breaks: tuple[BreakView, ...] = ()
 
 
 class Badge(Model):
@@ -900,6 +991,13 @@ class RepView(Model):
     phone: PhoneHealth | None = None
 
 
+class BreakTime(Model):
+    """A break the team takes every work day (lunch), India time."""
+
+    start: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+    end: str = Field(pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
 class WorkHoursView(Model):
     """The team's work days and hours, India time (0 is Monday)."""
 
@@ -909,6 +1007,7 @@ class WorkHoursView(Model):
     pause_leads: bool
     inside: bool
     next_start: datetime | None = None
+    breaks: tuple[BreakTime, ...] = ()
 
 
 class SettingsView(Model):
@@ -1400,6 +1499,8 @@ class WorkHoursCommand(Command):
     start: str = Field(default="09:30", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     end: str = Field(default="19:00", pattern=r"^([01]\d|2[0-3]):[0-5]\d$")
     pause_leads: bool = False
+    # Left out (an older app): the breaks set before stay.
+    breaks: tuple[BreakTime, ...] | None = Field(default=None, max_length=3)
 
     @field_validator("days")
     @classmethod
@@ -1407,6 +1508,13 @@ class WorkHoursCommand(Command):
         if any(day < 0 or day > 6 for day in days):
             raise ValueError("Days are 0 (Monday) to 6 (Sunday).")
         return tuple(sorted(set(days)))
+
+    @field_validator("breaks")
+    @classmethod
+    def _breaks(cls, breaks: tuple[BreakTime, ...] | None) -> tuple[BreakTime, ...] | None:
+        if breaks and any(item.start >= item.end for item in breaks):
+            raise ValueError("A break ends after it starts.")
+        return breaks
 
 
 class ImportCommand(Command):

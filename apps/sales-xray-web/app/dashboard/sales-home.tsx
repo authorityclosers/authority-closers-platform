@@ -13,7 +13,11 @@
  * - One primary action: Call the next lead (you), or review the late
  *   follow-ups (the team).
  * - The second figures sideways in a slider (the team's outcomes).
- * - Recent calls, with Activity beside them; then My work.
+ * - The team's recent calls, with Activity beside them; then My work.
+ * - A seller's Home (Leads redesign, section 6; Dipak and the owner, 30 Oct
+ *   2026): today's work counting down and the pending work first; then what
+ *   was done (Analyse yourself, then recent calls with Activity beside them,
+ *   three each); the longest breaks last.
  *
  * Only real numbers: nothing here is estimated or invented.
  */
@@ -22,6 +26,7 @@ import {
   ArrowRight,
   ChevronRight,
   FileText,
+  Gauge,
   PhoneCall,
   UsersRound,
 } from "lucide-react";
@@ -39,6 +44,8 @@ import {
   MyWork,
   RecentToggle,
   TodayBar,
+  TodayCountdown,
+  YourBreaks,
   mineFour,
   teamFour,
 } from "./home-today";
@@ -249,6 +256,13 @@ function TeamHome({
       {works ? <MyWork desk={desk} /> : null}
       <ActionList label="More">
         <ActionRow
+          icon={<Gauge size={20} />}
+          tone="neutral"
+          title="Performance"
+          note="Each seller's calls, talk time and breaks, Live and Cold apart"
+          href="/performance"
+        />
+        <ActionRow
           icon={<UsersRound size={20} />}
           tone="neutral"
           title="Your team"
@@ -323,6 +337,7 @@ function SellerHome({
         />
         {onTeam ? <ViewChip to="team" onPick={onTeam} /> : null}
       </TodayBar>
+      <TodayCountdown desk={desk} />
       <FourTiles label="Your day" tiles={mineFour(desk, tasks)} />
       {first ? (
         <Link
@@ -362,12 +377,14 @@ function SellerHome({
         </>
       )}
       <YourTargets myDay={myDay} />
+      <MyWork desk={desk} />
+      {/* What was done, under the pending work: three each, one tap to all. */}
       <RecentToggle
         calls={<HomeRecentCalls week={week} saved={recent} bare />}
         activity={<HomeActivity week={week} bare />}
         seeAll={{ calls: "/analysis/calls", activity: "/leads?tab=work" }}
       />
-      <MyWork desk={desk} />
+      <YourBreaks desk={desk} />
     </>
   );
 }

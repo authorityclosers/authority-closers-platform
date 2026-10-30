@@ -67,6 +67,7 @@ from ac_platform.lead_desk.contracts import (
     DuplicateBand,
     DuplicateCompare,
     DuplicateQueue,
+    Effort,
     FollowUp,
     ImportCommand,
     ImportPreview,
@@ -949,6 +950,14 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request, frozenset({"days"}))
         async with desk_for(request, response) as lead_desk:
             return await lead_desk.performance(days)
+
+    @router.get("/performance/sellers", response_model=Effort, response_model_by_alias=True)
+    async def effort(request: Request, response: Response, days: int = 1) -> Effort:
+        """The Performance page: each seller's effort with Inbound and Cold apart (owners and
+        admins see every seller; a seller their own)."""
+        no_query(request, frozenset({"days"}))
+        async with desk_for(request, response) as lead_desk:
+            return await lead_desk.effort(days)
 
     @router.get("/me", response_model=Me, response_model_by_alias=True)
     async def me(request: Request, response: Response) -> Me:

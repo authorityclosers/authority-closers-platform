@@ -52,6 +52,17 @@ export type MyDay = {
 
 export type TeamPool = { open: number; unassigned: number; may_take: boolean };
 
+/** A gap between my calls inside the working day (Leads redesign, section 6). */
+export type HomeBreak = {
+  start: string;
+  end: string;
+  minutes: number;
+  /** Inside a break the team set (lunch): not red. */
+  planned: boolean;
+  /** An edge is a call from the app's Call button: its time is approximate. */
+  approximate: boolean;
+};
+
 /** The desk with Home's extras (absent from an older server). */
 export type HomeDesk = Desk & {
   numbers_yesterday?: Desk["numbers"] | null;
@@ -59,6 +70,10 @@ export type HomeDesk = Desk & {
   /** This calendar month so far (Analyse yourself). */
   numbers_month?: Desk["numbers"] | null;
   team_pool?: TeamPool | null;
+  /** Today's work counting down: still to call today, and called today. */
+  to_call_today?: { left: number; called: number } | null;
+  /** My three longest breaks today, longest first. */
+  breaks?: HomeBreak[] | null;
 };
 
 export const METRIC_WORDS: Record<Metric, string> = {

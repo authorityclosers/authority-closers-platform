@@ -424,7 +424,7 @@ it("gives a Viewer the team's Home with nothing to change", async () => {
 });
 
 // #18: the seller dashboard answers who needs a call before showing history.
-it("puts Today and the next call before recent work on the seller dashboard", async () => {
+it("puts the pending work first and what was done under it", async () => {
   answer({
     "/v1/lead-desk/activity*": { items: [], next_before: null },
     "/v1/lead-desk": desk([
@@ -443,9 +443,15 @@ it("puts Today and the next call before recent work on the seller dashboard", as
   ]);
   expect(host.querySelector("h2")?.textContent).toBe("Today");
   expect(host.textContent).toContain("Call Ravi");
+  // Pending work first; what was done under it (owner, 30 Oct 2026): Analyse
+  // yourself, then Recent calls with Activity one tap away.
   const text = host.textContent!;
-  expect(text.indexOf("Today")).toBeLessThan(text.indexOf("Recent calls"));
-  // Activity sits beside Recent calls, one tap away.
+  expect(text.indexOf("Call Ravi")).toBeLessThan(
+    text.indexOf("Analyse yourself"),
+  );
+  expect(text.indexOf("Analyse yourself")).toBeLessThan(
+    text.indexOf("Recent calls"),
+  );
   const activity = Array.from(host.querySelectorAll("button")).find(
     (button) => button.textContent === "Activity",
   )!;
@@ -453,4 +459,70 @@ it("puts Today and the next call before recent work on the seller dashboard", as
   expect(host.querySelector('[aria-label="Recent"]')?.textContent).toContain(
     "Notes, messages and stage moves show here.",
   );
+});
+
+it("counts today's work down and ends with the longest breaks", async () => {
+  answer({
+    "/v1/lead-desk": {
+      ...desk([]),
+      to_call_today: { left: 18, called: 2 },
+      breaks: [
+        {
+          start: "2026-10-30T05:10:00Z",
+          end: "2026-10-30T06:30:00Z",
+          minutes: 80,
+          planned: false,
+          approximate: false,
+        },
+        {
+          start: "2026-10-30T07:30:00Z",
+          end: "2026-10-30T08:30:00Z",
+          minutes: 60,
+          planned: true,
+          approximate: false,
+        },
+        {
+          start: "2026-10-30T08:30:00Z",
+          end: "2026-10-30T09:30:00Z",
+          minutes: 60,
+          planned: false,
+          approximate: true,
+        },
+      ],
+    },
+    "/v1/lead-desk/tasks*": { tasks: [], counts: { today: 0, overdue: 0 } },
+  });
+  await mount(false);
+  await act(async () => Promise.resolve());
+  const countdown = host.querySelector('[aria-labelledby="countdown-title"]');
+  expect(countdown?.textContent).toContain("18of 20 left");
+  expect(countdown?.textContent).toContain("2 called");
+  expect(
+    countdown
+      ?.querySelector('[role="progressbar"]')
+      ?.getAttribute("aria-valuenow"),
+  ).toBe("2");
+  // At the very end of Home.
+  const breaks = host.querySelector('[aria-labelledby="breaks-title"]');
+  expect(breaks?.nextElementSibling).toBeNull();
+  const rows = Array.from(breaks?.querySelectorAll("li") ?? []);
+  expect(rows.map((li) => li.textContent?.replace(/\s+/g, " "))).toEqual([
+    "10:40 AM – 12:00 PM1 h 20 min",
+    "1:00 PM – 2:00 PMSet break1 h",
+    "2:00 PM – 3:00 PM≈ 1 h",
+  ]);
+  // Red unless it is a break the team set.
+  expect(rows.map((li) => li.hasAttribute("data-red"))).toEqual([
+    true,
+    false,
+    true,
+  ]);
+  expect(breaks?.textContent).toContain("≈ Next to a call from the app");
+});
+
+it("draws no countdown or breaks from a server without them", async () => {
+  answer({ "/v1/lead-desk": desk([]) });
+  await mount(false);
+  expect(host.querySelector('[aria-labelledby="countdown-title"]')).toBeNull();
+  expect(host.querySelector('[aria-labelledby="breaks-title"]')).toBeNull();
 });

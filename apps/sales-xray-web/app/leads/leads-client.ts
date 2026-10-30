@@ -287,6 +287,8 @@ export type WorkHours = {
   pause_leads: boolean;
   inside: boolean;
   next_start: string | null;
+  /** Breaks the team takes every work day (lunch); absent from an older server. */
+  breaks?: { start: string; end: string }[];
 };
 
 export type PhoneHealth = {
@@ -1363,7 +1365,13 @@ export function saveSettings(
 /** Sets the team's work hours; no days clears them. */
 export function saveWorkHours(
   revision: number,
-  hours: { days: number[]; start: string; end: string; pause_leads: boolean },
+  hours: {
+    days: number[];
+    start: string;
+    end: string;
+    pause_leads: boolean;
+    breaks?: { start: string; end: string }[];
+  },
 ) {
   return request<Team>(
     "/work-hours",

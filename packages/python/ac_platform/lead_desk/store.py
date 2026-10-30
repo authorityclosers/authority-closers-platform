@@ -14,7 +14,7 @@ import json
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, NamedTuple
 from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
@@ -33,6 +33,7 @@ from ac_platform.lead_desk import (
     reports,
     routing_rules,
 )
+from ac_platform.lead_desk import breaks as call_breaks
 from ac_platform.lead_desk import hours as work_hours
 from ac_platform.lead_desk import meetings as meeting_rows
 from ac_platform.lead_desk import tasks as task_book
@@ -55,6 +56,8 @@ from ac_platform.lead_desk.contracts import (
     Board,
     BoardColumn,
     BoardGroup,
+    BreakTime,
+    BreakView,
     BulkDone,
     BulkLeads,
     CallPrivacy,
@@ -67,6 +70,7 @@ from ac_platform.lead_desk.contracts import (
     Desk,
     DeviceCommand,
     Disposition,
+    Effort,
     FieldValue,
     FollowUp,
     GroupRow,
@@ -111,9 +115,11 @@ from ac_platform.lead_desk.contracts import (
     RepRules,
     RepView,
     SellerCalls,
+    SellerEffort,
     SellerOutcome,
     SettingsCommand,
     SettingsView,
+    SideEffort,
     StageChoice,
     StageCount,
     StageMove,
@@ -121,6 +127,7 @@ from ac_platform.lead_desk.contracts import (
     TakingLeads,
     Team,
     TeamPool,
+    ToCallToday,
     WorkDay,
     WorkHoursCommand,
     WorkHoursView,
@@ -227,6 +234,8 @@ IN_APP_BEFORE = timedelta(minutes=2)
 IN_APP_AFTER = timedelta(minutes=20)
 # Directions that are not a call out (Home's Attempted, owner 30 Oct 2026).
 NOT_OUT = frozenset({"incoming", "missed", "rejected", "blocked"})
+# Calls read at once for a window (a team's month).
+CALL_ROWS = 20000
 DEFAULT_SETTINGS: dict[str, Any] = {
     "auto_reassign": False,
     "reassign_minutes": 10,
@@ -375,6 +384,49 @@ def hours_view(hours: work_hours.WorkHours | None, now: datetime) -> WorkHoursVi
         pause_leads=hours.pause_leads,
         inside=inside,
         next_start=None if inside else work_hours.next_start(hours, now),
+        breaks=tuple(
+            BreakTime(start=begins.strftime("%H:%M"), end=ends.strftime("%H:%M"))
+            for begins, ends in hours.breaks
+        ),
+    )
+
+
+class CallRow(NamedTuple):
+    """A call as Recent Calls lists it."""
+
+    event_id: UUID
+    actor: UUID | None
+    lead_id: UUID
+    at: datetime
+    data: dict[str, Any]
+
+
+def call_out(data: Mapping[str, Any]) -> bool:
+    """A call out (Home's Attempted): not a call in, a missed, rejected or blocked call."""
+    return data.get("direction") not in NOT_OUT
+
+
+def call_seconds(data: Mapping[str, Any]) -> int:
+    return max(0, int(data.get("duration_seconds") or 0))
+
+
+def call_answered(data: Mapping[str, Any]) -> bool:
+    """Connected: talk time above 0, or the phone's log said so."""
+    return call_seconds(data) > 0 or data.get("connected") is True
+
+
+def lead_side(pipeline: str | None) -> str:
+    """Inbound or Cold (migration 0146): only "cold" is Cold; empty is Inbound."""
+    return "cold" if pipeline == "cold" else "inbound"
+
+
+def break_view(gap: call_breaks.Gap) -> BreakView:
+    return BreakView(
+        start=gap.start,
+        end=gap.end,
+        minutes=round(gap.length.total_seconds() / 60),
+        planned=gap.planned,
+        approximate=gap.approximate,
     )
 
 
@@ -911,9 +963,11 @@ class LeadDesk:
                 )
             )
         ).one()
+        # Today's calls once: the numbers, the countdown and the breaks read them.
+        today_calls = await self._call_rows(day_start, self.now + timedelta(seconds=1))
         return Desk(
             me=who,
-            numbers=await self._numbers(day_start, self.now + timedelta(seconds=1)),
+            numbers=await self._numbers(day_start, self.now + timedelta(seconds=1), today_calls),
             numbers_yesterday=await self._numbers(day_start - timedelta(days=1), day_start),
             numbers_week=await self._numbers(
                 day_start - timedelta(days=6), self.now + timedelta(seconds=1)
@@ -942,9 +996,13 @@ class LeadDesk:
                 for key, label, text in MESSAGE_TEMPLATES
             ),
             call_back=call_back,
+            to_call_today=await self._to_call_today(mine, day_end, today_calls),
+            breaks=await self._breaks_today(today_calls),
         )
 
-    async def _numbers(self, start: datetime, end: datetime) -> Numbers:
+    async def _numbers(
+        self, start: datetime, end: datetime, rows: Sequence[CallRow] | None = None
+    ) -> Numbers:
         """My numbers between two moments, read from the calls Recent Calls and My work
         list (owner, 30 Oct 2026: Home said 0 beside a list of calls, because a call
         placed in the app never counted). Counted on read from the stored calls, so a
@@ -958,31 +1016,15 @@ class LeadDesk:
         (a personal call) stays out, as it does from the lead's calls. A phone or
         recorded call keeps its start (the event's time) and its seconds, so it ends at
         start + seconds."""
-        from ac_platform.lead_desk.activity_summary import activity_window
-
         me = self.viewer.person_id
-        joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
-        found = (
-            await self.db.execute(
-                select(LeadEvent.id, LeadEvent.lead_id, LeadEvent.created_at, LeadEvent.data)
-                .join(Lead, joined)
-                .where(
-                    *activity_window(self, start, end, person=None, team=False),
-                    LeadEvent.kind == "call",
-                )
-                .order_by(LeadEvent.created_at.desc())
-                .limit(5000)
-            )
-        ).all()
-        hidden = await self._private_calls(start)
+        if rows is None:
+            rows = await self._call_rows(start, end)
         # (lead, when, seconds, answered) for each call out.
-        out: list[tuple[UUID, datetime, int, bool]] = []
-        for event_id, lead_id, at, raw in found:
-            data = raw if isinstance(raw, dict) else {}
-            if data.get("direction") in NOT_OUT or str(event_id) in hidden:
-                continue
-            seconds = max(0, int(data.get("duration_seconds") or 0))
-            out.append((lead_id, at, seconds, seconds > 0 or data.get("connected") is True))
+        out = [
+            (row.lead_id, row.at, call_seconds(row.data), call_answered(row.data))
+            for row in rows
+            if call_out(row.data)
+        ]
         stages = await self._stages_then([(lead_id, at) for lead_id, at, _, _ in out])
         new_assigned = int(
             await self.db.scalar(
@@ -1003,6 +1045,80 @@ class LeadDesk:
             talk_seconds=sum(row[2] for row in connected),
             follow_ups_done=sum(1 for stage in stages if stage not in (None, "new")),
             new_assigned=new_assigned,
+        )
+
+    async def _call_rows(
+        self, start: datetime, end: datetime, *, person: UUID | None = None, team: bool = False
+    ) -> list[CallRow]:
+        """The calls Recent Calls and My work list between two moments, newest first:
+        mine, a seller's (``person``) or the whole team's (``team``), for those who may
+        see them. A call its seller made private (a personal call) stays out."""
+        from ac_platform.lead_desk.activity_summary import activity_window
+
+        joined = and_(Lead.id == LeadEvent.lead_id, Lead.tenant_id == LeadEvent.tenant_id)
+        found = (
+            await self.db.execute(
+                select(
+                    LeadEvent.id,
+                    LeadEvent.actor_person_id,
+                    LeadEvent.lead_id,
+                    LeadEvent.created_at,
+                    LeadEvent.data,
+                )
+                .join(Lead, joined)
+                .where(
+                    *activity_window(self, start, end, person=person, team=team),
+                    LeadEvent.kind == "call",
+                )
+                .order_by(LeadEvent.created_at.desc())
+                .limit(CALL_ROWS)
+            )
+        ).all()
+        hidden = await self._private_calls(start)
+        return [
+            CallRow(event_id, actor, lead_id, at, data if isinstance(data, dict) else {})
+            for event_id, actor, lead_id, at, data in found
+            if str(event_id) not in hidden
+        ]
+
+    async def _to_call_today(
+        self, mine: Any, day_end: datetime, today: Sequence[CallRow]
+    ) -> ToCallToday:
+        """Today's work counting down (Leads redesign section 6, 20 → 19 → 18): my open
+        leads due by tonight, or new and never given a time (an untouched Cold list
+        aside: no daily cold-call targets), that I haven't called today; and the leads I
+        called today."""
+        called = {row.lead_id for row in today if call_out(row.data)}
+        due = (
+            await self.db.scalars(
+                select(Lead.id)
+                .where(
+                    mine,
+                    or_(
+                        Lead.next_action_at < day_end,
+                        and_(
+                            Lead.stage == "new",
+                            Lead.next_action_at.is_(None),
+                            func.coalesce(Lead.pipeline, "live") != "cold",
+                        ),
+                    ),
+                )
+                .limit(CALL_ROWS)
+            )
+        ).all()
+        return ToCallToday(
+            left=sum(1 for lead_id in due if lead_id not in called), called=len(called)
+        )
+
+    async def _breaks_today(self, today: Sequence[CallRow]) -> tuple[BreakView, ...]:
+        """My three longest breaks today: the gaps between my calls inside the working
+        day (the team's work hours when set, else my first call to my last)."""
+        hours = work_hours.parse((await self.settings())[1])
+        spans = [found for row in today if (found := call_breaks.span(row.at, row.data))]
+        day = self.now.astimezone(IST).date()
+        return tuple(
+            break_view(gap)
+            for gap in call_breaks.longest(call_breaks.day_gaps(day, spans, hours, self.now))
         )
 
     async def _stages_then(self, moments: Sequence[tuple[UUID, datetime]]) -> list[str | None]:
@@ -4348,6 +4464,293 @@ class LeadDesk:
         if not self.viewer.can_manage:
             raise DeskError(403, "Only owners and admins manage the team's lead rules.")
 
+    async def effort(self, days: int) -> Effort:
+        """The Performance engine (Leads redesign section 6; owner and Dipak, 30 Oct 2026):
+        for each seller, the work done, what was missed and the breaks taken, with Inbound
+        and Cold leads measured apart (Dipak's table).
+
+        Work done: calls attempted and connected, talk time, different leads called and
+        reached, moved to Interested, given a meeting or won, and contact coverage;
+        first-call speed for Inbound only, since a Cold list's import time says nothing.
+        Missed: leads more than an hour late now, calls in nobody took and the leads not
+        called back since, open tasks more than an hour late, connected calls with no
+        recording today. Breaks: the three longest gaps between calls inside the working
+        day, all the time between calls outside set breaks, and today's first and last
+        call. Owners and admins see every seller; a seller sees their own. Read from the
+        calls Recent Calls lists, so it agrees with Home; a lead's side is its pipeline
+        (migration 0146, empty is Inbound).
+        """
+        from ac_platform.call_ai.missing_recordings import missing_today
+        from ac_platform.lead_desk.models import LeadTask
+
+        if days not in (1, 7, 30):
+            raise DeskError(422, "Pick today, 7 days or 30 days.")
+        team = self.viewer.can_see_team
+        me = self.viewer.person_id
+        last = self.now.astimezone(IST).date()
+        begin = datetime.combine(last - timedelta(days=days - 1), time.min, tzinfo=IST)
+        begin = begin.astimezone(UTC)
+        until = self.now + timedelta(seconds=1)
+        rows = await self._call_rows(begin, until, team=team)
+        acted = () if team else (LeadEvent.actor_person_id == me,)
+        owned = () if team else (Lead.owner_person_id == me,)
+        moves = (
+            await self.db.execute(
+                select(
+                    LeadEvent.actor_person_id,
+                    LeadEvent.lead_id,
+                    LeadEvent.kind,
+                    LeadEvent.data,
+                    LeadEvent.created_at,
+                )
+                .where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.kind.in_(("result", "stage", "meeting")),
+                    LeadEvent.created_at >= begin,
+                    LeadEvent.created_at < until,
+                    LeadEvent.actor_person_id.is_not(None),
+                    *acted,
+                )
+                .limit(CALL_ROWS)
+            )
+        ).all()
+        open_now = (
+            await self.db.execute(
+                select(
+                    Lead.owner_person_id,
+                    Lead.id,
+                    Lead.pipeline,
+                    Lead.stage,
+                    Lead.calls,
+                    overdue_filter(self.now),
+                )
+                .where(
+                    Lead.tenant_id == self.tenant_id,
+                    Lead.stage.in_(OPEN_STAGES),
+                    Lead.owner_person_id.is_not(None),
+                    *owned,
+                )
+                .limit(CALL_ROWS * 5)
+            )
+        ).all()
+        arrivals = (
+            await self.db.execute(
+                select(Lead.owner_person_id, Lead.pipeline, Lead.created_at, Lead.first_contact_at)
+                .where(
+                    Lead.tenant_id == self.tenant_id,
+                    begin <= ARRIVED,
+                    Lead.owner_person_id.is_not(None),
+                    *owned,
+                )
+                .limit(CALL_ROWS)
+            )
+        ).all()
+        sides = await self._sides({row.lead_id for row in rows} | {row[1] for row in moves})
+
+        tally: dict[tuple[UUID, str], dict[str, Any]] = {}
+
+        def bucket(person: UUID, side: str) -> dict[str, Any]:
+            return tally.setdefault(
+                (person, side),
+                {
+                    "attempted": 0,
+                    "connected": 0,
+                    "talk": 0,
+                    "tried": set(),
+                    "reached": set(),
+                    "interested": set(),
+                    "meetings": set(),
+                    "won": set(),
+                    "backlog": 0,
+                    "open": set(),
+                    "speeds": [],
+                    "late": 0,
+                    "missed": 0,
+                    "unanswered": 0,
+                },
+            )
+
+        spans: dict[UUID, dict[date, list[call_breaks.Span]]] = {}
+        # Each lead's calls in nobody took and later contacts, oldest first: a lead
+        # still waiting at the end was not called back.
+        contacts: dict[UUID, list[tuple[datetime, UUID | None]]] = {}
+        for row in rows:
+            if missed_call("call", row.data):
+                contacts.setdefault(row.lead_id, []).append((row.at, row.actor))
+            elif reached("call", row.data):
+                contacts.setdefault(row.lead_id, []).append((row.at, None))
+        for _, lead_id, kind, _, at in moves:
+            if kind == "result":
+                contacts.setdefault(lead_id, []).append((at, None))
+        for lead_id, seen_by in contacts.items():
+            waiting: UUID | None = None
+            for _, missed_by in sorted(seen_by, key=lambda item: item[0]):
+                waiting = missed_by
+            if waiting is not None:
+                bucket(waiting, sides.get(lead_id, "inbound"))["unanswered"] += 1
+        for row in rows:
+            if row.actor is None:
+                continue
+            on_phone = call_breaks.span(row.at, row.data)
+            if on_phone is not None:
+                spans.setdefault(row.actor, {}).setdefault(
+                    row.at.astimezone(IST).date(), []
+                ).append(on_phone)
+            if missed_call("call", row.data):
+                bucket(row.actor, sides.get(row.lead_id, "inbound"))["missed"] += 1
+            if not call_out(row.data):
+                continue
+            into = bucket(row.actor, sides.get(row.lead_id, "inbound"))
+            into["attempted"] += 1
+            into["tried"].add(row.lead_id)
+            if call_answered(row.data):
+                into["connected"] += 1
+                into["talk"] += call_seconds(row.data)
+                into["reached"].add(row.lead_id)
+        for actor, lead_id, kind, raw, _ in moves:
+            data = raw if isinstance(raw, dict) else {}
+            into = bucket(actor, sides.get(lead_id, "inbound"))
+            if kind == "meeting":
+                if data.get("action") == "scheduled":
+                    into["meetings"].add(lead_id)
+                continue
+            stage = data.get("stage")
+            before = data.get("from_stage") or data.get("previous_stage")
+            if stage in ("interested", "won") and stage != before:
+                into[stage].add(lead_id)
+        for owner, lead_id, pipeline, stage, calls, late in open_now:
+            into = bucket(owner, lead_side(pipeline))
+            into["open"].add(lead_id)
+            if stage == "new" and not calls:
+                into["backlog"] += 1
+            if late:
+                into["late"] += 1
+        for owner, pipeline, created, first_contact in arrivals:
+            minutes = first_call_minutes(created, first_contact)
+            if lead_side(pipeline) == "inbound" and minutes is not None:
+                bucket(owner, "inbound")["speeds"].append(minutes)
+
+        def side_view(parts: list[dict[str, Any]], inbound: bool) -> SideEffort:
+            def union(key: str) -> set[UUID]:
+                joined: set[UUID] = set()
+                for part in parts:
+                    joined |= part[key]
+                return joined
+
+            tried = union("tried")
+            return SideEffort(
+                attempted=sum(part["attempted"] for part in parts),
+                connected=sum(part["connected"] for part in parts),
+                talk_seconds=sum(part["talk"] for part in parts),
+                leads_attempted=len(tried),
+                reached=len(union("reached")),
+                interested=len(union("interested")),
+                meetings=len(union("meetings")),
+                won=len(union("won")),
+                worked_interested=len(tried & (union("interested") | union("won"))),
+                backlog=sum(part["backlog"] for part in parts),
+                eligible=len(union("open") | tried),
+                first_call_minutes=(
+                    median([minutes for part in parts for minutes in part["speeds"]])
+                    if inbound
+                    else None
+                ),
+                late=sum(part["late"] for part in parts),
+                missed_calls=sum(part["missed"] for part in parts),
+                not_called_back=sum(part["unanswered"] for part in parts),
+            )
+
+        def parts_of(person: UUID | None, side: str) -> list[dict[str, Any]]:
+            return [
+                part
+                for (who, which), part in tally.items()
+                if which == side and (person is None or who == person)
+            ]
+
+        hours = work_hours.parse((await self.settings())[1])
+        missing = await missing_today(
+            self.db, tenant_id=self.tenant_id, now=self.now, person_id=None if team else me
+        )
+        tasks_late: dict[UUID | None, int] = {
+            owner: int(total)
+            for owner, total in (
+                await self.db.execute(
+                    select(LeadTask.owner_person_id, func.count())
+                    .where(
+                        LeadTask.tenant_id == self.tenant_id,
+                        LeadTask.status == "open",
+                        LeadTask.starts_at < self.now - OVERDUE_AFTER,
+                        *(() if team else (LeadTask.owner_person_id == me,)),
+                    )
+                    .group_by(LeadTask.owner_person_id)
+                )
+            ).all()
+        }
+        if team:
+            people = {rep.state.person_id: rep.state.name for rep in await self._reps()}
+            acting = {row.actor for row in rows} | {row[0] for row in moves}
+            people.update(await self._names(acting - set(people)))
+        else:
+            people = {me: self.viewer.name}
+        sellers = []
+        for person, name in people.items():
+            seen = spans.get(person, {})
+            gaps = [
+                gap
+                for day in sorted({*seen, last})
+                for gap in call_breaks.day_gaps(day, seen.get(day, []), hours, self.now)
+            ]
+            today = seen.get(last, [])
+            unplanned = sum(
+                (
+                    gap.length
+                    for gap in gaps
+                    if not gap.planned and gap.length >= call_breaks.AT_LEAST
+                ),
+                timedelta(),
+            )
+            sellers.append(
+                SellerEffort(
+                    person_id=person,
+                    name=name,
+                    inbound=side_view(parts_of(person, "inbound"), True),
+                    cold=side_view(parts_of(person, "cold"), False),
+                    breaks=tuple(break_view(gap) for gap in call_breaks.longest(gaps)),
+                    unplanned_break_minutes=round(unplanned.total_seconds() / 60),
+                    first_call_at=min((span.start for span in today), default=None),
+                    last_call_at=max((span.end for span in today), default=None),
+                    tasks_late=int(tasks_late.get(person, 0)),
+                    missing_recordings=missing.by_person.get(person, 0),
+                )
+            )
+        sellers.sort(
+            key=lambda seller: (
+                -(seller.inbound.attempted + seller.cold.attempted),
+                seller.name.lower(),
+            )
+        )
+        return Effort(
+            days=days,
+            start=begin,
+            end=self.now,
+            team=team,
+            sellers=tuple(sellers),
+            inbound=side_view(parts_of(None if team else me, "inbound"), True),
+            cold=side_view(parts_of(None if team else me, "cold"), False),
+            missing_recordings=missing.total if team else missing.by_person.get(me, 0),
+        )
+
+    async def _sides(self, lead_ids: set[UUID]) -> dict[UUID, str]:
+        """Inbound or Cold for each lead (migration 0146; empty reads Inbound)."""
+        if not lead_ids:
+            return {}
+        found = await self.db.execute(
+            select(Lead.id, Lead.pipeline).where(
+                Lead.tenant_id == self.tenant_id, Lead.id.in_(list(lead_ids))
+            )
+        )
+        return {lead_id: lead_side(pipeline) for lead_id, pipeline in found.all()}
+
     def _require_team_view(self) -> None:
         # Roles B: Viewers read the team's calls, reports and team page, and change
         # nothing (every write is refused before the route runs).
@@ -4872,8 +5275,21 @@ class LeadDesk:
         if current != command.expected_revision:
             raise DeskError(409, "Someone changed these settings. Reload and try again.")
         config = {**DEFAULT_SETTINGS, **(row.config if row else {})}
+        # Set breaks (lunch); an app that doesn't send them keeps the ones set before.
+        if command.breaks is None:
+            before = work_hours.parse(config)
+            breaks = before.breaks if before else ()
+        else:
+            breaks = tuple(
+                (time.fromisoformat(item.start), time.fromisoformat(item.end))
+                for item in command.breaks
+            )
+        if any(not start <= begins < ends <= end for begins, ends in breaks):
+            raise DeskError(422, "A break sits inside work hours. Pick its time again.")
         hours = (
-            work_hours.WorkHours(command.days, start, end, command.pause_leads)
+            work_hours.WorkHours(
+                command.days, start, end, command.pause_leads, tuple(sorted(breaks))
+            )
             if command.days
             else None
         )

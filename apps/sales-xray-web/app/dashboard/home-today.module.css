@@ -220,3 +220,156 @@
     transform: none;
   }
 }
+
+/* ---------- Today's work counting down (Leads redesign, section 5) ---------- */
+.countdown {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.countdownHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.countdownHead h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.countdownHead span,
+.countdownFigure span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.countdownFigure {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0;
+}
+
+.countdownFigure strong {
+  color: var(--sx-ink);
+  font-size: 34px;
+  font-weight: 800;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.countdownBar {
+  height: 6px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--sx-fill-soft);
+}
+
+.countdownBar > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--sx-accent);
+  transition: width 300ms var(--sx-ease-out);
+}
+
+/* ---------- Your 3 longest breaks today ---------- */
+.breaks {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.breaks h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.breakList {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.breakRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 44px;
+  border-bottom: 1px solid var(--sx-line);
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+}
+
+.breakRow:last-child {
+  border-bottom: 0;
+}
+
+.breakRow span {
+  display: grid;
+  gap: 2px;
+  font-variant-numeric: tabular-nums;
+}
+
+.breakRow small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.breakRow strong {
+  flex: none;
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Not a break the team set: red. */
+.breakRow[data-red] strong {
+  color: var(--sx-bad);
+}
+
+.breakNote {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .countdownBar > span {
+    transition: none;
+  }
+}
+
+/* Home's Performance button, under Analyse yourself. */
+.workMore {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  gap: 4px;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.workMore:focus-visible {
+  outline: none;
+  border-radius: 6px;
+  box-shadow: var(--sx-focus-ring);
+}

@@ -69,8 +69,29 @@ it("sets the team's work days and hours, India time", async () => {
     start: "09:30",
     end: "19:00",
     pause_leads: true,
+    breaks: [],
   });
   expect(onSaved).toHaveBeenCalledTimes(1);
+});
+
+it("sends a set break (lunch), so a gap there isn't red on Home", async () => {
+  const fetchMock = vi.fn<typeof fetch>(
+    async () => new Response(JSON.stringify(team(null))),
+  );
+  vi.stubGlobal("fetch", fetchMock);
+  await act(async () =>
+    root.render(<WorkHoursPanel team={team(null)} onSaved={vi.fn()} />),
+  );
+  const lunch = Array.from(host.querySelectorAll("label")).find((label) =>
+    label.textContent?.startsWith("A set break"),
+  );
+  await act(async () => lunch?.querySelector("input")?.click());
+  expect(host.textContent).toContain("Break starts");
+  await act(async () => button("Save work hours").click());
+  const [, init] = fetchMock.mock.calls[0];
+  expect(JSON.parse(init?.body as string).breaks).toEqual([
+    { start: "13:00", end: "14:00" },
+  ]);
 });
 
 it("clears the hours, and refuses hours that end before they start", async () => {

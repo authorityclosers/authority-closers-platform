@@ -1,0 +1,167 @@
+/* Performance (Leads redesign, section 6): Inbound and Cold side by side, one
+   card for the team and one per seller. */
+.page {
+  display: grid;
+  gap: 14px;
+  padding-bottom: 24px;
+}
+
+.card,
+.seller {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-lg);
+  background: var(--sx-surface);
+}
+
+.card h2 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.sub,
+.quiet {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.list {
+  display: grid;
+  gap: 10px;
+}
+
+.seller summary {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  align-content: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.seller summary::-webkit-details-marker {
+  display: none;
+}
+
+.seller summary strong {
+  color: var(--sx-ink);
+  font-size: var(--sx-text-md);
+  font-weight: 750;
+}
+
+.seller summary span {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--sx-text-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.table th,
+.table td {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--sx-line);
+  text-align: right;
+}
+
+.table tbody tr:last-child th,
+.table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.table th[scope="row"],
+.table thead th:first-child {
+  padding-right: 8px;
+  color: var(--sx-muted);
+  font-weight: 600;
+  text-align: left;
+}
+
+.table td {
+  width: 28%;
+  color: var(--sx-ink);
+  font-weight: 700;
+}
+
+.table thead th[data-side] {
+  font-size: var(--sx-text-xs);
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.table thead th[data-side="inbound"] {
+  color: var(--sx-accent);
+}
+
+.table thead th[data-side="cold"] {
+  color: var(--sx-muted);
+}
+
+.hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.part {
+  display: grid;
+  gap: 4px;
+}
+
+.part h3 {
+  margin: 0;
+  color: var(--sx-ink);
+  font-size: var(--sx-text-sm);
+  font-weight: 750;
+}
+
+.breaks {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.line {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+.line[data-red] {
+  color: var(--sx-bad);
+  font-weight: 650;
+}
+
+/* A seller's red flags, on the card before it opens: only what isn't 0. */
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 4px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flags li {
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--sx-bad) 12%, transparent);
+  color: var(--sx-bad);
+  font-size: var(--sx-text-xs);
+  font-weight: 700;
+}
