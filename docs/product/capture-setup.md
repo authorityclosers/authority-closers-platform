@@ -98,9 +98,12 @@ Owner order, 30 Oct 2026 (14:35Z).
 - It covers every page until everything this app build can grant is granted. There is no Not now. Agreeing to call
   capture stays its own choice: its no is still recorded and asked again a day later.
 - **Nothing locks anyone out over what the build can't ask for:**
-  - Contacts are offered but never waited on until the owner states what they are for (orchestrator, 30 Oct 2026).
-    They need an app build that declares them (`checks.contacts`, apps PR #18, not merged); other builds say "Update
-    Sales X-Ray".
+  - Contacts are offered but never waited on (orchestrator, 30 Oct 2026).
+    - **Purpose (owner, 30 Oct 2026):** showing lead names on calls. A caller is matched to a saved contact or lead,
+      so calls and leads show the right name; contacts are read for nothing else.
+    - No build reads contacts yet.
+    - They need an app build that declares them (`checks.contacts`, apps PR #18, not merged). Other builds say
+      "Update Sales X-Ray".
   - Builds without the folder picker say the same for the recordings folder.
   - The Google Play build has no call history until Google approves the declaration: "Comes in a later Google Play
     version".

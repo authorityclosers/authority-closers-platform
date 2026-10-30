@@ -75,8 +75,8 @@ export function permissionItems(
     {
       key: "contacts",
       label: "Contacts",
-      // The owner asked for contacts; what the app does with them is the owner's to word.
-      why: "Your organisation asks for it on every seller's phone.",
+      // The owner's purpose (30 Oct 2026): showing lead names on calls, nothing else.
+      why: "Shows the right name on calls and leads by matching callers to your saved contacts. Read for nothing else.",
       state: has(status, "contacts")
         ? ask(status.checks.contacts === true, status.blocked.contacts)
         : "update",
@@ -104,9 +104,9 @@ export function permissionItems(
 }
 
 /**
- * Asked for, never waited on: contacts, until the owner says what Sales X-Ray
- * uses them for (orchestrator, 30 Oct 2026: "keep the web checklist line
- * non-blocking").
+ * Asked for, never waited on: contacts (orchestrator, 30 Oct 2026: "keep the
+ * web checklist line non-blocking"). Their purpose is set (lead names on
+ * calls), but no build reads them yet.
  */
 export const OPTIONAL: ReadonlySet<PermissionKey> = new Set(["contacts"]);
 

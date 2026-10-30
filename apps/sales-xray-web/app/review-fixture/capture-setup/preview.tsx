@@ -242,7 +242,7 @@ const PERMISSIONS: PermissionItem[] = [
   {
     key: "contacts",
     label: "Contacts",
-    why: "Your organisation asks for it on every seller's phone.",
+    why: "Shows the right name on calls and leads by matching callers to your saved contacts. Read for nothing else.",
     state: "update",
   },
   {
