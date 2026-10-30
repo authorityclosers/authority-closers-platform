@@ -63,7 +63,12 @@ State lives in `/var/lib/ac-budget-alerts/state.json` and the log in `/var/log/a
 - **Gmail access.** A Google service account with domain-wide delegation for `gmail.readonly` only. Its key is `/etc/ac-cost-detect/service-account.json` (root 600, from Infisical), and the mailboxes are listed in `/etc/ac-cost-detect/env` as `AC_COST_DETECT_MAILBOXES`.
 - **Before the key exists.** The unit does nothing (`ConditionPathExists`).
 - **One-off back-scan.** `ac-cost-detect --days 60` (add `--dry-run` to print instead of filing).
-- **State.** `/var/lib/ac-cost-detect/seen.json` holds message hashes only.
+- **State.** `/var/lib/ac-cost-detect/seen.json` holds message hashes only. The daily run and the billing run take turns through a lock.
+- **The billing inbox (`--billing`).** `ac-cost-detect-billing.timer` runs every 15 minutes and handles everything sent or forwarded to `AC_COST_DETECT_BILLING` (billing@, an alias that delivers into a listed mailbox).
+  - Every message is filed, with no keyword filter.
+  - The vendor comes from a forward's original sender.
+  - When the body names no amount, the amount comes from attached PDFs (`pdftotext`, poppler-utils).
+  - When there is no amount at all, the task says "amount to check".
 
 ## Install (dev, done 19 Oct 2026)
 

@@ -1,0 +1,14 @@
+# Everything sent or forwarded to AC's billing inbox is filed in AC Pulse for confirmation
+# (owner, 30 Oct 2026). Gmail is only read; nothing runs until the key is installed.
+[Unit]
+Description=File what reaches AC's billing inbox in AC Pulse for confirmation
+ConditionPathExists=/etc/ac-cost-detect/service-account.json
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/ac-cost-detect/env
+ExecStart=/usr/local/sbin/ac-cost-detect --billing --days 2
+Nice=10
+IOSchedulingClass=idle
+CPUQuota=25%
+TimeoutStartSec=5min

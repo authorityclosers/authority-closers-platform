@@ -141,7 +141,8 @@ def test_each_message_is_filed_once() -> None:
         ["admin@example.test"], lambda _mailbox: FakeGmail(inbox), filed.append, [], days=3
     )
     assert [item["vendor"] for item in proposals] == ["ElevenLabs"] and len(filed) == 1
-    assert len(seen) == 2  # the newsletter is remembered too, never read again
+    # Both messages are remembered (the newsletter is never read again), and the charge.
+    assert len(seen) == 3
     again, seen_again = job.run(
         ["admin@example.test"], lambda _mailbox: FakeGmail(inbox), filed.append, seen, days=3
     )
@@ -175,3 +176,162 @@ def test_without_a_key_nothing_is_read(tmp_path: Path, monkeypatch: pytest.Monke
     job = runner()
     monkeypatch.setattr(job, "KEY", tmp_path / "missing.json")
     assert job.main([]) == 0
+
+
+def test_notices_that_are_not_charges_are_skipped_and_a_charge_is_filed_once() -> None:
+    # The first real run (30 Oct 2026) proposed these beside the one real receipt.
+    job = runner()
+    for sender, subject in (
+        ("AWS <no-reply@signup.aws>", "Welcome to AWS - Your Account with Free Plan is Ready"),
+        ("Anthropic <invoice@mail.anthropic.com>", "Credit note from Anthropic, PBC for invoice"),
+        ("Google Cloud <billing-noreply@google.com>", "100% of budget reached"),
+        ("Anthropic <billing@mail.anthropic.com>", "Action required: payment failed"),
+    ):
+        notice = _message("n", sender, subject, _part("text/plain", "Total ₹20,338.14"))
+        assert job.propose("admin@example.test", notice) is None, subject
+    inbox = {
+        "r1": _message(
+            "r1",
+            "Anthropic <invoice@mail.anthropic.com>",
+            "Your receipt from Anthropic",
+            _part("text/plain", "Total ₹20,338.14"),
+        ),
+        "r2": _message(
+            "r2",
+            "Anthropic <invoice@mail.anthropic.com>",
+            "Your invoice from Anthropic",
+            _part("text/plain", "Amount paid ₹20,338.14"),
+        ),
+    }
+    filed: list[dict[str, Any]] = []
+    proposals, seen = job.run(
+        ["admin@example.test"], lambda _mailbox: FakeGmail(inbox), filed.append, [], days=3
+    )
+    assert len(proposals) == 1 and len(filed) == 1
+    assert len(seen) == 3  # two messages and the one charge
+
+
+def test_threads_notifications_and_processor_receipts() -> None:
+    # Real subjects from the 60-day look at admin@ (30 Oct 2026); numbers are fictional.
+    job = runner()
+    for sender, subject in (
+        (
+            "GitHub <notifications@github.com>",
+            "Re: [org/repo] Add the offline corpus route (PR #4)",
+        ),
+        ("GitHub <notifications@github.com>", "[org/repo] Add the offline corpus route (PR #4)"),
+        ("ChatGPT <noreply@tm.openai.com>", "[Task Update] Hourly operations watch"),
+        ("OpenAI <noreply@tm.openai.com>", "Updates to your Pro plan"),
+        ("Google <payments-noreply@google.com>", "Congrats! Your account has been upgraded"),
+        ("Someone <a@example.test>", "Re: Re: Urgent: apply the annual credit"),
+    ):
+        mail = _message("n", sender, subject, _part("text/plain", "Total ₹1,000"))
+        assert job.propose("admin@example.test", mail) is None, subject
+    via_stripe = _message(
+        "s1",
+        "Eleven Labs Inc. <invoice+statements@stripe.com>",
+        "Your receipt from Eleven Labs Inc. #2274-0126-4953",
+        _part("text/plain", "Amount paid ₹1,936.00"),
+    )
+    proposal = job.propose("admin@example.test", via_stripe)
+    assert proposal["vendor"] == "ElevenLabs" and proposal["category"] == "ai_product"
+    assert proposal["confidence"] == "high"
+    unknown = _message(
+        "s2",
+        "Shop <receipts@stripe.com>",
+        "Your receipt from Fictional Tools Ltd #1",
+        _part("text/plain", "Total ₹500"),
+    )
+    other = job.propose("admin@example.test", unknown)
+    assert other["vendor"] == "Fictional Tools" and other["confidence"] == "low"
+
+
+def test_our_own_mail_is_no_charge_but_a_forwarded_invoice_is() -> None:
+    job = runner()
+    ours = _message(
+        "o1",
+        "Owner <admin@example.test>",
+        "Urgent: apply the annual credit to the new plan, invoice 0001",
+        _part("text/plain", "Total ₹20,338.14"),
+    )
+    assert job.propose("admin@example.test", ours) is None
+    forwarded = _message(
+        "o2",
+        "Teammate <dipak@example.test>",
+        "Fwd: Your receipt from Anthropic",
+        _part("text/plain", "Total ₹20,338.14"),
+    )
+    assert job.propose("admin@example.test", forwarded)["rupees"] == 20338.14
+
+
+def test_a_google_ads_payment_is_ad_spend() -> None:
+    job = runner()
+    ads = _message(
+        "g1",
+        "Google Ads <payments-noreply@google.com>",
+        "Google Ads: We've received your payment for 000-000-0000",
+        _part("text/plain", "Amount ₹500.00"),
+    )
+    proposal = job.propose("admin@example.test", ads)
+    assert proposal["vendor"] == "Google Ads" and proposal["category"] == "marketing"
+    assert proposal["rupees"] == 500 and proposal["confidence"] == "high"
+
+
+class BillingGmail(FakeGmail):
+    def __init__(self, messages: dict[str, dict[str, Any]], pdfs: list[bytes]) -> None:
+        super().__init__(messages)
+        self.queries: list[str] = []
+        self.attached = pdfs
+
+    def search(self, days: int, query: str = "") -> list[str]:
+        self.queries.append(query)
+        return list(self.messages)
+
+    def pdfs(self, message: dict[str, Any]) -> list[bytes]:
+        return self.attached
+
+
+def test_everything_sent_to_the_billing_inbox_is_filed(monkeypatch: pytest.MonkeyPatch) -> None:
+    job = runner()
+    inbox = {
+        # Our own forward of a vendor's invoice, the amount only in its PDF.
+        "b1": _message(
+            "b1",
+            "Teammate <dipak@example.test>",
+            "Fwd: Invoice October",
+            _part(
+                "text/plain",
+                "---------- Forwarded message ---------\nFrom: ElevenLabs <billing@elevenlabs.io>",
+            ),
+        ),
+        # A note with no amount anywhere: still filed, to check.
+        "b2": _message(
+            "b2", "Vendor <accounts@unknownsupplier.example>", "Statement", _part("text/plain", "")
+        ),
+    }
+    monkeypatch.setattr(job, "pdf_text", lambda blob: "Total due ₹1,936.00")
+    gmail = BillingGmail(inbox, [b"%PDF-1.4 fictional"])
+    filed: list[dict[str, Any]] = []
+    proposals, _seen = job.run(
+        ["admin@example.test"],
+        lambda _mailbox: gmail,
+        filed.append,
+        [],
+        days=2,
+        billing="billing@example.test",
+    )
+    assert gmail.queries == [
+        "(to:billing@example.test OR deliveredto:billing@example.test OR cc:billing@example.test)"
+    ]
+    by_vendor = {proposal["vendor"]: proposal for proposal in proposals}
+    assert by_vendor["ElevenLabs"]["rupees"] == 1936.0
+    assert by_vendor["ElevenLabs"]["category"] == "ai_product"
+    # The PDF text helps the first; the second has none either way.
+    monkeypatch.setattr(job, "pdf_text", lambda blob: "")
+    unknown = job.propose("admin@example.test", inbox["b2"], billing=True)
+    assert unknown["amount"] is None and unknown["rupees"] is None
+    op = job.task(unknown)
+    assert op["fields"]["title"].startswith("Cost to check: Unknownsupplier")
+    assert "amount to check" in op["fields"]["notes"]
+    # Outside the billing inbox the same mail is not a charge.
+    assert job.propose("admin@example.test", inbox["b1"]) is None
