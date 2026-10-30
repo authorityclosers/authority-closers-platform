@@ -8,6 +8,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ListView } from "./list-view";
 import { readLeads, type LeadRow } from "./leads-client";
 import { LeadLine } from "./desk-view";
+import { noteLeadMoved } from "./lead-moves";
+import { announceWorkspaceChange } from "../workspace-change";
 
 vi.mock("next/link", () => ({
   default: ({ children }: { children: unknown }) => children,
@@ -207,4 +209,44 @@ it("hydrates the server's first rows without replacing them with a loading outli
     ),
   );
   expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(0);
+});
+
+it("a lead given another stage leaves this stage's list at once, the next lead on top", async () => {
+  // Owner, 30 Oct 2026: after a disposition nobody scrolls for the next call.
+  vi.mocked(readLeads).mockResolvedValue({
+    leads: rows.slice(0, 3),
+    total: 3,
+    next_offset: null,
+  });
+  await act(async () =>
+    root.render(
+      <ListView
+        canManage={false}
+        stage="new"
+        stageLabel="New"
+        scope="mine"
+        query=""
+        version={0}
+        onOpen={vi.fn()}
+      />,
+    ),
+  );
+  await reveal();
+  const names = () =>
+    [...host.querySelectorAll("[data-lead-row] button")].map(
+      (button) => button.textContent,
+    );
+  expect(names()).toEqual([
+    "Open Fictional prospect 0",
+    "Open Fictional prospect 1",
+    "Open Fictional prospect 2",
+  ]);
+  await act(async () =>
+    noteLeadMoved({ ...rows[0], stage: "follow_up", revision: 2 }),
+  );
+  expect(names()).toEqual([
+    "Open Fictional prospect 1",
+    "Open Fictional prospect 2",
+  ]);
+  await act(async () => announceWorkspaceChange("arrived"));
 });

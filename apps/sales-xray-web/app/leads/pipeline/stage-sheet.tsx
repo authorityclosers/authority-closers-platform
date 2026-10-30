@@ -35,6 +35,7 @@ import {
   type MeetingDraft,
   type WhenPick,
 } from "./blocks";
+import { noteLeadMoved } from "../lead-moves";
 import { moveLead, type MoveInput, type MoveOption } from "./pipeline-client";
 import styles from "./pipeline.module.css";
 import { finalLine, leadKind, moveVerb } from "./words";
@@ -184,7 +185,10 @@ export function StageSheet({
     try {
       // A reopen is a move too: the same lead, back to work, its history kept.
       await moveLead(lead, move.step, { ...moveInput(move, draft), via });
-      onMoved(await readLead(lead.lead_id));
+      const moved = await readLead(lead.lead_id);
+      // Every list and To call follow the move at once (lead-moves.ts).
+      noteLeadMoved(moved.lead);
+      onMoved(moved);
       tick();
       const to = leadKind(move.kind);
       if (to) {
