@@ -15,6 +15,11 @@ which only allows platform_release_manage, for the one permission it refuses:
 - dry run by default; idempotent by --command-id (a replay with the same intent is a
   no-op, different intent is refused); an existing active grant is a no-op.
 
+--permission (default platform_access_manage) may also name platform_tenants_read or
+platform_organisations_manage: Admin's Organisations directory and its owner-only Seats
+grant need both, and no Admin page grants platform capabilities (owner order 30 Oct 2026:
+free seats for two founding-client organisations). One permission per command ID.
+
 Run inside the deployed API container (the baked package provides ac_platform):
 
     docker exec -i ac-application-production-api-1 python - \\
@@ -52,7 +57,8 @@ from ac_platform.identity.models import Person, ProviderIdentity
 from ac_platform.identity.services import normalize_email
 from ac_platform.tenancy.models import Membership
 
-PERMISSION = "platform_access_manage"
+MANAGER = "platform_access_manage"
+PERMISSIONS = (MANAGER, "platform_tenants_read", "platform_organisations_manage")
 OPERATOR = "claude-laptop:platform-access-grant"
 
 
@@ -62,6 +68,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--allow-production", action="store_true")
     parser.add_argument("--email", required=True)
     parser.add_argument("--command-id", type=UUID, required=True)
+    parser.add_argument("--permission", choices=PERMISSIONS, default=MANAGER)
     for name in ("approver", "issue", "reason"):
         parser.add_argument(f"--{name}", required=True)
     parser.add_argument("--apply", action="store_true")
@@ -69,12 +76,14 @@ def _parser() -> argparse.ArgumentParser:
 
 
 async def execute(
-    database: AsyncSession, settings: Settings, command: Command
+    database: AsyncSession, settings: Settings, command: Command, permission: str = MANAGER
 ) -> dict[str, object]:
     # _validate checks environment, production flag, reference IDs and reason; it only
     # allows platform_release_manage for its own action, so this script validates with
     # the owner-membership action and adds the one permission itself.
     tenant_id = _validate(settings, command)
+    if permission not in PERMISSIONS:
+        raise DataChangeRefused("This script grants only the listed platform permissions.")
     email = normalize_email(command.email).lower()
     app = CapabilityApplication(database, operations_tenant_id=tenant_id)
     await app._governance()
@@ -107,7 +116,7 @@ async def execute(
     manager_exists = await database.scalar(
         select(
             exists().where(
-                CapabilityGrant.permission == PERMISSION,
+                CapabilityGrant.permission == MANAGER,
                 CapabilityGrant.scope_kind == "platform",
                 ~exists().where(CapabilityRevocation.grant_id == CapabilityGrant.id),
             )
@@ -118,7 +127,7 @@ async def execute(
     audit_payload = {**_payload(command, person.id), "operator": OPERATOR}
     payload = {
         **audit_payload,
-        "permission": PERMISSION,
+        "permission": permission,
         "scope_kind": "platform",
         "tenant_id": None,
         "program_id": None,
@@ -130,7 +139,7 @@ async def execute(
         if (
             prior.subject_person_id != person.id
             or prior.granted_by_person_id != person.id
-            or prior.permission != PERMISSION
+            or prior.permission != permission
             or prior.scope_kind != "platform"
             or prior.tenant_id is not None
             or prior.program_id is not None
@@ -150,19 +159,19 @@ async def execute(
         raise DataChangeRefused("The command ID has already been used for another change.")
     active = await app.active_grants(person.id)
     current = next(
-        (row for row in active if row.permission == PERMISSION and row.scope_kind == "platform"),
+        (row for row in active if row.permission == permission and row.scope_kind == "platform"),
         None,
     )
     no_op = prior is not None or current is not None
     before = sorted({row.permission for row in active if row.scope_kind == "platform"})
-    after = before if no_op else sorted({*before, PERMISSION})
+    after = before if no_op else sorted({*before, permission})
     if command.apply and not no_op:
         await app._insert_grant(
             person.id,
             None,
             command.command_id,
             person.id,
-            PERMISSION,
+            permission,
             CapabilityScope("platform"),
             command.reason.strip(),
             actor_type="operator_data_change",
@@ -170,7 +179,7 @@ async def execute(
         )
     return {
         "person_id_prefix": str(person.id)[:8],
-        "permission": PERMISSION,
+        "permission": permission,
         "status": "no_op" if no_op else "applied" if command.apply else "dry_run",
         "before": before,
         "after": after,
@@ -181,14 +190,16 @@ class _DryRun(Exception):
     pass
 
 
-async def _run(settings: Settings, command: Command) -> dict[str, object]:
+async def _run(
+    settings: Settings, command: Command, permission: str = MANAGER
+) -> dict[str, object]:
     engine = create_async_engine(settings.database_url, pool_pre_ping=True, hide_parameters=True)
     result: dict[str, object] = {}
     try:
         async with async_sessionmaker(engine, expire_on_commit=False, autoflush=False)() as db:
             try:
                 async with db.begin():
-                    result = await execute(db, settings, command)
+                    result = await execute(db, settings, command, permission)
                     if not command.apply:
                         raise _DryRun
             except _DryRun:
@@ -216,7 +227,7 @@ def main(argv: list[str] | None = None) -> int:
         _validate(settings, command)
         if command.environment in {"staging", "production"}:
             require_baked_release_id(settings.release_id)
-        result = run_async(_run(settings, command))
+        result = run_async(_run(settings, command, args.permission))
     except DataChangeRefused as refused:
         print(f"data change refused: {refused}", file=sys.stderr)
         return 2
