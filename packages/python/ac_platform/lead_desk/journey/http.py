@@ -118,6 +118,11 @@ class StageView(_View):
     needs: list[str] | None = None
     reasons: list[ReasonItem] | None = None
     rot_hours: int | None = Field(default=None, alias="rotHours")
+    # The stage editor (stages-views-sources.md §3): "Sellers see this", its colour token
+    # (null: by its kind) and the first stage's name on the Cold Leads side.
+    visible: bool = True
+    color: str | None = None
+    cold_label: str | None = Field(default=None, alias="coldLabel")
 
 
 class JourneyView(_View):
@@ -193,11 +198,18 @@ class StageCommand(_Command):
     needs: list[str] | None = Field(default=None, max_length=6)
     reasons: list[ReasonCommand] | None = Field(default=None, max_length=journeys.MAX_REASONS)
     rot_hours: int | None = Field(default=None, alias="rotHours", ge=1, le=journeys.MAX_ROT_HOURS)
+    # The stage editor; left out, a stage keeps what it had ("" clears a colour or name).
+    visible: bool | None = None
+    color: str | None = Field(default=None, max_length=16)
+    cold_label: str | None = Field(default=None, alias="coldLabel", max_length=60)
 
 
 class JourneyCommand(_Command):
     expected_version: int = Field(alias="expectedVersion", ge=0)
     stages: list[StageCommand] = Field(min_length=1, max_length=journeys.MAX_ALL)
+    # Where the leads of a stage the page removed go (its key -> a stage of the new list);
+    # left out, they stay in the removed stage's kind (stages-views-sources.md §3).
+    places: dict[str, str] = Field(default_factory=dict, alias="map")
 
 
 class TemplateCommand(_Command):
@@ -501,6 +513,9 @@ def journey_view(journey: Journey, counts: dict[str, int], can_edit: bool) -> Jo
                 if stage.reasons is not None
                 else None,
                 rot_hours=stage.rot_hours,
+                visible=not stage.hidden,
+                color=stage.color,
+                cold_label=stage.cold_label,
             )
             for stage in journey.stages
         ],
@@ -777,7 +792,11 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
             stages = journeys.build(
                 [item.model_dump(exclude_none=True) for item in command.stages], before, counts
             )
-            await journeys.save(
+            if len(command.places) > journeys.MAX_ALL:
+                raise JourneyError("Pick where leads go for fewer stages.")
+            draft = Journey(before.version + 1, before.industry, stages, pipeline=key)
+            places = journeys.check_places(before, draft, command.places)
+            after = await journeys.save(
                 desk.db,
                 desk.tenant_id,
                 stages=stages,
@@ -788,6 +807,9 @@ def install_journey_http(application: FastAPI, ctx: RouteContext) -> None:
                 now=desk.now,
                 pipeline=key,
             )
+            if places:
+                # A removed stage's leads go where the manager picked, history kept.
+                await desk.place_leads(before, after, places)
             return await current(desk, key)
 
     @router.post("/journey/template", response_model=JourneyView, response_model_by_alias=True)

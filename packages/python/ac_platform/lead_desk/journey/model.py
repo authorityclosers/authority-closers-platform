@@ -22,6 +22,11 @@ list saved before them reads back unchanged and lets a lead go anywhere
 
 Every list can mark a lead Junk, even one with no Junk stage of its own: such a lead
 sits in ``JUNK``, the desk's own Junk stage.
+
+The stage editor (stages-views-sources.md §3, owner + Dipak, 30 Oct 2026) adds, each
+written only when set: ``hidden`` (sellers don't see it; it still exists and keeps its
+leads), ``color`` (one of ``COLORS``; none: by its kind) and ``cold_label`` (the first
+stage's name on the Cold Leads side; the list is the same on both sides otherwise).
 """
 
 from __future__ import annotations
@@ -66,6 +71,10 @@ CLOSED_KINDS: Final[frozenset[str]] = frozenset({"won", "lost", "junk"})
 MAX_REASONS: Final[int] = 20
 MAX_REASON_LABEL: Final[int] = 60
 MAX_ROT_HOURS: Final[int] = 24 * 90
+# The stage editor's colour dots, as tokens the web maps to its own colours.
+COLORS: Final[frozenset[str]] = frozenset(
+    {"teal", "blue", "violet", "amber", "green", "red", "slate", "pink"}
+)
 
 
 class JourneyError(ValueError):
@@ -86,6 +95,10 @@ class Stage:
     needs: tuple[str, ...] | None = None
     reasons: tuple[tuple[str, str], ...] | None = None
     rot_hours: int | None = None
+    # The stage editor: sellers don't see it; its colour; the first stage's Cold name.
+    hidden: bool = False
+    color: str | None = None
+    cold_label: str | None = None
 
     def as_json(self) -> dict[str, Any]:
         out: dict[str, Any] = {
@@ -106,6 +119,12 @@ class Stage:
             out["reasons"] = [{"key": key, "label": label} for key, label in self.reasons]
         if self.rot_hours is not None:
             out["rot_hours"] = self.rot_hours
+        if self.hidden:
+            out["hidden"] = True
+        if self.color:
+            out["color"] = self.color
+        if self.cold_label:
+            out["cold_label"] = self.cold_label
         return out
 
 
@@ -270,6 +289,32 @@ def _rot(value: Any) -> int | None:
     return value if 1 <= value <= MAX_ROT_HOURS else None
 
 
+def _color(value: Any) -> str | None:
+    return value if isinstance(value, str) and value in COLORS else None
+
+
+def _cold_label(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    return " ".join(value.split())[:MAX_LABEL] or None
+
+
+def _wanted_color(value: Any) -> str | None:
+    """A colour the page sent: one of the dots, or empty for none."""
+    if value in (None, ""):
+        return None
+    if value not in COLORS:
+        raise JourneyError("Pick a colour from the dots.")
+    return str(value)
+
+
+def _wanted_cold_label(value: Any) -> str | None:
+    """The first stage's Cold Leads name the page sent; empty for none."""
+    if value in (None, ""):
+        return None
+    return clean_label(value)
+
+
 def from_rows(stages: Iterable[Mapping[str, Any]]) -> tuple[Stage, ...]:
     """Stored stages back into objects; anything unreadable is skipped, never guessed."""
     out: list[Stage] = []
@@ -295,6 +340,9 @@ def from_rows(stages: Iterable[Mapping[str, Any]]) -> tuple[Stage, ...]:
                 _needs(item.get("needs")),
                 _reasons(item.get("reasons")),
                 _rot(item.get("rot_hours")),
+                hidden=item.get("hidden") is True,
+                color=_color(item.get("color")),
+                cold_label=_cold_label(item.get("cold_label")),
             )
         )
     return tuple(out)
@@ -432,6 +480,9 @@ def build(
                 _needs(item.get("needs")),
                 _reasons(item.get("reasons")),
                 _rot(item.get("rot_hours")),
+                hidden=item.get("visible") is False,
+                color=_wanted_color(item.get("color")),
+                cold_label=_wanted_cold_label(item.get("cold_label")),
             )
         else:
             if key in taken:
@@ -454,6 +505,11 @@ def build(
                 _needs(item["needs"]) if "needs" in item else prior.needs,
                 _reasons(item["reasons"]) if "reasons" in item else prior.reasons,
                 _rot(item["rot_hours"]) if "rot_hours" in item else prior.rot_hours,
+                hidden=(item["visible"] is False) if "visible" in item else prior.hidden,
+                color=_wanted_color(item["color"]) if "color" in item else prior.color,
+                cold_label=_wanted_cold_label(item["cold_label"])
+                if "cold_label" in item
+                else prior.cold_label,
             )
         taken.add(stage.key)
         out.append(stage)
@@ -482,6 +538,10 @@ def check(stages: tuple[Stage, ...]) -> tuple[Stage, ...]:
         raise JourneyError("Keep one Junk stage at most.")
     if live and live[0].kind != "new":
         raise JourneyError("The New stage comes first.")
+    if live and live[0].hidden:
+        raise JourneyError("Sellers always see the first stage.")
+    if any(stage.cold_label for stage in live[1:]):
+        raise JourneyError("Only the first stage has a Cold Leads name.")
     if not any(stage.kind == "won" for stage in live):
         raise JourneyError("Keep at least one Won stage, so you can see your sales.")
     if not any(stage.kind == "lost" for stage in live):
@@ -501,6 +561,7 @@ def journey_of(profile: Template, version: int = 1) -> Journey:
             reasons=item.reasons,
             rot_hours=item.rot_hours,
             moves=item.moves,
+            cold_label=item.cold_label,
         )
         for item in profile.stages
     )
@@ -533,6 +594,7 @@ def from_template(
             needs=item.needs,
             reasons=item.reasons,
             rot_hours=item.rot_hours,
+            cold_label=item.cold_label,
         )
         taken.add(stage.key)
         out.append(stage)

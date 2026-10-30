@@ -1,0 +1,695 @@
+/*
+ * The stage editor (owner + Dipak, 30 Oct 2026): a live phone preview on top, one
+ * card per stage below; side by side on a computer. Tokens only. A stage's colour
+ * comes in as --stage (a palette token, stage-look.ts).
+ */
+
+.editor {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.editor :is(h3, p, ol, dl, dd) {
+  margin: 0;
+}
+
+@media (min-width: 900px) {
+  .editor {
+    grid-template-columns: minmax(260px, 320px) minmax(0, 1fr);
+    align-items: start;
+    gap: 24px;
+  }
+
+  .previewPane {
+    position: sticky;
+    top: 16px;
+  }
+}
+
+.previewPane,
+.listPane {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* ---------- the phone preview ---------- */
+
+.phone {
+  --side: var(--sx-accent);
+
+  display: grid;
+  gap: 10px;
+  justify-self: center;
+  box-sizing: border-box;
+  width: min(100%, 300px);
+  padding: 14px 12px 16px;
+  border: 1px solid var(--sx-line);
+  border-top: 3px solid var(--side);
+  border-radius: var(--sx-radius-xl);
+  background: var(--sx-paper);
+  box-shadow: var(--sx-shadow-1);
+  overflow: hidden;
+}
+
+.phone[data-side="cold"] {
+  --side: var(--lx-closing);
+}
+
+.selector {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 2px;
+  padding: 2px;
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-fill-soft);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  text-align: center;
+}
+
+.selector span {
+  padding: 6px 4px;
+  border-radius: var(--sx-radius-sm);
+  color: var(--sx-muted);
+  white-space: nowrap;
+}
+
+.selector span[data-on] {
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  box-shadow: inset 3px 0 0 var(--side);
+}
+
+.sideHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  font-size: var(--sx-text-sm);
+}
+
+.sideHead small {
+  padding: 2px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--side) 14%, var(--sx-surface));
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  white-space: nowrap;
+}
+
+.numbers {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.numbers div {
+  display: flex;
+  flex-direction: column-reverse;
+  min-width: 0;
+}
+
+.numbers dd {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-md);
+  font-weight: 700;
+}
+
+.numbers dt {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tabs {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  mask-image: linear-gradient(to right, black 85%, transparent);
+}
+
+.tab {
+  flex: none;
+  padding: 5px 10px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink-2);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.tab[data-on] {
+  background: color-mix(in oklab, var(--stage) 18%, var(--sx-surface));
+  color: var(--sx-ink);
+  box-shadow: inset 0 -2px 0 var(--stage);
+}
+
+.leadCard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.bar,
+.barShort {
+  height: 10px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+}
+
+.barShort {
+  grid-column: 1 / -1;
+  width: 60%;
+  background: var(--sx-fill-soft);
+}
+
+.leadChip {
+  padding: 3px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--stage) 18%, var(--sx-surface));
+  color: var(--sx-ink);
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* ---------- the stage cards ---------- */
+
+.listHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.listHead h3 {
+  font-size: var(--sx-text-md);
+}
+
+.cards {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.card {
+  position: relative;
+  display: grid;
+  gap: 8px;
+  box-sizing: border-box;
+  min-width: 0;
+  padding: 6px 4px 6px 0;
+  border: 1px solid var(--sx-line);
+  border-left: 4px solid var(--stage);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.card[data-hidden] {
+  background: var(--sx-sunken);
+}
+
+.card[data-hidden] .name strong {
+  color: var(--sx-muted);
+}
+
+.card[data-dragged] {
+  z-index: 1;
+  box-shadow: var(--sx-shadow-float);
+  transition: none;
+}
+
+.cardRow {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.grip,
+.iconButton,
+.dot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--sx-ink-2);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.grip {
+  width: 36px;
+  color: var(--sx-muted);
+  cursor: grab;
+  touch-action: none;
+}
+
+.grip:disabled {
+  visibility: hidden;
+}
+
+.card[data-dragged] .grip {
+  cursor: grabbing;
+}
+
+.dot::before {
+  content: "";
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--stage);
+  box-shadow: 0 0 0 3px color-mix(in oklab, var(--stage) 22%, transparent);
+}
+
+.dotStill {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--stage);
+}
+
+.iconButton[aria-pressed="false"] {
+  color: var(--sx-muted);
+}
+
+.iconButton:disabled,
+.dot:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.words {
+  display: grid;
+  flex: 1;
+  gap: 2px;
+  min-width: 0;
+}
+
+.name {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: text;
+}
+
+.name:disabled {
+  cursor: default;
+}
+
+.name strong {
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.name small {
+  overflow: hidden;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.meaning,
+.meaningStill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 24px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: color-mix(in oklab, var(--stage) 14%, var(--sx-surface));
+  color: var(--sx-ink-2);
+  font: inherit;
+  font-size: var(--sx-text-xs);
+  font-weight: 600;
+}
+
+.meaning {
+  position: relative;
+  cursor: pointer;
+}
+
+.meaning::after {
+  content: "";
+  position: absolute;
+  inset: -10px -4px;
+}
+
+.rename {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+
+.rename .input + .input {
+  grid-column: 1;
+}
+
+.rename .textButton {
+  grid-column: 2;
+  grid-row: 1;
+}
+
+.input {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  min-height: 40px;
+  padding: 6px 10px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: 16px;
+}
+
+.panel {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 4px 8px 6px 16px;
+}
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+
+.swatch {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.swatch::before {
+  content: "";
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--stage);
+}
+
+.swatch[aria-pressed="true"]::before {
+  box-shadow:
+    0 0 0 2px var(--sx-surface),
+    0 0 0 4px var(--stage);
+}
+
+.meanings {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(124px, 1fr));
+  gap: 6px;
+  min-width: 0;
+}
+
+.meaningChoice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 10px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.meaningChoice[aria-pressed="true"] {
+  border-color: var(--sx-accent);
+  background: var(--sx-accent-soft);
+}
+
+.meaningChoice:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.danger {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 1px solid color-mix(in oklab, var(--sx-bad) 40%, var(--sx-line));
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-bad);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.danger:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.help {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  overflow-wrap: anywhere;
+}
+
+.chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill-soft);
+  color: var(--sx-ink);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.chip svg {
+  color: var(--sx-accent);
+}
+
+.chip:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.textButton {
+  flex: none;
+  min-height: 40px;
+  padding: 0 8px;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.textButton[aria-pressed="true"] {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  border: 1px dashed var(--sx-line-strong);
+  border-radius: var(--sx-radius-md);
+  background: transparent;
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.add:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.meetings {
+  display: grid;
+  gap: 2px;
+  padding: 12px 16px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+}
+
+.meetings h3 {
+  font-size: var(--sx-text-sm);
+}
+
+.switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  cursor: pointer;
+}
+
+.switch input {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  accent-color: var(--sx-accent);
+}
+
+/* ---------- the sheets ---------- */
+
+.addList,
+.customForm {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.addRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 12px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  color: var(--sx-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.addIcon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--sx-radius-sm);
+  background: var(--sx-accent-soft);
+  color: var(--sx-accent);
+}
+
+.addWords {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.addWords small {
+  color: var(--sx-muted);
+  font-size: var(--sx-text-xs);
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+}
+
+.recommended {
+  display: grid;
+  gap: 4px;
+  padding-left: 22px;
+  font-size: var(--sx-text-sm);
+}
+
+.srOnly {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+:is(
+  .grip,
+  .iconButton,
+  .dot,
+  .name,
+  .meaning,
+  .swatch,
+  .meaningChoice,
+  .danger,
+  .chip,
+  .textButton,
+  .add,
+  .addRow
+):focus-visible {
+  outline: 2px solid var(--sx-focus-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card {
+    transition: none;
+  }
+}

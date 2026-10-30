@@ -31,7 +31,26 @@ export type StageView = {
   needs?: string[] | null;
   reasons?: { key: string; label: string }[] | null;
   rotHours?: number | null;
+  /** The stage editor (owner + Dipak, 30 Oct 2026): whether sellers see it, its
+   *  colour dot (null: by its meaning, stage-look.ts) and the first stage's name on
+   *  the Cold Leads side. */
+  visible?: boolean;
+  color?: StageColor | null;
+  coldLabel?: string | null;
 };
+
+/** The stage editor's colour dots; the server keeps exactly these. */
+export const STAGE_COLORS = [
+  "teal",
+  "blue",
+  "violet",
+  "amber",
+  "green",
+  "red",
+  "slate",
+  "pink",
+] as const;
+export type StageColor = (typeof STAGE_COLORS)[number];
 
 export type JourneyView = {
   version: number;
@@ -161,6 +180,10 @@ export type Draft = {
   /** Where a stage came from when it was added from a connected app. */
   origin?: string;
   ref?: string;
+  /** The stage editor's settings (see StageView). */
+  visible?: boolean;
+  color?: StageColor | null;
+  coldLabel?: string | null;
 };
 
 export type Suggestion = {
@@ -307,6 +330,35 @@ export const saveJourney = (
         ...(!draft.key && draft.origin ? { origin: draft.origin } : {}),
         ...(!draft.key && draft.ref ? { ref: draft.ref } : {}),
       })),
+    }),
+  });
+
+/** The stage editor's save: every stage with its editor settings, and where the leads
+ *  of a stage it removed go (`map`: its key -> a stage of the new list). */
+export const saveStages = (
+  expectedVersion: number,
+  drafts: Draft[],
+  pipeline?: string,
+  map: Record<string, string> = {},
+) =>
+  call<JourneyView>(`/journey${inPipeline(pipeline)}`, {
+    method: "PUT",
+    body: JSON.stringify({
+      expectedVersion,
+      stages: drafts.map((draft) => ({
+        ...(draft.key ? { key: draft.key } : {}),
+        label: draft.label.trim(),
+        ...(draft.kind ? { kind: draft.kind } : {}),
+        ...(draft.milestone ? { milestone: draft.milestone } : {}),
+        archived: draft.archived,
+        visible: draft.visible !== false,
+        // "" clears a colour or a Cold name; only the New stage has a Cold name.
+        color: draft.color ?? "",
+        ...(draft.kind === "new" && !draft.archived
+          ? { coldLabel: draft.coldLabel?.trim() ?? "" }
+          : {}),
+      })),
+      ...(Object.keys(map).length ? { map } : {}),
     }),
   });
 
@@ -462,6 +514,9 @@ export function drafts(view: JourneyView): Draft[] {
     leads: stage.leads,
     kindWords: stage.kindWords,
     meaning: stage.meaning,
+    visible: stage.visible !== false,
+    color: stage.color ?? null,
+    coldLabel: stage.coldLabel ?? null,
   }));
 }
 

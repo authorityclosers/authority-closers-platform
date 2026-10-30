@@ -139,6 +139,8 @@ class TemplateStage:
     needs: tuple[str, ...] | None = None
     reasons: tuple[tuple[str, str], ...] | None = None
     rot_hours: int | None = None
+    # The first stage's name on the Cold Leads side (stages-views-sources.md §2).
+    cold_label: str | None = None
 
     @property
     def kind(self) -> Kind:
@@ -178,6 +180,26 @@ _UNREACHED = _t("not_connected", "Not connected", "unreachable")
 _LOST = _t("lost", "Lost", "lost")
 
 TEMPLATES: Final[tuple[Template, ...]] = (
+    # The recommended nine (owner + Dipak, 30 Oct 2026, final; stages-views-sources.md
+    # §2): the same on Inbound and Cold Leads but for the first stage's name. Follow-ups
+    # live in Interested, with reminders; the two meeting stages are a switch each.
+    Template(
+        "recommended",
+        "Recommended",
+        "Nine stages for inbound enquiries and cold calling.",
+        "spark",
+        (
+            TemplateStage("new", "New Lead", "lead", cold_label="Unworked"),
+            _t("not_connected", "Not Connected", "unreachable"),
+            _t("open_leads", "Open Leads", "contacted"),
+            _t("interested", "Interested", "qualified"),
+            _t("meeting_scheduled", "Meeting Scheduled", "appointment_booked"),
+            _t("meeting_done", "Meeting Done", "appointment_done"),
+            _t("won", "Won", "won"),
+            _t("lost", "Closed / Lost", "lost"),
+            _t("junk", "Junk Lead", "disqualified"),
+        ),
+    ),
     Template(
         "simple",
         "Any business",
