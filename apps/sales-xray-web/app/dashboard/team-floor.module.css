@@ -461,7 +461,7 @@ a.row:focus-visible {
   font-variant-numeric: tabular-nums;
 }
 
-.ringText span {
+.ringText > span {
   color: var(--sx-muted);
   font-size: 11px;
   font-weight: 650;
