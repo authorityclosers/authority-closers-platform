@@ -218,6 +218,18 @@ GOOGLE = (
             "usage",
         ),
     ),
+    # 30 Oct 2026: "Google Ads: We've received your payment for <account>".
+    (
+        "google ads",
+        (
+            "Google Ads",
+            "Ad spend",
+            "marketing",
+            "sales_xray",
+            {"rule": "direct", "product": "sales_xray"},
+            "usage",
+        ),
+    ),
 )
 
 # A currency mark not inside a word ("orders 12" is no money), then the figure.

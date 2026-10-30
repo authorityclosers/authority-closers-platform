@@ -262,3 +262,16 @@ def test_our_own_mail_is_no_charge_but_a_forwarded_invoice_is() -> None:
         _part("text/plain", "Total ₹20,338.14"),
     )
     assert job.propose("admin@example.test", forwarded)["rupees"] == 20338.14
+
+
+def test_a_google_ads_payment_is_ad_spend() -> None:
+    job = runner()
+    ads = _message(
+        "g1",
+        "Google Ads <payments-noreply@google.com>",
+        "Google Ads: We've received your payment for 000-000-0000",
+        _part("text/plain", "Amount ₹500.00"),
+    )
+    proposal = job.propose("admin@example.test", ads)
+    assert proposal["vendor"] == "Google Ads" and proposal["category"] == "marketing"
+    assert proposal["rupees"] == 500 and proposal["confidence"] == "high"
