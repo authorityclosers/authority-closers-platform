@@ -43,7 +43,7 @@ async def test_the_owner_sees_paid_and_complimentary_seats_and_may_buy(state):
     body = OrganisationSeatsResponse.model_validate_json(response.text)
     assert (body.paid_seats, body.complimentary_seats, body.total_seats) == (100, 4, 104)
     assert (body.active_members, body.pending_invites, body.seats_available) == (3, 0, 101)
-    assert body.can_buy is True
+    assert body.can_buy is True and body.exempt is False
     assert "Fictional founding" not in response.text and last not in response.text
     billing = (await call(state, path="/billing")).json()
     assert (billing["complimentary_seats"], billing["total_seats"]) == (4, 104)

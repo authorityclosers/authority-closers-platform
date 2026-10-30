@@ -272,6 +272,11 @@ export type OrgSeats = {
   seatsAvailable: number;
   /** The owner and Finance buy seats; admins see them. */
   canBuy: boolean;
+  /**
+   * The organisation's exemption covers it: invites need no seat, so there
+   * is no seat limit (false from a server that predates it).
+   */
+  exempt: boolean;
 };
 
 const SEAT_COUNTS = [
@@ -286,11 +291,15 @@ const SEAT_COUNTS = [
 export function parseSeats(value: unknown): OrgSeats {
   const data = obj(value);
   if (
-    !exact(value, [...SEAT_COUNTS, "can_buy"]) ||
+    !(
+      exact(value, [...SEAT_COUNTS, "can_buy", "exempt"]) ||
+      exact(value, [...SEAT_COUNTS, "can_buy"])
+    ) ||
     !SEAT_COUNTS.every(
       (key) => count(data[key]) && Number.isInteger(data[key]),
     ) ||
     typeof data.can_buy !== "boolean" ||
+    (Object.hasOwn(data, "exempt") && typeof data.exempt !== "boolean") ||
     (data.paid_seats as number) + (data.complimentary_seats as number) !==
       data.total_seats
   )
@@ -303,6 +312,7 @@ export function parseSeats(value: unknown): OrgSeats {
     pendingInvites: data.pending_invites as number,
     seatsAvailable: data.seats_available as number,
     canBuy: data.can_buy,
+    exempt: data.exempt === true,
   };
 }
 

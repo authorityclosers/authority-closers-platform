@@ -146,6 +146,9 @@ class OrganisationSeatsResponse(OrganisationBillingResponse):
     stays in Admin (Sales X-Ray shows no "valid until" times)."""
 
     can_buy: bool
+    # The sealed owner-organisation exemption covers this organisation: invites need no seat,
+    # so the counts above set no limit.
+    exempt: bool
 
 
 class MemberActivityResponse(BaseModel):
@@ -627,6 +630,12 @@ def install_organisation_http(
         return OrganisationSeatsResponse(
             **await organisation_seats(auth.database, tenant_id),
             can_buy=can(role, "billing.pay"),
+            # The same check invites make (OrganisationService._ensure_seat_available).
+            exempt=seat_exempt(
+                tenant_id,
+                policy=getattr(application.state, "internal_tester_policy", None),
+                environment=settings.environment,
+            ),
         )
 
     def service(auth: AuthenticatedTransaction) -> OrganisationService:

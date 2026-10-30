@@ -126,7 +126,8 @@
   overflow-wrap: anywhere;
 }
 
-.empty p b {
+.empty p b,
+.note b {
   color: var(--lx-ink);
 }
 

@@ -106,7 +106,11 @@ it("reads the server's seat counts and refuses a shape it does not know", () => 
     pendingInvites: 1,
     seatsAvailable: 1,
     canBuy: true,
+    exempt: false,
   });
+  expect(parseSeats(seats({ exempt: true })).exempt).toBe(true);
+  expect(parseSeats(seats({ exempt: false })).exempt).toBe(false);
+  expect(() => parseSeats(seats({ exempt: "yes" }))).toThrow();
   expect(() => parseSeats(seats({ total_seats: 5 }))).toThrow();
   expect(() => parseSeats(seats({ until: "2027-01-31" }))).toThrow();
   expect(() => parseSeats(seats({ can_buy: "yes" }))).toThrow();
@@ -242,4 +246,27 @@ it("orders only active members", () => {
       (row) => row.name,
     ),
   ).toEqual(["A Seller"]);
+});
+
+it("an exempt organisation reads No seat limit, with no seat count to buy", async () => {
+  reply = () =>
+    json(
+      seats({
+        complimentary_seats: 0,
+        total_seats: 0,
+        active_members: 6,
+        pending_invites: 2,
+        seats_available: 0,
+        exempt: true,
+      }),
+    );
+  await show();
+  const text = host.textContent ?? "";
+  expect(text).toContain("No seat limit");
+  expect(text).toContain("Invite as many people as you need.");
+  expect(text).toContain("6 members");
+  expect(text).toContain("2 invites waiting");
+  expect(text).not.toMatch(/No seats yet|seats taken|free|Buy seats/);
+  expect(host.querySelector('[role="img"]')).toBeNull();
+  expect(host.querySelector("a")).toBeNull();
 });
