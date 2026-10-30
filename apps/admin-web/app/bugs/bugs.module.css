@@ -96,6 +96,101 @@
   background: var(--sx-surface);
 }
 
+.before {
+  display: grid;
+  gap: 6px;
+  margin-top: 14px;
+}
+
+.parts,
+.steps,
+.attachments {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+}
+
+.parts,
+.attachments {
+  list-style: none;
+}
+
+.steps {
+  padding-left: 22px;
+}
+
+.part {
+  display: grid;
+  grid-template-columns: 28px 120px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.partNumber {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  background: var(--sx-accent);
+  color: var(--sx-accent-ink);
+  font-size: var(--sx-text-xs, 12px);
+  font-weight: 700;
+}
+
+.partPicture {
+  display: block;
+  width: 120px;
+  height: 72px;
+  border: 1px solid var(--sx-line);
+  border-radius: var(--sx-radius-md);
+  background: var(--sx-surface);
+  object-fit: cover;
+}
+
+.partWords {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.recording {
+  display: block;
+  width: 100%;
+  max-width: 420px;
+  border-radius: var(--sx-radius-md);
+}
+
+.access {
+  display: grid;
+  gap: 8px;
+}
+
+.accessList {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.accessRow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--sx-line);
+}
+
+.accessWho {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
 .errorText {
   max-width: 520px;
   overflow-wrap: anywhere;

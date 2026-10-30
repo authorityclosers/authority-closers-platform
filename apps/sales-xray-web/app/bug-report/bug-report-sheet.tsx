@@ -77,7 +77,12 @@ import { recentSteps } from "../telemetry";
 import { scrubRoute } from "./scrub";
 import { setShakeToReport, useShakeSetting, useShakeToReport } from "./shake";
 import { VoiceNoteRow, type VoiceNote } from "./voice-note";
-import { advancedAccess, type AdvancedAccess } from "./advanced-access";
+import {
+  advancedAccess,
+  advancedServer,
+  requestAdvanced,
+  type AdvancedAccess,
+} from "./advanced-access";
 import { enterSends, keySendAsks, stopAskingOnKeySend } from "./key-send";
 import type { AdvancedSeed } from "./advanced-reporter";
 
@@ -198,6 +203,7 @@ export function BugReportSheet({
   onClose,
   advanced = "off",
   onAdvanced,
+  onRequestAdvanced,
 }: {
   open: boolean;
   about: ReportAbout | null;
@@ -208,6 +214,8 @@ export function BugReportSheet({
   advanced?: AdvancedAccess;
   /** Opens the advanced reporter with what is written and taken so far. */
   onAdvanced?: (seed: AdvancedSeed) => void;
+  /** Asks the owner to let this person use the advanced reporter. */
+  onRequestAdvanced?: () => void;
 }) {
   const inApp = useInApp();
   const shakeOn = useShakeSetting();
@@ -804,6 +812,20 @@ export function BugReportSheet({
             >
               Your reports
             </button>
+            {advanced === "off" && onRequestAdvanced ? (
+              <>
+                {" · "}
+                <button
+                  type="button"
+                  className={styles.inlineAction}
+                  onClick={onRequestAdvanced}
+                >
+                  Request advanced reporter
+                </button>
+              </>
+            ) : advanced === "requested" ? (
+              " · Advanced reporter asked for"
+            ) : null}
           </p>
         </form>
       )}
@@ -986,6 +1008,32 @@ export function BugReportHost() {
           setOpen(false);
           setAdvanced(seed);
         }}
+        onRequestAdvanced={
+          advancedServer()
+            ? () => {
+                void requestAdvanced().then(
+                  (state) => {
+                    setAccess(state);
+                    notify({
+                      id: "bug-report-advanced",
+                      tone: "success",
+                      title:
+                        "Asked. The owner decides; it shows here once you're in.",
+                    });
+                  },
+                  (error: unknown) =>
+                    notify({
+                      id: "bug-report-advanced",
+                      tone: "error",
+                      title:
+                        error instanceof BugReportError
+                          ? error.message
+                          : "Your request didn't go. Try again in a moment.",
+                    }),
+                );
+              }
+            : undefined
+        }
       />
       {advanced ? (
         <AdvancedReporter

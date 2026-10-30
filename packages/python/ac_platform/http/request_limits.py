@@ -16,6 +16,8 @@ MAX_MEDIA_WEBHOOK_BYTES = 512 * 1024
 # A bug report with a picture of the screen (base64, at most 4 MB of image) and a
 # voice note (at most 1.5 MB of audio).
 MAX_BUG_REPORT_BYTES = 8 * 1024 * 1024
+# A file that follows an advanced bug report: a short screen recording at most (0149).
+MAX_BUG_FILE_BYTES = 21 * 1024 * 1024
 MAX_DECLARED_BODY_BYTES = MAX_MEDIA_CAPTION_BYTES
 MAX_PROBLEM_INSTANCE_LENGTH = 512
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS"})
@@ -36,6 +38,7 @@ _SYNTHETIC_BYTES_PATH = re.compile(
     r"/v1/conversation/acquisition/imports/sandbox/calls/syn-[A-Za-z0-9][A-Za-z0-9._:-]{0,150}/source"
 )
 _CONVERSATION_DRAFT_IMPORT_PATH = re.compile(rf"/v1/admin/conversation/runs/{_UUID}/draft")
+_BUG_FILE_PATH = re.compile(rf"/v1/bug-reports/{_UUID}/files")
 # A recording an authorised app sends for a person (POST /v1/api/calls, calls:write).
 _APP_CALL_UPLOAD_PATH = re.compile(r"/v1/api/calls")
 
@@ -58,6 +61,8 @@ def request_body_limit(scope: Scope) -> int:
         return MAX_MEDIA_CAPTION_BYTES
     if path == "/v1/bug-reports":
         return MAX_BUG_REPORT_BYTES
+    if _BUG_FILE_PATH.fullmatch(path):
+        return MAX_BUG_FILE_BYTES
     return MAX_REQUEST_BODY_BYTES
 
 

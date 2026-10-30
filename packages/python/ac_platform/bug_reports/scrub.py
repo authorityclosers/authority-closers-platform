@@ -12,7 +12,7 @@ import re
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlsplit
 
-from ac_platform.bug_reports.models import AREAS
+from ac_platform.bug_reports.models import AREAS, MAX_FILES
 
 MAX_ERRORS = 20
 ERROR_KINDS = ("error", "rejection", "console", "notice", "http")
@@ -76,6 +76,16 @@ def scrub_text(value: object, limit: int) -> str:
     for pattern, marker in _REDACTIONS:
         text = pattern.sub(marker, text)
     return text[:limit]
+
+
+def scrub_block(value: str, limit: int = 2 * 1024 * 1024) -> str:
+    """Many lines of text (a log a person attached), each redacted; the lines stay."""
+    lines = []
+    for line in value[:limit].splitlines():
+        for pattern, marker in _REDACTIONS:
+            line = pattern.sub(marker, line)
+        lines.append(line)
+    return "\n".join(lines)
 
 
 def _route_part(value: str, limit: int) -> str:
@@ -149,30 +159,45 @@ _NUMBER_FIELDS: dict[str, tuple[str, ...]] = {
 
 
 # The last app steps before a report (telemetry event names, oldest first; demo P0,
-# 26 Oct 2026): never content, only the name, when and the page's route template.
-MAX_TRAIL = 20
-_STEP = re.compile(r"[a-z][a-z0-9_]{1,63}")
+# 26 Oct 2026): never content, only the name, when, the page's route template and, since
+# the advanced reporter (31 Oct 2026), the step's words from fixed lists. The app's names
+# carry its prefix ("sx.tap"); the first pattern dropped them, so trails arrived empty.
+MAX_TRAIL = 50
+_STEP = re.compile(r"[a-z][a-z0-9_]{1,47}(?:\.[a-z][a-z0-9_]{1,47})?")
 _STEP_AT = re.compile(r"[0-9T:.+\-Z]{10,40}")
+_STEP_FIELDS = frozenset(
+    {"screen", "from", "nav", "target", "feature", "via", "from_kind", "to_kind", "outcome"}
+)
+_STEP_WORD = re.compile(r"[a-z][a-z0-9_]{0,47}")
 
 
-def clean_trail(value: object) -> list[dict[str, str]]:
+def clean_trail(value: object) -> list[dict[str, Any]]:
     """At most twenty recent app steps, each a known-shaped event name with its time and
     route; anything else is dropped."""
     if not isinstance(value, list):
         return []
-    out: list[dict[str, str]] = []
+    out: list[dict[str, Any]] = []
     for item in value[-MAX_TRAIL:]:
         if not isinstance(item, dict):
             continue
         event = item.get("event")
         if not isinstance(event, str) or _STEP.fullmatch(event) is None:
             continue
-        step = {"event": event}
+        step: dict[str, Any] = {"event": event}
         at = item.get("at")
         if isinstance(at, str) and _STEP_AT.fullmatch(at):
             step["at"] = at
         if isinstance(item.get("route"), str) and item["route"].strip():
             step["route"] = scrub_route(item["route"], 200)
+        detail = item.get("detail")
+        if isinstance(detail, dict):
+            words = {
+                key: value
+                for key, value in detail.items()
+                if key in _STEP_FIELDS and isinstance(value, str) and _STEP_WORD.fullmatch(value)
+            }
+            if words:
+                step["detail"] = words
         out.append(step)
     return out
 
@@ -208,6 +233,124 @@ def clean_context(value: object) -> dict[str, Any]:
     if trail:
         out["trail"] = trail
     return out
+
+
+# The advanced reporter's own parts (owner, 31 Oct 2026): steps to reproduce, comments on
+# parts of the screen (where each part is, never its text), slow or failed calls, speed.
+MAX_STEPS = 20
+MAX_COMMENTS = 20
+MAX_CALLS = 15
+_COMPONENT = re.compile(r"[A-Z][A-Za-z0-9]{2,40}")
+_TAG = re.compile(r"[a-z][a-z0-9-]{0,24}")
+_REFERENCE = re.compile(r"[A-Za-z0-9_.:-]{4,64}")
+_SPEED_FIELDS = (
+    "first_byte_ms",
+    "ready_ms",
+    "loaded_ms",
+    "largest_paint_ms",
+    "layout_shift",
+    "memory_mb",
+    "page_age_s",
+)
+
+
+def _whole(value: object, low: int, high: int) -> int | None:
+    if isinstance(value, int | float) and not isinstance(value, bool) and low <= value <= high:
+        return int(value)
+    return None
+
+
+def _items(value: object, limit: int) -> list[dict[str, Any]]:
+    return (
+        [item for item in value[:limit] if isinstance(item, dict)]
+        if isinstance(value, list)
+        else []
+    )
+
+
+def clean_advanced(value: object) -> dict[str, Any] | None:
+    """The advanced reporter's parts, each bounded and scrubbed; None when there are none."""
+    if not isinstance(value, dict):
+        return None
+    raw_steps = value.get("steps")
+    steps = [
+        text
+        for text in (
+            scrub_text(step, 200)
+            for step in (raw_steps if isinstance(raw_steps, list) else [])[:MAX_STEPS]
+        )
+        if text
+    ]
+    comments: list[dict[str, Any]] = []
+    for item in _items(value.get("comments"), MAX_COMMENTS):
+        number = _whole(item.get("n"), 1, 50)
+        if number is None:
+            continue
+        components = item.get("components")
+        entry: dict[str, Any] = {
+            "n": number,
+            "note": scrub_text(item.get("note"), 500),
+            "selector": scrub_text(item.get("selector"), 400),
+            "components": [
+                name
+                for name in (components if isinstance(components, list) else [])[:3]
+                if isinstance(name, str) and _COMPONENT.fullmatch(name)
+            ],
+            "on_picture": item.get("on_picture") is True,
+        }
+        testid = scrub_text(item.get("testid"), 80)
+        if testid:
+            entry["testid"] = testid
+        tag = item.get("tag")
+        if isinstance(tag, str) and _TAG.fullmatch(tag):
+            entry["tag"] = tag
+        role = scrub_text(item.get("role"), 40)
+        if role:
+            entry["role"] = role
+        raw_box = item.get("box")
+        box: dict[str, Any] = raw_box if isinstance(raw_box, dict) else {}
+        where = {key: _whole(box.get(key), -20_000, 20_000) for key in ("x", "y", "w", "h")}
+        if all(number is not None for number in where.values()):
+            entry["box"] = where
+        comments.append(entry)
+    calls: list[dict[str, Any]] = []
+    for item in _items(value.get("calls"), MAX_CALLS):
+        path = item.get("path")
+        if not isinstance(path, str) or not path.startswith("/"):
+            continue
+        call: dict[str, Any] = {
+            "path": scrub_route(path, 200),
+            "failed": item.get("failed") is True,
+        }
+        if item.get("method") in METHODS:
+            call["method"] = item["method"]
+        status = _whole(item.get("status"), 0, 599)
+        if status is not None:
+            call["status"] = status
+        took = _whole(item.get("ms"), 0, 600_000)
+        if took is not None:
+            call["ms"] = took
+        reference = item.get("reference")
+        if isinstance(reference, str) and _REFERENCE.fullmatch(reference):
+            call["reference"] = reference
+        calls.append(call)
+    given_speed = value.get("speed")
+    raw_speed: dict[str, Any] = given_speed if isinstance(given_speed, dict) else {}
+    speed = {
+        key: round(float(raw_speed[key]), 3)
+        for key in _SPEED_FIELDS
+        if isinstance(raw_speed.get(key), int | float)
+        and not isinstance(raw_speed.get(key), bool)
+        and 0 <= raw_speed[key] < 10_000_000
+    }
+    return {
+        "steps": steps,
+        "comments": comments,
+        "calls": calls,
+        "speed": speed,
+        "marked": value.get("marked") is True,
+        "files": _whole(value.get("files"), 0, MAX_FILES) or 0,
+    }
 
 
 def clean_errors(value: object) -> list[dict[str, Any]]:
