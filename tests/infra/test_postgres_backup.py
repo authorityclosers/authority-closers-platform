@@ -3,6 +3,7 @@ from __future__ import annotations
 import errno
 import hashlib
 import importlib.util
+import io
 import json
 import os
 import shutil
@@ -1654,3 +1655,108 @@ def test_excluded_analytics_source_count_uses_the_same_snapshot(tmp_path: Path) 
     excluded = {"analytics_events": counts.pop("analytics_events")}
     assert excluded == {"analytics_events": 7}
     assert counts == dict.fromkeys(backup.PARITY_TABLES, 7)
+
+
+def _sandbox_target(tmp_path: Path, environment: str, migration_head: str) -> object:
+    return backup.ApplicationTarget(
+        environment=environment,
+        current_link=tmp_path / f"current-{environment}",
+        release_dir=tmp_path / ("a" * 40),
+        profile_file=tmp_path / f"{environment}.env",
+        images_file=tmp_path / "release-images.env",
+        state_root=tmp_path / "state",
+        compose_project=f"ac-application-{environment}",
+        secret_environment=environment,
+        migration_head=migration_head,
+    )
+
+
+def test_only_the_staging_r2_dump_leaves_out_synthetic_sandbox_rows(tmp_path: Path) -> None:
+    head = max(backup.VERSIONED_PARITY_CONTRACTS)
+    staging = _sandbox_target(tmp_path, "staging", head)
+    assert backup.r2_excluded_table_data(staging) == (
+        "analytics_events",
+        "conversation_synthetic_records",
+    )
+    assert backup.r2_excluded_table_data(_sandbox_target(tmp_path, "production", head)) == (
+        "analytics_events",
+    )
+    # Schemas before the sandbox table (0082) have no synthetic rows to leave out.
+    legacy = _sandbox_target(tmp_path, "staging", "20260904_0018")
+    assert backup.r2_excluded_table_data(legacy) == ("analytics_events",)
+
+    snapshot = "00000003-0000001B-1"
+    command = backup.dump_command(
+        staging, snapshot, excluded_table_data=backup.r2_excluded_table_data(staging)
+    )[-1]
+    assert command.count("--exclude-table-data=") == 2
+    assert "--exclude-table-data=public.analytics_events" in command
+    assert "--exclude-table-data=public.conversation_synthetic_records" in command
+    # The schema exporter rewrites exactly this one fragment.
+    assert command.count("--format=custom --create") == 1
+    # Drive captures call the default command and keep the sandbox rows.
+    assert "conversation_synthetic_records" not in backup.dump_command(staging, snapshot)[-1]
+    for unreviewed in (("conversation_synthetic_records",), ("analytics_events", "audit_events")):
+        with pytest.raises(backup.BackupError, match="reviewed backup policy"):
+            backup.dump_command(staging, snapshot, excluded_table_data=unreviewed)
+
+
+@pytest.mark.skipif(os.name != "posix", reason="the capture fsyncs POSIX directories")
+def test_staging_r2_capture_counts_its_synthetic_rows_and_restores_them_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    head = max(backup.VERSIONED_PARITY_CONTRACTS)
+    target = _sandbox_target(tmp_path, "staging", head)
+    snapshot = "00000003-0000001B-1"
+    monkeypatch.setattr(backup.os, "chown", lambda *_args, **_kwargs: None)
+    # CI runners have no acops group; chown is stubbed, so only the group lookup is faked.
+    monkeypatch.setattr(
+        backup, "grp", SimpleNamespace(getgrnam=lambda _name: SimpleNamespace(gr_gid=os.getgid()))
+    )
+    monkeypatch.setattr(
+        backup,
+        "start_exported_snapshot_holder",
+        lambda _target: SimpleNamespace(
+            snapshot_id=snapshot, assert_alive=lambda: None, close=lambda: None
+        ),
+    )
+    dumped: list[str] = []
+
+    class FakeDump:
+        def __init__(self, command: list[str], **_kwargs: object) -> None:
+            dumped.append(command[-1])
+            self.stdout = io.BytesIO(b"PGDMPfictional")
+
+        def wait(self) -> int:
+            return 0
+
+        def poll(self) -> int:
+            return 0
+
+    monkeypatch.setattr(backup.subprocess, "Popen", FakeDump)
+    monkeypatch.setattr(
+        backup.subprocess, "run", lambda *_args, **_kwargs: SimpleNamespace(returncode=0)
+    )
+    source = dict.fromkeys((*backup.parity_tables_for_head(head), "analytics_events"), 7)
+    source["conversation_synthetic_records"] = 832160
+    monkeypatch.setattr(
+        backup,
+        "run_checked",
+        lambda _command, **_kwargs: SimpleNamespace(
+            stdout="\n".join(
+                [f"__migration_head__|{head}", *(f"{t}|{n}" for t, n in source.items())]
+            )
+        ),
+    )
+
+    _dump, metadata_path, metadata = backup.capture_dump(target, tmp_path / "logical", 1024)
+
+    assert "--exclude-table-data=public.conversation_synthetic_records" in dumped[0]
+    assert metadata["excluded_table_data"] == {
+        "analytics_events": 7,
+        "conversation_synthetic_records": 832160,
+    }
+    assert set(metadata["row_counts"]) == set(backup.parity_tables_for_head(head))
+    assert metadata["row_counts"]["conversation_synthetic_records"] == 0
+    assert metadata["row_counts"]["audit_events"] == 7
+    assert json.loads(metadata_path.read_text()) == metadata

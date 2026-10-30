@@ -1683,6 +1683,13 @@ def _validate_backup(value: str, *, workspace_root: Path) -> Path:
     return backup
 
 
+def _excluded_table_sets(environment: str) -> tuple[set[str], ...]:
+    # Mirrors ac-postgres-backup.py: only staging's R2 dump also leaves out its synthetic sandbox.
+    if environment == "staging":
+        return ({"analytics_events"}, {"analytics_events", "conversation_synthetic_records"})
+    return ({"analytics_events"},)
+
+
 def _validate_backup_metadata(
     value: str,
     *,
@@ -1717,13 +1724,13 @@ def _validate_backup_metadata(
         payload = json.loads(metadata_bytes.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise DrillError("backup metadata is not valid UTF-8 JSON") from error
+    excluded: dict = {}
     if isinstance(payload, dict) and "excluded_table_data" in payload:
         excluded = payload.pop("excluded_table_data")
         if (
             not isinstance(excluded, dict)
-            or set(excluded) != {"analytics_events"}
-            or type(excluded["analytics_events"]) is not int
-            or excluded["analytics_events"] < 0
+            or set(excluded) not in _excluded_table_sets(environment)
+            or any(type(value) is not int or value < 0 for value in excluded.values())
         ):
             raise DrillError("backup excluded-table inventory is malformed")
     expected_keys = {
@@ -1774,6 +1781,11 @@ def _validate_backup_metadata(
             )
         ):
             raise DrillError("backup metadata row-count parity is malformed")
+    if any(
+        table != "analytics_events" and payload.get("row_counts", {}).get(table) != 0
+        for table in excluded
+    ):
+        raise DrillError("excluded parity table data must restore empty")
     release_id = payload.get("release_id")
     expected_project = f"ac-application-{environment}"
     if (
@@ -2752,12 +2764,17 @@ def _verify_excluded_table_data(target: DisposableTarget, metadata_path: Path) -
     metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
     if "excluded_table_data" not in metadata:
         return
-    # Metadata was strictly validated before the disposable target was created.
-    count = _query(
-        target, "SELECT count(*) FROM public.analytics_events", "verify excluded analytics data"
-    ).strip()
-    if count != "0":
-        raise DrillError("restored excluded analytics data must be empty")
+    # Metadata was strictly validated before the disposable target was created, so each
+    # table name comes from the fixed exclusion allowlist.
+    for table in metadata["excluded_table_data"]:
+        label = "analytics" if table == "analytics_events" else table
+        count = _query(
+            target,
+            f"SELECT count(*) FROM public.{table}",  # noqa: S608 - fixed exclusion allowlist
+            f"verify excluded {label} data",
+        ).strip()
+        if count != "0":
+            raise DrillError(f"restored excluded {label} data must be empty")
 
 
 def _row_counts(target: DisposableTarget, expected_head: str) -> dict[str, int]:

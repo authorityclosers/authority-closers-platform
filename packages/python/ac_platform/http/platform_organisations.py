@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Annotated, Any
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, FastAPI, Header, Request
+from fastapi import APIRouter, Depends, FastAPI, Header, Request, Response
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import func, select
 
@@ -105,6 +105,20 @@ class PlatformWorkspaceResponse(_Strict):
 
 class PlatformWorkspacesResponse(_Strict):
     workspaces: list[PlatformWorkspaceResponse]
+
+
+class AdminWorkspaceResponse(_Strict):
+    tenant_id: UUID
+    # The name Admin shows ("AC Operations" for the staff workspace).
+    name: str
+    kind: WorkspaceKind
+
+
+class AdminWorkspacesResponse(_Strict):
+    person_id: UUID
+    session_id: UUID
+    selected_tenant_id: UUID | None
+    workspaces: list[AdminWorkspaceResponse]
 
 
 class ReasonRequest(_Strict):
@@ -550,3 +564,46 @@ def install_platform_organisations_http(
         )
 
     application.include_router(workspaces_router)
+
+    own_router = APIRouter(
+        prefix="/v1/me/admin-workspaces",
+        tags=["platform-organisations"],
+        dependencies=[Depends(require_surface)],
+    )
+
+    @own_router.get("", response_model=AdminWorkspacesResponse)
+    async def own_workspaces(
+        request: Request,
+        response: Response,
+        auth: AuthenticatedTransaction = actor_dependency,
+    ) -> AdminWorkspacesResponse:
+        """The signed-in person's own workspaces, named and kinded as Admin shows them.
+
+        The same memberships GET /v1/me/workspaces lists, so Admin's sign-in can
+        open the staff workspace and never shows two choices that read the same
+        (two of them are registered as "Authority Closers"). Presentation only:
+        it needs no platform grant, shows no other workspace and selects nothing.
+        """
+        if request.query_params:
+            raise DomainError("Workspaces are resolved only for the authenticated person.")
+        actor = auth.resolved.actor
+        own = await auth.identity.repository.list_active_workspaces(actor.person_id)
+        kinds = await classify_workspaces(
+            auth.database,
+            operations_tenant_id=settings.operations_tenant_id,
+            personal_tenant_id=settings.public_learner_tenant_id,
+            tenant_ids=[tenant_id for tenant_id, _ in own],
+        )
+        response.headers["cache-control"] = "private, no-store"
+        response.headers["pragma"] = "no-cache"
+        return AdminWorkspacesResponse(
+            person_id=actor.person_id,
+            session_id=actor.session_id,
+            selected_tenant_id=actor.tenant_id,
+            workspaces=[
+                AdminWorkspaceResponse(tenant_id=item.tenant_id, name=item.name, kind=item.kind)
+                for item in ordered(kinds.values())
+            ],
+        )
+
+    application.include_router(own_router)

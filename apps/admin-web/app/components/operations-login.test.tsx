@@ -44,6 +44,18 @@ const platformAdmin: platform.PlatformIdentity = {
   displayName: admin.displayName,
   permissions: ["platform_tenants_read"],
 };
+/** Admin's names: the second fixture workspace is the staff workspace. */
+function named(): workspaces.AdminWorkspaces {
+  return {
+    person_id: person,
+    session_id: sessionId,
+    selected_tenant_id: null,
+    workspaces: [
+      { tenant_id: tenant, name: "Synthetic Academy", kind: "other" },
+      { tenant_id: other, name: "AC Operations", kind: "operations" },
+    ],
+  };
+}
 let container: HTMLDivElement;
 let root: Root;
 let disposed: boolean;
@@ -58,6 +70,8 @@ beforeEach(() => {
   vi.spyOn(workspaces, "selectOperationsWorkspace").mockResolvedValue(admin);
   vi.spyOn(api, "loadAdminSession").mockResolvedValue(admin);
   vi.spyOn(platform, "loadPlatformIdentity").mockResolvedValue(null);
+  vi.spyOn(workspaces, "loadAdminWorkspaces").mockResolvedValue(null);
+  sessionStorage.clear();
   vi.stubGlobal(
     "fetch",
     vi
@@ -91,6 +105,14 @@ async function submit() {
       .querySelector("form")!
       .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });
+}
+async function signIn() {
+  (container.querySelector('input[name="email"]') as HTMLInputElement).value =
+    "synthetic@example.test";
+  (
+    container.querySelector('input[name="password"]') as HTMLInputElement
+  ).value = "synthetic-password-not-real";
+  await submit();
 }
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -136,7 +158,7 @@ it.each([
   "platform_organisations_manage",
   "platform_release_manage",
 ] as const)(
-  "offers Platform Admin navigation for %s without an academy assignment",
+  "opens Admin home for %s without an academy assignment or a choice",
   async (permission) => {
     vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue({
       ...choices,
@@ -147,21 +169,15 @@ it.each([
       permissions: [permission],
     });
     await mount();
-    expect(navigate).not.toHaveBeenCalled();
-    expect(container.querySelector("select")).toBeNull();
-    expect(container.textContent).toContain("Your account has platform access");
-    const platformButton = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent === "Open Platform Admin",
-    )!;
-    await act(async () => platformButton.click());
-    expect(navigate).toHaveBeenCalledWith("/platform");
+    expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
+    expect(container.textContent).not.toContain("Choose your workspace");
     expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
     expect(api.loadAdminSession).not.toHaveBeenCalled();
   },
 );
 
 it.each([null, tenant])(
-  "lets a returning platform admin choose an academy even with selected context %s",
+  "opens a returning platform admin in the staff workspace, whatever was selected (%s)",
   async (selectedTenantId) => {
     const selected = { ...choices, selected_tenant_id: selectedTenantId };
     vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue(selected);
@@ -169,20 +185,69 @@ it.each([null, tenant])(
       ...platformAdmin,
       selectedTenantId,
     });
+    vi.mocked(workspaces.loadAdminWorkspaces).mockResolvedValue(named());
     await mount();
-    expect(navigate).not.toHaveBeenCalled();
-    expect(container.querySelector("select")?.value).toBe("");
-    expect(container.textContent).toContain("Open Platform Admin");
-    expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
-    expect(api.loadAdminSession).not.toHaveBeenCalled();
-    await choose(other);
-    await submit();
-    expect(workspaces.selectOperationsWorkspace).toHaveBeenCalledWith(
+    expect(
+      workspaces.selectOperationsWorkspace,
+    ).toHaveBeenCalledExactlyOnceWith(
       selected,
       other,
       "admin",
       expect.objectContaining({ signal: expect.any(AbortSignal) }),
     );
+    expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
+    expect(container.querySelector("select")).toBeNull();
+  },
+);
+
+it("keeps a platform admin already in the staff workspace there without a context write", async () => {
+  const selected = { ...choices, selected_tenant_id: other };
+  vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue(selected);
+  vi.mocked(platform.loadPlatformIdentity).mockResolvedValue({
+    ...platformAdmin,
+    selectedTenantId: other,
+  });
+  vi.mocked(workspaces.loadAdminWorkspaces).mockResolvedValue({
+    ...named(),
+    selected_tenant_id: other,
+  });
+  await mount();
+  expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
+  expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
+});
+
+it("leaves Admin home to decide when the staff workspace opens no console", async () => {
+  vi.mocked(platform.loadPlatformIdentity).mockResolvedValue(platformAdmin);
+  vi.mocked(workspaces.loadAdminWorkspaces).mockResolvedValue(named());
+  vi.mocked(workspaces.selectOperationsWorkspace).mockRejectedValue(
+    new workspaces.OperationsWorkspaceError("synthetic no Admin access"),
+  );
+  await mount();
+  expect(workspaces.selectOperationsWorkspace).toHaveBeenCalledOnce();
+  expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+});
+
+const unnamed: [string, workspaces.AdminWorkspaces | null][] = [
+  ["no named workspaces", null],
+  ["names for another session", { ...named(), session_id: other }],
+  [
+    "no staff workspace among them",
+    {
+      ...named(),
+      workspaces: named().workspaces.filter(
+        (item) => item.kind !== "operations",
+      ),
+    },
+  ],
+];
+it.each(unnamed)(
+  "opens Admin home for a platform admin with %s, selecting nothing",
+  async (_, known) => {
+    vi.mocked(platform.loadPlatformIdentity).mockResolvedValue(platformAdmin);
+    vi.mocked(workspaces.loadAdminWorkspaces).mockResolvedValue(known);
+    await mount();
+    expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
     expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
   },
 );
@@ -207,9 +272,20 @@ it.each([
   },
 );
 
-it("never consults Platform Admin admission for a Coach login", async () => {
+it("never consults Platform Admin admission or Admin's names for a Coach login", async () => {
   await mount({ surface: "coach" });
   expect(platform.loadPlatformIdentity).not.toHaveBeenCalled();
+  expect(workspaces.loadAdminWorkspaces).not.toHaveBeenCalled();
+});
+it("leaves a Coach login with one workspace to an explicit choice", async () => {
+  vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue({
+    ...choices,
+    workspaces: [choices.workspaces[0]],
+  });
+  await mount({ surface: "coach" });
+  expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
+  expect(navigate).not.toHaveBeenCalled();
+  expect(container.querySelector("select")).not.toBeNull();
 });
 it("lands an explicitly selected Coach workspace on the dashboard", async () => {
   await mount({ surface: "coach" });
@@ -285,52 +361,149 @@ it("finishes password authentication before reading memberships and never posts 
   expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
   expect(container.innerHTML).not.toContain("synthetic-password-not-real");
 });
-it("offers both destinations after password sign-in instead of redirecting a platform admin", async () => {
+it("lands a platform admin's password sign-in in the staff workspace, not a picker", async () => {
   vi.mocked(workspaces.loadOperationsWorkspaces)
     .mockResolvedValueOnce(null)
     .mockResolvedValueOnce(choices);
   vi.mocked(platform.loadPlatformIdentity).mockResolvedValue(platformAdmin);
+  vi.mocked(workspaces.loadAdminWorkspaces).mockResolvedValue(named());
   await mount();
   expect(platform.loadPlatformIdentity).not.toHaveBeenCalled();
-  (container.querySelector('input[name="email"]') as HTMLInputElement).value =
-    "synthetic@example.test";
-  (
-    container.querySelector('input[name="password"]') as HTMLInputElement
-  ).value = "synthetic-password-not-real";
-  await submit();
-  expect(navigate).not.toHaveBeenCalled();
-  expect(container.textContent).toContain("Choose your workspace");
-  expect(container.textContent).toContain("Open Platform Admin");
-  expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
-  await choose();
-  await submit();
+  expect(workspaces.loadAdminWorkspaces).not.toHaveBeenCalled();
+  await signIn();
+  expect(vi.mocked(fetch).mock.calls[0][0]).toBe("/v1/auth/password/login");
+  expect(workspaces.selectOperationsWorkspace).toHaveBeenCalledExactlyOnceWith(
+    choices,
+    other,
+    "admin",
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
+  expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
+  expect(container.textContent).not.toContain("Choose your workspace");
+  expect(container.innerHTML).not.toContain("synthetic-password-not-real");
+});
+
+it("opens the only workspace of a person without platform access", async () => {
+  const sole = { ...choices, workspaces: [choices.workspaces[0]] };
+  vi.mocked(workspaces.loadOperationsWorkspaces)
+    .mockResolvedValueOnce(null)
+    .mockResolvedValueOnce(sole);
+  await mount();
+  await signIn();
+  expect(workspaces.selectOperationsWorkspace).toHaveBeenCalledExactlyOnceWith(
+    sole,
+    tenant,
+    "admin",
+    expect.objectContaining({ signal: expect.any(AbortSignal) }),
+  );
   expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
 });
 
-it("disables platform navigation during context selection and clears it after confirmed sign-out", async () => {
+it("says plainly when the only workspace opens no Admin, with nothing to pick", async () => {
+  vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue({
+    ...choices,
+    workspaces: [choices.workspaces[0]],
+  });
+  vi.mocked(workspaces.selectOperationsWorkspace).mockRejectedValue(
+    new workspaces.WorkspaceAccessDenied("synthetic denial"),
+  );
+  await mount();
+  expect(navigate).not.toHaveBeenCalled();
+  expect(container.querySelector("h1")?.textContent).toBe(
+    "No Admin access yet.",
+  );
+  expect(container.textContent).toContain(
+    "Your account has no Platform Admin access.",
+  );
+  expect(container.querySelector("select")).toBeNull();
+  expect(container.querySelector('[role="alert"]')).toBeNull();
+  expect(
+    [...container.querySelectorAll("button")].map((item) => item.textContent),
+  ).toEqual(["Use another account"]);
+});
+
+it("keeps the picker and a safe alert when the only workspace could not be checked", async () => {
+  vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue({
+    ...choices,
+    workspaces: [choices.workspaces[0]],
+  });
+  vi.mocked(workspaces.selectOperationsWorkspace).mockRejectedValue(
+    new workspaces.OperationsWorkspaceError(),
+  );
+  await mount();
+  expect(navigate).not.toHaveBeenCalled();
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain(
+    "could not be verified",
+  );
+  expect(container.querySelector("select")).not.toBeNull();
+});
+
+it("stops instead of looping when Admin sends a platform admin straight back", async () => {
   vi.mocked(platform.loadPlatformIdentity).mockResolvedValue(platformAdmin);
+  vi.mocked(workspaces.loadAdminWorkspaces).mockResolvedValue(named());
+  await mount();
+  expect(navigate).toHaveBeenCalledOnce();
+  await act(async () => root.unmount());
+  root = createRoot(container);
+  navigate.mockClear();
+  vi.mocked(workspaces.selectOperationsWorkspace).mockClear();
+  await mount();
+  expect(navigate).not.toHaveBeenCalled();
+  expect(workspaces.selectOperationsWorkspace).not.toHaveBeenCalled();
+  const open = [...container.querySelectorAll("button")].find(
+    (button) => button.textContent === "Open Admin",
+  )!;
+  await act(async () => open.click());
+  expect(workspaces.selectOperationsWorkspace).toHaveBeenCalledOnce();
+  expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
+});
+
+it("never shows two choices that read the same", async () => {
+  vi.mocked(workspaces.loadOperationsWorkspaces).mockResolvedValue({
+    ...choices,
+    workspaces: [
+      { tenant_id: tenant, name: "Synthetic Closers" },
+      { tenant_id: other, name: "Synthetic Closers" },
+    ],
+  });
+  vi.mocked(workspaces.loadAdminWorkspaces).mockResolvedValue({
+    ...named(),
+    workspaces: [
+      { tenant_id: tenant, name: "Synthetic Closers", kind: "company" },
+      { tenant_id: other, name: "AC Operations", kind: "operations" },
+    ],
+  });
+  await mount();
+  expect(
+    [...container.querySelectorAll("option")].map((item) => item.textContent),
+  ).toEqual(["Select a workspace", "Synthetic Closers", "AC Operations"]);
+});
+
+it("disables Admin entry while it is pending and clears it after confirmed sign-out", async () => {
+  sessionStorage.setItem("ac:operations-login-entry", String(Date.now()));
+  vi.mocked(platform.loadPlatformIdentity).mockResolvedValue(platformAdmin);
+  vi.mocked(workspaces.loadAdminWorkspaces).mockResolvedValue(named());
   const request = deferred<api.AdminSession>();
   vi.mocked(workspaces.selectOperationsWorkspace).mockReturnValue(
     request.promise,
   );
   await mount();
-  await choose();
-  await submit();
   const buttons = [...container.querySelectorAll("button")];
-  const platformButton = buttons.find(
-    (button) => button.textContent === "Open Platform Admin",
-  )!;
-  expect(platformButton.disabled).toBe(true);
-  await act(async () => platformButton.click());
+  const open = buttons.find((button) => button.textContent === "Open Admin")!;
+  await act(async () => open.click());
+  expect(open.disabled).toBe(true);
+  await act(async () => open.click());
+  expect(workspaces.selectOperationsWorkspace).toHaveBeenCalledOnce();
   expect(navigate).not.toHaveBeenCalled();
   await act(async () => request.resolve(admin));
+  expect(navigate).toHaveBeenCalledExactlyOnceWith("/");
   navigate.mockClear();
   await act(async () =>
     buttons
       .find((button) => button.textContent === "Use another account")!
       .click(),
   );
-  expect(container.textContent).not.toContain("Open Platform Admin");
+  expect(container.textContent).not.toContain("Open Admin");
   expect(container.querySelector('input[name="email"]')).not.toBeNull();
   expect(navigate).not.toHaveBeenCalled();
 });
