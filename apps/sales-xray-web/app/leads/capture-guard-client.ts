@@ -3,7 +3,8 @@ export type CaptureState =
   | "missing"
   | "uploaded"
   | "analysing"
-  | "report_ready";
+  | "report_ready"
+  | "short_call";
 export type CaptureCall = {
   event_id: string;
   lead_id: string;

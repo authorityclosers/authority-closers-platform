@@ -16,6 +16,8 @@ const labels: Record<string, string> = {
   uploaded: "Uploaded",
   analysing: "Analysing",
   report_ready: "Report ready",
+  // Under the short-call rule (owner, 21 Oct 2026): done, with no report.
+  short_call: "Short call · transcript and lead details",
   missing: "No recording after 30 minutes",
   cancelled: "Upload cancelled",
   held: "Upload paused · review this call",
@@ -109,6 +111,8 @@ export type Track = {
   done: number;
   label: string;
   stuck: boolean;
+  /** Finished before the last step: a short call has a transcript and no report. */
+  ended?: boolean;
   fix?: { label: string; href: string };
 };
 const setupFix = {
@@ -127,6 +131,8 @@ export function trackFor(
 ): Track | null {
   if (server?.state === "report_ready")
     return { done: 6, label: "Report ready", stuck: false };
+  if (server?.state === "short_call")
+    return { done: 5, label: labels.short_call, stuck: false, ended: true };
   if (server?.attention)
     return {
       done: 4,
@@ -196,14 +202,16 @@ export function CallTrack({
           aria-label={
             track.done >= TRACK_STEPS.length - 1
               ? "All 7 steps done"
-              : `${track.stuck ? "Stuck at" : "Now at"} ${at}, step ${track.done + 2} of 7`
+              : track.ended
+                ? `Done after ${TRACK_STEPS[track.done]}, no report`
+                : `${track.stuck ? "Stuck at" : "Now at"} ${at}, step ${track.done + 2} of 7`
           }
         >
           {TRACK_STEPS.map((step, index) => (
             <i
               key={step}
               data-done={index <= track.done || undefined}
-              data-now={index === track.done + 1 || undefined}
+              data-now={(!track.ended && index === track.done + 1) || undefined}
             />
           ))}
         </span>
