@@ -69,6 +69,9 @@ let root: Root;
 let answer: { status: number; body: unknown };
 
 beforeEach(() => {
+  // "Today" is a fixed midday, so lines minutes old stay today whatever the clock says (failed just after midnight).
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date(2026, 9, 30, 12, 0));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -112,6 +115,7 @@ afterEach(() => {
   act(() => root.unmount());
   container.remove();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 it("says a ready Report is whose call", () => {
@@ -164,9 +168,12 @@ it("puts who did it first, so nobody reads the lead as the doer", () => {
 });
 
 it("merges today's work and today's Reports, newest first, each once", () => {
+  const now = new Date(2026, 9, 30, 12, 0);
+  const before = (minutes: number) =>
+    new Date(now.getTime() - minutes * 60_000).toISOString();
   const call = work("e1", "asha fictional", {
     submission_id: REPORT,
-    at: minutesAgo(5),
+    at: before(5),
   });
   const rows = teamRows(
     [call],
@@ -174,13 +181,14 @@ it("merges today's work and today's Reports, newest first, each once", () => {
       saved(),
       saved({
         id: "00000000-0000-4000-8000-000000000511",
-        createdAt: minutesAgo(40),
+        createdAt: before(40),
       }),
       saved({
         id: "00000000-0000-4000-8000-000000000512",
-        createdAt: new Date(Date.now() - 3 * 86_400_000).toISOString(),
+        createdAt: before(3 * 24 * 60),
       }),
     ],
+    now,
   );
   // The call already has its Report; the older day's Report is left out.
   expect(rows.map((row) => row.key)).toEqual([
