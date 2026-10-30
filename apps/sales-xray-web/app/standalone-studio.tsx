@@ -18,6 +18,7 @@ import { AccountNavigation } from "./account-navigation";
 import { readAccountProfileEligibility } from "./account-profile-client";
 import { AcquisitionShell } from "./acquisition-shell";
 import { ConsentRenewal } from "./consent-renewal";
+import { CaptureSetupGate } from "./capture-setup/capture-setup-gate";
 import { PhoneOnboarding } from "./leads/phone-onboarding";
 import { PersistentShell } from "./shell/lightbox-shell";
 import { PlayMoveCard } from "./apps/play-move-card";
@@ -326,6 +327,7 @@ function AppFrame({
       <PersistentShell>{children}</PersistentShell>
       <FirstCallGuide />
       <ConsentRenewal />
+      <CaptureSetupGate />
       <PhoneOnboarding />
       <PlayMoveCard />
       <WriteSync />

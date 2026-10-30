@@ -84,6 +84,7 @@ import {
 import { can, ROLE_HINT, ROLE_LABEL, rolesToGive } from "./roles";
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
+import { CaptureSetupPanel } from "./capture-setup-panel";
 import { SeatsPanel, SeatUsePanel, type SeatUse } from "./seats-panel";
 import { TeamPatternsSection } from "./team-patterns-section";
 import {
@@ -577,6 +578,13 @@ export function OrganisationView({
                   yourPersonId={access?.context?.personId ?? null}
                   onMissing={() => setMissing(true)}
                 />
+              </SectionBoundary>
+            )}
+
+            {/* Who hasn't set up call capture (owner, 30 Oct 2026). */}
+            {shows("members") && live && can(myRole, "leads.manage") && (
+              <SectionBoundary name="Call capture">
+                <CaptureSetupPanel key={tenantId} />
               </SectionBoundary>
             )}
 

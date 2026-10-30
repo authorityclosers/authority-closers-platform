@@ -51,6 +51,10 @@ vi.mock("./profile-menu", () => ({
   PROFILE_UPDATED_EVENT: "sales-xray:profile-updated",
   ProfileMenu: () => null,
 }));
+// Call capture setup has its own tests (capture-setup.test.tsx); these count the session's own reads.
+vi.mock("./capture-setup/capture-setup-gate", () => ({
+  CaptureSetupGate: () => null,
+}));
 vi.mock("next/navigation", () => ({
   usePathname: () => pathname,
   useSearchParams: () => new URLSearchParams(),
