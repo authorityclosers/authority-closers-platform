@@ -1,0 +1,267 @@
+name: ARM64 readiness
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["wb-ci/slot-*"]
+    paths: [".github/workflows/arm64-readiness.yml"]
+
+permissions:
+  contents: read
+
+env:
+  DOCKER_BUILD_RECORD_UPLOAD: "false"
+
+jobs:
+  images:
+    runs-on: ${{ matrix.platform.runner }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        platform:
+          - architecture: amd64
+            runner: ubuntu-24.04
+          - architecture: arm64
+            runner: ubuntu-24.04-arm
+        image:
+          - name: api
+            file: infra/application/Dockerfile.python
+            target: runtime
+          - name: learner
+            file: infra/application/Dockerfile.web
+            target: learner
+          - name: admin
+            file: infra/application/Dockerfile.web
+            target: admin
+          - name: coach
+            file: infra/application/Dockerfile.web
+            target: coach
+          - name: sales-xray
+            file: infra/sales-xray-web/Dockerfile
+            target: runtime
+          - name: native
+            file: infra/conversation-worker/Dockerfile
+            target: runtime
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - name: Build unchanged pinned recipe on native architecture
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: .
+          file: ${{ matrix.image.file }}
+          target: ${{ matrix.image.target }}
+          platforms: linux/${{ matrix.platform.architecture }}
+          load: true
+          tags: ac-arm-proof:${{ matrix.image.name }}
+          build-args: AC_RELEASE_ID=${{ github.sha }}
+      - name: Prove architecture and native execution
+        env:
+          IMAGE_NAME: ${{ matrix.image.name }}
+          EXPECTED_ARCH: ${{ matrix.platform.architecture }}
+        run: |
+          set -euo pipefail
+          image="ac-arm-proof:$IMAGE_NAME"
+          docker inspect --format '{{.Architecture}}' "$image" | grep -Fx "$EXPECTED_ARCH"
+          docker inspect "$image" > "$RUNNER_TEMP/image.json"
+          case "$IMAGE_NAME" in
+            native)
+              docker run --rm --network none --read-only "$image" doctor
+              ;;
+            api)
+              docker run --rm --network none --entrypoint python "$image" -c 'import ac_platform.http; import psycopg; import cryptography; import pydantic_core'
+              ;;
+            *)
+              docker run --rm --network none --entrypoint node "$image" -e 'if (process.arch !== process.argv[1]) process.exit(1)' "$(case "$EXPECTED_ARCH" in amd64) echo x64;; arm64) echo arm64;; esac)"
+              container="$(docker run --detach --network none --read-only --tmpfs /tmp --env AC_ENVIRONMENT=staging "$image")"
+              trap 'docker rm --force "$container" >/dev/null' EXIT
+              # The same probe and URL each service's compose healthcheck uses.
+              case "$IMAGE_NAME" in
+                learner) url=http://127.0.0.1:3000/ ;;
+                admin) url=http://127.0.0.1:3001/healthz ;;
+                coach) url=http://127.0.0.1:3002/healthz ;;
+                sales-xray) url=http://127.0.0.1:3016/health ;;
+              esac
+              for attempt in $(seq 1 60); do
+                if docker exec "$container" /usr/local/bin/ac-http-healthcheck "$url"; then
+                  exit 0
+                fi
+                sleep 1
+              done
+              docker logs "$container"
+              exit 1
+              ;;
+          esac
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: image-${{ matrix.platform.architecture }}-${{ matrix.image.name }}
+          path: ${{ runner.temp }}/image.json
+          retention-days: 1
+
+  web-suites:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 40
+    env:
+      AC_ENVIRONMENT: test
+      AC_EXTERNAL_SIDE_EFFECTS_HOLD: "true"
+      AC_EMAIL_PROVIDER: fake
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Install locked dependencies and native tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg g++
+          python -m pip install --disable-pip-version-check uv==0.12.7
+          uv sync --frozen
+          corepack enable
+          corepack prepare pnpm@11.19.0 --activate
+          pnpm install --frozen-lockfile
+          uv run python -c 'from ac_platform.conversation_intelligence.signals import build_native; build_native()'
+      - name: Web suites on ARM
+        run: pnpm -r --if-present test
+
+  python-suites:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix:
+        shard: [0, 1, 2, 3]
+    services:
+      postgres:
+        image: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_DB: ac_platform
+          POSTGRES_USER: ac_owner
+          POSTGRES_PASSWORD: local-owner-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ac_owner -d ac_platform"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+      postgres-recovery-tests:
+        image: postgres@sha256:1c59e2c3c818eaa0f0628f695b36e7c9e362d6b219b36a54a32df645cbd7e1af
+        env:
+          POSTGRES_DB: ac_local_sandbox
+          POSTGRES_USER: ac_owner
+          POSTGRES_PASSWORD: local-owner-only
+        ports:
+          - 127.0.0.1:55432:5432
+        options: >-
+          --health-cmd "pg_isready -U ac_owner -d ac_local_sandbox"
+          --health-interval 3s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      AC_ENVIRONMENT: test
+      AC_RELEASE_ID: ci-${{ github.sha }}
+      AC_DATABASE_URL: postgresql+psycopg://ac_runtime:local-runtime-only@localhost:5432/ac_platform
+      AC_DATABASE_MIGRATOR_URL: postgresql+psycopg://ac_migrator:local-migrator-only@localhost:5432/ac_platform
+      AC_TEST_DATABASE_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
+      AC_MEDIA_DELIVERY_RENEWAL_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@127.0.0.1:55432/ac_local_sandbox
+      AC_OPERATIONS_POSTGRES_TEST_URL: postgresql+psycopg://ac_owner:local-owner-only@localhost:5432/ac_platform
+      AC_EXTERNAL_SIDE_EFFECTS_HOLD: "true"
+      AC_EMAIL_PROVIDER: fake
+      AC_REQUIRE_RESTORE_INPUT_DOCKER_TEST: "1"
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version: 24.19.0
+      - name: Enable pinned pnpm
+        run: corepack enable && corepack prepare pnpm@11.19.0 --activate
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: "3.12"
+      - name: Install uv
+        run: python -m pip install --disable-pip-version-check uv==0.12.7
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile && uv sync --frozen
+      - name: Install ARM codec, filesystem and locked browser prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg g++ postgresql-client acl e2fsprogs util-linux
+          uv run playwright install --with-deps chromium
+      - name: Build verified AudioAtlas for conversation regressions
+        run: |
+          set -euo pipefail
+          command -v g++
+          g++ --version
+          uv run python -c 'from ac_platform.conversation_intelligence.signals import build_native, _native_executable; built = build_native(); assert _native_executable(None) == built.resolve()'
+      - name: Provision least-privilege database roles
+        env:
+          PGPASSWORD: local-owner-only
+        run: >-
+          psql --set ON_ERROR_STOP=1
+          --host localhost
+          --username ac_owner
+          --dbname ac_platform
+          --file infra/local/postgres/init/001-roles.sql
+      - name: Apply and verify PostgreSQL migration chain
+        run: uv run alembic upgrade head && uv run alembic check
+      - name: Run deterministic Python test shard
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/arm64-python-test-shard-${{ matrix.shard }}"
+          uv run python scripts/ci/python_test_shard.py run \
+            --root "${GITHUB_WORKSPACE}" \
+            --shard-index "${{ matrix.shard }}" \
+            --shard-count 4 \
+            --exclude-file scripts/ci/python-test-exclusions.txt \
+            --manifest "${RUNNER_TEMP}/arm64-python-test-shard-${{ matrix.shard }}/manifest.json" \
+            --junitxml "${RUNNER_TEMP}/arm64-python-test-shard-${{ matrix.shard }}/junit.xml" \
+            --basetemp "${RUNNER_TEMP}/python-test-basetemp-${{ matrix.shard }}"
+      - name: Retain Python shard evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: python-test-shard-${{ github.sha }}-${{ github.run_attempt }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/arm64-python-test-shard-${{ matrix.shard }}
+          if-no-files-found: error
+          retention-days: 1
+
+  verify-python-coverage:
+    if: always()
+    needs: python-suites
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: python-test-shard-${{ github.sha }}-${{ github.run_attempt }}-*
+          path: ${{ runner.temp }}/arm64-python-test-shards
+          merge-multiple: false
+      - name: Require complete shard coverage
+        run: >-
+          python3 scripts/ci/python_test_shard.py verify
+          --root "${GITHUB_WORKSPACE}"
+          --shard-count 4
+          --exclude-file scripts/ci/python-test-exclusions.txt
+          --manifest-dir "${{ runner.temp }}/arm64-python-test-shards"
+          --sha "${{ github.sha }}"
+          --run-attempt "${{ github.run_attempt }}"
+      - name: Require passing ARM Python suites
+        env:
+          RESULT: ${{ needs.python-suites.result }}
+        run: test "$RESULT" = success

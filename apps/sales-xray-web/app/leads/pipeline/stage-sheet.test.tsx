@@ -8,6 +8,12 @@ vi.mock("../../telemetry", () => ({
   track: () => undefined,
   waitBand: () => "unknown",
 }));
+vi.mock("../lead-moves", async (original) => ({
+  ...(await original<typeof import("../lead-moves")>()),
+  noteLeadMoved: vi.fn(),
+}));
+
+import { noteLeadMoved } from "../lead-moves";
 
 import type { MoveOption } from "./pipeline-client";
 import { StageSheet, missing, moveInput, type Draft } from "./stage-sheet";
@@ -188,6 +194,10 @@ it("sends the move with only what was asked", async () => {
   });
   expect(move?.body).not.toHaveProperty("nextActionAt");
   expect(moved).toHaveBeenCalled();
+  // The lists leave the moved lead behind at once (owner, 30 Oct 2026).
+  expect(noteLeadMoved).toHaveBeenCalledWith(
+    expect.objectContaining({ lead_id: LEAD.lead_id }),
+  );
 });
 
 it("knows what a move still lacks", () => {

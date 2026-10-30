@@ -142,6 +142,10 @@ class Lead(Base):
     # and opening it goes to that lead. Both null for a lead of its own.
     merged_into_id: Mapped[UUID | None] = mapped_column(Uuid, nullable=True)
     merged_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Live or cold (migration 0146, owner 30 Oct 2026): a bulk-uploaded list kept apart from
+    # the leads worked every day. Null (every lead from before) is "live". Not pipeline_key,
+    # which is the Lead OS pipeline the lead is in. No screen reads it yet.
+    pipeline: Mapped[str | None] = mapped_column(String(8), nullable=True, default="live")
 
 
 class LeadEvent(Base):

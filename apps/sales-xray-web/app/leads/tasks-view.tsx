@@ -4,10 +4,12 @@
  * Tasks (owner, 24 Oct 2026; work-memory engine): the seller's own promises, in
  * three lists: Overdue, Today and Upcoming, earliest first. Done takes a task
  * off with an Undo; Later moves it by 15 minutes, an hour, to this evening or
- * tomorrow. A tap anywhere else opens the lead.
+ * tomorrow. A tap anywhere else opens the lead. + adds one (owner order, 30
+ * Oct 2026, fix 4), and the list then shows the tab it landed in.
  */
 
-import { Check, Clock, ListTodo, MapPin } from "lucide-react";
+import { Check, Clock, ListTodo, MapPin, Plus } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { displayName } from "../display-name";
@@ -24,8 +26,20 @@ import {
   type TaskSnoozeChoice,
   type TaskView,
 } from "./leads-client";
-import { BUCKETS, SNOOZES, bucketLabel, dueWords, kindOf } from "./task-words";
+import {
+  BUCKETS,
+  SNOOZES,
+  bucketFor,
+  bucketLabel,
+  dueWords,
+  kindOf,
+} from "./task-words";
 import styles from "./tasks.module.css";
+
+const AddTaskSheet = dynamic(
+  () => import("./add-task-sheet").then((module) => module.AddTaskSheet),
+  { ssr: false },
+);
 
 type Loaded = TaskList & { view: TaskBucket; round: number };
 
@@ -47,6 +61,8 @@ export function TasksView({
   // Taken off this list while the change is on its way (or kept on the phone).
   const [gone, setGone] = useState<ReadonlySet<string>>(new Set());
   const [later, setLater] = useState<TaskView | null>(null);
+  // A new form each time + opens it.
+  const [adding, setAdding] = useState({ open: false, round: 0 });
 
   useEffect(() => {
     const controller = new AbortController();
@@ -165,15 +181,28 @@ export function TasksView({
 
   return (
     <section className={styles.tasks} aria-label="Tasks">
-      <Segmented
-        label="Which tasks"
-        items={BUCKETS.map((bucket) => ({
-          key: bucket.key,
-          label: bucketLabel(bucket, shown?.counts ?? loaded?.counts ?? null),
-        }))}
-        value={view}
-        onChange={setView}
-      />
+      <div className={styles.head}>
+        <Segmented
+          label="Which tasks"
+          items={BUCKETS.map((bucket) => ({
+            key: bucket.key,
+            label: bucketLabel(bucket, shown?.counts ?? loaded?.counts ?? null),
+          }))}
+          value={view}
+          onChange={setView}
+        />
+        <button
+          type="button"
+          className={styles.add}
+          aria-label="Add task"
+          aria-haspopup="dialog"
+          onClick={() =>
+            setAdding((form) => ({ open: true, round: form.round + 1 }))
+          }
+        >
+          <Plus size={20} aria-hidden="true" />
+        </button>
+      </div>
       {!shown ? (
         <ol className={styles.list} aria-busy="true">
           {Array.from({ length: 5 }, (_, index) => (
@@ -193,7 +222,7 @@ export function TasksView({
                 ? "Nothing due today"
                 : "Nothing coming up"
           }
-          text="Add a task from a lead with Remind. It shows here on its day."
+          text="Add one with +, or from a lead with Remind. It shows here on its day."
         />
       ) : (
         <ol
@@ -280,6 +309,19 @@ export function TasksView({
           ))}
         </div>
       </ActionSheet>
+      {adding.round > 0 ? (
+        <AddTaskSheet
+          key={adding.round}
+          open={adding.open}
+          onClose={() => setAdding((form) => ({ ...form, open: false }))}
+          onAdded={(at) => {
+            setAdding((form) => ({ ...form, open: false }));
+            // The list shows the tab the new task landed in.
+            setView(bucketFor(at, now()));
+            reload();
+          }}
+        />
+      ) : null}
     </section>
   );
 }

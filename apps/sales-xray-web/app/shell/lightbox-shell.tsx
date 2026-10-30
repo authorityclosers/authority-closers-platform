@@ -305,6 +305,11 @@ const AddLeadDialog = dynamic(
   () => loadCaptureDialogs().then((module) => module.AddLeadDialog),
   { ssr: false },
 );
+const loadAddTask = () => import("../leads/add-task-sheet");
+const AddTaskSheet = dynamic(
+  () => loadAddTask().then((module) => module.AddTaskSheet),
+  { ssr: false },
+);
 
 const RAIL_NAME_STYLE: CSSProperties = {
   position: "absolute",
@@ -408,6 +413,8 @@ function LightboxShellFrame({
   // Ask Dipak (28 Oct 2026 meeting): the tab bar's middle slot.
   const [askOpen, setAskOpen] = useState(false);
   const [leadForm, setLeadForm] = useState({ open: false, round: 0 });
+  // The + sheet's Add task (owner order, 30 Oct 2026, fix 4): a new form each time.
+  const [taskForm, setTaskForm] = useState({ open: false, round: 0 });
   const router = useAppRouter();
   const accountAnchorRef = useRef<HTMLElement | null>(null);
   const railRef = useRef<HTMLDivElement | null>(null);
@@ -1036,9 +1043,11 @@ function LightboxShellFrame({
     void loadCaptureDialogs();
     setLeadForm((form) => ({ open: true, round: form.round + 1 }));
   }, []);
-  // Add lead is one tap away while + is open: fetch the form then.
+  // Add lead and Add task are one tap away while + is open: fetch them then.
   useEffect(() => {
-    if (addOpen) void loadCaptureDialogs();
+    if (!addOpen) return;
+    void loadCaptureDialogs();
+    void loadAddTask();
   }, [addOpen]);
   const commands = useMemo<Command[]>(() => {
     const place = (
@@ -2182,8 +2191,25 @@ function LightboxShellFrame({
             setAddOpen(false);
             setLeadForm((form) => ({ open: true, round: form.round + 1 }));
           }}
+          onAddTask={() => {
+            setAddOpen(false);
+            setTaskForm((form) => ({ open: true, round: form.round + 1 }));
+          }}
         />
       )}
+      {/* Mounted from the first Add task on, so it can slide away. */}
+      {taskForm.round > 0 ? (
+        <AddTaskSheet
+          key={taskForm.round}
+          open={taskForm.open}
+          onClose={() => setTaskForm((form) => ({ ...form, open: false }))}
+          onAdded={() => setTaskForm((form) => ({ ...form, open: false }))}
+          onOpenTasks={() => {
+            leavingOverlay();
+            go("/leads?tab=tasks");
+          }}
+        />
+      ) : null}
       {/* Mounted from the first Add lead on, so it can slide away. */}
       {leadForm.round > 0 ? (
         <AddLeadDialog

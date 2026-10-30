@@ -60,6 +60,7 @@ import { PhoneLogCard } from "./phone-log-card";
 import { ANDROID_DOWNLOAD_READY } from "./phone-app-flag";
 import { ActionSheet } from "./action-sheet";
 import { IN_APP_CALL, InAppCallHint, useInPhoneApp } from "./call-hint";
+import { deskWithMoves, useLeadMoves } from "./lead-moves";
 import { preloadFirstLeads } from "./list-cache";
 import {
   cachedDesk,
@@ -436,7 +437,12 @@ export function LeadsRoute({
     desk: serverSeed?.desk ?? seed,
   });
   const deskKey = deskState.identity;
-  const desk = deskFor(deskState, identity);
+  // To call without the leads the person has just worked (lead-moves.ts).
+  const moves = useLeadMoves();
+  const desk = useMemo(() => {
+    const read = deskFor(deskState, identity);
+    return read && deskWithMoves(read, moves);
+  }, [deskState, identity, moves]);
   if (authenticated && serverSeed && !serverConsumed && deskKey !== identity) {
     setDeskState({ identity, desk: serverSeed.desk });
     setServerConsumed(true);
@@ -1475,13 +1481,10 @@ export function LeadsRoute({
                     tabs={[
                       stageStrip[0],
                       { key: "desk", label: "Now", count: toCall },
-                      { key: "more", label: "More" },
                       ...stageStrip.slice(1),
                     ]}
                     current={view}
-                    onChange={(next) =>
-                      next === "more" ? setMoreOpen(true) : go(next)
-                    }
+                    onChange={(next) => go(next)}
                   />
                 ) : (
                   <ViewSwitch
