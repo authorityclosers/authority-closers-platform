@@ -161,3 +161,27 @@ async def test_loader_is_checked_again_for_each_addition(unpaid, tmp_path):
         key=uuid4(),
     )
     assert response.status_code == 409 and response.json()["code"] == "seats_full"
+
+
+async def test_seats_say_no_limit_exactly_when_invites_skip_the_seat_check(unpaid, tmp_path):
+    before = (await call(unpaid, path="/seats")).json()
+    assert (before["total_seats"], before["exempt"]) == (0, False)
+    path = install_approval(unpaid, tmp_path)
+    seats = (await call(unpaid, path="/seats")).json()
+    assert (seats["total_seats"], seats["seats_available"], seats["exempt"]) == (0, 0, True)
+    invited = await call(
+        unpaid,
+        "POST",
+        "/members",
+        body={"email": "no-limit@example.test", "role": "member"},
+        key=uuid4(),
+    )
+    assert invited.status_code == 200, invited.text
+    # A tampered approval lifts nothing, so the read stops claiming no limit too.
+    path.write_bytes(path.read_bytes() + b" ")
+    assert (await call(unpaid, path="/seats")).json()["exempt"] is False
+
+
+async def test_another_organisations_exemption_is_not_this_ones(unpaid, tmp_path):
+    install_approval(unpaid, tmp_path, tenant_id=uuid4())
+    assert (await call(unpaid, path="/seats")).json()["exempt"] is False

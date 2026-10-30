@@ -115,6 +115,7 @@ export function SeatsPanel({
     );
 
   const taken = seats.activeMembers + seats.pendingInvites;
+  if (seats.exempt) return <NoSeatLimit seats={seats} />;
   // Members beyond the seats (a free grant ended) still count in full.
   const scale = Math.max(seats.totalSeats, taken, 1);
   const share = (value: number) => `${(value / scale) * 100}%`;
@@ -250,6 +251,34 @@ export function SeatUsePanel({
             );
           })}
         </ul>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * An organisation the exemption covers: invites need no seat, so the card
+ * says so instead of counting seats it doesn't need (owner order, 30 Oct).
+ */
+function NoSeatLimit({ seats }: { seats: OrgSeats }) {
+  return (
+    <section className={styles.section} aria-labelledby="org-seats">
+      <div className={styles.head}>
+        <h2 id="org-seats" className={styles.title}>
+          Seats
+        </h2>
+        <span className={styles.summary}>No seat limit</span>
+      </div>
+      <div className={styles.card}>
+        <ul className={styles.legend}>
+          <li data-part="members">{plural(seats.activeMembers, "member")}</li>
+          <li data-part="invites">
+            {plural(seats.pendingInvites, "invite")} waiting
+          </li>
+        </ul>
+        <p className={styles.note}>
+          <b>No seat limit.</b> Invite as many people as you need.
+        </p>
       </div>
     </section>
   );
