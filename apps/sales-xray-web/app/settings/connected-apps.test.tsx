@@ -29,7 +29,11 @@ vi.mock("../organisation/integrations/integrations-panel", () => ({
   ),
 }));
 
-import { ConnectedApps, appReturnNotice } from "./connected-apps";
+import {
+  ConnectedApps,
+  appReturnNotice,
+  outcomeSearch,
+} from "./connected-apps";
 import { parseHealth } from "./connected-apps-client";
 
 (
@@ -967,4 +971,49 @@ it("opens lead stages on their own page, and follows only this app's pages", asy
       parseHealth({ apps: [{ app: "lead_stages", state: "ready", page }] })
         ?.apps[0].page,
     ).toBeNull();
+});
+
+it("finishes a WhatsApp connect the phone app brings back here, and says how it went", async () => {
+  const verifier = "v".repeat(43);
+  window.localStorage.setItem(
+    "sx.appConnect",
+    JSON.stringify({ provider: "whatsapp", verifier, at: Date.now() }),
+  );
+  window.history.replaceState(
+    null,
+    "",
+    `/settings/apps#connect=whatsapp&handoff=${"h".repeat(40)}`,
+  );
+  routes["POST /v1/lead-desk/whatsapp/app-complete"] = () =>
+    Response.json({ result: "connected" });
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  expect(
+    calls.find(
+      (call) => call.key === "POST /v1/lead-desk/whatsapp/app-complete",
+    )?.body,
+  ).toEqual({ handoff: "h".repeat(40), verifier });
+  expect(seen.notices.map((notice) => notice.title)).toContain(
+    "WhatsApp is connected",
+  );
+  expect(window.location.hash).toBe("");
+});
+
+it("says a Messenger connect stopped in the phone's browser wasn't made", async () => {
+  window.history.replaceState(
+    null,
+    "",
+    "/settings/apps#connect=messaging&result=cancelled",
+  );
+  await act(async () => root.render(<ConnectedApps />));
+  await flush();
+  expect(seen.notices.map((notice) => notice.title)).toContain(
+    "Messenger wasn’t connected",
+  );
+  expect(outcomeSearch("whatsapp", { result: "nonumbers" })).toBe(
+    "?connect_error=no_numbers",
+  );
+  expect(outcomeSearch("messenger", { result: "<odd>" })).toBe(
+    "?connect_error=failed",
+  );
 });

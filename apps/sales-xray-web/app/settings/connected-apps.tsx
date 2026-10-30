@@ -34,6 +34,7 @@ import {
 } from "lucide-react";
 
 import { notify } from "../notice-center";
+import { useAppConnect, type ConnectOutcome } from "../leads/app-connect";
 import { readSalesXrayWorkspaces } from "../sales-xray-workspaces";
 import { IntegrationsPanel } from "../organisation/integrations/integrations-panel";
 import { goToProvider } from "../sign-in-connect";
@@ -132,6 +133,24 @@ const RETURN_WORDS: Record<string, string> = {
     "No WhatsApp number was shared. Connect again and choose the number to use.",
   failed: "Try again in a moment.",
 };
+
+// The server's word for a finished connect, as the address's connect_error code.
+const OUTCOME_CODES: Record<string, string> = {
+  taken: "in_use",
+  nopages: "no_pages",
+  noaccounts: "no_accounts",
+  nonumbers: "no_numbers",
+};
+
+/** The address a finished connect from the phone app would have come back with. */
+export function outcomeSearch(
+  card: string,
+  { result }: ConnectOutcome,
+): string {
+  if (result === "connected") return `?connected=${card}`;
+  const code = OUTCOME_CODES[result] ?? result;
+  return `?connect_error=${code in RETURN_WORDS ? code : "failed"}`;
+}
 
 /** The one corner card for the way back from a connect, or null. */
 export function appReturnNotice(
@@ -1014,6 +1033,16 @@ export function ConnectedApps() {
     );
     return () => controller.abort();
   }, [attempt]);
+
+  // Back from WhatsApp's or Messenger's sign-in in the phone's browser: the app
+  // reopens this page with the hand-off, and the connect finishes here.
+  const finished = (card: string) => (outcome: ConnectOutcome) => {
+    const notice = appReturnNotice(outcomeSearch(card, outcome), card);
+    if (notice) notify(notice);
+    setAttempt((value) => value + 1);
+  };
+  useAppConnect("whatsapp", finished("whatsapp"));
+  useAppConnect("messaging", finished("messenger"));
 
   // Back from a connect: say how it went once, then drop the query so a reload
   // doesn't say it again. The health read on mount shows the new state.

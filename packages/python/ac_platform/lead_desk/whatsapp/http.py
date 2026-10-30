@@ -572,14 +572,11 @@ def install_whatsapp_http(application: FastAPI, ctx: RouteContext) -> None:
                     state=state_value,
                 ),
             )
-        back = f"{app_url()}/organisation?tab=integrations"
 
         def done(outcome: str) -> Response:
-            url = (
-                app_return.settings_url(app_url(), card, outcome)
-                if card
-                else f"{back}&whatsapp={outcome}"
-            )
+            # Always Settings → Connected apps, at the card it started from or the
+            # WhatsApp card (the old Integrations address now opens Developers).
+            url = app_return.settings_url(app_url(), card or "whatsapp", outcome)
             return RedirectResponse(url, status_code=303, headers=PRIVATE)
 
         if request.query_params.get("error"):

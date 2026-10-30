@@ -352,14 +352,11 @@ def install_social_http(application: FastAPI, ctx: RouteContext) -> None:
                     cfg.token_key, provider="messaging", code=params["code"][:2048], state=state
                 ),
             )
-        back = f"{app_url()}/organisation?tab=integrations"
 
         def done(outcome: str) -> Response:
-            url = (
-                app_return.settings_url(app_url(), card, outcome)
-                if card
-                else f"{back}&messaging={outcome}"
-            )
+            # Always Settings → Connected apps, at the card it started from or the
+            # Messenger card (the old Integrations address now opens Developers).
+            url = app_return.settings_url(app_url(), card or "messenger", outcome)
             return RedirectResponse(url, status_code=303, headers=PRIVATE)
 
         if params.get("error"):
