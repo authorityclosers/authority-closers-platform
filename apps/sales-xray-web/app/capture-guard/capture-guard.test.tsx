@@ -347,6 +347,18 @@ it("tracks each call from dialled to its report, or where it is stuck", () => {
     ),
   ).toMatchObject({ done: 4, label: "Analysing" });
   expect(trackFor(null, serverCall({ state: "report_ready" }))?.done).toBe(6);
+  // A short call is done with its transcript: not stuck, and no report is coming.
+  expect(
+    trackFor(
+      { eventId: "event", state: "analysing" },
+      serverCall({ state: "short_call" }),
+    ),
+  ).toMatchObject({
+    done: 5,
+    stuck: false,
+    ended: true,
+    label: "Short call · transcript and lead details",
+  });
   expect(
     trackFor(null, serverCall({ state: "uploaded", attention: true })),
   ).toMatchObject({ done: 4, stuck: true });
@@ -382,6 +394,24 @@ it("shows the seven steps, the stuck one and its fix", async () => {
   );
   expect(host.querySelector("a")).toBeNull();
   expect(host.textContent).toContain("Analysing");
+  await act(async () => root?.unmount());
+  host.remove();
+  // A short call ends after Analysing: no dot waits on a report.
+  await render(
+    <CallTrack
+      track={{
+        done: 5,
+        stuck: false,
+        ended: true,
+        label: "Short call · transcript and lead details",
+      }}
+    />,
+  );
+  expect(host.querySelectorAll("i[data-done]")).toHaveLength(6);
+  expect(host.querySelector("i[data-now]")).toBeNull();
+  expect(host.querySelector('[role="img"]')?.getAttribute("aria-label")).toBe(
+    "Done after Analysing, no report",
+  );
 });
 it("a list row with no capture evidence says nothing", async () => {
   vi.mocked(autoCaptureStates).mockResolvedValue([]);

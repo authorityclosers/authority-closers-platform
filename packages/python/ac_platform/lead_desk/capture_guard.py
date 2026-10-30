@@ -2,7 +2,9 @@
 
 Recording attachments do not count as new calls. A received recording needs a
 ready server recording, and a ready report needs an unerased report on a
-completed run. Nothing here starts analysis or changes a seller's score.
+completed run. A call the short-call rule held (owner, 21 Oct 2026: transcript
+and lead details only) is done without a report. Nothing here starts analysis
+or changes a seller's score.
 """
 
 from __future__ import annotations
@@ -18,6 +20,7 @@ from sqlalchemy import and_, select
 
 from ac_platform.conversation_intelligence.guest_models import ConversationGuestSubmission
 from ac_platform.conversation_intelligence.models import (
+    ConversationProcessingPlan,
     ConversationRecording,
     ConversationReportDraft,
     ConversationRun,
@@ -29,7 +32,9 @@ if TYPE_CHECKING:
     from ac_platform.lead_desk.store import LeadDesk
 
 IST = ZoneInfo("Asia/Kolkata")
-CaptureState = Literal["waiting", "missing", "uploaded", "analysing", "report_ready"]
+CaptureState = Literal["waiting", "missing", "uploaded", "analysing", "report_ready", "short_call"]
+# The plan holds a short call with one of these (call_ai.policy.SHORT_CODES).
+SHORT_CALL_HOLDS = ("ai_short_call", "ai_no_conversation")
 
 
 class CaptureCall(BaseModel):
@@ -67,13 +72,14 @@ def state_for(
     received: bool,
     run_state: str | None = None,
     report: bool = False,
+    short: bool = False,
 ) -> CaptureState:
     if received:
         if run_state == "completed" and report:
             return "report_ready"
         if run_state in {"queued", "running"}:
             return "analysing"
-        return "uploaded"
+        return "short_call" if short else "uploaded"
     return "missing" if now - at >= timedelta(minutes=30) else "waiting"
 
 
@@ -86,7 +92,9 @@ def daily_rates(calls: list[CaptureCall], names: dict[UUID, str]) -> list[Captur
     for (person, day), group in sorted(
         groups.items(), key=lambda item: (-item[0][1].toordinal(), str(item[0][0]))
     ):
-        received = sum(call.state in {"uploaded", "analysing", "report_ready"} for call in group)
+        received = sum(
+            call.state in {"uploaded", "analysing", "report_ready", "short_call"} for call in group
+        )
         analysed = sum(call.state == "report_ready" for call in group)
         rate = received * 100 / len(group)
         result.append(
@@ -166,8 +174,21 @@ async def read(desk: LeadDesk, *, days: int = 7, event_id: UUID | None = None) -
         for attachment in linked.values()
         if (value := desk._uuid(attachment.data.get("submission_id"))) is not None
     }
-    evidence: dict[UUID, tuple[bool, str | None, bool]] = {}
+    evidence: dict[UUID, tuple[bool, str | None, bool, bool]] = {}
     if submission_ids:
+        plan = ConversationProcessingPlan
+        short = (
+            select(plan.id)
+            .where(
+                plan.recording_id == ConversationRecording.id,
+                plan.tenant_id == ConversationRecording.tenant_id,
+                plan.generation == ConversationRecording.generation,
+                plan.erased_at.is_(None),
+                plan.state == "held",
+                plan.progress["failure_code"].as_string().in_(SHORT_CALL_HOLDS),
+            )
+            .exists()
+        )
         rows = (
             await desk.db.execute(
                 select(
@@ -175,6 +196,7 @@ async def read(desk: LeadDesk, *, days: int = 7, event_id: UUID | None = None) -
                     ConversationRecording.state,
                     ConversationRun.state,
                     ConversationReportDraft.id,
+                    short,
                 )
                 .join(
                     ConversationRecording,
@@ -205,16 +227,18 @@ async def read(desk: LeadDesk, *, days: int = 7, event_id: UUID | None = None) -
                 .order_by(ConversationRun.created_at.desc(), ConversationRun.id)
             )
         ).all()
-        for submission, recording_state, run_state, report_id in rows:
+        for submission, recording_state, run_state, report_id, held_short in rows:
             evidence.setdefault(
-                submission, (recording_state == "ready", run_state, report_id is not None)
+                submission,
+                (recording_state == "ready", run_state, report_id is not None, bool(held_short)),
             )
     calls = []
     for event in events:
         matched = linked.get(str(event.id))
         submission = desk._uuid(matched.data.get("submission_id")) if matched else None
-        received, run, report = (
-            evidence.get(submission, (False, None, False)) if submission else (False, None, False)
+        nothing = (False, None, False, False)
+        received, run, report, held_short = (
+            evidence.get(submission, nothing) if submission else nothing
         )
         at = (
             event.created_at.replace(tzinfo=UTC)
@@ -235,6 +259,7 @@ async def read(desk: LeadDesk, *, days: int = 7, event_id: UUID | None = None) -
                     received=received,
                     run_state=run,
                     report=report,
+                    short=held_short,
                 ),
                 attention=received and run in {"failed", "cancelled"},
             )
