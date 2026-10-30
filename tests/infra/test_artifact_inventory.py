@@ -364,7 +364,9 @@ def test_all_image_builds_disable_automatic_docker_record_uploads() -> None:
                 }
                 assert effective["DOCKER_BUILD_RECORD_UPLOAD"] == "false"
                 count += 1
-    assert count == 6
+    # application.yml 4, sales-xray web 1, native 1; arm64-readiness and release-images-arm64 1 each
+    # (their matrices cover all six images).
+    assert count == 8
 
 
 @pytest.mark.parametrize("expiry", ["expired", "past", "margin"])
