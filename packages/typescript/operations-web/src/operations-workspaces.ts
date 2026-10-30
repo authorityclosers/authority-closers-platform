@@ -23,6 +23,47 @@ export const operationsWorkspacesSchema = z
       });
   });
 export type OperationsWorkspaces = z.infer<typeof operationsWorkspacesSchema>;
+
+/** What a workspace is, as Admin's directory says it (never read from a name). */
+export const workspaceKindSchema = z.enum([
+  "company",
+  "customer",
+  "personal",
+  "sandbox",
+  "operations",
+  "other",
+]);
+export type WorkspaceKind = z.infer<typeof workspaceKindSchema>;
+export const adminWorkspacesSchema = z
+  .object({
+    person_id: z.uuid(),
+    session_id: z.uuid(),
+    selected_tenant_id: z.uuid().nullable(),
+    workspaces: z
+      .array(
+        z
+          .object({
+            tenant_id: z.uuid(),
+            name: z.string().min(1).max(200),
+            kind: workspaceKindSchema,
+          })
+          .strict(),
+      )
+      .max(500),
+  })
+  .strict();
+export type AdminWorkspaces = z.infer<typeof adminWorkspacesSchema>;
+
+/** The words Admin's person menu badges each kind with. */
+const KIND_WORDS: Record<WorkspaceKind, string> = {
+  company: "Our company",
+  customer: "Customer",
+  personal: "Personal",
+  sandbox: "Sandbox",
+  operations: "Staff",
+  other: "Other",
+};
+
 export class OperationsWorkspaceError extends Error {
   constructor(
     message = "Your workspace could not be verified. Check your connection and try again.",
@@ -57,6 +98,78 @@ export async function loadOperationsWorkspaces({
   } catch {
     throw new OperationsWorkspaceError();
   }
+}
+
+/**
+ * The person's own workspaces as Admin names them ("AC Operations" for the
+ * staff workspace) and what each is. Presentation and routing only: null when
+ * unavailable, and the API still checks every selection, page and command.
+ */
+export async function loadAdminWorkspaces({
+  fetcher = fetch,
+  signal,
+}: Options = {}): Promise<AdminWorkspaces | null> {
+  try {
+    const response = await fetcher("/v1/me/admin-workspaces", {
+      method: "GET",
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      signal,
+      headers: { accept: "application/json" },
+    });
+    if (!response.ok) return null;
+    const parsed = adminWorkspacesSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What each choice reads, so no two ever read the same: Admin's name when it
+ * is known for this session, then what the workspace is when names repeat,
+ * then the start of its id when even that repeats.
+ */
+export function workspaceLabels(
+  choices: OperationsWorkspaces,
+  known: AdminWorkspaces | null,
+): Map<string, string> {
+  const named =
+    known &&
+    known.person_id === choices.person_id &&
+    known.session_id === choices.session_id
+      ? new Map(known.workspaces.map((item) => [item.tenant_id, item]))
+      : new Map<string, AdminWorkspaces["workspaces"][number]>();
+  const labels = new Map(
+    choices.workspaces.map((item) => [
+      item.tenant_id,
+      named.get(item.tenant_id)?.name ?? item.name,
+    ]),
+  );
+  const steps: ((id: string, label: string) => string)[] = [
+    (id, label) => {
+      const kind = named.get(id)?.kind;
+      return kind ? `${label} · ${KIND_WORDS[kind]}` : label;
+    },
+    (id, label) => `${label} · ${id.slice(0, 8)}`,
+    (id, label) => `${label} · ${id}`,
+  ];
+  for (const step of steps) {
+    const counts = new Map<string, number>();
+    for (const label of labels.values()) {
+      const key = label.trim().toLowerCase();
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    let repeated = false;
+    for (const [id, label] of labels) {
+      if ((counts.get(label.trim().toLowerCase()) ?? 0) < 2) continue;
+      labels.set(id, step(id, label));
+      repeated = true;
+    }
+    if (!repeated) break;
+  }
+  return labels;
 }
 
 export function operationsSessionMatches(

@@ -1,8 +1,11 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  loadAdminWorkspaces,
   loadOperationsWorkspaces,
   operationsSessionMatches,
   selectOperationsWorkspace,
+  workspaceLabels,
+  type AdminWorkspaces,
   type OperationsWorkspaces,
 } from "@ac/operations-web/workspaces";
 
@@ -220,5 +223,159 @@ describe("canonical operations workspace selection", () => {
         "coach",
       ),
     ).toBe(false);
+  });
+});
+
+const third = "55555555-5555-4555-8555-555555555555";
+const alike: OperationsWorkspaces = {
+  ...choices,
+  workspaces: [
+    { tenant_id: tenant, name: "Synthetic Closers" },
+    { tenant_id: other, name: "Synthetic Closers" },
+    { tenant_id: third, name: "Synthetic Learners" },
+  ],
+};
+function named(
+  workspaces: AdminWorkspaces["workspaces"],
+  change: Partial<AdminWorkspaces> = {},
+): AdminWorkspaces {
+  return {
+    person_id: person,
+    session_id: session,
+    selected_tenant_id: null,
+    workspaces,
+    ...change,
+  };
+}
+
+describe("Admin's names for the person's own workspaces", () => {
+  it("reads the own-session fixed path, no-store and same-origin", async () => {
+    const body = named([
+      { tenant_id: other, name: "AC Operations", kind: "operations" },
+    ]);
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(Response.json(body));
+    const signal = new AbortController().signal;
+    await expect(loadAdminWorkspaces({ fetcher, signal })).resolves.toEqual(
+      body,
+    );
+    expect(fetcher).toHaveBeenCalledWith(
+      "/v1/me/admin-workspaces",
+      expect.objectContaining({
+        method: "GET",
+        credentials: "same-origin",
+        cache: "no-store",
+        redirect: "error",
+        signal,
+      }),
+    );
+  });
+  it.each([
+    () => new Response(null, { status: 404 }),
+    () => new Response(null, { status: 403 }),
+    () => Response.json({ workspaces: [] }),
+    () =>
+      Response.json(
+        named([
+          { tenant_id: other, name: "AC Operations", kind: "admin" },
+        ] as never),
+      ),
+    () =>
+      Response.json({
+        ...named([]),
+        platform_permissions: ["platform_access_manage"],
+      }),
+  ])(
+    "is quietly unavailable for a refused or odd answer %#",
+    async (answer) => {
+      await expect(
+        loadAdminWorkspaces({
+          fetcher: vi.fn<typeof fetch>().mockResolvedValue(answer()),
+        }),
+      ).resolves.toBeNull();
+    },
+  );
+  it("is quietly unavailable when the network fails", async () => {
+    await expect(
+      loadAdminWorkspaces({
+        fetcher: vi.fn<typeof fetch>().mockRejectedValue(new Error("offline")),
+      }),
+    ).resolves.toBeNull();
+  });
+});
+
+describe("what each workspace choice reads", () => {
+  const labels = (known: AdminWorkspaces | null, from = alike) => [
+    ...workspaceLabels(from, known).values(),
+  ];
+
+  it("uses Admin's name for the staff workspace, so the two no longer match", () => {
+    expect(
+      labels(
+        named([
+          { tenant_id: tenant, name: "Synthetic Closers", kind: "company" },
+          { tenant_id: other, name: "AC Operations", kind: "operations" },
+          { tenant_id: third, name: "Personal accounts", kind: "personal" },
+        ]),
+      ),
+    ).toEqual(["Synthetic Closers", "AC Operations", "Personal accounts"]);
+  });
+  it("adds what each is when Admin's names still repeat", () => {
+    expect(
+      labels(
+        named([
+          { tenant_id: tenant, name: "Synthetic Closers", kind: "company" },
+          { tenant_id: other, name: "Synthetic Closers", kind: "customer" },
+        ]),
+      ),
+    ).toEqual([
+      "Synthetic Closers · Our company",
+      "Synthetic Closers · Customer",
+      "Synthetic Learners",
+    ]);
+  });
+  it.each([
+    null,
+    named(
+      [
+        { tenant_id: tenant, name: "Synthetic Closers", kind: "company" },
+        { tenant_id: other, name: "AC Operations", kind: "operations" },
+      ],
+      { session_id: other },
+    ),
+  ])(
+    "tells repeated names apart by id without names for this session %#",
+    (known) => {
+      expect(labels(known)).toEqual([
+        "Synthetic Closers · 33333333",
+        "Synthetic Closers · 44444444",
+        "Synthetic Learners",
+      ]);
+    },
+  );
+  it("never repeats even when the kind and the id start repeat", () => {
+    const twin = "33333333-0000-4000-8000-000000000000";
+    const result = labels(
+      named([
+        { tenant_id: tenant, name: "Synthetic Closers", kind: "customer" },
+        { tenant_id: twin, name: "Synthetic Closers", kind: "customer" },
+      ]),
+      {
+        ...choices,
+        workspaces: [
+          { tenant_id: tenant, name: "Synthetic Closers" },
+          { tenant_id: twin, name: "Synthetic Closers" },
+        ],
+      },
+    );
+    expect(new Set(result).size).toBe(2);
+    expect(result[1]).toContain(twin);
+  });
+  it("leaves distinct names as they are", () => {
+    expect(labels(null, choices)).toEqual([
+      "Synthetic Academy",
+      "Second Academy",
+    ]);
   });
 });

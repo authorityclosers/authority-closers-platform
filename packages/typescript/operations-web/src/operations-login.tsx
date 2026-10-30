@@ -15,10 +15,13 @@ import {
 } from "./platform-identity";
 import { loginLocalAdmin } from "./local-admin-login";
 import {
+  loadAdminWorkspaces,
   loadOperationsWorkspaces,
   operationsSessionMatches,
   selectOperationsWorkspace,
+  workspaceLabels,
   OperationsWorkspaceError,
+  type AdminWorkspaces,
   type OperationsWorkspaces,
   type OperationsSurface,
 } from "./operations-workspaces";
@@ -43,6 +46,149 @@ function hasMatchingPlatformAccess(
   )
     throw new OperationsWorkspaceError();
   return true;
+}
+
+// One automatic entry per half minute: if Admin sends the person straight
+// back here, the page stops and offers the way in instead of looping.
+const entryKey = "ac:operations-login-entry";
+const entryWindowMs = 30_000;
+function enteredRecently(): boolean {
+  try {
+    const elapsed = Date.now() - Number(sessionStorage.getItem(entryKey));
+    return elapsed >= 0 && elapsed < entryWindowMs;
+  } catch {
+    return false;
+  }
+}
+function enter(destination: string) {
+  try {
+    sessionStorage.setItem(entryKey, String(Date.now()));
+  } catch {
+    /* Without storage the way in still works; only the loop guard is lost. */
+  }
+  // Re-enter through server admission with a fresh document; discard cached context.
+  window.location.assign(destination);
+}
+
+const withSignal =
+  (signal: AbortSignal): typeof fetch =>
+  (input, init) =>
+    fetch(input, { ...init, signal });
+
+async function selectedContextAdmits(
+  next: OperationsWorkspaces,
+  surface: OperationsSurface,
+  signal: AbortSignal,
+): Promise<boolean> {
+  if (!next.selected_tenant_id) return false;
+  try {
+    const session = await loadAdminSession(withSignal(signal));
+    return operationsSessionMatches(
+      session,
+      next,
+      next.selected_tenant_id,
+      surface,
+    );
+  } catch {
+    /* A different authorized workspace may still be available. */
+    return false;
+  }
+}
+
+/**
+ * Opens Admin without a choice whenever there is nothing to choose (owner,
+ * 30 Oct 2026: "he should be directly inside the admin, and choosing a
+ * workspace can be inside"). Platform staff open it in the staff workspace
+ * (AC Operations) when they belong to it; Admin home sends anyone that
+ * workspace does not admit on to Platform, and organisations are switched
+ * inside Admin. Anyone already in a workspace that opens Admin goes straight
+ * in, and so does anyone with exactly one workspace. False keeps the picker.
+ * Selecting only changes which of the person's own workspaces is active; the
+ * API re-checks it and every page and command.
+ */
+async function enterWithoutChoice(
+  next: OperationsWorkspaces,
+  surface: OperationsSurface,
+  platform: boolean,
+  known: AdminWorkspaces | null,
+  signal: AbortSignal,
+): Promise<boolean> {
+  if (surface === "admin" && platform) {
+    const staff = known?.workspaces.find(
+      (item) => item.kind === "operations",
+    )?.tenant_id;
+    if (
+      staff &&
+      staff !== next.selected_tenant_id &&
+      next.workspaces.some((item) => item.tenant_id === staff)
+    ) {
+      try {
+        await selectOperationsWorkspace(next, staff, surface, { signal });
+      } catch {
+        /* Admin home still decides: Platform when this workspace opens no console. */
+      }
+    }
+    return true;
+  }
+  if (await selectedContextAdmits(next, surface, signal)) return true;
+  if (surface === "admin" && next.workspaces.length === 1) {
+    await selectOperationsWorkspace(
+      next,
+      next.workspaces[0].tenant_id,
+      surface,
+      { signal },
+    );
+    return true;
+  }
+  return false;
+}
+
+type Arrival = {
+  platform: boolean;
+  known: AdminWorkspaces | null;
+  entered: boolean;
+  failure: unknown;
+};
+
+/** After sign-in, or on a session that already exists: in, or the picker. */
+async function arrive(
+  next: OperationsWorkspaces,
+  surface: OperationsSurface,
+  signal: AbortSignal,
+  automatic: boolean,
+): Promise<Arrival> {
+  const [platform, named] =
+    surface === "admin"
+      ? await Promise.all([
+          loadPlatformIdentity({ signal }),
+          loadAdminWorkspaces({ signal }),
+        ])
+      : [null, null];
+  const known =
+    named &&
+    named.person_id === next.person_id &&
+    named.session_id === next.session_id
+      ? named
+      : null;
+  const arrival: Arrival = {
+    platform: hasMatchingPlatformAccess(platform, next),
+    known,
+    entered: false,
+    failure: null,
+  };
+  if (signal.aborted || (automatic && enteredRecently())) return arrival;
+  try {
+    arrival.entered = await enterWithoutChoice(
+      next,
+      surface,
+      arrival.platform,
+      known,
+      signal,
+    );
+  } catch (failure) {
+    arrival.failure = failure;
+  }
+  return arrival;
 }
 
 export function OperationsLogin({
@@ -71,6 +217,7 @@ function OperationsLoginForm({
   const [pending, setPending] = useState(!local);
   const [error, setError] = useState("");
   const [choices, setChoices] = useState<OperationsWorkspaces | null>(null);
+  const [known, setKnown] = useState<AdminWorkspaces | null>(null);
   const [platformAvailable, setPlatformAvailable] = useState(false);
   const [tenantId, setTenantId] = useState("");
   const inFlight = useRef(false);
@@ -85,60 +232,34 @@ function OperationsLoginForm({
   useEffect(() => {
     const controller = new AbortController();
     current.current = controller;
+    const active = () =>
+      !controller.signal.aborted && current.current === controller;
     if (!local) {
-      // Recover an OAuth-returned session using reads only; never select on mount.
+      // Recover an existing session (an OAuth return or a revisit) with reads;
+      // a workspace is selected only when there is nothing to choose.
       void loadOperationsWorkspaces({ signal: controller.signal })
         .then(async (next) => {
-          if (controller.signal.aborted || current.current !== controller)
+          if (!active() || !next) return;
+          const arrival = await arrive(next, surface, controller.signal, true);
+          if (!active()) return;
+          setPlatformAvailable(arrival.platform);
+          setKnown(arrival.known);
+          if (arrival.entered) {
+            enter(destination);
             return;
-          const platform =
-            surface === "admin" && next
-              ? await loadPlatformIdentity({ signal: controller.signal })
-              : null;
-          if (controller.signal.aborted || current.current !== controller)
-            return;
-          const canOpenPlatform = next
-            ? hasMatchingPlatformAccess(platform, next)
-            : false;
-          setPlatformAvailable(canOpenPlatform);
-          // A platform grant is an additional destination, not a reason to
-          // bypass the academy selector. Never select a tenant on mount.
-          if (!canOpenPlatform && next?.selected_tenant_id) {
-            try {
-              const session = await loadAdminSession((input, init) =>
-                fetch(input, { ...init, signal: controller.signal }),
-              );
-              if (
-                !controller.signal.aborted &&
-                current.current === controller &&
-                operationsSessionMatches(
-                  session,
-                  next,
-                  next.selected_tenant_id,
-                  surface,
-                )
-              ) {
-                window.location.assign(destination);
-                return;
-              }
-            } catch {
-              /* A different authorized workspace may still be available. */
-            }
           }
-          if (!controller.signal.aborted && current.current === controller) {
-            setChoices(next);
-            setTenantId("");
-          }
+          setChoices(next);
+          setTenantId("");
+          if (arrival.failure) setError(safeError(arrival.failure));
         })
         .catch(() => {
-          if (!controller.signal.aborted && current.current === controller)
+          if (active())
             setError(
               "Your existing session could not be checked. You can try signing in again.",
             );
         })
         .finally(() => {
-          if (!controller.signal.aborted && current.current === controller)
-            setPending(false);
+          if (active()) setPending(false);
         });
     }
     return () => {
@@ -167,7 +288,7 @@ function OperationsLoginForm({
         await selectOperationsWorkspace(choices, tenantId, surface, {
           signal: controller.signal,
         });
-        if (active()) window.location.assign(destination);
+        if (active()) enter(destination);
         return;
       }
       if (local) {
@@ -220,42 +341,48 @@ function OperationsLoginForm({
         throw new OperationsWorkspaceError(
           "Your sign-in session expired. Please sign in again.",
         );
-      const platform =
-        surface === "admin"
-          ? await loadPlatformIdentity({ signal: controller.signal })
-          : null;
+      const arrival = await arrive(next, surface, controller.signal, false);
       if (!active()) return;
-      const canOpenPlatform = hasMatchingPlatformAccess(platform, next);
-      setPlatformAvailable(canOpenPlatform);
-      if (!canOpenPlatform && next.selected_tenant_id) {
-        try {
-          const session = await loadAdminSession((input, init) =>
-            fetch(input, { ...init, signal: controller.signal }),
-          );
-          if (
-            active() &&
-            operationsSessionMatches(
-              session,
-              next,
-              next.selected_tenant_id,
-              surface,
-            )
-          ) {
-            window.location.assign(destination);
-            return;
-          }
-        } catch {
-          /* Explicit selection remains available; no authority is inferred. */
-        }
+      setPlatformAvailable(arrival.platform);
+      setKnown(arrival.known);
+      if (arrival.entered) {
+        enter(destination);
+        return;
       }
-      if (active()) {
-        setChoices(next);
-        setTenantId("");
-      }
+      setChoices(next);
+      setTenantId("");
+      if (arrival.failure) setError(safeError(arrival.failure));
     } catch (failure) {
       if (active()) setError(safeError(failure));
     } finally {
       if (active()) {
+        setPending(false);
+        inFlight.current = false;
+      }
+    }
+  }
+
+  /** The way in when automatic entry stopped: the same staff-workspace rule. */
+  async function openAdmin() {
+    if (!choices || !hydrated || pending || inFlight.current) return;
+    inFlight.current = true;
+    setPending(true);
+    setError("");
+    current.current?.abort();
+    const controller = new AbortController();
+    current.current = controller;
+    try {
+      await enterWithoutChoice(
+        choices,
+        surface,
+        true,
+        known,
+        controller.signal,
+      );
+      if (!controller.signal.aborted && current.current === controller)
+        enter("/");
+    } finally {
+      if (!controller.signal.aborted && current.current === controller) {
         setPending(false);
         inFlight.current = false;
       }
@@ -281,6 +408,7 @@ function OperationsLoginForm({
       if (!response.ok) throw new Error();
       if (!controller.signal.aborted && current.current === controller) {
         setChoices(null);
+        setKnown(null);
         setPlatformAvailable(false);
         setTenantId("");
       }
@@ -294,6 +422,8 @@ function OperationsLoginForm({
       }
     }
   }
+
+  const labels = choices ? workspaceLabels(choices, known) : null;
 
   return (
     <main className="dev-admin-login-shell" id="admin-content">
@@ -320,7 +450,7 @@ function OperationsLoginForm({
               {choices.workspaces.length
                 ? "Open a workspace assigned to your account. Your permissions are checked before you enter."
                 : platformAvailable
-                  ? "Your account has platform access. Open Platform Admin to manage the platform."
+                  ? "Your account has platform access. Open Admin to manage the platform."
                   : "No active workspace is assigned to this account. Contact your administrator or use another account."}
             </p>
             {choices.workspaces.length > 0 && (
@@ -336,7 +466,7 @@ function OperationsLoginForm({
                   <option value="">Select a workspace</option>
                   {choices.workspaces.map((item) => (
                     <option key={item.tenant_id} value={item.tenant_id}>
-                      {item.name}
+                      {labels?.get(item.tenant_id) ?? item.name}
                     </option>
                   ))}
                 </select>
@@ -417,15 +547,11 @@ function OperationsLoginForm({
                 className="button button-secondary"
                 type="button"
                 onClick={() => {
-                  if (!pending && !inFlight.current && hydrated)
-                    // Re-enter through server admission with a fresh document,
-                    // as academy selection does above; discard cached context.
-                    // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-                    window.location.assign("/platform");
+                  void openAdmin();
                 }}
                 disabled={pending || !hydrated}
               >
-                Open Platform Admin
+                Open Admin
               </button>
             )}
             <button
