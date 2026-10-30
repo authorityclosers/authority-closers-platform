@@ -33,6 +33,9 @@ const devAllowedOrigins = (process.env.AC_SALES_XRAY_DEV_ALLOWED_ORIGINS ?? "")
   .split(",")
   .map((value) => value.trim())
   .filter(Boolean);
+/** The website line's caching: five minutes fresh, then used for up to a day while asked again (or while we're down). */
+export const SCRIPT_CACHE =
+  "public, max-age=300, stale-while-revalidate=86400, stale-if-error=86400";
 /** Route and page file extensions; "discovery.ts" only outside the static preview, "perf.tsx" only for the speed check. */
 export function pageExtensions(preview: boolean, perf = false): string[] {
   const base = ["tsx", "ts", "jsx", "js"];
@@ -195,8 +198,9 @@ const config: NextConfig = {
               // browser and Cloudflare serve them without asking the server
               // again (AUT-1342). Pages, data and documents stay no-store, and
               // private: a page rendered on the server carries one person's
-              // data, so no edge or proxy may keep it (29 Oct 2026).
-              source: "/:path((?!_next/static/).*)",
+              // data, so no edge or proxy may keep it (29 Oct 2026). The
+              // website line has its own rule below.
+              source: "/:path((?!_next/static/|sx\\.js/?$).*)",
               headers: [
                 { key: "Referrer-Policy", value: "no-referrer" },
                 { key: "X-Content-Type-Options", value: "nosniff" },
@@ -207,6 +211,17 @@ const config: NextConfig = {
                   value: "camera=(), microphone=(self), geolocation=()",
                 },
                 { key: "Cache-Control", value: "private, no-store" },
+              ],
+            },
+            {
+              // The website line runs on customers' own sites on every page
+              // view: browsers and Cloudflare keep it five minutes, then use it
+              // while they ask again (its ETag makes that a 304). It holds no
+              // key and no one's data; the key is checked at hello (30 Oct 2026).
+              source: "/sx.js",
+              headers: [
+                { key: "X-Content-Type-Options", value: "nosniff" },
+                { key: "Cache-Control", value: SCRIPT_CACHE },
               ],
             },
           ];

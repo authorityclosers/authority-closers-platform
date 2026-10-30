@@ -1,3 +1,4 @@
+import { buildCustomRoute } from "next/dist/lib/build-custom-route";
 import { afterEach, expect, it, vi } from "vitest";
 
 afterEach(() => {
@@ -5,21 +6,69 @@ afterEach(() => {
   vi.resetModules();
 });
 
-it("lets no cache keep a page: private, no-store on all but build files", async () => {
+// Whether a header rule applies to a path, by the expression Next itself builds from it.
+function matches(source: string, path: string): boolean {
+  const { regex } = buildCustomRoute("header", { source, headers: [] });
+  return new RegExp(regex).test(path);
+}
+
+it("lets no cache keep a page: private, no-store on all but build files and the website line", async () => {
   vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "0");
   vi.resetModules();
   const { default: config } = await import("./next.config");
   const rules = (await config.headers?.()) ?? [];
   const pages = rules.find(
-    (rule) => rule.source === "/:path((?!_next/static/).*)",
+    (rule) => rule.source === "/:path((?!_next/static/|sx\\.js/?$).*)",
   );
   expect(pages?.headers).toContainEqual({
     key: "Cache-Control",
     value: "private, no-store",
   });
+  for (const path of [
+    "/",
+    "/leads",
+    "/settings/team",
+    "/sx.js.map",
+    "/sx.jsx",
+    "/a/sx.js",
+    "/favicon.ico",
+  ])
+    expect(matches(pages?.source ?? "", path), path).toBe(true);
+  for (const path of ["/_next/static/chunks/a.js", "/sx.js", "/sx.js/"])
+    expect(matches(pages?.source ?? "", path), path).toBe(false);
   expect(rules.every((rule) => !rule.source.startsWith("/_next/static"))).toBe(
     true,
   );
+});
+
+it("lets browsers and Cloudflare keep the website line a few minutes, and nothing else", async () => {
+  vi.stubEnv("AC_SALES_XRAY_STATIC_PREVIEW", "0");
+  vi.resetModules();
+  const { default: config, SCRIPT_CACHE } = await import("./next.config");
+  expect(SCRIPT_CACHE).toBe(
+    "public, max-age=300, stale-while-revalidate=86400, stale-if-error=86400",
+  );
+  const rules = (await config.headers?.()) ?? [];
+  const script = rules.filter((rule) =>
+    rule.headers.some((header) => header.value === SCRIPT_CACHE),
+  );
+  expect(script.map((rule) => rule.source)).toEqual(["/sx.js"]);
+  expect(script[0]?.headers).toEqual([
+    { key: "X-Content-Type-Options", value: "nosniff" },
+    { key: "Cache-Control", value: SCRIPT_CACHE },
+  ]);
+  // Exactly one rule sets the line's Cache-Control, so no header is sent twice.
+  for (const path of ["/sx.js", "/sx.js/"]) {
+    const setting = rules.filter(
+      (rule) =>
+        matches(rule.source, path) &&
+        rule.headers.some((header) => header.key === "Cache-Control"),
+    );
+    expect(
+      setting.map((rule) => rule.source),
+      path,
+    ).toEqual(["/sx.js"]);
+  }
 });
 
 it("rewrites only the required canonical auth and profile endpoints", async () => {
