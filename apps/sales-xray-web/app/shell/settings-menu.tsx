@@ -57,7 +57,7 @@ import { createPortal } from "react-dom";
 
 import type { Allowance } from "../acquisition-client";
 import { useSalesXraySignOut } from "../account-navigation";
-import { openBugReport, reportShortcut } from "../bug-report/open";
+import { openBugReportFromMenu, reportShortcut } from "../bug-report/open";
 import { UpdateRating } from "../feedback/update-rating";
 import { useFirstCallGuideSwitch } from "../guide-toggle";
 import { phoneCallsOpener, useInApp } from "../in-app-client";
@@ -587,8 +587,9 @@ export function SettingsMenu({
           label="Report a problem"
           shortcut={reportShortcut()}
           onClick={() => {
+            // Before the sheet starts closing: the picture leaves it out.
+            openBugReportFromMenu();
             onClose();
-            openBugReport();
           }}
         />
         <Row

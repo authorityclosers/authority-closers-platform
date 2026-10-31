@@ -27,7 +27,7 @@ import {
   requestSalesXrayLogout,
   UploadNeedsSignOutConfirmationError,
 } from "./account-navigation";
-import { openBugReport, reportShortcut } from "./bug-report/open";
+import { openBugReportFromMenu, reportShortcut } from "./bug-report/open";
 import {
   setReportButtonHidden,
   useReportButtonHidden,
@@ -395,7 +395,7 @@ export function ProfileMenu({
               className={styles.item}
               onClick={() => {
                 setOpen(false);
-                openBugReport();
+                openBugReportFromMenu();
               }}
             >
               <MessageSquareWarning size={16} aria-hidden="true" />

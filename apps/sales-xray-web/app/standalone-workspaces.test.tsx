@@ -227,6 +227,8 @@ it("switches both ways and clears the previous workspace's cached Recents", asyn
     const item = [
       ...host.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'),
     ].find((el) => el.textContent?.includes(name))!;
+    // One tap asks, "Switch to ...?"; the second switches.
+    await act(async () => item.click());
     await act(async () => item.click());
     expect(getShellState().selectedTenantId).toBe(to);
     expect(getShellState().recentCalls).toEqual([]);

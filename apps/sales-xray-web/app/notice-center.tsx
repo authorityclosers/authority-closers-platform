@@ -603,13 +603,16 @@ export function NoticeCenter() {
   const waiting = Math.max(0, list.length - SHOWN);
   // Once no card waits, the next pile starts folded again.
   if (expanded && waiting === 0) setExpanded(false);
-  const shownList = expanded ? list : list.slice(-SHOWN);
+  // The newest first: a card arrives at the top of the stack, so the cards
+  // already there never move (orchestrator, 1 Nov 2026: a card joining below
+  // lifted the others, a layout shift); older ones wait under "+N more".
+  const shownList = [...(expanded ? list : list.slice(-SHOWN))].reverse();
 
   return (
     <>
       {/* One corner, under nothing: never over the page header or the top bar
           (owner via the orchestrator, 31 Oct 2026). Work that needs the seller
-          rides at its top (ui/alerts.tsx); the newest card sits nearest the corner.
+          rides at its top (ui/alerts.tsx); a new card arrives at the top too.
           It never covers content either: the page keeps room for it, and a card
           folds to a pill once seen (31 Oct 2026). */}
       {/* Inside an open sheet, on its top layer; otherwise in the page. */}
@@ -625,6 +628,9 @@ export function NoticeCenter() {
           {workCard ? (
             <NoticeCard key={workCard.id} notice={workCard} leave={workGone} />
           ) : null}
+          {shownList.map((notice) => (
+            <NoticeCard key={notice.id} notice={notice} />
+          ))}
           {waiting > 0 ? (
             <button
               type="button"
@@ -635,9 +641,6 @@ export function NoticeCenter() {
               {expanded ? "Show fewer" : `+${waiting} more`}
             </button>
           ) : null}
-          {shownList.map((notice) => (
-            <NoticeCard key={notice.id} notice={notice} />
-          ))}
         </div>
       </StackHost>
       {/* Urgent work: a centre card over the page, by design. */}

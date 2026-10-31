@@ -187,11 +187,12 @@
   box-shadow: var(--lx-ring-focus);
 }
 
-/* A corner card springs up from the corner it lives in. */
+/* A new card glides in from above, at the top of the stack, so the cards
+   already there stay where they are (1 Nov 2026). */
 @keyframes enter {
   from {
     opacity: 0;
-    transform: translateY(14px) scale(0.96);
+    transform: translateY(-14px) scale(0.96);
   }
 }
 

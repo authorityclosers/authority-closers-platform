@@ -67,6 +67,43 @@ export function openBugReport(about?: ReportAbout): void {
   );
 }
 
+/** The sheet a report was asked for from, while it closes (taken once). */
+let leaving: HTMLDialogElement | null = null;
+
+/**
+ * Report from a menu or sheet (You, the profile menu): the picture is of the
+ * screen under it, not of the menu on its way out (phone personas, 1 Nov
+ * 2026: the picture showed the account menu). The phone app waits for the
+ * sheet to close before it takes its picture; the page's own picture leaves
+ * the sheet out.
+ */
+export function openBugReportFromMenu(about?: ReportAbout): void {
+  const open = [
+    ...document.querySelectorAll<HTMLDialogElement>("dialog[open]"),
+  ];
+  const sheet =
+    open.reverse().find((dialog) => {
+      try {
+        return dialog.matches(":modal");
+      } catch {
+        return false;
+      }
+    }) ?? null;
+  if (sheet && !sheet.hasAttribute("data-capture-skip")) {
+    sheet.setAttribute("data-capture-skip", "");
+    window.setTimeout(() => sheet.removeAttribute("data-capture-skip"), 4000);
+  }
+  leaving = sheet;
+  openBugReport(about);
+}
+
+/** The sheet a report came from, while it closes; null after one ask. */
+export function takeLeaving(): HTMLDialogElement | null {
+  const sheet = leaving;
+  leaving = null;
+  return sheet;
+}
+
 let mounted = 0;
 const listeners = new Set<() => void>();
 
