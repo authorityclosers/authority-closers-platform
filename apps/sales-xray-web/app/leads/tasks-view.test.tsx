@@ -135,7 +135,9 @@ it("lists today's tasks with what, for whom, where and when, and counts each lis
   expect(text).toContain("Call back Asha Fictional");
   expect(text).toContain("Asked for the 2 BHK brochure");
   expect(text).toContain("Baner office");
-  expect(text).toContain("Meeting · Ravi Sample");
+  // The lead once: its title already names them (persona QA, 31 Oct 2026).
+  expect(text).toContain("Meeting with Ravi Sample");
+  expect(text).not.toContain("Meeting · Ravi Sample");
 });
 
 it("adds a task with + and then shows the list it landed in", async () => {

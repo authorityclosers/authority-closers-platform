@@ -49,6 +49,14 @@ function kept(reason: unknown): reason is LeadsError {
   return reason instanceof LeadsError && reason.kept === true;
 }
 
+/** The task's lead, once: not when the title already names them ("Call back
+ *  Asha"); "Your own" for a task on no lead. */
+function leadWords(task: { title: string; lead_name: string | null }): string {
+  if (!task.lead_name) return "Your own";
+  const name = displayName(task.lead_name);
+  return task.title.toLowerCase().includes(name.toLowerCase()) ? "" : name;
+}
+
 export function TasksView({
   onOpen,
   now = () => new Date(),
@@ -181,7 +189,10 @@ export function TasksView({
   );
 
   return (
-    <section className={styles.tasks} aria-label="Tasks">
+    <section className={styles.tasks} aria-labelledby="tasks-heading">
+      <h2 id="tasks-heading" className={styles.title}>
+        Tasks
+      </h2>
       <div className={styles.head}>
         <Segmented
           label="Which tasks"
@@ -246,8 +257,7 @@ export function TasksView({
                 <span className={styles.text}>
                   <strong>{task.title}</strong>
                   <span>
-                    {kind.label} ·{" "}
-                    {task.lead_name ? displayName(task.lead_name) : "Your own"}
+                    {[kind.label, leadWords(task)].filter(Boolean).join(" · ")}
                   </span>
                   {task.location ? (
                     <small>
