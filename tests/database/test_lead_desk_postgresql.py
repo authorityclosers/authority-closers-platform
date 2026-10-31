@@ -920,6 +920,16 @@ def test_calls_the_phone_logged_by_itself_reach_their_leads(
                 assert (same.json()["logged"], same.json()["already"]) == (0, 1)
                 # Its recording is offered by the after-call sheet, not the call log.
                 assert same.json()["calls"] == []
+                # Sent again, it is known: its seconds sit beside the app's call once.
+                twice = await client.post(
+                    f"{BASE}/phone-log",
+                    json={
+                        "device_id": device,
+                        "calls": [row("106", "9876543210", 1, duration_seconds=31)],
+                    },
+                    headers=WRITE,
+                )
+                assert (twice.json()["logged"], twice.json()["already"]) == (0, 1)
 
                 detail = (await client.get(f"{BASE}/leads/{leads['Ravi Kulkarni']}")).json()
                 phone_events = [event for event in detail["events"] if event.get("via")]
@@ -986,9 +996,10 @@ def test_calls_the_phone_logged_by_itself_reach_their_leads(
                 assert desk["numbers"]["calls"] == dialled + 2
                 assert desk["numbers"]["connected"] == dialled + 1
                 assert desk["numbers"]["not_connected"] == 1
-                # The app's own call (40 s away from the app) is an estimate, not talk time.
-                assert desk["numbers"]["talk_seconds"] == 192 * dialled
-                assert desk["numbers"]["talk_estimated_seconds"] == 40
+                # The app's own call (40 s away from the app) took the phone's own 31 s
+                # when the call log found it: talk time, no estimate left.
+                assert desk["numbers"]["talk_seconds"] == 192 * dialled + 31
+                assert desk["numbers"]["talk_estimated_seconds"] == 0
 
                 as_(setup.token)
                 team = (await client.get(f"{BASE}/team")).json()
