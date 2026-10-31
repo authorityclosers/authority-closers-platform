@@ -43,7 +43,7 @@ def test_gaps_inside_work_hours_cut_at_the_set_break() -> None:
     now = at(16)
     found = breaks.day_gaps(DAY, calls, TEAM, now)
     assert [(gap.start, gap.end, gap.planned) for gap in found] == [
-        (at(10), at(10, 30), False),  # work started, no call yet
+        # Work started at 10:00, the first call was at 10:30: no break before it.
         (at(10, 40), at(12), False),
         (at(12, 5), at(13), False),
         (at(13), at(14), True),  # lunch, set: not red
@@ -58,24 +58,41 @@ def test_gaps_inside_work_hours_cut_at_the_set_break() -> None:
     ]
 
 
-def test_without_work_hours_first_call_to_last() -> None:
-    calls = [phone(11, 0, 60), phone(11, 30, 60), phone(14, 0, 60)]
-    found = breaks.longest(breaks.day_gaps(DAY, calls, None, at(20)))
-    assert [(gap.start, gap.end) for gap in found] == [
-        (at(11, 31), at(14)),
-        (at(11, 1), at(11, 30)),
+def test_a_night_a_day_off_or_no_work_hours_is_never_a_break() -> None:
+    # Persona QA (31 Oct 2026): a call just after midnight and one in the evening showed
+    # "17 h 18 min" in red. Only the work hours count, from the first call inside them.
+    night = [phone(0, 30, 60), phone(17, 48, 60)]
+    found = breaks.longest(breaks.day_gaps(DAY, night, TEAM, at(20)))
+    assert [(gap.start, gap.end) for gap in found] == [(at(17, 49), at(18))]
+    # No work hours set, or a day the team doesn't work: no breaks at all.
+    assert breaks.day_gaps(DAY, night, None, at(20)) == []
+    sunday = date(2026, 11, 1)
+    on_sunday = [
+        breaks.Span(
+            datetime.combine(sunday, time(hour), tzinfo=IST),
+            datetime.combine(sunday, time(hour, 1), tzinfo=IST),
+            approximate=False,
+        )
+        for hour in (11, 15)
     ]
-    assert breaks.day_gaps(DAY, [], None, at(20)) == []
+    assert breaks.day_gaps(sunday, on_sunday, TEAM, at(20) + timedelta(days=2)) == []
+    # No call inside the hours yet, or none at all: nothing to measure.
+    assert breaks.day_gaps(DAY, [phone(9, 0, 60)], TEAM, at(12)) == []
+    assert breaks.day_gaps(DAY, [], TEAM, at(12)) == []
     # A minute or less between dials is not a break.
     close = [phone(11, 0, 60), phone(11, 1, 60)]
-    assert breaks.longest(breaks.day_gaps(DAY, close, None, at(20))) == []
+    assert breaks.longest(breaks.day_gaps(DAY, close, TEAM, at(11, 2))) == []
 
 
 def test_an_app_call_makes_its_gaps_approximate() -> None:
     app = breaks.span(at(12), {"duration_seconds": 300})
     assert app is not None
-    found = breaks.day_gaps(DAY, [phone(11, 0, 60), app, phone(13, 0, 60)], None, at(20))
-    assert [gap.approximate for gap in found] == [True, True]
+    found = breaks.day_gaps(DAY, [phone(11, 0, 60), app, phone(12, 30, 60)], TEAM, at(12, 45))
+    assert [(gap.start, gap.end, gap.approximate) for gap in found] == [
+        (at(11, 1), at(11, 55), True),
+        (at(12), at(12, 30), True),
+        (at(12, 31), at(12, 45), False),
+    ]
 
 
 def test_set_breaks_are_kept_in_the_settings() -> None:

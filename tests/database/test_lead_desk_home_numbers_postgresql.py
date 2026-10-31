@@ -18,7 +18,7 @@ from ac_platform.lead_desk.hours import IST
 from ac_platform.lead_desk.models import Lead, LeadEvent
 from tests.database.conversation_harness import conversation_harness
 from tests.database.test_conversation_postgresql import run
-from tests.database.test_lead_os_acceptance_postgresql import BASE, ROOT, later, world
+from tests.database.test_lead_os_acceptance_postgresql import BASE, ROOT, WRITE, later, world
 
 
 @pytest.fixture(scope="module")
@@ -187,11 +187,28 @@ def test_today_counts_down_and_ends_with_the_longest_breaks(
 ) -> None:
     """Leads redesign section 6 (owner and Dipak, 30 Oct 2026): today's work counts down
     as calls happen (20 -> 19 -> 18), and Home ends with the three longest gaps between
-    the seller's calls: with no work hours set, from the first call to the last, from
-    each call's real start and seconds."""
+    the seller's calls, inside the team's work hours from the first call (Persona QA,
+    31 Oct 2026: never a night or a day off), from each call's real start and seconds."""
 
     async def exercise() -> None:
         async with world(postgres_harness, tmp_path) as here:
+            # Work hours all week, the whole day, so the gaps are inside them.
+            here.as_admin()
+            team = (await here.client.get(f"{BASE}/team")).json()
+            hours = await here.client.put(
+                f"{BASE}/work-hours",
+                json={
+                    "expected_revision": team["settings"]["revision"],
+                    "days": [0, 1, 2, 3, 4, 5, 6],
+                    "start": "00:00",
+                    "end": "23:59",
+                    "pause_leads": False,
+                    "breaks": [],
+                },
+                headers=WRITE,
+            )
+            assert hours.status_code == 200, hours.text
+            here.as_seller()
             first = await here.add("Fictional Break One", "98760 67021")
             await here.add("Fictional Break Two", "98760 67022")
             before = (await here.client.get(f"{BASE}")).json()
@@ -221,8 +238,10 @@ def test_today_counts_down_and_ends_with_the_longest_breaks(
             if (now - timedelta(minutes=31)).astimezone(IST).date() != now.astimezone(IST).date():
                 return
             assert desk["to_call_today"] == {"left": 1, "called": 1}
-            # 30 min ago for 2 min, 20 min ago for 1 min, 5 min ago: gaps of 8 and 14 min.
-            assert [gap["minutes"] for gap in desk["breaks"]] == [14, 8]
+            # 30 min ago for 2 min, 20 min ago for 1 min, 5 min ago for 30 s: gaps of 8
+            # and 14 min, and the four and a half since the last call.
+            assert [gap["minutes"] for gap in desk["breaks"]][:2] == [14, 8]
+            assert len(desk["breaks"]) == 3
             assert not any(gap["planned"] or gap["approximate"] for gap in desk["breaks"])
 
     run(exercise())

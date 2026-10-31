@@ -1249,8 +1249,8 @@ class LeadDesk:
         return found
 
     async def _breaks_today(self, today: Sequence[CallRow]) -> tuple[BreakView, ...]:
-        """My three longest breaks today: the gaps between my calls inside the working
-        day (the team's work hours when set, else my first call to my last)."""
+        """My three longest breaks today: the gaps between my calls inside the team's
+        work hours on a work day, from my first call inside them (none without hours)."""
         hours = work_hours.parse((await self.settings())[1])
         spans = [found for row in today if (found := call_breaks.span(row.at, row.data))]
         day = self.now.astimezone(IST).date()
