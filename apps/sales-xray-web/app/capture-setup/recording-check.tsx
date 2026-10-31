@@ -11,11 +11,11 @@
  * (call_ai/missing_recordings.py). It is a corner card in the app's corner
  * stack, never fixed over the page (persona QA and the test robot, 31 Oct
  * 2026), and never on Home, whose Tried row already carries the count:
- * - the day's first sight is the full card: how many, where the Phone app's
- *   switch is, and "See which" to Calls;
- * - after that it is one slim line ("28 calls not recorded"); Details opens the
- *   full card again;
- * - closing either hides it for the rest of the day.
+ * - the day's first sight is the full card: how many ("28 calls not
+ *   recorded"), where the Phone app's switch is, and "See which" to Calls;
+ * - after that it comes folded: the corner stack's one-line pill with the same
+ *   title, which a tap opens (notice-center.tsx);
+ * - closing it hides it for the rest of the day.
  * It never shows over a setup screen, or when Home tried nothing today.
  */
 
@@ -33,7 +33,7 @@ import { CAPTURE_SETUP_ATTRIBUTE } from "./capture-setup-rules";
 import { PERMISSIONS_ATTRIBUTE } from "./permissions-rules";
 
 const EVERY_MS = 120_000;
-// The full card shows this long the first time each day, then becomes one line.
+// The full card shows this long the first time each day, then comes folded.
 const FULL_MS = 12_000;
 const DAY_KEY = "sx-recording-check-day";
 export const RECORDING_NOTICE = "recording-check";
@@ -94,39 +94,23 @@ function watchCovers(changed: () => void) {
 const coveredNow = () =>
   COVERS.some((name) => document.documentElement.hasAttribute(name));
 
-/** The full corner card: how many calls, where the Phone app's switch is, See which. */
+/** The corner card: how many calls, where the Phone app's switch is, See which.
+    Folded, it is one line with the same title; a tap opens it. */
 export function recordingNotice(
   calls: number,
   family: string | null,
   onSeeWhich: () => void,
   onClosed: () => void = () => undefined,
-): Notice {
-  return {
-    id: RECORDING_NOTICE,
-    tone: "info",
-    title:
-      calls === 1
-        ? "A call today has no recording"
-        : `${calls} calls today have no recording`,
-    message: `Turn on call recording: ${WHERE[family ?? ""] ?? WHERE.xiaomi}`,
-    action: { label: "See which", run: onSeeWhich, icon: "open" },
-    // Stays until closed; closing hides it for the rest of the day.
-    onDismiss: async () => onClosed(),
-  };
-}
-
-/** After the day's first sight: one slim line; Details opens the full card. */
-export function recordingLine(
-  calls: number,
-  onDetails: () => void,
-  onClosed: () => void = () => undefined,
+  folded = false,
 ): Notice {
   return {
     id: RECORDING_NOTICE,
     tone: "info",
     title: calls === 1 ? "1 call not recorded" : `${calls} calls not recorded`,
-    action: { label: "Details", run: onDetails },
-    slim: true,
+    message: `Turn on call recording: ${WHERE[family ?? ""] ?? WHERE.xiaomi}`,
+    action: { label: "See which", run: onSeeWhich, icon: "open" },
+    ...(folded ? { slim: true } : {}),
+    // Stays until closed; closing hides it for the rest of the day.
     onDismiss: async () => onClosed(),
   };
 }
@@ -143,7 +127,6 @@ export function RecordingCheck() {
   const [missing, setMissing] = useState<MissingRecordings | null>(null);
   const [family, setFamily] = useState<string | null>(null);
   const [day, setDay] = useState<DayState | null>(null);
-  const [expanded, setExpanded] = useState(false);
 
   const read = useCallback(async () => {
     if (document.visibilityState === "hidden") return;
@@ -187,7 +170,6 @@ export function RecordingCheck() {
     calls > 0 &&
     (missing?.tried ?? 0) > 0 &&
     day !== "closed";
-  const full = show && (day === null || expanded);
 
   useEffect(() => {
     if (!show) {
@@ -197,21 +179,17 @@ export function RecordingCheck() {
     const close = () => {
       writeDay("closed");
       setDay("closed");
-      setExpanded(false);
     };
-    notify(
-      full
-        ? recordingNotice(calls, family, () => router.push("/calls"), close)
-        : recordingLine(calls, () => setExpanded(true), close),
-    );
-    if (!full || day !== null) return;
-    // The day's first full card becomes one line after a while.
+    const seeWhich = () => router.push("/calls");
+    notify(recordingNotice(calls, family, seeWhich, close, day !== null));
+    if (day !== null) return;
+    // The day's first full card comes folded after a while, and for the rest of the day.
     const later = window.setTimeout(() => {
       writeDay("full_seen");
       setDay("full_seen");
     }, FULL_MS);
     return () => window.clearTimeout(later);
-  }, [show, full, calls, family, day, router]);
+  }, [show, calls, family, day, router]);
 
   useEffect(() => () => dismissNotice(RECORDING_NOTICE), []);
 

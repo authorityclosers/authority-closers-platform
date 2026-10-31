@@ -29,8 +29,8 @@ import { RECORDING_NOTICE, RecordingCheck } from "./recording-check";
 // Owner, 30 Oct 2026 (fix 5): "if a connected call has no recording file after
 // 2 minutes, show the rep a banner with the steps to turn on automatic call
 // recording in their phone's dialer (Xiaomi/HyperOS steps first)". Persona QA
-// and the test robot, 31 Oct 2026: a corner card, never on Home, one slim line
-// after the day's first sight, closed for the day; the same calls as Tried.
+// and the test robot, 31 Oct 2026: a corner card, never on Home, folded to one
+// line after the day's first sight, closed for the day; the same calls as Tried.
 
 let root: Root;
 let host: HTMLDivElement;
@@ -90,28 +90,37 @@ async function mount(calls: number, tried = calls ? 54 : 0) {
 
 const last = () => notices.shown.at(-1) as Notice | undefined;
 
-it("shows the day's first card in full, then one slim line that opens again", async () => {
+it("shows the day's first card in full, then folded for the rest of the day", async () => {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   await mount(28);
   expect(host.innerHTML).toBe("");
   let card = last();
   expect(card?.id).toBe(RECORDING_NOTICE);
-  expect(card?.title).toBe("28 calls today have no recording");
+  expect(card?.title).toBe("28 calls not recorded");
+  expect(card?.slim).toBeUndefined();
   expect(card?.message).toContain("record automatically, all numbers");
   expect(card?.action?.label).toBe("See which");
   card?.action?.run();
   expect(route.pushed).toEqual(["/calls"]);
-  // After a while the card becomes one line, for the rest of the day too.
+  // After a while it folds to the corner stack's one line (a tap opens it).
   await act(async () => {
     vi.advanceTimersByTime(13_000);
   });
   card = last();
   expect(card?.title).toBe("28 calls not recorded");
-  expect(card?.message).toBeUndefined();
   expect(card?.slim).toBe(true);
-  expect(card?.action?.label).toBe("Details");
-  await act(async () => card?.action?.run());
-  expect(last()?.title).toBe("28 calls today have no recording");
+  expect(card?.action?.label).toBe("See which");
+  // Back later the same day: folded from the start.
+  await act(async () => root.unmount());
+  root = createRoot(host);
+  notices.shown.length = 0;
+  await mount(28);
+  expect(last()?.slim).toBe(true);
+});
+
+it("says one call in the singular", async () => {
+  await mount(1);
+  expect(last()?.title).toBe("1 call not recorded");
 });
 
 it("closing it hides it for the rest of the day", async () => {
