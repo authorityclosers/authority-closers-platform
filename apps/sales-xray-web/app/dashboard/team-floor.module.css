@@ -93,6 +93,11 @@
   min-width: 0;
 }
 
+/* The Controls button arrives with the role read; its height is kept from the start. */
+.today > .head {
+  min-height: 44px;
+}
+
 .head h2 {
   margin: 0;
   color: var(--sx-ink);
@@ -257,6 +262,11 @@ a.row:focus-visible {
 
 .need svg {
   color: var(--sx-muted);
+}
+
+/* A row held while Needs you now loads. */
+.need[data-wait] {
+  opacity: 0.5;
 }
 
 .need:active {
@@ -502,6 +512,7 @@ a.row:focus-visible {
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 10px;
+  min-height: 30px;
   margin-top: 6px;
   min-width: 0;
 }

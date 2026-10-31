@@ -47,15 +47,15 @@ import styles from "./team-floor.module.css";
 
 /** Today's figures from the Performance engine; the last good ones if a read
  *  fails; null until the first arrives. */
-function useEffort(): Effort | null {
-  return useHomeRead("effort:1", (signal) => readEffort(1, signal)).value;
+function useEffort() {
+  return useHomeRead("effort:1", (signal) => readEffort(1, signal));
 }
 
 type SideCounts = { fresh: number; open: number; unowned: number };
 
 /** The side's three lead counts, each the total of the list its card opens. */
-function useSideCounts(side: Side): SideCounts | null {
-  return useHomeRead(`counts:${side}`, async (signal) => {
+function useSideCounts(side: Side) {
+  return useHomeRead<SideCounts>(`counts:${side}`, async (signal) => {
     const total = (query: string) =>
       deskRequest<LeadPage>(`/leads?${query}`, { signal }).then(
         (page) => page.total,
@@ -66,7 +66,7 @@ function useSideCounts(side: Side): SideCounts | null {
       total(`scope=unassigned&side=${side}`),
     ]);
     return { fresh, open, unowned };
-  }).value;
+  });
 }
 
 const count = (value: number | undefined | null) =>
@@ -452,9 +452,9 @@ function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
         <p className={styles.heroNote}>
           {day
             ? `${Math.round(done * 100)}% of today's leads called · ${minutes(day.talk_seconds)} talk`
-            : " "}
+            : "\u00a0"}
         </p>
-        {sellers.length ? (
+        {!effort || sellers.length ? (
           <div className={styles.avatars}>
             <ul>
               {sellers.slice(0, 7).map((seller) => {
@@ -471,9 +471,11 @@ function FloorHero({ effort, side }: { effort: Effort | null; side: Side }) {
               })}
             </ul>
             <span>
-              {live
-                ? `${live} on calls now`
-                : `${sellers.length} ${sellers.length === 1 ? "seller" : "sellers"}`}
+              {!effort
+                ? "\u00a0"
+                : live
+                  ? `${live} on calls now`
+                  : `${sellers.length} ${sellers.length === 1 ? "seller" : "sellers"}`}
             </span>
           </div>
         ) : null}
@@ -504,11 +506,17 @@ export function TeamFloor({
   /** The viewer's person id. */
   me?: string | null;
 }) {
-  const effort = useEffort();
-  const counts = useSideCounts(side);
+  const effortRead = useEffort();
+  const countsRead = useSideCounts(side);
+  const effort = effortRead.value;
+  const counts = countsRead.value;
   const day = effort?.[side] ?? null;
   const figures = pages(side, counts, day);
   const waiting = needs(side, counts, effort);
+  // Needs you now waits for both reads (or a failure), so it never reorders as they land.
+  const settled =
+    (effort !== null || effortRead.failed) &&
+    (counts !== null || countsRead.failed);
   return (
     <div className={styles.floor}>
       <div className={styles.main}>
@@ -574,7 +582,15 @@ export function TeamFloor({
           <div className={styles.head}>
             <h2 id="needs-title">Needs you now</h2>
           </div>
-          {waiting.length ? (
+          {!settled ? (
+            <ul className={styles.needs} aria-hidden="true">
+              {[0, 1, 2].map((row) => (
+                <li key={row}>
+                  <span className={styles.need} data-wait="" />
+                </li>
+              ))}
+            </ul>
+          ) : waiting.length ? (
             <ul className={styles.needs}>
               {waiting.map((need, index) => (
                 <li key={need.key} data-extra={index >= 3 || undefined}>

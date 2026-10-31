@@ -191,10 +191,8 @@ export function Count({ value }: { value: string }) {
     const began = performance.now();
     let frame = 0;
     const step = (now: number) => {
-      const t = Math.min(1, (now - began) / 700);
-      const eased = 1 - (1 - t) ** 3;
-      element.textContent = `${Math.round(start + (target - start) * eased)}${rest}`;
-      if (t < 1) frame = requestAnimationFrame(step);
+      element.textContent = `${countedTo(start, target, now - began, 700)}${rest}`;
+      if (now - began < 700) frame = requestAnimationFrame(step);
     };
     element.textContent = `${start}${rest}`;
     frame = requestAnimationFrame(step);
@@ -204,6 +202,19 @@ export function Count({ value }: { value: string }) {
     };
   }, [value]);
   return <span ref={node} />;
+}
+
+/** The number a count-up shows `elapsed` ms into `length`, eased out. A frame's time can
+ *  be from before the count began (a long first-load task), so the progress is held to
+ *  0..1: never a minus number, never past the real one (QA 73c90cfa, 31 Oct 2026). */
+export function countedTo(
+  start: number,
+  target: number,
+  elapsed: number,
+  length: number,
+): number {
+  const progress = Math.min(1, Math.max(0, elapsed / length));
+  return Math.round(start + (target - start) * (1 - (1 - progress) ** 3));
 }
 
 export const share = (part: number, whole: number) =>

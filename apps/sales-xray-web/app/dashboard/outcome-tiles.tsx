@@ -27,6 +27,7 @@ import type {
 } from "../leads/leads-client";
 import { Avatar, Segmented } from "../ui/kit";
 import { Sheet } from "../ui/sheet";
+import { countedTo } from "./metric-pager";
 import { OutcomesSkeleton } from "./sales-home-skeleton";
 import styles from "./outcome-tiles.module.css";
 
@@ -70,13 +71,10 @@ function useCountUp(value: number): number {
     }
     const began = performance.now();
     const tick = (now: number) => {
-      const progress = Math.min(1, (now - began) / 600);
-      const next = Math.round(
-        start + (value - start) * (1 - (1 - progress) ** 3),
-      );
+      const next = countedTo(start, value, now - began, 600);
       setShown(next);
       from.current = next;
-      if (progress < 1) frame = requestAnimationFrame(tick);
+      if (now - began < 600) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
