@@ -33,6 +33,7 @@ import { TelemetryAuto } from "./telemetry-auto";
 import { ClarityGate } from "./clarity";
 import { PressFeedback } from "./press-feedback";
 import { WebReady } from "./web-ready";
+import { PrePaintScript } from "./pre-paint-script";
 export const metadata: Metadata = {
   title: "Sales X-Ray · Authority Closers",
   description:
@@ -80,38 +81,26 @@ export default async function Layout({
         {/* Dev only: ?theme= sets the saved theme (ui/look.ts), before the
             theme script, which reads it. */}
         {themePreviewEnabled({ NODE_ENV: process.env.NODE_ENV }) ? (
-          <script
+          <PrePaintScript
             id="sales-xray-theme-preview"
-            dangerouslySetInnerHTML={{ __html: themePreviewScript() }}
+            code={themePreviewScript()}
           />
         ) : null}
         {themeControl ? (
-          <script
-            id="sales-xray-theme-init"
-            dangerouslySetInnerHTML={{ __html: themeInitScript() }}
-          />
+          <PrePaintScript id="sales-xray-theme-init" code={themeInitScript()} />
         ) : null}
         {/* Low-memory phones get a lighter glass from the first paint. */}
-        <script
-          id="sales-xray-glass-init"
-          dangerouslySetInnerHTML={{ __html: glassInitScript() }}
-        />
-        <script
+        <PrePaintScript id="sales-xray-glass-init" code={glassInitScript()} />
+        <PrePaintScript
           id="sales-xray-sidebar-init"
-          dangerouslySetInnerHTML={{ __html: sidebarInitScript() }}
+          code={sidebarInitScript()}
         />
         {/* Inside the phone app, website-only chrome is hidden from the
             first paint (html[data-sx-app], styles.css). */}
-        <script
-          id="sales-xray-app-init"
-          dangerouslySetInnerHTML={{ __html: inAppInitScript() }}
-        />
+        <PrePaintScript id="sales-xray-app-init" code={inAppInitScript()} />
         {/* Starts this page's reads while the HTML is still arriving, so the
             app finds its data ready instead of asking after it starts. */}
-        <script
-          id="sales-xray-early-reads"
-          dangerouslySetInnerHTML={{ __html: earlyReadsScript() }}
-        />
+        <PrePaintScript id="sales-xray-early-reads" code={earlyReadsScript()} />
         <ThemeProvider controlEnabled={themeControl}>
           {/* The root layout persists across client navigation, so a live
               upload is owned here rather than by the page that started it. */}
