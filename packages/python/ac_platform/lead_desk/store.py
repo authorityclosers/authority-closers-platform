@@ -2236,7 +2236,13 @@ class LeadDesk:
             or (STAGE_LABELS.get(stage) if stage else None),
             reason=reason,
             reason_label=REASON_LABELS.get(reason) if reason else None,
-            connected=data.get("connected") if isinstance(data.get("connected"), bool) else None,
+            # A call is connected when the one rule finds it (call_answered: talk seconds,
+            # the phone's log, a recording), as Home counts it; otherwise what was saved.
+            connected=True
+            if event.kind == "call" and call_answered(data)
+            else data.get("connected")
+            if isinstance(data.get("connected"), bool)
+            else None,
             note=data.get("remark") or data.get("note") or None,
             next_action_at=datetime.fromisoformat(follow) if isinstance(follow, str) else None,
             owner_name=names.get(to) if to else None,
