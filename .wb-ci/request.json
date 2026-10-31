@@ -1,0 +1,21 @@
+{
+  "schema": "wb-ci/2",
+  "source_sha": "b41c6cd5df0da2f5d0091d4df829ff13f3f8fa39",
+  "full": true,
+  "checks": [
+    "web"
+  ],
+  "changed_files": null,
+  "routes": [],
+  "py_tests": [],
+  "include_paths": [
+    "apps/sales-xray-web/app/organisation/seats-panel.tsx",
+    "apps/sales-xray-web/app/organisation/organisation-view.tsx",
+    "apps/sales-xray-web/app/organisation/seat-use.test.ts",
+    "apps/sales-xray-web/app/dashboard/sales-home.tsx",
+    "apps/sales-xray-web/app/dashboard/team-controls.tsx",
+    "apps/sales-xray-web/app/dashboard/team-controls.test.tsx"
+  ],
+  "py_shards": 17,
+  "requested_by": "suyash@ac-kvm4-prod"
+}

@@ -35,6 +35,7 @@ import { SetupStart } from "./home-v2";
 import { TodayBar } from "./home-today";
 import { TeamFloor } from "./team-floor";
 import { HomeLoadWatch, useHomeRead } from "./home-load";
+import { RevenueBar } from "./revenue-bar";
 import { TeamControls } from "./team-controls";
 import {
   readDesk,
@@ -367,6 +368,8 @@ export function SalesHome({
   return (
     <div className={styles.home} data-home="">
       <HomeLoadWatch />
+      {/* The month's revenue against its target (capture-setup's bar). */}
+      <RevenueBar scope={shown === "team" ? "team" : "mine"} />
       {/* The month's revenue bar goes here, above both modes (capture-setup
           session, 31 Oct 2026). */}
       {manager && works ? (
