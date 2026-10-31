@@ -130,6 +130,8 @@ it("says which CRM's export it is and imports in one press, columns tucked away"
     "me",
     expect.any(String),
     null,
+    // Bulk upload (section 5): Cold Leads unless picked otherwise.
+    { side: "cold" },
   );
 });
 

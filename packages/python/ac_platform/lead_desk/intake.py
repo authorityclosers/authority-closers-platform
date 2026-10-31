@@ -40,6 +40,7 @@ from ac_platform.lead_desk.capture import (
 from ac_platform.lead_desk.capture import key as header_key
 from ac_platform.lead_desk.contracts import (
     ImportCommand,
+    ImportGiven,
     ImportPreview,
     ImportResult,
     NewSource,
@@ -231,6 +232,9 @@ STATUS_KINDS: Final[dict[str, str]] = {
 CRM_NAMES: Final[frozenset[str]] = frozenset(name for name, _ in CRM_EXPORTS)
 # Names that matched nothing are said back, the first this many.
 UNMATCHED_SHOWN: Final[int] = 10
+# The stages a bulk upload may start new leads in (section 5): the first, or Open Leads or
+# Interested when the file has real past talks.
+START_KINDS: Final[frozenset[str]] = frozenset({"new", "follow_up", "interested"})
 
 
 def suggest_columns(headers: Iterable[str], taken: Mapping[str, str]) -> dict[str, str]:
@@ -359,11 +363,21 @@ class Intake:
         }
         if "name" not in mapping and "phone" not in mapping:
             raise DeskError(422, "Choose which column has the name or the phone number.")
-        if command.assign == "rules" and not self.desk.viewer.can_manage:
-            assign = "me"
-        else:
-            assign = command.assign
+        # Only owners and admins give leads to others; anyone else's go on their own desk.
+        assign = command.assign if self.desk.viewer.can_manage else "me"
         reps = await self.desk._reps()
+        # The salespeople the owner picked and how many each takes, in order (section 5).
+        names = {rep.state.person_id: rep.state.name for rep in reps}
+        queue: list[list[Any]] = []
+        if assign == "people":
+            for share in command.shares:
+                if share.person_id not in names:
+                    raise DeskError(422, "Pick the salespeople from your team.")
+                await self.desk._require_seller(share.person_id)
+            queue = [[share.person_id, share.count] for share in command.shares if share.count]
+        handed: dict[UUID, int] = {}
+        chosen = f"Chosen by {await self.desk._name(self.desk.viewer.person_id)}"
+        start = await self._start(command)
         # A row may name its lead's stage, and (owners and admins) its owner.
         stage_header = command.mapping.get("stage") or None
         owner_header = (
@@ -400,6 +414,8 @@ class Intake:
             person = people.get(header_key(named)) if named else None
             if named and person is None:
                 missing_owners.setdefault(named[:80])
+            # Picked salespeople get theirs after the lead is made: it is made unassigned.
+            way: Any = "person" if person else "none" if assign in ("people", "none") else assign
             try:
                 lead, outcome = await self.desk.ingest(
                     record,
@@ -407,7 +423,7 @@ class Intake:
                     source_label=label,
                     source_ref=content_ref(record),
                     mapping=mapping,
-                    assign="person" if person else assign,  # type: ignore[arg-type]
+                    assign=way,
                     person_id=person,
                     actor=self.desk.viewer.person_id,
                     test_data=self.desk.sandbox,
@@ -423,16 +439,28 @@ class Intake:
                 continue
             if person is not None:
                 owned += 1
+            # Inbound or Cold (0146), set on new leads only.
+            lead.pipeline = command.side
+            if person is None and queue:
+                to = queue[0]
+                await self.desk._set_owner(
+                    lead, to[0], chosen, "manual", actor=self.desk.viewer.person_id
+                )
+                handed[to[0]] = handed.get(to[0], 0) + 1
+                to[1] -= 1
+                if not to[1]:
+                    queue.pop(0)
             wanted = clean(row.get(stage_header)) if stage_header else None
-            if not wanted:
+            if not wanted and start is None:
                 continue
             pipeline = journeys.pipeline_of(lead)
             if pipeline not in journeys_read:
                 journeys_read[pipeline] = await journeys.read(self.db, self.tenant_id, pipeline)
             journey = journeys_read[pipeline]
-            stage = match_stage(journey, wanted)
+            stage = match_stage(journey, wanted) if wanted else journey.stage_for(start or "")
             if stage is None:
-                missing_stages.setdefault(wanted[:80])
+                if wanted:
+                    missing_stages.setdefault(wanted[:80])
                 continue
             staged += 1
             now = journey.resolve(lead.stage, lead.step)
@@ -461,8 +489,28 @@ class Intake:
                 "owned": owned,
                 "unmatched_stages": tuple(missing_stages)[:UNMATCHED_SHOWN],
                 "unmatched_owners": tuple(missing_owners)[:UNMATCHED_SHOWN],
+                "given": tuple(
+                    ImportGiven(person_id=person_id, name=names.get(person_id, ""), leads=count)
+                    for person_id, count in handed.items()
+                ),
+                "side": command.side,
             }
         )
+
+    async def _start(self, command: ImportCommand) -> str | None:
+        """The stage new leads start in when the owner picked one past the first (section 5):
+        an in-talks or interested stage of the pipeline they go to. None: the first stage."""
+        if not command.step:
+            return None
+        journey = await journeys.read(
+            self.db, self.tenant_id, command.pipeline or journeys.MAIN_PIPELINE
+        )
+        stage = journey.stage_for(command.step)
+        if stage is None or stage.archived or stage.kind not in START_KINDS:
+            raise DeskError(
+                422, "New leads start in the first stage, an in-talks stage or an interested one."
+            )
+        return None if stage.kind == "new" else stage.key
 
     # ----- sources ---------------------------------------------------------------
 

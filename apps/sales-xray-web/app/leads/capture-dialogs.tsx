@@ -36,14 +36,24 @@ import {
   parseContactText,
   pickContacts,
   previewImport,
+  readTeam,
   SAMPLE_CSV,
   type ImportPreview,
   type ImportResult,
   type LeadMatch,
   type NewLead,
   type PickedContact,
+  type RepView,
   type SharedLead,
 } from "./leads-client";
+import {
+  countsFor,
+  firstChoices,
+  freshRows,
+  sharesFor,
+  type UploadChoices,
+} from "./bulk-upload";
+import { sharesLine, UploadChoicesFields } from "./upload-choices";
 import { askFeedback } from "../feedback/ask";
 import { BrandTile } from "../ui/brand-tile";
 import {
@@ -200,6 +210,8 @@ export function AddLeadDialog({
     initial ? { ...EMPTY, ...initial } : EMPTY,
   );
   const [source, setSource] = useState<"manual" | "referral">("manual");
+  // Inbound by default: a lead typed in is usually a real enquiry (section 5).
+  const [side, setSide] = useState<"live" | "cold">("live");
   const [assign, setAssign] = useState<"rules" | "me">(
     canManage ? "rules" : "me",
   );
@@ -328,6 +340,7 @@ export function AddLeadDialog({
         assign,
         referred_by: source === "referral" ? form.referred_by : undefined,
         pipeline: pipeline || undefined,
+        side,
       };
       const detail = await addLead(lead, command.current);
       flow.done({ step: "save" });
@@ -564,6 +577,20 @@ export function AddLeadDialog({
             </div>
           </div>
         ) : null}
+        <div className={styles.whoGets}>
+          <span className={kitStyles.fieldLabel} aria-hidden="true">
+            Inbound or Cold
+          </span>
+          <Segmented
+            label="Inbound or Cold"
+            value={side}
+            onChange={setSide}
+            items={[
+              { key: "live", label: "Inbound Leads" },
+              { key: "cold", label: "Cold Leads" },
+            ]}
+          />
+        </div>
         {canManage ? (
           <PipelinePick open={open} value={pipeline} onChange={setPipeline} />
         ) : null}
@@ -763,9 +790,27 @@ export function ImportDialog({
 }) {
   const [preview, setPreview] = useState<ImportPreview | null>(null);
   const [mapping, setMapping] = useState<Record<string, string>>({});
-  const [assign, setAssign] = useState<"rules" | "me">(
-    canManage ? "rules" : "me",
+  // Bulk upload (stages-views-sources.md section 5): Cold Leads by default, who receives
+  // the new leads and how many each, and the stage they start in.
+  const [choices, setChoices] = useState<UploadChoices>(() =>
+    firstChoices(canManage),
   );
+  const [team, setTeam] = useState<RepView[] | null>(null);
+  useEffect(() => {
+    if (!open || !canManage) return;
+    let live = true;
+    readTeam().then(
+      (next) => {
+        if (live) setTeam(next.reps);
+      },
+      () => {
+        if (live) setTeam([]);
+      },
+    );
+    return () => {
+      live = false;
+    };
+  }, [open, canManage]);
   const [pipeline, setPipeline] = useState("");
   const [result, setResult] = useState<ImportResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -900,6 +945,14 @@ export function ImportDialog({
     Boolean(mapping.name || mapping.phone) &&
     preview.importable >= Math.ceil(preview.total_rows * 0.9);
   const showColumns = !matched || columns;
+  const fresh = preview ? freshRows(preview) : 0;
+  const overGiven =
+    choices.assign === "people" &&
+    team !== null &&
+    Object.values(countsFor(choices, team, fresh)).reduce(
+      (sum, count) => sum + count,
+      0,
+    ) > fresh;
 
   const run = async () => {
     if (!preview) return;
@@ -914,9 +967,16 @@ export function ImportDialog({
         await commitImport(
           preview,
           mapping,
-          assign,
+          choices.assign,
           command.current,
           pipeline || null,
+          {
+            side: choices.side,
+            ...(choices.assign === "people" && team
+              ? { shares: sharesFor(choices, team, fresh) }
+              : {}),
+            ...(choices.step ? { step: choices.step } : {}),
+          },
         ),
       );
       onDone();
@@ -948,7 +1008,11 @@ export function ImportDialog({
           <>
             <Button onClick={onClose}>Cancel</Button>
             {preview ? (
-              <Button variant="primary" onClick={run} disabled={busy}>
+              <Button
+                variant="primary"
+                onClick={run}
+                disabled={busy || overGiven}
+              >
                 {busy
                   ? "Importing…"
                   : `Import ${preview.total_rows} lead${preview.total_rows === 1 ? "" : "s"}`}
@@ -995,7 +1059,19 @@ export function ImportDialog({
                 <dd>{result.owned}</dd>
               </div>
             ) : null}
+            {result.given?.map((item) => (
+              <div key={item.person_id}>
+                <dt>Given to {displayName(item.name)}</dt>
+                <dd>{item.leads}</dd>
+              </div>
+            ))}
           </dl>
+        ) : null}
+        {result?.side ? (
+          <p className={styles.hint}>
+            The new leads are in{" "}
+            {result.side === "cold" ? "Cold Leads" : "Inbound Leads"}.
+          </p>
         ) : null}
         {result?.unmatched_stages?.length ? (
           <p className={styles.hint}>
@@ -1197,19 +1273,20 @@ export function ImportDialog({
                 plural
               />
             ) : null}
+            <UploadChoicesFields
+              canManage={canManage}
+              team={team}
+              fresh={fresh}
+              pipeline={pipeline}
+              value={choices}
+              onChange={setChoices}
+            />
             {canManage ? (
-              <Segmented
-                label="Who gets them"
-                value={assign}
-                onChange={setAssign}
-                items={[
-                  { key: "rules", label: "Best fit by the rules" },
-                  { key: "me", label: "Me" },
-                ]}
-              />
-            ) : (
-              <p className={styles.hint}>They go on your desk.</p>
-            )}
+              <p className={styles.hint}>
+                About {fresh} new {fresh === 1 ? "lead" : "leads"}:{" "}
+                {sharesLine(choices, team, fresh)}
+              </p>
+            ) : null}
           </>
         )}
         {error ? (

@@ -2152,7 +2152,7 @@ class LeadDesk:
         source_label: str | None = None,
         source_ref: str | None = None,
         mapping: Mapping[str, str] | None = None,
-        assign: Literal["rules", "me", "person"] = "rules",
+        assign: Literal["rules", "me", "person", "none"] = "rules",
         person_id: UUID | None = None,
         actor: UUID | None = None,
         test_data: bool = False,
@@ -2280,6 +2280,8 @@ class LeadDesk:
             await self._set_owner(
                 lead, person_id, f"Chosen by {await self._name(actor)}", "manual", actor=actor
             )
+        elif assign == "none":
+            pass  # the owner gives it out later (bulk upload, section 5)
         else:
             await self._allocate(lead, reps=reps)
         return lead, "created"
@@ -3537,6 +3539,8 @@ class LeadDesk:
             raise DeskError(422, str(error)) from None
         if lead is None:
             raise DeskError(422, "Add a name or a phone number.")
+        if outcome == "created":
+            lead.pipeline = command.side
         await self.db.flush()
         if outcome == "repeat" and not (
             self.viewer.can_manage or lead.owner_person_id == self.viewer.person_id
@@ -5684,6 +5688,8 @@ class LeadDesk:
                     Lead.attempts == 0,
                     Lead.owner_person_id.is_not(None),
                     Lead.assigned_at < self.now - timedelta(minutes=minutes),
+                    # A Cold list given to a seller is worked over days, not minutes.
+                    Lead.pipeline.is_distinct_from("cold"),
                     Lead.test_data.is_(False),
                 )
                 .order_by(Lead.assigned_at)

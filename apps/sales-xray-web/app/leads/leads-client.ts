@@ -361,6 +361,17 @@ export type ImportResult = {
   unmatched_owners?: string[];
   /** People the import took past their open-lead limit, said plainly. */
   warnings?: string[];
+  /** Bulk upload: who got how many of the new leads, and their side. */
+  given?: { person_id: string; name: string; leads: number }[];
+  side?: "live" | "cold";
+};
+
+/** Bulk upload's choices (stages-views-sources.md section 5): Inbound ("live") or Cold,
+ *  the salespeople picked and how many each, and the stage new leads start in. */
+export type ImportOptions = {
+  side?: "live" | "cold";
+  shares?: { person_id: string; count: number }[];
+  step?: string;
 };
 
 export type SourceView = {
@@ -1009,6 +1020,8 @@ export type NewLead = {
   person_id?: string;
   /** A pipeline picked by hand; none: the one that takes added leads. */
   pipeline?: string;
+  /** Inbound ("live", the default) or Cold Leads (section 5). */
+  side?: "live" | "cold";
 };
 
 /** Whether a number is already a lead (Add lead asks while it is typed). */
@@ -1500,9 +1513,10 @@ export async function previewImport(file: File) {
 export function commitImport(
   preview: ImportPreview,
   mapping: Record<string, string>,
-  assign: "rules" | "me",
+  assign: "rules" | "me" | "people" | "none",
   command = commandId(),
   pipeline: string | null = null,
+  options: ImportOptions = {},
 ) {
   return request<ImportResult>(
     "/imports",
@@ -1514,6 +1528,7 @@ export function commitImport(
       assign,
       ...(pipeline ? { pipeline } : {}),
       ...(preview.detected ? { source_name: preview.detected } : {}),
+      ...options,
     }),
   );
 }

@@ -1181,6 +1181,14 @@ class ImportPreview(Model):
     importable: int = 0
 
 
+class ImportGiven(Model):
+    """How many new leads a bulk upload gave one salesperson."""
+
+    person_id: UUID
+    name: str
+    leads: int
+
+
 class ImportResult(Model):
     created: int
     repeats: int
@@ -1196,6 +1204,9 @@ class ImportResult(Model):
     # People an import took past their open-lead limit, said plainly (owner, 25 Oct 2026):
     # an import may go over; it never hides it.
     warnings: tuple[str, ...] = ()
+    # Bulk upload (section 5): who got how many of the new leads, and their side.
+    given: tuple[ImportGiven, ...] = ()
+    side: Literal["live", "cold"] = "live"
 
 
 class SourceView(Model):
@@ -1305,6 +1316,9 @@ class NewLead(Command):
     person_id: UUID | None = None
     # A pipeline picked by hand; None: the one that takes added leads.
     pipeline: str | None = Field(default=None, max_length=40)
+    # Inbound ("live") or Cold ("cold") for a new lead (section 5); a number already a lead
+    # keeps its own.
+    side: Literal["live", "cold"] = "live"
 
 
 class Disposition(Command):
@@ -1555,12 +1569,26 @@ class WorkHoursCommand(Command):
         return breaks
 
 
+class ImportShare(Command):
+    """A salesperson the owner picked for a bulk upload and how many new leads they take."""
+
+    person_id: UUID
+    count: int = Field(ge=0, le=2000)
+
+
 class ImportCommand(Command):
     command_id: UUID
     file_name: str = Field(min_length=1, max_length=200)
     mapping: dict[str, str]
     rows: tuple[dict[str, str], ...] = Field(min_length=1, max_length=2000)
-    assign: Literal["rules", "me"] = "rules"
+    # Bulk upload (section 5): "people" gives new leads to the salespeople in `shares`, in
+    # order and as many as each takes, the rest unassigned; "none" leaves them all unassigned.
+    assign: Literal["rules", "me", "people", "none"] = "rules"
+    shares: tuple[ImportShare, ...] = Field(default=(), max_length=50)
+    # Inbound ("live") or Cold ("cold") for the new leads; a number already a lead keeps its own.
+    side: Literal["live", "cold"] = "live"
+    # The stage new leads start in (a stage key); none: the first stage.
+    step: str | None = Field(default=None, max_length=40)
     # A pipeline picked by hand; None: the one that takes file imports.
     pipeline: str | None = Field(default=None, max_length=40)
     # The CRM the preview recognised: the leads' source says "<CRM> export: <file>".
