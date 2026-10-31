@@ -1919,6 +1919,13 @@ export function LeadsRoute({
                 onShowOpen={() =>
                   pickWork({ view: "all", when: null, step: null })
                 }
+                // A search finds only what this view holds; All Leads holds
+                // every lead (persona row 8da7d076).
+                onSearchAll={
+                  workView !== "all"
+                    ? () => pickWork({ view: "all", when: null, step: null })
+                    : undefined
+                }
                 layoutOwner={contextKey}
                 pipelineNames={pipelineNames}
                 me={current && desk ? desk.me.person_id : null}

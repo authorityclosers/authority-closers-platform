@@ -170,7 +170,7 @@ import {
   type SimulationStep,
 } from "./simulated-call";
 import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
-import { amountOf } from "./pipeline/blocks";
+import { amountOf, RUPEES } from "./pipeline/blocks";
 import { MeetingCard } from "./pipeline/meeting-card";
 import pipe from "./pipeline/pipeline.module.css";
 import { StageSheet } from "./pipeline/stage-sheet";
@@ -894,13 +894,20 @@ export function CallOutcome({
             >
               <input
                 inputMode="decimal"
-                placeholder={stage === "won" ? "60,000 or 1.5 L" : "60,000"}
+                placeholder="60,000"
                 value={deal}
                 maxLength={24}
                 aria-invalid={stage === "won" && needsAmount && deal !== ""}
                 onChange={(event) => setDeal(event.target.value)}
               />
             </Field>
+          ) : null}
+          {/* The amount read back, as the Move sheet does: a phone's number
+              keypad has no L (phone personas, 1 Nov 2026). */}
+          {stage === "won" && worth !== null ? (
+            <p className={styles.hint} aria-live="polite">
+              {RUPEES.format(worth)}
+            </p>
           ) : null}
         </div>
       ) : null}

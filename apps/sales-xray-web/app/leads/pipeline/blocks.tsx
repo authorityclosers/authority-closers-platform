@@ -361,7 +361,7 @@ export function amountOf(text: string): number | null {
   return value >= 1 && value <= AMOUNT_MAX ? value : null;
 }
 
-const RUPEES = new Intl.NumberFormat("en-IN", {
+export const RUPEES = new Intl.NumberFormat("en-IN", {
   style: "currency",
   currency: "INR",
   maximumFractionDigits: 0,
@@ -381,7 +381,7 @@ export function AmountBlock({
       <input
         inputMode="decimal"
         autoComplete="off"
-        placeholder="₹60,000 or 1.5 L"
+        placeholder="₹60,000"
         maxLength={24}
         value={value}
         aria-invalid={value.trim() !== "" && amount === null}

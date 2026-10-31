@@ -272,6 +272,19 @@ describe("a Won deal after a call (revenue targets, with the asks above)", () =>
     expect(host.textContent).toContain("Deal amount (₹)");
     expect(host.textContent).toContain("Add the deal amount to save");
     expect(host.textContent).not.toContain("When is the meeting?");
+    // A phone's number keypad has no L: digits, read back in rupees (ph1-14).
+    const amount = host.querySelector<HTMLInputElement>(
+      'input[inputmode="decimal"]',
+    )!;
+    expect(amount.placeholder).toBe("60,000");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(amount, "150000");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.textContent).toContain("₹1,50,000");
   });
 });
 

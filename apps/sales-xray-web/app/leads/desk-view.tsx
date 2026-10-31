@@ -64,18 +64,32 @@ export function whyLine(row: LeadRow, now: Date = new Date()): string {
   return row.why;
 }
 
+/** The server's why when it only names the stage ("Won", "Open Leads",
+ *  "Meeting Done due"), which the line above already says. */
+const stageAgain = (row: LeadRow) =>
+  row.why === row.stage_label || row.why === `${row.stage_label} due`;
+
 /** A compact row's third line: the next action and its time, never the stage
- *  again (owner, 31 Oct 2026: "New lead" twice on one row). */
+ *  again (owner, 31 Oct 2026: "New lead" twice on one row; phone personas,
+ *  1 Nov 2026: "Won Won", "Interested twice"). Nothing for a closed lead. */
 export function nextLine(row: LeadRow, now: Date = new Date()): string {
   if (!row.missed_at && row.why_kind === "new")
     return `Added ${ago(row.created_at, now)}`;
+  if (!row.missed_at && row.why_kind === "closed") return "";
+  const why = !stageAgain(row)
+    ? row.why
+    : row.why_kind === "due"
+      ? "Due"
+      : row.next_action_at
+        ? "Next call"
+        : "No next call yet";
   // Late is said by its colour, so the time stays short and is never cut.
   if (
     row.next_action_at &&
     (row.why_kind === "due" || row.why_kind === "retry")
   )
-    return `${row.why} · ${when(row.next_action_at, now)}`;
-  return whyLine(row, now);
+    return `${why} · ${when(row.next_action_at, now)}`;
+  return whyLine({ ...row, why }, now);
 }
 
 /** Truly late: its follow-up time has passed. */
@@ -156,6 +170,7 @@ export function LeadLine({
         : undefined,
     onHold: actions?.onHold ? () => actions.onHold?.(row) : undefined,
   });
+  const line = compact ? nextLine(row) : whyLine(row);
   const sub = compact ? (
     <>
       {stageWord ?? row.stage_label}
@@ -245,18 +260,20 @@ export function LeadLine({
           <span className={styles.leadMain}>
             <span className={styles.leadName}>{row.name}</span>
             {sub ? <span className={styles.leadSub}>{sub}</span> : null}
-            <span
-              className={styles.leadWhy}
-              data-tone={
-                row.missed_at || red
-                  ? "bad"
-                  : compact
-                    ? undefined
-                    : WHY_TONE[row.why_kind]
-              }
-            >
-              {compact ? nextLine(row) : whyLine(row)}
-            </span>
+            {line ? (
+              <span
+                className={styles.leadWhy}
+                data-tone={
+                  row.missed_at || red
+                    ? "bad"
+                    : compact
+                      ? undefined
+                      : WHY_TONE[row.why_kind]
+                }
+              >
+                {line}
+              </span>
+            ) : null}
           </span>
           {tap || compact ? null : (
             <span className={styles.leadEnd}>{tags}</span>
