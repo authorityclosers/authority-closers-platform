@@ -553,6 +553,11 @@
   font: inherit;
 }
 
+/* The skill picker takes the rest of the time row. */
+.skillPick {
+  flex: 1;
+}
+
 .nav {
   display: grid;
   grid-template-columns: 1fr 1fr 1.6fr;

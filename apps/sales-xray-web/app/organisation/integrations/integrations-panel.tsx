@@ -33,6 +33,7 @@ import {
   Skeleton,
   type Tone,
 } from "../../ui/kit";
+import { Picker } from "../../ui/picker";
 import {
   createKey,
   disableHandover,
@@ -334,24 +335,20 @@ function NewKeyDialog({
         </fieldset>
         <label className={styles.inline} htmlFor={expiryId}>
           Expires
-          <select
+          <Picker
             id={expiryId}
+            title="Expires"
+            mode="inline"
             value={expiry === null ? "never" : String(expiry)}
-            onChange={(event) =>
-              setExpiry(
-                event.target.value === "never"
-                  ? null
-                  : Number(event.target.value),
-              )
-            }
-          >
-            {data.expiryDays.map((days) => (
-              <option key={days} value={days}>
-                In {days} days
-              </option>
-            ))}
-            <option value="never">Never</option>
-          </select>
+            options={[
+              ...data.expiryDays.map((days) => ({
+                key: String(days),
+                label: `In ${days} days`,
+              })),
+              { key: "never", label: "Never" },
+            ]}
+            onChange={(key) => setExpiry(key === "never" ? null : Number(key))}
+          />
         </label>
       </div>
     </Dialog>
@@ -606,18 +603,17 @@ function WebhookForm({
       {data.factsProfiles.length ? (
         <label className={styles.inline} htmlFor={profileId}>
           Facts for quotes
-          <select
+          <Picker
             id={profileId}
-            value={profile ?? ""}
-            onChange={(event) => setProfile(event.target.value || null)}
-          >
-            <option value="">None</option>
-            {data.factsProfiles.map((name) => (
-              <option key={name} value={name}>
-                {name.replaceAll("_", " ")}
-              </option>
-            ))}
-          </select>
+            title="Facts for quotes"
+            value={profile || null}
+            all={{ label: "None" }}
+            options={data.factsProfiles.map((name) => ({
+              key: name,
+              label: name.replaceAll("_", " "),
+            }))}
+            onChange={(key) => setProfile(key || null)}
+          />
         </label>
       ) : null}
       <div className={styles.actions}>

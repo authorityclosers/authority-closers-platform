@@ -123,7 +123,6 @@
 }
 
 .field input,
-.field select,
 .readonly {
   width: 100%;
   min-height: 48px;
@@ -141,8 +140,7 @@
   color: #8a9aad;
 }
 
-.field input[aria-invalid="true"],
-.field select[aria-invalid="true"] {
+.field input[aria-invalid="true"] {
   border-color: #b74043;
 }
 
@@ -215,7 +213,7 @@
   background: #f2fbf8;
 }
 
-.panel :is(button, input, select):focus-visible {
+.panel :is(button, input):focus-visible {
   outline: 3px solid #3b64d9;
   outline-offset: 3px;
 }

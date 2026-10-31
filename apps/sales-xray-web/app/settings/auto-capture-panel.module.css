@@ -10,8 +10,7 @@
   margin: 0;
 }
 
-.capture button,
-.capture select {
+.capture button {
   min-height: 48px;
 }
 
@@ -20,15 +19,4 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.capture select {
-  max-width: 100%;
-  min-width: 0;
-  padding: 8px 12px;
-  border: 1px solid var(--sx-line);
-  border-radius: 8px;
-  background: var(--sx-paper);
-  color: var(--sx-ink);
-  font: inherit;
 }

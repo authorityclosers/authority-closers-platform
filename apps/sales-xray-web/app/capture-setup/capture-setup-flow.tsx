@@ -77,6 +77,7 @@ import {
 } from "../settings/auto-analysis-client";
 import { useBackClose } from "../ui/back-close";
 import { Button, Skeleton } from "../ui/kit";
+import { Picker } from "../ui/picker";
 import { recordCaptureSetup, type CaptureSetup } from "./capture-setup-client";
 import {
   phoneFacts,
@@ -810,14 +811,16 @@ function UploadsStep({
     >
       <label className={own.choice}>
         <span>Upload using</span>
-        <select
+        <Picker
+          title="Upload using"
           value={wifiOnly ? "wifi" : "any"}
+          options={[
+            { key: "any", label: "Wi-Fi or mobile data" },
+            { key: "wifi", label: "Wi-Fi only" },
+          ]}
           disabled={busy}
-          onChange={(event) => setWifiOnly(event.target.value === "wifi")}
-        >
-          <option value="any">Wi-Fi or mobile data</option>
-          <option value="wifi">Wi-Fi only</option>
-        </select>
+          onChange={(key) => setWifiOnly(key === "wifi")}
+        />
       </label>
       {note ? (
         <p className={own.issue} role="status">

@@ -26,12 +26,17 @@ const DEVELOPMENT = new Set([
 ]);
 
 export function advancedAccess(): Promise<AdvancedAccess> {
-  asked ??= fetch("/v1/bug-reports/advanced", {
-    credentials: "same-origin",
-    cache: "no-store",
-    redirect: "error",
-    headers: { accept: "application/json" },
-  })
+  // Started from a settled promise, so a fetch that throws or gives nothing back (a page's
+  // test double) reads as off instead of breaking the page.
+  asked ??= Promise.resolve()
+    .then(() =>
+      fetch("/v1/bug-reports/advanced", {
+        credentials: "same-origin",
+        cache: "no-store",
+        redirect: "error",
+        headers: { accept: "application/json" },
+      }),
+    )
     .then(async (response): Promise<AdvancedAccess> => {
       if (
         response.status === 404 &&

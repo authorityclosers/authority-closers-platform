@@ -27,6 +27,7 @@ import {
 import styles from "./account-profile.module.css";
 import { PROFILE_UPDATED_EVENT } from "./profile-menu";
 import { invalidateShellProfile } from "./shell/profile-store";
+import { Picker } from "./ui/picker";
 
 export type SelectedFileMetadata = Readonly<{
   name: string;
@@ -180,7 +181,7 @@ export function AccountProfile({
   const eligibleNotified = useRef(false);
   const onEligibleRef = useRef(onEligible);
   const nameInput = useRef<HTMLInputElement>(null);
-  const countrySelect = useRef<HTMLSelectElement>(null);
+  const countrySelect = useRef<HTMLButtonElement>(null);
   const phoneInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -495,24 +496,23 @@ export function AccountProfile({
               <>
                 <label className={styles.field}>
                   <span>Country or region</span>
-                  <select
-                    ref={countrySelect}
+                  <Picker
+                    title="Country or region"
+                    buttonRef={countrySelect}
                     name="phone_country"
-                    value={country}
-                    onChange={(event) => {
-                      setCountry(event.target.value as CountryChoice);
+                    value={country || null}
+                    options={COUNTRY_CHOICES.map((choice) => ({
+                      key: choice.value,
+                      label: choice.label,
+                    }))}
+                    placeholder="Choose a country or region"
+                    onChange={(key) => {
+                      setCountry((key ?? "") as CountryChoice);
                       setPhoneIssue("");
                     }}
-                    aria-invalid={Boolean(phoneIssue) && !country}
-                    aria-describedby="account-profile-phone-help"
-                  >
-                    <option value="">Choose a country or region</option>
-                    {COUNTRY_CHOICES.map((choice) => (
-                      <option key={choice.value} value={choice.value}>
-                        {choice.label}
-                      </option>
-                    ))}
-                  </select>
+                    invalid={Boolean(phoneIssue) && !country}
+                    describedBy="account-profile-phone-help"
+                  />
                 </label>
                 <label className={styles.field}>
                   <span>Mobile number</span>

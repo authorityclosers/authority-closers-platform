@@ -201,7 +201,11 @@ it("lists chats waiting first with the channel, unread dot and reply clock", asy
   expect(rows[0].textContent).toContain("4 min");
   expect(rows[1].hasAttribute("data-unread")).toBe(false);
   // A seller sees their own chats only: no Mine / Unassigned switch.
-  expect(host.querySelector("[aria-label='Whose chats']")).toBeNull();
+  expect(
+    [...host.querySelectorAll('button[aria-haspopup="listbox"]')].some(
+      (picker) => picker.textContent?.startsWith("Whose chats"),
+    ),
+  ).toBe(false);
   expect(host.querySelector("main")?.dataset.page).toBe("Chats (1)");
 });
 

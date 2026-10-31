@@ -911,31 +911,9 @@
   font-size: 12px;
 }
 
-.select,
-.roleSelect {
-  height: 32px;
-  box-sizing: border-box;
-  padding: 0 28px 0 10px;
-  border: 1px solid var(--lx-line-strong);
-  border-radius: var(--lx-radius-sm);
-  background-color: var(--lx-surface);
-  color: var(--lx-ink);
-  font: inherit;
-  font-size: 13px;
-}
-
-.roleSelect {
-  height: 28px;
-  margin-left: -10px;
-  border-color: transparent;
-  background-color: transparent;
-  color: var(--lx-ink-3);
-  cursor: pointer;
-}
-
-.roleSelect:hover:not(:disabled) {
-  border-color: var(--lx-line-strong);
-  color: var(--lx-ink);
+/* The role pickers' popovers open past the edge of the members list. */
+.surface:has(.select, .roleSelect) {
+  overflow: visible;
 }
 
 /* Row actions appear on hover or focus where a pointer can hover; always on touch. */
@@ -950,13 +928,6 @@
   .memberRow[data-you] .rowActions {
     opacity: 1;
   }
-}
-
-.select:focus-visible,
-.roleSelect:focus-visible {
-  border-color: var(--lx-teal);
-  box-shadow: 0 0 0 3px var(--lx-teal-soft);
-  outline: none;
 }
 
 /* The member-change confirmation (a kit Sheet): the question, then Cancel
@@ -1033,6 +1004,23 @@
 .memberRow .rowActions > * {
   position: relative;
   z-index: 1;
+}
+
+/* An open role list stays above the rows below it. */
+.memberRow .roleSelect:focus-within {
+  z-index: 2;
+}
+
+/* A member's role reads as a word with a chevron until it is opened. */
+.memberRow .roleSelect > button {
+  min-height: 32px;
+  border-color: transparent;
+  background: transparent;
+}
+
+.memberRow .roleSelect > button:hover:not(:disabled),
+.memberRow .roleSelect > button[aria-expanded="true"] {
+  border-color: var(--lx-line-strong);
 }
 
 .memberRow[data-invited] .avatar {
@@ -2197,7 +2185,6 @@
     padding-left: 42px;
   }
 
-  .memberRow .roleSelect,
   .memberRow .role {
     height: 30px;
     margin-left: 0;
@@ -2207,10 +2194,6 @@
     color: var(--sx-ink-2);
     font-size: 12px;
     font-weight: 600;
-  }
-
-  .memberRow .roleSelect {
-    padding: 0 24px 0 12px;
   }
 
   .memberRow .role {
@@ -2231,8 +2214,7 @@
     padding: 12px 14px;
   }
 
-  .addRow .field,
-  .addRow .select {
+  .addRow .field {
     height: 44px;
   }
 

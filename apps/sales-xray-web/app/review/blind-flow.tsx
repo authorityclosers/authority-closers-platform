@@ -13,6 +13,7 @@ import { ArrowLeft, ChevronLeft, Pause, Play, Plus } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { notify } from "../notice-center";
+import { Picker } from "../ui/picker";
 import {
   DIMENSION_SKIP_WORDS,
   callName,
@@ -297,7 +298,11 @@ export function BlindFlow({
       if (
         event.target instanceof HTMLInputElement ||
         event.target instanceof HTMLTextAreaElement ||
-        event.target instanceof HTMLSelectElement ||
+        // A picker's own keys (its button, and the arrows in its list).
+        (event.target instanceof Element &&
+          event.target.closest(
+            '[role="listbox"], [aria-haspopup="listbox"]',
+          )) ||
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
@@ -897,20 +902,18 @@ function MomentForm({
           aria-label="Time in the call (minutes:seconds)"
           onChange={(event) => setTime(event.target.value)}
         />
-        <select
-          className={styles.note}
-          style={{ flex: 1, width: "auto" }}
-          value={dimension}
-          aria-label="Which skill (optional)"
-          onChange={(event) => setDimension(event.target.value)}
-        >
-          <option value="">Which skill? (optional)</option>
-          {dims.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.number}. {d.label}
-            </option>
-          ))}
-        </select>
+        <Picker
+          title="Which skill (optional)"
+          ariaLabel="Which skill (optional)"
+          className={styles.skillPick}
+          value={dimension || null}
+          placeholder="Which skill? (optional)"
+          options={dims.map((d) => ({
+            key: d.id,
+            label: `${d.number}. ${d.label}`,
+          }))}
+          onChange={(key) => setDimension(key ?? "")}
+        />
       </div>
       <input
         className={styles.note}

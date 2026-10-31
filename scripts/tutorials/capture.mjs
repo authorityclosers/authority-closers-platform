@@ -565,9 +565,15 @@ async function act(page, a, device, stills) {
       await page.waitForTimeout(a.ms ?? 200);
       break;
     case "select":
-      // Native <select> menus do not open in headless Chromium; pick the option directly.
+      // The app's picker (31 Oct 2026) opens like a seller sees it, and its row is tapped once
+      // the sheet takes taps. Native <select> menus do not open in headless Chromium; pick
+      // the option directly.
       mark(await seen());
-      await loc.selectOption({ label: a.option });
+      if ((await loc.getAttribute("aria-haspopup")) === "listbox") {
+        await loc.click();
+        await page.waitForTimeout(a.before ?? 600);
+        await page.getByRole("option", { name: a.option, exact: true }).click();
+      } else await loc.selectOption({ label: a.option });
       await page.waitForTimeout(a.ms ?? 1200);
       break;
     case "paste": {

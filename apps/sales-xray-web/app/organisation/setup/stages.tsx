@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { notify } from "../../notice-center";
 import { Skeleton } from "../../ui/kit";
+import { Picker } from "../../ui/picker";
 import { AdPlatforms } from "../../leads/journey/ad-platforms";
 import {
   readJourney,
@@ -126,18 +127,18 @@ export function OrganisationStages({ bare = false }: { bare?: boolean }) {
         </header>
       )}
       {pipes && pipes.pipelines.length > 1 ? (
-        <select
-          className={styles.search}
-          aria-label="Stage list"
+        <Picker
+          title="Stage list"
+          ariaLabel="Stage list"
           value={pipeline}
-          onChange={(event) => choosePipeline(event.target.value)}
-        >
-          {pipes.pipelines.map((item) => (
-            <option key={item.key} value={item.key}>
-              {item.name}
-            </option>
-          ))}
-        </select>
+          options={pipes.pipelines.map((item) => ({
+            key: item.key,
+            label: item.name,
+          }))}
+          onChange={(key) => {
+            if (key !== null) choosePipeline(key);
+          }}
+        />
       ) : null}
       <StageEditor
         key={pipeline}

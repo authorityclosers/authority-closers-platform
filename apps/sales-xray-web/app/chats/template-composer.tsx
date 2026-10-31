@@ -13,6 +13,7 @@ import { useState } from "react";
 import { LeadsError } from "../leads/leads-client";
 import { filled, type WaTemplate } from "../leads/whatsapp-client";
 import { notify } from "../notice-center";
+import { Picker } from "../ui/picker";
 import { recordOptIn, sendTemplate, type ChatDetail } from "./chats-client";
 import styles from "./chats.module.css";
 
@@ -83,19 +84,18 @@ export function TemplateComposer({
     <div className={styles.templateBox}>
       <label className={styles.templatePick}>
         <span>Template</span>
-        <select
-          value={pickedKey}
-          onChange={(event) => {
-            setPickedKey(event.target.value);
+        <Picker
+          title="Template"
+          value={pickedKey || null}
+          options={detail.templates.map((template) => ({
+            key: keyOf(template),
+            label: `${templateName(template.name)} (${template.language})`,
+          }))}
+          onChange={(key) => {
+            setPickedKey(key ?? "");
             setValues([]);
           }}
-        >
-          {detail.templates.map((template) => (
-            <option key={keyOf(template)} value={keyOf(template)}>
-              {templateName(template.name)} ({template.language})
-            </option>
-          ))}
-        </select>
+        />
       </label>
       {picked && picked.parts ? (
         <div className={styles.templateParts}>

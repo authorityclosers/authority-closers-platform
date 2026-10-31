@@ -429,11 +429,11 @@ call has no saved record; Sandbox shows "Needed work"). Links meet 32/44 px with
 reachable centres; See calls focuses the call list on All calls, folded as usual. Reads,
 writes, clipping, overflow and refreshes are checked as usual. Fixture-only.
 
-For Team's native Sort reps control, select `-k fixture_team_rep_order`.
+For Team's Sort reps picker, select `-k fixture_team_rep_order`.
 Four viewport/theme cases use the existing signed-out Sandbox and Design review
 Team views. They check Latest call against absolute source timestamps and Name
 A–Z against fixed en-IN base/numeric collation across every supplied rep, before
-the eight-row fold. Home/End retain native control focus; switching order folds.
+the eight-row fold. Home/End move within the picker's open list; switching order folds.
 Name/area intersection, empty state, Clear filters and Find reps keep the order.
 Names, focus, records, counts, dates, dots, routes and aggregate totals stay
 unchanged. Targets meet 32/44 px and screenshots cover both folded orders.

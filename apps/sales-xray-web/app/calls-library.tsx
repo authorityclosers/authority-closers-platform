@@ -77,6 +77,7 @@ import { ownsCall, requestWorkspace } from "./call-ownership";
 import { CallLabelEditor, RenameCallButton } from "./call-label-editor";
 import styles from "./calls-library.module.css";
 import { CallsBodySkeleton } from "./calls-skeleton";
+import { Picker } from "./ui/picker";
 
 // The skeletons live in a small module so loading screens load them alone.
 export { CallsBodySkeleton, CallsSkeleton } from "./calls-skeleton";
@@ -1919,32 +1920,34 @@ function CallsLibraryContent({
                 <label className={styles.repFilter}>
                   <Users size={14} aria-hidden="true" />
                   <span className={styles.srOnly}>Rep (loaded calls)</span>
-                  <select
-                    value={activeRep}
-                    onChange={(event) => setSelectedRep(event.target.value)}
-                  >
-                    <option value="">All reps</option>
-                    {repOptions.map((rep) => (
-                      <option key={rep.personId} value={rep.personId}>
-                        {repLabel(rep.personId)}
-                      </option>
-                    ))}
-                  </select>
+                  <Picker
+                    title="Rep (loaded calls)"
+                    className={styles.repPicker}
+                    value={activeRep || null}
+                    all={{ label: "All reps" }}
+                    options={repOptions.map((rep) => ({
+                      key: rep.personId,
+                      label: repLabel(rep.personId),
+                    }))}
+                    onChange={(key) => setSelectedRep(key ?? "")}
+                  />
                 </label>
               ) : null}
               <label className={styles.sort}>
                 <ArrowUpDown size={14} aria-hidden="true" />
-                <select
+                <Picker
+                  title="Sort calls"
+                  ariaLabel="Sort calls"
+                  className={styles.sortPicker}
                   value={sort}
-                  onChange={(event) => setSort(event.target.value as CallSort)}
-                  aria-label="Sort calls"
-                >
-                  {SORTS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                  options={SORTS.map((option) => ({
+                    key: option.id,
+                    label: option.label,
+                  }))}
+                  onChange={(key) => {
+                    if (key) setSort(key as CallSort);
+                  }}
+                />
               </label>
               {workspace ? (
                 <button

@@ -1314,14 +1314,13 @@
   gap: 4px;
 }
 
-.templatePick span,
+.templatePick > span,
 .templatePreview span {
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   font-weight: 650;
 }
 
-.templatePick select,
 .templateParts input,
 .optIn input {
   box-sizing: border-box;
@@ -1336,7 +1335,6 @@
   font-size: var(--sx-text-sm);
 }
 
-.templatePick select:focus,
 .templateParts input:focus,
 .optIn input:focus {
   border-color: var(--sx-accent);
@@ -1475,7 +1473,6 @@
     min-height: 40px;
   }
 
-  .templatePick select,
   .templateParts input,
   .optIn input {
     min-height: 44px;
@@ -1782,21 +1779,12 @@
   cursor: pointer;
 }
 
+/* An icon, then the shared picker, which brings its own box (31 Oct 2026). */
 .pickChip {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 5px;
-  height: 34px;
-  box-sizing: border-box;
-  padding: 0 10px;
-  border: 1px solid var(--sx-line);
-  border-radius: var(--sx-radius-pill);
-  background: var(--sx-surface);
-  color: var(--sx-ink);
-  /* The same type as the chips beside it (polish pass, 24 Oct 2026). */
-  font-size: var(--sx-text-xs);
-  font-weight: 600;
 }
 
 .pickChip > svg {
@@ -1804,20 +1792,6 @@
   pointer-events: none;
 }
 
-.pickChip select {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.pickChip select:focus-visible {
-  outline: none;
-}
-
-.pickChip:focus-within,
 .iconChip:focus-visible,
 .searchClose:focus-visible {
   outline: none;
@@ -1874,13 +1848,8 @@
 }
 
 /* One height for every control in Chats' filter row on touch screens, as
-   the chips (after the pickers' own rules; polish pass, 24 Oct 2026). */
+   the chips (polish pass, 24 Oct 2026). */
 @media (pointer: coarse) {
-  .pickChip {
-    height: 36px;
-    padding: 0 12px;
-  }
-
   .iconChip {
     width: 36px;
     height: 36px;
