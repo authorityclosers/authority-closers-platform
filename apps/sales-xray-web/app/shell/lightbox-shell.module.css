@@ -2341,9 +2341,12 @@
     background: var(--sx-fill);
   }
 
+  /* The lit row's name, a shade deeper than the accent toward the ink, so it
+     reads 4.5:1 on its fill in light and dark (axe on Leads, 31 Oct 2026:
+     the accent on its own fill was 4.49:1 in light). */
   .place[aria-current="page"] {
     background: transparent;
-    color: var(--sx-accent);
+    color: color-mix(in oklab, var(--sx-accent) 80%, var(--lx-ink));
     font-weight: 600;
   }
 
@@ -2432,9 +2435,10 @@
   }
 }
 
+/* Rows slide in without fading: a half-faded name fails contrast (axe on
+   Leads, 31 Oct 2026: 1.76:1 in dark mid-way). */
 @keyframes place-in {
   from {
-    opacity: 0;
     transform: translateX(-6px);
   }
 }
