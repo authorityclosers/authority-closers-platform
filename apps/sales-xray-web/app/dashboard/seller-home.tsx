@@ -47,6 +47,7 @@ import {
 } from "./metric-pager";
 import type { HomeBreak, HomeDesk, HomeSide } from "./my-day-client";
 import styles from "./seller-home.module.css";
+import { talkOrDash } from "./talk-time";
 
 /** Which lead types this seller works: GET /sides (Leads session, 31 Oct). */
 type SidesAccess = { inbound: boolean; cold: boolean };
@@ -355,7 +356,13 @@ export function TodayCards({
                   },
                   {
                     label: "Talk time",
-                    value: own ? minutes(own.numbers.talk_seconds) : null,
+                    value: own
+                      ? talkOrDash(
+                          own.numbers.talk_seconds,
+                          own.numbers.talk_estimated_seconds,
+                          minutes,
+                        )
+                      : null,
                   },
                   {
                     label: "Called today",
@@ -698,7 +705,11 @@ export function TodayPerformance({
     {
       label: "Talk time",
       value: numbers
-        ? breakLength(Math.round(numbers.talk_seconds / 60))
+        ? talkOrDash(
+            numbers.talk_seconds,
+            numbers.talk_estimated_seconds,
+            (seconds) => breakLength(Math.round(seconds / 60)),
+          )
         : null,
       href: "/growth",
     },

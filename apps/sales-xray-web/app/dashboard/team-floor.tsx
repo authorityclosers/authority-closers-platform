@@ -44,6 +44,7 @@ import {
 import { leadsHref } from "./seller-home";
 import { useHomeRead } from "./home-load";
 import styles from "./team-floor.module.css";
+import { talkOrDash } from "./talk-time";
 
 /** Today's figures from the Performance engine; the last good ones if a read
  *  fails; null until the first arrives. */
@@ -209,7 +210,9 @@ function pages(
       {
         key: "talk",
         label: "Talk time",
-        value: day ? minutes(day.talk_seconds) : null,
+        value: day
+          ? talkOrDash(day.talk_seconds, day.talk_estimated_seconds, minutes)
+          : null,
         help: "Time spent on answered calls today",
       },
     ],

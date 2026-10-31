@@ -100,6 +100,8 @@ export type Desk = {
     calls: number;
     connected: number;
     talk_seconds: number;
+    /** Call-button dials' time away from the app: an estimate, never talk time. */
+    talk_estimated_seconds?: number;
     follow_ups_done: number;
     new_assigned: number;
   };

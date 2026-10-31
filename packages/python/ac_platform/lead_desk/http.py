@@ -915,6 +915,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
                 submission_id=None,
                 simulated=False,
                 duration_seconds=command.duration_seconds,
+                away=True,
             )
 
     @router.post("/recording-call", response_model=PhoneLogged, response_model_by_alias=True)

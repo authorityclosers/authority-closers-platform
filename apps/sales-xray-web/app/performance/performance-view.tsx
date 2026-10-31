@@ -24,6 +24,7 @@ import {
 } from "./performance-client";
 import { RevenueSplit } from "./revenue-split";
 import styles from "./performance.module.css";
+import { talkOrDash } from "../dashboard/talk-time";
 
 const PERIODS: { key: string; label: string; days: EffortDays }[] = [
   { key: "1", label: "Today", days: 1 },
@@ -60,7 +61,9 @@ export function measures(inbound: SideEffort, cold: SideEffort): Measure[] {
     row("Connection rate", inbound, cold, (side) =>
       percent(side.connected, side.attempted),
     ),
-    row("Talk time", inbound, cold, (side) => talk(side.talk_seconds)),
+    row("Talk time", inbound, cold, (side) =>
+      talkOrDash(side.talk_seconds, side.talk_estimated_seconds, talk),
+    ),
     row("Leads reached", inbound, cold, (side) => String(side.reached)),
     row("Contact coverage", inbound, cold, (side) =>
       percent(side.leads_attempted, side.eligible),
@@ -132,10 +135,13 @@ export function sellerLine(seller: SellerEffort): string {
   const attempted = seller.inbound.attempted + seller.cold.attempted;
   const connected = seller.inbound.connected + seller.cold.connected;
   const seconds = seller.inbound.talk_seconds + seller.cold.talk_seconds;
+  const estimated =
+    (seller.inbound.talk_estimated_seconds ?? 0) +
+    (seller.cold.talk_estimated_seconds ?? 0);
   return [
     `${attempted} ${attempted === 1 ? "call" : "calls"}`,
     `${percent(connected, attempted)} connected`,
-    `${talk(seconds)} talk`,
+    `${talkOrDash(seconds, estimated, talk)} talk`,
   ].join(" · ");
 }
 

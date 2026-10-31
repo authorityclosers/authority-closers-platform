@@ -22,6 +22,7 @@ import type { HomeBreak, HomeDesk } from "./my-day-client";
 import type { Performance } from "../leads/leads-client";
 import { Segmented } from "../ui/kit";
 import styles from "./home-today.module.css";
+import { talkOrDash } from "./talk-time";
 
 /** One of the top four: a number, its red rule, and where it opens. */
 export type Four = {
@@ -263,7 +264,14 @@ export function MyWork({ desk }: { desk: HomeDesk | null }) {
           label: "Not connected",
           value: String(Math.max(0, numbers.calls - numbers.connected)),
         },
-        { label: "Talk time", value: talk(numbers.talk_seconds) },
+        {
+          label: "Talk time",
+          value: talkOrDash(
+            numbers.talk_seconds,
+            numbers.talk_estimated_seconds,
+            talk,
+          ),
+        },
         { label: "Follow-ups done", value: String(numbers.follow_ups_done) },
       ]
     : null;

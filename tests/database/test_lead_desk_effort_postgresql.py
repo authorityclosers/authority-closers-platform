@@ -37,8 +37,8 @@ def test_inbound_and_cold_are_measured_apart(postgres_harness: Any, tmp_path: Pa
                     .where(Lead.id.in_([UUID(cold), UUID(other)]))
                     .values(pipeline="cold")
                 )
-            # Calls from the app's Call button: the Inbound lead talked 95 s; nobody
-            # answered the Cold one.
+            # Calls from the app's Call button: 95 s away from the app on the Inbound lead
+            # (an estimate, never talk time); nobody answered the Cold one.
             for lead_id, seconds in ((inbound, 95), (cold, 0)):
                 placed = await here.client.post(
                     f"{BASE}/leads/{lead_id}/calls/phone",
@@ -59,7 +59,8 @@ def test_inbound_and_cold_are_measured_apart(postgres_harness: Any, tmp_path: Pa
             own = mine["sellers"][0]
             assert own["person_id"] == str(here.seller.person_id)
             hot, cool = own["inbound"], own["cold"]
-            assert (hot["attempted"], hot["connected"], hot["talk_seconds"]) == (1, 1, 95)
+            assert (hot["attempted"], hot["connected"], hot["talk_seconds"]) == (1, 1, 0)
+            assert hot["talk_estimated_seconds"] == 95
             assert (hot["reached"], hot["interested"], hot["worked_interested"]) == (1, 1, 1)
             assert hot["first_call_minutes"] is not None
             assert (cool["attempted"], cool["connected"], cool["leads_attempted"]) == (1, 0, 1)
