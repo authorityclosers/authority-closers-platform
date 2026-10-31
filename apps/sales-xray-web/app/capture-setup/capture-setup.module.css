@@ -152,6 +152,38 @@
   color: var(--sx-good);
 }
 
+/* A line left undone says what that means, under it. */
+.checks li:not([data-on]) {
+  align-items: flex-start;
+}
+
+.checks li:not([data-on]) svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.why {
+  display: block;
+  margin-top: 2px;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.4;
+}
+
+/* Report a problem: small, under each step's buttons. */
+.report {
+  justify-self: center;
+  padding: 0 12px;
+  border: 0;
+  background: transparent;
+  color: var(--sx-muted);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 .hidden {
   position: absolute;
   width: 1px;

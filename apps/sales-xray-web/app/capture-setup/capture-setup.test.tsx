@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const route = vi.hoisted(() => ({ path: "/leads" }));
 vi.mock("next/navigation", () => ({ usePathname: () => route.path }));
 
+import { REPORT_PROBLEM_EVENT } from "../bug-report/open";
 import { resetBackCloseForTests } from "../ui/back-close";
 import { WorkspaceAccessContext } from "../workspace-access";
 import type { CaptureSetup } from "./capture-setup-client";
@@ -372,6 +373,113 @@ describe("CaptureSetupFlow", () => {
     expect(host.textContent).toContain(
       "On the next screen, choose No restrictions.",
     );
+  });
+
+  it("offers App info and Skip for now when Allow shows nothing", async () => {
+    // Redmi Note 8 Pro on Android 13, persona QA, 31 Oct 2026: Allow showed no
+    // question at all, and only "Continue anyway" got the seller on.
+    const sent = fakePhone({
+      family: "other",
+      autostartNeeded: false,
+      checks: {
+        calls: true,
+        notifications: true,
+        recordings: true,
+        recorder: true,
+        battery: false,
+        autostart: true,
+      },
+    });
+    fakeServer(setup({ consent: "on" }), "on");
+    await flow(setup({ consent: "on" }));
+    await act(async () => button("Continue").click());
+    await settle();
+    expect(title()).toBe("Let Sales X-Ray run in the background");
+    await act(async () => button("Allow").click());
+    await settle();
+    expect(host.textContent).toContain(
+      "If nothing opened, open App info, then tap Battery or App battery usage, then Unrestricted.",
+    );
+    await act(async () => button("Open App info").click());
+    await settle();
+    expect(
+      sent
+        .filter((message) => message.method === "setupOpen")
+        .map((message) => message.args.what),
+    ).toEqual(["battery", "appInfo"]);
+    await act(async () => button("Skip for now").click());
+    await settle();
+    expect(title()).toBe("Almost set");
+    expect(host.textContent).toContain("Runs in the background not done");
+    expect(host.textContent).toContain(
+      "Calls upload when you open Sales X-Ray.",
+    );
+  });
+
+  it("lets a seller skip Autostart, says what App info means, and offers Report a problem", async () => {
+    // Persona QA, 31 Oct 2026: Open Autostart opened plain App info (Uninstall,
+    // Force stop), with no skip and no word on what to do there.
+    fakePhone({
+      checks: {
+        calls: true,
+        notifications: true,
+        recordings: true,
+        recorder: true,
+        battery: true,
+        autostart: false,
+      },
+    });
+    fakeServer(setup({ consent: "on" }), "on");
+    await flow(setup({ consent: "on" }));
+    await act(async () => button("Continue").click());
+    await settle();
+    expect(title()).toBe("Turn on Autostart");
+    expect(host.textContent).toContain(
+      "If App info opens instead of a list, this phone has no Autostart switch.",
+    );
+    const reported: unknown[] = [];
+    const listen = (event: Event) =>
+      reported.push((event as CustomEvent).detail);
+    window.addEventListener(REPORT_PROBLEM_EVENT, listen);
+    await act(async () => button("Report a problem").click());
+    window.removeEventListener(REPORT_PROBLEM_EVENT, listen);
+    expect(reported).toEqual([
+      { title: "Call capture setup: Turn on Autostart" },
+    ]);
+    await act(async () => button("Skip for now").click());
+    await settle();
+    expect(title()).toBe("Almost set");
+  });
+
+  it("says Almost set and why when the Phone app keeps recordings private", async () => {
+    // Persona QA, 31 Oct 2026: "You're set" with two empty ticks, and a last
+    // recording "found" although no folder was chosen.
+    fakePhone({
+      family: "other",
+      autostartNeeded: false,
+      recorderProfile: {
+        kind: "private",
+        maker: "google",
+        dialerLabel: "Phone by Google",
+        recording: "unknown",
+        folders: [],
+        newestMs: Date.now() - 12 * 86_400_000,
+      },
+    });
+    fakeServer(setup({ consent: "on" }), "on");
+    await flow(setup({ consent: "on" }));
+    await act(async () => button("Continue").click());
+    await settle();
+    await act(async () => button("Continue without recordings").click());
+    await settle();
+    expect(title()).toBe("Almost set");
+    expect(host.textContent).toContain(
+      "Your Phone app keeps its recordings private. Add a call's recording on its lead.",
+    );
+    expect(host.textContent).toContain(
+      "You can start working. What's left is below.",
+    );
+    expect(host.textContent).not.toContain("Last call recording found");
   });
 
   it("has no close button while required, and Skip when it isn't", async () => {
