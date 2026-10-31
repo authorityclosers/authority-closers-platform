@@ -20,6 +20,7 @@ afterEach(async () => {
     root.unmount();
   });
   host.remove();
+  window.sessionStorage.clear();
 });
 const close = () =>
   host.querySelector<HTMLButtonElement>('[aria-label="Dismiss"]')!;
@@ -116,31 +117,6 @@ it("preserves ordinary notice actions and avoids removing a permanent card on na
   );
   expect(host.textContent).not.toContain("Ordinary notice");
 });
-it("shows a slim card as one line whose title opens the rest", async () => {
-  const run = vi.fn();
-  const onDismiss = vi.fn(async () => {});
-  await act(async () =>
-    notify({
-      id: "fictional",
-      tone: "info",
-      title: "Fictional line",
-      action: { label: "Details", run },
-      slim: true,
-      onDismiss,
-    }),
-  );
-  const line = host.querySelector<HTMLButtonElement>(
-    '[aria-label="Fictional line. Details"]',
-  )!;
-  expect(line.textContent).toBe("Fictional line");
-  expect(host.querySelector("[data-slim]")).not.toBeNull();
-  await act(async () => line.click());
-  expect(run).toHaveBeenCalledTimes(1);
-  expect(host.textContent).toContain("Fictional line");
-  await act(async () => close().click());
-  expect(onDismiss).toHaveBeenCalledTimes(1);
-  expect(host.textContent).not.toContain("Fictional line");
-});
 it("shows at most two cards, the older ones under +N more", async () => {
   // Owner via the orchestrator, 31 Oct 2026: at most two show, in one corner.
   const ids = ["first", "second", "third", "fourth"];
@@ -170,4 +146,98 @@ it("shows at most two cards, the older ones under +N more", async () => {
   } finally {
     await act(async () => ids.forEach((id) => dismissNotice(id)));
   }
+});
+it("folds a seen card to a one-line pill, and a tap opens it again", async () => {
+  // Owner via the orchestrator, 31 Oct 2026: a corner card may never cover content.
+  vi.useFakeTimers();
+  try {
+    await act(async () =>
+      notify({
+        id: "fictional",
+        tone: "error",
+        title: "Fictional sync paused",
+        message: "Fictional steps to fix it.",
+      }),
+    );
+    expect(host.textContent).toContain("Fictional steps to fix it.");
+    await act(async () => vi.advanceTimersByTime(8000));
+    const pill = () =>
+      host.querySelector<HTMLButtonElement>('button[aria-expanded="false"]');
+    expect(pill()?.textContent).toBe("Fictional sync paused");
+    expect(host.textContent).not.toContain("Fictional steps to fix it.");
+    await act(async () => pill()!.click());
+    expect(host.textContent).toContain("Fictional steps to fix it.");
+    // Opened by a tap, it holds focus, so it stays open while it's read.
+    expect(document.activeElement?.getAttribute("role")).toBe("alert");
+    await act(async () => vi.advanceTimersByTime(8000));
+    expect(host.textContent).toContain("Fictional steps to fix it.");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("brings a card seen this visit back folded, until it is closed", async () => {
+  vi.useFakeTimers();
+  const card = {
+    id: "fictional",
+    tone: "info",
+    title: "Fictional calls have no recording",
+    message: "Fictional steps.",
+    onDismiss: async () => {},
+  } as const;
+  try {
+    await act(async () => notify(card));
+    await act(async () => vi.advanceTimersByTime(8000));
+    // Away and back (Home to Leads and back): it returns as the pill.
+    await act(async () => dismissNotice("fictional"));
+    await act(async () => notify(card));
+    expect(host.textContent).not.toContain("Fictional steps.");
+    // A new title is new news: it opens.
+    await act(async () =>
+      notify({ ...card, title: "More fictional calls have no recording" }),
+    );
+    expect(host.textContent).toContain("Fictional steps.");
+    await act(async () => vi.advanceTimersByTime(8000));
+    await act(async () => close().click());
+    expect(host.textContent).not.toContain("recording");
+    // Closed, it is forgotten: the next one opens.
+    await act(async () =>
+      notify({ ...card, title: "More fictional calls have no recording" }),
+    );
+    expect(host.textContent).toContain("Fictional steps.");
+    // Its owner may say it was seen already (once a day, say): it arrives folded.
+    await act(async () => dismissNotice("fictional"));
+    await act(async () =>
+      notify({ ...card, title: "Fresh fictional news", folded: true }),
+    );
+    expect(host.textContent).toContain("Fresh fictional news");
+    expect(host.textContent).not.toContain("Fictional steps.");
+  } finally {
+    vi.useRealTimers();
+  }
+});
+it("shows a slim card as the pill, whose tap opens the rest", async () => {
+  // The recording card's slim line is the stack's pill, like every card
+  // (orchestrator, 31 Oct 2026: the fold comes from the stack, for all alike).
+  const run = vi.fn();
+  await act(async () =>
+    notify({
+      id: "fictional",
+      tone: "info",
+      title: "Fictional line",
+      message: "Fictional rest.",
+      action: { label: "Details", run },
+      slim: true,
+      onDismiss: async () => {},
+    }),
+  );
+  const pill = host.querySelector<HTMLButtonElement>(
+    'button[aria-expanded="false"]',
+  )!;
+  expect(pill.textContent).toBe("Fictional line");
+  expect(host.textContent).not.toContain("Fictional rest.");
+  await act(async () => pill.click());
+  expect(host.textContent).toContain("Fictional rest.");
+  expect(run).not.toHaveBeenCalled();
+  await act(async () => close().click());
+  expect(host.textContent).not.toContain("Fictional line");
 });
