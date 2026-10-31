@@ -22,7 +22,6 @@ import {
   BatteryCharging,
   CheckCircle2,
   CircleDashed,
-  FolderOpen,
   Mic,
   Power,
   ShieldCheck,
@@ -64,6 +63,7 @@ import {
   autoCaptureStatus,
   buzz,
   onPhoneSignal,
+  openDialer,
   pickRecordingsFolder,
   recorderOpen,
   setupMark,
@@ -82,7 +82,9 @@ import { Button, Skeleton } from "../ui/kit";
 import { Picker } from "../ui/picker";
 import { recordCaptureSetup, type CaptureSetup } from "./capture-setup-client";
 import {
+  markTestCall,
   phoneFacts,
+  recordingProven,
   savedWhen,
   stepsFor,
   type CaptureStep,
@@ -455,12 +457,41 @@ function ConsentStep({
   );
 }
 
-const RECORDING_STATE: Record<string, string> = {
-  on: "Call recording is on.",
-  off: "Call recording is off.",
+/** A recording's length as a clock: 0:10. */
+const clock = (ms: number) => {
+  const seconds = Math.max(1, Math.round(ms / 1000));
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 };
 
-/** Step 3: the folder, then the recorder's switch if it is off. */
+/** The phone's own word in a sentence: "Redmi" for a Redmi 13, else its maker. */
+function phoneWord(model: string, family: string): string {
+  const first = model.trim().split(/\s+/)[0] ?? "";
+  return /^(redmi|poco|galaxy|pixel|oneplus|nord|iqoo|realme|vivo|oppo)$/i.test(
+    first,
+  )
+    ? first
+    : (BRAND[family] ?? "phone");
+}
+
+/** A test call's recording is looked for this long after the seller comes back. */
+const TEST_WAIT_MS = 45_000;
+
+type TestCall = { started: number; found: number | null; gaveUp: boolean };
+
+type RecordingItem = {
+  key: "recorder" | "folder" | "test";
+  label: string;
+  done: boolean;
+  say: string;
+};
+
+/**
+ * Step 3: recording as one checked list (competitor teardown #6, 1 Nov 2026):
+ * the Phone app's switch, the recordings folder, then a 10-second test call
+ * the seller places, until a recording is found. Each line checks itself and
+ * says what is still missing; a Phone app that keeps recordings private says
+ * so first.
+ */
 function RecordingsStep({
   titleId,
   phone,
@@ -476,17 +507,60 @@ function RecordingsStep({
 }) {
   const [busy, setBusy] = useState(false);
   const [note, setNote] = useState<string | null>(null);
+  const [test, setTest] = useState<TestCall | null>(null);
+  const [now] = useState(() => Date.now());
+  const look = useRef(refresh);
+  useEffect(() => {
+    look.current = refresh;
+  });
+
+  // A test call is out: its recording is looked for every few seconds and when
+  // the app comes back, until it is found or the seller has been back a while.
+  const waitingFrom =
+    test && test.found === null && !test.gaveUp ? test.started : null;
+  useEffect(() => {
+    if (waitingFrom === null) return;
+    let stopped = false;
+    let giveUp: number | undefined;
+    const check = async () => {
+      const next = await look.current();
+      const newest = next.facts?.newestMs ?? null;
+      if (stopped || newest === null || newest < waitingFrom) return;
+      if (next.facts) markTestCall(next.facts.device);
+      setTest((value) => (value ? { ...value, found: newest } : value));
+    };
+    const timer = window.setInterval(() => void check(), 4_000);
+    const stop = onPhoneSignal((event) => {
+      if (event !== "resume") return;
+      void check();
+      giveUp ??= window.setTimeout(
+        () =>
+          setTest((value) =>
+            value && value.found === null ? { ...value, gaveUp: true } : value,
+          ),
+        TEST_WAIT_MS,
+      );
+    });
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+      window.clearTimeout(giveUp);
+      stop();
+    };
+  }, [waitingFrom]);
+
   const facts = phone.facts;
   const status = phone.status;
   if (!facts || !status) return null;
   const guide = recorderGuide(status.recorder, status.family);
-  const dialer = status.recorder?.dialerLabel ?? "Your Phone app";
+  const dialer = status.recorder?.dialerLabel ?? "your Phone app";
+  const Dialer = dialer.charAt(0).toUpperCase() + dialer.slice(1);
 
   if (facts.privateDialler)
     return (
       <Screen
         icon={Mic}
-        title="This Phone app keeps recordings private"
+        title={`${Dialer} keeps recordings private here`}
         titleId={titleId}
         line={guide.lead}
         actions={
@@ -526,115 +600,191 @@ function RecordingsStep({
       </Screen>
     );
 
-  if (!facts.folderPicked)
-    return (
-      <Screen
-        icon={FolderOpen}
-        title="Pick your call recordings folder"
-        titleId={titleId}
-        line="Your Phone app saves each call. Choose that folder once: Android opens it for you, then tap Use this folder and Allow."
-        actions={
-          <Button
-            variant="primary"
-            disabled={busy}
-            aria-busy={busy || undefined}
-            onClick={() => {
-              setBusy(true);
-              void pickRecordingsFolder().then(async (picked) => {
-                const next = picked ? await refresh() : phone;
-                setBusy(false);
-                if (!next.facts?.folderPicked)
-                  setNote("No folder chosen yet. Tap Choose the folder again.");
-                else if (!next.facts.recorderOff) onDone();
+  const recorderOn =
+    !facts.recorderOff &&
+    (status.recorder?.recording === "on" || status.checks.recorder === true);
+  const tested = test?.found ?? null;
+  const proven = tested !== null || recordingProven(facts);
+  const when = savedWhen(facts.newestMs, now);
+  const testSay =
+    tested !== null
+      ? `Test recording found ✓${facts.newestDurationMs ? ` ${clock(facts.newestDurationMs)}` : ""}`
+      : proven
+        ? when
+          ? `Last call recording found ${when}.`
+          : "A call recording was found."
+        : !test
+          ? "Call anyone for 10 seconds from your Phone app (a friend, or your own voicemail), then come back."
+          : !test.gaveUp
+            ? "Looking for the test recording…"
+            : recorderOn
+              ? `No recording arrived in the folder you chose. Check ${dialer} records all calls, or choose the folder again, then test again.`
+              : `No recording arrived: turn on Call recording in ${dialer} for all calls, then test again.`;
+  const items: RecordingItem[] = [
+    {
+      key: "recorder",
+      label: `Call recording on in ${dialer}`,
+      done: recorderOn,
+      say: recorderOn
+        ? "On."
+        : facts.recorderOff
+          ? "Off: calls aren't saved yet."
+          : "This phone can't say: check it records all calls.",
+    },
+    {
+      key: "folder",
+      label: "Recordings folder chosen",
+      done: facts.folderPicked,
+      say: facts.folderPicked
+        ? "Chosen."
+        : "Not yet: Android opens it for you.",
+    },
+    { key: "test", label: "10-second test call", done: proven, say: testSay },
+  ];
+  const left = items.filter((item) => !item.done).length;
+  const first = items.find((item) => !item.done)?.key ?? null;
+
+  const chooseFolder = () => {
+    setBusy(true);
+    setNote(null);
+    void pickRecordingsFolder().then(async (picked) => {
+      const next = picked ? await refresh() : phone;
+      setBusy(false);
+      if (!next.facts?.folderPicked)
+        setNote("No folder chosen yet. Tap Choose the folder again.");
+    });
+  };
+  const startTest = () => {
+    setTest({ started: Date.now(), found: null, gaveUp: false });
+    openDialer();
+  };
+
+  let actions: ReactNode;
+  if (first === "recorder")
+    actions = (
+      <>
+        <Button
+          variant="primary"
+          onClick={() => {
+            void setupOpen("recorder").then((opened) => {
+              if (!opened) {
+                setNote(
+                  "Open your Phone app's settings yourself, then come back.",
+                );
+                return;
+              }
+              // A switch the phone can read is checked on the way back; one it
+              // can't counts as done once the seller has been there.
+              leave(async () => {
+                if (status.recorder?.recording !== "off")
+                  await setupMark("recorder", true);
+                await refresh();
               });
-            }}
-          >
-            Choose the folder
-          </Button>
-        }
+            });
+          }}
+        >
+          Open call recording settings
+        </Button>
+        <Button
+          variant="ghost"
+          onClick={() => {
+            void setupMark("recorder", true).then(() => refresh());
+          }}
+        >
+          It&apos;s on
+        </Button>
+      </>
+    );
+  else if (first === "folder")
+    actions = (
+      <Button
+        variant="primary"
+        disabled={busy}
+        aria-busy={busy || undefined}
+        onClick={chooseFolder}
       >
-        <p className={own.note}>
-          {dialer} on this phone.{" "}
-          {RECORDING_STATE[status.recorder?.recording ?? ""] ??
-            "Check that it records calls."}
-        </p>
-        <p className={own.fine}>
-          Most Xiaomi, Redmi, POCO, Samsung, Vivo, Oppo, Realme, OnePlus and
-          Huawei phones save calls by themselves. Google&apos;s Phone app keeps
-          its recordings private.
-        </p>
-        <dl className={styles.fine}>
-          <div>
-            <dt>Reads</dt>
-            <dd>
-              Only the folder you choose. Not your photos, documents or other
-              files.
-            </dd>
-          </div>
-          <div>
-            <dt>Leaves your phone</dt>
-            <dd>Recordings of calls with your leads, after their Undo time.</dd>
-          </div>
-        </dl>
-        {note ? (
-          <p className={own.issue} role="status">
-            {note}
-          </p>
+        Choose the folder
+      </Button>
+    );
+  else if (first === "test")
+    actions = (
+      <>
+        {!test || test.gaveUp ? (
+          <Button variant="primary" onClick={startTest}>
+            {test ? "Test again" : "Open the dialer"}
+          </Button>
         ) : null}
-      </Screen>
+        {test?.gaveUp && recorderOn ? (
+          <Button variant="ghost" disabled={busy} onClick={chooseFolder}>
+            Choose the folder again
+          </Button>
+        ) : null}
+        <Button variant="ghost" onClick={onDone}>
+          Skip the test call
+        </Button>
+      </>
+    );
+  else
+    actions = (
+      <Button variant="primary" onClick={onDone}>
+        Continue
+      </Button>
     );
 
   return (
     <Screen
       icon={Mic}
-      title="Turn on call recording"
-      titleId={titleId}
-      line={`${dialer} saves calls only while Call recording is on.`}
-      actions={
-        <>
-          <Button
-            variant="primary"
-            onClick={() => {
-              void setupOpen("recorder").then((opened) => {
-                if (!opened) {
-                  setNote(
-                    "Open your Phone app's settings yourself, then come back.",
-                  );
-                  return;
-                }
-                leave(async () => {
-                  await setupMark("recorder", true);
-                  await refresh();
-                  onDone();
-                });
-              });
-            }}
-          >
-            Open call recording settings
-          </Button>
-          <Button
-            variant="ghost"
-            onClick={() => {
-              void setupMark("recorder", true).then(() => onDone());
-            }}
-          >
-            It&apos;s on
-          </Button>
-        </>
+      title={
+        left
+          ? `Your ${phoneWord(facts.model, facts.family)} can record · ${left === 1 ? "1 step" : `${left} steps`}`
+          : "Recording works"
       }
+      titleId={titleId}
+      line="Each step checks itself."
+      actions={actions}
     >
-      <ol className={styles.steps}>
-        {guide.steps.map((line) => (
-          <li key={line}>{line}</li>
+      <ul className={own.checks} aria-label="Recording setup">
+        {items.map((item) => (
+          <li key={item.key} data-on={item.done ? "" : undefined}>
+            {item.done ? (
+              <CheckCircle2 size={18} aria-hidden="true" />
+            ) : (
+              <CircleDashed size={18} aria-hidden="true" />
+            )}
+            <span>
+              {item.label}
+              <span className={own.hidden}>
+                {item.done ? " done" : " not done"}
+              </span>
+              <span
+                className={own.why}
+                role={item.key === "test" ? "status" : undefined}
+              >
+                {named(item.say)}
+              </span>
+            </span>
+          </li>
         ))}
-      </ol>
-      {note ? <p className={own.note}>{note}</p> : null}
+      </ul>
+      {first === "recorder" ? (
+        <ol className={styles.steps}>
+          {guide.steps.map((line) => (
+            <li key={line}>{line}</li>
+          ))}
+        </ol>
+      ) : null}
+      {note ? (
+        <p className={own.issue} role="status">
+          {note}
+        </p>
+      ) : null}
     </Screen>
   );
 }
 
 const BRAND: Record<string, string> = {
   xiaomi: "Xiaomi",
+  samsung: "Samsung",
   vivo: "Vivo",
   oppo: "Oppo",
   realme: "Realme",
@@ -958,7 +1108,15 @@ function DoneStep({
             "Your Phone app keeps its recordings private. Add a call's recording on its lead.",
           ],
         ] as [string, boolean, string][])
-      : []),
+      : recordings
+        ? ([
+            [
+              "Test recording found",
+              recordingProven(facts),
+              "Not yet. Call anyone for 10 seconds from your Phone app: Sales X-Ray finds the recording by itself.",
+            ],
+          ] as [string, boolean, string][])
+        : []),
     [
       "Runs in the background",
       facts.battery && (!facts.autostartNeeded || facts.autostart),
