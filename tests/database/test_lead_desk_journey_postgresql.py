@@ -134,6 +134,12 @@ def test_a_business_own_stages_through_the_desk(postgres_harness: Any, tmp_path:
                         "connected": True,
                         "step": "site_visit_booked",
                         "follow_up_at": later,
+                        # A booked visit says when and where (its stage's meaning).
+                        "meeting": {
+                            "starts_at": later,
+                            "mode": "in_person",
+                            "location": "Fictional site office",
+                        },
                     },
                     headers=WRITE,
                 )
