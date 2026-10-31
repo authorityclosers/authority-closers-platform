@@ -179,3 +179,45 @@ def test_a_cold_leads_first_stage_says_its_cold_name(postgres_harness: Any, tmp_
             assert await label("Fictional Inbound no side") == "New Lead"
 
     run(exercise())
+
+
+def test_follow_ups_hold_every_planned_call_on_its_side(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """Phone personas (1 Nov 2026): ph2-14, a "No answer" retry showed only in All Leads;
+    ph2-18, a Cold lead's call-back booked for tomorrow never reached Cold > Follow-ups.
+    Follow-ups hold every open lead with a time, on its side."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            await both_sides(here)
+            async with here.setup.sessions() as db, db.begin():
+                # A call-back booked on an untouched Cold lead, for tomorrow.
+                await db.execute(
+                    update(Lead)
+                    .where(Lead.name == "Fictional Cold untouched")
+                    .values(next_action_at=datetime.now(UTC) + timedelta(days=1))
+                )
+            here.as_seller()
+
+            async def names(**query: str) -> list[str]:
+                answer = await here.client.get(
+                    f"{BASE}/leads", params={"scope": "mine", "stage": "open", **query}
+                )
+                assert answer.status_code == 200, answer.text
+                return sorted(row["name"] for row in answer.json()["leads"])
+
+            # The retry after no answer, the follow-up and the booked call-back.
+            assert await names(view="follow_ups", side="cold") == [
+                "Fictional Cold talking",
+                "Fictional Cold tried",
+                "Fictional Cold untouched",
+            ]
+            assert await names(view="follow_ups", side="cold", when="upcoming") == [
+                "Fictional Cold talking",
+                "Fictional Cold untouched",
+            ]
+            # Inbound's own: the late follow-up, never a Cold one.
+            assert await names(view="follow_ups", side="inbound") == ["Fictional Inbound late"]
+
+    run(exercise())

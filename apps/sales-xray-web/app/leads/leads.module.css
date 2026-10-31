@@ -7553,3 +7553,27 @@ fieldset.form {
     display: none;
   }
 }
+
+/* A calling round: Call beside Skip (phone personas, 1 Nov 2026). */
+.roundActions {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.roundActions > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.skipButton {
+  min-height: 56px;
+  padding: 0 20px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}

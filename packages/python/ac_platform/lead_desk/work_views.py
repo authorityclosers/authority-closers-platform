@@ -1,10 +1,10 @@
 """The seller's work views and the stage filter on the Leads list (Dipak's Home + Leads
 handoff, 31 Oct 2026, items 56-73). Work views are not stages: To Call is the side's
 customers needing a call today, next lead first; Follow-ups is the leads with planned or
-overdue contact (Open Leads and Interested with a follow-up time), split into Due Today,
-Overdue and Upcoming. The stage filter takes the owner's own stage (a step key); a lead
-with no step, or one its list no longer has, counts in its kind's stage, so nothing falls
-out of the list. Reads only."""
+overdue contact (any open lead with a time: a follow-up, a retry, a booked call-back), split
+into Due Today, Overdue and Upcoming. The stage filter takes the owner's own stage (a step
+key); a lead with no step, or one its list no longer has, counts in its kind's stage, so
+nothing falls out of the list. Reads only."""
 
 from __future__ import annotations
 
@@ -16,7 +16,7 @@ from sqlalchemy import and_, case, false, func, or_
 
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.models import Lead
-from ac_platform.lead_desk.vocabulary import NEEDS_FOLLOW_UP, OPEN_STAGES
+from ac_platform.lead_desk.vocabulary import OPEN_STAGES
 
 WorkView = Literal["to_call", "follow_ups"]
 FollowUpWhen = Literal["today", "overdue", "upcoming"]
@@ -33,8 +33,10 @@ def in_view(view: WorkView, day_end: datetime) -> Any:
                 and_(Lead.stage == "new", Lead.next_action_at.is_(None)),
             ),
         )
-    # Planned contact: Open Leads and Interested with a time (retries stay in To Call).
-    return and_(Lead.stage.in_(NEEDS_FOLLOW_UP), Lead.next_action_at.is_not(None))
+    # Planned contact: any open lead with a time, on its side (phone personas, 1 Nov 2026:
+    # ph2-14, a "No answer" retry showed nowhere but All Leads; ph2-18, a Cold lead's booked
+    # call-back never reached Cold > Follow-ups). A retry due today is in To Call too.
+    return and_(Lead.stage.in_(OPEN_STAGES), Lead.next_action_at.is_not(None))
 
 
 def call_order(now: datetime, day_start: datetime) -> tuple[Any, ...]:

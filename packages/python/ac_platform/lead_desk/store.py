@@ -466,6 +466,17 @@ def call_seconds(data: Mapping[str, Any]) -> int:
     return max(0, int(data.get("duration_seconds") or 0))
 
 
+def dial_placed(data: Mapping[str, Any], at: datetime, synced_at: datetime | None) -> bool:
+    """A Call-button dial counts once the phone's own call log shows it (any seconds) or its
+    seller answered "We talked". When that phone's call history was read after the dial
+    (``synced_at``) without it, the seller backed out of the dialler: never placed, counted
+    nowhere (phone personas, 1 Nov 2026, ph2-13). No capture (web, capture off), or no look
+    since: it counts, as before. Other calls are always placed."""
+    if not is_dial(data) or PHONE_SECONDS in data or data.get(TALKED) is True:
+        return True
+    return synced_at is None or synced_at <= at + DIAL_MATCH
+
+
 def call_answered(data: Mapping[str, Any]) -> bool:
     """Connected, one rule with the lead's own story (phone personas, 1 Nov 2026): talk seconds
     the phone measured, the phone's log said so, a transcript (the call's recording), or the
@@ -1236,7 +1247,26 @@ class LeadDesk:
                 return row._replace(data={**row.data, TALKED: True})
             return row
 
-        return [read_beside(row) for row in rows]
+        beside = [read_beside(row) for row in rows]
+        synced = await self._phones_synced() if any(is_dial(r.data) for r in beside) else {}
+        # A dial its phone's call log never showed was not placed (dial_placed).
+        return [
+            row
+            for row in beside
+            if dial_placed(row.data, row.at, synced.get(row.actor) if row.actor else None)
+        ]
+
+    async def _phones_synced(self) -> dict[UUID, datetime]:
+        """When each seller's phone last sent its call history (_phone_seen), read only."""
+        row = await self.db.get(LeadDeskSettings, self.tenant_id)
+        phones = row.config.get(PHONES_KEY) if row is not None else None
+        found: dict[UUID, datetime] = {}
+        for person, entry in (phones or {}).items() if isinstance(phones, dict) else ():
+            at = entry.get("synced_at") if isinstance(entry, dict) else None
+            if isinstance(at, str):
+                with contextlib.suppress(ValueError):
+                    found[UUID(person)] = datetime.fromisoformat(at)
+        return found
 
     async def _dials_talked(self, dials: list[CallRow]) -> set[UUID]:
         """Call-button dials whose seller answered "We talked" right after (DIAL_ANSWER): the

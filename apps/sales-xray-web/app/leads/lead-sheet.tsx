@@ -2816,6 +2816,7 @@ export function LeadCard({
   focusAt = null,
   primarySlot = null,
   hidePrimary = false,
+  onSkip,
 }: {
   detail: LeadDetail;
   me: Me | null;
@@ -2835,6 +2836,8 @@ export function LeadCard({
   focusAt?: string | null;
   primarySlot?: HTMLElement | null;
   hidePrimary?: boolean;
+  /** In a calling round: go on to the next lead without calling this one. */
+  onSkip?: () => void;
 }) {
   const { lead } = detail;
   const setup = useContext(MessageSetup);
@@ -3108,7 +3111,7 @@ export function LeadCard({
     return !phoneDigits || value.replace(/\D/g, "").slice(-10) !== phoneDigits;
   });
 
-  const primaryAction = detail.phone ? (
+  const callAction = detail.phone ? (
     <CallLink
       className={styles.callButton}
       phone={detail.phone}
@@ -3139,6 +3142,18 @@ export function LeadCard({
     </button>
   ) : (
     <p className={styles.hint}>No phone number on this lead.</p>
+  );
+  // A calling round (Call Next, Start Cold Calling) shows the card first: Call
+  // dials, Skip goes on to the next lead and saves nothing (ph2-13, 1 Nov 2026).
+  const primaryAction = onSkip ? (
+    <div className={styles.roundActions}>
+      {callAction}
+      <button type="button" className={styles.skipButton} onClick={onSkip}>
+        Skip
+      </button>
+    </div>
+  ) : (
+    callAction
   );
 
   return (
@@ -3920,6 +3935,9 @@ export function LeadSheet({
             <LeadCard
               primarySlot={primarySlot}
               hidePrimary={questionOpen}
+              onSkip={
+                queue && onNext && leadId ? () => onNext(leadId) : undefined
+              }
               detail={detail}
               me={me}
               onChanged={update}

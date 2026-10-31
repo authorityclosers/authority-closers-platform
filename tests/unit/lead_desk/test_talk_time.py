@@ -12,6 +12,7 @@ from ac_platform.lead_desk.store import (
     call_answered,
     call_seconds,
     dial_for,
+    dial_placed,
 )
 
 DIAL_BEFORE = {"submission_id": None, "simulated": False, "duration_seconds": 60, "sample": None}
@@ -75,3 +76,20 @@ def test_a_call_with_a_transcript_is_connected() -> None:
     """Phone personas (1 Nov 2026): a call with its transcript read "not reached yet"."""
     recording = {"submission_id": "f00d", "simulated": False, "recording": True}
     assert call_answered(recording)
+
+
+def test_a_dial_the_call_log_never_showed_was_not_placed() -> None:
+    """ph2-13 (phone personas, 1 Nov 2026): backing out of the dialler logged a call."""
+    at = datetime(2026, 11, 1, 10, 0, tzinfo=UTC)
+    dial = {"duration_seconds": 12, "simulated": False, "estimated": True}
+    later = at + timedelta(minutes=20)
+    # The phone's call history came after the dial and didn't have it: not placed.
+    assert not dial_placed(dial, at, later)
+    # It had it (any seconds), or the seller said "We talked": placed.
+    assert dial_placed({**dial, PHONE_SECONDS: 0}, at, later)
+    assert dial_placed({**dial, TALKED: True}, at, later)
+    # No capture on that phone, or no look since the dial: counted, as before.
+    assert dial_placed(dial, at, None)
+    assert dial_placed(dial, at, at + timedelta(minutes=1))
+    # A call the phone logged by itself is always placed.
+    assert dial_placed({"via": "phone", "direction": "outgoing", "duration_seconds": 0}, at, later)

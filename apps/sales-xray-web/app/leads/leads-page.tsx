@@ -1550,7 +1550,9 @@ export function LeadsRoute({
       : []),
   ];
 
-  // Save & Next Lead: the list's next lead not yet served this round; none: done.
+  // Save & Next Lead (or Skip): the list's next lead not yet served this round;
+  // none: done. Its card opens first, with Call and Skip; only Call dials
+  // (phone personas, 1 Nov 2026, ph2-13: the dialler opened with a bare number).
   const nextLead = (saved: string) => {
     const served = new Set(queue ?? []).add(saved);
     const next = order.current.find((id) => !served.has(id));
@@ -1559,7 +1561,7 @@ export function LeadsRoute({
       return;
     }
     setQueue(served.add(next));
-    open(next, "call");
+    open(next);
   };
   // A wide screen shows the lead beside the list (owner, 31 Oct 2026: the
   // computer's full width, a list and a detail pane); elsewhere a sheet.
@@ -1767,7 +1769,7 @@ export function LeadsRoute({
                         onStart={() => {
                           if (!topLead) return;
                           setQueue(new Set([topLead]));
-                          open(topLead, "call");
+                          open(topLead);
                         }}
                       />
                     </>

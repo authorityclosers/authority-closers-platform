@@ -117,15 +117,22 @@ def test_work_views_and_the_stage_filter(postgres_harness: Any, tmp_path: Path) 
             desk = await here.client.get(BASE)
             assert desk.status_code == 200, desk.text
             assert desk.json()["sides"]["inbound"]["next_lead"]["name"] == to_call[0]
-            # Follow-ups: planned or overdue contact, soonest first; retries stay in To Call.
+            # Follow-ups: every planned contact, soonest first, the retry after no answer
+            # too (phone personas, 1 Nov 2026, ph2-14: it showed only in All Leads).
             assert await names(scope="mine", side="inbound", view="follow_ups") == [
                 "Fictional follow-up old",
+                "Fictional retry late",
                 "Fictional follow-up due",
                 "Fictional follow-up later",
             ]
-            assert await names(scope="mine", side="inbound", view="follow_ups", when="overdue") == [
-                "Fictional follow-up old"
-            ]
+            today_retry = (now - timedelta(hours=2)).astimezone(IST).date() == now.astimezone(
+                IST
+            ).date()
+            assert await names(scope="mine", side="inbound", view="follow_ups", when="overdue") == (
+                ["Fictional follow-up old"]
+                if today_retry
+                else ["Fictional follow-up old", "Fictional retry late"]
+            )
             assert await names(
                 scope="mine", side="inbound", view="follow_ups", when="upcoming"
             ) == ["Fictional follow-up later"]
