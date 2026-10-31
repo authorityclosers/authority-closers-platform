@@ -52,22 +52,46 @@ function useEffort() {
   return useHomeRead("effort:1", (signal) => readEffort(1, signal));
 }
 
-type SideCounts = { fresh: number; open: number; unowned: number };
+/** The stages the New and Open leads cards open, found by meaning on the server (the
+ *  desk's new_key and open_key); null where the organisation's stages have none. An
+ *  organisation on older stages has no "open_leads" (phone personas, 31 Oct 2026). */
+export type StageKeys = { newKey: string | null; openKey: string | null };
 
-/** The side's three lead counts, each the total of the list its card opens. */
-function useSideCounts(side: Side) {
-  return useHomeRead<SideCounts>(`counts:${side}`, async (signal) => {
-    const total = (query: string) =>
-      deskRequest<LeadPage>(`/leads?${query}`, { signal }).then(
-        (page) => page.total,
-      );
-    const [fresh, open, unowned] = await Promise.all([
-      total(`scope=team&side=${side}&view=to_call&step=new`),
-      total(`scope=team&side=${side}&step=open_leads`),
-      total(`scope=unassigned&side=${side}`),
-    ]);
-    return { fresh, open, unowned };
-  });
+type SideCounts = {
+  fresh: number | null;
+  open: number | null;
+  unowned: number;
+};
+
+/** The side's three lead counts, each the total of the list its card opens; none
+ *  until the stage keys are known, and none for a stage the organisation lacks. */
+function useSideCounts(side: Side, stages: StageKeys | undefined) {
+  const which = stages
+    ? `${stages.newKey ?? "-"}:${stages.openKey ?? "-"}`
+    : "wait";
+  return useHomeRead<SideCounts | null>(
+    `counts:${side}:${which}`,
+    async (signal) => {
+      if (!stages) return null;
+      const total = (query: string) =>
+        deskRequest<LeadPage>(`/leads?${query}`, { signal }).then(
+          (page) => page.total,
+        );
+      const step = (key: string) => encodeURIComponent(key);
+      const [fresh, open, unowned] = await Promise.all([
+        stages.newKey
+          ? total(
+              `scope=team&side=${side}&view=to_call&step=${step(stages.newKey)}`,
+            )
+          : null,
+        stages.openKey
+          ? total(`scope=team&side=${side}&step=${step(stages.openKey)}`)
+          : null,
+        total(`scope=unassigned&side=${side}`),
+      ]);
+      return { fresh, open, unowned };
+    },
+  );
 }
 
 const count = (value: number | undefined | null) =>
@@ -87,15 +111,16 @@ function needs(
   side: Side,
   counts: SideCounts | null,
   effort: Effort | null,
+  stages: StageKeys | undefined,
 ): Need[] {
   const day = effort?.[side];
   const list: Need[] = [
-    side === "inbound" && counts
+    side === "inbound" && counts?.fresh != null && stages?.newKey
       ? {
           key: "fresh",
           count: counts.fresh,
           label: "new leads not called yet",
-          href: leadsHref("inbound", { view: "to_call", step: "new" }),
+          href: leadsHref("inbound", { view: "to_call", step: stages.newKey }),
         }
       : null,
     side === "inbound" && effort
@@ -146,27 +171,44 @@ function pages(
   side: Side,
   counts: SideCounts | null,
   day: SideEffort | null,
+  stages: StageKeys | undefined,
 ): { leads: More[]; calls: More[]; speed: More[] } {
   const cold = side === "cold";
+  // A card whose stage the organisation doesn't have is left out, never "0".
+  const has = (key: string | null | undefined) => !stages || !!key;
   return {
     leads: [
-      {
-        key: "new",
-        label: cold ? "Unworked" : "New leads",
-        value: count(counts?.fresh),
-        red: (counts?.fresh ?? 0) > 0,
-        href: leadsHref(side, { view: "to_call", step: "new" }),
-        help: cold
-          ? "Cold leads nobody has called yet"
-          : "Enquiries waiting for their first call",
-      },
-      {
-        key: "open",
-        label: "Open leads",
-        value: count(counts?.open),
-        href: leadsHref(side, { view: "all", step: "open_leads" }),
-        help: "Leads called and still in discussion",
-      },
+      ...(has(stages?.newKey)
+        ? [
+            {
+              key: "new",
+              label: cold ? "Unworked" : "New leads",
+              value: count(counts?.fresh),
+              red: (counts?.fresh ?? 0) > 0,
+              href: leadsHref(side, {
+                view: "to_call",
+                step: stages?.newKey ?? "new",
+              }),
+              help: cold
+                ? "Cold leads nobody has called yet"
+                : "Enquiries waiting for their first call",
+            },
+          ]
+        : []),
+      ...(has(stages?.openKey)
+        ? [
+            {
+              key: "open",
+              label: "Open leads",
+              value: count(counts?.open),
+              href: leadsHref(side, {
+                view: "all",
+                step: stages?.openKey ?? "open_leads",
+              }),
+              help: "Leads called and still in discussion",
+            },
+          ]
+        : []),
       {
         key: "late",
         label: "Follow-ups late",
@@ -495,6 +537,7 @@ export function TeamFloor({
   more,
   mine = null,
   me = null,
+  stages,
 }: {
   side: Side;
   onSide: (side: Side) => void;
@@ -508,14 +551,16 @@ export function TeamFloor({
   mine?: ReactNode;
   /** The viewer's person id. */
   me?: string | null;
+  /** The stages the lead cards open (undefined until the desk is read). */
+  stages: StageKeys | undefined;
 }) {
   const effortRead = useEffort();
-  const countsRead = useSideCounts(side);
+  const countsRead = useSideCounts(side, stages);
   const effort = effortRead.value;
   const counts = countsRead.value;
   const day = effort?.[side] ?? null;
-  const figures = pages(side, counts, day);
-  const waiting = needs(side, counts, effort);
+  const figures = pages(side, counts, day, stages);
+  const waiting = needs(side, counts, effort, stages);
   // Needs you now waits for both reads (or a failure), so it never reorders as they land.
   const settled =
     (effort !== null || effortRead.failed) &&

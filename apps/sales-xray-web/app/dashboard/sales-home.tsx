@@ -33,7 +33,7 @@ import { MyTasks, SellerBlocks } from "./seller-home";
 import type { Side } from "../ui/side-selector";
 import { SetupStart } from "./home-v2";
 import { TodayBar } from "./home-today";
-import { TeamFloor } from "./team-floor";
+import { TeamFloor, type StageKeys } from "./team-floor";
 import { HomeLoadWatch, useHomeRead } from "./home-load";
 import { RevenueBar } from "./revenue-bar";
 import { TeamControls } from "./team-controls";
@@ -117,6 +117,17 @@ function useTeamLeadCount(enabled: boolean): number | null {
   return total;
 }
 
+/** The stages Home's lead cards open, as the server found them by meaning; an older
+ *  server (no sides) or a desk that failed keeps the first and Open Leads keys. */
+function stagesOf(desk: ReturnType<typeof useDesk>): StageKeys | undefined {
+  if (desk.status === "loading") return undefined;
+  const side =
+    desk.status === "ready" ? (desk.desk as HomeDesk).sides?.inbound : null;
+  return side
+    ? { newKey: side.new_key, openKey: side.open_key }
+    : { newKey: "new", openKey: "open_leads" };
+}
+
 /** The period's report for the team, with the period kept in the address. */
 function usePerformance() {
   const [period, setPeriod] = usePeriod();
@@ -132,10 +143,12 @@ function TeamHome({
   manages,
   mine,
   me,
+  stages,
 }: {
   manages: boolean;
   mine: HomeDesk | null;
   me: string | null;
+  stages: StageKeys | undefined;
 }) {
   const { period, setPeriod, shown, failed } = usePerformance();
   const [side, setSide] = useHomeSide();
@@ -147,6 +160,7 @@ function TeamHome({
       controls={manages ? <TeamControls /> : null}
       mine={mine ? <MyTasks desk={mine} side={side} /> : null}
       me={me}
+      stages={stages}
       outcomes={
         <OutcomeTiles
           period={period}
@@ -381,6 +395,7 @@ export function SalesHome({
             manages={manages}
             mine={works && desk.status === "ready" ? desk.desk : null}
             me={desk.status === "ready" ? desk.desk.me.person_id : null}
+            stages={stagesOf(desk)}
           />
         ) : (
           <SellerHome state={desk} />

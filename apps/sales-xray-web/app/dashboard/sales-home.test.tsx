@@ -369,6 +369,62 @@ it("gives an owner the team's floor, one side at a time", async () => {
   ).toEqual(["late", "gaps", "recordings"]);
 });
 
+// Phone personas on v1.21 (31 Oct 2026): an organisation on older stages has no
+// "open_leads", and its Open leads card said 0 and opened "No leads match". Each
+// lead card opens its stage as the server found it by meaning; a card whose
+// meaning the organisation lacks is left out, never a raw key.
+const withStages = (open_key: string | null) => {
+  const keys = { new_key: "enquiry", open_key, upcoming: [] };
+  return { ...owner(desk([])), sides: { inbound: keys, cold: keys } };
+};
+
+it("opens each lead card's stage as the server found it by meaning", async () => {
+  answer({
+    "/v1/lead-desk": withStages("contacted"),
+    "/v1/lead-desk/reports/performance*": performance(),
+    "/v1/lead-desk/team": team({ new: 2 }),
+    "/v1/lead-desk/performance/sellers*": effort(false),
+    "/v1/lead-desk/leads?scope=team&side=inbound&view=to_call&step=enquiry":
+      page(2),
+    "/v1/lead-desk/leads?scope=team&side=inbound&step=contacted": page(5),
+    "/v1/lead-desk/leads?scope=unassigned&side=inbound": page(0),
+  });
+  await mount(true);
+  await act(async () => Promise.resolve());
+  await act(async () => Promise.resolve());
+  expect(figures().slice(0, 2)).toEqual([
+    ["new", "2", true],
+    ["open", "5", false],
+  ]);
+  expect(
+    ["new", "open"].map((key) =>
+      host.querySelector(`a[data-figure=${key}]`)?.getAttribute("href"),
+    ),
+  ).toEqual([
+    "/leads?view=to_call&step=enquiry",
+    "/leads?view=all&step=contacted",
+  ]);
+});
+
+it("leaves out Open leads where the organisation has no such stage", async () => {
+  answer({
+    "/v1/lead-desk": withStages(null),
+    "/v1/lead-desk/reports/performance*": performance(),
+    "/v1/lead-desk/team": team({ new: 2 }),
+    "/v1/lead-desk/performance/sellers*": effort(false),
+    "/v1/lead-desk/leads?scope=team&side=inbound&view=to_call&step=enquiry":
+      page(2),
+    "/v1/lead-desk/leads?scope=unassigned&side=inbound": page(0),
+  });
+  await mount(true);
+  await act(async () => Promise.resolve());
+  await act(async () => Promise.resolve());
+  expect(figures().map(([key]) => key)).not.toContain("open");
+  expect(figures()[0]).toEqual(["new", "2", true]);
+  const asked = vi.mocked(fetch).mock.calls.map(([input]) => String(input));
+  expect(asked.some((path) => path.includes("open_leads"))).toBe(false);
+});
+
 it("keeps every figure calm when nothing waits", async () => {
   answer({
     "/v1/lead-desk": owner(desk([])),
