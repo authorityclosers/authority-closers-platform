@@ -1960,6 +1960,7 @@ export function LeadsRoute({
         {filtering ? (
           <FilterSheet
             key={filtering.round}
+            fileSources={desk.file_sources ?? []}
             open={filtering.open}
             onClose={() =>
               setFiltering((current) => current && { ...current, open: false })
@@ -2201,6 +2202,14 @@ export function LeadsRoute({
               }
             }}
             onDone={refresh}
+            onLanded={(landed) =>
+              pickWork({
+                side: landed,
+                view: "to_call",
+                when: null,
+                step: null,
+              })
+            }
           />
         ) : null}
       </MessageSetup.Provider>

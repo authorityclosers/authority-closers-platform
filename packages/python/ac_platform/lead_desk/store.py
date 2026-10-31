@@ -940,6 +940,7 @@ class LeadDesk:
             stage_label=self._stage_label(lead),
             step=self._step(lead),
             pipeline=journeys.pipeline_of(lead),
+            side=lead_side(lead.pipeline),
             source=lead.source,
             source_label=lead.source_label or SOURCE_LABELS.get(lead.source, lead.source),
             owner_person_id=lead.owner_person_id,
@@ -1140,7 +1141,24 @@ class LeadDesk:
                 new_key=new_key,
                 open_key=open_key,
             )
+        file_sources = tuple(
+            (
+                await self.db.scalars(
+                    select(Lead.source_label)
+                    .where(
+                        Lead.tenant_id == self.tenant_id,
+                        Lead.source == "csv",
+                        Lead.source_label.not_like("File: %"),
+                        Lead.source_label.not_like("% export: %"),
+                    )
+                    .distinct()
+                    .order_by(Lead.source_label)
+                    .limit(12)
+                )
+            ).all()
+        )
         return Desk(
+            file_sources=file_sources,
             me=who,
             numbers=numbers[("today", None)],
             numbers_yesterday=numbers[("yesterday", None)],
@@ -1785,7 +1803,10 @@ class LeadDesk:
         day = self._day_start()
         where: list[Any] = []
         if source is not None:
-            where.append(Lead.source == source)
+            # A kind ("csv"), or a list's own name from a file's Source column (ph1-18).
+            where.append(
+                Lead.source == source if source in SOURCE_LABELS else Lead.source_label == source
+            )
         if due == "late":
             where.append(and_(Lead.stage.in_(OPEN_STAGES), Lead.next_action_at < self.now))
         elif due == "today":
@@ -3210,7 +3231,10 @@ class LeadDesk:
                 raise DeskError(403, "Only owners and admins see another seller's leads.")
             where.append(Lead.owner_person_id == owner)
         if source is not None:
-            where.append(Lead.source == source)
+            # A kind ("csv"), or a list's own name from a file's Source column (ph1-18).
+            where.append(
+                Lead.source == source if source in SOURCE_LABELS else Lead.source_label == source
+            )
         if search:
             needle = search_needle(search)
             digits = "".join(ch for ch in search if ch.isdigit())
@@ -3623,10 +3647,12 @@ class LeadDesk:
         # The bell's "<name> is your lead now" (owner, 27 Oct 2026; migration 0142): for a
         # seller someone else gave it to (the lead rules, a manager), never for their own pick
         # (an add for oneself passes no actor, so the person asking counts too).
+        # A Cold lead comes in a list: never a bell line (ph1-16, 1 Nov 2026).
         if (
             person_id is not None
             and person_id != previous
             and person_id not in {actor, self.viewer.person_id}
+            and lead_side(lead.pipeline) != "cold"
         ):
             self._tell_new_owner(lead, person_id, event)
         return event

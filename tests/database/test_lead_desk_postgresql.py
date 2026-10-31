@@ -390,10 +390,10 @@ def test_website_form_and_file_capture(postgres_harness: Any, tmp_path: Path) ->
                     if rep["person_id"] == str(setup.state.person_id)
                 )
                 sheet = (
-                    "Name,Phone,Status,Assigned to\n"
-                    f"Meera,9800000010,interested,{me['name'].upper()}\n"
-                    "Karan,9800000011,Hot lead,Nobody Known\n"
-                    "Asha,98000 00003,Won,\n"
+                    "Name,Phone,Status,Assigned to,Source\n"
+                    f"Meera,9800000010,interested,{me['name'].upper()},Expo list\n"
+                    "Karan,9800000011,Hot lead,Nobody Known,\n"
+                    "Asha,98000 00003,Won,,\n"
                 ).encode()
                 looked = await client.post(
                     f"{BASE}/imports/preview",
@@ -429,6 +429,18 @@ def test_website_form_and_file_capture(postgres_harness: Any, tmp_path: Path) ->
                 assert rows["Meera"]["owner_person_id"] == str(setup.state.person_id)
                 assert rows["Karan"]["stage"] == "new"
                 assert rows["Asha"]["stage"] == "new"
+                # The file's Source column is the lead's source; the filter can pick it
+                # (ph1-18, 1 Nov 2026: "Expo list" read "File upload").
+                assert seen["mapping"]["source"] == "Source"
+                assert rows["Meera"]["source_label"] == "Expo list"
+                assert rows["Karan"]["source_label"] == "File: b.csv"
+                listed = (
+                    await client.get(
+                        f"{BASE}/leads", params={"scope": "team", "source": "Expo list"}
+                    )
+                ).json()
+                assert [row["name"] for row in listed["leads"]] == ["Meera"]
+                assert "Expo list" in (await client.get(BASE)).json()["file_sources"]
         finally:
             await setup.engine.dispose()
 

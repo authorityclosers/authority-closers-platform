@@ -50,7 +50,7 @@ from uuid import UUID
 
 import httpx
 from fastapi import FastAPI
-from sqlalchemy import and_, delete, exists, or_, select, text
+from sqlalchemy import and_, delete, exists, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from ac_platform.lead_desk import digest_push, hours, nudge_push, reassign, sheet_sync, task_push
@@ -259,6 +259,9 @@ async def collect(database: AsyncSession, now: datetime) -> list[Alert]:
                 or_(_has_device(), _owner_has_device()),
                 Lead.assigned_at > since,
                 Lead.assigned_at <= now,
+                # Cold leads come in lists: a new one is never an alert (phone personas,
+                # 1 Nov 2026, ph1-16: 900 imported fired "New lead" on two phones).
+                func.coalesce(Lead.pipeline, "live") != "cold",
                 or_(
                     Lead.alerted_assigned_at.is_(None),
                     Lead.alerted_assigned_at < Lead.assigned_at,

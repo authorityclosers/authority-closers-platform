@@ -11,9 +11,10 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.lead_desk.models import Lead
 from ac_platform.product_updates.models import Notification
 from tests.database.test_conversation_account_library_postgresql import _session
 from tests.database.test_conversation_postgresql import postgres_harness as _postgres_harness
@@ -108,6 +109,34 @@ def test_a_lead_given_to_a_seller_rings_their_bell_once(
                 )
                 assert own.status_code == 201, own.text
                 assert len(await lead_bells(seller.person_id)) == 1
+
+                # A Cold lead given to the seller rings no bell (ph1-16, 1 Nov 2026).
+                as_(setup.token)
+                cold = await client.post(
+                    f"{BASE}/leads",
+                    json={"command_id": str(uuid4()), "name": "cold fictional", "assign": "me"},
+                    headers=WRITE,
+                )
+                assert cold.status_code == 201, cold.text
+                async with AsyncSession(setup.engine) as db:
+                    await db.execute(
+                        update(Lead)
+                        .where(Lead.id == cold.json()["lead"]["lead_id"])
+                        .values(pipeline="cold")
+                    )
+                    await db.commit()
+                handed = await client.post(
+                    f"{BASE}/leads/{cold.json()['lead']['lead_id']}/assign",
+                    json={
+                        "command_id": str(uuid4()),
+                        "expected_revision": cold.json()["lead"]["revision"],
+                        "person_id": str(seller.person_id),
+                    },
+                    headers=WRITE,
+                )
+                assert handed.status_code == 200, handed.text
+                assert len(await lead_bells(seller.person_id)) == 1
+                as_(seller_token)
 
                 # Team today (Home's Team view) is for those who see the team.
                 refused = await client.get(f"{BASE}/activity", params={"team": "1"})

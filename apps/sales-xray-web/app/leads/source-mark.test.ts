@@ -105,3 +105,11 @@ it("never names the stage again, and says nothing more for a closed lead (phone 
   } as LeadRow;
   expect(nextLine(won, now)).toBe("");
 });
+
+it("names a file's own list instead of File upload (ph1-18, 1 Nov 2026)", () => {
+  expect(shortSource(from("csv", "Expo list"))).toBe("Expo list");
+  expect(shortSource(from("csv", "File: leads.csv"))).toBe("File upload");
+  expect(shortSource(from("csv", "Zoho export: leads.csv"))).toBe(
+    "File upload",
+  );
+});

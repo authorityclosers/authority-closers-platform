@@ -32,9 +32,11 @@ export function arrivals(
   now: number = Date.now(),
 ): LeadRow[] {
   if (seen === null) return [];
+  // A Cold lead comes in a list: it never pops up (ph1-16, 1 Nov 2026).
   return rows.filter(
     (row) =>
       row.why_kind === "new" &&
+      row.side !== "cold" &&
       row.owner_person_id === me &&
       !seen.has(row.lead_id) &&
       now - Date.parse(row.created_at) <= FRESH_MS,

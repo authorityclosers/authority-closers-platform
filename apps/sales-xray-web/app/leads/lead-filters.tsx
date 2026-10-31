@@ -290,10 +290,13 @@ export function FilterSheet({
   onApply,
   sellerPicker,
   onClearAll,
+  fileSources = [],
 }: {
   open: boolean;
   onClose: () => void;
   filters: LeadFilters;
+  /** The organisation's own lists, from files' Source columns (ph1-18). */
+  fileSources?: readonly string[];
   defaultWho: Scope;
   /** Owners and admins pick whose leads; a seller's are always their own. */
   canPickWho: boolean;
@@ -382,7 +385,10 @@ export function FilterSheet({
             follow-up; search is on the page. */}
         <Choices
           label="Lead source"
-          words={SOURCE_WORDS}
+          words={{
+            ...SOURCE_WORDS,
+            ...Object.fromEntries(fileSources.map((name) => [name, name])),
+          }}
           value={more.source}
           any="Every source"
           onChange={(source) => setMore({ source })}

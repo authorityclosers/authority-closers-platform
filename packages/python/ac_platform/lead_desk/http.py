@@ -279,7 +279,7 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         pipeline: str | None = None,
         sort: LeadSort | None = None,
         order: Literal["asc", "desc"] | None = None,
-        source: str | None = Query(default=None, max_length=16),
+        source: str | None = Query(default=None, max_length=120),
         due: LeadDue | None = None,
         contact: LeadSince | None = None,
         created: LeadMade | None = None,

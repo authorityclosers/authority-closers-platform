@@ -145,3 +145,11 @@ it("offers Call, WhatsApp and Later for the lead that arrived", () => {
   press("Later");
   expect(calls).toEqual(["call lead-2", "whatsapp lead-2", "later"]);
 });
+
+it("never pops up a Cold lead (ph1-16, 1 Nov 2026: 900 imported)", () => {
+  const seen = new Set<string>();
+  const rows = [lead(1, { side: "cold" }), lead(2)];
+  expect(arrivals(seen, rows, "me", NOW).map((row) => row.lead_id)).toEqual([
+    rows[1].lead_id,
+  ]);
+});

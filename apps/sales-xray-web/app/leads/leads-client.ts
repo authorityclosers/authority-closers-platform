@@ -58,6 +58,8 @@ export type LeadRow = {
   step?: string | null;
   /** The organisation's pipeline the lead is in ("main" until there are more). */
   pipeline?: string;
+  /** Inbound or Cold (ph1-16). */
+  side?: "inbound" | "cold";
   /** They called, nobody picked up, and nobody has called back yet. */
   missed_at?: string | null;
   missed_calls?: number;
@@ -86,6 +88,8 @@ export type Stage =
   | "junk";
 
 export type Desk = {
+  /** The organisation's own lists, from files' Source columns (ph1-18). */
+  file_sources?: string[];
   me: {
     person_id: string;
     name: string;

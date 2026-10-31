@@ -3,7 +3,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { RepView } from "./leads-client";
 import { firstChoices, type UploadChoices } from "./bulk-upload";
-import { sharesLine, UploadChoicesFields } from "./upload-choices";
+import {
+  overLimitLines,
+  sharesLine,
+  UploadChoicesFields,
+} from "./upload-choices";
 import { readJourney } from "./journey/journey-client";
 
 vi.mock("./journey/journey-client", async (original) => ({
@@ -143,4 +147,26 @@ it("says where the leads go in a line for each choice", () => {
       5,
     ),
   ).toBe("Asha Example 2 · Ravi Sample 1 · 2 unassigned.");
+});
+
+// ph1-17 (phone personas, 1 Nov 2026): the limit warning came only after.
+it("says before the import who it takes past their limit", () => {
+  const priya = {
+    person_id: "p",
+    name: "priya fictional",
+    max_open: 50,
+    open_leads: 2,
+  } as RepView;
+  const choices = {
+    side: "cold",
+    assign: "people",
+    off: [],
+    counts: null,
+  } as unknown as UploadChoices;
+  expect(overLimitLines(choices, [priya], 900)).toEqual([
+    "Priya Fictional would have 902 open leads, 852 over the limit of 50.",
+  ]);
+  expect(overLimitLines(choices, [{ ...priya, max_open: null }], 900)).toEqual(
+    [],
+  );
 });

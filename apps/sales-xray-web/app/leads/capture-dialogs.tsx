@@ -54,7 +54,11 @@ import {
   sharesFor,
   type UploadChoices,
 } from "./bulk-upload";
-import { sharesLine, UploadChoicesFields } from "./upload-choices";
+import {
+  overLimitLines,
+  sharesLine,
+  UploadChoicesFields,
+} from "./upload-choices";
 import { askFeedback } from "../feedback/ask";
 import { BrandTile } from "../ui/brand-tile";
 import {
@@ -772,6 +776,7 @@ const COLUMN_LABELS: Record<string, string> = {
   ...FIELD_LABELS,
   stage: "Stage",
   owner: "Owner",
+  source: "Source",
 };
 
 export function ImportDialog({
@@ -779,6 +784,7 @@ export function ImportDialog({
   canManage,
   onClose,
   onDone,
+  onLanded,
   pasted = null,
   google = false,
 }: {
@@ -786,6 +792,8 @@ export function ImportDialog({
   canManage: boolean;
   onClose: () => void;
   onDone: () => void;
+  /** Done: show the side the new leads went to (ph1-17: it opened Inbound). */
+  onLanded?: (side: "inbound" | "cold") => void;
   /** Rows pasted into the list's quick add: read as soon as it opens. */
   pasted?: string | null;
   /** Opened to import a Google Sheet (Lead sources → Import from Google
@@ -1005,7 +1013,14 @@ export function ImportDialog({
       onClose={onClose}
       actions={
         result ? (
-          <Button variant="primary" onClick={onClose}>
+          <Button
+            variant="primary"
+            onClick={() => {
+              if (result.side && onLanded)
+                onLanded(result.side === "cold" ? "cold" : "inbound");
+              onClose();
+            }}
+          >
             Done
           </Button>
         ) : (
@@ -1214,30 +1229,33 @@ export function ImportDialog({
             {showColumns ? (
               <>
                 <div className={styles.formGrid}>
-                  {[...MAPPABLE, "stage", ...(canManage ? ["owner"] : [])].map(
-                    (field) => (
-                      <Field key={field} label={COLUMN_LABELS[field]}>
-                        <Picker
-                          title={COLUMN_LABELS[field] ?? field}
-                          mode="inline"
-                          value={mapping[field] || null}
-                          all={{ label: "Not in this file" }}
-                          options={preview.headers.map((header) => ({
-                            key: header,
-                            label: header,
-                          }))}
-                          onChange={(key) =>
-                            setMapping((current) => {
-                              const next = { ...current };
-                              if (key) next[field] = key;
-                              else delete next[field];
-                              return next;
-                            })
-                          }
-                        />
-                      </Field>
-                    ),
-                  )}
+                  {[
+                    ...MAPPABLE,
+                    "stage",
+                    "source",
+                    ...(canManage ? ["owner"] : []),
+                  ].map((field) => (
+                    <Field key={field} label={COLUMN_LABELS[field]}>
+                      <Picker
+                        title={COLUMN_LABELS[field] ?? field}
+                        mode="inline"
+                        value={mapping[field] || null}
+                        all={{ label: "Not in this file" }}
+                        options={preview.headers.map((header) => ({
+                          key: header,
+                          label: header,
+                        }))}
+                        onChange={(key) =>
+                          setMapping((current) => {
+                            const next = { ...current };
+                            if (key) next[field] = key;
+                            else delete next[field];
+                            return next;
+                          })
+                        }
+                      />
+                    </Field>
+                  ))}
                 </div>
                 {mapping.stage || (canManage && mapping.owner) ? (
                   <p className={styles.hint}>
@@ -1289,6 +1307,18 @@ export function ImportDialog({
                 About {fresh} new {fresh === 1 ? "lead" : "leads"}:{" "}
                 {sharesLine(choices, team, fresh)}
               </p>
+            ) : null}
+            {/* Said before the import, never only after (ph1-17). */}
+            {canManage && overLimitLines(choices, team, fresh).length ? (
+              <div
+                className={styles.importWarnings}
+                role="status"
+                data-import-limit=""
+              >
+                {overLimitLines(choices, team, fresh).map((line) => (
+                  <p key={line}>{line}</p>
+                ))}
+              </div>
             ) : null}
           </>
         )}

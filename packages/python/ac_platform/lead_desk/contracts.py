@@ -137,6 +137,8 @@ class LeadRow(Model):
     step: str | None = None
     # The organisation's pipeline the lead is in (lead_desk/journey/pipelines.py).
     pipeline: str = "main"
+    # Inbound or Cold, for the page (a Cold lead never pops up as new: ph1-16).
+    side: Literal["inbound", "cold"] = "inbound"
     # They called and nobody picked up, and nobody has called them since
     # (Salestrail's missed-call queue): the newest such call and how many.
     missed_at: datetime | None = None
@@ -282,6 +284,8 @@ class SideDay(Model):
 
 class Desk(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
+    # The organisation's own lists from files' Source columns, for the source filter (ph1-18).
+    file_sources: tuple[str, ...] = ()
     me: Me
     numbers: Numbers
     counts: Counts
