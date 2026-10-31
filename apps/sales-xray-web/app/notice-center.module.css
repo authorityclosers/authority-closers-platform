@@ -58,6 +58,17 @@
   --tone: var(--lx-teal);
 }
 
+.card[data-tone="work"],
+.pill[data-tone="work"] {
+  --tone: var(--lx-teal);
+}
+
+/* Work due within the hour (leads/due-soon.tsx): the urgent colour. */
+.card[data-tone="due"],
+.pill[data-tone="due"] {
+  --tone: var(--lx-danger);
+}
+
 .card[data-tone="success"],
 .pill[data-tone="success"] {
   --tone: var(--lx-strength-ink);
@@ -109,6 +120,7 @@
   font: inherit;
   font-size: 12.5px;
   font-weight: 650;
+  text-decoration: none;
   cursor: pointer;
   transition:
     background var(--sx-dur-fast) var(--sx-ease-out),

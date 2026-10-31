@@ -2,18 +2,20 @@
 
 /**
  * Alerts by urgency (owner program, 25 Oct 2026, item 3). Work that needs the
- * seller, never app problems (those stay corner cards, notice-center.tsx):
- * - normal: a banner at the top of the screen, its edge glowing softly a few
- *   times, a light haptic; it leaves by itself after a few seconds;
+ * seller, never app problems:
+ * - normal: a card in the app's corner stack (Sales X-Ray: notice-center.tsx,
+ *   which reads it with useNormalAlert), a light haptic; it leaves by itself
+ *   after a few seconds. Nothing at the top of the screen any more: one
+ *   notification system, whose cards never cover the page (owner via the
+ *   orchestrator, 31 Oct 2026);
  * - urgent: a larger card in the middle with the one thing to do, in the
  *   urgent colour with the urgent haptic; it stays until done or put off.
  * One of each at a time: a newer alert of a level replaces the older one.
- * A banner may carry the urgent emphasis (red, the urgent haptic) for work due
- * within the hour (leads/due-soon.tsx): still up top, still leaving by itself.
- * Mounted `stacked`, the banner joins the corner cards instead (31 Oct 2026).
+ * A normal alert may carry the urgent emphasis (red, the urgent haptic) for
+ * work due within the hour (leads/due-soon.tsx); it still leaves by itself.
  */
 
-import { BellRing, Siren, X } from "./icons";
+import { Siren } from "./icons";
 import { Anchor, type KitLink } from "../sx/link";
 import { useEffect, useId, useRef, useSyncExternalStore } from "react";
 
@@ -41,7 +43,8 @@ export type AppAlert = Readonly<{
 type Shown = Readonly<{ banner: AppAlert | null; urgent: AppAlert | null }>;
 
 const NONE: Shown = { banner: null, urgent: null };
-const BANNER_MS = 8_000;
+/** How long a normal alert stays, unless it says otherwise. */
+export const NORMAL_ALERT_MS = 8_000;
 
 let shown: Shown = NONE;
 const listeners = new Set<() => void>();
@@ -78,6 +81,15 @@ function subscribe(listener: () => void) {
   };
 }
 
+/** The normal alert showing now, for the host's corner stack to show. */
+export function useNormalAlert(): AppAlert | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => shown.banner,
+    () => null,
+  );
+}
+
 function Act({
   alert,
   className,
@@ -101,59 +113,6 @@ function Act({
     <button type="button" className={className} onClick={done}>
       {action.label}
     </button>
-  );
-}
-
-function Banner({
-  alert,
-  link,
-  stacked,
-}: {
-  alert: AppAlert;
-  link?: KitLink;
-  stacked: boolean;
-}) {
-  const held = useRef(false);
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      if (!held.current) clearAlert(alert.id);
-    }, alert.timeout ?? BANNER_MS);
-    return () => window.clearInterval(timer);
-  }, [alert.id, alert.timeout]);
-  const hold = () => {
-    held.current = true;
-  };
-  const free = () => {
-    held.current = false;
-  };
-  return (
-    <div
-      className={`${styles.banner} ${stacked ? styles.bannerStacked : ""} ${alert.emphasis === "urgent" ? styles.bannerUrgent : ""}`}
-      role="status"
-      data-emphasis={alert.emphasis}
-      data-capture-skip=""
-      onPointerEnter={hold}
-      onPointerLeave={free}
-      onFocus={hold}
-      onBlur={free}
-    >
-      <span className={styles.bannerIcon} aria-hidden="true">
-        <BellRing size={18} />
-      </span>
-      <div className={styles.words}>
-        <strong>{alert.title}</strong>
-        {alert.message ? <span>{alert.message}</span> : null}
-      </div>
-      <Act link={link} alert={alert} className={styles.bannerAction} />
-      <button
-        type="button"
-        className={styles.close}
-        aria-label="Close"
-        onClick={() => clearAlert(alert.id)}
-      >
-        <X size={18} aria-hidden="true" />
-      </button>
-    </div>
   );
 }
 
@@ -206,37 +165,16 @@ function Urgent({ alert, link }: { alert: AppAlert; link?: KitLink }) {
 }
 
 /**
- * Where alerts appear; mounted once, beside the corner cards. `only` mounts one
- * kind; `stacked` puts the banner in the corner stack, so nothing covers the
- * page header or the top bar (owner via the orchestrator, 31 Oct 2026).
+ * Where urgent alerts appear: the centre card, over the page by design.
+ * Normal alerts are the host's corner cards (useNormalAlert).
  */
-export function AlertHost({
-  link,
-  only,
-  stacked = false,
-}: {
-  link?: KitLink;
-  only?: "banner" | "urgent";
-  stacked?: boolean;
-} = {}) {
+export function AlertHost({ link }: { link?: KitLink } = {}) {
   const now = useSyncExternalStore(
     subscribe,
     () => shown,
     () => NONE,
   );
-  return (
-    <>
-      {now.banner && only !== "urgent" ? (
-        <Banner
-          link={link}
-          key={now.banner.id}
-          alert={now.banner}
-          stacked={stacked}
-        />
-      ) : null}
-      {now.urgent && only !== "banner" ? (
-        <Urgent link={link} key={now.urgent.id} alert={now.urgent} />
-      ) : null}
-    </>
-  );
+  return now.urgent ? (
+    <Urgent link={link} key={now.urgent.id} alert={now.urgent} />
+  ) : null;
 }

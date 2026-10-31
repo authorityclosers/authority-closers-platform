@@ -2,6 +2,7 @@
 
 import {
   AlertCircle,
+  BellRing,
   Bug,
   CheckCircle2,
   Copy,
@@ -10,7 +11,15 @@ import {
   RotateCw,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import Link from "next/link";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 
 import {
   installReportShortcut,
@@ -18,10 +27,17 @@ import {
   useReporterAvailable,
 } from "./bug-report/open";
 import { installErrorRecorder, recordError } from "./bug-report/recent-errors";
-import { AlertHost } from "./ui/alerts";
+import {
+  AlertHost,
+  clearAlert,
+  NORMAL_ALERT_MS,
+  useNormalAlert,
+  type AppAlert,
+} from "./ui/alerts";
 import styles from "./notice-center.module.css";
 
-export type NoticeTone = "error" | "info" | "success";
+/** "work" and "due" are work alerts (ui/alerts.tsx); "due" is within the hour. */
+export type NoticeTone = "error" | "info" | "success" | "work" | "due";
 export type Notice = Readonly<{
   id: string;
   tone: NoticeTone;
@@ -29,11 +45,13 @@ export type Notice = Readonly<{
   message?: string;
   /** A request reference the AC team can trace; shown short, copied in full. */
   reference?: string;
-  /** "retry" by default; "open" for a way to another app or site. */
+  /** "retry" by default; "open" for a way to another app or site; "none". */
   action?: Readonly<{
     label: string;
     run: () => void;
-    icon?: "retry" | "open";
+    icon?: "retry" | "open" | "none";
+    /** A page in the app to open with it. */
+    href?: string;
   }>;
   /** Milliseconds before it leaves by itself; errors stay until dismissed. */
   timeout?: number;
@@ -124,9 +142,86 @@ function subscribe(listener: () => void) {
 
 const EMPTY: readonly Notice[] = [];
 
-const ICON = { error: AlertCircle, info: Info, success: CheckCircle2 };
+const ICON = {
+  error: AlertCircle,
+  info: Info,
+  success: CheckCircle2,
+  work: BellRing,
+  due: BellRing,
+};
 
-function NoticeCard({ notice }: { notice: Notice }) {
+/** A work alert (ui/alerts.tsx) as a corner card: one notification system,
+    so it gets the page's room and the fold like every card (owner via the
+    orchestrator, 31 Oct 2026: no banner over the top of the page). */
+function fromAlert(alert: AppAlert): Notice {
+  const action = alert.action;
+  return {
+    id: `alert:${alert.id}`,
+    tone: alert.emphasis === "urgent" ? "due" : "work",
+    title: alert.title,
+    message: alert.message,
+    action: action
+      ? {
+          label: action.label,
+          run: () => action.run?.(),
+          href: action.href,
+          icon: "none",
+        }
+      : undefined,
+    timeout: alert.timeout ?? NORMAL_ALERT_MS,
+    noReport: true,
+  };
+}
+
+/** Under the pointer or holding keyboard focus: a card waits for it. */
+function inUse(node: HTMLElement | null): boolean {
+  if (!node) return false;
+  try {
+    if (node.matches(":hover")) return true;
+  } catch {
+    // A browser without :hover in matches: focus alone decides.
+  }
+  return node.contains(document.activeElement);
+}
+
+function CardAction({
+  action,
+  onRun,
+}: {
+  action: NonNullable<Notice["action"]>;
+  onRun: () => void;
+}) {
+  const icon =
+    action.icon === "none" ? null : action.icon === "open" ? (
+      <ExternalLink size={13} aria-hidden="true" />
+    ) : (
+      <RotateCw size={13} aria-hidden="true" />
+    );
+  const run = () => {
+    onRun();
+    action.run();
+  };
+  return action.href ? (
+    <Link className={styles.action} href={action.href} onClick={run}>
+      {icon}
+      {action.label}
+    </Link>
+  ) : (
+    <button type="button" className={styles.action} onClick={run}>
+      {icon}
+      {action.label}
+    </button>
+  );
+}
+
+function NoticeCard({
+  notice,
+  leave,
+}: {
+  notice: Notice;
+  /** How the card goes away; by default it leaves the notice list. */
+  leave?: () => void;
+}) {
   const reporter = useReporterAvailable();
   const report = notice.tone === "error" && !notice.noReport && reporter;
   const [copied, setCopied] = useState(false);
@@ -144,6 +239,10 @@ function NoticeCard({ notice }: { notice: Notice }) {
     setFolded(arrivesFolded());
   }
   const Icon = ICON[notice.tone];
+  const remove = useCallback(
+    () => (leave ? leave() : dismissNotice(notice.id)),
+    [leave, notice.id],
+  );
   const dismiss = async () => {
     if (dismissing) return;
     setDismissing(true);
@@ -151,7 +250,7 @@ function NoticeCard({ notice }: { notice: Notice }) {
     try {
       await notice.onDismiss?.();
       forgetSeen(key);
-      dismissNotice(notice.id);
+      remove();
     } catch {
       setDismissFailed(true);
       setDismissing(false);
@@ -162,9 +261,18 @@ function NoticeCard({ notice }: { notice: Notice }) {
     const timeout =
       notice.timeout ?? (notice.tone === "error" ? undefined : 5000);
     if (!timeout || notice.onDismiss) return;
-    const timer = window.setTimeout(() => dismissNotice(notice.id), timeout);
+    let timer = 0;
+    // Never from under the pointer or keyboard focus; it tries again shortly.
+    const go = () => {
+      if (inUse(card.current)) {
+        timer = window.setTimeout(go, 2000);
+        return;
+      }
+      remove();
+    };
+    timer = window.setTimeout(go, timeout);
     return () => window.clearTimeout(timer);
-  }, [notice]);
+  }, [notice, remove]);
   useEffect(() => {
     if (folded) return;
     const node = card.current;
@@ -176,10 +284,7 @@ function NoticeCard({ notice }: { notice: Notice }) {
     let timer = 0;
     const fold = (moved: boolean) => {
       // Not under the pointer or keyboard focus; it tries again shortly.
-      if (
-        !moved &&
-        (node?.matches(":hover") || node?.contains(document.activeElement))
-      ) {
+      if (!moved && inUse(node)) {
         timer = window.setTimeout(() => fold(false), 2000);
         return;
       }
@@ -204,7 +309,7 @@ function NoticeCard({ notice }: { notice: Notice }) {
   }, [folded, key]);
   if (folded)
     return (
-      <div className={styles.pill} data-tone={notice.tone}>
+      <div ref={card} className={styles.pill} data-tone={notice.tone}>
         <button
           type="button"
           className={styles.pillOpen}
@@ -245,21 +350,12 @@ function NoticeCard({ notice }: { notice: Notice }) {
         {notice.action || notice.dismissLabel || notice.reference || report ? (
           <div className={styles.actions}>
             {notice.action ? (
-              <button
-                type="button"
-                className={styles.action}
-                onClick={() => {
-                  if (!notice.onDismiss) dismissNotice(notice.id);
-                  notice.action?.run();
+              <CardAction
+                action={notice.action}
+                onRun={() => {
+                  if (!notice.onDismiss) remove();
                 }}
-              >
-                {notice.action.icon === "open" ? (
-                  <ExternalLink size={13} aria-hidden="true" />
-                ) : (
-                  <RotateCw size={13} aria-hidden="true" />
-                )}
-                {notice.action.label}
-              </button>
+              />
             ) : null}
             {notice.dismissLabel ? (
               <button
@@ -292,7 +388,7 @@ function NoticeCard({ notice }: { notice: Notice }) {
                 type="button"
                 className={styles.reference}
                 onClick={() => {
-                  dismissNotice(notice.id);
+                  remove();
                   openBugReport({
                     title: notice.title,
                     reference: notice.reference,
@@ -335,6 +431,11 @@ export function NoticeCenter() {
   );
   const [expanded, setExpanded] = useState(false);
   const stack = useRef<HTMLDivElement>(null);
+  const work = useNormalAlert();
+  const workCard = useMemo(() => (work ? fromAlert(work) : null), [work]);
+  const workGone = useCallback(() => {
+    if (work) clearAlert(work.id);
+  }, [work]);
 
   // The page keeps room for the stack, so content scrolls clear of it: the
   // band from the stack's top to the window's bottom, which the shell adds to
@@ -418,7 +519,9 @@ export function NoticeCenter() {
         aria-live="polite"
         data-capture-skip=""
       >
-        <AlertHost only="banner" stacked />
+        {workCard ? (
+          <NoticeCard key={workCard.id} notice={workCard} leave={workGone} />
+        ) : null}
         {waiting > 0 ? (
           <button
             type="button"
@@ -434,7 +537,7 @@ export function NoticeCenter() {
         ))}
       </div>
       {/* Urgent work: a centre card over the page, by design. */}
-      <AlertHost only="urgent" />
+      <AlertHost />
     </>
   );
 }

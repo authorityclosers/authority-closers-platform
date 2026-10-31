@@ -23,7 +23,8 @@ vi.mock("@ac/ui/kit/haptics", () => ({
   haptic: (kind: string) => haptic(kind),
 }));
 
-import { AlertHost, clearAlert } from "../ui/alerts";
+import { NoticeCenter } from "../notice-center";
+import { clearAlert } from "../ui/alerts";
 import { DueSoonWatch, readSoon, showSoon, type SoonItem } from "./due-soon";
 
 (
@@ -67,19 +68,21 @@ afterEach(async () => {
   );
   await act(async () => root.unmount());
   host.remove();
+  window.sessionStorage.clear();
   haptic.mockClear();
   fetchMock.mockReset();
   vi.unstubAllGlobals();
 });
 
-// Owner, 25 Oct 2026 (workflow 12): a red banner up top naming the lead, with
-// the urgent haptic, opening the lead; once per follow-up.
-it("raises the red banner once per follow-up, opening the lead", async () => {
+// Owner, 25 Oct 2026 (workflow 12): a red alert naming the lead, with the
+// urgent haptic, opening the lead; once per follow-up. A corner card since
+// 31 Oct 2026, never over the top of the page.
+it("raises the red card once per follow-up, opening the lead", async () => {
   answer(200, { item: ITEM, generated_at: "2026-10-26T04:30:00Z" });
   await act(async () =>
     root.render(
       <>
-        <AlertHost />
+        <NoticeCenter />
         <DueSoonWatch live />
       </>,
     ),
@@ -87,10 +90,10 @@ it("raises the red banner once per follow-up, opening the lead", async () => {
   for (let flush = 0; flush < 6; flush += 1) {
     await act(async () => Promise.resolve());
   }
-  const banner = host.querySelector('[role="status"]');
-  expect(banner?.getAttribute("data-emphasis")).toBe("urgent");
-  expect(banner?.textContent).toContain("Priya Sample: follow-up in 40 min");
-  expect(banner?.querySelector("a")?.getAttribute("href")).toBe(
+  const card = host.querySelector('[aria-live="polite"] [role="status"]');
+  expect(card?.getAttribute("data-tone")).toBe("due");
+  expect(card?.textContent).toContain("Priya Sample: follow-up in 40 min");
+  expect(card?.querySelector("a")?.getAttribute("href")).toBe(
     `/leads?lead=${ITEM.lead_id}`,
   );
   expect(haptic).toHaveBeenCalledWith("urgent");

@@ -2,9 +2,9 @@
 
 /**
  * Alerts by urgency with fictional work, for the visual matrix: `?level=normal`
- * (default) a banner up top; `?level=urgent` the centre card; `?level=due` the
- * red banner for a follow-up due within the hour; `&long=1` long words that
- * must wrap. The page behind is a plain list, as Home would be.
+ * (default) a corner card; `?level=urgent` the centre card; `?level=due` the
+ * red corner card for a follow-up due within the hour; `&long=1` long words
+ * that must wrap. The page behind is a plain list, as Home would be.
  */
 
 import { Suspense, useEffect } from "react";

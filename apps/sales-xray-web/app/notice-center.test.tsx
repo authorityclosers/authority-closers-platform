@@ -1,7 +1,23 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+vi.mock("next/link", () => ({
+  default: ({
+    href,
+    children,
+    ...props
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & {
+    href: string;
+    children: React.ReactNode;
+  }) => (
+    <a {...props} href={href}>
+      {children}
+    </a>
+  ),
+}));
+
 import { dismissNotice, NoticeCenter, notify } from "./notice-center";
+import { clearAlert, raiseAlert } from "./ui/alerts";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -240,4 +256,35 @@ it("shows a slim card as the pill, whose tap opens the rest", async () => {
   expect(run).not.toHaveBeenCalled();
   await act(async () => close().click());
   expect(host.textContent).not.toContain("Fictional line");
+});
+it("shows a work alert as a corner card that folds like every card", async () => {
+  // One notification system (owner via the orchestrator, 31 Oct 2026): no
+  // banner over the top of the page; work rides at the top of the stack.
+  vi.useFakeTimers();
+  try {
+    await act(async () =>
+      raiseAlert({
+        id: "fictional-work",
+        level: "normal",
+        emphasis: "urgent",
+        title: "Fictional follow-up in 40 min",
+        message: "Fictional steps.",
+        action: { label: "Open", href: "/leads" },
+        timeout: 600_000,
+      }),
+    );
+    const card = host.querySelector('[aria-live="polite"] [role="status"]');
+    expect(card?.getAttribute("data-tone")).toBe("due");
+    expect(card?.querySelector('a[href="/leads"]')?.textContent).toBe("Open");
+    await act(async () => vi.advanceTimersByTime(8000));
+    expect(host.textContent).not.toContain("Fictional steps.");
+    expect(
+      host.querySelector('button[aria-expanded="false"]')?.textContent,
+    ).toBe("Fictional follow-up in 40 min");
+    await act(async () => close().click());
+    expect(host.textContent).not.toContain("Fictional follow-up");
+  } finally {
+    await act(async () => clearAlert("fictional-work"));
+    vi.useRealTimers();
+  }
 });
