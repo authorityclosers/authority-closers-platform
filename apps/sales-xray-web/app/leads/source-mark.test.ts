@@ -59,3 +59,16 @@ it("says when a new lead was added instead of naming its stage again", () => {
   } as LeadRow;
   expect(nextLine(later, now)).toMatch(/^Call back · /);
 });
+
+it("keeps a late row's time short, so it is never cut (persona QA, 31 Oct 2026)", () => {
+  const now = new Date(2026, 9, 31, 12, 0);
+  const late = {
+    why: "Call back",
+    why_kind: "due",
+    created_at: new Date(2026, 9, 20, 12, 0).toISOString(),
+    next_action_at: new Date(2026, 9, 30, 17, 30).toISOString(),
+    missed_at: null,
+  } as unknown as LeadRow;
+  expect(nextLine(late, now)).toMatch(/^Call back · /);
+  expect(nextLine(late, now)).not.toContain("was");
+});

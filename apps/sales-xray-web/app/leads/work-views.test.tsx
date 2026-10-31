@@ -12,6 +12,7 @@ import {
   LeadSearch,
   StagePicker,
   ViewTabs,
+  WorkSplit,
   emptyWords,
   lastView,
   listTitle,
@@ -271,4 +272,26 @@ it("a moved lead leaves a work view it no longer fits", () => {
     inWorkView(row("interested", null, "meeting_done"), { step: "open_leads" }),
   ).toBe(false);
   expect(inWorkView(row("won", null), null)).toBe(true);
+});
+
+it("gives the list the whole width until a lead is open (persona QA, 31 Oct 2026)", async () => {
+  await act(async () =>
+    root.render(
+      <WorkSplit pane={null}>
+        <p>Rows</p>
+      </WorkSplit>,
+    ),
+  );
+  const split = host.firstElementChild as HTMLElement;
+  expect(split.hasAttribute("data-pane")).toBe(false);
+  expect(split.children).toHaveLength(1);
+  await act(async () =>
+    root.render(
+      <WorkSplit pane={<p>Lead</p>}>
+        <p>Rows</p>
+      </WorkSplit>,
+    ),
+  );
+  expect(split.hasAttribute("data-pane")).toBe(true);
+  expect(split.textContent).toBe("RowsLead");
 });

@@ -6,7 +6,10 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 vi.mock("next/link", () => ({
   default: ({ children }: { children: unknown }) => children,
 }));
-vi.mock("../notice-center", () => ({ notify: () => undefined }));
+vi.mock("../notice-center", () => ({
+  notify: () => undefined,
+  dismissNotice: () => undefined,
+}));
 
 import { CallOutcome } from "./lead-sheet";
 import type { LeadDetail, LeadRow } from "./leads-client";

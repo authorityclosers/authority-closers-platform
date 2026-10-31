@@ -6,6 +6,8 @@
   display: grid;
   gap: 24px;
   min-width: 0;
+  /* Room under the page's heading (persona QA, 31 Oct 2026: it touched the pills). */
+  padding-top: 16px;
 }
 
 .kinds {

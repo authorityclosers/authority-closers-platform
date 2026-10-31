@@ -14,7 +14,10 @@ import { announceWorkspaceChange } from "../workspace-change";
 vi.mock("next/link", () => ({
   default: ({ children }: { children: unknown }) => children,
 }));
-vi.mock("../notice-center", () => ({ notify: vi.fn() }));
+vi.mock("../notice-center", () => ({
+  notify: vi.fn(),
+  dismissNotice: () => undefined,
+}));
 vi.mock("./leads-client", async (original) => ({
   ...(await original<typeof import("./leads-client")>()),
   readLeads: vi.fn(),

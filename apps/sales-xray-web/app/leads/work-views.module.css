@@ -323,14 +323,6 @@
   overscroll-behavior: contain;
 }
 
-.paneEmpty {
-  margin: 0;
-  padding: 48px 16px;
-  color: var(--sx-muted);
-  font-size: var(--sx-text-sm);
-  text-align: center;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .tab {
     transition: none;

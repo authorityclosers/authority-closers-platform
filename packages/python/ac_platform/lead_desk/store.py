@@ -776,9 +776,14 @@ class LeadDesk:
             raise DeskError(422, str(error)) from None
 
     def _stage_label(self, lead: Lead) -> str:
-        """The business's own name for the lead's stage (in its pipeline), else the desk's."""
+        """The business's own name for the lead's stage (in its pipeline), else the desk's. A
+        Cold lead's first stage says its Cold name (Unworked), in its sheet as in the lists
+        (persona QA, 31 Oct 2026)."""
         journey = self._journeys.get(journeys.pipeline_of(lead))
         if journey is not None:
+            stage = journey.resolve(lead.stage, lead.step)
+            if is_cold(lead) and lead.stage == "new" and stage and stage.cold_label:
+                return stage.cold_label
             label = journey.label(lead.stage, lead.step)
             if label:
                 return label
@@ -863,9 +868,10 @@ class LeadDesk:
             last_result_label=result_label,
             test_data=lead.test_data,
             # A cold lead is never late for a seller: a 1,000-lead list would be all red
-            # (Dipak, 30 Oct 2026). Owners and admins still see it.
+            # (Dipak, 30 Oct 2026). Owners and admins still see a worked one late; an untouched
+            # one is late for no one (persona QA, 31 Oct 2026: "Late follow-ups 232").
             overdue=lead.owner_person_id is not None
-            and (self.viewer.can_manage or not is_cold(lead))
+            and not (is_cold(lead) and (lead.stage == "new" or not self.viewer.can_manage))
             and is_overdue(lead.stage, lead.next_action_at, lead.created_at, self.now),
             stage_at=lead.stage_at,
             group=transitions.group(lead.stage),
@@ -1417,11 +1423,13 @@ class LeadDesk:
     async def badge(self) -> Badge:
         """What is due for me now: the Leads tab's badge and the phone's icon count. A lead
         who called and wasn't reached counts too, once (Redmi check, 23 Oct 2026: the badge,
-        the To call tab and its rows tell the same story)."""
+        the To call tab and its rows tell the same story). Inbound leads only, as on Home: a
+        Cold lead is never late or due on it (persona QA, 31 Oct 2026: "99+" over 7 leads)."""
         mine = and_(
             Lead.tenant_id == self.tenant_id,
             Lead.owner_person_id == self.viewer.person_id,
             Lead.stage.in_(OPEN_STAGES),
+            func.coalesce(Lead.pipeline, "live") != "cold",
         )
         due = or_(
             Lead.next_action_at <= self.now,

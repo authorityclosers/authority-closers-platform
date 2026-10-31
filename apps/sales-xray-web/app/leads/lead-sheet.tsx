@@ -32,6 +32,9 @@ import {
   Trash2,
   Workflow,
   X,
+  FileText,
+  ListPlus,
+  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import {
@@ -94,6 +97,16 @@ import type { FirstTapEvent } from "./first-tap";
 import { callStep } from "./phone-call-steps";
 import { CompanyCallStrip, useCompanyCall } from "./company-call";
 import { LeadTasks } from "./lead-tasks";
+import { AddTaskSheet } from "./add-task-sheet";
+import { AskDipakSheet } from "../shell/ask-deepak";
+import {
+  EMPTY_MEETING,
+  MeetingBlock,
+  ReasonBlock,
+  meetingReady,
+  meetingStart,
+  type MeetingDraft,
+} from "./pipeline/blocks";
 import { RemindSheet } from "./remind-sheet";
 import {
   chatDays,
@@ -318,6 +331,21 @@ function TimePicker({
   );
 }
 
+/** A stage's name may break after a "/" ("Meeting/Demo scheduled" ran to the
+ *  tile's edge on a 360 px phone, persona QA 31 Oct 2026); the words stay whole. */
+function breakable(label: string): ReactNode {
+  return label.split("/").map((part, at) => (
+    <Fragment key={at}>
+      {at > 0 ? (
+        <>
+          /<wbr />
+        </>
+      ) : null}
+      {part}
+    </Fragment>
+  ));
+}
+
 export function CallOutcome({
   detail,
   submitLabel,
@@ -356,6 +384,10 @@ export function CallOutcome({
   );
   // Open Leads: why it is still open, if the seller says (Dipak's handoff).
   const [openReason, setOpenReason] = useState<string | null>(null);
+  // Meeting Scheduled asks when; Lost or Junk asks why (persona QA, 31 Oct 2026).
+  const [meeting, setMeeting] = useState<MeetingDraft>(EMPTY_MEETING);
+  const [closeReason, setCloseReason] = useState<string | null>(null);
+  const [closeNote, setCloseNote] = useState("");
   const [reason, setReason] = useState<string | null>(
     heard?.connected === false ? missedReason(heard.result) : null,
   );
@@ -429,7 +461,22 @@ export function CallOutcome({
   const first = detail.lead.name.split(" ")[0];
 
   const closes = stage === "won" || stage === "lost";
-  const needsTime = talk === "talked" && stage !== null && !closes;
+  // What the picked stage's move needs, by the server's rules.
+  const chosenMove =
+    talk === "talked" && step
+      ? (detail.moves ?? []).find((move) => move.step === step)
+      : undefined;
+  const wantsMeeting = !!chosenMove?.needs.includes("meeting");
+  const wantsReason =
+    !!chosenMove &&
+    (chosenMove.group === "lost" || chosenMove.group === "junk") &&
+    chosenMove.reasons.length > 0;
+  const reasonReady =
+    closeReason !== null &&
+    (closeReason !== "other" || closeNote.trim() !== "");
+  const meetingAt = wantsMeeting ? meetingStart(meeting) : null;
+  const needsTime =
+    talk === "talked" && stage !== null && !closes && !wantsMeeting;
   const at = needsTime
     ? timeOf(next, custom)
     : talk === "missed"
@@ -444,6 +491,8 @@ export function CallOutcome({
       : talk === "talked" &&
         stage !== null &&
         (!needsTime || at !== null) &&
+        (!wantsMeeting || meetingReady(meeting)) &&
+        (!wantsReason || reasonReady) &&
         !needsAmount;
   // Owner, 22 Oct 2026: Save looked dead after "We talked" until a next step
   // was picked, and nothing said so. It now says what is missing, and a tap
@@ -456,9 +505,13 @@ export function CallOutcome({
         : "Pick when to try again to save"
       : stage === null
         ? "Pick what happens next to save"
-        : needsAmount
-          ? "Add the deal amount to save"
-          : "Pick when to call next to save";
+        : wantsMeeting && !meetingReady(meeting)
+          ? "Pick when the meeting is to save"
+          : wantsReason && !reasonReady
+            ? "Pick why to save"
+            : needsAmount
+              ? "Add the deal amount to save"
+              : "Pick when to call next to save";
   // Each Save tap with a step missing lights that step once (Redmi, 22 Oct
   // 2026: the hint was on screen already; the step itself should say "here").
   const [nudges, setNudges] = useState(0);
@@ -494,8 +547,29 @@ export function CallOutcome({
         reason: talk === "missed" ? (reason ?? undefined) : undefined,
         stage: talk === "talked" ? (stage ?? undefined) : undefined,
         step: talk === "talked" ? (step ?? undefined) : undefined,
-        outcome_reason: stillOpen && openReason ? openReason : undefined,
-        follow_up_at: at ? at.toISOString() : undefined,
+        outcome_reason: wantsReason
+          ? (closeReason ?? undefined)
+          : stillOpen && openReason
+            ? openReason
+            : undefined,
+        reason_note:
+          wantsReason && closeReason === "other"
+            ? closeNote.trim() || undefined
+            : undefined,
+        meeting:
+          wantsMeeting && meetingAt && meeting.mode
+            ? {
+                starts_at: meetingAt.toISOString(),
+                mode: meeting.mode,
+                link: meeting.link.trim() || undefined,
+                location: meeting.location.trim() || undefined,
+              }
+            : undefined,
+        follow_up_at: at
+          ? at.toISOString()
+          : meetingAt
+            ? meetingAt.toISOString()
+            : undefined,
         remark: note.trim() || undefined,
         deal_value: worth !== null ? String(worth) : deal.trim() || undefined,
       });
@@ -703,11 +777,29 @@ export function CallOutcome({
                   setStep(item.step ?? null);
                 }}
               >
-                <strong>{item.label}</strong>
+                <strong>{breakable(item.label)}</strong>
                 <small>{item.sub}</small>
               </button>
             ))}
           </div>
+          {wantsMeeting ? (
+            <MeetingBlock draft={meeting} onChange={setMeeting} />
+          ) : null}
+          {wantsReason && chosenMove ? (
+            <ReasonBlock
+              label={
+                chosenMove.group === "junk"
+                  ? "Why is it junk?"
+                  : "Why was it lost?"
+              }
+              reasons={chosenMove.reasons}
+              value={closeReason}
+              note={closeNote}
+              required
+              onPick={setCloseReason}
+              onNote={setCloseNote}
+            />
+          ) : null}
           {stillOpen ? (
             <div
               className={styles.reasonGrid}
@@ -2674,6 +2766,14 @@ export function LeadCard({
   const [calling, setCalling] = useState(false);
   // Remind: a task on this lead (work-memory engine).
   const [reminding, setReminding] = useState(false);
+  // Add task with this customer chosen, and Ask Dipak about them (items 84, 97).
+  const [tasking, setTasking] = useState(false);
+  const latestReport =
+    [...(detail.events ?? [])]
+      .reverse()
+      .find((event) => event.kind === "call" && event.submission_id)
+      ?.submission_id ?? null;
+  const [asking, setAsking] = useState(false);
   const [messaging, setMessaging] = useState<{
     round: number;
     preset: string | null;
@@ -3110,9 +3210,17 @@ export function LeadCard({
               />
               <ActionBox
                 kind="task"
+                channel="task"
+                label="Task"
+                name={`Add a task for ${lead.name}`}
+                icon={<ListPlus size={20} aria-hidden="true" />}
+                onClick={() => setTasking(true)}
+              />
+              <ActionBox
+                kind="task"
                 channel="remind"
-                label="Remind"
-                name="Remind me"
+                label="Follow-up"
+                name={`Schedule a follow-up with ${lead.name}`}
                 icon={<BellPlus size={20} aria-hidden="true" />}
                 onClick={() => setReminding(true)}
               />
@@ -3128,8 +3236,48 @@ export function LeadCard({
               />
             </>
           ) : null}
+          <ActionBox
+            kind="note"
+            channel="ask"
+            label="Ask Dipak"
+            name={`Ask Dipak about ${lead.name}`}
+            icon={<Sparkles size={20} aria-hidden="true" />}
+            onClick={() => setAsking(true)}
+          />
         </div>
       </div>
+      {latestReport ? (
+        // The latest finished Xray Report of this customer's calls (item 93).
+        <Link
+          className={styles.ownerAction}
+          href={callHref(latestReport)}
+          prefetch={false}
+        >
+          <FileText size={16} aria-hidden="true" />
+          View latest report
+        </Link>
+      ) : null}
+      {tasking ? (
+        <AddTaskSheet
+          open
+          lead={{
+            lead_id: lead.lead_id,
+            name: lead.name,
+            owner_person_id: lead.owner_person_id,
+            owner_name: lead.owner_name,
+          }}
+          onClose={() => setTasking(false)}
+          onAdded={() => {
+            setTasking(false);
+            void readLead(lead.lead_id).then(onChanged, () => undefined);
+          }}
+        />
+      ) : null}
+      <AskDipakSheet
+        open={asking}
+        about={lead.name}
+        onClose={() => setAsking(false)}
+      />
       {detail.can_edit ? (
         <RemindSheet
           open={reminding}

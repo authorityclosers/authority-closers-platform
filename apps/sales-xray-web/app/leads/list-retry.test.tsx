@@ -12,7 +12,10 @@ import { ListView } from "./list-view";
 vi.mock("next/link", () => ({
   default: ({ children }: { children: unknown }) => children,
 }));
-vi.mock("../notice-center", () => ({ notify: vi.fn() }));
+vi.mock("../notice-center", () => ({
+  notify: vi.fn(),
+  dismissNotice: () => undefined,
+}));
 
 // Report #27, 26 Oct 2026: a list that didn't load says so calmly, and tries again.
 let host: HTMLDivElement;

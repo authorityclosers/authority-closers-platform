@@ -7436,3 +7436,54 @@ fieldset.form {
     opacity: 1;
   }
 }
+
+/* A compact row's next action wraps rather than being cut (persona QA,
+   31 Oct 2026: "was yesterday 5:3…"). */
+.leadFace[data-compact] .leadWhy {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
+/* The after-call card stays short and its Save in reach (persona QA, 31 Oct
+   2026: Save & Close sat 1,158 px down under ten big options). A stage says
+   its name only; Save rides at the bottom of the screen while the card shows. */
+.choiceRow .choiceTile {
+  flex-direction: row;
+  min-height: 52px;
+  padding: 8px;
+}
+
+.stageTile {
+  min-height: 48px;
+  padding: 8px 12px;
+}
+
+.stageTile small {
+  display: none;
+}
+
+.outcome .saveRow {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  margin-inline: -16px;
+  padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
+  border-top: 1px solid var(--sx-line);
+  background: var(--sx-surface);
+  /* Covers the sheet's own bottom padding, which a stuck row leaves open. */
+  box-shadow: 0 16px 0 var(--sx-surface);
+}
+
+/* Nothing in a lead sheet is wider than the sheet (persona QA, 31 Oct 2026:
+   one long why line made the card 452 px in a 340 px sheet). The card's one
+   column is the sheet's width, and the why line wraps there. */
+.card {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.cardBadges .leadWhy {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
