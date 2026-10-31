@@ -91,6 +91,28 @@ const CLOCK = new Intl.DateTimeFormat("en-US", {
 });
 const when = (at: string | null) => (at ? CLOCK.format(new Date(at)) : "");
 
+const DAY = new Intl.DateTimeFormat("en-IN", {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  timeZone: "Asia/Kolkata",
+});
+const IST_DATE = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" });
+
+/** A time with its day when it isn't today (QA, 31 Oct 2026: "10:00 AM",
+ *  but which day?): "Tomorrow, 10:00 AM", "Mon, 3 Nov, 10:00 AM". */
+const whenDay = (at: string | null) => {
+  if (!at) return "";
+  const date = new Date(at);
+  const day = IST_DATE.format(date);
+  const today = IST_DATE.format(new Date());
+  const tomorrow = IST_DATE.format(new Date(Date.now() + 86_400_000));
+  const time = CLOCK.format(date);
+  if (day === today) return time;
+  if (day === tomorrow) return `Tomorrow, ${time}`;
+  return `${DAY.format(date)}, ${time}`;
+};
+
 /** A task's type tag: its lead's side, or General for a task of your own. */
 type TaskTag = Side | "general";
 const TAG_WORDS: Record<TaskTag, string> = {
@@ -632,7 +654,7 @@ export function UpcomingFollowUps({
                 <span>
                   {[
                     lead.next_action_note || lead.stage_label,
-                    when(lead.next_action_at),
+                    whenDay(lead.next_action_at),
                   ]
                     .filter(Boolean)
                     .join(" · ")}

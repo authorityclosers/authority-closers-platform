@@ -14,6 +14,7 @@ import { useEffect, useState } from "react";
 
 import { BreakRow, breakLength } from "../dashboard/home-today";
 import { Segmented } from "../ui/kit";
+import { SectionBoundary } from "../ui/section-boundary";
 import {
   readEffort,
   type Effort,
@@ -21,6 +22,7 @@ import {
   type SellerEffort,
   type SideEffort,
 } from "./performance-client";
+import { RevenueSplit } from "./revenue-split";
 import styles from "./performance.module.css";
 
 const PERIODS: { key: string; label: string; days: EffortDays }[] = [
@@ -284,10 +286,6 @@ export function PerformanceView() {
           {effort.team ? (
             <section className={styles.card} aria-labelledby="team-title">
               <h2 id="team-title">Team</h2>
-              <p className={styles.sub}>
-                Inbound and Cold leads are counted apart, so an uploaded list
-                doesn&apos;t change the Inbound numbers.
-              </p>
               <MeasureTable
                 rows={measures(effort.inbound, effort.cold)}
                 label="The team's work, Inbound and Cold"
@@ -316,6 +314,12 @@ export function PerformanceView() {
               />
             ))}
           </section>
+          {/* Revenue by side and by seller, once a deal is won (7 or 30 days). */}
+          {days === 7 || days === 30 ? (
+            <SectionBoundary name="Revenue" resetKey={days}>
+              <RevenueSplit days={days} />
+            </SectionBoundary>
+          ) : null}
           {approximate ? (
             <p className={styles.quiet}>
               ≈ Next to a call from the app&apos;s Call button: its time is when

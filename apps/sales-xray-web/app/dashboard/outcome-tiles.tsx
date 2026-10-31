@@ -95,7 +95,16 @@ export function changeWords(value: number, previous: number): string {
   return diff > 0 ? `${diff} more` : `${-diff} fewer`;
 }
 
-function Change({ value, previous }: { value: number; previous: number }) {
+function Change({
+  value,
+  previous,
+  before = true,
+}: {
+  value: number;
+  previous: number;
+  /** "than before" after it; off where the period is named next to it. */
+  before?: boolean;
+}) {
   const diff = value - previous;
   const Icon = diff > 0 ? ArrowUpRight : diff < 0 ? ArrowDownRight : Minus;
   return (
@@ -104,7 +113,8 @@ function Change({ value, previous }: { value: number; previous: number }) {
       data-trend={diff > 0 ? "up" : diff < 0 ? "down" : "flat"}
     >
       <Icon size={13} aria-hidden="true" />
-      {changeWords(value, previous)}
+      {/* More than what? The period before, as the footnote says (QA, 31 Oct). */}
+      {`${changeWords(value, previous)}${diff && before ? " than before" : ""}`}
     </span>
   );
 }
@@ -528,7 +538,11 @@ function TileDetail({ tile, data }: { tile: TileSpec; data: TileData }) {
       </p>
       {tile.compare && was !== undefined ? (
         <p className={styles.detailChange}>
-          <Change value={tile.compare(data.now)} previous={was} />
+          <Change
+            value={tile.compare(data.now)}
+            previous={was}
+            before={false}
+          />
           {` than ${beforeWords(data.period)} (${was})`}
         </p>
       ) : null}
