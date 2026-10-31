@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { RevenueBar, takesLine, toneOf } from "./revenue-bar";
 import type { Revenue } from "./revenue-client";
-import { inr } from "./revenue-client";
+import { inr, REVENUE_CHANGED } from "./revenue-client";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -95,6 +95,22 @@ it("shows nothing without a target, and never a box while it loads", async () =>
   expect(container.innerHTML).toBe("");
   await settle();
   expect(container.innerHTML).toBe("");
+});
+
+it("reads again when a target is saved, without a reload", async () => {
+  // Phone personas (31 Oct 2026): the team's target was set in Team controls and
+  // Team Home kept no bar until a reload.
+  serve({ ...MINE, target: null, needs: null });
+  await act(async () => root.render(<RevenueBar scope="mine" />));
+  await settle();
+  expect(container.innerHTML).toBe("");
+  const asked = serve(MINE);
+  await act(async () => {
+    window.dispatchEvent(new Event(REVENUE_CHANGED));
+  });
+  await settle();
+  expect(asked[0]).toContain("/revenue?scope=mine");
+  expect(container.textContent).toContain("of ₹5 L · October");
 });
 
 it("opens each seller's month for the team, by name and never ranked", async () => {

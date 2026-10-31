@@ -169,7 +169,10 @@ function salesLine(performance: Loaded<Performance>) {
 
 function firstResponseLine(sla: Loaded<SlaReport>) {
   if (sla === undefined) return undefined;
-  if (!sla?.settings.on) return "Set a first-response target in Leads settings";
+  // Home's Team controls holds it (First call on new enquiries); Leads settings
+  // has none (persona row 5a28f46e).
+  if (!sla?.settings.on)
+    return "Set a first-call target in Team controls on Home";
   const late = sla.late?.length ?? 0;
   return late
     ? `${plural(late, "lead")} waiting past ${sla.settings.minutes} min now`
@@ -379,9 +382,15 @@ export function ReportsHub({
             What stands out
           </h2>
           {!loaded ? (
+            // Two fact rows, at its rows' own height: the sections below
+            // never move when the facts arrive (ux-audit, 1 Nov 2026).
             <div className={styles.standoutSkeleton} aria-hidden="true">
-              <Skeleton width="80%" height={14} />
-              <Skeleton width="60%" height={14} />
+              <span>
+                <Skeleton width="80%" height={14} />
+              </span>
+              <span>
+                <Skeleton width="60%" height={14} />
+              </span>
             </div>
           ) : facts.length ? (
             <ul>

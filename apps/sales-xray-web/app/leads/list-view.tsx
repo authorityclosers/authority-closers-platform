@@ -120,6 +120,7 @@ export function ListView({
   onClearFilters,
   onAdd,
   onShowOpen,
+  onSearchAll,
   layoutOwner,
   pipelineNames = null,
   me = null,
@@ -180,6 +181,8 @@ export function ListView({
   /** An empty Open list offers Add lead; another stage, the open leads. */
   onAdd?: () => void;
   onShowOpen?: () => void;
+  /** A search that found nothing in this view runs over All Leads. */
+  onSearchAll?: () => void;
   /** Who chose List or Table (person and workspace), for remembering it. */
   layoutOwner?: string;
   /** Several pipelines: each one's name, for the table's Pipeline column. */
@@ -805,6 +808,7 @@ export function ListView({
         ) : page === null ? (
           <div
             className={styles.listSkeleton}
+            role="status"
             aria-busy="true"
             aria-label="Loading leads"
           >
@@ -836,6 +840,7 @@ export function ListView({
             onClearFilters={onClearFilters}
             onAdd={onAdd}
             onShowOpen={onShowOpen}
+            onSearchAll={onSearchAll}
           />
         ) : (
           <>
@@ -1012,6 +1017,7 @@ function EmptyList({
   onClearFilters,
   onAdd,
   onShowOpen,
+  onSearchAll,
 }: {
   stage: string;
   stageLabel: string;
@@ -1021,6 +1027,7 @@ function EmptyList({
   onClearFilters?: () => void;
   onAdd?: () => void;
   onShowOpen?: () => void;
+  onSearchAll?: () => void;
 }) {
   const action = (label: string, run?: () => void) =>
     run ? (
@@ -1034,11 +1041,17 @@ function EmptyList({
         icon={SearchX}
         title="No leads match"
         text={
-          query
-            ? "Try another name, city or the last digits of a number."
-            : "Nobody here for whose leads you picked."
+          query && onSearchAll
+            ? "Not in this list. It may be in All Leads."
+            : query
+              ? "Try another name, city or the last digits of a number."
+              : "Nobody here for whose leads you picked."
         }
-        action={action("Clear filters", onClearFilters)}
+        action={
+          query && onSearchAll
+            ? action("Search All Leads", onSearchAll)
+            : action("Clear filters", onClearFilters)
+        }
       />
     );
   if (stage === TEST)

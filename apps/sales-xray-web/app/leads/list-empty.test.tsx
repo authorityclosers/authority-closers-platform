@@ -105,3 +105,34 @@ it("an empty stage, or no test leads, goes back to the open leads", async () => 
   const test = await empty(TEST, "Test leads");
   expect(test.button.textContent).toBe("See open leads");
 });
+
+it("a search with no match in a work view runs over All Leads (persona row 8da7d076)", async () => {
+  const all = vi.fn();
+  await act(async () =>
+    root.render(
+      <ListView
+        canManage
+        stage="open"
+        stageLabel="Open"
+        scope="team"
+        query="0004"
+        onOpen={() => undefined}
+        version={0}
+        onClearFilters={() => undefined}
+        onSearchAll={all}
+      />,
+    ),
+  );
+  await act(async () => {
+    for (let i = 0; i < 6; i++) await Promise.resolve();
+  });
+  const buttons = [...host.querySelectorAll('[role="status"] button')];
+  expect(host.textContent).toContain(
+    "Not in this list. It may be in All Leads.",
+  );
+  expect(buttons.map((button) => button.textContent)).toEqual([
+    "Search All Leads",
+  ]);
+  await act(async () => (buttons[0] as HTMLButtonElement).click());
+  expect(all).toHaveBeenCalledTimes(1);
+});

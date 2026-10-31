@@ -119,3 +119,19 @@ it("counts today's calls without a recording, in all and per seller", async () =
   expect(items[0]).toContain("2 calls without a recording today · Redmi 13");
   expect(items[1]).not.toContain("without a recording");
 });
+
+it("never says everyone is set up while a phone has call logging off", async () => {
+  // Phone personas ph1-23, 1 Nov 2026: Connections said a phone had call logging
+  // off while Team said everyone was set up. One rule now, from the server.
+  await mount([
+    row("Karan Fictional", "set_up", {
+      phone: "Redmi 13 5G",
+      call_log_off: "Redmi 13 5G",
+    }),
+  ]);
+  expect(host.textContent).toContain("Call logging off on 1 phone");
+  expect(host.textContent).not.toContain("Everyone is set up");
+  expect(host.querySelector("li")?.textContent).toContain(
+    "Call logging off on Redmi 13 5G: on that phone, Settings, Selling, Log work calls",
+  );
+});

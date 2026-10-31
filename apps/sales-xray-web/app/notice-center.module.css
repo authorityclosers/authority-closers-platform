@@ -1,8 +1,19 @@
+/* Inside an open sheet the stack is a popover on the sheet's top layer: the
+   browser's popover box is cleared, and --sx-stack-lift (notice-center.tsx)
+   keeps it above the sheet's footer. */
 .stack {
   position: fixed;
   z-index: 80;
+  top: auto;
   right: 20px;
-  bottom: 20px;
+  bottom: max(20px, var(--sx-stack-lift, 0px));
+  left: auto;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+  border: 0;
+  background: transparent;
+  color: inherit;
   display: grid;
   gap: 10px;
   width: min(380px, calc(100vw - 24px));
@@ -176,11 +187,12 @@
   box-shadow: var(--lx-ring-focus);
 }
 
-/* A corner card springs up from the corner it lives in. */
+/* A new card glides in from above, at the top of the stack, so the cards
+   already there stay where they are (1 Nov 2026). */
 @keyframes enter {
   from {
     opacity: 0;
-    transform: translateY(14px) scale(0.96);
+    transform: translateY(-14px) scale(0.96);
   }
 }
 
@@ -275,15 +287,18 @@
 /* A computer: above the corner's Report a problem button. */
 @media (min-width: 900px) and (hover: hover) {
   .stack {
-    bottom: 72px;
+    bottom: max(72px, var(--sx-stack-lift, 0px));
   }
 }
 
 /* Phones and tablets: above the bottom tab bar, which shows below 900 px. */
 @media (max-width: 899.98px) {
   .stack {
-    bottom: calc(
-      var(--lx-bottom-nav-h, 56px) + 8px + env(safe-area-inset-bottom, 0px)
+    bottom: max(
+      calc(
+        var(--lx-bottom-nav-h, 56px) + 8px + env(safe-area-inset-bottom, 0px)
+      ),
+      var(--sx-stack-lift, 0px)
     );
   }
 }

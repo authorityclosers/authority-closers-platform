@@ -50,7 +50,12 @@ export function phoneOnboarded(): boolean {
   }
 }
 
-function markOnboarded() {
+/**
+ * Marks this phone onboarded: also when call capture setup finished on it, which
+ * asks for the same folder, battery and uploads (phone personas, v1.21, 1 Nov
+ * 2026: the battery screen came back right after "You're set").
+ */
+export function markPhoneOnboarded() {
   try {
     window.localStorage.setItem(ONBOARDED_KEY, new Date().toISOString());
   } catch {
@@ -109,7 +114,7 @@ export function PhoneOnboarding() {
       const recorder = await callRecorderStatus();
       if (stopped) return;
       if (!flowSteps(status, recorder).length) {
-        markOnboarded();
+        markPhoneOnboarded();
         return;
       }
       if (waiting()) return;
@@ -136,7 +141,7 @@ export function PhoneOnboarding() {
   return (
     <PhoneSetupFlow
       onClose={() => {
-        markOnboarded();
+        markPhoneOnboarded();
         setOpen(false);
       }}
     />

@@ -60,18 +60,27 @@ LABELS = {
     "lost": "Closed / Lost",
     "junk": "Junk Lead",
 }
-# The spec's section 3, plus "any active stage → Lost" and "any stage → Junk".
+# The spec's section 3, plus "any active stage → Lost" and "any stage → Junk", and any open
+# stage → Won (orchestrator for the owner, 1 Nov 2026, ph1-13).
 WORKING = {"not_connected", "interested", "discussion_incomplete", "meeting_scheduled"}
 ALLOWED: dict[str, set[str]] = {
-    "new": {*WORKING, "lost", "junk"},
-    "not_connected": {"interested", "discussion_incomplete", "meeting_scheduled", "lost", "junk"},
-    "interested": {"discussion_incomplete", "meeting_scheduled", "lost", "junk"},
-    "discussion_incomplete": {"interested", "meeting_scheduled", "lost", "junk"},
+    "new": {*WORKING, "won", "lost", "junk"},
+    "not_connected": {
+        "interested",
+        "discussion_incomplete",
+        "meeting_scheduled",
+        "won",
+        "lost",
+        "junk",
+    },
+    "interested": {"discussion_incomplete", "meeting_scheduled", "won", "lost", "junk"},
+    "discussion_incomplete": {"interested", "meeting_scheduled", "won", "lost", "junk"},
     "meeting_scheduled": {
         "demo_completed",
         "not_connected",
         "interested",
         "discussion_incomplete",
+        "won",
         "lost",
         "junk",
     },
@@ -376,6 +385,7 @@ def test_a_seller_is_shown_only_the_moves_they_may_make() -> None:
     assert [m.stage.key for m in shown] == [
         "discussion_incomplete",
         "meeting_scheduled",
+        "won",
         "lost",
         "junk",
     ]
@@ -476,3 +486,23 @@ def test_a_stage_whose_list_never_said_asks_by_its_meaning() -> None:
     t.check(unset, unset.by_key["interested"], meeting.key, t.Given(meeting=True), can_manage=False)
     # The owner's own list stands, even when it asks nothing.
     assert t.needs_of(replace(meeting, needs=()))[0] == ()
+
+
+def test_an_open_lead_may_always_be_won_with_its_amount() -> None:
+    """ph1-13 (orchestrator for the owner, 1 Nov 2026): the old eight stages let Interested go
+    only to Discussion incomplete, Meeting/Demo scheduled or Lost; Move now offers Won from any
+    open stage, and asks the deal amount. Closed stages are as they were."""
+    journey = eight()
+    interested = journey.by_key["interested"]
+    assert interested.moves is not None and "won" not in interested.moves  # the saved list
+    keys = [move.stage.key for move in t.moves(journey, interested, can_manage=False)]
+    assert "won" in keys
+    with pytest.raises(t.MoveRefused) as refused:
+        t.check(journey, interested, "won", t.Given(), can_manage=False)
+    assert refused.value.status == 422
+    assert refused.value.needs == ("amount",)
+    won = t.check(journey, interested, "won", t.Given(amount=True), can_manage=False)
+    assert won.stage.key == "won" and won.needs == ("amount",)
+    # Lost stays where its list says: never straight to Won.
+    lost = [move.stage.key for move in t.moves(journey, journey.by_key["lost"], can_manage=True)]
+    assert "won" not in lost

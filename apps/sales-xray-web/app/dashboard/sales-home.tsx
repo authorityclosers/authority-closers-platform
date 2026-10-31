@@ -22,7 +22,7 @@
  * Only real numbers: nothing here is estimated or invented.
  */
 
-import { FileText, Gauge, UsersRound } from "lucide-react";
+import { FileText, Gauge, UsersRound, WifiOff } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState, useSyncExternalStore } from "react";
 
@@ -33,8 +33,8 @@ import { MyTasks, SellerBlocks } from "./seller-home";
 import type { Side } from "../ui/side-selector";
 import { SetupStart } from "./home-v2";
 import { TodayBar } from "./home-today";
-import { TeamFloor } from "./team-floor";
-import { HomeLoadWatch, useHomeRead } from "./home-load";
+import { TeamFloor, type StageKeys } from "./team-floor";
+import { HomeLoadWatch, useHomeRead, useOnline } from "./home-load";
 import { RevenueBar } from "./revenue-bar";
 import { TeamControls } from "./team-controls";
 import {
@@ -117,6 +117,17 @@ function useTeamLeadCount(enabled: boolean): number | null {
   return total;
 }
 
+/** The stages Home's lead cards open, as the server found them by meaning; an older
+ *  server (no sides) or a desk that failed keeps the first and Open Leads keys. */
+function stagesOf(desk: ReturnType<typeof useDesk>): StageKeys | undefined {
+  if (desk.status === "loading") return undefined;
+  const side =
+    desk.status === "ready" ? (desk.desk as HomeDesk).sides?.inbound : null;
+  return side
+    ? { newKey: side.new_key, openKey: side.open_key }
+    : { newKey: "new", openKey: "open_leads" };
+}
+
 /** The period's report for the team, with the period kept in the address. */
 function usePerformance() {
   const [period, setPeriod] = usePeriod();
@@ -132,10 +143,12 @@ function TeamHome({
   manages,
   mine,
   me,
+  stages,
 }: {
   manages: boolean;
   mine: HomeDesk | null;
   me: string | null;
+  stages: StageKeys | undefined;
 }) {
   const { period, setPeriod, shown, failed } = usePerformance();
   const [side, setSide] = useHomeSide();
@@ -147,6 +160,7 @@ function TeamHome({
       controls={manages ? <TeamControls /> : null}
       mine={mine ? <MyTasks desk={mine} side={side} /> : null}
       me={me}
+      stages={stages}
       outcomes={
         <OutcomeTiles
           period={period}
@@ -218,6 +232,7 @@ function SellerHome({ state }: { state: ReturnType<typeof useDesk> }) {
             key={`taking-${desk.me.taking_leads !== false}`}
             initial={desk.me.taking_leads !== false}
             place="chip"
+            words="full"
             pausedUntil={desk.me.paused_until ?? null}
           />
         </>
@@ -318,6 +333,7 @@ export function SalesHome({
 }) {
   const desk = useDesk();
   const [view, setView] = useHomeView();
+  const online = useOnline();
   const person = desk.status === "ready" ? desk.desk.me.person_id : null;
   // Remembered per person on this device; the address still says which, so
   // Back returns to it.
@@ -368,6 +384,12 @@ export function SalesHome({
   return (
     <div className={styles.home} data-home="">
       <HomeLoadWatch />
+      {online ? null : (
+        <p className={styles.offline} role="status">
+          <WifiOff size={16} aria-hidden="true" />
+          You&apos;re offline. Showing what was saved.
+        </p>
+      )}
       {/* The month's revenue against its target (capture-setup's bar). */}
       <RevenueBar scope={shown === "team" ? "team" : "mine"} />
       {/* The month's revenue bar goes here, above both modes (capture-setup
@@ -381,6 +403,7 @@ export function SalesHome({
             manages={manages}
             mine={works && desk.status === "ready" ? desk.desk : null}
             me={desk.status === "ready" ? desk.desk.me.person_id : null}
+            stages={stagesOf(desk)}
           />
         ) : (
           <SellerHome state={desk} />

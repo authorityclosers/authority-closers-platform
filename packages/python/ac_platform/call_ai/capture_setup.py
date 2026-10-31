@@ -95,6 +95,63 @@ def _text(value: Any, limit: int) -> str:
     return value.strip()[:limit] if isinstance(value, str) else ""
 
 
+# Phones whose model is the maker's code, by the name people know (phone personas, v1.21,
+# 1 Nov 2026: Team listed "2406ERN9CI"). Until the app sends the phone's own marketing
+# name, these, and the maker before any other code.
+PHONE_NAMES: Final[dict[str, str]] = {
+    "2406ERN9CI": "Redmi 13 5G",
+    "M1906G7G": "Redmi Note 8 Pro",
+    "M1906G7I": "Redmi Note 8 Pro",
+}
+MAKERS: Final[dict[str, str]] = {
+    "xiaomi": "Xiaomi",
+    "samsung": "Samsung",
+    "vivo": "Vivo",
+    "oppo": "Oppo",
+    "realme": "Realme",
+    "oneplus": "OnePlus",
+    "huawei": "Huawei",
+}
+# Model names that already say what the phone is.
+NAMED: Final = ("redmi", "poco", "galaxy", "mi ", "iqoo", "nord", "pixel")
+
+
+def phone_name(model: str, family: str) -> str | None:
+    """A phone as people know it: its marketing name where the model is a maker's code,
+    else the maker and the model ("Samsung SM-A155F"), else the model."""
+    model = model.strip()
+    if not model:
+        return None
+    if known := PHONE_NAMES.get(model.upper()):
+        return known
+    maker = MAKERS.get(family.strip().lower())
+    lowered = model.lower()
+    if maker and not lowered.startswith((maker.lower(), *NAMED)):
+        return f"{maker} {model}"
+    return model
+
+
+def phone_label(device: str | None, family: str | None, found: Setup | None) -> str:
+    """A seller's phone by the name people know: the model its setup finished with,
+    else its maker ("Xiaomi phone"), else "phone"."""
+    for phone in found.phones if found else ():
+        if device and phone.device == device and (name := phone_name(phone.model, phone.family)):
+            return name
+    maker = MAKERS.get((family or "").strip().lower())
+    return f"{maker} phone" if maker else "phone"
+
+
+def call_log_off(entry: Any) -> bool:
+    """A phone that can log work calls and has it off: the one rule Connections and Team
+    share (phone personas ph1-23, 1 Nov 2026: Connections said a phone had call logging
+    off while Team said everyone was set up). A build without call history (the Play
+    build) never reports call logging, so it never counts as off."""
+    if not isinstance(entry, dict) or not isinstance(entry.get("reported_at"), str):
+        return False
+    checks = entry.get("checks")
+    return isinstance(checks, dict) and checks.get("callLog") is False
+
+
 def _fold(rows: list[Any]) -> Setup:
     """Rows newest first: each phone's newest finish and the last word."""
     phones: dict[str, Phone] = {}
@@ -152,6 +209,37 @@ async def setup(database: Any, tenant_id: UUID, person_id: UUID) -> Setup:
 
     result: Setup = await database.run_sync(read)
     return result
+
+
+def devices_of(payloads: list[Any]) -> list[str]:
+    """Installs that finished setup, newest first, once each."""
+    devices: list[str] = []
+    for payload in payloads:
+        if not isinstance(payload, dict) or payload.get("outcome") != "completed":
+            continue
+        device = _text(payload.get("device"), 80)
+        if device and device not in devices:
+            devices.append(device)
+    return devices
+
+
+async def finished_devices(database: Any, person_id: UUID) -> list[str]:
+    """The installs this person finished setup on, in any workspace. A phone's own steps
+    (recordings folder, battery, uploads) belong to the phone, not to a workspace: a
+    workspace switch asks only for that workspace's consent (persona QA ph2-15, 1 Nov
+    2026: switching ran the whole setup again, and after every restart)."""
+    payloads = (
+        await database.scalars(
+            select(AuditEvent.payload)
+            .where(
+                AuditEvent.resource_type == RESOURCE_TYPE,
+                AuditEvent.resource_id == str(person_id),
+            )
+            .order_by(AuditEvent.occurred_at.desc(), AuditEvent.sequence_no.desc())
+            .limit(_READ_LIMIT)
+        )
+    ).all()
+    return devices_of(list(payloads))
 
 
 async def team(database: Any, tenant_id: UUID, people: list[UUID]) -> dict[UUID, Setup]:

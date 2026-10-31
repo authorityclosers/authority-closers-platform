@@ -29,6 +29,8 @@ export type Connection = {
   state: AppState;
   words: string | null;
   disconnect: Link | null;
+  /** A page in this app with the fix ("How to fix"). */
+  fix: string | null;
 };
 export type TestOffer = {
   kind: string;
@@ -201,6 +203,7 @@ function parseApp(value: unknown): AppHealth | null {
         state: state(item.state ?? "ready"),
         words: text(item.words),
         disconnect: link(item.disconnect),
+        fix: isRecord(item.fix) ? ownPage(item.fix.path) : null,
       })),
     lastEvent:
       event && text(event.at) && text(event.words)

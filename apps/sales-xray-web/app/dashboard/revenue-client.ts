@@ -82,6 +82,17 @@ export function readRevenueTargets(month?: string, signal?: AbortSignal) {
   );
 }
 
+/** Said on the window when a target or a revenue setting is saved here: every revenue
+ *  bar on screen reads again (phone personas, 31 Oct 2026: Team Home kept no bar after
+ *  the team's target was set). */
+export const REVENUE_CHANGED = "sx-revenue-changed";
+
+function changed<T>(saved: T): T {
+  if (typeof window !== "undefined")
+    window.dispatchEvent(new Event(REVENUE_CHANGED));
+  return saved;
+}
+
 export function saveRevenueTargets(
   month: string,
   change: {
@@ -93,7 +104,7 @@ export function saveRevenueTargets(
   return deskRequest<RevenueTargets>(
     "/revenue/targets",
     deskJson("PUT", { command_id: command, month, ...change }),
-  );
+  ).then(changed);
 }
 
 export function saveRevenueSettings(
@@ -108,7 +119,7 @@ export function saveRevenueSettings(
       sellers_set_own: sellersSetOwn,
       typical_deal: typicalDeal,
     }),
-  );
+  ).then(changed);
 }
 
 export function readRevenueBreakdown(days: 7 | 30 | 90, signal?: AbortSignal) {

@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PhoneHealth, RepView } from "./leads-client";
 import { parseSetup } from "./native-phone";
-import { PhoneSetupBar, setupProgress } from "./phone-setup";
+import { PhoneSetupBar, reportedChecks, setupProgress } from "./phone-setup";
 import { phoneDot, recorderSteps } from "./phone-setup-words";
 import { PhoneCell } from "./team-view";
 
@@ -254,4 +254,18 @@ describe("a seller's phone on Team", () => {
     expect(cell.getAttribute("data-tone")).toBe("warn");
     expect(cell.getAttribute("title")).toContain("To do: Call recorder on");
   });
+});
+
+it("never reports call logging from a build that can't log calls", () => {
+  // Phone personas ph1-23, 1 Nov 2026: a Play build's "call logging off" was a
+  // problem in Connections that no seller could fix.
+  const play = parseSetup(
+    setup({ ...CHECKS, callLog: false }, { callLogSupported: false }),
+  )!;
+  expect(reportedChecks(play)).not.toHaveProperty("callLog");
+  expect(reportedChecks(play)).toMatchObject({ calls: true, recordings: true });
+  const full = parseSetup(
+    setup({ ...CHECKS, callLog: false }, { callLogSupported: true }),
+  )!;
+  expect(reportedChecks(full)).toMatchObject({ callLog: false });
 });

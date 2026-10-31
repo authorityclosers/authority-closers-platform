@@ -251,6 +251,26 @@ async def test_lists_registered_organisations_newest_first(operator):
     )
 
 
+async def test_the_directory_leaves_out_deleted_organisations(operator):
+    state = operator
+    now = datetime.now(UTC)
+    with Session(state.engine) as db, db.begin():
+        db.add_all(
+            Organisation(
+                tenant_id=state.tenants[name],
+                creation_command_id=uuid4(),
+                domain_verification_token="f" * 43,
+                created_at=now + timedelta(minutes=minutes),
+            )
+            for name, minutes in (("Deleted", 2), ("Suspended", 1))
+        )
+    response = await call(state)
+    assert response.status_code == 200, response.text
+    names = [row["name"] for row in response.json()["organisations"]]
+    # A suspended organisation stays listed; a deleted one is gone.
+    assert names == ["Suspended", "Inactive", "Alpha"]
+
+
 async def test_reads_the_member_directory_of_any_organisation(operator):
     state = operator
     with Session(state.engine) as db, db.begin():

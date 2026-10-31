@@ -32,12 +32,16 @@ export function TakingSwitch({
   place,
   onChanged,
   pausedUntil = null,
+  words = "short",
 }: {
   initial: boolean;
   place: "header" | "row" | "chip";
   onChanged?: () => void;
   /** Outside the team's work hours, new leads wait until this time. */
   pausedUntil?: string | null;
+  /** "full": the chip names the switch and its state at every width
+   *  ("Taking new leads · On"), as on Home (phone personas, 1 Nov 2026). */
+  words?: "short" | "full";
 }) {
   const [on, setOn] = useState(initial);
   const [saved, setSaved] = useState(0);
@@ -117,14 +121,14 @@ export function TakingSwitch({
       meaning="While this is on, the lead rules can give you new leads. Your open leads stay with you either way."
       onText="You're receiving new leads"
       offText="Paused: new leads go to others. Your open leads stay with you."
-      chipOn="Taking leads"
-      chipOff="Not taking leads"
+      chipOn={words === "full" ? "Taking new leads · On" : "Taking leads"}
+      chipOff={words === "full" ? "Taking new leads · Off" : "Not taking leads"}
       on={on}
       hold={hold}
       confirmOff={{
         title: "Stop taking new leads?",
         points: [
-          "New leads go to other sellers until you turn this back on.",
+          "New ad and website leads go to others until you turn this back on.",
           "Your open leads and follow-ups stay with you.",
           "Turn it back on any time, from Leads or Settings, Selling.",
         ],
@@ -137,7 +141,7 @@ export function TakingSwitch({
   );
   if (place !== "chip") return control;
   return (
-    <span className={styles.chip} data-on={on}>
+    <span className={styles.chip} data-on={on} data-words={words}>
       <span className={styles.mark} aria-hidden="true">
         {on ? <UserRoundCheck size={20} /> : <UserRoundX size={20} />}
       </span>

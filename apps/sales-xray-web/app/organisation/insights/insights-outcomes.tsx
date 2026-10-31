@@ -1,15 +1,45 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
+import { readRevenue } from "../../dashboard/revenue-client";
 import { Button } from "../../ui/kit";
 import {
   count,
   dateLabel,
   OUTCOMES,
   percent,
+  rupees,
   type Insights,
   type OutcomeKey,
 } from "./insights-data";
 import styles from "./outcomes.module.css";
+
+/**
+ * Below this many analysed calls Insights makes no claims: one call is not a
+ * trend (Dipak's walk, ph1-22, 1 Nov 2026: "Wins held steady" and 100% from
+ * one call).
+ */
+export const MIN_CALLS = 10;
+
+/** This month's Won leads, from the Lead Desk: a win is a deal, not a call. */
+export type MonthWins = { deals: number; amount: number };
+
+function useMonthWins(live: boolean): MonthWins | null {
+  const [wins, setWins] = useState<MonthWins | null>(null);
+  useEffect(() => {
+    if (!live) return;
+    const controller = new AbortController();
+    readRevenue("team", controller.signal).then(
+      (revenue) => setWins({ deals: revenue.deals, amount: revenue.won }),
+      () => {
+        // No Lead Desk here: the story keeps to its calls.
+      },
+    );
+    return () => controller.abort();
+  }, [live]);
+  return wins;
+}
 
 /** The endings that count as an agreed next step (the ring's three). */
 const FORWARD: ReadonlySet<OutcomeKey> = new Set([
@@ -31,11 +61,14 @@ function EveryEnding({
   groups,
   calls,
   missing,
+  few = false,
   onCalls,
 }: {
   groups: { key: string; label: string; rows: EndingRow[] }[];
   calls: number | null;
   missing: boolean;
+  /** Too few calls for shares or a most common ending (MIN_CALLS). */
+  few?: boolean;
   onCalls: (outcome?: OutcomeKey) => void;
 }) {
   const rows = groups.flatMap((group) => group.rows);
@@ -44,9 +77,9 @@ function EveryEnding({
     (a, b) => (b.value ?? -1) - (a.value ?? -1),
   );
   // A tie has no single most common ending.
-  const top = first && first.value !== second?.value ? first : null;
+  const top = !few && first && first.value !== second?.value ? first : null;
   const share = (value: number | null) =>
-    value === null || !calls ? "—" : percent(value / calls);
+    few ? "" : value === null || !calls ? "—" : percent(value / calls);
   return (
     <section className={styles.card} aria-label="Every call outcome">
       <h2>
@@ -122,21 +155,31 @@ function EveryEnding({
 export function OutcomeStory({
   data,
   onCalls,
+  wins: given,
 }: {
   data: Insights;
   onCalls: (outcome?: OutcomeKey) => void;
+  /** This month's Won leads; read from the Lead Desk when not given. */
+  wins?: MonthWins | null;
 }) {
   const { totals, previous, coverage } = data;
+  // Off under test, as the shell's own reads are (pages count their reads).
+  const read = useMonthWins(
+    given === undefined && !data.synthetic && process.env.NODE_ENV !== "test",
+  );
+  const wins = given === undefined ? read : given;
+  const few = coverage.calls && totals.calls < MIN_CALLS;
   const share =
-    coverage.nextStep && coverage.calls && totals.calls > 0
+    !few && coverage.nextStep && coverage.calls && totals.calls > 0
       ? totals.nextStep / totals.calls
       : null;
   const diff =
     previous && coverage.previousWon && coverage.won
       ? totals.won - previous.won
       : null;
-  const headline =
-    diff === null
+  const headline = few
+    ? `Not enough calls yet (${count(totals.calls)} of ${MIN_CALLS})`
+    : diff === null
       ? "How your calls ended"
       : diff === 0
         ? "Wins held steady this period"
@@ -147,6 +190,7 @@ export function OutcomeStory({
     value: data.outcomes.find((row) => row.outcome === key)?.calls ?? null,
   })).sort((a, b) => (b.value ?? -1) - (a.value ?? -1));
   const complete =
+    !few &&
     coverage.calls &&
     coverage.nextStep &&
     coverage.won &&
@@ -164,25 +208,47 @@ export function OutcomeStory({
         <p className={styles.eyebrow}>The sales story</p>
         <h2>{headline}</h2>
         <div className={styles.storyNumbers}>
-          <strong>
-            {coverage.won ? count(totals.won) : "—"}
-            <small>won calls</small>
-          </strong>
+          {wins ? (
+            <strong>
+              {count(wins.deals)}
+              <small>
+                {wins.deals === 1 ? "lead won" : "leads won"} this month
+              </small>
+            </strong>
+          ) : (
+            <strong>
+              {coverage.won && !few ? count(totals.won) : "—"}
+              <small>won calls</small>
+            </strong>
+          )}
           <p>
-            {previous && coverage.previousWon
-              ? `Previous period: ${count(previous.won)} won calls`
-              : "Previous period unavailable"}
-            <br />
+            {wins && wins.amount > 0 ? (
+              <>
+                {rupees(wins.amount)} won this month
+                <br />
+              </>
+            ) : null}
+            {few
+              ? null
+              : previous && coverage.previousWon
+                ? `Previous period: ${count(previous.won)} won calls`
+                : "Previous period unavailable"}
+            {few ? null : <br />}
             {coverage.calls
-              ? `${count(totals.calls)} analysed calls`
-              : "Call count unavailable"}{" "}
-            ·{" "}
-            {percent(
-              coverage.won && coverage.calls && totals.calls
-                ? totals.won / totals.calls
-                : null,
-            )}{" "}
-            won
+              ? `${count(totals.calls)} analysed ${totals.calls === 1 ? "call" : "calls"}`
+              : "Call count unavailable"}
+            {few ? null : (
+              <>
+                {" "}
+                ·{" "}
+                {percent(
+                  coverage.won && coverage.calls && totals.calls
+                    ? totals.won / totals.calls
+                    : null,
+                )}{" "}
+                won
+              </>
+            )}
           </p>
         </div>
         <p className={styles.caption}>
@@ -195,9 +261,11 @@ export function OutcomeStory({
       <div className={styles.grid}>
         <section className={styles.card} aria-label="Next steps and outcomes">
           <h2>
-            {share === null
-              ? "Next-step share unavailable"
-              : `${percent(share)} of calls agreed a next step`}
+            {few
+              ? "Not enough calls yet"
+              : share === null
+                ? "Next-step share unavailable"
+                : `${percent(share)} of calls agreed a next step`}
           </h2>
           <div className={styles.ringBody}>
             <button
@@ -303,7 +371,11 @@ export function OutcomeStory({
               </text>
             </svg>
           ) : (
-            <p className={styles.unavailable}>— Funnel counts unavailable</p>
+            <p className={styles.unavailable}>
+              {few
+                ? `Not enough calls yet (${count(totals.calls)} of ${MIN_CALLS})`
+                : "— Funnel counts unavailable"}
+            </p>
           )}
           <p className={styles.caption}>
             Won is part of Next step. A lead can appear in several calls.
@@ -338,6 +410,7 @@ export function OutcomeStory({
         ]}
         calls={coverage.calls ? totals.calls : null}
         missing={missing}
+        few={few}
         onCalls={onCalls}
       />
     </>

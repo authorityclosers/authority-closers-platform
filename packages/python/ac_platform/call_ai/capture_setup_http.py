@@ -38,7 +38,8 @@ from ac_platform.identity.sales_xray_profile import (
     get_sales_xray_profile,
 )
 from ac_platform.kernel.errors import DomainError
-from ac_platform.lead_desk.store import MANAGERS, person_name
+from ac_platform.lead_desk.models import LeadDeskSettings
+from ac_platform.lead_desk.store import MANAGERS, PHONES_KEY, person_name
 from ac_platform.tenancy.models import Membership, Organisation
 
 PRIVATE = {"Cache-Control": "private, no-store", "Vary": "Cookie"}
@@ -164,6 +165,8 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
             "declined_at": no.isoformat() if no else None,
             "ask_again_at": again.isoformat() if again else None,
             "phones": [phone.view() for phone in found.phones],
+            # This person's installs finished in any workspace: their phone steps are done.
+            "finished_devices": await capture_setup.finished_devices(auth.database, person_id),
         }
 
     @router.get("")
@@ -256,6 +259,11 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                     team=True,
                 )
             ).missing
+            # Phones with work-call logging off, by Connections' own rule (ph1-23).
+            desk = await auth.database.get(LeadDeskSettings, tenant_id)
+            stored = (desk.config if desk else None) or {}
+            reports = stored.get(PHONES_KEY)
+            phones: dict[str, Any] = reports if isinstance(reports, dict) else {}
             people: list[dict[str, Any]] = []
             for person, member_role in rows:
                 consent = await consent_of(request, auth, tenant_id, person.id)
@@ -270,6 +278,12 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                 elif state in ("phone_pending", "turned_off"):
                     at = consent.at
                 newest = setup.phones[0] if setup.phones else None
+                report: dict[str, Any] = phones.get(str(person.id)) or {}
+                log_off = (
+                    capture_setup.phone_label(report.get("device_id"), report.get("family"), setup)
+                    if capture_setup.call_log_off(report)
+                    else None
+                )
                 people.append(
                     {
                         "person_id": str(person.id),
@@ -277,14 +291,25 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                         "role": str(member_role),
                         "state": state,
                         "at": at.isoformat() if at else None,
-                        "phone": (newest.model or None) if newest else None,
+                        "phone": (
+                            capture_setup.phone_name(newest.model, newest.family)
+                            if newest
+                            else None
+                        ),
                         "missing_today": missing.by_person.get(person.id, 0),
+                        # The phone with work-call logging off, by name, or None.
+                        "call_log_off": log_off,
                     }
                 )
             # Who still needs to set it up first, then by name.
             people.sort(key=lambda row: (row["state"] == "set_up", row["name"].casefold()))
             # Calls without a recording today, everyone's (owner, 30 Oct 2026, fix 5).
-            return {"schema": TEAM_SCHEMA, "people": people, "missing_today": missing.total}
+            return {
+                "schema": TEAM_SCHEMA,
+                "people": people,
+                "missing_today": missing.total,
+                "call_log_off": sum(row["call_log_off"] is not None for row in people),
+            }
 
     @router.get("/missing")
     async def read_missing(request: Request, response: Response) -> dict[str, Any]:

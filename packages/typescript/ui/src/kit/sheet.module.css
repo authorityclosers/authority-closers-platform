@@ -162,12 +162,14 @@
   }
 }
 
+/* --sx-sheet-room: the app's corner cards above the footer (set on the body
+   while they show), so the words scroll clear of them. */
 .body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 2px 16px 16px;
+  padding: 2px 16px max(16px, var(--sx-sheet-room, 0px));
 }
 
 .footer {

@@ -36,6 +36,7 @@ from sqlalchemy import cast, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ac_platform.call_ai import capture_setup
 from ac_platform.identity.models import Person
 from ac_platform.lead_desk.ai_replies import admin_settings
 from ac_platform.lead_desk.connectors import google_ads_api as gads
@@ -172,6 +173,8 @@ class Connection(_View):
     state: State = "ready"
     words: str | None = None
     disconnect: Link | None = None
+    # A Sales Xray page with the fix ("How to fix").
+    fix: Link | None = None
 
 
 class TestOffer(_View):
@@ -746,21 +749,37 @@ async def _phones(db: AsyncSession, tenant_id: UUID) -> AppHealth:
         if ids
         else {}
     )
+    # Each seller's phone by the name people know, from its finished call capture setup.
+    finished = await capture_setup.team(db, tenant_id, ids) if ids else {}
     connections = []
-    off = 0
+    off: list[str] = []
     for person_id, entry in phones.items():
         report = phone_health(entry)
         if report is None:
             continue
-        off += not report.call_log_on
+        who = people.get(person_id, "A teammate")
+        phone = capture_setup.phone_label(
+            entry.get("device_id"),
+            report.family,
+            finished.get(UUID(person_id)) if _uuid(person_id) else None,
+        )
+        # One rule with Team (ph1-23): a build that can't log calls (Play) never says so.
+        is_off = capture_setup.call_log_off(entry)
+        if is_off:
+            off.append(f"{who}'s {phone}")
         synced = f"synced {report.synced_at:%d %b %H:%M} UTC" if report.synced_at else "not synced"
         connections.append(
             Connection(
                 id=person_id,
-                label=people.get(person_id, "A teammate"),
-                detail=f"Call log {'on' if report.call_log_on else 'off'} · {synced}",
-                state="ready" if report.call_log_on else "problem",
-                words=None if report.call_log_on else "Call logging is off on this phone.",
+                label=f"{who} · {phone}",
+                detail=f"Call log {'on' if report.call_log_on else 'off'} · {synced}"
+                if "callLog" in report.checks
+                else "Logs the calls placed from Sales Xray",
+                state="problem" if is_off else "ready",
+                words=f"On {who}'s {phone}: Sales Xray, Settings, Selling, turn on Log work calls."
+                if is_off
+                else None,
+                fix=Link(method="GET", path="/settings/selling") if is_off else None,
             )
         )
     last = await db.scalar(
@@ -773,10 +792,10 @@ async def _phones(db: AsyncSession, tenant_id: UUID) -> AppHealth:
     return AppHealth(
         app="phone_calls",
         name=NAMES["phone_calls"],
-        state=_state(True, bool(connections), off > 0),
+        state=_state(True, bool(connections), bool(off)),
         words="Log your team's calls from their phones with the Sales Xray app."
         if not connections
-        else f"{_count(off, 'phone has', 'phones have')} call logging off."
+        else f"Call logging is off on {', '.join(off)}."
         if off
         else f"{_count(len(connections), 'phone', 'phones')} logging calls.",
         configured=True,

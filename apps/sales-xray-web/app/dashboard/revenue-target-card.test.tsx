@@ -158,4 +158,9 @@ it("saves the organisation's month and only the sellers that changed", async () 
     organisation: 1500000,
     sellers: [{ person_id: "a", amount: 400000 }],
   });
+  // Said by the button, where the owner looks (the corner notice sits under the sheet).
+  await settle();
+  expect(container.querySelector("[role=status]")?.textContent).toMatch(
+    /target saved$/,
+  );
 });

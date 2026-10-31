@@ -1,6 +1,6 @@
 "use client";
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "../ui/kit";
 import { notify } from "../notice-center";
 import {
@@ -174,8 +174,15 @@ export function CaptureHealthView({
     lastSeen && checkedAt !== null && lastSeen <= checkedAt
       ? Math.max(0, Math.floor((checkedAt - lastSeen) / 60_000))
       : null;
+  // A link to #calls-setup lands here: the check loads after the page, so the
+  // browser's own jump missed it (phone personas, v1.21, 1 Nov 2026).
+  const section = useRef<HTMLElement>(null);
+  useEffect(() => {
+    if (window.location.hash === "#calls-setup")
+      section.current?.scrollIntoView?.({ block: "start" });
+  }, []);
   return (
-    <section id="calls-setup" aria-label="Calls setup check">
+    <section ref={section} id="calls-setup" aria-label="Calls setup check">
       <h3>Calls setup check</h3>
       <CaptureAttention
         status={status}

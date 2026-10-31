@@ -59,6 +59,10 @@ def test_won_needs_its_amount_and_the_month_reads_against_its_targets(
             assert won.status_code == 200, won.text
             moved = [e for e in await here.events(first) if e.data.get("to_kind") == "won"]
             assert moved[-1].data["amount"] == 120000 and moved[-1].data["currency"] == "INR"
+            # The amount shows once on the lead: its header and the move's history line.
+            detail = (await client.get(f"{BASE}/leads/{first}")).json()
+            assert detail["won_amount"] == 120000
+            assert [e["amount"] for e in detail["events"] if e.get("amount")] == [120000]
 
             # After a call: the deal value it already asked for is the amount.
             second = await here.add("Sam Example", "+12025550124")

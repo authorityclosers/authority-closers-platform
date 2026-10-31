@@ -13,6 +13,7 @@ import {
   StagePicker,
   ViewTabs,
   WorkSplit,
+  resolveStep,
   emptyWords,
   lastView,
   listTitle,
@@ -337,4 +338,30 @@ it("sizes the lead beside the list from where it sits, so it ends above the wind
   } finally {
     HTMLElement.prototype.getBoundingClientRect = real;
   }
+});
+
+it("finds a linked stage by its meaning, and never shows a raw key (phone personas, 1 Nov 2026)", async () => {
+  const eight = [
+    stage("new", "New", "new"),
+    stage("follow_up", "Follow-up", "follow_up"),
+    stage("interested", "Interested", "interested"),
+  ];
+  expect(resolveStep(eight, "open_leads")).toBe("follow_up");
+  expect(resolveStep(eight, "unworked")).toBe("new");
+  expect(resolveStep(eight, "interested")).toBe("interested");
+  expect(resolveStep(eight, "demo_done")).toBeNull();
+  // An archived stage is no longer in the list.
+  expect(resolveStep(STAGES, "old")).toBeNull();
+  await act(async () =>
+    root.render(
+      <StagePicker
+        stages={STAGES}
+        side="inbound"
+        value="demo_done"
+        onChange={() => undefined}
+      />,
+    ),
+  );
+  expect(host.textContent).not.toContain("demo_done");
+  expect(host.textContent).toContain("Demo done");
 });

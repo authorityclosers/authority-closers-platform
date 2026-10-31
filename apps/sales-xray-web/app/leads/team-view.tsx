@@ -379,6 +379,7 @@ export function TeamView({
     return (
       <div
         className={styles.listSkeleton}
+        role="status"
         aria-busy="true"
         aria-label="Loading the team"
       >

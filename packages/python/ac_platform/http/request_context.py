@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from time import perf_counter
+from urllib.parse import quote
 from uuid import uuid4
 
 import structlog
@@ -45,6 +46,12 @@ async def request_context_middleware(
     response.headers["x-ac-release-id"] = release_id
     response.headers["x-content-type-options"] = "nosniff"
     response.headers["referrer-policy"] = "strict-origin-when-cross-origin"
+    left = getattr(request.state, "workspace_left", None)
+    if left is not None:
+        # The session names a workspace the person is no longer in: the app moves
+        # to another workspace or its picker and says which one was left.
+        response.headers["x-ac-workspace-left"] = str(left.tenant_id)
+        response.headers["x-ac-workspace-left-name"] = quote(left.name, safe="")
     logger.info(
         "request_completed",
         request_id=request_id,

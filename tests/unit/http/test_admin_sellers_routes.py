@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator, Iterator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 from types import SimpleNamespace
 from typing import Any
 from uuid import uuid4
@@ -28,10 +28,21 @@ from ac_platform.identity.models import Session as SignIn
 from ac_platform.kernel.authz import ActorContext
 from ac_platform.lead_desk.models import LeadDeskSettings, LeadEvent
 from ac_platform.learning.planning_models import AnalyticsEvent
+from ac_platform.telemetry.admin_view import INDIA
 from ac_platform.telemetry.sales_xray import NOTICE_VERSION, RETENTION_POLICY_ID
 from ac_platform.tenancy.models import Membership, Tenant
 
 OPERATIONS = uuid4()
+# The reader's clock, frozen at 14:00 in India: the seeds two hours earlier sit at India
+# midday on the reader's "today" whatever the hour the suite runs (seeded off the real
+# clock, they fell on the previous India day between 18:30 and 20:30 UTC).
+NOW = datetime(2026, 11, 1, 8, 30, tzinfo=UTC)
+
+
+class _FrozenClock(datetime):
+    @classmethod
+    def now(cls, tz: tzinfo | None = None) -> datetime:  # type: ignore[override]
+        return NOW if tz is None else NOW.astimezone(tz)
 
 
 class _Database:
@@ -74,7 +85,8 @@ def setup(monkeypatch: pytest.MonkeyPatch) -> Iterator[dict[str, Any]]:
     model_metadata().create_all(engine)
     session = Session(engine)
     org, other, person, stranger = uuid4(), uuid4(), uuid4(), uuid4()
-    now = datetime.now(UTC)
+    monkeypatch.setattr(admin_sellers, "datetime", _FrozenClock)
+    now = NOW
     earlier = now - timedelta(hours=2)
     session.add_all(
         [
@@ -232,6 +244,7 @@ def test_an_email_finds_its_person_whatever_its_case(setup: dict[str, Any]) -> N
 
 
 def test_the_timeline_reads_only_this_persons_days(setup: dict[str, Any]) -> None:
+    assert admin_sellers.datetime.now(UTC).astimezone(INDIA).hour == 14
     client = setup["client"]
     response = client.get(f"/v1/admin/sellers/{setup['person']}/timeline?days=7")
     assert response.status_code == 200, response.text

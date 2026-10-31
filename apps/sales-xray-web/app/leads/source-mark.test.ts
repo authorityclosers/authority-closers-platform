@@ -72,3 +72,36 @@ it("keeps a late row's time short, so it is never cut (persona QA, 31 Oct 2026)"
   expect(nextLine(late, now)).toMatch(/^Call back · /);
   expect(nextLine(late, now)).not.toContain("was");
 });
+
+it("never names the stage again, and says nothing more for a closed lead (phone personas, 1 Nov 2026: Won Won)", () => {
+  const now = new Date(2026, 9, 31, 12, 0);
+  const row = {
+    stage_label: "Open Leads",
+    why: "Open Leads",
+    why_kind: "open",
+    created_at: new Date(2026, 9, 20, 12, 0).toISOString(),
+    next_action_at: new Date(2026, 10, 2, 8, 0).toISOString(),
+    missed_at: null,
+  } as unknown as LeadRow;
+  expect(nextLine(row, now)).toMatch(/^Next call · /);
+  expect(nextLine({ ...row, next_action_at: null }, now)).toBe(
+    "No next call yet",
+  );
+  const due = {
+    ...row,
+    stage_label: "Meeting Done",
+    why: "Meeting Done due",
+    why_kind: "due",
+    next_action_at: new Date(2026, 9, 31, 8, 10).toISOString(),
+  } as LeadRow;
+  expect(nextLine(due, now)).toMatch(/^Due · /);
+  expect(nextLine(due, now)).not.toContain("Meeting Done");
+  const won = {
+    ...row,
+    stage_label: "Won",
+    why: "Won",
+    why_kind: "closed",
+    next_action_at: null,
+  } as LeadRow;
+  expect(nextLine(won, now)).toBe("");
+});

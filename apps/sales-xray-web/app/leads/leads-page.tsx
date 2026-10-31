@@ -134,6 +134,7 @@ import {
   FollowUpTabs,
   LeadSearch,
   StagePicker,
+  resolveStep,
   ViewTabs,
   WorkHead,
   WorkSplit,
@@ -919,6 +920,14 @@ export function LeadsRoute({
   // The tabs carry the stages of the pipeline shown; across several, the six kinds.
   const journeyFor = several(pipes) ? pipeline : MAIN_PIPELINE;
   const journeyKey = `${contextKey}:${journeyFor}`;
+  // A link may name a stage this organisation doesn't have (Home's Open Leads in
+  // a list without one): the stage that means the same, else all stages with a
+  // word; never the raw key (phone personas, 1 Nov 2026).
+  const stepShown =
+    more.step && journey?.key === journeyKey
+      ? resolveStep(journey.view.stages, more.step)
+      : (more.step ?? null);
+  const stepLost = !!more.step && stepShown === null;
   useEffect(() => {
     if (!authenticated || !journeyFor) return;
     let live = true;
@@ -1371,6 +1380,10 @@ export function LeadsRoute({
     view === OPENING_STAGE
       ? listTitle(workView, side, more.when ?? null)
       : null;
+  const headingShown =
+    stepLost && heading
+      ? `${heading} · that stage isn't in your list`
+      : heading;
   const stageLabel =
     heading ??
     tabs.find((tab) => tab.key === view)?.label ??
@@ -1537,7 +1550,9 @@ export function LeadsRoute({
       : []),
   ];
 
-  // Save & Next Lead: the list's next lead not yet served this round; none: done.
+  // Save & Next Lead (or Skip): the list's next lead not yet served this round;
+  // none: done. Its card opens first, with Call and Skip; only Call dials
+  // (phone personas, 1 Nov 2026, ph2-13: the dialler opened with a bare number).
   const nextLead = (saved: string) => {
     const served = new Set(queue ?? []).add(saved);
     const next = order.current.find((id) => !served.has(id));
@@ -1546,7 +1561,7 @@ export function LeadsRoute({
       return;
     }
     setQueue(served.add(next));
-    open(next, "call");
+    open(next);
   };
   // A wide screen shows the lead beside the list (owner, 31 Oct 2026: the
   // computer's full width, a list and a detail pane); elsewhere a sheet.
@@ -1724,7 +1739,7 @@ export function LeadsRoute({
                       side={side}
                       value={
                         view === OPENING_STAGE
-                          ? (more.step ?? null)
+                          ? stepShown
                           : (pickable.find((stage) => stage.kind === view)
                               ?.key ?? null)
                       }
@@ -1754,7 +1769,7 @@ export function LeadsRoute({
                         onStart={() => {
                           if (!topLead) return;
                           setQueue(new Set([topLead]));
-                          open(topLead, "call");
+                          open(topLead);
                         }}
                       />
                     </>
@@ -1870,7 +1885,7 @@ export function LeadsRoute({
                 }}
                 stageWord={stageWord}
                 quietLate={side === "cold" && !can}
-                heading={heading}
+                heading={headingShown}
                 empty={view === OPENING_STAGE ? emptyWords(workView) : null}
                 canManage={can}
                 initial={desk === serverSeed?.desk ? serverSeed : null}
@@ -1889,7 +1904,11 @@ export function LeadsRoute({
                 onTable={setTableMode}
                 onStepCounts={onStepCounts}
                 pipeline={pipeline}
-                more={listMore}
+                more={
+                  listMore && stepShown !== (listMore.step ?? null)
+                    ? { ...listMore, step: stepShown }
+                    : listMore
+                }
                 onSort={(sort, order) =>
                   applyFilters({
                     ...shownFilters,
@@ -1901,6 +1920,13 @@ export function LeadsRoute({
                 onAdd={() => begin("adding", setAdding)}
                 onShowOpen={() =>
                   pickWork({ view: "all", when: null, step: null })
+                }
+                // A search finds only what this view holds; All Leads holds
+                // every lead (persona row 8da7d076).
+                onSearchAll={
+                  workView !== "all"
+                    ? () => pickWork({ view: "all", when: null, step: null })
+                    : undefined
                 }
                 layoutOwner={contextKey}
                 pipelineNames={pipelineNames}

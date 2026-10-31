@@ -19,7 +19,9 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
+  type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   installReportShortcut,
@@ -418,6 +420,48 @@ function NoticeCard({
   );
 }
 
+/** The open modal dialog on top (a sheet), or none. */
+function topModal(): HTMLDialogElement | null {
+  const open = document.querySelectorAll<HTMLDialogElement>("dialog[open]");
+  for (let index = open.length - 1; index >= 0; index -= 1) {
+    try {
+      if (open[index].matches(":modal")) return open[index];
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * While a sheet or dialog is open everything outside it is inert and under
+ * it, so a card raised from inside it went unseen (orchestrator, 1 Nov 2026).
+ * The stack follows the sheet on top.
+ */
+function useTopModal(): HTMLDialogElement | null {
+  const [modal, setModal] = useState<HTMLDialogElement | null>(null);
+  useEffect(() => {
+    let timer = 0;
+    const look = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => setModal(topModal()), 0);
+    };
+    look();
+    const observer = new MutationObserver(look);
+    observer.observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["open"],
+    });
+    return () => {
+      observer.disconnect();
+      window.clearTimeout(timer);
+    };
+  }, []);
+  return modal;
+}
+
 /**
  * The one place app-level problems appear: a small stack of cards in the
  * bottom corner (above the tab bar on phones). It also catches unexpected
@@ -430,7 +474,8 @@ export function NoticeCenter() {
     () => EMPTY,
   );
   const [expanded, setExpanded] = useState(false);
-  const stack = useRef<HTMLDivElement>(null);
+  const [stack, setStack] = useState<HTMLDivElement | null>(null);
+  const sheet = useTopModal();
   const work = useNormalAlert();
   const workCard = useMemo(() => (work ? fromAlert(work) : null), [work]);
   const workGone = useCallback(() => {
@@ -441,7 +486,7 @@ export function NoticeCenter() {
   // band from the stack's top to the window's bottom, which the shell adds to
   // the end of the page (shell/lightbox-shell.module.css). No card, no room.
   useEffect(() => {
-    const node = stack.current;
+    const node = stack;
     if (!node || typeof ResizeObserver === "undefined") return;
     const root = document.documentElement;
     const publish = () => {
@@ -462,7 +507,61 @@ export function NoticeCenter() {
       window.removeEventListener("resize", publish);
       root.style.removeProperty("--sx-corner-h");
     };
-  }, []);
+  }, [stack]);
+
+  // Inside a sheet the stack is a popover on its top layer (as the picker is),
+  // so its cards show and answer taps. It sits above the sheet's footer, so
+  // Save stays in sight, and the sheet's words keep room to scroll clear of
+  // it (kit sheet: data-sheet-footer, data-sheet-body, --sx-sheet-room).
+  useEffect(() => {
+    if (!sheet || !stack) return;
+    try {
+      if (!stack.matches(":popover-open")) stack.showPopover();
+    } catch {
+      // Without popovers it still sits inside the sheet, over its panel.
+    }
+    const across = (a: DOMRect, b: DOMRect) =>
+      a.left < b.right && b.left < a.right;
+    let body: HTMLElement | null = null;
+    const place = () => {
+      const footer = sheet.querySelector<HTMLElement>("[data-sheet-footer]");
+      const edge = footer?.getBoundingClientRect();
+      if (
+        edge &&
+        edge.height > 0 &&
+        across(stack.getBoundingClientRect(), edge)
+      )
+        stack.style.setProperty(
+          "--sx-stack-lift",
+          `${Math.ceil(window.innerHeight - edge.top + 8)}px`,
+        );
+      else stack.style.removeProperty("--sx-stack-lift");
+      body?.style.removeProperty("--sx-sheet-room");
+      body = sheet.querySelector<HTMLElement>("[data-sheet-body]");
+      if (!body) return;
+      const box = stack.getBoundingClientRect();
+      const words = body.getBoundingClientRect();
+      const room =
+        box.height > 0 && across(box, words)
+          ? Math.ceil(words.bottom - box.top + 12)
+          : 0;
+      if (room > 0) body.style.setProperty("--sx-sheet-room", `${room}px`);
+    };
+    place();
+    const sized =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(place);
+    sized?.observe(stack);
+    const changed = new MutationObserver(place);
+    changed.observe(sheet, { childList: true, subtree: true });
+    window.addEventListener("resize", place);
+    return () => {
+      sized?.disconnect();
+      changed.disconnect();
+      window.removeEventListener("resize", place);
+      body?.style.removeProperty("--sx-sheet-room");
+      stack.style.removeProperty("--sx-stack-lift");
+    };
+  }, [sheet, stack]);
 
   // Keeps the page's last twenty problems for a bug report (bug-report/).
   useEffect(() => installErrorRecorder(), []);
@@ -504,40 +603,58 @@ export function NoticeCenter() {
   const waiting = Math.max(0, list.length - SHOWN);
   // Once no card waits, the next pile starts folded again.
   if (expanded && waiting === 0) setExpanded(false);
-  const shownList = expanded ? list : list.slice(-SHOWN);
+  // The newest first: a card arrives at the top of the stack, so the cards
+  // already there never move (orchestrator, 1 Nov 2026: a card joining below
+  // lifted the others, a layout shift); older ones wait under "+N more".
+  const shownList = [...(expanded ? list : list.slice(-SHOWN))].reverse();
 
   return (
     <>
       {/* One corner, under nothing: never over the page header or the top bar
           (owner via the orchestrator, 31 Oct 2026). Work that needs the seller
-          rides at its top (ui/alerts.tsx); the newest card sits nearest the corner.
+          rides at its top (ui/alerts.tsx); a new card arrives at the top too.
           It never covers content either: the page keeps room for it, and a card
           folds to a pill once seen (31 Oct 2026). */}
-      <div
-        ref={stack}
-        className={styles.stack}
-        aria-live="polite"
-        data-capture-skip=""
-      >
-        {workCard ? (
-          <NoticeCard key={workCard.id} notice={workCard} leave={workGone} />
-        ) : null}
-        {waiting > 0 ? (
-          <button
-            type="button"
-            className={styles.more}
-            aria-expanded={expanded}
-            onClick={() => setExpanded((now) => !now)}
-          >
-            {expanded ? "Show fewer" : `+${waiting} more`}
-          </button>
-        ) : null}
-        {shownList.map((notice) => (
-          <NoticeCard key={notice.id} notice={notice} />
-        ))}
-      </div>
+      {/* Inside an open sheet, on its top layer; otherwise in the page. */}
+      <StackHost sheet={sheet}>
+        <div
+          key={sheet ? "sheet" : "page"}
+          ref={setStack}
+          className={styles.stack}
+          aria-live="polite"
+          data-capture-skip=""
+          popover={sheet ? "manual" : undefined}
+        >
+          {workCard ? (
+            <NoticeCard key={workCard.id} notice={workCard} leave={workGone} />
+          ) : null}
+          {shownList.map((notice) => (
+            <NoticeCard key={notice.id} notice={notice} />
+          ))}
+          {waiting > 0 ? (
+            <button
+              type="button"
+              className={styles.more}
+              aria-expanded={expanded}
+              onClick={() => setExpanded((now) => !now)}
+            >
+              {expanded ? "Show fewer" : `+${waiting} more`}
+            </button>
+          ) : null}
+        </div>
+      </StackHost>
       {/* Urgent work: a centre card over the page, by design. */}
       <AlertHost />
     </>
   );
+}
+
+function StackHost({
+  sheet,
+  children,
+}: {
+  sheet: HTMLDialogElement | null;
+  children: ReactNode;
+}) {
+  return sheet ? createPortal(children, sheet) : children;
 }

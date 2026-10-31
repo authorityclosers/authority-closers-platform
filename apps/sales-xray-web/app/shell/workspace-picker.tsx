@@ -14,6 +14,7 @@
  */
 import { roleLabel } from "../organisation/roles";
 import { Check, MailOpen, Plus, UserRound } from "lucide-react";
+import { useState } from "react";
 
 import type { PendingInvite } from "../organisation/organisation-api";
 import type { SalesXrayWorkspace } from "../sales-xray-workspaces";
@@ -151,6 +152,9 @@ export function WorkspacePicker({
   personPhotoUrl?: string | null;
   personEmail?: string | null;
 }) {
+  // One tap asks, "Switch to <name>?", and a second one switches (phone
+  // personas, ph2-15, 1 Nov 2026: one tap in the account sheet switched).
+  const [asking, setAsking] = useState<string | null>(null);
   const current =
     workspaces.find((workspace) => workspace.tenant_id === currentId) ?? null;
   const others = workspaces.filter(
@@ -192,34 +196,51 @@ export function WorkspacePicker({
       {others.length ? (
         <>
           <p className={styles.label}>Switch to</p>
-          {others.map((workspace) => (
-            <button
-              key={workspace.tenant_id}
-              type="button"
-              role={itemRole}
-              aria-checked={menu ? workspace.tenant_id === picked : undefined}
-              className={styles.item}
-              data-picked={workspace.tenant_id === picked ? "" : undefined}
-              onClick={() => onSelect(workspace.tenant_id)}
-            >
-              <WorkspaceTile
-                workspace={workspace}
-                logoUrl={logoFor(workspace)}
-                personName={personName}
-                personPhotoUrl={personPhotoUrl}
-                personEmail={personEmail}
-              />
-              <span className={styles.copy}>
-                <b title={workspaceName(workspace)}>
-                  {workspaceName(workspace)}
-                </b>
-                <small>{workspaceLine(workspace)}</small>
-              </span>
-              {workspace.tenant_id === picked ? (
-                <Check size={16} className={styles.check} aria-hidden="true" />
-              ) : null}
-            </button>
-          ))}
+          {others.map((workspace) => {
+            const ask = asking === workspace.tenant_id && !picked;
+            return (
+              <button
+                key={workspace.tenant_id}
+                type="button"
+                role={itemRole}
+                aria-checked={menu ? workspace.tenant_id === picked : undefined}
+                className={styles.item}
+                data-picked={workspace.tenant_id === picked ? "" : undefined}
+                data-asking={ask ? "" : undefined}
+                onClick={() => {
+                  if (ask) onSelect(workspace.tenant_id);
+                  else setAsking(workspace.tenant_id);
+                }}
+              >
+                <WorkspaceTile
+                  workspace={workspace}
+                  logoUrl={logoFor(workspace)}
+                  personName={personName}
+                  personPhotoUrl={personPhotoUrl}
+                  personEmail={personEmail}
+                />
+                <span className={styles.copy}>
+                  <b title={workspaceName(workspace)}>
+                    {ask
+                      ? `Switch to ${workspaceName(workspace)}?`
+                      : workspaceName(workspace)}
+                  </b>
+                  <small>{workspaceLine(workspace)}</small>
+                </span>
+                {workspace.tenant_id === picked ? (
+                  <Check
+                    size={16}
+                    className={styles.check}
+                    aria-hidden="true"
+                  />
+                ) : ask ? (
+                  <span className={styles.join} aria-hidden="true">
+                    Switch
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
         </>
       ) : null}
       {invites.length && onJoin ? (

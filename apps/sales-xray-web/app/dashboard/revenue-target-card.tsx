@@ -9,7 +9,7 @@
  * list and the detail under its Back button (team-controls.tsx).
  */
 
-import { ChevronRight, Target } from "lucide-react";
+import { Check, ChevronRight, Target } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { amountOf } from "../leads/pipeline/blocks";
@@ -109,6 +109,13 @@ export function RevenueTargetDetail() {
   const [own, setOwn] = useState<Record<string, string>>({});
   const [typical, setTypical] = useState("");
   const [saving, setSaving] = useState(false);
+  const [savedNote, setSavedNote] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!savedNote) return;
+    const timer = window.setTimeout(() => setSavedNote(null), 3000);
+    return () => window.clearTimeout(timer);
+  }, [savedNote]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -195,6 +202,8 @@ export function RevenueTargetDetail() {
           : {}),
       });
       setTargets(saved);
+      // Said here, by the button: the corner notice sits under this sheet.
+      setSavedNote(`${monthName(month)} target saved`);
       notify({
         id: "revenue-target",
         tone: "success",
@@ -301,6 +310,14 @@ export function RevenueTargetDetail() {
           Save {monthName(month)}
         </button>
       ) : null}
+      <p className={styles.savedNote} role="status">
+        {savedNote ? (
+          <>
+            <Check size={16} aria-hidden="true" />
+            {savedNote}
+          </>
+        ) : null}
+      </p>
       {manage ? (
         <div className={styles.group}>
           <div className={styles.row}>

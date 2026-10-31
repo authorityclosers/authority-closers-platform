@@ -38,6 +38,9 @@
   align-items: center;
   gap: 2px;
   width: fit-content;
+  /* A 44 px tap target that takes no more room (robot row f2773fe5, 1 Nov 2026). */
+  min-height: 44px;
+  margin-block: -11.5px;
   color: var(--sx-muted);
   font-size: var(--sx-text-xs);
   text-decoration: none;

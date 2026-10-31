@@ -139,7 +139,10 @@ it("shows the four outcomes, each with its change and its words", async () => {
   await draw(week);
   expect(tile("won").textContent).toContain("6");
   expect(tile("won").textContent).toContain("2 more");
-  expect(tile("won").textContent).toContain("20% of 30 leads called");
+  // The tile names its window (ph1-20, 1 Nov 2026: "86%" read as today's).
+  expect(tile("won").textContent).toContain(
+    "Last 7 days · 20% of 30 leads called",
+  );
   expect(tile("interested").textContent).toContain("4 more");
   expect(tile("new_leads").textContent).toContain("Same as before");
   expect(tile("new_leads").textContent).toContain("First call in 18 min");

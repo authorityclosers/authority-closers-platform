@@ -911,6 +911,13 @@
   font-size: 12px;
 }
 
+/* Why Invite is closed (no free seat): a plain note, not an error. */
+.fieldNote {
+  flex-basis: 100%;
+  color: var(--lx-muted);
+  font-size: 12px;
+}
+
 /* The role pickers' popovers open past the edge of the members list. */
 .surface:has(.select, .roleSelect) {
   overflow: visible;

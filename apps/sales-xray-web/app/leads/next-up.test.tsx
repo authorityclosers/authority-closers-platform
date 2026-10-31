@@ -217,3 +217,44 @@ it("asks straight away after a call the phone logged with talk time", async () =
   );
   expect(tile("Log a call")).toBeUndefined();
 });
+
+// ph2-13 (phone personas, 1 Nov 2026): a round opens the lead's card first,
+// with Call and Skip; Skip goes on to the next lead and saves nothing.
+it.each([true, false])(
+  "offers Skip beside Call only in a round (%s)",
+  async (queue) => {
+    const onNext = vi.fn();
+    const fetchMock = vi.mocked(fetch);
+    await act(async () =>
+      root.render(
+        <LeadSheet
+          leadId={ONE}
+          me={null}
+          onClose={() => undefined}
+          onChanged={() => undefined}
+          onNext={onNext}
+          queue={queue}
+        />,
+      ),
+    );
+    await flush();
+    const skip = [...document.querySelectorAll("button")].find(
+      (button) => button.textContent === "Skip",
+    );
+    if (!queue) {
+      expect(skip).toBeUndefined();
+      return;
+    }
+    const calls = fetchMock.mock.calls.length;
+    await act(async () => skip!.click());
+    expect(onNext).toHaveBeenCalledWith(ONE);
+    // Nothing saved: no request beyond the lead's own read.
+    expect(
+      fetchMock.mock.calls
+        .slice(calls)
+        .filter(
+          ([, init]) => (init as RequestInit | undefined)?.method === "POST",
+        ),
+    ).toHaveLength(0);
+  },
+);

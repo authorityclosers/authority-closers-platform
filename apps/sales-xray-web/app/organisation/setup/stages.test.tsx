@@ -307,6 +307,10 @@ it("offers the recommended stages only when the list differs, by matching stage"
   vi.mocked(applyTemplate).mockResolvedValue({ ...copy(), version: 5 });
   await render();
   await tap("Use recommended");
+  // Before confirming: where today's leads go (phone personas, 1 Nov 2026).
+  expect(
+    document.querySelector('[aria-label="What moves where"]')?.textContent,
+  ).toBe("Talking · 2 leads → Open Leads");
   const confirm = [...host.querySelectorAll("button")].filter(
     (item) => item.textContent === "Use recommended",
   );

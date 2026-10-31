@@ -477,9 +477,15 @@ export function Sheet({
                 {title}
               </h2>
             )}
-            <div className={styles.body}>{children}</div>
+            {/* Named for the app's corner cards, which sit above the footer
+                and give the words room (notice-center.tsx). */}
+            <div className={styles.body} data-sheet-body="">
+              {children}
+            </div>
             {footer ? (
-              <footer className={styles.footer}>{footer}</footer>
+              <footer className={styles.footer} data-sheet-footer="">
+                {footer}
+              </footer>
             ) : null}
           </>
         ) : null}

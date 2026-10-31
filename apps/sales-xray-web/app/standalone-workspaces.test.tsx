@@ -5,12 +5,17 @@ import { StandaloneStudio } from "./standalone-studio";
 import { useWorkspaceAccess } from "./workspace-access";
 import { getShellState, updateShellState } from "./shell/shell-store";
 import type { SalesXrayWorkspaceChoices } from "./sales-xray-workspaces";
+import { notify } from "./notice-center";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/analysis/new",
   useSearchParams: () => new URLSearchParams(),
 }));
 vi.mock("./profile-menu", () => ({ ProfileMenu: () => null }));
+vi.mock("./notice-center", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("./notice-center")>()),
+  notify: vi.fn(),
+}));
 vi.mock("./capture-setup/recording-check", () => ({
   RecordingCheck: () => null,
 }));
@@ -222,6 +227,8 @@ it("switches both ways and clears the previous workspace's cached Recents", asyn
     const item = [
       ...host.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]'),
     ].find((el) => el.textContent?.includes(name))!;
+    // One tap asks, "Switch to ...?"; the second switches.
+    await act(async () => item.click());
     await act(async () => item.click());
     expect(getShellState().selectedTenantId).toBe(to);
     expect(getShellState().recentCalls).toEqual([]);
@@ -284,4 +291,124 @@ it("starts every screen again for the workspace the server switched to, without 
   expect(host.querySelector("[data-value]")?.textContent).toBe("");
   // The server's answer to the switch is enough: no second round trip.
   expect(directoryReads()).toBe(before);
+});
+
+// Orchestrator, 1 Nov 2026: the session still names a workspace the person
+// is no longer in (removed, or the organisation deleted). The server answers
+// without it and names it until another is chosen; the page lands calmly.
+function leaveWorkspace(tenantId = "gone-id", name = "Old%20Sandbox") {
+  let named = true;
+  const answer = fetcher.getMockImplementation() as (
+    path: string,
+    init?: RequestInit,
+  ) => Promise<Response>;
+  fetcher.mockImplementation(async (path: string, init?: RequestInit) => {
+    const response: Response = await answer(path, init);
+    if (path === "/v1/context" && response.ok) named = false;
+    if (named) {
+      response.headers.set("x-ac-workspace-left", tenantId);
+      response.headers.set("x-ac-workspace-left-name", name);
+    }
+    return response;
+  });
+}
+const settle = () =>
+  act(async () => {
+    for (let i = 0; i < 20; i += 1) await Promise.resolve();
+  });
+const tenant = () =>
+  host.querySelector("[data-upload]")?.getAttribute("data-tenant");
+const notes = () =>
+  vi
+    .mocked(notify)
+    .mock.calls.map(([notice]) => notice)
+    .filter((notice) => notice.id === "workspace-left");
+
+beforeEach(() => vi.mocked(notify).mockClear());
+
+it("lands on Personal with a calm note when the saved workspace has ended", async () => {
+  directory = { ...directory, selected_tenant_id: null };
+  leaveWorkspace();
+  await mount();
+  await settle();
+  expect(fetcher).toHaveBeenCalledWith(
+    "/v1/context",
+    expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ tenant_id: "personal-id" }),
+    }),
+  );
+  expect(tenant()).toBe("personal-id");
+  expect(host.textContent).not.toContain("could not be checked");
+  expect(notes()).toEqual([
+    {
+      id: "workspace-left",
+      tone: "info",
+      title: "You're no longer in Old Sandbox",
+      message: "You're in Personal now.",
+    },
+  ]);
+});
+
+it("lands on the only workspace left when there is no Personal", async () => {
+  directory = { selected_tenant_id: null, workspaces: [organisation] };
+  leaveWorkspace();
+  await mount();
+  await settle();
+  expect(tenant()).toBe("org-id");
+  expect(notes()).toEqual([
+    expect.objectContaining({
+      title: "You're no longer in Old Sandbox",
+      message: "You're in Closers Academy now.",
+    }),
+  ]);
+});
+
+it("opens the picker with the note when several workspaces are left", async () => {
+  directory = {
+    selected_tenant_id: null,
+    workspaces: [
+      organisation,
+      { ...organisation, tenant_id: "second-id", name: "Second Floor" },
+    ],
+  };
+  leaveWorkspace();
+  await mount();
+  await settle();
+  expect(tenant()).toBeUndefined();
+  expect(host.textContent).toContain("Second Floor");
+  expect(
+    fetcher.mock.calls.filter(([path]) => path === "/v1/context"),
+  ).toHaveLength(0);
+  expect(notes()).toEqual([
+    expect.objectContaining({
+      title: "You're no longer in Old Sandbox",
+      message: "Pick a workspace to carry on.",
+    }),
+  ]);
+});
+
+it("moves off the workspace on screen as soon as an answer says it ended", async () => {
+  directory = { ...directory, selected_tenant_id: "org-id" };
+  await mount();
+  await settle();
+  expect(tenant()).toBe("org-id");
+  expect(notes()).toEqual([]);
+
+  // The organisation is deleted while the page is open.
+  directory = { selected_tenant_id: null, workspaces: [personal] };
+  leaveWorkspace("org-id", "Closers%20Academy");
+  await act(async () => {
+    await fetch("/v1/conversation/acquisition/activity");
+  });
+  await settle();
+  expect(tenant()).toBe("personal-id");
+  expect(notes()).toEqual([
+    {
+      id: "workspace-left",
+      tone: "info",
+      title: "You're no longer in Closers Academy",
+      message: "You're in Personal now.",
+    },
+  ]);
 });

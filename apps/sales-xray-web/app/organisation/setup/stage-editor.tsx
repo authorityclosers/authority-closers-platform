@@ -158,6 +158,10 @@ export function StageEditor({
   }, [view]);
 
   const recommended = templates?.find((item) => item.id === "recommended");
+  // Use recommended's preview: today's stages and where their leads go.
+  const [moves, setMoves] = useState<
+    { from: string; leads: number; to: string }[] | null
+  >(null);
   const differs =
     !!recommended &&
     (recommended.stages.length !== order.length ||
@@ -272,6 +276,37 @@ export function StageEditor({
       `Added ${stage.label.trim()}`,
       { undo: list },
     );
+  }
+
+  // What moves where, before the switch (phone personas, 1 Nov 2026: Use
+  // recommended switched with no preview of where the leads go).
+  async function openRecommended() {
+    setOpen({ kind: "recommend" });
+    setMoves(null);
+    try {
+      await queue.current;
+      const preview = await previewTemplate(
+        version.current,
+        "recommended",
+        pipeline,
+      );
+      const map = recommendedMap(stages.current, preview);
+      setMoves(
+        preview.landings
+          .filter((landing) => landing.leads > 0)
+          .map((landing) => ({
+            from: landing.fromLabel,
+            leads: landing.leads,
+            to:
+              preview.stages.find(
+                (stage) =>
+                  stage.key === (map[landing.fromKey] ?? landing.toKey),
+              )?.label ?? landing.toLabel,
+          })),
+      );
+    } catch {
+      setMoves([]);
+    }
   }
 
   async function adoptRecommended() {
@@ -632,7 +667,7 @@ export function StageEditor({
             type="button"
             className={styles.quiet}
             disabled={busy}
-            onClick={() => setOpen({ kind: "recommend" })}
+            onClick={() => void openRecommended()}
           >
             <Sparkles size={16} aria-hidden="true" />
             Use recommended
@@ -782,6 +817,24 @@ export function StageEditor({
                 </li>
               ))}
             </ol>
+            {moves === null ? (
+              <p className={styles.help}>Checking where your leads go…</p>
+            ) : moves.length ? (
+              <>
+                <p className={styles.help}>Where today&apos;s leads go</p>
+                <ul
+                  className={styles.recommended}
+                  aria-label="What moves where"
+                >
+                  {moves.map((move) => (
+                    <li key={move.from}>
+                      {move.from} · {move.leads}{" "}
+                      {move.leads === 1 ? "lead" : "leads"} → {move.to}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
             <p className={styles.help}>
               Each lead moves to its matching stage.
             </p>

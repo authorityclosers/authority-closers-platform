@@ -652,6 +652,12 @@ it("reads only known apps and follows only the back end's own routes", () => {
             id: "1",
             label: "Page",
             disconnect: { method: "POST", path: "/v1/lead-desk/../me" },
+            fix: { method: "GET", path: "https://evil.example/settings" },
+          },
+          {
+            id: "2",
+            label: "Asha · Redmi 13 5G",
+            fix: { method: "GET", path: "/settings/selling" },
           },
         ],
       },
@@ -661,6 +667,9 @@ it("reads only known apps and follows only the back end's own routes", () => {
   expect(parsed?.apps).toHaveLength(1);
   expect(parsed?.apps[0]).toMatchObject({ state: "problem", connect: null });
   expect(parsed?.apps[0].connections[0].disconnect).toBeNull();
+  // "How to fix" opens a page of this app only (phone personas ph1-23).
+  expect(parsed?.apps[0].connections[0].fix).toBeNull();
+  expect(parsed?.apps[0].connections[1].fix).toBe("/settings/selling");
   expect(parsed?.apps[0].blockers).toEqual([]);
   expect(parseHealth({ apps: "x" })).toBeNull();
 });

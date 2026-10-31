@@ -43,12 +43,20 @@ function day(at: string | null): string | null {
 
 const calls = (count: number) => (count === 1 ? "1 call" : `${count} calls`);
 
-/** The one line under a seller's name, with today's calls that have no recording. */
+/** The one line under a seller's name, with today's calls that have no recording
+    and a phone with work-call logging off (the rule Connections uses, ph1-23). */
 export function captureLine(row: CaptureTeamRow): string {
-  const line = stateLine(row);
-  return row.missing_today
-    ? `${calls(row.missing_today)} without a recording today · ${line}`
-    : line;
+  return [
+    row.missing_today
+      ? `${calls(row.missing_today)} without a recording today`
+      : null,
+    row.call_log_off
+      ? `Call logging off on ${row.call_log_off}: on that phone, Settings, Selling, Log work calls`
+      : null,
+    stateLine(row),
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }
 
 function stateLine(row: CaptureTeamRow): string {
@@ -86,6 +94,8 @@ export function CaptureSetupPanel() {
   const rows = team?.people ?? null;
   if (failed || (rows && !rows.length)) return null;
   const missing = rows?.filter((row) => row.state !== "set_up").length ?? 0;
+  // Never "Everyone is set up" while Connections names a phone (ph1-23).
+  const logOff = rows?.filter((row) => row.call_log_off).length ?? 0;
   // Owner, 30 Oct 2026 (fix 5): "calls without recordings today".
   const unrecorded = team?.missingToday ?? 0;
   return (
@@ -100,7 +110,9 @@ export function CaptureSetupPanel() {
             : [
                 missing
                   ? `${missing} of ${rows.length} not set up`
-                  : "Everyone is set up",
+                  : logOff
+                    ? `Call logging off on ${logOff === 1 ? "1 phone" : `${logOff} phones`}`
+                    : "Everyone is set up",
                 unrecorded
                   ? `${calls(unrecorded)} without a recording today`
                   : null,

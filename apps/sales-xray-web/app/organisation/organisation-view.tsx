@@ -80,13 +80,19 @@ import {
   type OrgActivity,
   type OrgMember,
   type OrgRole,
+  type OrgSeats,
   type Organisation,
 } from "./organisation-api";
 import { can, ROLE_HINT, ROLE_LABEL, rolesToGive } from "./roles";
 import styles from "./organisation.module.css";
 import { ReceiptActivitySection } from "./receipt-activity";
 import { CaptureSetupPanel } from "./capture-setup-panel";
-import { SeatsPanel, SeatUsePanel, seatUseFrom } from "./seats-panel";
+import {
+  inviteBlock,
+  SeatsPanel,
+  SeatUsePanel,
+  seatUseFrom,
+} from "./seats-panel";
 import { readEffort, type Effort } from "../performance/performance-client";
 import { TeamPatternsSection } from "./team-patterns-section";
 import {
@@ -397,6 +403,8 @@ export function OrganisationView({
   // Owners, admins and Finance see seats; a member change reads them again.
   const seesSeats = live && (canManage || can(myRole, "billing.view"));
   const [seatsVersion, setSeatsVersion] = useState(0);
+  // The Seats card's counts: Invite closes, with the reason, when none is free.
+  const [orgSeats, setOrgSeats] = useState<OrgSeats | null>(null);
   // Seat use counts the calls Analytics counts: the lead desk's own, last 30
   // days (persona QA, 31 Oct 2026: 0 here, 343 in Analytics).
   const [deskCalls, setDeskCalls] = useState<Effort | null>(null);
@@ -565,7 +573,7 @@ export function OrganisationView({
 
             {shows("members") && seesSeats && (
               <SectionBoundary name="Seats">
-                <SeatsPanel version={seatsVersion} />
+                <SeatsPanel version={seatsVersion} onSeats={setOrgSeats} />
               </SectionBoundary>
             )}
 
@@ -584,6 +592,7 @@ export function OrganisationView({
                   orgName={name}
                   yourPersonId={access?.context?.personId ?? null}
                   onMissing={() => setMissing(true)}
+                  inviteBlocked={seesSeats ? inviteBlock(orgSeats) : null}
                 />
               </SectionBoundary>
             )}
@@ -1447,6 +1456,7 @@ function MembersPanel({
   orgName = "",
   yourPersonId,
   onMissing,
+  inviteBlocked = null,
 }: {
   members: Live<OrgMember[]>;
   reload: () => void;
@@ -1458,6 +1468,8 @@ function MembersPanel({
   orgName?: string;
   yourPersonId: string | null;
   onMissing: () => void;
+  /** Why no invite can go out now (no free seat), or null. */
+  inviteBlocked?: string | null;
 }) {
   const [email, setEmail] = useState("");
   const dates = useDisplayDates();
@@ -1567,6 +1579,8 @@ function MembersPanel({
       : [];
   const disabled =
     !canManage || busy || confirming !== null || members.status !== "ready";
+  // Removing someone or revoking an invite stays open: that frees a seat.
+  const addDisabled = disabled || Boolean(inviteBlocked);
   const invited = rows.filter((member) => member.status === "invited").length;
 
   return (
@@ -1601,9 +1615,15 @@ function MembersPanel({
                   setEmail(event.target.value);
                   setInvalid("");
                 }}
-                disabled={disabled}
+                disabled={addDisabled}
                 aria-label="Email to invite"
-                aria-describedby={invalid ? "org-add-error" : undefined}
+                aria-describedby={
+                  invalid
+                    ? "org-add-error"
+                    : inviteBlocked
+                      ? "org-add-blocked"
+                      : undefined
+                }
               />
             </label>
             <Picker
@@ -1615,16 +1635,25 @@ function MembersPanel({
                 label: ROLE_LABEL[item],
               }))}
               onChange={(key) => setNewRole(key as OrgRole)}
-              disabled={disabled}
+              disabled={addDisabled}
               ariaLabel="Role for the new person"
             />
             <button
               type="submit"
               className={styles.primary}
-              disabled={disabled}
+              disabled={addDisabled}
             >
               Invite
             </button>
+            {inviteBlocked && !invalid ? (
+              <small
+                id="org-add-blocked"
+                className={styles.fieldNote}
+                role="status"
+              >
+                {inviteBlocked}
+              </small>
+            ) : null}
             {invalid ? (
               <small
                 id="org-add-error"
