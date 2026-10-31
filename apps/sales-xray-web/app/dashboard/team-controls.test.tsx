@@ -149,7 +149,9 @@ async function openControls() {
 
 it("shows five cards with their values, and no tabs or rows of sellers", async () => {
   await openControls();
-  expect(chips()).toEqual([
+  // Five settings, then the month's revenue target (capture-setup's card).
+  expect(chips()[5]?.[0]).toBe("revenue");
+  expect(chips().slice(0, 5)).toEqual([
     ["hours", "Not set"],
     ["first_call", "Within 10 min"],
     ["nudges", "On, except 1"],
