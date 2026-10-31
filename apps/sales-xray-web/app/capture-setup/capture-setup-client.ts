@@ -55,6 +55,15 @@ export type CaptureTeamRow = Readonly<{
   missing_today?: number;
   /** The phone, by name, with work-call logging off: Connections' rule (ph1-23). */
   call_log_off?: string | null;
+  /** Recording on this seller's phone (competitor teardown #7). */
+  recording?: CaptureRecording | null;
+}>;
+
+/** "ok": a recording lately; "late": none lately, or none yet; "off": no folder or recorder. */
+export type CaptureRecording = Readonly<{
+  state: "ok" | "late" | "off";
+  last_at: string | null;
+  fix: "folder" | "recorder" | "test" | null;
 }>;
 
 export type CaptureTeam = Readonly<{
@@ -209,6 +218,24 @@ export async function recordCaptureSetup(
     }),
     parseCaptureSetup,
   );
+}
+
+/** This phone's newest call recording, for Team's line (never the file or a number). */
+export async function reportRecordingHealth(report: {
+  device: string;
+  newest_recording_at: string | null;
+}): Promise<void> {
+  const response = await fetch(`${CAPTURE_SETUP_PATH}/recording-health`, {
+    method: "POST",
+    credentials: "same-origin",
+    cache: "no-store",
+    headers: {
+      accept: "application/json",
+      "content-type": "application/json",
+    },
+    body: JSON.stringify(report),
+  });
+  if (!response.ok) throw new Error("Recording health not sent.");
 }
 
 /** Each seller's state, for owners, admins and managers (Team). */

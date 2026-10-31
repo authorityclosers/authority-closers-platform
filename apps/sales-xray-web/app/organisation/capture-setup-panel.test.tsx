@@ -4,7 +4,11 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import type { CaptureTeamRow } from "../capture-setup/capture-setup-client";
-import { CaptureSetupPanel, captureLine } from "./capture-setup-panel";
+import {
+  CaptureSetupPanel,
+  captureLine,
+  recordingLine,
+} from "./capture-setup-panel";
 
 (
   globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }
@@ -134,4 +138,33 @@ it("never says everyone is set up while a phone has call logging off", async () 
   expect(host.querySelector("li")?.textContent).toContain(
     "Call logging off on Redmi 13 5G: on that phone, Settings, Selling, Log work calls",
   );
+});
+it("shows each phone's recording as a dot and a line with its fix", async () => {
+  // Competitor teardown, item 7, 1 Nov 2026: the owner sees whether each phone records.
+  const now = Date.parse("2026-11-01T09:00:00+05:30");
+  const at = (minutes: number) =>
+    new Date(now - minutes * 60_000).toISOString();
+  expect(recordingLine({ state: "ok", last_at: at(12), fix: null }, now)).toBe(
+    "Recording OK · last file 12 min ago",
+  );
+  expect(
+    recordingLine(
+      { state: "late", last_at: "2026-10-27T11:00:00+05:30", fix: "recorder" },
+      now,
+    ),
+  ).toBe("No recordings since Tue · Turn on call recording");
+  expect(
+    recordingLine({ state: "off", last_at: null, fix: "folder" }, now),
+  ).toBe("No recordings folder · Allow folder");
+  expect(
+    recordingLine({ state: "late", last_at: null, fix: "test" }, now),
+  ).toBe("No call recording found yet · Place a test call");
+  await mount([
+    row("Karan Fictional", "set_up", {
+      phone: "Redmi 13 5G",
+      recording: { state: "off", last_at: null, fix: "folder" },
+    }),
+  ]);
+  const line = host.querySelector('small[data-state="off"]');
+  expect(line?.textContent).toBe("No recordings folder · Allow folder");
 });

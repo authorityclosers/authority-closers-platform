@@ -47,6 +47,7 @@ OUTSIDE = "Call capture is set up inside an organisation."
 SCHEMA = "sales-xray-capture-setup/1"
 TEAM_SCHEMA = "sales-xray-capture-setup-team/1"
 MISSING_SCHEMA = "sales-xray-missing-recordings/1"
+RECORDING_SCHEMA = "sales-xray-recording-health/1"
 
 
 class PhoneFinished(BaseModel):
@@ -59,6 +60,14 @@ class PhoneFinished(BaseModel):
     recordings: bool = False
     background: bool = False
     uploads: bool = False
+
+
+class RecordingHealth(BaseModel):
+    """The seller's own phone: its install id and its newest call recording."""
+
+    model_config = ConfigDict(extra="forbid")
+    device: str = Field(min_length=1, max_length=80)
+    newest_recording_at: datetime | None = None
 
 
 class SetupCommand(BaseModel):
@@ -264,6 +273,10 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
             stored = (desk.config if desk else None) or {}
             reports = stored.get(PHONES_KEY)
             phones: dict[str, Any] = reports if isinstance(reports, dict) else {}
+            # Each phone's newest recording (competitor teardown #7).
+            kept = stored.get(capture_setup.RECORDING_KEY)
+            recordings: dict[str, Any] = kept if isinstance(kept, dict) else {}
+            now = datetime.now(UTC)
             people: list[dict[str, Any]] = []
             for person, member_role in rows:
                 consent = await consent_of(request, auth, tenant_id, person.id)
@@ -299,6 +312,10 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                         "missing_today": missing.by_person.get(person.id, 0),
                         # The phone with work-call logging off, by name, or None.
                         "call_log_off": log_off,
+                        # Recording on this seller's phone: ok, late or off, and the fix.
+                        "recording": capture_setup.recording_state(
+                            phones.get(str(person.id)), recordings.get(str(person.id)), now
+                        ),
                     }
                 )
             # Who still needs to set it up first, then by name.
@@ -310,6 +327,39 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                 "missing_today": missing.total,
                 "call_log_off": sum(row["call_log_off"] is not None for row in people),
             }
+
+    @router.post("/recording-health")
+    async def report_recording(
+        command: RecordingHealth, request: Request, response: Response
+    ) -> dict[str, Any]:
+        """The seller's phone says when it last found a call recording, for Team's line
+        (competitor teardown #7, 1 Nov 2026). Never a number, a name or the file."""
+        async with member(request, response, write=True) as (auth, tenant_id, person_id, _):
+            now = datetime.now(UTC)
+            desk = await auth.database.get(LeadDeskSettings, tenant_id, with_for_update=True)
+            if desk is None:
+                desk = LeadDeskSettings(
+                    tenant_id=tenant_id,
+                    revision=1,
+                    config={},
+                    updated_by_person_id=None,
+                    updated_at=now,
+                )
+                auth.database.add(desk)
+            kept = (desk.config or {}).get(capture_setup.RECORDING_KEY)
+            health: dict[str, Any] = dict(kept) if isinstance(kept, dict) else {}
+            newest = command.newest_recording_at
+            if newest is not None:
+                newest = min(newest.astimezone(UTC), now)
+            health[str(person_id)] = {
+                "device": command.device,
+                "newest_at": newest.isoformat() if newest else None,
+                "reported_at": now.isoformat(),
+            }
+            # A new dict, so the change is saved; the revision stays (not a manager's edit).
+            desk.config = {**(desk.config or {}), capture_setup.RECORDING_KEY: health}
+            await auth.database.flush()
+            return {"schema": RECORDING_SCHEMA, "recorded": True}
 
     @router.get("/missing")
     async def read_missing(request: Request, response: Response) -> dict[str, Any]:

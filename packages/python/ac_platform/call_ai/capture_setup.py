@@ -141,6 +141,41 @@ def phone_label(device: str | None, family: str | None, found: Setup | None) -> 
     return f"{maker} phone" if maker else "phone"
 
 
+# Each seller's phone's newest call recording, as it reports it, kept beside the phone
+# reports in the Lead Desk settings row (competitor teardown #7, 1 Nov 2026).
+RECORDING_KEY: Final = "recording_health"
+# A recording this recent says the phone records.
+RECORDING_FRESH: Final = timedelta(days=2)
+
+
+def _moment(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return _utc(datetime.fromisoformat(value))
+    except ValueError:
+        return None
+
+
+def recording_state(phone: Any, health: Any, now: datetime) -> dict[str, Any] | None:
+    """A seller's phone recording, as Team shows it: "ok" with its last file, "late" (no
+    recording lately, or none yet) or "off" (no folder, or the Phone app doesn't record),
+    with the fix. None when the phone never said."""
+    checks = phone.get("checks") if isinstance(phone, dict) else None
+    checks = checks if isinstance(checks, dict) else {}
+    newest = _moment(health.get("newest_at")) if isinstance(health, dict) else None
+    if not checks and not isinstance(health, dict):
+        return None
+    last = newest.isoformat() if newest else None
+    if checks.get("recordings") is False:
+        return {"state": "off", "last_at": last, "fix": "folder"}
+    if checks.get("recorder") is False:
+        return {"state": "off", "last_at": last, "fix": "recorder"}
+    if newest is not None and now - newest <= RECORDING_FRESH:
+        return {"state": "ok", "last_at": last, "fix": None}
+    return {"state": "late", "last_at": last, "fix": "recorder" if newest else "test"}
+
+
 def call_log_off(entry: Any) -> bool:
     """A phone that can log work calls and has it off: the one rule Connections and Team
     share (phone personas ph1-23, 1 Nov 2026: Connections said a phone had call logging
