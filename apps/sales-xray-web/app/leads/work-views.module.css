@@ -317,7 +317,11 @@
 .splitPane {
   position: sticky;
   top: calc(var(--work-head-h, 120px) - 24px + 8px);
-  max-height: calc(100dvh - 48px - var(--work-head-h, 120px) - 8px);
+  /* Down to 16 px above the window's bottom, from wherever it sits (WorkSplit
+     measures its top as the page moves). */
+  max-height: calc(
+    100dvh - var(--pane-top, calc(var(--work-head-h, 120px) - 16px)) - 16px
+  );
   min-width: 0;
   overflow: auto;
   overscroll-behavior: contain;
