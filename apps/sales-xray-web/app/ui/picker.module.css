@@ -148,6 +148,15 @@
   animation: pop-in var(--sx-dur-base) var(--sx-ease-out) both;
 }
 
+/* A table cell's list floats in the top layer, so no scrolling table box clips
+   it; the picker sets its place and its width from the cell. */
+.pop[popover] {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  color: var(--sx-ink);
+}
+
 @keyframes pop-in {
   from {
     opacity: 0;

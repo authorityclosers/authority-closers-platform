@@ -549,6 +549,21 @@
   outline: none;
 }
 
+/* A picked cell: the app's picker in the cell's own size and edge. */
+.cellPick {
+  width: 100%;
+  min-width: 0;
+}
+
+.cellPicker > button {
+  min-height: 36px;
+  padding: 0 6px 0 8px;
+  border-color: var(--sx-accent);
+  border-radius: var(--sx-radius-sm);
+  font-size: var(--sx-text-sm);
+  box-shadow: var(--sx-focus-ring);
+}
+
 /* Touch screens wide enough for the table: the pencil shows, and is larger. */
 @media (hover: none) {
   .rename {
@@ -699,7 +714,8 @@
     height: 40px;
   }
 
-  .wrap:not([data-fit]) .table :is(.cell, .cellInput, .name) {
+  .wrap:not([data-fit]) .table :is(.cell, .cellInput, .name),
+  .wrap:not([data-fit]) .table .cellPicker > button {
     min-height: 30px;
   }
 
