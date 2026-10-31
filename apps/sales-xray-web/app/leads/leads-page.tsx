@@ -110,10 +110,8 @@ import {
   type ListMore,
   type ListSince,
   type ListSort,
-  readSides,
   type FollowUpWhen,
   type LeadSide,
-  type SideNumbers,
   type WorkView,
 } from "./leads-client";
 import { MessageSetup } from "./message-context";
@@ -171,6 +169,7 @@ import {
 } from "./lead-filters";
 import styles from "./leads.module.css";
 import { OPEN_ADD_EVENT } from "../shell/shell-store";
+import { useSideNumbers } from "./side-numbers";
 
 type Manage = "team" | "sources" | "stages" | "numbers";
 
@@ -845,19 +844,13 @@ export function LeadsRoute({
   // only then; someone with Cold Leads only works Cold.
   const sidesScope = warmManager ? "team" : "mine";
   const sidesKey = JSON.stringify([identity, sidesScope]);
-  const [sideNumbers, setSideNumbers] = useState<{
-    key: string;
-    value: SideNumbers;
-  } | null>(null);
-  useEffect(() => {
-    if (!authenticated || !role) return;
-    const controller = new AbortController();
-    readSides(sidesScope, controller.signal)
-      .then((value) => setSideNumbers({ key: sidesKey, value }))
-      .catch(() => undefined);
-    return () => controller.abort();
-  }, [authenticated, role, sidesScope, sidesKey, version]);
-  const numbers = sideNumbers?.key === sidesKey ? sideNumbers.value : null;
+  // The page waits for them before it draws (side-numbers.ts).
+  const { numbers, settled: sidesSettled } = useSideNumbers({
+    ready: !!authenticated && !!role,
+    scope: sidesScope,
+    keyed: sidesKey,
+    version,
+  });
   const coldOnly =
     !!numbers && numbers.inbound.leads === 0 && numbers.cold.imported > 0;
   const bothSides =
@@ -1219,7 +1212,8 @@ export function LeadsRoute({
     );
   }
 
-  if (!current || !desk || legacySettings) return <LeadsSkeleton />;
+  if (!current || !desk || legacySettings || !sidesSettled)
+    return <LeadsSkeleton />;
 
   // A phone alert's lead opens once; closing it leaves the desk.
   const fromLink = linked && linkDone !== hash ? linked : null;
