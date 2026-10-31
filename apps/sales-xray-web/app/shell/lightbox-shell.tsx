@@ -26,6 +26,8 @@ import {
   UserRound,
   Users,
   UsersRound,
+  ChartColumn,
+  TrendingUp,
 } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
@@ -1802,7 +1804,9 @@ function LightboxShellFrame({
                   <span className={styles.contextRow}>
                     {workspaceMark}
                     <small className={styles.mobileContext}>
-                      {workspaceLabel}
+                      <span className={styles.contextName}>
+                        {workspaceLabel}
+                      </span>
                       <ChevronDown
                         size={12}
                         strokeWidth={2.5}
@@ -1838,6 +1842,17 @@ function LightboxShellFrame({
           {/* You opens from the avatar on the left, not from here too. */}
           <div className={styles.barActions}>
             <ReviewBarChip live={leadsBadgeLive} />
+            {/* Chats lives with Leads (Dipak's handoff, 31 Oct 2026): an icon
+                in its header, with the unread mark. */}
+            {guest || phoneTab !== "leads" ? null : (
+              <ScreenLink
+                className={styles.barSearch}
+                href="/chats"
+                aria-label="Chats"
+              >
+                <ChatsTabIcon size={20} live={leadsLive} />
+              </ScreenLink>
+            )}
             {/* The + lives up here now (28 Oct 2026 meeting): small and
                 highlighted; it opens Add lead, Add a call and Add task. */}
             {guest ? null : (
@@ -1976,10 +1991,10 @@ function LightboxShellFrame({
           </SectionBoundary>
         </main>
       </div>
-      {/* The new map (owner, 22 Oct 2026): five tabs on phones, Home, Leads,
-          + (Add), Chats and Calls. Your avatar in the top bar opens You (your
-          settings, the organisation's, the other places, Log out), so there
-          is no More tab. */}
+      {/* Dipak's handoff (31 Oct 2026): five tabs on phones, Home, Leads,
+          Ask Dipak, Reports and Growth. The + is in the top bar, Chats is an
+          icon in the Leads header, and your avatar opens You (your settings,
+          the organisation's, the other places, Log out). */}
       <nav
         ref={tabBarRef}
         className={styles.bottomNav}
@@ -2041,29 +2056,31 @@ function LightboxShellFrame({
             <span>Ask Dipak</span>
           </button>
         )}
-        {/* Chats has its own tab and its own unread count. */}
-        {guest ? null : (
-          <ScreenLink
-            className={styles.bottomLink}
-            href="/chats"
-            onClick={tapTab("chats")}
-            aria-current={phoneTab === "chats" ? "page" : undefined}
-          >
-            <ChatsTabIcon size={20} live={leadsLive} />
-            <span className={styles.tabPill} aria-hidden="true" />
-            <span>Chats</span>
-          </ScreenLink>
-        )}
+        {/* Reports opens on All Calls; a call's report and the Reports
+            summaries light it (Dipak's handoff, 31 Oct 2026). */}
         {guest ? null : (
           <ScreenLink
             className={styles.bottomLink}
             href="/analysis/calls"
-            onClick={tapTab("calls")}
-            aria-current={phoneTab === "calls" ? "page" : undefined}
+            onClick={tapTab("reports")}
+            aria-current={phoneTab === "reports" ? "page" : undefined}
           >
-            <AudioLines size={20} aria-hidden="true" />
+            <ChartColumn size={20} aria-hidden="true" />
             <span className={styles.tabPill} aria-hidden="true" />
-            <span>Calls</span>
+            <span>Reports</span>
+          </ScreenLink>
+        )}
+        {/* My Growth: Analytics now, Coaching later as a tab inside it. */}
+        {guest ? null : (
+          <ScreenLink
+            className={styles.bottomLink}
+            href="/growth"
+            onClick={tapTab("growth")}
+            aria-current={phoneTab === "growth" ? "page" : undefined}
+          >
+            <TrendingUp size={20} aria-hidden="true" />
+            <span className={styles.tabPill} aria-hidden="true" />
+            <span>Growth</span>
           </ScreenLink>
         )}
         {/* Signed out shows Sign in (the phone app has its own sign-in
