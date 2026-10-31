@@ -129,3 +129,17 @@ def test_team_names_a_phone_as_people_know_it() -> None:
     assert capture_setup.phone_name("V2318", "vivo") == "Vivo V2318"
     assert capture_setup.phone_name("Pixel 8", "other") == "Pixel 8"
     assert capture_setup.phone_name("  ", "xiaomi") is None
+
+
+def test_a_finished_install_counts_once_newest_first_and_a_no_never() -> None:
+    # Persona QA ph2-15, 1 Nov 2026: a workspace switch ran the phone's steps again.
+    assert capture_setup.devices_of(
+        [
+            {"outcome": "completed", "device": "install-b"},
+            {"outcome": "declined", "device": "install-c"},
+            {"outcome": "completed", "device": " install-a "},
+            {"outcome": "completed", "device": "install-b"},
+            {"outcome": "completed", "device": ""},
+            "not a payload",
+        ]
+    ) == ["install-b", "install-a"]

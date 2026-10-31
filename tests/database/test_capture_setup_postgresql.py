@@ -119,6 +119,7 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                     "declined_at": None,
                     "ask_again_at": None,
                     "phones": [],
+                    "finished_devices": [],
                 }
 
                 # A phone can't claim to be finished before the seller agreed.
@@ -155,6 +156,8 @@ def test_a_seller_agrees_finishes_on_a_phone_and_team_sees_it(
                 view = done.json()
                 assert view["consent"] == "on"
                 assert [phone["device"] for phone in view["phones"]] == ["install-fictional-1"]
+                # The install is done for this person in every workspace (ph2-15).
+                assert view["finished_devices"] == ["install-fictional-1"]
                 assert view["phones"][0]["uploads"] is True
                 events = await _events(setup, seller.person_id)
                 assert len(events) == 1

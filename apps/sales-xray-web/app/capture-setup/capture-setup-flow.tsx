@@ -1084,6 +1084,7 @@ export function CaptureSetupFlow({
   onDeclined,
   onClose,
   startAt,
+  switchBack = null,
 }: {
   setup: CaptureSetup;
   /** The phone app's answer when the flow opened; null on the web. */
@@ -1093,6 +1094,8 @@ export function CaptureSetupFlow({
   required: boolean;
   organisation: string | null;
   onFinish: (next: CaptureSetup | null) => void;
+  /** The workspace the seller came from: always one tap away (ph2-15). */
+  switchBack?: { name: string; run: () => void } | null;
   onDeclined: (next: CaptureSetup) => void;
   onClose: () => void;
   /** Review fixtures: open at this step when it is one of the steps. */
@@ -1325,6 +1328,13 @@ export function CaptureSetupFlow({
         <div className={own.skip}>
           <Button variant="ghost" onClick={next}>
             Skip
+          </Button>
+        </div>
+      ) : null}
+      {switchBack ? (
+        <div className={own.skip}>
+          <Button variant="ghost" onClick={switchBack.run}>
+            Switch back to {switchBack.name}
           </Button>
         </div>
       ) : null}

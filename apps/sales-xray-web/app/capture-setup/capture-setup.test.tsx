@@ -7,6 +7,7 @@ const route = vi.hoisted(() => ({ path: "/leads" }));
 vi.mock("next/navigation", () => ({ usePathname: () => route.path }));
 
 import { REPORT_PROBLEM_EVENT } from "../bug-report/open";
+import { SELECT_WORKSPACE_EVENT } from "../call-ownership";
 import { resetBackCloseForTests } from "../ui/back-close";
 import { WorkspaceAccessContext } from "../workspace-access";
 import type { CaptureSetup } from "./capture-setup-client";
@@ -510,7 +511,16 @@ describe("CaptureSetupFlow", () => {
   });
 });
 
-async function gate(view: CaptureSetup | Error) {
+const HOMES = {
+  tenant_id: "t",
+  kind: "organisation" as const,
+  name: "Fictional Homes",
+  role: "member" as const,
+  sales_xray_enabled: true,
+};
+
+async function gate(view: CaptureSetup | Error, workspaces = [HOMES]) {
+  let calls: Call[] = [];
   if (view instanceof Error)
     vi.stubGlobal(
       "fetch",
@@ -518,7 +528,7 @@ async function gate(view: CaptureSetup | Error) {
         throw view;
       }),
     );
-  else fakeServer(view);
+  else calls = fakeServer(view);
   await act(async () =>
     root.render(
       <WorkspaceAccessContext.Provider
@@ -526,15 +536,7 @@ async function gate(view: CaptureSetup | Error) {
           status: "ready",
           authenticated: true,
           context: { personId: "p", sessionId: "s", tenantId: "t" },
-          workspaces: [
-            {
-              tenant_id: "t",
-              kind: "organisation",
-              name: "Fictional Homes",
-              role: "member",
-              sales_xray_enabled: true,
-            },
-          ],
+          workspaces,
           retry: () => {},
         }}
       >
@@ -543,6 +545,7 @@ async function gate(view: CaptureSetup | Error) {
     ),
   );
   await settle();
+  return calls;
 }
 
 describe("CaptureSetupGate", () => {
@@ -589,6 +592,46 @@ describe("CaptureSetupGate", () => {
     await settle();
     expect(title()).toBe("What Sales X-Ray captures");
     vi.useRealTimers();
+  });
+
+  it("asks nothing on a phone finished in another workspace, and tells this one's Team", async () => {
+    // Persona QA ph2-15, 1 Nov 2026: a workspace switch ran all five steps again,
+    // saying "You agreed on 30 Oct", with no Back and no Skip.
+    fakePhone();
+    const calls = await gate(
+      setup({ consent: "on", finished_devices: [DEVICE] }),
+    );
+    expect(host.querySelector("dialog")).toBeNull();
+    expect(posts(calls, "/capture-setup")[0].body).toEqual({
+      outcome: "completed",
+      phone: {
+        device: DEVICE,
+        model: "Redmi 13",
+        family: "xiaomi",
+        app_version: "1.0.50",
+        recordings: true,
+        background: true,
+        uploads: true,
+      },
+    });
+  });
+
+  it("always offers to switch back to the workspace the seller came from", async () => {
+    window.localStorage.setItem(
+      "sx-workspaces-seen:p",
+      JSON.stringify({ current: "t-old", previous: null }),
+    );
+    const asked: unknown[] = [];
+    const listen = (event: Event) => asked.push((event as CustomEvent).detail);
+    window.addEventListener(SELECT_WORKSPACE_EVENT, listen);
+    await gate(setup(), [
+      HOMES,
+      { ...HOMES, tenant_id: "t-old", name: "Fictional Realty" },
+    ]);
+    expect(title()).toBe("What Sales X-Ray captures");
+    await act(async () => button("Switch back to Fictional Realty").click());
+    window.removeEventListener(SELECT_WORKSPACE_EVENT, listen);
+    expect(asked).toEqual(["t-old"]);
   });
 
   it("stays shut while a no stands, and never locks anyone out on a failed read", async () => {

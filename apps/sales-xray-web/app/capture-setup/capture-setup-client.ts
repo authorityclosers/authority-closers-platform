@@ -32,6 +32,8 @@ export type CaptureSetup = Readonly<{
   declined_at: string | null;
   ask_again_at: string | null;
   phones: readonly CaptureSetupPhone[];
+  /** This person's installs that finished setup in any workspace (ph2-15). */
+  finished_devices?: readonly string[];
 }>;
 
 export type CaptureTeamState =
@@ -113,7 +115,12 @@ export function parseCaptureSetup(body: unknown): CaptureSetup {
       typeof phone.device === "string" &&
       typeof phone.at === "string",
   );
-  return { ...(body as CaptureSetup), phones };
+  const finished = Array.isArray(body.finished_devices)
+    ? body.finished_devices.filter(
+        (device): device is string => typeof device === "string",
+      )
+    : [];
+  return { ...(body as CaptureSetup), phones, finished_devices: finished };
 }
 
 export function parseCaptureTeam(body: unknown): CaptureTeam {

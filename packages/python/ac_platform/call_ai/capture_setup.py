@@ -190,6 +190,37 @@ async def setup(database: Any, tenant_id: UUID, person_id: UUID) -> Setup:
     return result
 
 
+def devices_of(payloads: list[Any]) -> list[str]:
+    """Installs that finished setup, newest first, once each."""
+    devices: list[str] = []
+    for payload in payloads:
+        if not isinstance(payload, dict) or payload.get("outcome") != "completed":
+            continue
+        device = _text(payload.get("device"), 80)
+        if device and device not in devices:
+            devices.append(device)
+    return devices
+
+
+async def finished_devices(database: Any, person_id: UUID) -> list[str]:
+    """The installs this person finished setup on, in any workspace. A phone's own steps
+    (recordings folder, battery, uploads) belong to the phone, not to a workspace: a
+    workspace switch asks only for that workspace's consent (persona QA ph2-15, 1 Nov
+    2026: switching ran the whole setup again, and after every restart)."""
+    payloads = (
+        await database.scalars(
+            select(AuditEvent.payload)
+            .where(
+                AuditEvent.resource_type == RESOURCE_TYPE,
+                AuditEvent.resource_id == str(person_id),
+            )
+            .order_by(AuditEvent.occurred_at.desc(), AuditEvent.sequence_no.desc())
+            .limit(_READ_LIMIT)
+        )
+    ).all()
+    return devices_of(list(payloads))
+
+
 async def team(database: Any, tenant_id: UUID, people: list[UUID]) -> dict[UUID, Setup]:
     """Everyone's setup in one read (Team), for the members asked about."""
     wanted = {str(person) for person in people}

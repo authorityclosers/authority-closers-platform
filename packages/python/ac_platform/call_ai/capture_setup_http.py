@@ -164,6 +164,8 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
             "declined_at": no.isoformat() if no else None,
             "ask_again_at": again.isoformat() if again else None,
             "phones": [phone.view() for phone in found.phones],
+            # This person's installs finished in any workspace: their phone steps are done.
+            "finished_devices": await capture_setup.finished_devices(auth.database, person_id),
         }
 
     @router.get("")

@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { parseSetup } from "../leads/native-phone";
 import type { CaptureSetup } from "./capture-setup-client";
 import {
+  finishedPhone,
   isGatedRoute,
   phoneFacts,
   savedWhen,
@@ -116,6 +117,20 @@ describe("setupRequired", () => {
     ).toBe(true);
   });
 
+  it("asks nothing on a phone finished in another workspace once this one's consent is on (ph2-15)", () => {
+    // Persona QA, 1 Nov 2026: a workspace switch ran all five steps again,
+    // and after every restart.
+    const elsewhere = setup({ finished_devices: [DEVICE] });
+    expect(setupRequired(elsewhere, ready, NOW)).toBe(false);
+    expect(setupRequired({ ...elsewhere, consent: "ask" }, ready, NOW)).toBe(
+      true,
+    );
+    // Another install of the same person is a phone of its own.
+    expect(
+      setupRequired(elsewhere, { ...ready, device: "install-fresh" }, NOW),
+    ).toBe(true);
+  });
+
   it("lets a no stand for a day, then asks again", () => {
     const said = setup({
       consent: "ask",
@@ -197,6 +212,52 @@ describe("stepsFor", () => {
     )!;
     expect(off.recorderOff).toBe(true);
     expect(stepsFor(setup(), off)).toEqual(["consent", "recordings", "done"]);
+  });
+
+  it("skips the phone's own steps when it finished in another workspace (ph2-15)", () => {
+    const restricted = phoneFacts(
+      status({ battery: false }, { folderPicked: false }),
+      { ...on, on: false },
+    )!;
+    // Only this workspace's consent, then done: no folder, battery or uploads again.
+    expect(
+      stepsFor(
+        setup({ consent: "ask", finished_devices: [DEVICE] }),
+        restricted,
+      ),
+    ).toEqual(["consent", "done"]);
+    // Run again from Settings where it finished: the phone's steps show, to fix them.
+    const here = setup({
+      finished_devices: [DEVICE],
+      phones: [
+        {
+          device: DEVICE,
+          model: "Redmi 13",
+          app_version: "1.0.50",
+          at: new Date(NOW).toISOString(),
+          recordings: false,
+          background: false,
+          uploads: false,
+        },
+      ],
+    });
+    expect(stepsFor(here, restricted)).toEqual([
+      "consent",
+      "recordings",
+      "background",
+      "uploads",
+      "done",
+    ]);
+    // What the gate records for the new workspace's Team: never a number.
+    expect(finishedPhone(restricted)).toEqual({
+      device: DEVICE,
+      model: "Redmi 13",
+      family: "xiaomi",
+      app_version: "1.0.50",
+      recordings: false,
+      background: false,
+      uploads: false,
+    });
   });
 
   it("ends the web's steps with finishing on the phone", () => {
