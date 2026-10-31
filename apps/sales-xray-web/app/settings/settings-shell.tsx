@@ -124,6 +124,10 @@ export function SectionList({
 export function SettingsShell({ children }: { children: ReactNode }) {
   const current = currentSection(usePathname());
   const section = current ? sectionById(current) : null;
+  // A section your role can't use keeps its name, not its promise ("Your plan
+  // and invoices" over a seller's billing line): the section says why itself.
+  const canHere = useCanHere();
+  const promised = !section?.needs || canHere(section.needs) !== false;
   return (
     <div className={styles.shell} data-section={current ?? "index"}>
       <nav className={styles.nav} aria-label="Settings sections">
@@ -139,7 +143,7 @@ export function SettingsShell({ children }: { children: ReactNode }) {
             </Link>
             <header className={styles.header}>
               <h1>{section.label}</h1>
-              <p>{section.hint}</p>
+              {promised ? <p>{section.hint}</p> : null}
             </header>
           </>
         ) : null}

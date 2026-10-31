@@ -320,6 +320,24 @@ it("leaves Plan & usage out for a Seller, and says who sees billing at its addre
   );
   expect(seen.account).toEqual([]);
   expect(host.querySelector("a, button")).toBeNull();
+  // Its page keeps the name but not "Your plan and invoices".
+  nav.pathname = "/settings/plan";
+  await act(async () =>
+    root.render(
+      inWorkspace(
+        <SettingsShell>
+          <SettingsSectionView id="plan" />
+        </SettingsShell>,
+        "organisation",
+        "member",
+      ),
+    ),
+  );
+  expect(host.querySelector("h1")?.textContent).toBe("Plan & usage");
+  expect(host.textContent).not.toContain("Your plan and invoices");
+  expect(host.textContent).toContain(
+    "Only your organisation's owner can see billing.",
+  );
 });
 
 it("keeps Plan & usage for an organisation's owner and in a personal workspace", async () => {
