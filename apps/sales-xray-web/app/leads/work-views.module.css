@@ -332,3 +332,10 @@
     transform: none;
   }
 }
+
+/* Follow-ups' pills are 44 px to tap on a touch screen (QA robot, 31 Oct 2026). */
+@media (pointer: coarse) {
+  .subTabs .tab {
+    min-height: 44px;
+  }
+}

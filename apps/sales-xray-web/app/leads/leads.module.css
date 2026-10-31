@@ -7487,3 +7487,31 @@ fieldset.form {
   overflow-wrap: anywhere;
   white-space: normal;
 }
+
+/* Every control on a lead is 44 px to tap on a touch screen (QA robot, 31 Oct
+   2026: Call 40 px, Stage 40 px, the City line 21 px, Add note 36 px). */
+@media (pointer: coarse) {
+  .quickAct {
+    width: 44px;
+    height: 44px;
+  }
+
+  .stageRow,
+  button.leadSub {
+    min-height: 44px;
+  }
+
+  .noteSend {
+    width: 44px;
+    height: 44px;
+  }
+}
+
+/* The lead's actions wrap to rows of four on a phone (eight in one row were
+   39 px wide at 390). */
+@media (max-width: 599.98px) {
+  .actionGrid {
+    grid-auto-flow: row;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
