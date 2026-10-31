@@ -83,6 +83,18 @@ it("puts every kind of report in one place, by category", async () => {
   expect(host.querySelector('a[href="/leads?tab=numbers"]')).not.toBeNull();
 });
 
+it("says where the first-call target is set when there is none (persona row 5a28f46e)", async () => {
+  const sla = REPORTS_FIXTURE.sla!;
+  await render(true, {
+    ...REPORTS_FIXTURE,
+    sla: { ...sla, settings: { ...sla.settings, on: false } },
+  });
+  expect(host.textContent).toContain(
+    "Set a first-call target in Team controls on Home",
+  );
+  expect(host.textContent).not.toContain("Leads settings");
+});
+
 it("keeps the team's reports for owners and admins", async () => {
   await render(false, { calls: REPORTS_FIXTURE.calls, pipeline: null });
   expect(

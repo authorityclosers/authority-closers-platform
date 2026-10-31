@@ -74,7 +74,12 @@ function Waiting({
       />
     );
   return (
-    <div className={styles.listSkeleton} aria-busy="true" aria-label="Loading">
+    <div
+      className={styles.listSkeleton}
+      role="status"
+      aria-busy="true"
+      aria-label="Loading"
+    >
       <Skeleton height={86} />
       <Skeleton height={240} />
     </div>

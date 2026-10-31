@@ -805,6 +805,7 @@ export function ListView({
         ) : page === null ? (
           <div
             className={styles.listSkeleton}
+            role="status"
             aria-busy="true"
             aria-label="Loading leads"
           >

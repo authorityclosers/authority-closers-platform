@@ -123,6 +123,9 @@ describe("the after-call sheet (UX study item 6)", () => {
     expect(tile("Interested").getAttribute("aria-pressed")).toBe("true");
     // Didn't get through, then back: the stage comes back too.
     await act(async () => tile("Didn").click());
+    // Its reasons never repeat the heading (persona QA, 31 Oct 2026).
+    expect(tile("Couldn't connect")).toBeDefined();
+    expect(host.textContent).not.toContain("Call didn't go through");
     await act(async () => tile("We talked").click());
     expect(tile("Interested").getAttribute("aria-pressed")).toBe("true");
     await act(async () => tile("Save").click());

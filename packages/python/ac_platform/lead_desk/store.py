@@ -424,6 +424,12 @@ class CallRow(NamedTuple):
 SIDES: tuple[Side, Side] = ("inbound", "cold")
 
 
+def search_needle(search: str) -> str:
+    """What a search matches anywhere in a name, company or city: its words with one space
+    between them (persona QA, 31 Oct 2026: "prasad  pandey" found nothing)."""
+    return f"%{' '.join(search.split())[:80]}%"
+
+
 def call_out(data: Mapping[str, Any]) -> bool:
     """A call out (Home's Attempted): not a call in, a missed, rejected or blocked call."""
     return data.get("direction") not in NOT_OUT
@@ -1672,7 +1678,7 @@ class LeadDesk:
         elif scope == "unassigned":
             where.append(Lead.owner_person_id.is_(None))
         if search:
-            needle = f"%{search.strip()[:80]}%"
+            needle = search_needle(search)
             digits = "".join(ch for ch in search if ch.isdigit())
             terms = [Lead.name.ilike(needle), Lead.company.ilike(needle), Lead.city.ilike(needle)]
             if len(digits) >= 4:
@@ -3161,7 +3167,7 @@ class LeadDesk:
         if source is not None:
             where.append(Lead.source == source)
         if search:
-            needle = f"%{search.strip()[:80]}%"
+            needle = search_needle(search)
             digits = "".join(ch for ch in search if ch.isdigit())
             terms = [Lead.name.ilike(needle), Lead.company.ilike(needle), Lead.city.ilike(needle)]
             if len(digits) >= 4:

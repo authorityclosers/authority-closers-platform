@@ -208,7 +208,8 @@ const MISSED: { key: string; label: string }[] = [
   { key: "disconnected", label: "Cut the call" },
   { key: "switched_off", label: "Phone switched off" },
   { key: "out_of_coverage", label: "No network" },
-  { key: "not_connected", label: "Call didn't go through" },
+  // Not "Call didn't go through": it read as the heading again (persona QA).
+  { key: "not_connected", label: "Couldn't connect" },
   { key: "invalid_number", label: "Wrong number" },
   { key: "not_in_use", label: "Number not in use" },
   { key: "incoming_not_available", label: "Can't take calls" },
