@@ -17,6 +17,7 @@ import {
   inr,
   monthName,
   readRevenue,
+  REVENUE_CHANGED,
   type Revenue,
   type SellerRevenue,
 } from "./revenue-client";
@@ -109,6 +110,13 @@ function SellerLine({
 export function RevenueBar({ scope }: { scope: "mine" | "team" }) {
   const [revenue, setRevenue] = useState<Revenue | null>(null);
   const [open, setOpen] = useState(false);
+  // A target saved in Team controls reaches the bar without a reload.
+  const [round, setRound] = useState(0);
+  useEffect(() => {
+    const again = () => setRound((value) => value + 1);
+    window.addEventListener(REVENUE_CHANGED, again);
+    return () => window.removeEventListener(REVENUE_CHANGED, again);
+  }, []);
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
@@ -120,7 +128,7 @@ export function RevenueBar({ scope }: { scope: "mine" | "team" }) {
       }
     })();
     return () => controller.abort();
-  }, [scope]);
+  }, [scope, round]);
   if (!revenue || revenue.target === null || revenue.target <= 0) return null;
   const target = revenue.target;
   const share = revenue.won / target;

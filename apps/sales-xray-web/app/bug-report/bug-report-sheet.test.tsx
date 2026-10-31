@@ -157,11 +157,13 @@ it("sends words, the screen, device, recent errors and the picture, then thanks"
     method: "POST",
     path: "/v1/lead-desk/x",
   });
-  const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
-    new Response(JSON.stringify({ bug_id: "b-1", screenshot: "kept" }), {
-      status: 201,
-      headers: { "content-type": "application/json" },
-    }),
+  // A fresh answer each time: the reporter reads its access too.
+  const fetcher = vi.fn<typeof fetch>().mockImplementation(
+    async () =>
+      new Response(JSON.stringify({ bug_id: "b-1", screenshot: "kept" }), {
+        status: 201,
+        headers: { "content-type": "application/json" },
+      }),
   );
   vi.stubGlobal("fetch", fetcher);
   await act(async () => openBugReport());
@@ -177,8 +179,13 @@ it("sends words, the screen, device, recent errors and the picture, then thanks"
   );
   await submit();
 
-  expect(fetcher).toHaveBeenCalledTimes(1);
-  const [path, init] = fetcher.mock.calls[0] as [string, RequestInit];
+  // The reporter also asks again whether the advanced one is open to you
+  // when it opens (advanced-access.ts); one report went.
+  const sent = fetcher.mock.calls.filter(
+    ([path]) => path === "/v1/bug-reports",
+  );
+  expect(sent).toHaveLength(1);
+  const [path, init] = sent[0] as [string, RequestInit];
   expect(path).toBe("/v1/bug-reports");
   expect(init.method).toBe("POST");
   const body = JSON.parse(String(init.body));

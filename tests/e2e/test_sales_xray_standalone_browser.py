@@ -420,6 +420,19 @@ def _workspace_switch(page: Any, switches: list[dict[str, Any]]) -> Iterator[Non
     )
 
 
+def _pick_workspace(menu: Any, name: re.Pattern[str]) -> None:
+    """Tap a workspace in the switcher, then confirm it.
+
+    The first tap only asks, "Switch to <name>?" (phone personas, ph2-15,
+    1 Nov 2026: one tap switched); the second tap, on the row that is asking,
+    switches. That row is found by its state, not its words, which change.
+    """
+    menu.get_by_role("menuitemradio", name=name).click()
+    asking = menu.locator('[role="menuitemradio"][data-asking]')
+    expect(asking).to_have_count(1)
+    asking.click()
+
+
 def _address(item: dict[str, Any]) -> str:
     return item["path"] + (f"?{item['query']}" if item["query"] else "")
 
@@ -645,10 +658,10 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             # 2026), and the switch lands in place once the server confirms it
             # (owner bug #17, 29 Oct 2026): wait for that before reading data.
             with _workspace_switch(page, workspace_switches):
-                workspace_menu.get_by_role(
-                    "menuitemradio",
-                    name=re.compile(r"Synthetic second Sales Xray workspace.*Organisation"),
-                ).click()
+                _pick_workspace(
+                    workspace_menu,
+                    re.compile(r"Synthetic second Sales Xray workspace.*Organisation"),
+                )
             expect(
                 page.get_by_role(
                     "button",
@@ -713,9 +726,7 @@ def _exercise_browser(backend: StandaloneBackend, evidence: Path) -> None:
             # tapping New analysis (builder, 26 Oct 2026: a tap during the
             # switch was lost).
             with _workspace_switch(page, workspace_switches):
-                workspace_menu.get_by_role(
-                    "menuitemradio", name=re.compile(r"Personal.*Just you")
-                ).click()
+                _pick_workspace(workspace_menu, re.compile(r"Personal.*Just you"))
             expect(switcher).to_be_visible()
             checks.append(
                 "Registered organisation is enabled; its empty history and 404 for the "

@@ -247,6 +247,58 @@ def test_today_counts_down_and_ends_with_the_longest_breaks(
     run(exercise())
 
 
+def test_a_leads_calls_say_connected_as_home_counts_them(
+    postgres_harness: Any, tmp_path: Path
+) -> None:
+    """One rule for connected (Leads session and Home, 1 Nov 2026): a lead's call events say
+    connected when Home would count them so (talk seconds the phone measured), keep what was
+    saved otherwise, and a Call-button dial's time away is never evidence either way."""
+
+    async def exercise() -> None:
+        async with world(postgres_harness, tmp_path) as here:
+            lead = await here.add("Fictional Connected One", "98760 67031")
+            now = datetime.now(UTC)
+            calls: list[tuple[int, dict[str, Any]]] = [
+                # The phone timed it; its log saved no flag.
+                (30, {"via": "phone", "direction": "outgoing", "duration_seconds": 30}),
+                # The phone's log: not answered.
+                (
+                    20,
+                    {
+                        "via": "phone",
+                        "direction": "outgoing",
+                        "duration_seconds": 0,
+                        "connected": False,
+                    },
+                ),
+                # A Call-button dial: 45 s away from the app, nothing else known.
+                (10, {"simulated": False, "estimated": True, "duration_seconds": 45}),
+            ]
+            async with here.setup.sessions() as db, db.begin():
+                for minutes, data in calls:
+                    db.add(
+                        LeadEvent(
+                            id=uuid4(),
+                            tenant_id=here.tenant_id,
+                            lead_id=UUID(lead),
+                            kind="call",
+                            actor_person_id=here.seller.person_id,
+                            data=data,
+                            created_at=now - timedelta(minutes=minutes),
+                        )
+                    )
+            detail = await here.client.get(f"{BASE}/leads/{lead}")
+            assert detail.status_code == 200, detail.text
+            seen = {
+                event["duration_seconds"]: event["connected"]
+                for event in detail.json()["events"]
+                if event["kind"] == "call"
+            }
+            assert seen == {30: True, 0: False, 45: None}
+
+    run(exercise())
+
+
 def test_the_desk_carries_inbound_and_cold_apart(postgres_harness: Any, tmp_path: Path) -> None:
     """Dipak's Home + Leads handoff (31 Oct 2026): the desk carries each side of my day, so
     Home's Inbound | Cold selector switches with no second read. A lead's side is its
@@ -265,7 +317,10 @@ def test_the_desk_carries_inbound_and_cold_apart(postgres_harness: Any, tmp_path
                     .values(pipeline="cold")
                 )
                 stored = await here.stored(hot)
-                for lead_id, seconds in ((hot, 60), (cold, 0)):
+                # The Inbound call the phone timed (connected); a dial with no talk on Cold
+                # (a dial's time away alone never connects: phone personas, 1 Nov 2026).
+                timed = {"via": "phone", "direction": "outgoing", "duration_seconds": 60}
+                for lead_id, data in ((hot, timed), (cold, {"duration_seconds": 0})):
                     db.add(
                         LeadEvent(
                             id=uuid4(),
@@ -273,7 +328,7 @@ def test_the_desk_carries_inbound_and_cold_apart(postgres_harness: Any, tmp_path
                             lead_id=UUID(lead_id),
                             kind="call",
                             actor_person_id=here.seller.person_id,
-                            data={"duration_seconds": seconds, "simulated": False},
+                            data={**data, "simulated": False},
                             created_at=stored.created_at,
                         )
                     )

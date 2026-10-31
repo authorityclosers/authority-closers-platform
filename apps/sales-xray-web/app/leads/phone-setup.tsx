@@ -83,10 +83,23 @@ export function setupProgress(status: SetupStatus): {
   };
 }
 
+/**
+ * What this phone reports: a build without call history (the Play build) can't
+ * log work calls, so it never says call logging is off (phone personas ph1-23,
+ * 1 Nov 2026: Connections called such a phone a problem nobody could fix).
+ */
+export function reportedChecks(status: SetupStatus): Record<string, boolean> {
+  if (status.callLogSupported) return status.checks;
+  return Object.fromEntries(
+    Object.entries(status.checks).filter(([name]) => name !== "callLog"),
+  );
+}
+
 /** Sends the checklist when it changed, or every few hours, so Team stays current. */
 export async function reportSetup(status: SetupStatus): Promise<void> {
   if (!status.device) return;
-  const sign = JSON.stringify([status.device, status.version, status.checks]);
+  const checks = reportedChecks(status);
+  const sign = JSON.stringify([status.device, status.version, checks]);
   try {
     const last = JSON.parse(localStorage.getItem(REPORT_KEY) ?? "null") as {
       sign?: string;
@@ -102,7 +115,7 @@ export async function reportSetup(status: SetupStatus): Promise<void> {
       device_id: status.device,
       app_version: status.version || undefined,
       family: status.family,
-      checks: status.checks,
+      checks,
     });
     try {
       localStorage.setItem(

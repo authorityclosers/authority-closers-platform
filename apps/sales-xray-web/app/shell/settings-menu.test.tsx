@@ -322,6 +322,11 @@ it("puts the current workspace first on a phone, others one tap away", async () 
   expect(personal.querySelector("b")?.textContent).toBe("Personal");
   await act(async () => (current as HTMLButtonElement).click());
   expect(onSelectWorkspace).not.toHaveBeenCalled();
+  // One tap asks, "Switch to Personal?" (phone personas, ph2-15, 1 Nov
+  // 2026: one tap switched); the second switches.
+  await act(async () => personal.click());
+  expect(onSelectWorkspace).not.toHaveBeenCalled();
+  expect(personal.textContent).toContain("Switch to Personal?");
   await act(async () => personal.click());
   expect(onClose).toHaveBeenCalled();
   expect(onSelectWorkspace).toHaveBeenCalledWith("personal-one");

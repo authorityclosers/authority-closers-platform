@@ -617,10 +617,11 @@ def test_organisation_call_policy_on_postgresql(postgres_harness, tmp_path, monk
                     membership = await db.get(Membership, (org, admin))
                     membership.status, membership.ended_at = "inactive", now
                 assert (await request(admin)).status_code in {401, 403}
+                # The session now reads as no workspace: refused, the speaker map as unavailable.
                 for suffix in READ_SUFFIXES:
                     assert (
                         await request(admin, path=PREFIX + f"/{ids['reported']}" + suffix)
-                    ).status_code in {401, 403}
+                    ).status_code in {401, 403, 404}
 
                 async with sessions() as db, db.begin():
                     (await db.get(IdentitySession, identities[owner])).selected_tenant_id = personal

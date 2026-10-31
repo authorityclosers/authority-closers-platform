@@ -203,6 +203,14 @@ async def _drain_account_deletion_hook(
 
 
 @dataclass(frozen=True, slots=True)
+class LeftWorkspace:
+    """A workspace a session still names after the person's membership of it ended."""
+
+    tenant_id: UUID
+    name: str
+
+
+@dataclass(frozen=True, slots=True)
 class ResolvedActorContext:
     """Server-owned actor plus the revisions used to authorize this transaction."""
 
@@ -212,6 +220,9 @@ class ResolvedActorContext:
     session_revision: int
     tenant_revision: int | None = None
     membership_revision: int | None = None
+    # Set when the session names a workspace the person is no longer in; the
+    # request is then answered without a workspace (see _selected_scope).
+    left_workspace: LeftWorkspace | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -438,6 +449,29 @@ class AsyncIdentityApplication:
             raise TenantScopeDeniedError("person has no active supported membership")
         return tenant, membership
 
+    async def _selected_scope(
+        self,
+        person_id: UUID,
+        tenant_id: UUID,
+    ) -> tuple[Tenant | None, Membership | None, LeftWorkspace | None]:
+        """The session's workspace, or the one it names after the person left it.
+
+        Ending a membership (a removal, or an owner-approved organisation deletion)
+        leaves the person's sessions naming that workspace. Their next request is
+        answered without a workspace instead of refused, and names the one left, so
+        the app lands on another workspace or its picker with a calm note
+        (orchestrator, 1 Nov 2026). It never answers inside a workspace the session
+        did not name: choosing one stays with select_tenant, which still refuses
+        the workspace left.
+        """
+
+        try:
+            tenant, membership = await self._lock_active_membership(person_id, tenant_id)
+        except TenantScopeDeniedError:
+            name = await self._session.scalar(select(Tenant.name).where(Tenant.id == tenant_id))
+            return None, None, LeftWorkspace(tenant_id=tenant_id, name=name or "")
+        return tenant, membership, None
+
     @staticmethod
     def _resolved_actor(
         person: PersonSnapshot,
@@ -445,6 +479,7 @@ class AsyncIdentityApplication:
         *,
         tenant: Tenant | None = None,
         membership: Membership | None = None,
+        left_workspace: LeftWorkspace | None = None,
     ) -> ResolvedActorContext:
         tenant_id = None if tenant is None else tenant.id
         return ResolvedActorContext(
@@ -458,6 +493,7 @@ class AsyncIdentityApplication:
             session_revision=session.revision,
             tenant_revision=None if tenant is None else tenant.revision,
             membership_revision=None if membership is None else membership.revision,
+            left_workspace=left_workspace,
         )
 
     async def resolve_actor(
@@ -479,12 +515,13 @@ class AsyncIdentityApplication:
         )
         tenant: Tenant | None = None
         membership: Membership | None = None
+        left: LeftWorkspace | None = None
         if session.selected_tenant_id is not None:
-            tenant, membership = await self._lock_active_membership(
+            tenant, membership, left = await self._selected_scope(
                 person.id,
                 session.selected_tenant_id,
             )
-        elif require_tenant:
+        if tenant is None and require_tenant:
             raise TenantScopeDeniedError("an explicit active tenant context is required")
         updated = replace(
             session,
@@ -497,6 +534,7 @@ class AsyncIdentityApplication:
             updated,
             tenant=tenant,
             membership=membership,
+            left_workspace=left,
         )
 
     async def resolve_actor_read_only(
@@ -546,17 +584,19 @@ class AsyncIdentityApplication:
         self._validate_session_state(session, current_time)
         tenant: Tenant | None = None
         membership: Membership | None = None
+        left: LeftWorkspace | None = None
         if session.selected_tenant_id is not None:
-            tenant, membership = await self._lock_active_membership(
+            tenant, membership, left = await self._selected_scope(
                 person.id, session.selected_tenant_id
             )
-        elif require_tenant:
+        if tenant is None and require_tenant:
             raise TenantScopeDeniedError("an explicit active tenant context is required")
         return self._resolved_actor(
             person,
             session,
             tenant=tenant,
             membership=membership,
+            left_workspace=left,
         )
 
     async def select_tenant(
@@ -1381,6 +1421,7 @@ class AsyncIdentityApplication:
 __all__ = [
     "AccountDeletionPrivacyHook",
     "AsyncIdentityApplication",
+    "LeftWorkspace",
     "ProductionTransactionRequiredError",
     "RegisteredIdentity",
     "ResolvedActorContext",

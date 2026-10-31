@@ -67,6 +67,10 @@ it("shows each organisation's own logo, the profile photo and the current tick",
   const current = row("Cedar Studio");
   expect(current.getAttribute("aria-current")).toBe("true");
   expect(current.querySelector('[aria-label="Current"]')).toBeTruthy();
+  // One tap asks first (phone personas, ph2-15, 1 Nov 2026); the second switches.
+  await act(async () => row("Maple Works").click());
+  expect(select).not.toHaveBeenCalled();
+  expect(row("Maple Works").textContent).toContain("Switch to Maple Works?");
   await act(async () => row("Maple Works").click());
   expect(select).toHaveBeenCalledWith(id(3));
 });

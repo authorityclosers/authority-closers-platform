@@ -181,9 +181,12 @@ export function activitySummary(history: AnalyticsHistory) {
     // The shared feed defines recorded work (WORK_KINDS in Lead Desk).
     // Team mode also returns incoming leads; those aren't a person's work.
     if (event.kind === "captured") continue;
+    // Work with no person behind it (rules, imports) or by someone who has
+    // left: named so, never a mystery row (Dipak's walk, ph1-21, 1 Nov 2026).
     const person = add(
       event.actor_person_id ?? null,
-      event.actor_name ?? "Person unavailable",
+      event.actor_name ??
+        (event.actor_person_id ? "Former member" : "Automatic updates"),
     );
     const period = day >= start ? "current" : "previous";
     const totals = period === "current" ? current : previous;

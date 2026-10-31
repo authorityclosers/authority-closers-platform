@@ -757,6 +757,17 @@
   font-weight: 650;
 }
 
+/* A connection's "How to fix": a page of this app with the fix. */
+.fixLink {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
 .connectionText span {
   color: var(--sx-muted);
 }

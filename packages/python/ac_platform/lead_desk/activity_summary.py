@@ -202,7 +202,8 @@ async def summarize(
         people.append(
             PersonActivity(
                 id=actor,
-                name=names.get(actor, "Person unavailable") if actor else "Person unavailable",
+                # Rules and imports have no person; a removed member has no name now.
+                name=names.get(actor, "Former member") if actor else "Automatic updates",
                 current=ActivityCounts(**member_current),
                 previous=ActivityCounts(**member_previous),
                 daily=tuple(

@@ -16,7 +16,10 @@
 
 import { callIdFromPath } from "../analysis-routes";
 import type { AutoCaptureStatus, SetupStatus } from "../leads/native-phone";
-import type { CaptureSetup } from "./capture-setup-client";
+import type {
+  CaptureFinishedPhone,
+  CaptureSetup,
+} from "./capture-setup-client";
 
 /**
  * On the page while the setup is deciding or open, so "Set up this phone"
@@ -117,7 +120,7 @@ export function noStillStands(setup: CaptureSetup, now: number): boolean {
   return Number.isFinite(again) && now < again;
 }
 
-/** This phone finished before (an earlier run on this same install). */
+/** This phone finished before in this workspace (an earlier run on this same install). */
 export function phoneFinished(
   setup: CaptureSetup,
   phone: PhoneFacts | null,
@@ -125,6 +128,44 @@ export function phoneFinished(
   return Boolean(
     phone?.device && setup.phones.some((item) => item.device === phone.device),
   );
+}
+
+/**
+ * This phone's own steps (recordings folder, background, uploads) are done: this
+ * person finished setup on this install here or in any other workspace. A
+ * workspace switch asks only for that workspace's consent (persona QA ph2-15,
+ * 1 Nov 2026: switching ran all five steps again, and after every restart).
+ */
+export function phoneDone(
+  setup: CaptureSetup,
+  phone: PhoneFacts | null,
+): boolean {
+  return Boolean(
+    phone?.device &&
+      (phoneFinished(setup, phone) ||
+        (setup.finished_devices ?? []).includes(phone.device)),
+  );
+}
+
+/** Finished on this install in another workspace, not yet in this one. */
+export function phoneDoneElsewhere(
+  setup: CaptureSetup,
+  phone: PhoneFacts | null,
+): boolean {
+  return phoneDone(setup, phone) && !phoneFinished(setup, phone);
+}
+
+/** What a finished phone records for Team: never a number, only what is on. */
+export function finishedPhone(phone: PhoneFacts): CaptureFinishedPhone {
+  return {
+    device: phone.device,
+    model: phone.model,
+    family: phone.family,
+    app_version: phone.version,
+    recordings: phone.folderPicked && !phone.privateDialler,
+    background: phone.battery && (!phone.autostartNeeded || phone.autostart),
+    uploads: phone.uploadsOn,
+  };
 }
 
 /** Whether an organisation's seller must go through it before Home, Leads and Calls. */
@@ -138,7 +179,9 @@ export function setupRequired(
   if (!setup.profile_complete || setup.consent !== "on") return true;
   // The web, or an app too old to upload calls by itself: the first two steps are all.
   if (!phone?.captureSupported) return false;
-  return !phoneFinished(setup, phone);
+  // Finished on this phone in another workspace: nothing to ask here (the gate
+  // records the phone for this workspace's Team by itself).
+  return !phoneDone(setup, phone);
 }
 
 /** The steps, in order, for this workspace and this place. */
@@ -154,6 +197,12 @@ export function stepsFor(
   steps.push("consent");
   if (!phone?.captureSupported) {
     if (!personal) steps.push("phone");
+    return steps;
+  }
+  // The phone's own steps, once per install for this person (ph2-15); a run
+  // again from Settings in a workspace it finished in still shows them.
+  if (phoneDoneElsewhere(setup, phone)) {
+    steps.push("done");
     return steps;
   }
   if (!phone.folderPicked || phone.recorderOff || phone.privateDialler)

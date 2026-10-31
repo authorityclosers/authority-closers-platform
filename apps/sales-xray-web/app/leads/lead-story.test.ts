@@ -118,3 +118,22 @@ describe("the story so far", () => {
     );
   });
 });
+
+describe("one rule for talked (phone personas, 1 Nov 2026)", () => {
+  it("counts a call with its transcript as a talk, never a dial's time away", () => {
+    const at = new Date(2026, 9, 22, 15, 0).toISOString();
+    const withTranscript = storyLines(
+      detail(
+        [{ kind: "call", at, submission_id: "a-call-with-a-transcript" }],
+        6,
+      ),
+      NOW,
+    ).join(" ");
+    expect(withTranscript).toContain("Tried 6 times, talked once");
+    const dialOnly = storyLines(
+      detail([{ kind: "call", at, duration_seconds: 60 }], 1),
+      NOW,
+    ).join(" ");
+    expect(dialOnly).toContain("not reached yet");
+  });
+});

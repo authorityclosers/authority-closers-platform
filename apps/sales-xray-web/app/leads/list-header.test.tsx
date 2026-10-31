@@ -210,7 +210,10 @@ it("paints cached first rows while syncing, retains them on failure, and hides t
   vi.mocked(readLeads).mockReturnValueOnce(new Promise(() => {}));
   await act(async () => root.render(view(maple)));
   expect(host.querySelectorAll("[data-lead-row]")).toHaveLength(0);
-  expect(host.querySelector('[aria-label="Loading leads"]')).not.toBeNull();
+  // A status region, which may carry a name (axe: aria-prohibited-attr).
+  expect(
+    host.querySelector('[aria-label="Loading leads"]')?.getAttribute("role"),
+  ).toBe("status");
 });
 
 it("keeps scrolled pages visible until a background refresh replaces the same window", async () => {

@@ -7,6 +7,7 @@ import {
   type AutoCaptureItem,
 } from "./native-phone";
 import { readCaptureGuard, type CaptureCall } from "./capture-guard-client";
+import { RecordingFix } from "../capture-guard/recording-fix";
 import styles from "../capture-guard/capture-guard.module.css";
 
 const labels: Record<string, string> = {
@@ -91,7 +92,7 @@ export function CaptureStateLabel({
           {hold === "profile" ? "Open Profile" : "Fix uploads"}
         </Link>
       ) : state === "missing" || state === "cancelled" || state === "held" ? (
-        <Link href="/settings/privacy#calls-setup">Fix recording</Link>
+        <RecordingFix label="Fix recording" />
       ) : null}
     </span>
   );
@@ -113,11 +114,13 @@ export type Track = {
   stuck: boolean;
   /** Finished before the last step: a short call has a transcript and no report. */
   ended?: boolean;
-  fix?: { label: string; href: string };
+  /** sheet: the recording check opens over the call (Back returns to it); else a link. */
+  fix?: { label: string; href: string; sheet?: boolean };
 };
 const setupFix = {
   label: "Fix recording",
   href: "/settings/privacy#calls-setup",
+  sheet: true,
 };
 /**
  * The phone's queue (app builds with autoCaptureHealth add a hold reason) and the capture guard's
@@ -153,6 +156,8 @@ export function trackFor(
         ? {
             label: native.hold === "profile" ? "Open Profile" : "Fix uploads",
             href: held.href,
+            // Privacy's checks open over the call; the profile is its own page.
+            sheet: held.href.startsWith("/settings/privacy#"),
           }
         : setupFix,
     };
@@ -229,7 +234,11 @@ export function CallTrack({
         {track.label}
       </small>
       {links && track.fix ? (
-        <Link href={track.fix.href}>{track.fix.label}</Link>
+        track.fix.sheet ? (
+          <RecordingFix label={track.fix.label} />
+        ) : (
+          <Link href={track.fix.href}>{track.fix.label}</Link>
+        )
       ) : null}
     </span>
   );

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 import { parseSeats, type OrgMember } from "./organisation-api";
 import {
+  inviteBlock,
   quietestFirst,
   seatSource,
   SeatsPanel,
@@ -269,4 +270,41 @@ it("an exempt organisation reads No seat limit, with no seat count to buy", asyn
   expect(text).not.toMatch(/No seats yet|seats taken|free|Buy seats/);
   expect(host.querySelector('[role="img"]')).toBeNull();
   expect(host.querySelector("a")).toBeNull();
+});
+
+it("says why an invite can't go out, and never blocks on unknown counts", () => {
+  const counts = parseSeats(seats());
+  expect(inviteBlock(null)).toBeNull();
+  expect(inviteBlock(counts)).toBeNull();
+  const none = {
+    ...counts,
+    complimentarySeats: 0,
+    totalSeats: 0,
+    seatsAvailable: 0,
+  };
+  expect(inviteBlock(none)).toBe(
+    "No seats yet, so invites can't go out. Buy seats to invite your team.",
+  );
+  expect(inviteBlock({ ...none, canBuy: false })).toBe(
+    "No seats yet, so invites can't go out. Ask your owner to add seats.",
+  );
+  expect(inviteBlock({ ...counts, seatsAvailable: 0 })).toBe(
+    "Every seat is taken. Remove someone or revoke an invite to free one.",
+  );
+  expect(inviteBlock({ ...none, exempt: true })).toBeNull();
+});
+
+it("hands the counts it read to the Team tab, and null when they can't be read", async () => {
+  const onSeats = vi.fn();
+  await act(async () =>
+    root.render(<SeatsPanel version={0} onSeats={onSeats} />),
+  );
+  await vi.waitFor(() => expect(onSeats).toHaveBeenCalledTimes(1));
+  expect(onSeats.mock.calls[0][0]).toEqual(parseSeats(seats()));
+  reply = () => json({ detail: "Busy" }, 503);
+  await act(async () =>
+    root.render(<SeatsPanel version={1} onSeats={onSeats} />),
+  );
+  await vi.waitFor(() => expect(onSeats).toHaveBeenCalledTimes(2));
+  expect(onSeats.mock.calls[1][0]).toBeNull();
 });

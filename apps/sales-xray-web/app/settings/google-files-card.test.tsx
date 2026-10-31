@@ -118,6 +118,10 @@ it("connects through Google when it isn't connected, and is Coming soon when not
   state = files({ configured: false, connected: false, copy: null });
   await show();
   expect(host.textContent).toContain("Coming soon");
+  // What works today, as Leads offers it (ph1-23).
+  expect(host.textContent).toContain(
+    "Today, add a Sheet by its link in Leads, Lead sources, Google Sheet.",
+  );
   expect(host.querySelector("a[data-variant]")).toBeNull();
 });
 

@@ -686,6 +686,11 @@ function ConnectionRow({
         {item.detail || item.words ? (
           <span>{[item.detail, item.words].filter(Boolean).join(" · ")}</span>
         ) : null}
+        {item.fix ? (
+          <Link className={styles.fixLink} href={item.fix}>
+            How to fix
+          </Link>
+        ) : null}
       </div>
       {item.disconnect ? (
         <Button

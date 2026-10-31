@@ -1420,3 +1420,63 @@ it("keeps seats from people who neither invite nor pay", async () => {
     fetchMock.mock.calls.some(([url]) => url === "/v1/organisation/seats"),
   ).toBe(false);
 });
+
+const noFreeSeat = {
+  paid_seats: 0,
+  complimentary_seats: 0,
+  total_seats: 0,
+  active_members: 2,
+  pending_invites: 1,
+  seats_available: 0,
+  can_buy: true,
+  exempt: false,
+};
+
+it("closes Invite with the reason when no seat is free, and keeps Remove and Revoke open", async () => {
+  routes["/v1/organisation/seats"] = noFreeSeat;
+  await render();
+  await click("Members");
+  const reason =
+    "No seats yet, so invites can't go out. Buy seats to invite your team.";
+  await vi.waitFor(() =>
+    expect(host.querySelector("#org-add-blocked")?.textContent).toBe(reason),
+  );
+  const input = host.querySelector<HTMLInputElement>(
+    'input[aria-label="Email to invite"]',
+  )!;
+  expect(input.disabled).toBe(true);
+  expect(input.getAttribute("aria-describedby")).toBe("org-add-blocked");
+  expect(button("Invite").disabled).toBe(true);
+  // Freeing a seat is how Invite opens again.
+  expect(button("Remove Dipak").disabled).toBe(false);
+  expect(button("Revoke invite for new@example.com").disabled).toBe(false);
+});
+
+it.each([
+  [
+    "a seat is free",
+    {
+      ...noFreeSeat,
+      total_seats: 4,
+      complimentary_seats: 4,
+      seats_available: 1,
+    },
+  ],
+  ["there is no seat limit", { ...noFreeSeat, exempt: true }],
+])("keeps Invite open when %s", async (_, seats) => {
+  routes["/v1/organisation/seats"] = seats;
+  await render();
+  await click("Members");
+  await vi.waitFor(() =>
+    expect(
+      fetchMock.mock.calls.some(([url]) => url === "/v1/organisation/seats"),
+    ).toBe(true),
+  );
+  await act(async () => undefined);
+  expect(host.querySelector("#org-add-blocked")).toBeNull();
+  expect(button("Invite").disabled).toBe(false);
+  expect(
+    host.querySelector<HTMLInputElement>('input[aria-label="Email to invite"]')!
+      .disabled,
+  ).toBe(false);
+});

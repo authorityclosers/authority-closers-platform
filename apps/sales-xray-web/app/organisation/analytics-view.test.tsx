@@ -86,7 +86,7 @@ it("labels partial comparisons and gaps instead of suggesting inactivity", () =>
     ),
   );
   expect(host.textContent).toContain("Comparison unavailable");
-  expect(host.textContent).toContain("Partial history");
+  expect(host.textContent).toContain("Some older days haven't loaded yet");
   expect(host.querySelector("svg")?.getAttribute("aria-label")).toContain(
     "unavailable",
   );
@@ -181,6 +181,6 @@ it("offers a corner-card retry after failure, then renders the complete summary"
   expect(fetch).toHaveBeenCalledTimes(2);
   expect(host.querySelector('[aria-label="Loading activity"]')).toBeNull();
   expect(host.textContent).toContain("Kiva Fictional");
-  expect(host.textContent).toContain("Full period history loaded");
+  expect(host.textContent).not.toContain("Some older days haven't loaded yet");
   expect(host.textContent).not.toContain("Load older activity");
 });

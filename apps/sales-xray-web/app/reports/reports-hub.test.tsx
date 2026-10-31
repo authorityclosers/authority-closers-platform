@@ -83,6 +83,18 @@ it("puts every kind of report in one place, by category", async () => {
   expect(host.querySelector('a[href="/leads?tab=numbers"]')).not.toBeNull();
 });
 
+it("says where the first-call target is set when there is none (persona row 5a28f46e)", async () => {
+  const sla = REPORTS_FIXTURE.sla!;
+  await render(true, {
+    ...REPORTS_FIXTURE,
+    sla: { ...sla, settings: { ...sla.settings, on: false } },
+  });
+  expect(host.textContent).toContain(
+    "Set a first-call target in Team controls on Home",
+  );
+  expect(host.textContent).not.toContain("Leads settings");
+});
+
 it("keeps the team's reports for owners and admins", async () => {
   await render(false, { calls: REPORTS_FIXTURE.calls, pipeline: null });
   expect(
@@ -107,4 +119,10 @@ it("draws each line's place while its numbers load", async () => {
   expect(host.textContent).toContain("Call reports");
   expect(host.textContent).not.toContain("ready");
   expect(host.textContent).not.toContain("Nothing needs you");
+});
+
+it("holds two fact rows while What stands out loads (ux-audit, 1 Nov 2026)", async () => {
+  await render(true, { ...REPORTS_FIXTURE, calls: undefined });
+  const rows = host.querySelectorAll('[class*="standoutSkeleton"] > span');
+  expect(rows).toHaveLength(2);
 });

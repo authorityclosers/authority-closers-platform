@@ -515,8 +515,11 @@ def test_at11_at12_moves_never_duplicate_and_each_lead_is_in_one_column(
             counts = sum(c["count"] for g in board["groups"] for c in g["columns"])
             assert counts == board["total"] == 5
             # A move the stage list doesn't have is refused with where it can go.
-            refused = await here.move(ids[1], "won")
+            refused = await here.move(ids[1], "demo_completed")
             assert refused.status_code == 409 and "Meeting/Demo scheduled" in refused.text
+            # Won is open from any open stage, and asks the deal amount (ph1-13, 1 Nov 2026).
+            unpriced = await here.move(ids[1], "won")
+            assert unpriced.status_code == 422 and "Add the deal amount." in unpriced.text
 
     run(exercise())
 
@@ -542,7 +545,7 @@ def test_a_missed_meeting_asks_where_the_lead_stands_now(
             meeting_id = booked.json()["meetingId"]
             # Missed: only stages the spec allows from Meeting Scheduled.
             wrong = await here.post(
-                f"/meetings/{meeting_id}/not-held", lead_id, status="missed", step="won"
+                f"/meetings/{meeting_id}/not-held", lead_id, status="missed", step="new"
             )
             assert wrong.status_code == 409
             missed = await here.post(

@@ -208,9 +208,9 @@ class SideEffort(Model):
     eligible: int = 0
     # Inbound only: median minutes from a lead arriving to its first call.
     first_call_minutes: int | None = None
-    # What was missed. Now: open leads more than an hour late (a follow-up past its
-    # time, or a new lead never called). In the period: calls in that nobody took,
-    # and of those leads, the ones nobody reached afterwards.
+    # What was missed. Now (Inbound only, what the Late list shows): open leads whose
+    # follow-up time has passed. In the period: calls in that nobody took, and of those
+    # leads, the ones nobody reached afterwards.
     late: int = 0
     missed_calls: int = 0
     not_called_back: int = 0
@@ -452,6 +452,8 @@ class LeadEventView(Model):
     move_source: str | None = None
     outcome_reason: str | None = None
     outcome_reason_label: str | None = None
+    # A move to Won: what the deal was worth, in whole rupees, as that move said.
+    amount: int | None = None
     # A meeting's history: scheduled, rescheduled, done, missed or cancelled.
     meeting_action: str | None = None
     starts_at: datetime | None = None
@@ -1012,6 +1014,9 @@ class LeadDetail(Model):
     worked_before: bool = False
     # The after-call answer this person saved a moment ago and may still undo.
     undo_result: UndoResultView | None = None
+    # A Won lead: what the deal was worth, the newest amount (a correction stands), whole
+    # rupees; None while it is not Won or no amount was given (ph1-13, 1 Nov 2026).
+    won_amount: int | None = None
 
 
 class PhoneHealth(Model):
@@ -1149,7 +1154,7 @@ class SellerOutcome(Model):
     interested: int
     won: int
     open_leads: int
-    # Open leads whose call is more than an hour late, now.
+    # Inbound open leads whose follow-up time has passed, now (the Late list).
     late: int
 
 

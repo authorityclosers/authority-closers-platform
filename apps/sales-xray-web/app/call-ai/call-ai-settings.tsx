@@ -239,10 +239,12 @@ export function CallAiSettingsSection() {
           </p>
         )}
         {settings.can_edit ? (
-          <Link href="/leads?tab=team" className={styles.foot}>
+          // A seller's own level is on their page, under Settings (Dipak's
+          // walk, ph1-24, 1 Nov 2026: the old way landed on Match leads).
+          <Link href="/organisation?tab=team" className={styles.foot}>
             <span>
               Set one seller&apos;s level
-              <small>Leads → Team, then tap their name</small>
+              <small>Organisation → Team, tap their name, then Settings</small>
             </span>
             <ChevronRight size={18} aria-hidden="true" />
           </Link>

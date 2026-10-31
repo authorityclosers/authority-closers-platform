@@ -10,11 +10,17 @@
  * rules.ts). Settings and Team stay open. If the check itself fails, nothing
  * opens: the app never locks a seller out on a failed read. Settings can open
  * it again any time (openCaptureSetup), never required then.
+ *
+ * After a workspace switch (persona QA ph2-15, 1 Nov 2026) a phone that finished
+ * in another workspace asks only for this one's consent, or nothing: its Team
+ * learns of the phone by itself. The gate always offers to switch back.
  */
 
 import dynamic from "next/dynamic";
 import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
+
+import { requestWorkspace } from "../call-ownership";
 
 import {
   autoCaptureStatus,
@@ -24,12 +30,18 @@ import {
 } from "../leads/native-phone";
 import { FIRST_RUN_ATTRIBUTE } from "../welcome/setup-state";
 import { useWorkspaceAccess } from "../workspace-access";
-import { readCaptureSetup, type CaptureSetup } from "./capture-setup-client";
+import {
+  readCaptureSetup,
+  recordCaptureSetup,
+  type CaptureSetup,
+} from "./capture-setup-client";
 import {
   CAPTURE_SETUP_ATTRIBUTE,
+  finishedPhone,
   isGatedRoute,
   markPersonalSeen,
   personalSeen,
+  phoneDoneElsewhere,
   phoneFacts,
   setupRequired,
 } from "./capture-setup-rules";
@@ -49,6 +61,49 @@ const READ_TIMEOUT_MS = 10_000;
 /** Opens the setup over the page (Settings, Calls), never required. */
 export function openCaptureSetup() {
   window.dispatchEvent(new Event(OPEN_EVENT));
+}
+
+const SEEN_KEY = (person: string) => `sx-workspaces-seen:${person}`;
+type Seen = { current: string | null; previous: string | null };
+
+function seen(person: string): Seen | null {
+  try {
+    const kept: unknown = JSON.parse(
+      window.localStorage.getItem(SEEN_KEY(person)) ?? "null",
+    );
+    if (!kept || typeof kept !== "object") return null;
+    const read = (value: unknown) => (typeof value === "string" ? value : null);
+    return {
+      current: "current" in kept ? read(kept.current) : null,
+      previous: "previous" in kept ? read(kept.previous) : null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** The workspace before this one, kept on this phone across restarts. */
+export function previousWorkspace(
+  person: string,
+  tenant: string,
+): string | null {
+  const kept = seen(person);
+  if (!kept) return null;
+  return kept.current === tenant ? kept.previous : kept.current;
+}
+
+/** Remembers the workspace now open, and the one before it. */
+export function rememberWorkspace(person: string, tenant: string) {
+  const kept = seen(person);
+  if (kept?.current === tenant) return;
+  try {
+    window.localStorage.setItem(
+      SEEN_KEY(person),
+      JSON.stringify({ current: tenant, previous: kept?.current ?? null }),
+    );
+  } catch {
+    // Private storage off: Switch back shows only within this run.
+  }
 }
 
 type Decision = {
@@ -78,6 +133,11 @@ export function CaptureSetupGate() {
   const [decision, setDecision] = useState<Decision | null>(null);
   const [failed, setFailed] = useState<string | null>(null);
   const [asked, setAsked] = useState(0);
+
+  // Where the seller came from, for "Switch back to …" (ph2-15).
+  useEffect(() => {
+    if (personId && tenantId) rememberWorkspace(personId, tenantId);
+  }, [personId, tenantId]);
 
   // Asked for from Settings: read again, then open, never required.
   useEffect(() => {
@@ -117,6 +177,23 @@ export function CaptureSetupGate() {
         if (stopped) return;
         const facts = phoneFacts(status, capture);
         const required = setupRequired(setup, facts, Date.now());
+        // Finished on this phone in another workspace, and agreed here: this
+        // workspace's Team learns of the phone, with nothing to ask (ph2-15).
+        if (
+          !manual &&
+          !required &&
+          facts &&
+          setup.required &&
+          setup.workspace === "organisation" &&
+          setup.consent === "on" &&
+          setup.profile_complete !== false &&
+          facts.captureSupported &&
+          phoneDoneElsewhere(setup, facts)
+        )
+          void recordCaptureSetup({
+            outcome: "completed",
+            phone: finishedPhone(facts),
+          }).catch(() => undefined);
         setDecision({
           key,
           setup,
@@ -190,8 +267,12 @@ export function CaptureSetupGate() {
     [current, personId, tenantId],
   );
   const close = useCallback(() => settle(null), [settle]);
-
   if (!open || !current) return null;
+  const previous = previousWorkspace(personId, tenantId);
+  const back =
+    previous && previous !== tenantId
+      ? access?.workspaces?.find((item) => item.tenant_id === previous)
+      : undefined;
   return (
     <CaptureSetupFlow
       setup={current.setup}
@@ -204,6 +285,14 @@ export function CaptureSetupGate() {
       onFinish={settle}
       onDeclined={settle}
       onClose={close}
+      switchBack={
+        back
+          ? {
+              name: back.name,
+              run: () => requestWorkspace(back.tenant_id),
+            }
+          : null
+      }
     />
   );
 }

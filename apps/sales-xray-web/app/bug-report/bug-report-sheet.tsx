@@ -68,6 +68,7 @@ import {
   REPORT_PROBLEM_EVENT,
   openBugReport,
   reporterMounted,
+  takeLeaving,
   takeWaitingReport,
   type ReportAbout,
 } from "./open";
@@ -251,6 +252,13 @@ export function BugReportSheet({
   const opening = useRef(0);
   // The picture being taken for this opening, so Send can wait for it.
   const capturing = useRef<Promise<Blob | null> | null>(null);
+  // Every picture's address made while the sheet is open (pictureUrl).
+  const made = useRef<string[]>([]);
+  const pictureUrl = (blob: Blob) => {
+    const url = URL.createObjectURL(blob);
+    made.current.push(url);
+    return url;
+  };
   const wordsId = useId();
   const formId = useId();
   const askSendId = useId();
@@ -296,12 +304,15 @@ export function BugReportSheet({
         capturing.current = taking;
         void taking.then((blob) => {
           if (round !== opening.current) return;
+          const url = blob ? URL.createObjectURL(blob) : null;
+          // Kept with the others until the sheet closes.
+          if (url) made.current.push(url);
           setPicture(
-            blob
+            blob && url
               ? {
                   state: "ready",
                   picture: { blob, source: "auto" },
-                  url: URL.createObjectURL(blob),
+                  url,
                   marked: false,
                 }
               : { state: "failed" },
@@ -321,13 +332,24 @@ export function BugReportSheet({
     if (asking) document.getElementById(askSendId)?.focus();
   }, [asking, askSendId]);
 
-  // A picture's address is released when it is replaced or the sheet closes.
+  // Every picture's address lives until the sheet has closed, then a moment
+  // more: the preview, Mark up or blur and a re-render may still show an
+  // earlier one (the test robot, 1 Nov 2026: a released preview failed to load
+  // after moving pages with the reporter open).
   useEffect(() => {
-    const url = picture.state === "ready" ? picture.url : null;
-    return () => {
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [picture]);
+    if (open) return;
+    const urls = made.current;
+    made.current = [];
+    if (urls.length)
+      window.setTimeout(
+        () => urls.forEach((url) => URL.revokeObjectURL(url)),
+        1000,
+      );
+  }, [open]);
+  useEffect(() => {
+    const list = made;
+    return () => list.current.forEach((url) => URL.revokeObjectURL(url));
+  }, []);
 
   const choose = (file: File | undefined) => {
     if (!file) return;
@@ -344,7 +366,7 @@ export function BugReportSheet({
     setPicture({
       state: "ready",
       picture: { blob: file, source: "upload" },
-      url: URL.createObjectURL(file),
+      url: pictureUrl(file),
       marked: false,
     });
   };
@@ -563,7 +585,7 @@ export function BugReportSheet({
             setPicture({
               state: "ready",
               picture: { blob: marked, source: picture.picture.source },
-              url: URL.createObjectURL(marked),
+              url: pictureUrl(marked),
               marked: true,
             });
             setInclude(true);
@@ -894,9 +916,11 @@ export function BugReportHost() {
   const [access, setAccess] = useState<AdvancedAccess>("off");
   const [advanced, setAdvanced] = useState<AdvancedSeed | null>(null);
   useEffect(() => reporterMounted(), []);
+  // Asked again each time the reporter opens: an old or failed answer is
+  // not the last word (advanced-access.ts).
   useEffect(() => {
     void advancedAccess().then(setAccess);
-  }, []);
+  }, [open]);
   // Ctrl Shift B (⌘⇧B) opens the advanced reporter straight away.
   useEffect(() => {
     if (access !== "on") return;
@@ -939,7 +963,7 @@ export function BugReportHost() {
         reveal(null);
         return;
       }
-      window.setTimeout(() => {
+      const take = () => {
         // A picture is optional. Older phone bridges can take two seconds
         // to answer; reporting must still open over a menu straight away.
         let timer: ReturnType<typeof setTimeout>;
@@ -949,7 +973,18 @@ export function BugReportHost() {
         void Promise.race([askScreenshot(), deadline])
           .then(reveal, () => reveal(null))
           .finally(() => clearTimeout(timer));
-      }, 120);
+      };
+      // Asked from a sheet (You): the phone's picture waits until it has
+      // closed, and a moment more for the screen to show it (phone personas,
+      // 1 Nov 2026: the picture was the account menu), at most 1.2 s.
+      const from = takeLeaving();
+      const started = Date.now();
+      const wait = () => {
+        if (!from || !from.open || Date.now() - started > 1200)
+          window.setTimeout(take, from ? 150 : 120);
+        else window.setTimeout(wait, 50);
+      };
+      wait();
     };
     window.addEventListener(REPORT_PROBLEM_EVENT, show);
     // Asked for before this loaded (the frame loads it once the page is quiet).

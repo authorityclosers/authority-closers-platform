@@ -5730,11 +5730,12 @@ a.repName {
    losing its end: "WhatsApp" was cut to "WhatsAp…". */
 .actionLabel {
   max-width: 100%;
-  overflow: hidden;
   font-size: min(var(--sx-text-xs), 16cqi);
   font-weight: 650;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.15;
+  text-align: center;
+  /* Whole, on two lines when the tile is narrow (robot row d65dde5c). */
+  overflow-wrap: anywhere;
 }
 
 .actionBox:active:not(:disabled) {
@@ -7552,4 +7553,59 @@ fieldset.form {
   :global(html[data-sx-sidebar="collapsed"]) .headAdd {
     display: none;
   }
+}
+
+/* A calling round: Call beside Skip (phone personas, 1 Nov 2026). */
+.roundActions {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.roundActions > :first-child {
+  flex: 1;
+  min-width: 0;
+}
+
+.skipButton {
+  min-height: 56px;
+  padding: 0 20px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: var(--lx-radius-lg);
+  background: var(--sx-surface);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* After a call: plain answers over the organisation's stages (ph2-16). */
+.quickAnswers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.quickAnswer {
+  min-height: 44px;
+  padding: 0 16px;
+  border: 1px solid var(--sx-line-strong);
+  border-radius: 999px;
+  background: var(--sx-surface);
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.skipLink {
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--sx-muted);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
 }

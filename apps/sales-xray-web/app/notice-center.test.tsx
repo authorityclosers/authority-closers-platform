@@ -288,3 +288,28 @@ it("shows a work alert as a corner card that folds like every card", async () =>
     vi.useRealTimers();
   }
 });
+it("puts a new card at the top, so the cards already there stay put", async () => {
+  // Orchestrator, 1 Nov 2026: a card joining below lifted the others, a
+  // layout shift. Older cards wait under "+N more", below the newest.
+  const ids = ["older", "newer", "newest"];
+  try {
+    for (const id of ids)
+      await act(async () =>
+        notify({
+          id,
+          tone: "info",
+          title: `Fictional ${id} card`,
+          timeout: 0,
+        }),
+      );
+    const order = () =>
+      [...host.querySelectorAll('[aria-live="polite"] > *')].map(
+        (node) => node.textContent ?? "",
+      );
+    expect(order()[0]).toContain("Fictional newest card");
+    expect(order()[1]).toContain("Fictional newer card");
+    expect(order()[2]).toBe("+1 more");
+  } finally {
+    await act(async () => ids.forEach((id) => dismissNotice(id)));
+  }
+});

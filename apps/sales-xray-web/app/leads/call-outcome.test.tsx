@@ -123,6 +123,9 @@ describe("the after-call sheet (UX study item 6)", () => {
     expect(tile("Interested").getAttribute("aria-pressed")).toBe("true");
     // Didn't get through, then back: the stage comes back too.
     await act(async () => tile("Didn").click());
+    // Its reasons never repeat the heading (persona QA, 31 Oct 2026).
+    expect(tile("Couldn't connect")).toBeDefined();
+    expect(host.textContent).not.toContain("Call didn't go through");
     await act(async () => tile("We talked").click());
     expect(tile("Interested").getAttribute("aria-pressed")).toBe("true");
     await act(async () => tile("Save").click());
@@ -269,6 +272,19 @@ describe("a Won deal after a call (revenue targets, with the asks above)", () =>
     expect(host.textContent).toContain("Deal amount (₹)");
     expect(host.textContent).toContain("Add the deal amount to save");
     expect(host.textContent).not.toContain("When is the meeting?");
+    // A phone's number keypad has no L: digits, read back in rupees (ph1-14).
+    const amount = host.querySelector<HTMLInputElement>(
+      'input[inputmode="decimal"]',
+    )!;
+    expect(amount.placeholder).toBe("60,000");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLInputElement.prototype,
+        "value",
+      )!.set!.call(amount, "150000");
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(host.textContent).toContain("₹1,50,000");
   });
 });
 
@@ -321,5 +337,81 @@ describe("Undo on the Save card (31 Oct 2026)", () => {
     const asked = fetchMock.mock.calls.map((call) => String(call[0]));
     expect(asked.at(-1)).toContain("/results/answer-1/undo");
     expect(notices.shown.at(-1)?.title).toMatch(/^Undone: back to /);
+  });
+});
+
+// ph2-16 (phone personas, 1 Nov 2026): plain answers over the organisation's
+// own stages, and "I didn't call".
+describe("plain answers after a call", () => {
+  const ownStages = () =>
+    ({
+      ...lead("new"),
+      stage_choices: [
+        {
+          key: "discussion_incomplete",
+          kind: "follow_up",
+          label: "Discussion incomplete",
+          meaning: "Talk again",
+        },
+        { key: "lost", kind: "lost", label: "Lost", meaning: "They said no" },
+      ],
+      moves: [
+        {
+          step: "discussion_incomplete",
+          label: "Discussion incomplete",
+          kind: "follow_up",
+          group: "active",
+          action: "move",
+          needs: ["next_action"],
+          asks: [],
+          reasons: [],
+        },
+        {
+          step: "lost",
+          label: "Lost",
+          kind: "lost",
+          group: "lost",
+          action: "close",
+          needs: ["reason"],
+          asks: [],
+          reasons: [{ key: "not_interested", label: "Not interested" }],
+        },
+      ],
+    }) as unknown as LeadDetail;
+
+  it("lands Not interested and Call back on the organisation's own stages", async () => {
+    await show(ownStages());
+    await act(async () => tile("We talked").click());
+    const quick = host.querySelector('[aria-label="Quick answers"]')!;
+    expect(
+      [...quick.querySelectorAll("button")].map((b) => b.textContent),
+    ).toEqual(["Not interested", "Call back", "Send details"]);
+    await act(async () => tile("Not interested").click());
+    expect(tile("Lost").getAttribute("aria-pressed")).toBe("true");
+    await act(async () => tile("Call back").click());
+    expect(tile("Discussion incomplete").getAttribute("aria-pressed")).toBe(
+      "true",
+    );
+  });
+
+  it("closes the question with I didn't call, saving nothing", async () => {
+    const onSkip = vi.fn();
+    const fetchMock = vi.fn<typeof fetch>();
+    vi.stubGlobal("fetch", fetchMock);
+    await act(async () =>
+      root.render(
+        <CallOutcome
+          detail={ownStages()}
+          submitLabel="Save"
+          attention={false}
+          beforeSave={async () => ownStages()}
+          onSaved={() => undefined}
+          onSkip={onSkip}
+        />,
+      ),
+    );
+    await act(async () => tile("I didn't call").click());
+    expect(onSkip).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

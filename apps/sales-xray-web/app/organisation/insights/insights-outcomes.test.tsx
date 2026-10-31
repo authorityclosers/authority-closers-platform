@@ -99,9 +99,33 @@ it("opens the exact outcome, and treats a real zero as zero", () => {
       />,
     ),
   );
+  // Zero is a real number, and below ten calls there is no funnel to draw.
   expect(
-    host
-      .querySelector('[aria-label="Counted call funnel"] svg')
-      ?.getAttribute("aria-label"),
-  ).toContain("0 analysed calls");
+    host.querySelector('[aria-label="Counted call funnel"]')?.textContent,
+  ).toContain("Not enough calls yet (0 of 10)");
+});
+
+// Dipak's walk, ph1-22 (1 Nov 2026): one analysed call claimed "Wins held
+// steady" and 100%, and a Won deal on the Lead Desk was nowhere.
+it("makes no claims below ten analysed calls, and counts wins from Won leads", () => {
+  const one = {
+    ...body,
+    totals: { calls: 1, next_step: 1, won: 1 },
+    previous: { won: 1 },
+    outcomes: [{ outcome: "won", calls: 1 }],
+  };
+  act(() =>
+    root.render(
+      <OutcomeStory
+        data={parseInsights(one)}
+        onCalls={() => {}}
+        wins={{ deals: 1, amount: 250_000 }}
+      />,
+    ),
+  );
+  expect(host.textContent).toContain("Not enough calls yet (1 of 10)");
+  expect(host.textContent).not.toContain("held steady");
+  expect(host.textContent).not.toContain("100%");
+  expect(host.textContent).toContain("1lead won this month");
+  expect(host.textContent).toContain("₹2.5 L won this month");
 });

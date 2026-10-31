@@ -92,8 +92,14 @@
 
 .standoutSkeleton {
   display: grid;
-  gap: 12px;
-  padding: 8px 0;
+  gap: 8px;
+}
+
+/* A fact row's height (.standout a), so nothing moves when they load. */
+.standoutSkeleton > span {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
 }
 
 .calm {

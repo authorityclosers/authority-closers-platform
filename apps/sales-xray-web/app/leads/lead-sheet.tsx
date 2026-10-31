@@ -170,7 +170,8 @@ import {
   type SimulationStep,
 } from "./simulated-call";
 import { SuggestedStage, SuggestionHint } from "./journey/stage-suggestion";
-import { amountOf } from "./pipeline/blocks";
+import { amountOf, RUPEES } from "./pipeline/blocks";
+import { inr } from "../dashboard/revenue-client";
 import { MeetingCard } from "./pipeline/meeting-card";
 import pipe from "./pipeline/pipeline.module.css";
 import { StageSheet } from "./pipeline/stage-sheet";
@@ -208,7 +209,8 @@ const MISSED: { key: string; label: string }[] = [
   { key: "disconnected", label: "Cut the call" },
   { key: "switched_off", label: "Phone switched off" },
   { key: "out_of_coverage", label: "No network" },
-  { key: "not_connected", label: "Call didn't go through" },
+  // Not "Call didn't go through": it read as the heading again (persona QA).
+  { key: "not_connected", label: "Couldn't connect" },
   { key: "invalid_number", label: "Wrong number" },
   { key: "not_in_use", label: "Number not in use" },
   { key: "incoming_not_available", label: "Can't take calls" },
@@ -357,6 +359,7 @@ export function CallOutcome({
   onStop,
   upNext = null,
   ask = false,
+  onSkip,
 }: {
   detail: LeadDetail;
   submitLabel: string;
@@ -373,6 +376,8 @@ export function CallOutcome({
   /** Logs a call still waiting to be logged; returns the lead as it now is. */
   beforeSave: () => Promise<LeadDetail>;
   onSaved: (next: LeadDetail) => void;
+  /** "I didn't call": close the question, saving nothing (ph2-16). */
+  onSkip?: () => void;
 }) {
   const id = useId();
   const ref = useRef<HTMLElement>(null);
@@ -422,6 +427,56 @@ export function CallOutcome({
   );
   const [note, setNote] = useState("");
   const [deal, setDeal] = useState("");
+  // ph2-16 (1 Nov 2026): plain answers, each on the organisation's own stage,
+  // when What happens next lists its stages (the desk's four say them already).
+  const ownLost = choices.find((item) => item.step && item.key === "lost");
+  const ownLater = choices.find(
+    (item) => item.step && item.key === "follow_up",
+  );
+  const lostReasons =
+    (detail.moves ?? []).find((move) => move.step === ownLost?.step)?.reasons ??
+    [];
+  const answers: {
+    id: string;
+    label: string;
+    tone: string;
+    pick: () => void;
+  }[] = [];
+  if (ownLost)
+    answers.push({
+      id: "not-interested",
+      label: "Not interested",
+      tone: "bad",
+      pick: () => {
+        setStage("lost");
+        setStep(ownLost.step ?? null);
+        if (lostReasons.some((item) => item.key === "not_interested"))
+          setCloseReason("not_interested");
+      },
+    });
+  if (ownLater)
+    answers.push(
+      {
+        id: "call-back",
+        label: "Call back",
+        tone: "later",
+        pick: () => {
+          setStage("follow_up");
+          setStep(ownLater.step ?? null);
+        },
+      },
+      {
+        id: "send-details",
+        label: "Send details",
+        tone: "warm",
+        pick: () => {
+          setStage("follow_up");
+          setStep(ownLater.step ?? null);
+          setNext("morning");
+          setNote((current) => current || "Asked for the details: send them.");
+        },
+      },
+    );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -734,6 +789,11 @@ export function CallOutcome({
           Didn&apos;t get through
         </button>
       </div>
+      {onSkip && talk === null ? (
+        <button type="button" className={styles.skipLink} onClick={onSkip}>
+          I didn&apos;t call
+        </button>
+      ) : null}
 
       {talk === "missed" ? (
         <div
@@ -796,6 +856,26 @@ export function CallOutcome({
           data-nudge={missing ? nudge : undefined}
         >
           <span className={styles.stepLabel}>What happens next?</span>
+          {answers.length ? (
+            // Plain answers over the organisation's own stages (ph2-16).
+            <div
+              className={styles.quickAnswers}
+              role="group"
+              aria-label="Quick answers"
+            >
+              {answers.map((answer) => (
+                <button
+                  key={answer.id}
+                  type="button"
+                  className={styles.quickAnswer}
+                  data-tone={answer.tone}
+                  onClick={answer.pick}
+                >
+                  {answer.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           {suggested ? (
             <SuggestionHint
               suggestion={suggested}
@@ -893,13 +973,20 @@ export function CallOutcome({
             >
               <input
                 inputMode="decimal"
-                placeholder={stage === "won" ? "60,000 or 1.5 L" : "60,000"}
+                placeholder="60,000"
                 value={deal}
                 maxLength={24}
                 aria-invalid={stage === "won" && needsAmount && deal !== ""}
                 onChange={(event) => setDeal(event.target.value)}
               />
             </Field>
+          ) : null}
+          {/* The amount read back, as the Move sheet does: a phone's number
+              keypad has no L (phone personas, 1 Nov 2026). */}
+          {stage === "won" && worth !== null ? (
+            <p className={styles.hint} aria-live="polite">
+              {RUPEES.format(worth)}
+            </p>
           ) : null}
         </div>
       ) : null}
@@ -1290,12 +1377,14 @@ export function eventText(event: LeadEvent): {
             : `Stages updated: now in ${to}`,
           detail: detail || undefined,
         };
+      // A move to Won says what the deal was worth (ph1-13, 1 Nov 2026).
+      const worth = event.amount ? ` · ${inr(event.amount)}` : "";
       const title =
         event.action === "reopen"
           ? `${who} reopened this lead in ${to}`
           : event.action === "close" || event.action === "reclassify"
-            ? `${who} closed this lead as ${to}`
-            : `${who} moved this lead to ${to}`;
+            ? `${who} closed this lead as ${to}${worth}`
+            : `${who} moved this lead to ${to}${worth}`;
       const was =
         event.from_label && event.from_label !== to
           ? `It was in ${event.from_label}`
@@ -1472,9 +1561,17 @@ export function storyLines(
     (event) =>
       event.kind === "call" && event.via === "phone" && event.connected,
   );
+  // One rule with Home's numbers (phone personas, 1 Nov 2026: a call with its
+  // transcript read "not reached yet"): the phone measured talk, said connected,
+  // or the call has a transcript; a dial counts through "We talked" (results).
+  const talkedCall = (event: (typeof detail.events)[number]) =>
+    event.kind === "call" &&
+    (event.connected === true ||
+      !!event.submission_id ||
+      (!!event.via && (event.duration_seconds ?? 0) > 0));
   const talks = Math.max(
     results.filter((event) => event.connected).length,
-    phoneTalks.length,
+    detail.events.filter(talkedCall).length,
   );
   const tries = Math.max(lead.attempts, lead.calls, phoneTalks.length);
   if (!tries) lines.push("Not called yet.");
@@ -2797,6 +2894,7 @@ export function LeadCard({
   focusAt = null,
   primarySlot = null,
   hidePrimary = false,
+  onSkip,
 }: {
   detail: LeadDetail;
   me: Me | null;
@@ -2816,6 +2914,8 @@ export function LeadCard({
   focusAt?: string | null;
   primarySlot?: HTMLElement | null;
   hidePrimary?: boolean;
+  /** In a calling round: go on to the next lead without calling this one. */
+  onSkip?: () => void;
 }) {
   const { lead } = detail;
   const setup = useContext(MessageSetup);
@@ -3027,6 +3127,10 @@ export function LeadCard({
     calls: detail.events.filter((event) => shows("calls", event)).length,
   };
   const canMove = detail.can_edit && (detail.moves?.length ?? 0) > 0;
+  const wonWorth =
+    detail.lead.stage === "won" && detail.won_amount
+      ? inr(detail.won_amount)
+      : null;
   // The lead's chats, read once for the timeline and the chat sections.
   const conversations = useLeadConversations(lead.lead_id);
   const chats = chatDays(lead.lead_id, conversations.wa, conversations.social);
@@ -3085,7 +3189,7 @@ export function LeadCard({
     return !phoneDigits || value.replace(/\D/g, "").slice(-10) !== phoneDigits;
   });
 
-  const primaryAction = detail.phone ? (
+  const callAction = detail.phone ? (
     <CallLink
       className={styles.callButton}
       phone={detail.phone}
@@ -3117,6 +3221,18 @@ export function LeadCard({
   ) : (
     <p className={styles.hint}>No phone number on this lead.</p>
   );
+  // A calling round (Call Next, Start Cold Calling) shows the card first: Call
+  // dials, Skip goes on to the next lead and saves nothing (ph2-13, 1 Nov 2026).
+  const primaryAction = onSkip ? (
+    <div className={styles.roundActions}>
+      {callAction}
+      <button type="button" className={styles.skipButton} onClick={onSkip}>
+        Skip
+      </button>
+    </div>
+  ) : (
+    callAction
+  );
 
   return (
     <div className={styles.card}>
@@ -3143,13 +3259,14 @@ export function LeadCard({
       </header>
       <div className={styles.cardBadges}>
         {/* One "Stage" with its coloured chip (owner, 31 Oct 2026): a tap
-            opens the stages, which ask what the move needs. */}
+            opens the stages, which ask what the move needs. A Won lead says
+            what it was worth once: "Won · ₹2.5 L" (ph1-13, 1 Nov 2026). */}
         {canMove ? (
           <button
             type="button"
             className={styles.stageRow}
             aria-haspopup="dialog"
-            aria-label={`Stage: ${lead.stage_label}. Move this lead`}
+            aria-label={`Stage: ${lead.stage_label}${wonWorth ? `, ${wonWorth}` : ""}. Move this lead`}
             onClick={() => setStaging(true)}
           >
             <small>Stage</small>
@@ -3162,6 +3279,7 @@ export function LeadCard({
               }
             >
               {lead.stage_label}
+              {wonWorth ? ` · ${wonWorth}` : ""}
             </span>
             <ChevronDown size={16} aria-hidden="true" />
           </button>
@@ -3177,6 +3295,7 @@ export function LeadCard({
               }
             >
               {lead.stage_label}
+              {wonWorth ? ` · ${wonWorth}` : ""}
             </span>
           </span>
         )}
@@ -3894,6 +4013,9 @@ export function LeadSheet({
             <LeadCard
               primarySlot={primarySlot}
               hidePrimary={questionOpen}
+              onSkip={
+                queue && onNext && leadId ? () => onNext(leadId) : undefined
+              }
               detail={detail}
               me={me}
               onChanged={update}
@@ -3913,6 +4035,13 @@ export function LeadSheet({
                     attention={asking}
                     ask={intent === "log" || logging === leadId}
                     beforeSave={() => logWaitingCall(detail)}
+                    onSkip={() => {
+                      // Nothing saved; in a round, on to the next lead (ph2-16).
+                      setBackFrom(null);
+                      setLogging(null);
+                      if (asked) setAnswered(asked.startedMs);
+                      if (queue && onNext && leadId) onNext(leadId);
+                    }}
                     onSaved={(next) => {
                       setBackFrom(null);
                       setLogging(null);

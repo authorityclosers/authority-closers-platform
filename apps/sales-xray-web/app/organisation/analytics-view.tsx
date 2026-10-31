@@ -278,21 +278,38 @@ export function AnalyticsView({
         ) : null}
       </section>
       <footer className={styles.coverage}>
+        {/* In plain words (Dipak's walk, ph1-21, 1 Nov 2026: the footnotes
+            read like code, a time zone's id among them). */}
         <p>
-          {team ? "Visible team work" : "Your visible work"} · {data.timezone} ·
-          Calls include those without reports. Conversations are connected
-          calls. Daily lines include other recorded work.
+          {team ? "Your team's work" : "Your work"} in {zoneName(data.timezone)}
+          . Calls count every call, with a report or not; conversations are the
+          calls that connected. The daily lines count notes and stage moves too.
         </p>
         <p>
-          Prior: {dayText(data.prior)} – {dayText(data.start - 1)}.
+          Compared with {dayText(data.prior)} – {dayText(data.start - 1)}.
           {!data.currentComplete || !data.previousComplete
-            ? " Partial history: + means at least; — and gaps are unavailable."
-            : " Full period history loaded."}
+            ? " Some older days haven't loaded yet: a number with + is at least that many, and — means not known yet."
+            : ""}
           {data.directoryMissing
-            ? " People list unavailable; showing people with recorded work."
+            ? " The team list didn't load, so only people with recorded work are shown."
             : ""}
         </p>
       </footer>
     </section>
   );
+}
+
+/** "India Standard Time" for Asia/Kolkata: a zone in words, not its id. */
+function zoneName(zone: string): string {
+  try {
+    const part = new Intl.DateTimeFormat("en-IN", {
+      timeZone: zone,
+      timeZoneName: "long",
+    })
+      .formatToParts(new Date())
+      .find((item) => item.type === "timeZoneName");
+    return part?.value ?? "your time zone";
+  } catch {
+    return "your time zone";
+  }
 }

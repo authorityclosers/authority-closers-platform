@@ -30,7 +30,7 @@ export type SideEffort = {
   eligible: number;
   /** Inbound only: median minutes from arriving to the first call. */
   first_call_minutes: number | null;
-  /** Open leads more than an hour late, now. */
+  /** Inbound open leads whose follow-up time has passed, now (the Late list). */
   late: number;
   /** Calls in nobody took, and those leads nobody reached afterwards. */
   missed_calls: number;

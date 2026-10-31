@@ -37,6 +37,20 @@
   font-size: var(--sx-text-sm);
 }
 
+/* "Set a first-call limit": opens that card. */
+.hintLink {
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sx-accent);
+  font: inherit;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
 .loading {
   min-height: 320px;
   border-radius: 20px;
@@ -145,11 +159,6 @@
   color: var(--sx-muted);
 }
 
-.chip[data-tone="soon"] {
-  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
-  color: color-mix(in oklab, var(--sx-warn) 70%, var(--sx-ink));
-}
-
 .chevron {
   grid-area: chevron;
   color: var(--sx-muted);
@@ -221,10 +230,6 @@
   border-bottom: 0;
 }
 
-.row[data-soon] .rowLabel {
-  color: var(--sx-muted);
-}
-
 .rowLabel {
   display: inline-flex;
   flex: 1 1 0;
@@ -235,15 +240,6 @@
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
   font-weight: 600;
-}
-
-.soon {
-  padding: 1px 8px;
-  border-radius: var(--sx-radius-pill);
-  background: color-mix(in oklab, var(--sx-warn) 14%, transparent);
-  color: color-mix(in oklab, var(--sx-warn) 70%, var(--sx-ink));
-  font-size: 11px;
-  font-weight: 700;
 }
 
 /* A switch: the thumb springs across. */
@@ -416,8 +412,7 @@
 }
 
 .people,
-.pick,
-.includes {
+.pick {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
@@ -426,8 +421,7 @@
   list-style: none;
 }
 
-.people > li:not(:last-child),
-.includes > li {
+.people > li:not(:last-child) {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -438,11 +432,6 @@
   color: var(--sx-ink);
   font-size: var(--sx-text-sm);
   font-weight: 600;
-}
-
-.includes > li {
-  padding: 0 12px;
-  color: var(--sx-muted);
 }
 
 .people button:not(.add) {

@@ -187,6 +187,8 @@ export type LeadEvent = {
   move_source?: string | null;
   outcome_reason?: string | null;
   outcome_reason_label?: string | null;
+  /** A move to Won: what the deal was worth, whole rupees. */
+  amount?: number | null;
   /** A meeting's history: scheduled, rescheduled, done, missed, cancelled. */
   meeting_action?: string | null;
   starts_at?: string | null;
@@ -228,6 +230,8 @@ export type LeadDetail = {
   moves?: MoveOption[];
   /** The after-call answer this person saved a moment ago and may still undo. */
   undo_result?: { event_id: string; until: string } | null;
+  /** A Won lead's newest deal amount, whole rupees (ph1-13). */
+  won_amount?: number | null;
   /** Its scheduled meeting, if one is booked. */
   meeting?: MeetingView | null;
   /** Its open tasks, the next one first (work-memory engine). */

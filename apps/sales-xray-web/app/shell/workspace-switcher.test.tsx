@@ -74,6 +74,10 @@ it("names where you are and offers only what works: no Soon items", async () => 
   expect(choices[1].textContent).toContain("Personal · Just you");
   await act(async () => (choices[0] as HTMLElement).click());
   expect(onSelect).not.toHaveBeenCalled();
+  // One tap asks first; the second switches.
+  await act(async () => (choices[1] as HTMLElement).click());
+  expect(onSelect).not.toHaveBeenCalled();
+  expect(choices[1].textContent).toContain("Switch to");
   await act(async () => (choices[1] as HTMLElement).click());
   expect(onSelect).toHaveBeenCalledWith(personal.tenant_id);
 });

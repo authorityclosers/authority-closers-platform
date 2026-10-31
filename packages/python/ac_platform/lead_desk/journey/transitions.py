@@ -221,6 +221,11 @@ def _all_moves(journey: Journey, current: Stage | None) -> tuple[Move, ...]:
     board = journey.board()
     if current is not None and current.moves is not None:
         wanted = set(current.moves)
+        # An open lead may always be won, whatever its list's moves say (orchestrator for the
+        # owner, 1 Nov 2026, ph1-13): the after-call offers Won from any stage, and sellers
+        # close deals straight from Interested. Won asks its amount (needs_of). Read time only.
+        if current.kind not in CLOSED_KINDS:
+            wanted |= {stage.key for stage in board if stage.kind == "won"}
         targets = [stage for stage in board if stage.key in wanted]
         ruled = True
     else:

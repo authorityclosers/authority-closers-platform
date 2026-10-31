@@ -320,25 +320,33 @@ export function TodayCards({
             label: "Your work",
             content: (
               <ul className={styles.cards}>
-                {cards.map((card) => (
-                  <li key={card.key}>
-                    <Link
-                      className={styles.card}
-                      href={card.href}
-                      data-card={card.key}
-                      aria-description={card.note}
-                    >
-                      <span className={styles.cardLabel}>{card.label}</span>
-                      <strong aria-busy={card.value == null || undefined}>
-                        {card.value == null ? (
-                          " "
-                        ) : (
-                          <Count value={String(card.value)} />
-                        )}
-                      </strong>
-                    </Link>
-                  </li>
-                ))}
+                {cards
+                  // A card whose stage the organisation doesn't have is left
+                  // out, never a raw "open_leads" (phone personas, 31 Oct 2026).
+                  .filter(
+                    (card) =>
+                      !(own && card.key === "new" && own.new_key === null) &&
+                      !(own && card.key === "open" && own.open_key === null),
+                  )
+                  .map((card) => (
+                    <li key={card.key}>
+                      <Link
+                        className={styles.card}
+                        href={card.href}
+                        data-card={card.key}
+                        aria-description={card.note}
+                      >
+                        <span className={styles.cardLabel}>{card.label}</span>
+                        <strong aria-busy={card.value == null || undefined}>
+                          {card.value == null ? (
+                            " "
+                          ) : (
+                            <Count value={String(card.value)} />
+                          )}
+                        </strong>
+                      </Link>
+                    </li>
+                  ))}
               </ul>
             ),
           },

@@ -32,8 +32,10 @@ type Loaded = { state: "loading" } | { state: "hidden" } | GoogleFiles;
 
 /** What the card says under its name. */
 export function googleFilesWords(files: GoogleFiles): string {
+  // Agrees with Leads (phone personas ph1-23, 1 Nov 2026): a Sheet's link works
+  // today; picking from Drive and keeping a copy wait for this card.
   if (!files.configured)
-    return "Import from Google Sheets and keep a copy of your leads there. Coming soon.";
+    return "Picking a Sheet from your Google Drive and keeping a copy of your leads there: coming soon. Today, add a Sheet by its link in Leads, Lead sources, Google Sheet.";
   if (!files.connected)
     return "Import leads from a Sheet you pick, and keep a copy of new leads in a Sheet of your own. Sales X-Ray sees only the files you pick.";
   return [

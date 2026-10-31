@@ -21,7 +21,7 @@
 import {
   BatteryCharging,
   CheckCircle2,
-  Circle,
+  CircleDashed,
   FolderOpen,
   Mic,
   Power,
@@ -54,6 +54,8 @@ import {
   type UploadPolicy,
 } from "../acquisition-client";
 import { PLAY_LISTING } from "../app-compatibility-provider";
+import { openBugReport } from "../bug-report/open";
+import { markPhoneOnboarded } from "../leads/phone-onboarding";
 import styles from "../leads/phone-onboarding.module.css";
 import { recorderGuide } from "../leads/phone-setup-words";
 import {
@@ -123,7 +125,19 @@ function Screen({
         ) : null}
         {children}
       </div>
-      <div className={styles.actions}>{actions}</div>
+      <div className={styles.actions}>
+        {actions}
+        {/* Persona QA, 31 Oct 2026: a seller stuck on a setup screen can say so. */}
+        <button
+          type="button"
+          className={own.report}
+          onClick={() =>
+            openBugReport({ title: `Call capture setup: ${title}` })
+          }
+        >
+          Report a problem
+        </button>
+      </div>
     </>
   );
 }
@@ -396,6 +410,19 @@ function ConsentStep({
         </p>
       ) : !notice ? (
         <Skeleton height={96} />
+      ) : agreed ? (
+        // Someone who agreed sees their date and goes on; the words stay one
+        // tap away instead of a second wall (phone personas, v1.21, 1 Nov 2026).
+        <details className={own.agreedWords}>
+          <summary>Read what you agreed to</summary>
+          <div className={own.words}>
+            <strong>{notice.title}</strong>
+            <p>{notice.text}</p>
+            {terms?.privacy_details ? (
+              <small>{terms.privacy_details}</small>
+            ) : null}
+          </div>
+        </details>
       ) : (
         <div className={own.words}>
           <strong>{notice.title}</strong>
@@ -635,16 +662,19 @@ function BackgroundStep({
   const facts = phone.facts;
   if (!facts) return null;
   const autostartLeft = facts.autostartNeeded && !facts.autostart;
-  // HyperOS opens its own Battery saver list instead of Android's question
-  // (Redmi 13, 31 Oct 2026), and leaves the app on "Battery saver".
-  const choose =
+  // App info's own switch, for when Allow shows nothing: a Play build may not
+  // ask Android's question, whose dialog then closes before it shows (Redmi
+  // Note 8 Pro on Android 13, persona QA, 31 Oct 2026). HyperOS opens its own
+  // Battery saver list either way (Redmi 13) and leaves the app on "Battery saver".
+  const where =
     facts.family === "xiaomi"
-      ? "choose Allow, or No restrictions if your phone shows a list"
-      : "choose Allow in Android's question";
+      ? "tap Battery saver, then No restrictions"
+      : "tap Battery or App battery usage, then Unrestricted";
   const afterBattery = async () => {
     const next = (await refresh()).facts;
     if (next?.battery && !(next.autostartNeeded && !next.autostart)) onDone();
   };
+  const skipBattery = () => (autostartLeft ? setPastBattery(true) : onDone());
 
   if (!facts.battery && !pastBattery)
     return (
@@ -658,42 +688,41 @@ function BackgroundStep({
             : "So calls upload when the app is closed, not only when you open it. It uses very little battery."
         }
         actions={
-          <>
+          tried ? (
+            <>
+              <Button
+                variant="primary"
+                onClick={() => {
+                  // App info itself: any key the phone doesn't know opens it.
+                  void setupOpen("appInfo").then((opened) => {
+                    if (opened) leave(afterBattery);
+                  });
+                }}
+              >
+                Open App info
+              </Button>
+              <Button variant="ghost" onClick={skipBattery}>
+                Skip for now
+              </Button>
+            </>
+          ) : (
             <Button
               variant="primary"
               onClick={() => {
                 setTried(true);
                 void setupOpen("battery").then((opened) => {
                   if (opened) leave(afterBattery);
-                  else
-                    notify({
-                      id: "capture-setup",
-                      tone: "info",
-                      title: "Open your phone's battery settings",
-                      message:
-                        "Find Sales X-Ray in Settings, Apps, Battery and choose No restrictions.",
-                    });
                 });
               }}
             >
               Allow
             </Button>
-            {tried ? (
-              <Button
-                variant="ghost"
-                onClick={() =>
-                  autostartLeft ? setPastBattery(true) : onDone()
-                }
-              >
-                Continue anyway
-              </Button>
-            ) : null}
-          </>
+          )
         }
       >
         {tried ? (
           <p className={own.note} role="status">
-            Still restricted. Tap Allow, then {choose}.
+            Not allowed yet. If nothing opened, open App info, then {where}.
           </p>
         ) : null}
       </Screen>
@@ -706,25 +735,37 @@ function BackgroundStep({
       titleId={titleId}
       line={`${BRAND[facts.family] ?? "Your"} phones stop apps after a restart unless Autostart is on. Switch Sales X-Ray on, then come back.`}
       actions={
-        <Button
-          variant="primary"
-          onClick={() => {
-            void setupOpen("autostart").then((opened) => {
-              // Android can't tell an app whether Autostart is on: coming back counts.
-              const mark = async () => {
-                await setupMark("autostart", true);
-                await refresh();
-                onDone();
-              };
-              if (opened) leave(mark);
-              else void mark();
-            });
-          }}
-        >
-          Open Autostart
-        </Button>
+        <>
+          <Button
+            variant="primary"
+            onClick={() => {
+              void setupOpen("autostart").then((opened) => {
+                // Android can't tell an app whether Autostart is on: coming back
+                // counts. A phone with no Autostart list (App info opened
+                // instead, or nothing) has nothing to switch on.
+                const mark = async () => {
+                  await setupMark("autostart", true);
+                  await refresh();
+                  onDone();
+                };
+                if (opened) leave(mark);
+                else void mark();
+              });
+            }}
+          >
+            Open Autostart
+          </Button>
+          <Button variant="ghost" onClick={onDone}>
+            Skip for now
+          </Button>
+        </>
       }
-    />
+    >
+      <p className={own.note}>
+        If App info opens instead of a list, this phone has no Autostart switch.
+        Press Back: nothing else to do there.
+      </p>
+    </Screen>
   );
 }
 
@@ -889,29 +930,62 @@ function DoneStep({
 
   if (!facts) return null;
   const when = savedWhen(facts.newestMs, now);
-  const lines: [string, boolean][] = [
-    ["Your name and phone", setup.profile_complete !== false],
+  const recordings = facts.folderPicked && !facts.privateDialler;
+  // Each line, and what a line left undone means for the seller (persona QA,
+  // 31 Oct 2026: "You're set" with two empty ticks and no word on why).
+  const lines: [string, boolean, string][] = [
+    ["Your name and phone", setup.profile_complete !== false, ""],
     ...(personal
       ? []
-      : ([["Agreed to call capture", true]] as [string, boolean][])),
-    ["Recordings folder chosen", facts.folderPicked && !facts.privateDialler],
+      : ([["Agreed to call capture", true, ""]] as [
+          string,
+          boolean,
+          string,
+        ][])),
+    // The folder line says only whether a folder was chosen (phone personas,
+    // v1.21: it stayed empty after one was, because the Phone app keeps its
+    // own recordings private); that gets a line of its own.
+    [
+      "Recordings folder chosen",
+      facts.folderPicked,
+      "Not chosen yet. Add a call's recording on its lead, or go through this setup again from Settings.",
+    ],
+    ...(facts.privateDialler
+      ? ([
+          [
+            "Phone app shares its recordings",
+            false,
+            "Your Phone app keeps its recordings private. Add a call's recording on its lead.",
+          ],
+        ] as [string, boolean, string][])
+      : []),
     [
       "Runs in the background",
       facts.battery && (!facts.autostartNeeded || facts.autostart),
+      "Not yet. Calls upload when you open Sales X-Ray.",
     ],
     ...(personal
       ? []
-      : ([["Uploads on", facts.uploadsOn]] as [string, boolean][])),
+      : ([
+          [
+            "Uploads on",
+            facts.uploadsOn,
+            "Not yet. Calls stay on your phone until uploads are on.",
+          ],
+        ] as [string, boolean, string][])),
   ];
+  const left = lines.filter(([, on]) => !on).length;
   return (
     <Screen
       icon={CheckCircle2}
-      title="You're set"
+      title={left ? "Almost set" : "You're set"}
       titleId={titleId}
       line={
-        when
-          ? `Last call recording found ${when}.`
-          : "No call recording found yet. Call a lead: its recording uploads by itself."
+        !recordings
+          ? "You can start working. What's left is below."
+          : when
+            ? `Last call recording found ${when}.`
+            : "No call recording found yet. Call a lead: its recording uploads by itself."
       }
       actions={
         failed && !saved ? (
@@ -936,15 +1010,20 @@ function DoneStep({
       }
     >
       <ul className={own.checks}>
-        {lines.map(([label, on]) => (
+        {lines.map(([label, on, why]) => (
           <li key={label} data-on={on ? "" : undefined}>
             {on ? (
               <CheckCircle2 size={18} aria-hidden="true" />
             ) : (
-              <Circle size={18} aria-hidden="true" />
+              <CircleDashed size={18} aria-hidden="true" />
             )}
-            <span>{label}</span>
-            <span className={own.hidden}>{on ? "done" : "not done"}</span>
+            <span>
+              {label}
+              <span className={own.hidden}>{on ? " done" : " not done"}</span>
+              {!on && why ? (
+                <span className={own.why}>{named(why)}</span>
+              ) : null}
+            </span>
           </li>
         ))}
       </ul>
@@ -1005,6 +1084,7 @@ export function CaptureSetupFlow({
   onDeclined,
   onClose,
   startAt,
+  switchBack = null,
 }: {
   setup: CaptureSetup;
   /** The phone app's answer when the flow opened; null on the web. */
@@ -1014,6 +1094,8 @@ export function CaptureSetupFlow({
   required: boolean;
   organisation: string | null;
   onFinish: (next: CaptureSetup | null) => void;
+  /** The workspace the seller came from: always one tap away (ph2-15). */
+  switchBack?: { name: string; run: () => void } | null;
   onDeclined: (next: CaptureSetup) => void;
   onClose: () => void;
   /** Review fixtures: open at this step when it is one of the steps. */
@@ -1181,7 +1263,11 @@ export function CaptureSetupFlow({
           phone={phone}
           setup={setup}
           personal={personal}
-          onDone={(saved) => onFinish(saved ?? setup)}
+          onDone={(saved) => {
+            // This phone went through what "Set up this phone" asks: it never asks again by itself.
+            if (inApp) markPhoneOnboarded();
+            onFinish(saved ?? setup);
+          }}
         />
       );
       break;
@@ -1242,6 +1328,13 @@ export function CaptureSetupFlow({
         <div className={own.skip}>
           <Button variant="ghost" onClick={next}>
             Skip
+          </Button>
+        </div>
+      ) : null}
+      {switchBack ? (
+        <div className={own.skip}>
+          <Button variant="ghost" onClick={switchBack.run}>
+            Switch back to {switchBack.name}
           </Button>
         </div>
       ) : null}
