@@ -91,6 +91,44 @@ const CLOCK = new Intl.DateTimeFormat("en-US", {
 });
 const when = (at: string | null) => (at ? CLOCK.format(new Date(at)) : "");
 
+/** A task's type tag: its lead's side, or General for a task of your own. */
+type TaskTag = Side | "general";
+const TAG_WORDS: Record<TaskTag, string> = {
+  inbound: "Inbound",
+  cold: "Cold",
+  general: "General",
+};
+const tagOf = (task: ListedTask): TaskTag | null =>
+  !task.lead_id
+    ? "general"
+    : ((task as ListedTask & { lead_side?: Side | null }).lead_side ?? null);
+
+/** Today's tasks with done and undo: the box ticks at once and goes back if
+ *  the server says no, so the screen never shows work that didn't happen. */
+export function useTaskList() {
+  const today = useTodayTasks();
+  const { tasks, setTasks } = today;
+  const done = (task: ListedTask) => {
+    const next = task.status === "done" ? "undo" : "done";
+    const before = tasks ?? [];
+    setTasks(
+      before.map((item) =>
+        item.task_id === task.task_id
+          ? { ...item, status: next === "done" ? "done" : "open" }
+          : item,
+      ),
+    );
+    taskAction(task, next).then(
+      (saved) =>
+        setTasks(
+          before.map((item) => (item.task_id === saved.task_id ? saved : item)),
+        ),
+      () => setTasks(before),
+    );
+  };
+  return { tasks, failed: today.failed, reload: today.reload, done };
+}
+
 /** Today's tasks that aren't calls: a follow-up is counted under Follow-ups. */
 export function useTodayTasks(): {
   tasks: ListedTask[] | null;
@@ -448,20 +486,23 @@ export function TodayTasks({
   onDone,
   onRetry,
   onAdded,
+  title = "Today's tasks",
 }: {
   tasks: ListedTask[] | null;
   failed: boolean;
   onDone: (task: ListedTask) => void;
   onRetry: () => void;
   onAdded: () => void;
+  /** "My tasks" on the owner's Team Home. */
+  title?: string;
 }) {
   const [adding, setAdding] = useState(false);
   return (
     <section className={styles.block} aria-labelledby="tasks-title">
-      <Head id="tasks-title" title="Today's tasks">
+      <Head id="tasks-title" title={title}>
         <button
           type="button"
-          className={styles.add}
+          className={styles.addTask}
           onClick={() => setAdding(true)}
         >
           + Add
@@ -491,29 +532,36 @@ export function TodayTasks({
               />
               <span className={styles.rowText}>
                 <strong>{task.title}</strong>
-                <span>
-                  {[
-                    when(task.starts_at),
-                    task.lead_id && task.lead_name ? (
-                      <Link key="lead" href={`/leads?lead=${task.lead_id}`}>
-                        {displayName(task.lead_name)}
-                      </Link>
-                    ) : (
-                      "General"
-                    ),
-                  ].map((part, index) => (
-                    <span key={index}>
-                      {index ? " · " : ""}
-                      {part}
+                <span className={styles.taskMeta}>
+                  {when(task.starts_at) ? (
+                    <span>{when(task.starts_at)}</span>
+                  ) : null}
+                  {tagOf(task) ? (
+                    <span className={styles.tag} data-tag={tagOf(task)}>
+                      {TAG_WORDS[tagOf(task) as TaskTag]}
                     </span>
-                  ))}
+                  ) : null}
+                  {task.lead_id && task.lead_name ? (
+                    <Link href={`/leads?lead=${task.lead_id}`}>
+                      {displayName(task.lead_name)}
+                    </Link>
+                  ) : null}
                 </span>
               </span>
             </li>
           ))}
         </ul>
       ) : (
-        <p className={styles.quiet}>No tasks due today.</p>
+        <div className={styles.emptyTasks}>
+          <span>No tasks today</span>
+          <button
+            type="button"
+            className={styles.addTask}
+            onClick={() => setAdding(true)}
+          >
+            + Add task
+          </button>
+        </div>
       )}
       <AddTaskSheet
         open={adding}
@@ -645,7 +693,7 @@ export function SellerBlocks({
   headerExtras?: ReactNode;
 }) {
   const access = useSidesAccess();
-  const { tasks, failed, setTasks, reload } = useTodayTasks();
+  const { tasks, failed, reload, done } = useTaskList();
   // Only the type this seller works when they don't have both.
   const shown: Side =
     access && !access.inbound && access.cold
@@ -654,25 +702,6 @@ export function SellerBlocks({
         ? "inbound"
         : side;
   const own = desk.sides?.[shown] ?? null;
-  const done = (task: ListedTask) => {
-    const next = task.status === "done" ? "undo" : "done";
-    const before = tasks ?? [];
-    setTasks(
-      before.map((item) =>
-        item.task_id === task.task_id
-          ? { ...item, status: next === "done" ? "done" : "open" }
-          : item,
-      ),
-    );
-    taskAction(task, next).then(
-      (saved) =>
-        setTasks(
-          before.map((item) => (item.task_id === saved.task_id ? saved : item)),
-        ),
-      // Not saved: as it was, so the screen never shows work that didn't happen.
-      () => setTasks(before),
-    );
-  };
   return (
     <div className={styles.me}>
       {access ? (
@@ -718,5 +747,24 @@ export function SellerBlocks({
         <LongestBreaks breaks={desk.breaks} />
       </div>
     </div>
+  );
+}
+
+/** The owner's own work on the Team Home: three of today's tasks and the next
+ *  two follow-ups on the side shown (Dipak: owners have their tasks too). */
+export function MyTasks({ desk, side }: { desk: HomeDesk; side: Side }) {
+  const { tasks, failed, reload, done } = useTaskList();
+  return (
+    <>
+      <TodayTasks
+        title="My tasks"
+        tasks={tasks}
+        failed={failed}
+        onDone={done}
+        onRetry={reload}
+        onAdded={reload}
+      />
+      <UpcomingFollowUps side={side} own={desk.sides?.[side] ?? null} />
+    </>
   );
 }

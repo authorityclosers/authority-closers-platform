@@ -31,20 +31,24 @@
     order: 2;
   }
 
-  .sellers {
+  .mineBlock {
     order: 3;
   }
 
-  .sales {
+  .sellers {
     order: 4;
   }
 
-  .splitBlock {
+  .sales {
     order: 5;
   }
 
-  .side > :last-child {
+  .splitBlock {
     order: 6;
+  }
+
+  .side > :last-child {
+    order: 7;
   }
 }
 
@@ -559,4 +563,11 @@ a.row:focus-visible {
   .hero {
     transition: none;
   }
+}
+
+/* The owner's own tasks and follow-ups. */
+.mineBlock {
+  display: grid;
+  gap: 24px;
+  min-width: 0;
 }

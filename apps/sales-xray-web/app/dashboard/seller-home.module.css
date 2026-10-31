@@ -526,3 +526,81 @@
 .me > [data-area]:empty {
   display: none;
 }
+
+/* + Add up front: sellers write their to-dos here (Dipak, 31 Oct 2026). */
+.addTask {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-accent);
+  color: var(--lx-on-teal);
+  font: inherit;
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform var(--sx-dur-fast) var(--sx-ease-out);
+}
+
+.addTask:active {
+  transform: scale(0.96);
+}
+
+.addTask:focus-visible {
+  outline: none;
+  box-shadow: var(--sx-focus-ring);
+}
+
+.emptyTasks {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 60px;
+  padding: 10px 14px 10px 16px;
+  border: 1px solid color-mix(in oklab, var(--sx-ink) 7%, transparent);
+  border-radius: 20px;
+  background: color-mix(in oklab, var(--sx-surface) 74%, transparent);
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+}
+
+/* A task's time, type and customer on one line. */
+.taskMeta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.tag {
+  padding: 1px 8px;
+  border-radius: var(--sx-radius-pill);
+  background: var(--sx-fill);
+  color: var(--sx-muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.tag[data-tag="inbound"] {
+  background: color-mix(in oklab, var(--sx-accent) 14%, transparent);
+  color: var(--sx-accent);
+}
+
+.tag[data-tag="cold"] {
+  background: color-mix(in oklab, var(--lx-closing) 16%, transparent);
+  color: var(--lx-closing);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .addTask {
+    transition: none;
+  }
+
+  .addTask:active {
+    transform: none;
+  }
+}

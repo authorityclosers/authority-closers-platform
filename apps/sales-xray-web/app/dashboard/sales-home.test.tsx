@@ -333,6 +333,12 @@ it("gives an owner the team's floor, one side at a time", async () => {
     host.querySelector('a[href="/organisation?tab=team"]')?.textContent,
   ).toContain("Your team");
   expect(host.querySelector('a[href="/reports"]')).not.toBeNull();
+  // The owner's own tasks and follow-ups sit beside the team's (Dipak: owners
+  // have their tasks too), with + Add up front.
+  expect(
+    Array.from(host.querySelectorAll("h2"), (title) => title.textContent),
+  ).toContain("My tasks");
+  expect(buttons).toContain("+ Add");
 
   // Cold: Unworked, never mixed with Inbound.
   const cold = Array.from(host.querySelectorAll("[role=radio]")).find((radio) =>

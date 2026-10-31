@@ -29,7 +29,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import type { LibrarySubmission } from "../acquisition-client";
 import { can } from "../organisation/roles";
 import { FirstRun } from "./first-run";
-import { SellerBlocks } from "./seller-home";
+import { MyTasks, SellerBlocks } from "./seller-home";
 import type { Side } from "../ui/side-selector";
 import { SetupStart } from "./home-v2";
 import { TodayBar } from "./home-today";
@@ -149,8 +149,15 @@ function usePerformance() {
   };
 }
 
-/** The team's Home: the floor, on the side the address names. */
-function TeamHome({ manages }: { manages: boolean }) {
+/** The team's Home: the floor, on the side the address names; the
+ *  owner's own tasks beside it when they work leads. */
+function TeamHome({
+  manages,
+  mine,
+}: {
+  manages: boolean;
+  mine: HomeDesk | null;
+}) {
   const { period, setPeriod, shown, failed } = usePerformance();
   const [side, setSide] = useHomeSide();
   const sellers = shown?.sellers.length ?? 0;
@@ -159,6 +166,7 @@ function TeamHome({ manages }: { manages: boolean }) {
       side={side}
       onSide={setSide}
       controls={manages ? <TeamControls /> : null}
+      mine={mine ? <MyTasks desk={mine} side={side} /> : null}
       outcomes={
         <OutcomeTiles
           period={period}
@@ -386,7 +394,10 @@ export function SalesHome({
       ) : null}
       <div key={shown} className={styles.mode} data-mode={shown}>
         {shown === "team" ? (
-          <TeamHome manages={manages} />
+          <TeamHome
+            manages={manages}
+            mine={works && desk.status === "ready" ? desk.desk : null}
+          />
         ) : (
           <SellerHome state={desk} />
         )}

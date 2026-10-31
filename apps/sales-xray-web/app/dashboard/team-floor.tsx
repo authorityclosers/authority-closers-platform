@@ -489,6 +489,7 @@ export function TeamFloor({
   controls,
   outcomes,
   more,
+  mine = null,
 }: {
   side: Side;
   onSide: (side: Side) => void;
@@ -498,6 +499,8 @@ export function TeamFloor({
   outcomes: ReactNode;
   /** The ways on: Performance, the team, reports. */
   more: ReactNode;
+  /** The owner's own tasks and follow-ups, for those who work leads. */
+  mine?: ReactNode;
 }) {
   const effort = useEffort();
   const counts = useSideCounts(side);
@@ -591,6 +594,7 @@ export function TeamFloor({
             </p>
           )}
         </section>
+        {mine ? <div className={styles.mineBlock}>{mine}</div> : null}
         <section
           className={`${styles.block} ${styles.splitBlock}`}
           aria-labelledby="split-title"

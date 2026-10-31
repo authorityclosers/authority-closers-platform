@@ -91,6 +91,7 @@ def view(
     lead_name: str | None,
     now: datetime,
     photos: Mapping[UUID, str | None] | None = None,
+    side: Literal["inbound", "cold"] | None = None,
 ) -> TaskView:
     return TaskView(
         task_id=task.id,
@@ -116,6 +117,7 @@ def view(
         created_by_photo_url=(photos or {}).get(task.created_by_person_id)
         if task.created_by_person_id
         else None,
+        lead_side=side,
     )
 
 
@@ -126,12 +128,21 @@ async def views(
     task's lead name when they are on different leads."""
     listed = list(tasks)
     photos = await person_photos.photo_urls(db, (task.created_by_person_id for task in listed))
+    # Each lead's side in one read: only "cold" is Cold (migration 0146).
+    lead_ids = {task.lead_id for task in listed if task.lead_id is not None}
+    sides: dict[UUID, Literal["inbound", "cold"]] = {}
+    if lead_ids:
+        for lead_id, pipeline in (
+            await db.execute(select(Lead.id, Lead.pipeline).where(Lead.id.in_(lead_ids)))
+        ).all():
+            sides[lead_id] = "cold" if pipeline == "cold" else "inbound"
     return tuple(
         view(
             task,
             lead_name if lead_name is not None else (names or {}).get(task.id),
             now,
             photos,
+            sides.get(task.lead_id) if task.lead_id is not None else None,
         )
         for task in listed
     )
