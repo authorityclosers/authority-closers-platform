@@ -1043,6 +1043,13 @@ async def _resolved_with_role_permissions(
     return _with_role_permissions(resolved, is_organisation=is_organisation)
 
 
+def _note_workspace_left(request: Request, resolved: ResolvedActorContext) -> None:
+    """Pass a workspace the session names after the person left it to the answer's headers."""
+
+    if resolved.left_workspace is not None:
+        request.state.workspace_left = resolved.left_workspace
+
+
 def _context_response(resolved: ResolvedActorContext) -> ContextResponse:
     return ContextResponse(
         person_id=resolved.actor.person_id,
@@ -1971,6 +1978,7 @@ def install_identity_http(
             resolved = await _resolved_with_role_permissions(
                 database, await identity.resolve_actor(token)
             )
+            _note_workspace_left(request, resolved)
             _refuse_read_only_change(request, resolved)
             yield AuthenticatedTransaction(
                 database=database,
@@ -1996,6 +2004,7 @@ def install_identity_http(
             resolved = await _resolved_with_role_permissions(
                 database, await identity.resolve_actor_read_only(token)
             )
+            _note_workspace_left(request, resolved)
             yield AuthenticatedTransaction(
                 database=database,
                 identity=identity,

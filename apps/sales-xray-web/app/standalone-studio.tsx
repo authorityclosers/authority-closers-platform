@@ -52,6 +52,14 @@ import {
   type SalesXrayWorkspace,
 } from "./sales-xray-workspaces";
 import { WorkspaceNoAccess } from "./workspace-no-access";
+import { notify, type Notice } from "./notice-center";
+import { announceWorkspaceChange } from "./workspace-change";
+import {
+  leftWorkspace,
+  leftWorkspaceTitle,
+  onWorkspaceLeft,
+  type LeftWorkspace,
+} from "./workspace-left";
 import { FirstCallGuide } from "./guide-host";
 
 const loadingOptions = { loading: FeatureLoading };
@@ -226,10 +234,13 @@ export function parseWorkspaceChoices(
   };
 }
 
+/** The account as read, and a workspace the person has just left. */
+type ReadChoices = WorkspaceChoices & Readonly<{ left?: LeftWorkspace | null }>;
+
 async function readWorkspaceChoices(
   signal: AbortSignal,
   standalone: boolean,
-): Promise<WorkspaceChoices | null> {
+): Promise<ReadChoices | null> {
   // On a full load both reads were started by the page's early reads, so
   // reading them in turn costs no extra round trip.
   const response = await earlyFetch("/v1/me/workspaces", {
@@ -248,22 +259,28 @@ async function readWorkspaceChoices(
     return null;
   }
   if (!response.ok) throw new Error("workspace_read_rejected");
+  // The session still named a workspace the person is no longer in: the
+  // server answered without it, and names it.
+  const left = leftWorkspace(response);
   const choices = parseWorkspaceChoices(await response.json());
   if (!choices) throw new Error("workspace_shape_invalid");
   // Academy embeds retain their existing identity/chooser contract.
-  if (!standalone) return choices;
+  if (!standalone) return { ...choices, left };
   // The legacy endpoint confirms session identity only. Sales Xray choices
   // and selection come exclusively from its own directory.
   const directory = await readSalesXrayWorkspaces(signal);
-  const personal = directory.workspaces.find(
-    (item) => item.kind === "personal",
-  );
+  // Personal, or after leaving a workspace the only one still open.
+  const landing =
+    directory.workspaces.find((item) => item.kind === "personal") ??
+    (left && directory.workspaces.length === 1
+      ? directory.workspaces[0]
+      : undefined);
   let selected = directory.selected_tenant_id;
-  if (selected === null && personal) {
+  if (selected === null && landing) {
     // Reads started before a workspace was chosen must not be used.
     dropEarlyReads();
-    await selectWorkspace(personal.tenant_id, signal);
-    selected = personal.tenant_id;
+    await selectWorkspace(landing.tenant_id, signal);
+    selected = landing.tenant_id;
   }
   return {
     person_id: choices.person_id,
@@ -271,6 +288,25 @@ async function readWorkspaceChoices(
     ...directory,
     salesXrayWorkspaces: directory.workspaces,
     selected_tenant_id: selected,
+    left,
+  };
+}
+
+/** The corner note once the person has left a workspace: where they are now. */
+function leftNotice(left: LeftWorkspace, choices: WorkspaceChoices): Notice {
+  const landed = choices.workspaces.find(
+    (item) => item.tenant_id === choices.selected_tenant_id,
+  );
+  const message = landed
+    ? `You're in ${landed.name} now.`
+    : choices.workspaces.length
+      ? "Pick a workspace to carry on."
+      : null;
+  return {
+    id: "workspace-left",
+    tone: "info",
+    title: leftWorkspaceTitle(left),
+    ...(message ? { message } : {}),
   };
 }
 
@@ -460,22 +496,30 @@ function StandaloneStudioView({
     activeController.current?.abort();
     activeController.current = controller;
     void readWorkspaceChoices(controller.signal, !embedded)
-      .then((choices) => {
+      .then((read) => {
         if (
           controller.signal.aborted ||
           generation.current !== requestGeneration
         )
           return;
         setFailures(0);
-        if (choices === null) {
+        if (read === null) {
           observeAccount?.(null);
           setView({ kind: "unauthenticated" });
           return;
         }
+        const { left, ...choices } = read;
         observeAccount?.({
           personId: choices.person_id,
           sessionId: choices.session_id,
         });
+        if (left) {
+          // Every screen starts again where the person landed, and the
+          // corner says so once.
+          announceWorkspaceChange("arrived");
+          setFrameRound((round) => round + 1);
+          notify(leftNotice(left, choices));
+        }
         if (choices.selected_tenant_id !== null) {
           setView({ kind: "ready", choices });
           return;
@@ -516,6 +560,22 @@ function StandaloneStudioView({
     },
     [],
   );
+
+  // An answer naming the workspace on screen (the person was removed, or the
+  // organisation deleted) reads the account again, afresh: the person lands
+  // on another workspace or the picker, never on "tenant context denied".
+  const shownTenantId =
+    view.kind === "ready" ? view.choices.selected_tenant_id : null;
+  useEffect(() => {
+    if (!shownTenantId) return;
+    let heard = false;
+    return onWorkspaceLeft((left) => {
+      if (heard || left.tenantId !== shownTenantId) return;
+      heard = true;
+      dropEarlyReads();
+      setAttempt((value) => value + 1);
+    });
+  }, [shownTenantId]);
 
   async function chooseWorkspace(choices: WorkspaceChoices, tenantId: string) {
     if (view.kind !== "chooser") return;

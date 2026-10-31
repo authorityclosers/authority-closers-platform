@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from hashlib import sha256
 from hmac import digest
 from types import SimpleNamespace
@@ -18,9 +19,12 @@ from ac_platform.application.settings import Settings
 from ac_platform.db.models import model_metadata
 from ac_platform.http.auth import install_identity_http
 from ac_platform.http.problem import register_problem_handlers
+from ac_platform.http.request_context import request_context_middleware
 from ac_platform.http.surfaces import CoachSurfaceMiddleware
+from ac_platform.identity.application import AsyncIdentityApplication
 from ac_platform.identity.models import Person
 from ac_platform.identity.models import Session as IdentitySession
+from ac_platform.identity.services import TenantScopeDeniedError
 from ac_platform.tenancy.models import Membership, Tenant
 from tests.unit.authorization.test_capability_application import AwaitableSession
 
@@ -250,3 +254,104 @@ async def test_workspace_query_cannot_select_another_subject(workspace_state, qu
     response = await get(workspace_state, query=query)
     assert response.status_code == 422
     assert "workspaces" not in response.json()
+
+
+LEARNER = "https://learner.authorityclosers.test"
+
+
+@pytest.fixture
+def left_state(workspace_state):
+    """The session still names Alpha, a workspace the person is about to leave."""
+    state = workspace_state
+    with Session(state.engine) as db, db.begin():
+        db.get(IdentitySession, state.session).selected_tenant_id = state.tenants["Alpha"]
+    state.app.middleware("http")(
+        partial(request_context_middleware, release_id="test-release", environment="test")
+    )
+    return state
+
+
+def leave(state, ending):
+    with Session(state.engine) as db, db.begin():
+        if ending == "removed":
+            row = db.get(Membership, (state.tenants["Alpha"], state.person))
+            row.status, row.ended_at = "inactive", datetime.now(UTC)
+        elif ending == "deleted":
+            db.get(Tenant, state.tenants["Alpha"]).status = "deleted"
+        else:
+            tenant = db.get(Tenant, state.tenants["Alpha"])
+            tenant.status, tenant.name = "deleted", "Café Closers"
+
+
+async def send(state, method, path, body=None):
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=state.app), base_url=LEARNER
+    ) as client:
+        return await client.request(
+            method,
+            path,
+            json=body,
+            headers={"cookie": f"ac_session={TOKEN}", "origin": LEARNER},
+        )
+
+
+@pytest.mark.parametrize(
+    ("ending", "name"),
+    [("removed", "Alpha"), ("deleted", "Alpha"), ("renamed", "Caf%C3%A9%20Closers")],
+)
+async def test_a_workspace_the_person_left_is_named_not_refused(left_state, ending, name):
+    state = left_state
+    leave(state, ending)
+    response = await get(state)
+    assert response.status_code == 200, response.text
+    assert response.json()["selected_tenant_id"] is None
+    assert response.json()["workspaces"] == [
+        {"tenant_id": str(state.tenants["Beta"]), "name": "Beta"}
+    ]
+    assert response.headers["x-ac-workspace-left"] == str(state.tenants["Alpha"])
+    assert response.headers["x-ac-workspace-left-name"] == name
+    # Reading changes nothing: the app chooses where the person goes next.
+    with Session(state.engine) as db:
+        assert db.get(IdentitySession, state.session).selected_tenant_id == state.tenants["Alpha"]
+
+
+async def test_the_next_request_lands_without_the_workspace_until_another_is_chosen(left_state):
+    state = left_state
+    current = await send(state, "GET", "/v1/context")
+    assert current.status_code == 200
+    assert current.json()["tenant_id"] == str(state.tenants["Alpha"])
+    assert "x-ac-workspace-left" not in current.headers
+    leave(state, "removed")
+
+    current = await send(state, "GET", "/v1/context")
+    assert current.status_code == 200, current.text
+    assert current.json()["tenant_id"] is None
+    assert current.json()["membership_role"] is None
+    assert current.headers["x-ac-workspace-left"] == str(state.tenants["Alpha"])
+    # The workspace left can't be chosen again; another one can.
+    again = await send(state, "POST", "/v1/context", {"tenant_id": str(state.tenants["Alpha"])})
+    assert again.status_code == 403
+    assert again.json()["code"] == "tenant_context_denied"
+    other = await send(state, "POST", "/v1/context", {"tenant_id": str(state.tenants["Beta"])})
+    assert other.status_code == 200, other.text
+    assert other.json()["tenant_id"] == str(state.tenants["Beta"])
+
+    response = await get(state)
+    assert response.json()["selected_tenant_id"] == str(state.tenants["Beta"])
+    assert "x-ac-workspace-left" not in response.headers
+
+
+async def test_a_caller_that_needs_a_workspace_is_still_refused_after_leaving(left_state):
+    state = left_state
+    leave(state, "removed")
+    pepper = state.settings.session_token_pepper.get_secret_value()
+    with Session(state.engine) as db, db.begin():
+        identity = AsyncIdentityApplication(cast(Any, HttpDatabase(db)), token_pepper=pepper)
+        resolved = await identity.resolve_actor(TOKEN)
+        assert resolved.actor.tenant_id is None
+        assert resolved.left_workspace is not None
+        assert resolved.left_workspace.tenant_id == state.tenants["Alpha"]
+        with pytest.raises(TenantScopeDeniedError):
+            await identity.resolve_actor(TOKEN, require_tenant=True)
+        with pytest.raises(TenantScopeDeniedError):
+            await identity.resolve_actor_read_only(TOKEN, require_tenant=True)

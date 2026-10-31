@@ -476,8 +476,9 @@ def test_certificate_http_is_self_tenant_and_active_context_scoped(
                     )
                 client.cookies.set("ac_session", seed.learner_token)
                 inactive_context = await client.get(f"/v1/certificates/{seed.certificate_id}")
+                # A workspace the learner left is answered as no workspace (and named).
                 assert inactive_context.status_code == 403
-                assert inactive_context.json()["code"] == "tenant_context_denied"
+                assert inactive_context.json()["code"] == "certificate_tenant_context_required"
         finally:
             await async_engine.dispose()
 

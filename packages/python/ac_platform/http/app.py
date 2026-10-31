@@ -456,7 +456,13 @@ def create_app(
                 "x-playback-token",
                 "x-analysis-quote",
             ],
-            expose_headers=["etag", "x-request-id", "x-ac-release-id"],
+            expose_headers=[
+                "etag",
+                "x-request-id",
+                "x-ac-release-id",
+                "x-ac-workspace-left",
+                "x-ac-workspace-left-name",
+            ],
             max_age=600,
         )
 
