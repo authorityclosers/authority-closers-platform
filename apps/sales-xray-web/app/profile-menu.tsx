@@ -4,10 +4,12 @@ import { usePurchasesAllowed } from "./purchase-policy";
 import {
   ArrowUpRight,
   CircleUserRound,
+  Eye,
   FileText,
   FolderOpen,
   LogOut,
   Mail,
+  MessageSquareWarning,
   Moon,
   MoreHorizontal,
   Palette,
@@ -25,6 +27,11 @@ import {
   requestSalesXrayLogout,
   UploadNeedsSignOutConfirmationError,
 } from "./account-navigation";
+import { openBugReport, reportShortcut } from "./bug-report/open";
+import {
+  setReportButtonHidden,
+  useReportButtonHidden,
+} from "./bug-report/report-button";
 import { invalidateShellProfile, useShellProfile } from "./shell/profile-store";
 import { useUploadSession } from "./hooks/upload-session";
 import { parseThemePreference } from "./lightbox/theme";
@@ -106,6 +113,9 @@ export function ProfileMenu({
 }) {
   const [open, setOpen] = useState(false);
   const purchasesAllowed = usePurchasesAllowed();
+  const reportButtonHidden = useReportButtonHidden();
+  // Read once the menu is open: the server has no keys to name.
+  const shortcut = open ? reportShortcut() : null;
   // Back (the button, the phone's gesture or key) closes it (owner, 22 Oct).
   useBackClose(open, () => setOpen(false));
   const [signingOut, setSigningOut] = useState(false);
@@ -376,6 +386,34 @@ export function ProfileMenu({
           <div className={styles.separator} role="separator" />
           <p className={styles.groupLabel}>Help</p>
           <div className={styles.actions}>
+            {/* In plain sight (orchestrator for the owner, 31 Oct 2026). */}
+            <button
+              type="button"
+              className={styles.item}
+              onClick={() => {
+                setOpen(false);
+                openBugReport();
+              }}
+            >
+              <MessageSquareWarning size={16} aria-hidden="true" />
+              <span>Report a problem</span>
+              {shortcut ? (
+                <kbd className={styles.shortcut}>{shortcut.label}</kbd>
+              ) : null}
+            </button>
+            {reportButtonHidden ? (
+              <button
+                type="button"
+                className={styles.item}
+                onClick={() => {
+                  setOpen(false);
+                  setReportButtonHidden(false);
+                }}
+              >
+                <Eye size={16} aria-hidden="true" />
+                <span>Show the report button</span>
+              </button>
+            ) : null}
             <a
               href="mailto:admin@authorityclosers.com?subject=Sales%20Xray%20help"
               className={styles.item}

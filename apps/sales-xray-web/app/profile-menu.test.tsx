@@ -1,6 +1,8 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { REPORT_PROBLEM_EVENT } from "./bug-report/open";
+import { setReportButtonHidden } from "./bug-report/report-button";
 import { invalidateShellProfile } from "./shell/profile-store";
 import { ThemeProvider } from "./lightbox/theme-provider";
 import { PROFILE_UPDATED_EVENT, ProfileMenu } from "./profile-menu";
@@ -385,6 +387,39 @@ it("keeps the public site's pricing and policy links in Help", async () => {
       ["Refunds", "/refunds"],
     ]),
   );
+});
+
+it("opens the reporter from Help, and brings the hidden report button back", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(Response.json(profile("Morgan Lee"))),
+  );
+  const opened = vi.fn();
+  window.addEventListener(REPORT_PROBLEM_EVENT, opened);
+  setReportButtonHidden(true);
+  try {
+    await act(async () =>
+      root.render(<ProfileMenu authenticated accountHref="/calls" />),
+    );
+    const trigger = () =>
+      host.querySelector<HTMLButtonElement>("button[aria-expanded]")!;
+    const item = (words: string) =>
+      [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
+        button.textContent?.startsWith(words),
+      );
+    await act(async () => trigger().click());
+    await act(async () => item("Report a problem")!.click());
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(host.querySelector('[aria-label="Profile actions"]')).toBeNull();
+
+    await act(async () => trigger().click());
+    await act(async () => item("Show the report button")!.click());
+    await act(async () => trigger().click());
+    expect(item("Show the report button")).toBeUndefined();
+  } finally {
+    window.removeEventListener(REPORT_PROBLEM_EVENT, opened);
+    setReportButtonHidden(false);
+  }
 });
 
 it("draws the avatar's circle while the session is checked, never hidden", async () => {
