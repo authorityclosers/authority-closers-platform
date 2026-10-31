@@ -55,6 +55,7 @@ import {
 } from "../acquisition-client";
 import { PLAY_LISTING } from "../app-compatibility-provider";
 import { openBugReport } from "../bug-report/open";
+import { markPhoneOnboarded } from "../leads/phone-onboarding";
 import styles from "../leads/phone-onboarding.module.css";
 import { recorderGuide } from "../leads/phone-setup-words";
 import {
@@ -409,6 +410,19 @@ function ConsentStep({
         </p>
       ) : !notice ? (
         <Skeleton height={96} />
+      ) : agreed ? (
+        // Someone who agreed sees their date and goes on; the words stay one
+        // tap away instead of a second wall (phone personas, v1.21, 1 Nov 2026).
+        <details className={own.agreedWords}>
+          <summary>Read what you agreed to</summary>
+          <div className={own.words}>
+            <strong>{notice.title}</strong>
+            <p>{notice.text}</p>
+            {terms?.privacy_details ? (
+              <small>{terms.privacy_details}</small>
+            ) : null}
+          </div>
+        </details>
       ) : (
         <div className={own.words}>
           <strong>{notice.title}</strong>
@@ -928,13 +942,23 @@ function DoneStep({
           boolean,
           string,
         ][])),
+    // The folder line says only whether a folder was chosen (phone personas,
+    // v1.21: it stayed empty after one was, because the Phone app keeps its
+    // own recordings private); that gets a line of its own.
     [
       "Recordings folder chosen",
-      recordings,
-      facts.privateDialler
-        ? "Your Phone app keeps its recordings private. Add a call's recording on its lead."
-        : "Not chosen yet. Add a call's recording on its lead, or go through this setup again from Settings.",
+      facts.folderPicked,
+      "Not chosen yet. Add a call's recording on its lead, or go through this setup again from Settings.",
     ],
+    ...(facts.privateDialler
+      ? ([
+          [
+            "Phone app shares its recordings",
+            false,
+            "Your Phone app keeps its recordings private. Add a call's recording on its lead.",
+          ],
+        ] as [string, boolean, string][])
+      : []),
     [
       "Runs in the background",
       facts.battery && (!facts.autostartNeeded || facts.autostart),
@@ -1236,7 +1260,11 @@ export function CaptureSetupFlow({
           phone={phone}
           setup={setup}
           personal={personal}
-          onDone={(saved) => onFinish(saved ?? setup)}
+          onDone={(saved) => {
+            // This phone went through what "Set up this phone" asks: it never asks again by itself.
+            if (inApp) markPhoneOnboarded();
+            onFinish(saved ?? setup);
+          }}
         />
       );
       break;

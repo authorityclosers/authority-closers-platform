@@ -45,13 +45,36 @@ afterEach(async () => {
   vi.clearAllMocks();
 });
 
-it("shows the red missing state with a direct setup fix", async () => {
+it("shows the red missing state, and its fix opens the recording check over the call", async () => {
   await render(<CaptureStateLabel state="missing" />);
   expect(host.textContent).toContain("No recording after 30 minutes");
   expect(host.querySelector('[data-missing="true"]')).not.toBeNull();
-  expect(host.querySelector("a")?.getAttribute("href")).toBe(
-    "/settings/privacy#calls-setup",
+  // Phone personas, v1.21, 1 Nov 2026: the link opened Settings at Usage
+  // analytics, and Back went to Leads instead of the call.
+  expect(host.querySelector("a")).toBeNull();
+  const fix = [...host.querySelectorAll("button")].find(
+    (button) => button.textContent === "Fix recording",
   );
+  expect(host.textContent).not.toContain("Call recording check");
+  await act(async () => fix?.click());
+  expect(host.textContent).toContain("Call recording check");
+});
+it("brings the recording check into view when a link asks for it", async () => {
+  const scrolled = vi.fn();
+  HTMLElement.prototype.scrollIntoView = scrolled;
+  window.history.replaceState(null, "", "/settings/privacy#calls-setup");
+  await render(
+    <CaptureHealthView
+      setup={null}
+      status={null}
+      consentOn
+      onRecorder={() => {}}
+      onFolder={() => {}}
+      onRefresh={() => {}}
+    />,
+  );
+  expect(scrolled).toHaveBeenCalledWith({ block: "start" });
+  window.history.replaceState(null, "", "/");
 });
 it("server missing and report receipts outrank a stale native queue", async () => {
   vi.mocked(autoCaptureStates).mockResolvedValue([

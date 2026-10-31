@@ -277,7 +277,11 @@ def install_capture_setup_http(application: FastAPI, ctx: RouteContext) -> None:
                         "role": str(member_role),
                         "state": state,
                         "at": at.isoformat() if at else None,
-                        "phone": (newest.model or None) if newest else None,
+                        "phone": (
+                            capture_setup.phone_name(newest.model, newest.family)
+                            if newest
+                            else None
+                        ),
                         "missing_today": missing.by_person.get(person.id, 0),
                     }
                 )

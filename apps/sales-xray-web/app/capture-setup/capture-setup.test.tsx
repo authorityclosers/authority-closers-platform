@@ -312,6 +312,10 @@ describe("CaptureSetupFlow", () => {
     const { finished } = await flow(setup({ consent: "on" }));
     expect(title()).toBe("What Sales X-Ray captures");
     expect(host.textContent).toContain("You agreed");
+    // The words they agreed to are one tap away, not a second wall (phone personas, v1.21).
+    expect(host.querySelector("details summary")?.textContent).toBe(
+      "Read what you agreed to",
+    );
     await act(async () => button("Continue").click());
     await settle();
     expect(title()).toBe("You're set");
@@ -337,6 +341,8 @@ describe("CaptureSetupFlow", () => {
     );
     await act(async () => button("Start working").click());
     expect(finished).toHaveBeenCalledOnce();
+    // "Set up this phone" asks the same things: it never opens again by itself.
+    expect(window.localStorage.getItem("sx-phone-onboarded")).not.toBeNull();
   });
 
   it("opens Android's folder picker for the recordings step", async () => {
@@ -473,6 +479,11 @@ describe("CaptureSetupFlow", () => {
     await act(async () => button("Continue without recordings").click());
     await settle();
     expect(title()).toBe("Almost set");
+    // The folder chosen is ticked; the private Phone app is its own line (v1.21).
+    expect(host.textContent).toContain("Recordings folder chosen done");
+    expect(host.textContent).toContain(
+      "Phone app shares its recordings not done",
+    );
     expect(host.textContent).toContain(
       "Your Phone app keeps its recordings private. Add a call's recording on its lead.",
     );

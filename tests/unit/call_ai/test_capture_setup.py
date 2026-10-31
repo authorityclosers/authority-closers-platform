@@ -115,3 +115,17 @@ def test_a_finished_phone_keeps_no_number_and_needs_its_install_id() -> None:
 
 def test_only_people_who_sell_go_through_it() -> None:
     assert {"owner", "admin", "manager", "member"} == capture_setup.REQUIRED_ROLES
+
+
+def test_team_names_a_phone_as_people_know_it() -> None:
+    # Phone personas, v1.21, 1 Nov 2026: Team listed the Redmi 13 as "2406ERN9CI".
+    assert capture_setup.phone_name("2406ERN9CI", "xiaomi") == "Redmi 13 5G"
+    assert capture_setup.phone_name("m1906g7g", "xiaomi") == "Redmi Note 8 Pro"
+    # A model that already says what it is stays as it is.
+    assert capture_setup.phone_name("Redmi 13", "xiaomi") == "Redmi 13"
+    assert capture_setup.phone_name("Galaxy A15", "samsung") == "Galaxy A15"
+    # Any other maker's code gets the maker before it.
+    assert capture_setup.phone_name("SM-A155F", "samsung") == "Samsung SM-A155F"
+    assert capture_setup.phone_name("V2318", "vivo") == "Vivo V2318"
+    assert capture_setup.phone_name("Pixel 8", "other") == "Pixel 8"
+    assert capture_setup.phone_name("  ", "xiaomi") is None

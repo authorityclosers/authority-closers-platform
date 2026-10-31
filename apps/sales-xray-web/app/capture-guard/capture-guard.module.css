@@ -127,3 +127,23 @@
   background: var(--sx-bad);
   box-shadow: none;
 }
+
+/* A call's Fix recording: a link-like button that opens the check over the call. */
+.fix {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.note {
+  margin: 0;
+  color: var(--sx-muted);
+  font-size: var(--sx-text-sm);
+  line-height: 1.45;
+}

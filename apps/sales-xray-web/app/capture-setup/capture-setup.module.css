@@ -329,3 +329,14 @@
   font-size: var(--sx-text-xs);
   font-weight: 600;
 }
+
+/* The words someone already agreed to: one tap away. */
+.agreedWords summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--sx-accent);
+  font-size: var(--sx-text-sm);
+  font-weight: 600;
+  cursor: pointer;
+}

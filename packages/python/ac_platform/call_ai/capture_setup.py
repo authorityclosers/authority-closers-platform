@@ -95,6 +95,42 @@ def _text(value: Any, limit: int) -> str:
     return value.strip()[:limit] if isinstance(value, str) else ""
 
 
+# Phones whose model is the maker's code, by the name people know (phone personas, v1.21,
+# 1 Nov 2026: Team listed "2406ERN9CI"). Until the app sends the phone's own marketing
+# name, these, and the maker before any other code.
+PHONE_NAMES: Final[dict[str, str]] = {
+    "2406ERN9CI": "Redmi 13 5G",
+    "M1906G7G": "Redmi Note 8 Pro",
+    "M1906G7I": "Redmi Note 8 Pro",
+}
+MAKERS: Final[dict[str, str]] = {
+    "xiaomi": "Xiaomi",
+    "samsung": "Samsung",
+    "vivo": "Vivo",
+    "oppo": "Oppo",
+    "realme": "Realme",
+    "oneplus": "OnePlus",
+    "huawei": "Huawei",
+}
+# Model names that already say what the phone is.
+NAMED: Final = ("redmi", "poco", "galaxy", "mi ", "iqoo", "nord", "pixel")
+
+
+def phone_name(model: str, family: str) -> str | None:
+    """A phone as people know it: its marketing name where the model is a maker's code,
+    else the maker and the model ("Samsung SM-A155F"), else the model."""
+    model = model.strip()
+    if not model:
+        return None
+    if known := PHONE_NAMES.get(model.upper()):
+        return known
+    maker = MAKERS.get(family.strip().lower())
+    lowered = model.lower()
+    if maker and not lowered.startswith((maker.lower(), *NAMED)):
+        return f"{maker} {model}"
+    return model
+
+
 def _fold(rows: list[Any]) -> Setup:
     """Rows newest first: each phone's newest finish and the last word."""
     phones: dict[str, Phone] = {}
