@@ -45,6 +45,11 @@ export type Notice = Readonly<{
   noReport?: boolean;
 }>;
 
+/** At most two cards show (owner via the orchestrator, 31 Oct 2026); older ones
+    wait under "+N more", up to this many. */
+const SHOWN = 2;
+const KEPT = 8;
+
 let notices: readonly Notice[] = [];
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach((listener) => listener());
@@ -59,7 +64,7 @@ export function notify(notice: Notice) {
     });
   }
   notices = [...notices.filter((item) => item.id !== notice.id), notice].slice(
-    -3,
+    -KEPT,
   );
   emit();
 }
@@ -209,6 +214,7 @@ export function NoticeCenter() {
     () => notices,
     () => EMPTY,
   );
+  const [expanded, setExpanded] = useState(false);
 
   // Keeps the page's last twenty problems for a bug report (bug-report/).
   useEffect(() => installErrorRecorder(), []);
@@ -247,15 +253,34 @@ export function NoticeCenter() {
     };
   }, []);
 
+  const waiting = Math.max(0, list.length - SHOWN);
+  // Once no card waits, the next pile starts folded again.
+  if (expanded && waiting === 0) setExpanded(false);
+  const shownList = expanded ? list : list.slice(-SHOWN);
+
   return (
     <>
+      {/* One corner, under nothing: never over the page header or the top bar
+          (owner via the orchestrator, 31 Oct 2026). Work that needs the seller
+          rides at its top (ui/alerts.tsx); the newest card sits nearest the corner. */}
       <div className={styles.stack} aria-live="polite" data-capture-skip="">
-        {list.map((notice) => (
+        <AlertHost only="banner" stacked />
+        {waiting > 0 ? (
+          <button
+            type="button"
+            className={styles.more}
+            aria-expanded={expanded}
+            onClick={() => setExpanded((now) => !now)}
+          >
+            {expanded ? "Show fewer" : `+${waiting} more`}
+          </button>
+        ) : null}
+        {shownList.map((notice) => (
           <NoticeCard key={notice.id} notice={notice} />
         ))}
       </div>
-      {/* Work that needs the seller, by urgency (ui/alerts.tsx). */}
-      <AlertHost />
+      {/* Urgent work: a centre card over the page, by design. */}
+      <AlertHost only="urgent" />
     </>
   );
 }

@@ -5,6 +5,9 @@
 .bannerUrgent {
   composes: bannerUrgent from "../../../../packages/typescript/ui/src/kit/alerts.module.css";
 }
+.bannerStacked {
+  composes: bannerStacked from "../../../../packages/typescript/ui/src/kit/alerts.module.css";
+}
 .bannerIcon {
   composes: bannerIcon from "../../../../packages/typescript/ui/src/kit/alerts.module.css";
 }
