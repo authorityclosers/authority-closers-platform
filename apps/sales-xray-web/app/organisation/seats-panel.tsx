@@ -57,11 +57,28 @@ const quietSince = (member: OrgMember, now: number) => {
   return Number.isFinite(last) ? now - last : Number.POSITIVE_INFINITY;
 };
 
+/**
+ * Why an invite can't go out now, or null when a seat is free or there is no
+ * seat limit (persona QA, 1 Nov 2026: "No seats yet" sat above a live Invite
+ * box, and the server refused every invite). Unknown counts never block.
+ */
+export function inviteBlock(seats: OrgSeats | null): string | null {
+  if (!seats || seats.exempt || seats.seatsAvailable > 0) return null;
+  if (seats.totalSeats === 0)
+    return seats.canBuy
+      ? "No seats yet, so invites can't go out. Buy seats to invite your team."
+      : "No seats yet, so invites can't go out. Ask your owner to add seats.";
+  return "Every seat is taken. Remove someone or revoke an invite to free one.";
+}
+
 export function SeatsPanel({
   version,
+  onSeats,
 }: {
   /** Changes after a member change, so the counts are read again. */
   version: number;
+  /** The counts as read (null when unknown); pass a stable setter. */
+  onSeats?: (seats: OrgSeats | null) => void;
 }) {
   // "off": a server without seats yet shows nothing, as before.
   const [seats, setSeats] = useState<OrgSeats | "error" | "off" | null>(null);
@@ -71,15 +88,18 @@ export function SeatsPanel({
     const controller = new AbortController();
     readSeats(controller.signal).then(
       (value) => {
-        if (!controller.signal.aborted) setSeats(value);
+        if (controller.signal.aborted) return;
+        setSeats(value);
+        onSeats?.(value);
       },
       (error) => {
-        if (!controller.signal.aborted)
-          setSeats(notLive(error) ? "off" : "error");
+        if (controller.signal.aborted) return;
+        setSeats(notLive(error) ? "off" : "error");
+        onSeats?.(null);
       },
     );
     return () => controller.abort();
-  }, [version, attempt]);
+  }, [version, attempt, onSeats]);
 
   if (seats === "off") return null;
   if (seats === null)
