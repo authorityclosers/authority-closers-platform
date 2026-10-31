@@ -14,6 +14,7 @@ import {
   useCallback,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   type CSSProperties,
 } from "react";
@@ -86,6 +87,27 @@ export function GuideOverlay({
         ? Target
         : AudioLines;
   const above = target && target.top > window.innerHeight / 2;
+  // The card never covers what it points at (orchestrator, 31 Oct 2026): when
+  // the target sits over the card's column, the card's top stays below it
+  // (guide.module.css --guide-clear caps its height; Close, Skip and Next stay
+  // pinned while the words scroll).
+  useLayoutEffect(() => {
+    const node = card.current;
+    if (!node) return;
+    const box = node.getBoundingClientRect();
+    const under =
+      target &&
+      !above &&
+      target.left < box.right &&
+      box.left < target.left + target.width &&
+      target.top < box.bottom;
+    if (under)
+      node.style.setProperty(
+        "--guide-clear",
+        `${Math.ceil(target.top + target.height)}px`,
+      );
+    else node.style.removeProperty("--guide-clear");
+  }, [target, above]);
   return createPortal(
     <>
       {target ? (

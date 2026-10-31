@@ -13,7 +13,9 @@
   bottom: var(--guide-bottom);
   z-index: 350;
   width: min(360px, calc(100vw - 32px));
-  max-height: calc(100dvh - var(--guide-bottom) - 80px);
+  max-height: calc(
+    100dvh - var(--guide-bottom) - max(80px, var(--guide-clear, 0px) + 12px)
+  );
   overflow: auto;
   border: 1px solid var(--lx-line-strong);
   border-radius: 20px;
@@ -39,6 +41,18 @@
   justify-content: space-between;
   gap: 12px;
   padding: 10px 16px;
+}
+
+/* Close, Skip and Next stay in sight when a short card scrolls its words. */
+.header,
+.footer {
+  position: sticky;
+  z-index: 1;
+  background: var(--lx-surface);
+}
+
+.header {
+  top: 0;
 }
 
 .header {
@@ -130,6 +144,7 @@
 }
 
 .footer {
+  bottom: 0;
   border-top: 1px solid var(--lx-line);
 }
 
@@ -234,7 +249,12 @@
       calc(60px + env(safe-area-inset-bottom)),
       calc(var(--sx-corner-h, 0px) + 12px)
     );
-    max-height: min(300px, calc(100dvh - var(--guide-bottom) - 92px));
+    max-height: min(
+      300px,
+      calc(
+        100dvh - var(--guide-bottom) - max(92px, var(--guide-clear, 0px) + 12px)
+      )
+    );
     border-radius: 16px;
   }
   .card .visual {
@@ -271,7 +291,9 @@
       calc(64px + env(safe-area-inset-bottom)),
       calc(var(--sx-corner-h, 0px) + 12px)
     );
-    max-height: calc(100dvh - var(--guide-bottom) - 84px);
+    max-height: calc(
+      100dvh - var(--guide-bottom) - max(84px, var(--guide-clear, 0px) + 12px)
+    );
   }
 }
 
