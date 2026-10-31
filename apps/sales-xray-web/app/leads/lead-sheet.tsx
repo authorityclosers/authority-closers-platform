@@ -575,6 +575,25 @@ export function CallOutcome({
       });
       buzz("done");
       flow.done({ step: "save" });
+      // Says where the lead went and when the next call is (persona QA, 31 Oct
+      // 2026: "All changes saved" didn't say where the lead went).
+      const moved =
+        saved.lead.step !== current.lead.step ||
+        saved.lead.stage !== current.lead.stage;
+      notify({
+        id: `outcome-${saved.lead.lead_id}`,
+        tone: "success",
+        title: [
+          `${moved ? "Moved to" : "Still"} ${saved.lead.stage_label}`,
+          saved.lead.next_action_at
+            ? `next call ${when(saved.lead.next_action_at)}`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+        message: saved.lead.name,
+        timeout: 6000,
+      });
       after(saved);
       // Reviews engine (owner, 23 Oct 2026): asks later, when nothing is in the way.
       askFeedback("call_outcome");
