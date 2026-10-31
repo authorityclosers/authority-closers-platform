@@ -968,6 +968,8 @@ function LightboxShellFrame({
     manager: can(roleHere, "team.view"),
     // A Viewer reads the team; setting it up stays with those who manage.
     manages: can(roleHere, "leads.manage"),
+    // Plan & billing only for whoever pays (persona QA, 31 Oct 2026).
+    billing: can(roleHere, "billing.view"),
   });
   // Account belongs to no area: the panel keeps Home's pages there.
   const shownArea = areas.find((item) => item.key === litArea) ?? areas[0];
