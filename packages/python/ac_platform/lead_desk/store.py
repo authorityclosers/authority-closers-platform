@@ -18,7 +18,7 @@ from typing import Any, Literal, NamedTuple
 from uuid import UUID, uuid4, uuid5
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, case, delete, false, func, or_, select, true
+from sqlalchemy import and_, case, delete, false, func, or_, select, text, true
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -119,6 +119,7 @@ from ac_platform.lead_desk.contracts import (
     RepOption,
     RepRules,
     RepView,
+    ResultUndo,
     SellerCalls,
     SellerEffort,
     SellerOutcome,
@@ -135,6 +136,7 @@ from ac_platform.lead_desk.contracts import (
     Team,
     TeamPool,
     ToCallToday,
+    UndoResultView,
     WorkDay,
     WorkHoursCommand,
     WorkHoursView,
@@ -147,6 +149,7 @@ from ac_platform.lead_desk.journey import pipelines, signals, transitions
 from ac_platform.lead_desk.journey.templates import MILESTONE_WORDS
 from ac_platform.lead_desk.models import (
     Lead,
+    LeadConversion,
     LeadDealAmount,
     LeadDeskSettings,
     LeadDevice,
@@ -521,6 +524,10 @@ TIMED_CALL = "timed_call"
 PHONE_SECONDS = "phone_seconds"
 # A phone-logged call matches the app's dial that started within this of it.
 DIAL_MATCH = timedelta(minutes=2)
+# How long the seller who saved a call's answer may undo it (undo_result).
+RESULT_UNDO = timedelta(minutes=5)
+# History lines that set where a lead stands: the newest of them is the one an undo may take back.
+STANDING_KINDS = ("result", "stage", "meeting", "captured", "repeat")
 
 
 def missed_call(kind: str, data: Any) -> bool:
@@ -2060,6 +2067,7 @@ class LeadDesk:
             duplicates=await duplicate_queue.hints(self, lead),
             merged_into=await duplicate_queue.merged_into(self, lead),
             worked_before=worked_before,
+            undo_result=await self._undoable(lead),
         )
 
     @staticmethod
@@ -3694,6 +3702,16 @@ class LeadDesk:
         was_due = lead.next_action_at is not None and lead.next_action_at <= self.now
         previous_stage = lead.stage
         previous_step = lead.step
+        # Where the lead stood, so its seller can undo the answer for a moment (undo_result).
+        before = {
+            "stage": lead.stage,
+            "step": lead.step,
+            "stage_at": lead.stage_at.isoformat() if lead.stage_at else None,
+            "next_action_at": lead.next_action_at.isoformat() if lead.next_action_at else None,
+            "next_action_note": lead.next_action_note,
+            "last_result": lead.last_result,
+            "outcome_reason": lead.outcome_reason,
+        }
         chosen: journeys.Stage | None = None
         journey = await self._labels(journeys.pipeline_of(lead))
         current = journey.resolve(lead.stage, lead.step)
@@ -3784,6 +3802,7 @@ class LeadDesk:
             "remark": command.remark,
             "deal_value": command.deal_value,
             "was_due": was_due,
+            "before": before,
         }
         if move is not None:
             # The call moved the lead: the same record, one history line (the result).
@@ -3826,6 +3845,159 @@ class LeadDesk:
                 actor=self.viewer.person_id,
                 command_id=command.command_id,
             )
+        await self.db.flush()
+        return await self.detail(lead.id)
+
+    async def _answer_undone(self, event_id: UUID) -> bool:
+        return (
+            await self.db.scalar(
+                select(LeadEvent.id)
+                .where(
+                    LeadEvent.tenant_id == self.tenant_id,
+                    LeadEvent.kind == "edited",
+                    LeadEvent.data[transitions.UNDONE_RESULT].as_string() == str(event_id),
+                )
+                .limit(1)
+            )
+            is not None
+        )
+
+    @staticmethod
+    def _undo_never(data: Mapping[str, Any]) -> str | None:
+        """Why an answer can never be undone here, or None (orchestrator, 31 Oct 2026)."""
+        if not isinstance(data.get("before"), dict):
+            return "Can't undo this answer."
+        if data.get("meeting_id"):
+            return "Can't undo: the meeting is booked. Change it from the meeting card."
+        if data.get("stage") == "won" and data.get("from_stage") != "won":
+            return "Can't undo a Won: reopen the lead instead."
+        return None
+
+    async def _undoable(self, lead: Lead) -> UndoResultView | None:
+        """The lead's latest call answer, while the person who saved it may still undo it."""
+        latest = await self.db.scalar(
+            select(LeadEvent)
+            .where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.lead_id == lead.id,
+                LeadEvent.kind.in_(STANDING_KINDS),
+                LeadEvent.created_at >= self.now - RESULT_UNDO,
+            )
+            .order_by(LeadEvent.created_at.desc(), LeadEvent.id.desc())
+            .limit(1)
+        )
+        if (
+            latest is None
+            or latest.kind != "result"
+            or latest.actor_person_id != self.viewer.person_id
+            or self._undo_never(latest.data if isinstance(latest.data, dict) else {})
+            or await self._answer_undone(latest.id)
+        ):
+            return None
+        return UndoResultView(event_id=latest.id, until=latest.created_at + RESULT_UNDO)
+
+    async def undo_result(self, lead_id: UUID, event_id: UUID, command: ResultUndo) -> LeadDetail:
+        """Undo an after-call answer (orchestrator for the owner, 31 Oct 2026): the lead's
+        latest, by the seller who saved it, within 5 minutes. It supersedes, never deletes:
+        the lead's previous stage, next call and its note come back with a history line, and
+        the call stays counted. Refused, calmly, once anything went or will go outward."""
+        seen = await self._command_seen(command.command_id)
+        if seen is not None:
+            return await self.detail(seen.lead_id)
+        lead = await self._lead(lead_id, lock=True)
+        event = await self.db.scalar(
+            select(LeadEvent).where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.lead_id == lead.id,
+                LeadEvent.id == event_id,
+                LeadEvent.kind == "result",
+            )
+        )
+        if event is None:
+            raise DeskError(404, "That call answer isn't on this lead.")
+        data = event.data if isinstance(event.data, dict) else {}
+        if event.actor_person_id != self.viewer.person_id:
+            raise DeskError(403, "Only the seller who saved this answer can undo it.")
+        if self.now - event.created_at > RESULT_UNDO:
+            raise DeskError(409, "Can't undo: it was saved more than 5 minutes ago.")
+        never = self._undo_never(data)
+        if never is not None:
+            raise DeskError(409, never)
+        if await self._answer_undone(event.id):
+            raise DeskError(409, "This answer was undone already.")
+        newer = await self.db.scalar(
+            select(LeadEvent.id)
+            .where(
+                LeadEvent.tenant_id == self.tenant_id,
+                LeadEvent.lead_id == lead.id,
+                LeadEvent.kind.in_(STANDING_KINDS),
+                LeadEvent.id != event.id,
+                LeadEvent.created_at >= event.created_at,
+            )
+            .limit(1)
+        )
+        if newer is not None:
+            raise DeskError(409, "Can't undo: the lead moved again since.")
+        if lead.revision != command.expected_revision:
+            raise DeskError(409, "This lead changed. Check it and try again.")
+        heard = await self.db.scalar(
+            select(LeadConversion.id)
+            .where(
+                LeadConversion.tenant_id == self.tenant_id,
+                LeadConversion.source_event_id == event.id,
+            )
+            .limit(1)
+        )
+        if heard is not None:
+            raise DeskError(409, "Can't undo: an ad platform already heard about it.")
+        told = await self.db.scalar(
+            text(
+                "SELECT 1 FROM partner_lead_events"
+                " WHERE tenant_id = :tenant AND source_event_id = :event"
+                " UNION ALL"
+                " SELECT 1 FROM partner_webhook_endpoints p"
+                " WHERE p.tenant_id = :tenant AND p.status = 'active' AND p.events_since <= :at"
+                " AND (jsonb_exists(CAST(p.events AS jsonb), 'lead.stage_changed')"
+                " OR jsonb_exists(CAST(p.events AS jsonb), 'lead.closed'))"
+                " LIMIT 1"
+            ),
+            {"tenant": self.tenant_id, "event": event.id, "at": event.created_at},
+        )
+        if told is not None:
+            raise DeskError(409, "Can't undo: a partner app hears about stage changes.")
+        before: dict[str, Any] = data["before"]
+
+        def moment(key: str) -> datetime | None:
+            value = before.get(key)
+            return datetime.fromisoformat(value) if isinstance(value, str) else None
+
+        undone_stage = lead.stage
+        lead.stage = str(before.get("stage") or lead.stage)
+        lead.step = before.get("step") if isinstance(before.get("step"), str) else None
+        if data.get("v") == 2:
+            lead.stage_at = moment("stage_at") or lead.stage_at
+        lead.next_action_at = moment("next_action_at")
+        lead.next_action_note = before.get("next_action_note")
+        lead.last_result = before.get("last_result")
+        lead.outcome_reason = before.get("outcome_reason")
+        lead.revision += 1
+        lead.updated_at = self.now
+        journey = await self._labels(journeys.pipeline_of(lead))
+        self._event(
+            lead,
+            "edited",
+            {
+                "changed": ["call_answer"],
+                transitions.UNDONE_RESULT: str(event.id),
+                "stage": lead.stage,
+                "from_stage": undone_stage,
+                "step": lead.step,
+                "step_label": journey.label(lead.stage, lead.step),
+                "follow_up_at": lead.next_action_at.isoformat() if lead.next_action_at else None,
+            },
+            actor=self.viewer.person_id,
+            command_id=command.command_id,
+        )
         await self.db.flush()
         return await self.detail(lead.id)
 

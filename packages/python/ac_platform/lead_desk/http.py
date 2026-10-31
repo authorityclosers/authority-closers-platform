@@ -107,6 +107,7 @@ from ac_platform.lead_desk.contracts import (
     RecordingCall,
     RecordingCommand,
     RepRules,
+    ResultUndo,
     RevenueBreakdownView,
     RevenueSettingsCommand,
     RevenueTargetsCommand,
@@ -521,6 +522,18 @@ def install_lead_desk_http(application: FastAPI, ctx: RouteContext) -> None:
         no_query(request)
         async with desk_for(request, response, write=True) as lead_desk:
             return await lead_desk.dispose(lead_id, command)
+
+    @router.post(
+        "/leads/{lead_id}/results/{event_id}/undo",
+        response_model=LeadDetail,
+        response_model_by_alias=True,
+    )
+    async def undo_result(
+        lead_id: UUID, event_id: UUID, command: ResultUndo, request: Request, response: Response
+    ) -> LeadDetail:
+        no_query(request)
+        async with desk_for(request, response, write=True) as lead_desk:
+            return await lead_desk.undo_result(lead_id, event_id, command)
 
     @router.patch("/leads/{lead_id}", response_model=LeadDetail, response_model_by_alias=True)
     async def edit_lead(

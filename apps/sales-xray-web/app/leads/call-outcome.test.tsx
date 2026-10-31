@@ -297,3 +297,29 @@ describe("where the lead went after Save (persona QA, 31 Oct 2026)", () => {
     expect(said?.message).toBe(after.lead.name);
   });
 });
+
+describe("Undo on the Save card (31 Oct 2026)", () => {
+  it("takes it back with Undo while the server offers it", async () => {
+    const after = {
+      ...lead("interested"),
+      undo_result: { event_id: "answer-1", until: "2026-11-03T05:35:00.000Z" },
+    } as LeadDetail;
+    const fetchMock = vi.fn<typeof fetch>(
+      async () => new Response(JSON.stringify(after)),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    notices.shown.length = 0;
+    await show(lead("new"));
+    await act(async () => tile("We talked").click());
+    await act(async () => tile("Interested").click());
+    await act(async () => tile("Save").click());
+    const card = notices.shown.at(-1) as {
+      action?: { label: string; run: () => void };
+    };
+    expect(card.action?.label).toBe("Undo");
+    await act(async () => card.action?.run());
+    const asked = fetchMock.mock.calls.map((call) => String(call[0]));
+    expect(asked.at(-1)).toContain("/results/answer-1/undo");
+    expect(notices.shown.at(-1)?.title).toMatch(/^Undone: back to /);
+  });
+});

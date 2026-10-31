@@ -31,15 +31,16 @@ from uuid import UUID, uuid4
 import httpx
 import structlog
 from fastapi import FastAPI
-from sqlalchemy import and_, cast, func, or_, select, text
+from sqlalchemy import String, and_, cast, exists, func, or_, select, text
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+from sqlalchemy.orm import aliased
 
 from ac_platform.lead_desk.journey import mapping
 from ac_platform.lead_desk.journey import model as journeys
 from ac_platform.lead_desk.journey.model import Journey
 from ac_platform.lead_desk.journey.providers import Answer, digest
-from ac_platform.lead_desk.journey.transitions import stages_changed
+from ac_platform.lead_desk.journey.transitions import UNDONE_RESULT, stages_changed
 from ac_platform.lead_desk.models import (
     Lead,
     LeadConversion,
@@ -69,6 +70,18 @@ KINDS: Final[tuple[str, ...]] = ("captured", "repeat", "result", "stage")
 
 def retry_delay(failures: int) -> timedelta:
     return timedelta(seconds=min(3600, 30 * 2 ** max(0, failures - 1)))
+
+
+def not_undone() -> Any:
+    """A call's answer its seller undid (store.undo_result) reached no stage: never a
+    conversion. The undo is a later history line naming the answer; the answer stays."""
+    undone = aliased(LeadEvent)
+    return ~exists().where(
+        undone.tenant_id == LeadEvent.tenant_id,
+        undone.lead_id == LeadEvent.lead_id,
+        undone.kind == "edited",
+        undone.data[UNDONE_RESULT].as_string() == cast(LeadEvent.id, String),
+    )
 
 
 def reached(journey: Journey, kind: str, data: Mapping[str, Any]) -> str | None:
@@ -156,6 +169,7 @@ async def _collect_one(
             LeadEvent.kind.in_(KINDS),
             LeadEvent.created_at >= floor,
             LeadEvent.created_at <= now - SETTLE,
+            not_undone(),
         )
         .order_by(LeadEvent.created_at, LeadEvent.id)
         .limit(COLLECT_LIMIT)

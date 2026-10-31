@@ -967,6 +967,20 @@ class SearchResult(Model):
     tasks: tuple[TaskView, ...]
 
 
+class ResultUndo(Command):
+    """Undo the lead's latest after-call answer: its seller, within 5 minutes."""
+
+    command_id: UUID
+    expected_revision: int = Field(ge=1)
+
+
+class UndoResultView(Model):
+    """The after-call answer its seller may still undo, and until when."""
+
+    event_id: UUID
+    until: datetime
+
+
 class LeadDetail(Model):
     schema_: Literal["lead-desk/1"] = Field(SCHEMA, alias="schema")
     lead: LeadRow
@@ -996,6 +1010,8 @@ class LeadDetail(Model):
     merged_into: MergedInto | None = None
     # Read only: this person worked on a lead merged into this one lately ("worked before").
     worked_before: bool = False
+    # The after-call answer this person saved a moment ago and may still undo.
+    undo_result: UndoResultView | None = None
 
 
 class PhoneHealth(Model):
