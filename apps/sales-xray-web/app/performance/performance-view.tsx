@@ -214,7 +214,10 @@ function SellerCard({ seller, own }: { seller: SellerEffort; own: boolean }) {
             {`Today: first call ${CLOCK.format(new Date(seller.first_call_at))}, last call ends ${CLOCK.format(new Date(seller.last_call_at))}`}
           </p>
         ) : null}
-        {seller.breaks.length ? (
+        {/* A break is time between calls: none before the first call. */}
+        {!(seller.inbound.attempted + seller.cold.attempted) ? (
+          <p className={styles.quiet}>No calls yet.</p>
+        ) : seller.breaks.length ? (
           <ol className={styles.breaks} aria-label="3 longest breaks">
             {seller.breaks.map((gap) => (
               <BreakRow key={gap.start} gap={gap} />

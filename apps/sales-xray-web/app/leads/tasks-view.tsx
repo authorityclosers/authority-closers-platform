@@ -64,7 +64,12 @@ export function TasksView({
   onOpen: (leadId: string) => void;
   now?: () => Date;
 }) {
-  const [view, setView] = useState<TaskBucket>("today");
+  // Home's "N overdue" opens Overdue (?tasks=overdue); Today otherwise.
+  const [view, setView] = useState<TaskBucket>(() => {
+    if (typeof window === "undefined") return "today";
+    const asked = new URLSearchParams(window.location.search).get("tasks");
+    return asked === "overdue" || asked === "upcoming" ? asked : "today";
+  });
   const [round, setRound] = useState(0);
   const [loaded, setLoaded] = useState<Loaded | null>(null);
   // Taken off this list while the change is on its way (or kept on the phone).
@@ -234,7 +239,7 @@ export function TasksView({
                 ? "Nothing due today"
                 : "Nothing coming up"
           }
-          text="Add one with +, or from a lead with Remind. It shows here on its day."
+          text="Add one with +."
         />
       ) : (
         <ol

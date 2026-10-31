@@ -93,7 +93,7 @@ function needs(
       ? {
           key: "fresh",
           count: counts.fresh,
-          label: "new enquiries not called yet",
+          label: "new leads not called yet",
           href: leadsHref("inbound", { view: "to_call", step: "new" }),
         }
       : null,
@@ -259,7 +259,16 @@ const CLOCK = new Intl.DateTimeFormat("en-IN", {
   timeZone: "Asia/Kolkata",
 });
 
-function Sellers({ effort, side }: { effort: Effort | null; side: Side }) {
+function Sellers({
+  effort,
+  side,
+  me,
+}: {
+  effort: Effort | null;
+  side: Side;
+  /** The viewer: their own row reads You. */
+  me: string | null;
+}) {
   if (!effort) return <div className={styles.loading} aria-busy="true" />;
   const sellers = [...effort.sellers].sort(
     (a, b) => b[side].attempted - a[side].attempted,
@@ -286,7 +295,11 @@ function Sellers({ effort, side }: { effort: Effort | null; side: Side }) {
       </div>
       {sellers.map((seller) => {
         const day = seller[side];
-        const gap = seller.breaks[0];
+        // A break is time between calls: none before the first call.
+        const gap =
+          seller.inbound.attempted + seller.cold.attempted
+            ? seller.breaks[0]
+            : undefined;
         return (
           <Link
             key={seller.person_id}
@@ -295,7 +308,7 @@ function Sellers({ effort, side }: { effort: Effort | null; side: Side }) {
             href="/growth"
           >
             <span role="cell" className={styles.name}>
-              {seller.name}
+              {seller.person_id === me ? "You" : seller.name}
             </span>
             <span role="cell">{day.attempted}</span>
             <span role="cell">{day.connected}</span>
@@ -476,6 +489,7 @@ export function TeamFloor({
   outcomes,
   more,
   mine = null,
+  me = null,
 }: {
   side: Side;
   onSide: (side: Side) => void;
@@ -487,6 +501,8 @@ export function TeamFloor({
   more: ReactNode;
   /** The owner's own tasks and follow-ups, for those who work leads. */
   mine?: ReactNode;
+  /** The viewer's person id. */
+  me?: string | null;
 }) {
   const effort = useEffort();
   const counts = useSideCounts(side);
@@ -538,7 +554,7 @@ export function TeamFloor({
               <ChevronRight size={16} aria-hidden="true" />
             </Link>
           </div>
-          <Sellers effort={effort} side={side} />
+          <Sellers effort={effort} side={side} me={me} />
         </section>
         <section
           className={`${styles.block} ${styles.sales}`}

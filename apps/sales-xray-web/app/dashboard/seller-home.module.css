@@ -604,3 +604,45 @@
     transform: none;
   }
 }
+
+/* Overdue tasks, one tap from Tasks' Overdue. */
+.overdue {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  color: var(--sx-bad);
+  font-size: var(--sx-text-sm);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+/* 44 px where a finger needs it (persona QA, 31 Oct 2026); the look stays. */
+.check {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  margin: 0 -11px;
+  cursor: pointer;
+}
+
+.taskMeta a,
+.nextName {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-block: -10px;
+}
+
+.followRow .rowText {
+  min-height: 44px;
+  justify-content: center;
+}
+
+@media (pointer: coarse) {
+  .addTask,
+  .seeAll {
+    min-height: 44px;
+  }
+}

@@ -126,31 +126,35 @@ export function useTaskList() {
       () => setTasks(before),
     );
   };
-  return { tasks, failed: today.failed, reload: today.reload, done };
+  return {
+    tasks,
+    overdue: today.overdue,
+    failed: today.failed,
+    reload: today.reload,
+    done,
+  };
 }
 
-/** Today's tasks that aren't calls: a follow-up is counted under Follow-ups. */
+/** The Tasks page's Today, and how many are overdue: one truth with Tasks
+ *  (persona QA, 31 Oct 2026: Home and Tasks counted different tasks). */
 export function useTodayTasks(): {
   tasks: ListedTask[] | null;
+  overdue: number | null;
   failed: boolean;
   setTasks: (next: ListedTask[]) => void;
   reload: () => void;
 } {
   const [tasks, setTasks] = useState<ListedTask[] | null>(null);
+  const [overdue, setOverdue] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    Promise.all([
-      readTasks("overdue", controller.signal),
-      readTasks("today", controller.signal),
-    ]).then(
-      ([late, today]) =>
-        setTasks(
-          [...(late?.tasks ?? []), ...(today?.tasks ?? [])]
-            .filter((task) => task.kind !== "call_back")
-            .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at)),
-        ),
+    readTasks("today", controller.signal).then(
+      (list) => {
+        setTasks(list.tasks);
+        setOverdue(list.counts.overdue ?? 0);
+      },
       () => {
         if (!controller.signal.aborted) setFailed(true);
       },
@@ -161,7 +165,7 @@ export function useTodayTasks(): {
     setFailed(false);
     setAttempt((value) => value + 1);
   }, []);
-  return { tasks, failed, setTasks, reload };
+  return { tasks, overdue, failed, setTasks, reload };
 }
 
 function Head({
@@ -452,8 +456,11 @@ const CLOCK_SHORT = new Intl.DateTimeFormat("en-IN", {
 /** My three longest breaks today (Dipak, item 36): red when nobody set them. */
 export function LongestBreaks({
   breaks,
+  calls = 1,
 }: {
   breaks: readonly HomeBreak[] | null | undefined;
+  /** Today's calls: no break before the first one. */
+  calls?: number;
 }) {
   return (
     <section className={styles.block} aria-labelledby="breaks-title">
@@ -463,7 +470,9 @@ export function LongestBreaks({
           <ChevronRight size={16} aria-hidden="true" />
         </Link>
       </Head>
-      {breaks?.length ? (
+      {!calls ? (
+        <p className={styles.quiet}>No calls yet today.</p>
+      ) : breaks?.length ? (
         <ul className={styles.breaks}>
           {breaks.slice(0, 3).map((gap) => (
             <li
@@ -493,8 +502,11 @@ export function TodayTasks({
   onRetry,
   onAdded,
   title = "Today's tasks",
+  overdue = null,
 }: {
   tasks: ListedTask[] | null;
+  /** Tasks past their time, one tap from Tasks' Overdue. */
+  overdue?: number | null;
   failed: boolean;
   onDone: (task: ListedTask) => void;
   onRetry: () => void;
@@ -506,6 +518,14 @@ export function TodayTasks({
   return (
     <section className={styles.block} aria-labelledby="tasks-title">
       <Head id="tasks-title" title={title}>
+        {overdue ? (
+          <Link
+            className={styles.overdue}
+            href="/leads?tab=tasks&tasks=overdue"
+          >
+            {`${overdue} overdue`}
+          </Link>
+        ) : null}
         <button
           type="button"
           className={styles.addTask}
@@ -530,12 +550,15 @@ export function TodayTasks({
         <ul className={styles.rows}>
           {tasks.slice(0, 3).map((task) => (
             <li key={task.task_id} className={styles.taskRow}>
-              <input
-                type="checkbox"
-                aria-label={`Done: ${task.title}`}
-                checked={task.status === "done"}
-                onChange={() => onDone(task)}
-              />
+              {/* A 44 px target around the box (QA, 31 Oct 2026). */}
+              <label className={styles.check}>
+                <input
+                  type="checkbox"
+                  aria-label={`Done: ${task.title}`}
+                  checked={task.status === "done"}
+                  onChange={() => onDone(task)}
+                />
+              </label>
               <span className={styles.rowText}>
                 <strong>{task.title}</strong>
                 <span className={styles.taskMeta}>
@@ -699,7 +722,7 @@ export function SellerBlocks({
   headerExtras?: ReactNode;
 }) {
   const access = useSidesAccess();
-  const { tasks, failed, reload, done } = useTaskList();
+  const { tasks, overdue, failed, reload, done } = useTaskList();
   // Only the type this seller works when they don't have both.
   const shown: Side =
     access && !access.inbound && access.cold
@@ -737,6 +760,7 @@ export function SellerBlocks({
       <div data-area="tasks">
         <TodayTasks
           tasks={tasks}
+          overdue={overdue}
           failed={failed}
           onDone={done}
           onRetry={reload}
@@ -750,7 +774,7 @@ export function SellerBlocks({
         <TodayPerformance side={shown} own={own} />
       </div>
       <div data-area="breaks">
-        <LongestBreaks breaks={desk.breaks} />
+        <LongestBreaks breaks={desk.breaks} calls={desk.numbers.calls} />
       </div>
     </div>
   );
@@ -759,12 +783,13 @@ export function SellerBlocks({
 /** The owner's own work on the Team Home: three of today's tasks and the next
  *  two follow-ups on the side shown (Dipak: owners have their tasks too). */
 export function MyTasks({ desk, side }: { desk: HomeDesk; side: Side }) {
-  const { tasks, failed, reload, done } = useTaskList();
+  const { tasks, overdue, failed, reload, done } = useTaskList();
   return (
     <>
       <TodayTasks
         title="My tasks"
         tasks={tasks}
+        overdue={overdue}
         failed={failed}
         onDone={done}
         onRetry={reload}

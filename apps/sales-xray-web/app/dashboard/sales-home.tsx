@@ -130,9 +130,11 @@ function usePerformance() {
 function TeamHome({
   manages,
   mine,
+  me,
 }: {
   manages: boolean;
   mine: HomeDesk | null;
+  me: string | null;
 }) {
   const { period, setPeriod, shown, failed } = usePerformance();
   const [side, setSide] = useHomeSide();
@@ -143,6 +145,7 @@ function TeamHome({
       onSide={setSide}
       controls={manages ? <TeamControls /> : null}
       mine={mine ? <MyTasks desk={mine} side={side} /> : null}
+      me={me}
       outcomes={
         <OutcomeTiles
           period={period}
@@ -374,6 +377,7 @@ export function SalesHome({
           <TeamHome
             manages={manages}
             mine={works && desk.status === "ready" ? desk.desk : null}
+            me={desk.status === "ready" ? desk.desk.me.person_id : null}
           />
         ) : (
           <SellerHome state={desk} />
